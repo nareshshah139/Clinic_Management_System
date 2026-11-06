@@ -577,7 +577,7 @@ export class BillingService {
     }
 
     if (patientId) {
-      where.invoice = { patientId };
+      where.invoice = { patient: { id: patientId, branchId } };
     }
 
     const [payments, total] = await Promise.all([
@@ -621,7 +621,7 @@ export class BillingService {
     }
 
     if (method) where.mode = method;
-    if (patientId) where.invoice = { patientId };
+    if (patientId) where.invoice = { patient: { id: patientId, branchId } };
 
     const [sumAgg, count, methodBreakdown, dailyBreakdown] = await Promise.all([
       this.prisma.newPayment.aggregate({ where, _sum: { amount: true } }),

@@ -348,3 +348,92 @@ describe('billing refunds', () => {
     expect(invoices[0].received).toBe(1000);
   });
 });
+
+describe('billing payment listing branch scope', () => {
+  const rows = [
+    {
+      id: 'p1',
+      amount: 100,
+      mode: 'CASH',
+      reconStatus: 'COMPLETED',
+      createdAt: new Date('2026-11-01'),
+      patientId: 'pat-1',
+      branchId: 'branch-a',
+    },
+    {
+      id: 'p2',
+      amount: 250,
+      mode: 'UPI',
+      reconStatus: 'COMPLETED',
+      createdAt: new Date('2026-11-02'),
+      patientId: 'pat-1',
+      branchId: 'branch-b',
+    },
+    {
+      id: 'p3',
+      amount: 400,
+      mode: 'CASH',
+      reconStatus: 'COMPLETED',
+      createdAt: new Date('2026-11-03'),
+      patientId: 'pat-2',
+      branchId: 'branch-a',
+    },
+  ];
+  const matches = (row: (typeof rows)[number], where: any) => {
+    const invoice = where.invoice ?? {};
+    return (
+      (invoice.patientId === undefined ||
+        invoice.patientId === row.patientId) &&
+      (invoice.patient?.id === undefined ||
+        invoice.patient.id === row.patientId) &&
+      (invoice.patient?.branchId === undefined ||
+        invoice.patient.branchId === row.branchId)
+    );
+  };
+  const make = () => {
+    const pick = (where: any) => rows.filter((row) => matches(row, where));
+    const prisma: any = {
+      newPayment: {
+        findMany: jest.fn(async ({ where }) => pick(where)),
+        count: jest.fn(async ({ where }) => pick(where).length),
+        aggregate: jest.fn(async ({ where }) => ({
+          _sum: {
+            amount: pick(where).reduce((sum, row) => sum + row.amount, 0),
+          },
+        })),
+        groupBy: jest.fn(async () => []),
+      },
+    };
+    return new BillingService(prisma, {} as any);
+  };
+
+  it('lists only the branch payments when no patient filter is given', async () => {
+    const result = await make().findAllPayments({} as any, 'branch-a');
+    expect(result.payments.map((p: any) => p.id)).toEqual(['p1', 'p3']);
+  });
+
+  it('keeps the branch boundary when filtering by a patient who also has another branch payments', async () => {
+    const result = await make().findAllPayments(
+      { patientId: 'pat-1' } as any,
+      'branch-a',
+    );
+    expect(result.payments.map((p: any) => p.id)).toEqual(['p1']);
+  });
+
+  it('keeps the branch boundary in the payment summary patient filter', async () => {
+    const summary = await make().getPaymentSummary(
+      { patientId: 'pat-1' } as any,
+      'branch-a',
+    );
+    expect(summary.totalAmount).toBe(100);
+    expect(summary.paymentCount).toBe(1);
+  });
+
+  it('returns nothing for a patient that belongs to another branch', async () => {
+    const result = await make().findAllPayments(
+      { patientId: 'pat-1' } as any,
+      'branch-c',
+    );
+    expect(result.payments).toEqual([]);
+  });
+});
