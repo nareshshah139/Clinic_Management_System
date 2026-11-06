@@ -1,3 +1,4 @@
+import type { PharmacyPurchaseInvoiceStatus } from '@prisma/client';
 import {
   clinicDay,
   collator,
@@ -7,12 +8,22 @@ import {
 } from './register-utils';
 import {
   MONEY_TOLERANCE,
+  daysPastDue,
   invoiceOutstanding,
+  invoiceSettled,
   paymentStatus,
 } from './purchase-payment-balance';
 
 export const PURCHASE_SOURCES = ['MANUAL', 'OCR', 'CSV', 'GMAIL'] as const;
-export const INVOICE_STATES = ['DRAFT', 'REVIEW', 'POSTED', 'CANCELLED'] as const;
+export const INVOICE_STATES = [
+  'DRAFT',
+  'OCR_REVIEW',
+  'RECONCILIATION_FAILED',
+  'REVIEWED',
+  'POSTED',
+  'CANCELLED',
+] as const;
+export const INVOICE_STATE_FILTERS = [...INVOICE_STATES, 'IN_REVIEW'] as const;
 export const PAYMENT_FILTERS = [
   'OUTSTANDING',
   'DUE',
@@ -35,6 +46,7 @@ export const SORT_DIRECTIONS = ['asc', 'desc'] as const;
 
 export type PurchaseSource = (typeof PURCHASE_SOURCES)[number];
 export type InvoiceState = (typeof INVOICE_STATES)[number];
+export type InvoiceStateFilter = (typeof INVOICE_STATE_FILTERS)[number];
 export type PaymentFilter = (typeof PAYMENT_FILTERS)[number];
 export type SearchField = (typeof SEARCH_FIELDS)[number];
 export type SortKey = (typeof SORT_KEYS)[number];
@@ -57,6 +69,7 @@ export type PurchasePayment = {
   outstanding: number;
   dueDate: string | null;
   overdueDays: number;
+  partlyPaid: boolean;
 };
 
 export type PurchaseRegisterRow = {
@@ -82,7 +95,7 @@ export type PurchaseRegisterQuery = {
   q?: string;
   distributorGstin?: string;
   paymentState?: PaymentFilter;
-  invoiceState?: InvoiceState;
+  invoiceState?: InvoiceStateFilter;
   source?: PurchaseSource;
   entryById?: string;
   sortBy: SortKey;
@@ -100,7 +113,7 @@ export type PurchaseRegisterPage = {
     amount: number;
     outstanding: number;
     count: number;
-    excluded: { cancelled: number };
+    excluded: { notPosted: number; cancelled: number };
   };
   entryByOptions: Person[];
   distributorOptions: Distributor[];
@@ -113,7 +126,7 @@ export type PurchaseInvoiceRecord = {
   dueDate: Date | null;
   createdAt: Date;
   source: string;
-  status: string;
+  status: PharmacyPurchaseInvoiceStatus;
   distributorName: string;
   distributorGstin: string;
   netPayable: number;
@@ -121,20 +134,21 @@ export type PurchaseInvoiceRecord = {
   paymentAllocations: { amount: number }[];
 };
 
-const INVOICE_STATE_OF: Record<string, InvoiceState> = {
+const INVOICE_STATE_OF: Record<PharmacyPurchaseInvoiceStatus, InvoiceState> = {
   DRAFT: 'DRAFT',
-  OCR_REVIEW_REQUIRED: 'REVIEW',
-  RECONCILIATION_FAILED: 'REVIEW',
-  REVIEWED: 'REVIEW',
+  OCR_REVIEW_REQUIRED: 'OCR_REVIEW',
+  RECONCILIATION_FAILED: 'RECONCILIATION_FAILED',
+  REVIEWED: 'REVIEWED',
   STOCK_COMMITTED: 'POSTED',
   CANCELLED: 'CANCELLED',
 };
 
+const REVIEW_STATES: readonly InvoiceState[] = [
+  'OCR_REVIEW',
+  'RECONCILIATION_FAILED',
+  'REVIEWED',
+];
 const OUTSTANDING_STATES: readonly PaymentState[] = ['DUE', 'OVERDUE', 'PARTIAL'];
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-const daysBetween = (from: string, to: string) =>
-  Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS);
 
 const purchaseSource = (value: string): PurchaseSource =>
   (PURCHASE_SOURCES as readonly string[]).includes(value)
@@ -145,11 +159,9 @@ export function purchasePayment(
   invoice: PurchaseInvoiceRecord,
   today: string,
 ): PurchasePayment {
-  const paid = money(
-    invoice.paymentAllocations.reduce((sum, row) => sum + Number(row.amount), 0),
-  );
+  const paid = invoiceSettled({ paymentAllocations: invoice.paymentAllocations });
   const credit = money(Number(invoice.creditApplied || 0));
-  const settled = money(paid + credit);
+  const settled = invoiceSettled(invoice);
   const dueDate = invoice.dueDate ? clinicDay(invoice.dueDate) : null;
   const closed = (state: PaymentState): PurchasePayment => ({
     state,
@@ -158,20 +170,29 @@ export function purchasePayment(
     outstanding: 0,
     dueDate,
     overdueDays: 0,
+    partlyPaid: false,
   });
   if (invoice.status === 'CANCELLED') return closed('CANCELLED');
   if (invoice.status !== 'STOCK_COMMITTED') return closed('NOT_POSTED');
 
   const balance = invoiceOutstanding(invoice, settled);
   if (balance <= MONEY_TOLERANCE) return closed('PAID');
-  const overdueDays = dueDate && dueDate < today ? daysBetween(dueDate, today) : 0;
+  const overdueDays = invoice.dueDate
+    ? Math.max(0, daysPastDue(invoice.dueDate, today))
+    : 0;
+  const partlyPaid =
+    paymentStatus(invoice.netPayable, settled) === 'PARTIALLY_PAID';
   const state: PaymentState =
-    paymentStatus(invoice.netPayable, settled) === 'PARTIALLY_PAID'
-      ? 'PARTIAL'
-      : overdueDays > 0
-        ? 'OVERDUE'
-        : 'DUE';
-  return { state, paid, credit, outstanding: balance, dueDate, overdueDays };
+    overdueDays > 0 ? 'OVERDUE' : partlyPaid ? 'PARTIAL' : 'DUE';
+  return {
+    state,
+    paid,
+    credit,
+    outstanding: balance,
+    dueDate,
+    overdueDays,
+    partlyPaid,
+  };
 }
 
 export function purchaseEntry(
@@ -191,7 +212,7 @@ export function purchaseEntry(
       gstin: invoice.distributorGstin,
     },
     amount: money(invoice.netPayable),
-    invoiceState: INVOICE_STATE_OF[invoice.status] ?? 'REVIEW',
+    invoiceState: INVOICE_STATE_OF[invoice.status],
     payment: purchasePayment(invoice, today),
   };
 }
@@ -211,6 +232,10 @@ function matchesPayment(state: PaymentState, filter: PaymentFilter) {
     : state === filter;
 }
 
+function matchesInvoiceState(state: InvoiceState, filter: InvoiceStateFilter) {
+  return filter === 'IN_REVIEW' ? REVIEW_STATES.includes(state) : state === filter;
+}
+
 const inRange = (row: PurchaseEntry, query: PurchaseRegisterQuery) =>
   row.billDate >= query.from && row.billDate <= query.to;
 
@@ -224,7 +249,8 @@ function matches(row: PurchaseEntry, query: PurchaseRegisterQuery) {
         query.distributorGstin.trim().toUpperCase()) &&
     (!query.paymentState ||
       matchesPayment(row.payment.state, query.paymentState)) &&
-    (!query.invoiceState || row.invoiceState === query.invoiceState) &&
+    (!query.invoiceState ||
+      matchesInvoiceState(row.invoiceState, query.invoiceState)) &&
     (!query.source || row.source === query.source) &&
     (!query.entryById || row.entryBy?.id === query.entryById)
   );
@@ -243,7 +269,7 @@ const SORT_VALUES: Record<SortKey, (row: PurchaseRegisterRow) => string | number
   outstanding: (row) => row.payment.outstanding,
 };
 
-export function sortRows(
+function sortRows(
   rows: PurchaseRegisterRow[],
   sortBy: SortKey,
   sortDir: SortDirection,
@@ -271,37 +297,81 @@ function distributorOptions(rows: PurchaseEntry[]): Distributor[] {
   );
 }
 
-export function purchaseRegisterPage(
+export function purchaseRegisterRows(
   entries: PurchaseEntry[],
   query: PurchaseRegisterQuery,
-): PurchaseRegisterPage {
+): PurchaseRegisterRow[] {
   const numbered = entries
     .filter((row) => matches(row, query))
     .sort(entryOrder)
     .map((row, index) => ({ ...row, srNo: index + 1 }));
-  const counted = numbered.filter((row) => row.invoiceState !== 'CANCELLED');
+  return sortRows(numbered, query.sortBy, query.sortDir);
+}
+
+export function purchaseRegisterPage(
+  entries: PurchaseEntry[],
+  query: PurchaseRegisterQuery,
+): PurchaseRegisterPage {
+  const rows = purchaseRegisterRows(entries, query);
+  const posted = rows.filter((row) => row.invoiceState === 'POSTED');
+  const cancelled = rows.filter((row) => row.invoiceState === 'CANCELLED').length;
   const sum = (values: number[]) => money(values.reduce((total, value) => total + value, 0));
   const ranged = entries.filter((row) => inRange(row, query));
   return {
-    rows: pageOf(sortRows(numbered, query.sortBy, query.sortDir), query.page, query.limit),
-    total: numbered.length,
+    rows: pageOf(rows, query.page, query.limit),
+    total: rows.length,
     page: query.page,
     limit: query.limit,
     totals: {
-      amount: sum(counted.map((row) => row.amount)),
-      outstanding: sum(counted.map((row) => row.payment.outstanding)),
-      count: counted.length,
-      excluded: { cancelled: numbered.length - counted.length },
+      amount: sum(posted.map((row) => row.amount)),
+      outstanding: sum(posted.map((row) => row.payment.outstanding)),
+      count: posted.length,
+      excluded: {
+        notPosted: rows.length - posted.length - cancelled,
+        cancelled,
+      },
     },
     entryByOptions: entryByOptions(ranged),
     distributorOptions: distributorOptions(ranged),
   };
 }
 
-export function canSettlePurchases(role: string, permissions: readonly string[]) {
-  if (['OWNER', 'ADMIN', 'DOCTOR'].includes(role)) return true;
-  return (
-    ['PHARMACIST', 'ACCOUNTANT'].includes(role) &&
-    permissions.includes('pharmacy:purchase-ledger:write')
-  );
+const PAYMENT_LABEL: Record<PaymentState, string> = {
+  NOT_POSTED: 'Not posted',
+  DUE: 'Due',
+  OVERDUE: 'Overdue',
+  PARTIAL: 'Part paid',
+  PAID: 'Paid',
+  CANCELLED: 'Cancelled',
+};
+
+const clinicTime = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+function paymentLabel(payment: PurchasePayment) {
+  if (payment.state !== 'OVERDUE') return PAYMENT_LABEL[payment.state];
+  const days = `${payment.overdueDays} day${payment.overdueDays === 1 ? '' : 's'}`;
+  return [PAYMENT_LABEL.OVERDUE, days, ...(payment.partlyPaid ? ['part paid'] : [])].join(' · ');
+}
+
+export function purchaseRegisterSheet(rows: PurchaseRegisterRow[]) {
+  return rows.map((row) => {
+    const entryAt = new Date(row.entryAt);
+    return {
+      'Sr No': row.srNo,
+      'Bill No': row.billNo,
+      'Entry Date': `${clinicDay(entryAt)} ${clinicTime.format(entryAt)}`,
+      'Bill Date': row.billDate,
+      'Entry By': row.entryBy?.name ?? '',
+      Distributor: row.distributor.name,
+      GSTIN: row.distributor.gstin,
+      'Bill Amount': row.amount,
+      Payment: paymentLabel(row.payment),
+      Outstanding: row.payment.outstanding,
+    };
+  });
 }

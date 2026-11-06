@@ -38,7 +38,7 @@ export function clinicDayOf(value: unknown): string | null {
   return Number.isFinite(instant.getTime()) ? clinicDay(instant) : null;
 }
 
-const clinicDayStart = (day: string) => new Date(`${day}T00:00:00+05:30`);
+export const clinicDayStart = (day: string) => new Date(`${day}T00:00:00+05:30`);
 
 export function clinicDayRange(from: string, to: string) {
   return {

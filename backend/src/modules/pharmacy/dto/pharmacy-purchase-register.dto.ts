@@ -12,7 +12,7 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  INVOICE_STATES,
+  INVOICE_STATE_FILTERS,
   PAYMENT_FILTERS,
   PURCHASE_SOURCES,
   SEARCH_FIELDS,
@@ -21,7 +21,7 @@ import {
 } from '../pharmacy-purchase-register';
 import { IsRegisterRange, MAX_REGISTER_RANGE_DAYS } from '../register-utils';
 import type {
-  InvoiceState,
+  InvoiceStateFilter,
   PaymentFilter,
   PurchaseRegisterQuery,
   PurchaseSource,
@@ -75,10 +75,13 @@ export class QueryPurchaseRegisterDto implements PurchaseRegisterQuery {
   @IsIn(PAYMENT_FILTERS)
   paymentState?: PaymentFilter;
 
-  @ApiPropertyOptional({ enum: INVOICE_STATES })
+  @ApiPropertyOptional({
+    enum: INVOICE_STATE_FILTERS,
+    description: 'IN_REVIEW matches OCR review, reconciliation failed and reviewed bills',
+  })
   @IsOptional()
-  @IsIn(INVOICE_STATES)
-  invoiceState?: InvoiceState;
+  @IsIn(INVOICE_STATE_FILTERS)
+  invoiceState?: InvoiceStateFilter;
 
   @ApiPropertyOptional({ enum: PURCHASE_SOURCES })
   @IsOptional()
@@ -115,4 +118,12 @@ export class QueryPurchaseRegisterDto implements PurchaseRegisterQuery {
   @Min(1)
   @Max(100)
   limit: number = 50;
+
+  @ApiPropertyOptional({
+    enum: ['xlsx'],
+    description: 'xlsx downloads every filtered bill in the requested order instead of one page',
+  })
+  @IsOptional()
+  @IsIn(['xlsx'])
+  format?: 'xlsx';
 }

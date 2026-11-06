@@ -24,6 +24,7 @@ import { extractWithCodexOAuth, purchaseOcrCodexConfig } from '../../shared/code
 import sharp from 'sharp';
 import type { Express } from 'express';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { clinicDayOf, clinicDayRange, clinicDayStart } from './register-utils';
 import {
   ConfirmPharmacyPurchaseMasterDto,
   CreatePharmacyPurchaseInvoiceDto,
@@ -1054,17 +1055,7 @@ export class PharmacyPurchaseInvoiceService {
   }
 
   purchaseRegisterWhere(query: QueryPharmacyPurchaseInvoiceDto, branchId: string) {
-    const startDate = query.startDate
-      ? this.parseDate(query.startDate, 'startDate')
-      : undefined;
-    const endDate = query.endDate
-      ? this.endOfDay(this.parseDate(query.endDate, 'endDate'))
-      : undefined;
-
-    if (startDate && endDate && startDate > endDate) {
-      throw new BadRequestException('startDate cannot be after endDate');
-    }
-
+    const invoiceDate = this.clinicInvoiceDates(query);
     const where: any = { branchId };
     if (query.search?.trim()) {
       const search = query.search.trim();
@@ -1077,13 +1068,28 @@ export class PharmacyPurchaseInvoiceService {
     }
     if (query.status) { where.status = query.status; }
     if (query.unposted === 'true') where.status = {notIn:['STOCK_COMMITTED','CANCELLED']};
-    if (startDate || endDate) {
-      where.invoiceDate = {};
-      if (startDate) where.invoiceDate.gte = startDate;
-      if (endDate) where.invoiceDate.lte = endDate;
-    }
+    if (invoiceDate) where.invoiceDate = invoiceDate;
 
     return where;
+  }
+
+  private clinicInvoiceDates(query: { startDate?: string; endDate?: string }) {
+    const day = (value: string | undefined, fieldName: string) => {
+      if (!value) return undefined;
+      const parsed = clinicDayOf(value);
+      if (!parsed) throw new BadRequestException(`${fieldName} must be a valid date`);
+      return parsed;
+    };
+    const from = day(query.startDate, 'startDate');
+    const to = day(query.endDate, 'endDate');
+    if (from && to && from > to) {
+      throw new BadRequestException('startDate cannot be after endDate');
+    }
+    if (!from && !to) return undefined;
+    return {
+      ...(from && { gte: clinicDayStart(from) }),
+      ...(to && { lt: clinicDayRange(to, to).lt }),
+    };
   }
 
   async findOne(id: string, branchId: string) {

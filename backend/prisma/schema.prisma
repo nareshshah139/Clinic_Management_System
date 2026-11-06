@@ -1568,6 +1568,7 @@ model PharmacyPurchaseInvoice {
   @@unique([branchId, distributorGstin, invoiceNumber])
   @@unique([branchId, workflowReceiptId])
   @@index([branchId])
+  @@index([branchId, invoiceDate])
   @@index([distributorGstin])
   @@index([invoiceDate])
   @@index([goodsReceivedDate])

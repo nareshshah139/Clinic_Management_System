@@ -7,7 +7,8 @@ import {
 import { PrismaService } from '../../shared/database/prisma.service';
 import { createHash } from 'node:crypto';
 import { CreatePharmacyPurchasePaymentDto, ReversePharmacyPurchasePaymentDto, ReallocatePharmacyPurchasePaymentDto } from './dto/pharmacy-purchase-ledger.dto';
-import { MONEY_TOLERANCE, invoiceOutstanding, paymentStatus } from './purchase-payment-balance';
+import { MONEY_TOLERANCE, daysPastDue, invoiceOutstanding, invoiceSettled, paymentStatus } from './purchase-payment-balance';
+import { clinicDay, clinicDayStart, isCalendarDay } from './register-utils';
 
 type LedgerInvoice = {
   id: string;
@@ -18,7 +19,7 @@ type LedgerInvoice = {
   invoiceDate: Date | string;
   dueDate?: Date | string | null;
   netPayable: number;
-  creditApplied?: number;
+  creditApplied?: number | null;
   tcsAmount?: number | null;
   status?: string;
   paymentAllocations?: {
@@ -74,7 +75,8 @@ export class PharmacyPurchaseLedgerService {
       );
     }
 
-    const requestFingerprint = this.paymentFingerprint(dto);
+    const paymentDate = isCalendarDay(dto.paymentDate) ? clinicDayStart(dto.paymentDate) : new Date(dto.paymentDate);
+    const requestFingerprint = this.paymentFingerprint({ ...dto, paymentDate });
     return this.transaction(async (tx: any) => {
       const existing = await tx.pharmacyPurchasePayment.findUnique({
         where: { branchId_requestKey: { branchId, requestKey: dto.requestKey.trim() } },
@@ -116,7 +118,7 @@ export class PharmacyPurchaseLedgerService {
           requestFingerprint,
           distributorGstin,
           distributorName,
-          paymentDate: new Date(dto.paymentDate),
+          paymentDate,
           mode: dto.mode,
           paidBy,
           amount,
@@ -142,11 +144,7 @@ export class PharmacyPurchaseLedgerService {
         ...payment,
         allocations: payment.allocations.map((allocation: any) => {
           const invoice = allocation.purchaseInvoice;
-          const originalInvoice = invoiceById.get(allocation.purchaseInvoiceId);
-          const existingPaid = this.sumAllocations(
-            originalInvoice?.paymentAllocations,
-          );
-          const paidAfter = this.money(existingPaid + Number(originalInvoice?.creditApplied || 0) + allocation.amount);
+          const paidAfter = this.money(invoiceSettled(invoiceById.get(allocation.purchaseInvoiceId)!) + allocation.amount);
           const outstandingAfter = invoiceOutstanding(invoice, paidAfter);
 
           return {
@@ -423,14 +421,13 @@ export class PharmacyPurchaseLedgerService {
     ];
 
     const invoices = await this.findLedgerInvoices(branchId, undefined, asOfDate);
+    const today = clinicDay(asOfDate);
     for (const invoice of invoices) {
       if (invoice.status !== 'STOCK_COMMITTED') throw new BadRequestException('Only posted purchase bills can receive payments');
-      const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = invoiceOutstanding(invoice, paid);
+      const outstanding = invoiceOutstanding(invoice, invoiceSettled(invoice));
       if (outstanding <= 0) continue;
 
-      const anchorDate = new Date(invoice.dueDate || invoice.invoiceDate);
-      const days = Math.max(0, this.daysBetween(anchorDate, asOfDate));
+      const days = Math.max(0, daysPastDue(invoice.dueDate || invoice.invoiceDate, today));
       const bucket =
         days <= 30
           ? buckets[0]
@@ -470,30 +467,28 @@ export class PharmacyPurchaseLedgerService {
     const dueToday: any[] = [];
     const dueIn7Days: any[] = [];
     const overdue: any[] = [];
-    const todayStart = this.startOfDay(asOfDate);
-    const sevenDaysEnd = this.endOfDay(this.addDays(todayStart, 7));
+    const today = clinicDay(asOfDate);
 
     for (const invoice of invoices) {
-      const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = invoiceOutstanding(invoice, paid);
+      const outstanding = invoiceOutstanding(invoice, invoiceSettled(invoice));
       if (outstanding <= MONEY_TOLERANCE || !invoice.dueDate) continue;
 
-      const dueDate = new Date(invoice.dueDate);
+      const days = daysPastDue(invoice.dueDate, today);
       const alertRow = {
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         distributorName: invoice.distributorName,
         distributorGstin: invoice.distributorGstin,
-        dueDate,
+        dueDate: new Date(invoice.dueDate),
         outstanding,
-        daysPastDue: this.daysBetween(dueDate, asOfDate),
+        daysPastDue: days,
       };
 
-      if (this.isSameDay(dueDate, todayStart)) {
+      if (days === 0) {
         dueToday.push(alertRow);
-      } else if (dueDate < todayStart) {
+      } else if (days > 0) {
         overdue.push(alertRow);
-      } else if (dueDate <= sevenDaysEnd) {
+      } else if (days >= -7) {
         dueIn7Days.push(alertRow);
       }
     }
@@ -593,8 +588,7 @@ export class PharmacyPurchaseLedgerService {
         );
       }
 
-      const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = invoiceOutstanding(invoice, paid);
+      const outstanding = invoiceOutstanding(invoice, invoiceSettled(invoice));
       if (Math.round(allocation.amount * 100) > Math.round(outstanding * 100)) {
         throw new BadRequestException(
           `Allocation exceeds outstanding balance for invoice ${invoice.invoiceNumber}`,
@@ -658,16 +652,15 @@ export class PharmacyPurchaseLedgerService {
     let annualPurchaseTotal = 0;
     let tcsAmountTotal = 0;
     const paidCycleDays: number[] = [];
-    const todayStart = this.startOfDay(asOfDate);
-    const sevenDaysEnd = this.endOfDay(this.addDays(todayStart, 7));
+    const today = clinicDay(asOfDate);
 
     for (const invoice of invoices) {
       const invoiceAmount = this.money(invoice.netPayable);
-      const invoicePaid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
+      const invoicePaid = invoiceSettled(invoice);
       const outstanding = invoiceOutstanding(invoice, invoicePaid);
       const status = paymentStatus(invoiceAmount, invoicePaid);
       invoiceTotal = this.money(invoiceTotal + invoiceAmount);
-      paid = this.money(paid + this.sumAllocations(invoice.paymentAllocations));
+      paid = this.money(paid + invoiceSettled({ paymentAllocations: invoice.paymentAllocations }));
       credits = this.money(credits + Number(invoice.creditApplied || 0));
 
       if (status === 'PENDING') pendingCount += 1;
@@ -679,18 +672,18 @@ export class PharmacyPurchaseLedgerService {
           paidCycleDays.push(
             Math.max(
               0,
-              this.daysBetween(new Date(invoice.invoiceDate), lastPaymentDate),
+              daysPastDue(invoice.invoiceDate, clinicDay(lastPaymentDate)),
             ),
           );
         }
       }
 
       if (outstanding > MONEY_TOLERANCE && invoice.dueDate) {
-        const dueDate = new Date(invoice.dueDate);
-        if (dueDate < todayStart) {
+        const days = daysPastDue(invoice.dueDate, today);
+        if (days > 0) {
           overdueCount += 1;
           overdueAmount = this.money(overdueAmount + outstanding);
-        } else if (dueDate <= sevenDaysEnd) {
+        } else if (days >= -7) {
           dueSoonCount += 1;
           dueSoonAmount = this.money(dueSoonAmount + outstanding);
         }
@@ -743,7 +736,7 @@ export class PharmacyPurchaseLedgerService {
   }
 
   private invoiceLedgerRow(invoice: LedgerInvoice, asOfDate: Date) {
-    const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
+    const paid = invoiceSettled(invoice);
     const outstanding = invoiceOutstanding(invoice, paid);
     return {
       id: invoice.id,
@@ -751,13 +744,13 @@ export class PharmacyPurchaseLedgerService {
       invoiceDate: invoice.invoiceDate,
       dueDate: invoice.dueDate,
       netPayable: this.money(invoice.netPayable),
-      paid: this.sumAllocations(invoice.paymentAllocations),
+      paid: invoiceSettled({ paymentAllocations: invoice.paymentAllocations }),
       creditApplied: Number(invoice.creditApplied || 0),
       outstanding,
       paymentStatus: paymentStatus(invoice.netPayable, paid),
       daysPastDue:
         outstanding > MONEY_TOLERANCE && invoice.dueDate
-          ? this.daysBetween(new Date(invoice.dueDate), asOfDate)
+          ? daysPastDue(invoice.dueDate, clinicDay(asOfDate))
           : 0,
       payments: (invoice.paymentAllocations || []).map((allocation) => ({
         paymentId: allocation.payment?.id,
@@ -778,15 +771,6 @@ export class PharmacyPurchaseLedgerService {
     };
   }
 
-  private sumAllocations(allocations?: { amount: number }[]) {
-    return this.money(
-      (allocations || []).reduce(
-        (sum, allocation) => sum + Number(allocation.amount || 0),
-        0,
-      ),
-    );
-  }
-
   private lastPaymentDate(invoice: LedgerInvoice) {
     const dates = (invoice.paymentAllocations || [])
       .map((allocation) => allocation.payment?.paymentDate)
@@ -797,39 +781,8 @@ export class PharmacyPurchaseLedgerService {
   }
 
   private fiscalYearStart(asOfDate: Date) {
-    const year =
-      asOfDate.getMonth() >= 3
-        ? asOfDate.getFullYear()
-        : asOfDate.getFullYear() - 1;
-    return new Date(year, 3, 1);
-  }
-
-  private startOfDay(date: Date) {
-    const next = new Date(date);
-    next.setHours(0, 0, 0, 0);
-    return next;
-  }
-
-  private endOfDay(date: Date) {
-    const next = new Date(date);
-    next.setHours(23, 59, 59, 999);
-    return next;
-  }
-
-  private addDays(date: Date, days: number) {
-    const next = new Date(date);
-    next.setDate(next.getDate() + days);
-    return next;
-  }
-
-  private isSameDay(a: Date, b: Date) {
-    return this.startOfDay(a).getTime() === this.startOfDay(b).getTime();
-  }
-
-  private daysBetween(start: Date, end: Date) {
-    const startTime = this.startOfDay(start).getTime();
-    const endTime = this.startOfDay(end).getTime();
-    return Math.floor((endTime - startTime) / 86400000);
+    const [year, month] = clinicDay(asOfDate).split('-').map(Number);
+    return clinicDayStart(`${month >= 4 ? year : year - 1}-04-01`);
   }
 
   private money(value: number) {

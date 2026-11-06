@@ -1,4 +1,12 @@
-import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  Query,
+  Request,
+  StreamableFile,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -21,24 +29,28 @@ export class PharmacyPurchaseRegisterController {
   constructor(private readonly purchaseRegister: PharmacyPurchaseRegisterService) {}
 
   @Get()
+  @Header('Cache-Control', 'private, no-store')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
   @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
   @ApiOperation({
-    summary: 'List purchase bills with payment state, totals and settle access',
+    summary: 'List purchase bills with payment state and totals, or download them as Excel',
   })
   @ApiResponse({
     status: 200,
-    description: 'Register page with totals for every filtered bill',
+    description:
+      'Register page with totals for every filtered bill; with format=xlsx, every filtered bill as an Excel file',
   })
   @ApiResponse({
     status: 400,
     description: `Invalid filters, or a date range that ends before it starts or spans more than ${MAX_REGISTER_RANGE_DAYS} days`,
   })
   async list(@Query() query: QueryPurchaseRegisterDto, @Request() req: any) {
-    return this.purchaseRegister.list(query, {
-      id: req.user.id,
-      role: req.user.role,
-      branchId: req.user.branchId,
+    const actor = { branchId: req.user.branchId };
+    if (query.format !== 'xlsx') return this.purchaseRegister.list(query, actor);
+    const file = await this.purchaseRegister.export(query, actor);
+    return new StreamableFile(file.data, {
+      type: file.mimeType,
+      disposition: `attachment; filename="${file.fileName}"`,
     });
   }
 }

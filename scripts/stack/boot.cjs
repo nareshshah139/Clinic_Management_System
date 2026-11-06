@@ -233,6 +233,14 @@ async function bootStack(opts = {}) {
       env: { ...env, PRISMA_GENERATE_SKIP_AUTOINSTALL: "1" },
       stdio: "pipe",
     });
+    execFileSync(
+      process.execPath,
+      [
+        req.resolve("prisma/build/index.js"), "db", "execute", "--url", env.DATABASE_URL,
+        "--file", path.join(root, "backend/prisma/migrations/20261005093000_inventory_read_queries/migration.sql"),
+      ],
+      { cwd: prismaCwd, env: { ...env, PRISMA_GENERATE_SKIP_AUTOINSTALL: "1" }, stdio: "pipe" },
+    );
     owned.db = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
     stack.db = owned.db;
 

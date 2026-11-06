@@ -1188,6 +1188,25 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(result.discountDropAlerts).toEqual([]);
   });
 
+  it('lists and exports purchase bills by clinic day, so a late-evening bill stays on its own day', async () => {
+    expect(
+      service.purchaseRegisterWhere({ startDate: '2026-04-01', endDate: '2026-04-30' }, branchId).invoiceDate,
+    ).toEqual({
+      gte: new Date('2026-03-31T18:30:00.000Z'),
+      lt: new Date('2026-04-30T18:30:00.000Z'),
+    });
+    expect(service.purchaseRegisterWhere({ endDate: '2026-04-30T22:00:00+05:30' }, branchId).invoiceDate).toEqual({
+      lt: new Date('2026-04-30T18:30:00.000Z'),
+    });
+    expect(service.purchaseRegisterWhere({ startDate: '2026-04-30T20:00:00.000Z' }, branchId).invoiceDate).toEqual({
+      gte: new Date('2026-04-30T18:30:00.000Z'),
+    });
+    expect(() => service.purchaseRegisterWhere({ startDate: '2026-04-30', endDate: '2026-04-01' }, branchId)).toThrow(
+      'startDate cannot be after endDate',
+    );
+    expect(() => service.purchaseRegisterWhere({ startDate: '2026-02-30' }, branchId)).toThrow('startDate must be a valid date');
+  });
+
   it('rejects distributor analytics with an inverted date range', async () => {
     await expect(
       service.getDistributorAnalytics(

@@ -279,4 +279,86 @@ describe('PharmacyPurchaseLedgerService', () => {
       tcsApproaching: 0,
     });
   });
+
+  it('stores a calendar-day payment date as the start of that clinic day', async () => {
+    const first = invoice({ id: 'purchase-1', netPayable: 1000 });
+    prisma.pharmacyPurchaseInvoice.findMany.mockResolvedValue([first]);
+    prisma.pharmacyPurchasePayment.create.mockImplementation(({ data }: any) =>
+      Promise.resolve({
+        id: 'payment-1',
+        ...data,
+        allocations: data.allocations.create.map((allocation: any) => ({ id: 'allocation-1', ...allocation, purchaseInvoice: first })),
+      }),
+    );
+    const pay = (requestKey: string, paymentDate: string) =>
+      service.createPayment(
+        {
+          requestKey,
+          distributorGstin: gstin,
+          distributorName: 'Linae Distributors',
+          paymentDate,
+          mode: PharmacyPurchasePaymentModeDto.UPI,
+          amount: 100,
+          allocations: [{ purchaseInvoiceId: 'purchase-1', amount: 100 }],
+        },
+        branchId,
+        userId,
+      );
+
+    expect((await pay('day', '2026-05-06')).paymentDate).toEqual(new Date('2026-05-05T18:30:00.000Z'));
+    expect((await pay('instant', '2026-05-06T15:45:00+05:30')).paymentDate).toEqual(new Date('2026-05-06T10:15:00.000Z'));
+  });
+
+  it('does not count a future-dated payment until its payment date', async () => {
+    prisma.pharmacyPurchaseInvoice.findMany.mockResolvedValue([
+      invoice({
+        netPayable: 1000,
+        paymentAllocations: [
+          {
+            amount: 400,
+            createdAt: new Date('2026-05-06T04:00:00.000Z'),
+            payment: {
+              id: 'payment-1',
+              paymentDate: new Date('2026-05-09T18:30:00.000Z'),
+              createdAt: new Date('2026-05-06T04:00:00.000Z'),
+              amount: 400,
+              mode: 'NEFT',
+            },
+          },
+        ],
+      }),
+    ]);
+
+    const outstanding = async (asOf: string) =>
+      (await service.getDistributorSummaries(branchId, new Date(asOf))).distributors[0].outstanding;
+    expect(await outstanding('2026-05-06T06:00:00.000Z')).toBe(1000);
+    expect(await outstanding('2026-05-09T18:30:00.000Z')).toBe(600);
+  });
+
+  it('ages and alerts by clinic day, so a bill due today in the clinic is not yet overdue', async () => {
+    prisma.pharmacyPurchaseInvoice.findMany.mockResolvedValue([
+      invoice({ id: 'due-today', dueDate: new Date('2026-05-05T19:00:00.000Z'), netPayable: 500 }),
+      invoice({ id: 'late', invoiceNumber: 'LD-002', dueDate: new Date('2026-05-05T18:29:00.000Z'), netPayable: 300 }),
+    ]);
+    const asOfDate = new Date('2026-05-06T10:00:00.000Z');
+
+    const aging = await service.getAging(branchId, asOfDate);
+    expect(aging.buckets[0].invoices.map((row: any) => [row.id, row.daysPastDue])).toEqual([
+      ['due-today', 0],
+      ['late', 1],
+    ]);
+    const alerts = await service.getAlerts(branchId, asOfDate);
+    expect([alerts.dueToday.map((row) => row.id), alerts.overdue.map((row) => row.id)]).toEqual([['due-today'], ['late']]);
+    prisma.pharmacyPurchasePayment.findMany.mockResolvedValue([]);
+    const ledger = await service.getDistributorLedger(branchId, gstin, asOfDate);
+    expect(ledger.invoices.map((row) => [row.id, row.daysPastDue])).toEqual([
+      ['due-today', 0],
+      ['late', 1],
+    ]);
+    const summary = (await service.getDistributorSummaries(branchId, asOfDate)).distributors[0];
+    expect([summary.overdue, summary.dueSoon]).toEqual([
+      { count: 1, amount: 300 },
+      { count: 1, amount: 500 },
+    ]);
+  });
 });

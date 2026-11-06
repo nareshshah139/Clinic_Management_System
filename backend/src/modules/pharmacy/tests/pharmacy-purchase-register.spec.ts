@@ -1,9 +1,11 @@
+import { PharmacyPurchaseInvoiceStatus } from '@prisma/client';
 import {
   PurchaseInvoiceRecord,
   PurchaseRegisterQuery,
-  canSettlePurchases,
   purchaseEntry,
   purchaseRegisterPage,
+  purchaseRegisterRows,
+  purchaseRegisterSheet,
 } from '../pharmacy-purchase-register';
 
 const TODAY = '2026-11-06';
@@ -72,6 +74,7 @@ describe('purchase register rows', () => {
         outstanding: 1234.57,
         dueDate: '2026-12-01',
         overdueDays: 0,
+        partlyPaid: false,
       },
     });
   });
@@ -84,28 +87,43 @@ describe('purchase register rows', () => {
       'REVIEWED',
       'STOCK_COMMITTED',
       'CANCELLED',
-    ].map((status) => purchaseEntry(invoice({ status }), null, TODAY).invoiceState);
-    expect(states).toEqual(['DRAFT', 'REVIEW', 'REVIEW', 'REVIEW', 'POSTED', 'CANCELLED']);
+    ].map((status) =>
+      purchaseEntry(invoice({ status: status as PharmacyPurchaseInvoiceStatus }), null, TODAY).invoiceState,
+    );
+    expect(states).toEqual([
+      'DRAFT',
+      'OCR_REVIEW',
+      'RECONCILIATION_FAILED',
+      'REVIEWED',
+      'POSTED',
+      'CANCELLED',
+    ]);
   });
 
   it('derives each payment state from payments, credits, status and the due date', () => {
     expect(payment({ status: 'CANCELLED', paymentAllocations: [{ amount: 200 }] })).toEqual({
-      state: 'CANCELLED', paid: 200, credit: 0, outstanding: 0, dueDate: null, overdueDays: 0,
+      state: 'CANCELLED', paid: 200, credit: 0, outstanding: 0, dueDate: null, overdueDays: 0, partlyPaid: false,
     });
     expect(payment({ status: 'REVIEWED' })).toEqual({
-      state: 'NOT_POSTED', paid: 0, credit: 0, outstanding: 0, dueDate: null, overdueDays: 0,
+      state: 'NOT_POSTED', paid: 0, credit: 0, outstanding: 0, dueDate: null, overdueDays: 0, partlyPaid: false,
     });
     expect(payment({ paymentAllocations: [{ amount: 600 }], creditApplied: 400 })).toEqual({
-      state: 'PAID', paid: 600, credit: 400, outstanding: 0, dueDate: null, overdueDays: 0,
+      state: 'PAID', paid: 600, credit: 400, outstanding: 0, dueDate: null, overdueDays: 0, partlyPaid: false,
     });
     expect(payment({ paymentAllocations: [{ amount: 999.995 }] }).state).toBe('PAID');
     expect(payment({ creditApplied: 250 })).toEqual({
-      state: 'PARTIAL', paid: 0, credit: 250, outstanding: 750, dueDate: null, overdueDays: 0,
+      state: 'PARTIAL', paid: 0, credit: 250, outstanding: 750, dueDate: null, overdueDays: 0, partlyPaid: true,
     });
+    expect(payment({ creditApplied: 250, dueDate: new Date('2026-11-10T18:30:00.000Z') })).toEqual({
+      state: 'PARTIAL', paid: 0, credit: 250, outstanding: 750, dueDate: '2026-11-11', overdueDays: 0, partlyPaid: true,
+    });
+  });
+
+  it('ranks a part-paid bill past its due day as overdue and still says it was part paid', () => {
     expect(
       payment({ paymentAllocations: [{ amount: 100 }], dueDate: new Date('2026-10-26T18:30:00.000Z') }),
     ).toEqual({
-      state: 'PARTIAL', paid: 100, credit: 0, outstanding: 900, dueDate: '2026-10-27', overdueDays: 10,
+      state: 'OVERDUE', paid: 100, credit: 0, outstanding: 900, dueDate: '2026-10-27', overdueDays: 10, partlyPaid: true,
     });
   });
 
@@ -156,6 +174,32 @@ describe('purchase register page', () => {
     ),
     purchaseEntry(
       invoice({
+        id: 'g',
+        invoiceNumber: 'MED-3',
+        createdAt: new Date('2026-10-03T06:00:00Z'),
+        distributorName: 'Medico Agencies',
+        distributorGstin: '27AAAAA0000A1Z5',
+        netPayable: 400,
+        dueDate: new Date('2026-10-31T18:30:00Z'),
+        paymentAllocations: [{ amount: 150 }],
+      }),
+      asha,
+      TODAY,
+    ),
+    purchaseEntry(
+      invoice({
+        id: 'h',
+        invoiceNumber: 'LIN-12',
+        createdAt: new Date('2026-10-06T05:00:00Z'),
+        netPayable: 600,
+        status: 'OCR_REVIEW_REQUIRED',
+        source: 'OCR',
+      }),
+      ravi,
+      TODAY,
+    ),
+    purchaseEntry(
+      invoice({
         id: 'd',
         invoiceNumber: 'MED-2',
         createdAt: new Date('2026-10-04T05:00:00Z'),
@@ -196,17 +240,24 @@ describe('purchase register page', () => {
   const shown = (overrides: Partial<PurchaseRegisterQuery> = {}) =>
     view(overrides).rows.map((row) => `${row.srNo}:${row.billNo}`);
 
-  it('numbers bills in entry order and totals non-cancelled bills in the period', () => {
+  it('numbers bills in entry order and totals only posted bills in the period', () => {
     const page = view();
-    expect(page.rows.map((row) => `${row.srNo}:${row.billNo}:${row.payment.state}`)).toEqual([
-      '1:LIN-10:DUE',
-      '2:LIN-9:PAID',
-      '3:MED-1:OVERDUE',
-      '4:MED-2:CANCELLED',
-      '5:LIN-11:NOT_POSTED',
+    expect(page.rows.map((row) => `${row.srNo}:${row.billNo}:${row.invoiceState}:${row.payment.state}`)).toEqual([
+      '1:LIN-10:POSTED:DUE',
+      '2:LIN-9:POSTED:PAID',
+      '3:MED-1:POSTED:OVERDUE',
+      '4:MED-3:POSTED:OVERDUE',
+      '5:MED-2:CANCELLED:CANCELLED',
+      '6:LIN-11:DRAFT:NOT_POSTED',
+      '7:LIN-12:OCR_REVIEW:NOT_POSTED',
     ]);
-    expect(page.total).toBe(5);
-    expect(page.totals).toEqual({ amount: 2600, outstanding: 1300, count: 4, excluded: { cancelled: 1 } });
+    expect(page.total).toBe(7);
+    expect(page.totals).toEqual({
+      amount: 2200,
+      outstanding: 1550,
+      count: 4,
+      excluded: { notPosted: 2, cancelled: 1 },
+    });
     expect(page.entryByOptions).toEqual([asha, ravi]);
     expect(page.distributorOptions).toEqual([
       { name: 'Linae Distributors', gstin: '36ABCDE1234F1Z5' },
@@ -215,50 +266,79 @@ describe('purchase register page', () => {
   });
 
   it('numbers over the filtered set, so one supplier starts at Sr No 1', () => {
-    expect(shown({ field: 'distributor', q: 'medico' })).toEqual(['1:MED-1', '2:MED-2']);
-    expect(shown({ field: 'distributor', q: '36abcde' })).toEqual(['1:LIN-10', '2:LIN-9', '3:LIN-11']);
-    expect(shown({ field: 'billNo', q: 'lin-1' })).toEqual(['1:LIN-10', '2:LIN-11']);
-    expect(shown({ distributorGstin: '27aaaaa0000a1z5' })).toEqual(['1:MED-1', '2:MED-2']);
+    expect(shown({ field: 'distributor', q: 'medico' })).toEqual(['1:MED-1', '2:MED-3', '3:MED-2']);
+    expect(shown({ field: 'distributor', q: '36abcde' })).toEqual(['1:LIN-10', '2:LIN-9', '3:LIN-11', '4:LIN-12']);
+    expect(shown({ field: 'billNo', q: 'lin-1' })).toEqual(['1:LIN-10', '2:LIN-11', '3:LIN-12']);
+    expect(shown({ distributorGstin: '27aaaaa0000a1z5' })).toEqual(['1:MED-1', '2:MED-3', '3:MED-2']);
   });
 
-  it('filters by payment state, with outstanding covering due, overdue and part-paid bills', () => {
-    expect(shown({ paymentState: 'OUTSTANDING' })).toEqual(['1:LIN-10', '2:MED-1']);
+  it('filters by payment state, with overdue including part-paid late bills and outstanding covering every unpaid posted bill', () => {
+    expect(shown({ paymentState: 'OVERDUE' })).toEqual(['1:MED-1', '2:MED-3']);
+    expect(view({ paymentState: 'OVERDUE' }).rows.map((row) => row.payment.partlyPaid)).toEqual([false, true]);
+    expect(shown({ paymentState: 'OUTSTANDING' })).toEqual(['1:LIN-10', '2:MED-1', '3:MED-3']);
     expect(view({ paymentState: 'OUTSTANDING' }).totals).toEqual({
-      amount: 1300, outstanding: 1300, count: 2, excluded: { cancelled: 0 },
+      amount: 1700, outstanding: 1550, count: 3, excluded: { notPosted: 0, cancelled: 0 },
     });
     expect(shown({ paymentState: 'DUE' })).toEqual(['1:LIN-10']);
-    expect(shown({ paymentState: 'OVERDUE' })).toEqual(['1:MED-1']);
     expect(shown({ paymentState: 'PAID' })).toEqual(['1:LIN-9']);
-    expect(shown({ paymentState: 'NOT_POSTED' })).toEqual(['1:LIN-11']);
+    expect(shown({ paymentState: 'NOT_POSTED' })).toEqual(['1:LIN-11', '2:LIN-12']);
     expect(shown({ paymentState: 'PARTIAL' })).toEqual([]);
-    expect(shown({ invoiceState: 'CANCELLED' })).toEqual(['1:MED-2']);
     expect(shown({ source: 'GMAIL' })).toEqual(['1:LIN-11']);
-    expect(shown({ entryById: 'user-ravi' })).toEqual(['1:LIN-9', '2:LIN-11']);
+    expect(shown({ entryById: 'user-ravi' })).toEqual(['1:LIN-9', '2:LIN-11', '3:LIN-12']);
     expect(shown({ from: '2026-03-31', to: '2026-03-31' })).toEqual(['1:OLD-1']);
   });
 
-  it('sorts both ways, with bill numbers in numeric order', () => {
-    expect(shown({ sortBy: 'billNo', sortDir: 'asc' })).toEqual(['2:LIN-9', '1:LIN-10', '5:LIN-11', '3:MED-1', '4:MED-2']);
-    expect(shown({ sortBy: 'srNo', sortDir: 'desc' })).toEqual(['5:LIN-11', '4:MED-2', '3:MED-1', '2:LIN-9', '1:LIN-10']);
-    expect(shown({ sortBy: 'amount', sortDir: 'desc' })).toEqual(['1:LIN-10', '5:LIN-11', '2:LIN-9', '3:MED-1', '4:MED-2']);
-    expect(shown({ sortBy: 'outstanding', sortDir: 'desc' })).toEqual(['1:LIN-10', '3:MED-1', '5:LIN-11', '4:MED-2', '2:LIN-9']);
-    expect(shown({ sortBy: 'distributor', sortDir: 'desc' })).toEqual(['4:MED-2', '3:MED-1', '5:LIN-11', '2:LIN-9', '1:LIN-10']);
-    expect(shown({ sortBy: 'entryAt', sortDir: 'desc', page: 2, limit: 2 })).toEqual(['3:MED-1', '2:LIN-9']);
+  it('filters by each bill status, with in review covering the three review statuses', () => {
+    expect(shown({ invoiceState: 'CANCELLED' })).toEqual(['1:MED-2']);
+    expect(shown({ invoiceState: 'DRAFT' })).toEqual(['1:LIN-11']);
+    expect(shown({ invoiceState: 'OCR_REVIEW' })).toEqual(['1:LIN-12']);
+    expect(shown({ invoiceState: 'IN_REVIEW' })).toEqual(['1:LIN-12']);
+    expect(shown({ invoiceState: 'REVIEWED' })).toEqual([]);
+    expect(view({ invoiceState: 'IN_REVIEW' }).totals).toEqual({
+      amount: 0, outstanding: 0, count: 0, excluded: { notPosted: 1, cancelled: 0 },
+    });
   });
-});
 
-describe('settle access', () => {
-  it('matches the purchase ledger write guard', () => {
+  it('sorts both ways, with bill numbers in numeric order', () => {
+    expect(shown({ sortBy: 'billNo', sortDir: 'asc' })).toEqual([
+      '2:LIN-9', '1:LIN-10', '6:LIN-11', '7:LIN-12', '3:MED-1', '5:MED-2', '4:MED-3',
+    ]);
+    expect(shown({ sortBy: 'srNo', sortDir: 'desc' })).toEqual([
+      '7:LIN-12', '6:LIN-11', '5:MED-2', '4:MED-3', '3:MED-1', '2:LIN-9', '1:LIN-10',
+    ]);
+    expect(shown({ sortBy: 'amount', sortDir: 'desc' })).toEqual([
+      '1:LIN-10', '6:LIN-11', '7:LIN-12', '2:LIN-9', '4:MED-3', '3:MED-1', '5:MED-2',
+    ]);
+    expect(shown({ sortBy: 'outstanding', sortDir: 'desc' })).toEqual([
+      '1:LIN-10', '3:MED-1', '4:MED-3', '7:LIN-12', '6:LIN-11', '5:MED-2', '2:LIN-9',
+    ]);
+    expect(shown({ sortBy: 'distributor', sortDir: 'desc' })).toEqual([
+      '5:MED-2', '4:MED-3', '3:MED-1', '7:LIN-12', '6:LIN-11', '2:LIN-9', '1:LIN-10',
+    ]);
+    expect(shown({ sortBy: 'entryAt', sortDir: 'desc', page: 2, limit: 2 })).toEqual(['5:MED-2', '4:MED-3']);
+  });
+
+  it('lays out every filtered bill for the spreadsheet in the screen order with clinic times', () => {
     expect(
-      [
-        ['OWNER', []],
-        ['ADMIN', []],
-        ['DOCTOR', []],
-        ['PHARMACIST', ['pharmacy:purchase-ledger:write']],
-        ['ACCOUNTANT', ['pharmacy:purchase-ledger:write']],
-        ['PHARMACIST', ['pharmacy:purchase-ledger:read']],
-        ['RECEPTION', ['pharmacy:purchase-ledger:write']],
-      ].map(([role, permissions]) => canSettlePurchases(role as string, permissions as string[])),
-    ).toEqual([true, true, true, true, true, false, false]);
+      purchaseRegisterSheet(
+        purchaseRegisterRows(entries, query({ field: 'distributor', q: 'medico', sortBy: 'billNo', sortDir: 'desc', limit: 1 })),
+      ),
+    ).toEqual([
+      {
+        'Sr No': 2, 'Bill No': 'MED-3', 'Entry Date': '2026-10-03 11:30', 'Bill Date': '2026-10-01',
+        'Entry By': 'Asha Rao', Distributor: 'Medico Agencies', GSTIN: '27AAAAA0000A1Z5',
+        'Bill Amount': 400, Payment: 'Overdue · 5 days · part paid', Outstanding: 250,
+      },
+      {
+        'Sr No': 3, 'Bill No': 'MED-2', 'Entry Date': '2026-10-04 10:30', 'Bill Date': '2026-10-01',
+        'Entry By': '', Distributor: 'Medico Agencies', GSTIN: '27AAAAA0000A1Z5',
+        'Bill Amount': 200, Payment: 'Cancelled', Outstanding: 0,
+      },
+      {
+        'Sr No': 1, 'Bill No': 'MED-1', 'Entry Date': '2026-10-03 10:30', 'Bill Date': '2026-10-01',
+        'Entry By': 'Asha Rao', Distributor: 'Medico Agencies', GSTIN: '27AAAAA0000A1Z5',
+        'Bill Amount': 300, Payment: 'Overdue · 6 days', Outstanding: 300,
+      },
+    ]);
   });
 });
