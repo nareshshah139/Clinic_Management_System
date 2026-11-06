@@ -24,6 +24,14 @@ import {
   TransitionWorkflowDto,
 } from './inventory-workflow.types';
 
+/**
+ * @cc [owner:nareshshah139,label:security] inventory-workspace-access
+ * The workspace controller has no role list, so every /inventory/workspace route MUST require a
+ * signed-in user whose token role and branch match the stored user. OWNER, ADMIN and DOCTOR hold
+ * every workspace permission; any other role MUST hold the permission the service names for the
+ * action, so reading stock never allows a change and a user with no grants MUST get 403. The
+ * controller MUST NOT expose a delete route.
+ */
 @Controller('inventory/workspace')
 @UseGuards(JwtAuthGuard)
 export class InventoryWorkflowController {
