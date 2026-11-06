@@ -33,7 +33,7 @@ export function useClinicInvestigations(toast: Toast) {
     let cancelled = false;
     Promise.resolve(apiClient.getClinicInvestigations?.())
       .then((rows) => {
-        if (!cancelled && Array.isArray(rows)) setSaved(rows);
+        if (!cancelled && Array.isArray(rows)) setSaved((added) => [...rows, ...added.filter((entry) => !rows.some((row) => row.id === entry.id))]);
       })
       .catch(() => {});
     return () => {
@@ -89,6 +89,7 @@ export function ManageClinicInvestigations({ saved, onRename, onRemove }: Manage
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const save = async (entry: ClinicInvestigation) => {
     const name = tidyInvestigationName(draft);
@@ -130,13 +131,23 @@ export function ManageClinicInvestigations({ saved, onRename, onRemove }: Manage
                       <X className="h-4 w-4" />
                     </Button>
                   </>
+                ) : confirmingId === entry.id ? (
+                  <>
+                    <span className="flex-1">Remove {entry.name} for everyone in the clinic?</span>
+                    <Button type="button" size="sm" variant="destructive" aria-label={`Confirm removing ${entry.name}`} onClick={() => { setConfirmingId(null); void onRemove(entry); }}>
+                      Remove
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" aria-label={`Keep ${entry.name}`} onClick={() => setConfirmingId(null)}>
+                      Keep
+                    </Button>
+                  </>
                 ) : (
                   <>
                     <span className="flex-1">{entry.name}</span>
                     <Button type="button" size="sm" variant="ghost" aria-label={`Rename ${entry.name}`} onClick={() => { setEditingId(entry.id); setDraft(entry.name); }}>
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button type="button" size="sm" variant="ghost" aria-label={`Remove ${entry.name}`} onClick={() => void onRemove(entry)}>
+                    <Button type="button" size="sm" variant="ghost" aria-label={`Remove ${entry.name}`} onClick={() => setConfirmingId(entry.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </>

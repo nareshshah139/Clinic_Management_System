@@ -531,14 +531,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [customInvestigationOptions, setCustomInvestigationOptions] = useState<string[]>([]);
   const [newCustomInvestigation, setNewCustomInvestigation] = useState<string>('');
   const clinicInvestigations = useClinicInvestigations(toast);
+  const listedInvestigations = useMemo(
+    () => mergeInvestigationOptions(defaultInvestigationOptions, clinicInvestigations.saved.map((entry) => entry.name)),
+    [clinicInvestigations.saved],
+  );
   const investigationOptions = useMemo(
-    () => mergeInvestigationOptions(defaultInvestigationOptions, clinicInvestigations.saved.map((entry) => entry.name), customInvestigationOptions),
-    [clinicInvestigations.saved, customInvestigationOptions],
+    () => mergeInvestigationOptions(listedInvestigations, customInvestigationOptions),
+    [listedInvestigations, customInvestigationOptions],
   );
   const [investigations, setInvestigations, hydrateInvestigations] = useClinicalState<string[]>([], 'investigations', dirtyClinicalFields);
   const addCustomInvestigation = async () => {
     const requested = tidyInvestigationName(newCustomInvestigation);
-    if (!requested || hasInvestigation(investigationOptions, requested)) return;
+    if (!requested || hasInvestigation(listedInvestigations, requested)) return;
     setNewCustomInvestigation('');
     const { name, savedToClinic } = await clinicInvestigations.add(requested);
     if (!savedToClinic) setCustomInvestigationOptions((prev) => (hasInvestigation(prev, name) ? prev : [...prev, name]));
@@ -5301,7 +5305,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     variant="outline"
                     onClick={() => void addCustomInvestigation()}
                     aria-label="Add custom investigation"
-                    disabled={!newCustomInvestigation.trim() || hasInvestigation(investigationOptions, newCustomInvestigation)}
+                    disabled={!newCustomInvestigation.trim() || hasInvestigation(listedInvestigations, newCustomInvestigation)}
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Add

@@ -98,7 +98,8 @@ it('removes an unticked saved investigation from the checkbox list', async () =>
   api.deleteClinicInvestigation.mockResolvedValue({ id: '1' });
   await renderBuilder();
   fireEvent.click(screen.getByRole('button', { name: 'Manage saved investigations' }));
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Remove MRI Brain' })); });
+  fireEvent.click(screen.getByRole('button', { name: 'Remove MRI Brain' }));
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirm removing MRI Brain' })); });
   expect(api.deleteClinicInvestigation).toHaveBeenCalledWith('1');
   expect(checkbox('MRI Brain')).toBeNull();
 });
@@ -109,7 +110,8 @@ it('keeps a removed investigation ticked for the current prescription', async ()
   await renderBuilder();
   fireEvent.click(checkbox('MRI Brain')!);
   fireEvent.click(screen.getByRole('button', { name: 'Manage saved investigations' }));
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Remove MRI Brain' })); });
+  fireEvent.click(screen.getByRole('button', { name: 'Remove MRI Brain' }));
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirm removing MRI Brain' })); });
   expect(api.deleteClinicInvestigation).toHaveBeenCalledWith('1');
   expect(checkbox('MRI Brain')).toBeChecked();
 });
@@ -122,4 +124,47 @@ it('still ticks the investigation for this prescription when saving to the clini
   expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Not saved to clinic list' }));
   fireEvent.click(screen.getByRole('button', { name: 'Manage saved investigations' }));
   expect(screen.getByText('No investigations saved to the clinic list yet.')).toBeInTheDocument();
+});
+
+it('asks before removing and keeps the investigation when the doctor declines', async () => {
+  api.getClinicInvestigations.mockResolvedValue([{ id: '1', name: 'MRI Brain' }]);
+  await renderBuilder();
+  fireEvent.click(screen.getByRole('button', { name: 'Manage saved investigations' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove MRI Brain' }));
+  expect(screen.getByText('Remove MRI Brain for everyone in the clinic?')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Keep MRI Brain' }));
+  expect(api.deleteClinicInvestigation).not.toHaveBeenCalled();
+  expect(checkbox('MRI Brain')).not.toBeNull();
+});
+
+it('lets the doctor retry saving after a failed save', async () => {
+  api.createClinicInvestigation.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ id: '1', name: 'MRI Brain' });
+  await renderBuilder();
+  await typeAndAdd('MRI Brain');
+  await typeAndAdd('MRI Brain');
+  expect(api.createClinicInvestigation).toHaveBeenNthCalledWith(2, { name: 'MRI Brain' });
+  expect(screen.getAllByRole('checkbox', { name: 'MRI Brain' })).toHaveLength(1);
+  expect(checkbox('MRI Brain')).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Manage saved investigations' }));
+  expect(screen.getByRole('button', { name: 'Rename MRI Brain' })).toBeInTheDocument();
+});
+
+it('saves an investigation carried over from an earlier draft to the clinic list', async () => {
+  localStorage.setItem('rxDraft:patient:standalone', JSON.stringify({ investigations: ['MRI Brain'] }));
+  api.createClinicInvestigation.mockResolvedValue({ id: '1', name: 'MRI Brain' });
+  await renderBuilder();
+  expect(checkbox('MRI Brain')).toBeChecked();
+  await typeAndAdd('MRI Brain');
+  expect(api.createClinicInvestigation).toHaveBeenCalledWith({ name: 'MRI Brain' });
+});
+
+it('keeps an investigation added before the clinic list finished loading', async () => {
+  let resolveList!: (rows: { id: string; name: string }[]) => void;
+  api.getClinicInvestigations.mockReturnValue(new Promise((resolve) => { resolveList = resolve; }));
+  api.createClinicInvestigation.mockResolvedValue({ id: '2', name: 'CT Brain' });
+  await renderBuilder();
+  await typeAndAdd('CT Brain');
+  await act(async () => { resolveList([{ id: '1', name: 'MRI Brain' }]); });
+  expect(checkbox('MRI Brain')).not.toBeChecked();
+  expect(checkbox('CT Brain')).toBeChecked();
 });

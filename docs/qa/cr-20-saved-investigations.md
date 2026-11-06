@@ -9,15 +9,16 @@ A custom investigation typed into **Add Custom Investigation** is now saved to t
 - Names match without regard to case or extra spaces. Typing "  mri   BRAIN " when "MRI Brain" exists does not add a second entry, and the Add button stays disabled.
 - **Manage saved investigations** lists the clinic's saved entries, each with Rename and Remove.
 - Rename changes the checkbox label for every future prescription. If the old name is ticked on the open prescription, the tick moves to the new name.
-- Remove deletes the entry from the clinic list. If it is ticked on the open prescription, it stays ticked there.
+- Remove asks "Remove … for everyone in the clinic?" first. Confirming deletes the entry from the clinic list. If it is ticked on the open prescription, it stays ticked there.
 - Saved prescriptions keep the investigation text they were written with. Renaming or removing an entry never changes a past prescription.
-- If saving to the clinic list fails, the investigation is still ticked on the current prescription, and a message says it was added to this prescription only.
+- If saving to the clinic list fails, the investigation is still ticked on the current prescription, and a message says it was added to this prescription only. Pressing Add again retries the save.
+- A name that came from an older prescription or draft, but is not on the clinic list yet, can be saved to the list by typing it and pressing Add.
 - Doctors, admins and owners can add, rename and remove. Nurses can see the list. Reception cannot change it.
 
 ## Not included
 
 - The built-in investigations stay fixed in code. The clinic can rename or remove only the ones it added, which is what CR-20 asks for.
-- Remove has no confirmation step. A removed entry can be added again by typing it.
+- A removed entry can be added again by typing it.
 
 ## Verification, 06/11/2026
 

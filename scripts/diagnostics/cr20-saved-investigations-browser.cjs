@@ -103,6 +103,7 @@ async function main() {
     await openVisit(page, second);
     await page.getByRole('button', { name: 'Manage saved investigations' }).click();
     await page.getByRole('button', { name: 'Remove MRI Brain with contrast' }).click();
+    await page.getByRole('button', { name: 'Confirm removing MRI Brain with contrast' }).click();
     await box(page, 'MRI Brain with contrast').waitFor({ state: 'detached' });
     await openVisit(page, second);
     assert.equal(await box(page, 'MRI Brain with contrast').count(), 0, 'a removed investigation stays removed after a reload');
