@@ -17,10 +17,11 @@ function fixture() {
   const state: any = {
     item: { id: 'batch', branchId: 'branch', name: 'Product', unit: 'PIECES', currentStock: 10, heldStock: 0, costPrice: 1, sellingPrice: 1, status: 'ACTIVE', updatedAt: new Date('2026-10-24'), metadata: '{}' },
     documents: [], effects: [], movements: [], events: [], audits: [],
+    users: [{ id: 'operator', branchId: 'branch', firstName: 'Rajesh', lastName: 'Iyer', role: 'OWNER', isActive: true }],
   };
   const matches = (row: any, where: any = {}) => Object.entries(where).every(([key, value]: [string, any]) => {
     if (key === 'branchId_requestKey') return matches(row, value);
-    if (key === 'payload') return row.payload?.[value.path[0]] === value.equals;
+    if ((key === 'payload' || key === 'detail') && value?.path) return value.path.reduce((v: any, k: string) => v?.[k], row[key]) === value.equals;
     if (value && typeof value === 'object' && !(value instanceof Date)) {
       if ('in' in value) return value.in.includes(row[key]);
       if ('not' in value) return row[key] !== value.not;
@@ -47,7 +48,7 @@ function fixture() {
   });
   const tx: any = {
     inventoryWorkflowDocument: table('documents'), inventoryWorkflowEffect: table('effects'),
-    inventoryWorkflowEvent: table('events'), stockTransaction: table('movements'), inventoryAudit: table('audits'),
+    inventoryWorkflowEvent: table('events'), stockTransaction: table('movements'), inventoryAudit: table('audits'), user: table('users'),
     inventorySupplierCredit: { findUnique: async () => null }, pharmacyPurchaseInvoice: { count: async () => 0 },
     inventoryItem: {
       findFirst: async ({ where }: any) => matches(state.item, where) ? structuredClone(state.item) : null,
@@ -92,18 +93,6 @@ describe('Inventory reconciliation recovery', () => {
     expect(state.item.currentStock).toBe(10);
   });
 
-  it('records direct manager approval and a physical ledger baseline even for a zero-delta count', async () => {
-    const { state, service, add } = fixture();
-    state.movements.push({ id: 'legacy', branchId: 'branch', itemId: 'batch', type: 'ADJUSTMENT', quantity: 2 });
-    add('count', 'COUNT', 0, { lines: [{ id: 'count-line', inventoryId: 'batch', quantity: 0, unitPrice: 1, systemStock: 10, physicalStock: 10 }] });
-    await service.transition(actor, 'count', { version: 1, action: 'POST' });
-    expect(state.documents.find((d: any) => d.id === 'count').approvedBy).toBe('operator');
-    expect(JSON.parse(state.item.metadata).ledgerCheckpoint).toMatchObject({ quantity: 10, coveredMovementIds: ['legacy'], documentId: 'count', actorId: 'operator' });
-    expect(state.audits[0].physicalStock).toBe(10);
-    expect(state.movements).toHaveLength(1);
-    expect(reconcileInventoryLedger(state.item, state.movements).status).toBe('RECONCILED');
-  });
-
   it('rolls back the source reopening when compensation cannot complete', async () => {
     const { state, service, add, tx } = fixture();
     add('hold', 'HOLD', 5);
@@ -115,37 +104,6 @@ describe('Inventory reconciliation recovery', () => {
     jest.spyOn(tx.stockTransaction, 'create').mockRejectedValueOnce(new Error('Injected movement failure'));
     await expect(service.transition(actor, 'loss', { version: 2, action: 'REVERSE', reason: 'Correct loss' })).rejects.toThrow('Injected');
     expect(state).toEqual(before);
-  });
-
-  it('posts a nonzero count with its own movement inside the baseline, then detects later drift', async () => {
-    const { state, service, add } = fixture();
-    add('count', 'COUNT', 0, { lines: [{ id: 'line', inventoryId: 'batch', quantity: 0, unitPrice: 1, systemStock: 10, physicalStock: 7 }] });
-    await service.transition(actor, 'count', { version: 1, action: 'POST' });
-    expect(state.item.currentStock).toBe(7);
-    expect(reconcileInventoryLedger(state.item, state.movements)).toMatchObject({ expectedStock: 7, difference: 0 });
-    state.item.currentStock = 6;
-    expect(reconcileInventoryLedger(state.item, state.movements)).toMatchObject({ expectedStock: 7, difference: -1 });
-  });
-
-  it('reconciles physical stock below held stock through a verified source loss and fresh count', async () => {
-    const { state, service, add } = fixture();
-    add('hold', 'HOLD', 5);
-    await service.transition(actor, 'hold', { version: 1, action: 'POST' });
-    add('blocked-count', 'COUNT', 0, { lines: [{ id: 'line', inventoryId: 'batch', quantity: 0, unitPrice: 1, systemStock: 10, physicalStock: 2 }] });
-    await expect(service.transition(actor, 'blocked-count', { version: 1, action: 'POST' })).rejects.toThrow();
-    expect([state.item.currentStock, state.item.heldStock]).toEqual([10, 5]);
-    add('missing-held-goods', 'LOSS', 3, { sourceHoldId: 'hold' });
-    await service.transition(actor, 'missing-held-goods', { version: 1, action: 'POST' });
-    const fresh = await service.transition(actor, 'blocked-count', { version: 1, action: 'RECOUNT' });
-    expect(fresh.payload.lines[0].systemStock).toBe(7);
-    // Record the new physical observation through the public save route.
-    const observed = await service.saveDocument(actor, {
-      kind: 'COUNT', version: fresh.version, reference: fresh.reference, requestKey: fresh.requestKey,
-      payload: { ...fresh.payload, lines: fresh.payload.lines.map((l: any) => ({ ...l, physicalStock: 2 })) },
-    }, fresh.id);
-    await service.transition(actor, fresh.id, { version: observed.version, action: 'POST' });
-    expect([state.item.currentStock, state.item.heldStock]).toEqual([2, 2]);
-    expect(reconcileInventoryLedger(state.item, state.movements)).toMatchObject({ status: 'RECONCILED', expectedStock: 2 });
   });
 
   it('cancels a supplier return challan after release into its own source hold', async () => {
@@ -309,23 +267,6 @@ describe('Actionable inventory guard evidence', () => {
     try { await promise; throw new Error('Expected operation to reject'); }
     catch (error: any) { if (!error.getResponse) throw error; return error.getResponse(); }
   }
-  it('names the protected batch balances when a real count is below held stock', async () => {
-    const {state, service, add}=fixture();
-    add('hold','HOLD',5); await service.transition(actor,'hold',{version:1,action:'POST'});
-    add('count','COUNT',0,{lines:[{id:'observed',inventoryId:'batch',quantity:0,unitPrice:1,systemStock:10,physicalStock:2}]});
-    const body=await rejectedResponse(service.transition(actor,'count',{version:1,action:'POST'}));
-    expect(body).toMatchObject({code:'INVENTORY_HELD_STOCK',stockEffect:'NONE',recovery:{action:'REVIEW_BATCH',inventoryId:'batch',quantities:{onHand:10,held:5,available:5,requested:8}}});
-    expect(body.message).toContain('Do not change the physical observation');
-    expect([state.item.currentStock,state.item.heldStock,state.movements.length]).toEqual([10,5,0]);
-  });
-  it('identifies a stale count row and requires a fresh physical observation',async()=>{
-    const {state,service,add}=fixture();
-    add('count','COUNT',0,{lines:[{id:'observed',inventoryId:'batch',quantity:0,unitPrice:1,systemStock:9,physicalStock:2}]});
-    const body=await rejectedResponse(service.transition(actor,'count',{version:1,action:'POST'}));
-    expect(body).toMatchObject({code:'INVENTORY_STALE_COUNT',stockEffect:'NONE',recovery:{action:'START_FRESH_COUNT',inventoryId:'batch',quantities:{onHand:10}}});
-    expect(body.message).toContain('Start fresh count');
-    expect(state.movements).toEqual([]);
-  });
   it('returns the actual source and remaining capacity rather than another hold on the batch',async()=>{
     const {state,service,add}=fixture();
     add('hold','HOLD',3); await service.transition(actor,'hold',{version:1,action:'POST'});
@@ -370,37 +311,198 @@ describe('Actionable inventory guard evidence', () => {
   });
 });
 
-describe('Count approval by role', () => {
-  const variance = { lines: [{ id: 'line', inventoryId: 'batch', quantity: 0, unitPrice: 1, systemStock: 10, physicalStock: 7 }] };
 
-  it.each([
-    ['ADMIN', 'operator', 'POSTED', 'operator', 7],
-    ['MANAGER', 'operator', 'POSTED', 'operator', 7],
-    ['DOCTOR', 'pharmacist-1', 'POSTED', 'operator', 7],
-    ['DOCTOR', 'operator', 'AWAITING_APPROVAL', undefined, 10],
-    ['PHARMACIST', 'operator', 'AWAITING_APPROVAL', undefined, 10],
-  ])('%s posting a variance count created by %s leaves it %s', async (role, createdBy, status, approvedBy, stock) => {
-    const { state, service, add } = fixture();
-    add('count', 'COUNT', 0, variance).createdBy = createdBy;
-    await service.transition({ ...actor, role }, 'count', { version: 1, action: 'POST' });
-    const doc = state.documents.find((d: any) => d.id === 'count');
-    expect([doc.status, doc.approvedBy, state.item.currentStock]).toEqual([status, approvedBy, stock]);
+describe('Stock count sign-off', () => {
+  const anil = { id: 'anil', branchId: 'branch', role: 'PHARMACIST' };
+  async function failure(promise: Promise<unknown>) {
+    try { await promise; } catch (error: any) { return { status: error.getStatus?.(), body: error.getResponse?.() }; }
+    throw new Error('Expected the operation to fail');
+  }
+  function counting(assigneeId = 'anil') {
+    const f = fixture();
+    f.state.item.name = 'Isotroin 10';
+    f.state.users.push(
+      { id: 'anil', branchId: 'branch', firstName: 'Anil', lastName: 'Deshmukh', role: 'PHARMACIST', isActive: true },
+      { id: 'doctor', branchId: 'branch', firstName: 'Priya', lastName: 'Menon', role: 'DOCTOR', isActive: true },
+    );
+    f.add('count', 'COUNT', 0, {
+      origin: 'CYCLE', assigneeId,
+      lines: [{ id: 'line', inventoryId: 'batch', name: 'Isotroin 10', quantity: 0, unitPrice: 12.5, systemStock: 10 }],
+    });
+    return f;
+  }
+
+  it('posts a count with no difference at once, writes the audit and the ledger baseline, and moves no stock', async () => {
+    const { state, service } = counting();
+    state.movements.push({ id: 'legacy', branchId: 'branch', itemId: 'batch', type: 'ADJUSTMENT', quantity: 2 });
+    const signed = await service.signOffCount(anil, 'count', { version: 1, requestKey: 'sign-1', lines: [{ id: 'line', physicalStock: 10 }] });
+    expect([signed.status, signed.version, signed.postedBy]).toEqual(['POSTED', 2, 'anil']);
+    expect(signed.payload.signOff).toMatchObject({ by: 'anil', note: '', requestKey: 'sign-1' });
+    expect(state.audits.map((a: any) => [a.auditorId, a.systemStock, a.physicalStock, a.variance])).toEqual([['anil', 10, 10, 0]]);
+    expect(state.movements.map((m: any) => m.id)).toEqual(['legacy']);
+    expect(state.item.currentStock).toBe(10);
+    expect(JSON.parse(state.item.metadata)).toMatchObject({ lastCountDocumentId: 'count', ledgerCheckpoint: { quantity: 10, coveredMovementIds: ['legacy'], documentId: 'count' } });
+    expect(reconcileInventoryLedger(state.item, state.movements).status).toBe('RECONCILED');
+    expect(state.events.map((e: any) => [e.action, e.fromStatus, e.toStatus])).toEqual([['SIGN_OFF', 'DRAFT', 'POSTED']]);
   });
 
-  it('lets a doctor approve a colleague\'s count but not their own, and never a pharmacist', async () => {
-    const { state, service, add } = fixture();
-    const own: any = add('own', 'COUNT', 0, variance);
-    Object.assign(own, { status: 'AWAITING_APPROVAL', createdBy: 'operator' });
-    const colleague: any = add('colleague', 'COUNT', 0, variance);
-    Object.assign(colleague, { status: 'AWAITING_APPROVAL', createdBy: 'pharmacist-1' });
-    const doctor = { ...actor, role: 'DOCTOR' };
-    await expect(service.transition(doctor, 'own', { version: 1, action: 'APPROVE' })).rejects.toThrow('Another approver must approve a document you created');
-    await expect(service.transition({ ...actor, role: 'PHARMACIST' }, 'colleague', { version: 1, action: 'APPROVE' })).rejects.toThrow('A manager must approve this document');
-    await service.transition(doctor, 'colleague', { version: 1, action: 'APPROVE' });
-    await service.transition({ ...actor, role: 'ADMIN' }, 'own', { version: 1, action: 'APPROVE' });
-    expect(state.documents.map((d: any) => [d.id, d.status, d.approvedBy])).toEqual([
-      ['own', 'APPROVED', 'operator'],
-      ['colleague', 'APPROVED', 'operator'],
-    ]);
+  it('needs every batch counted, and a note when a count differs', async () => {
+    const { state, service } = counting();
+    expect(await failure(service.signOffCount(anil, 'count', { version: 1, requestKey: 'sign-1' }))).toEqual({
+      status: 400,
+      body: { code: 'COUNT_INCOMPLETE', message: 'Count every item before signing off. Not counted yet: Isotroin 10.', lineIds: ['line'] },
+    });
+    expect(await failure(service.signOffCount(anil, 'count', { version: 1, requestKey: 'sign-1', lines: [{ id: 'line', physicalStock: 7 }] }))).toEqual({
+      status: 400,
+      body: { code: 'COUNT_NOTE_REQUIRED', message: 'Add a note explaining the differences before signing off.' },
+    });
+    expect((await failure(service.signOffCount(anil, 'count', { version: 1, requestKey: 'sign-1', lines: [{ id: 'line', physicalStock: 2.5 }], note: 'x' }))).body).toMatchObject({
+      code: 'INVENTORY_INVALID_COUNT', message: 'Isotroin 10: the counted quantity must be a whole number of at least 0.',
+    });
+    expect([state.documents[0].status, state.documents[0].version, state.events.length]).toEqual(['DRAFT', 1, 0]);
+  });
+
+  it('locks the signed count: a replay returns it, other figures get 409 and nothing edits it', async () => {
+    const { state, service } = counting();
+    const input = { version: 1, requestKey: 'sign-1', lines: [{ id: 'line', physicalStock: 7, note: 'Strip torn' }], note: 'Two strips damaged' };
+    const signed = await service.signOffCount(anil, 'count', input);
+    expect([signed.status, signed.payload.lines[0].physicalStock, signed.payload.lines[0].note, signed.payload.signOff.note]).toEqual(['AWAITING_APPROVAL', 7, 'Strip torn', 'Two strips damaged']);
+    expect([state.item.currentStock, state.movements.length, state.audits.length]).toEqual([10, 0, 0]);
+    expect((await service.signOffCount(anil, 'count', input)).version).toBe(2);
+    expect(state.events).toHaveLength(1);
+    expect(await failure(service.signOffCount(anil, 'count', { ...input, lines: [{ id: 'line', physicalStock: 6 }] }))).toMatchObject({ status: 409, body: { code: 'COUNT_REQUEST_KEY_REUSED' } });
+    expect(await failure(service.signOffCount(anil, 'count', { ...input, requestKey: 'sign-2' }))).toMatchObject({ status: 409, body: { message: 'This count was already signed off. Reload to see the signed record.' } });
+    expect((await failure(service.saveCountProgress(anil, 'count', { version: 2, lines: [{ id: 'line', physicalStock: 9 }] }))).status).toBe(409);
+    expect(await failure(service.saveDocument(anil, { kind: 'COUNT', version: 2, reference: 'count', requestKey: 'count', payload: {} } as any, 'count'))).toMatchObject({ status: 400, body: { message: 'Enter counted quantities from Stock counts › My counts' } });
+    expect(state.documents[0].payload.lines[0].physicalStock).toBe(7);
+  });
+
+  it('refuses a request key already used to sign another count', async () => {
+    const { state, service, add } = counting();
+    add('second', 'COUNT', 0, { assigneeId: 'anil', lines: [{ id: 'second-line', inventoryId: 'batch', name: 'Isotroin 10', quantity: 0, systemStock: 10 }] });
+    await service.signOffCount(anil, 'count', { version: 1, requestKey: 'shared', lines: [{ id: 'line', physicalStock: 10 }] });
+    expect(await failure(service.signOffCount(anil, 'second', { version: 1, requestKey: 'shared', lines: [{ id: 'second-line', physicalStock: 10 }] }))).toMatchObject({ status: 409, body: { code: 'COUNT_REQUEST_KEY_REUSED' } });
+    expect(state.documents[1].status).toBe('DRAFT');
+  });
+
+  it('lets only the assigned person enter and sign a count', async () => {
+    const { state, service } = counting();
+    expect(await failure(service.saveCountProgress(actor, 'count', { version: 1, lines: [{ id: 'line', physicalStock: 9 }] }))).toEqual({
+      status: 403, body: { statusCode: 403, error: 'Forbidden', message: 'This count is assigned to Anil Deshmukh. Only they can enter and sign it off.' },
+    });
+    expect(state.documents[0].version).toBe(1);
+  });
+
+  it('captures the system stock at the moment each quantity is entered', async () => {
+    const { state, service } = counting();
+    const first = await service.saveCountProgress(anil, 'count', { version: 1, lines: [{ id: 'line', physicalStock: 9 }] });
+    expect([first.payload.lines[0].systemStock, first.payload.lines[0].physicalStock, state.item.currentStock]).toEqual([10, 9, 10]);
+    state.item.currentStock = 8;
+    const noted = await service.saveCountProgress(anil, 'count', { version: 2, lines: [{ id: 'line', note: 'Behind the shelf' }] });
+    expect([noted.payload.lines[0].systemStock, noted.payload.lines[0].physicalStock, noted.payload.lines[0].note]).toEqual([10, 9, 'Behind the shelf']);
+    const recounted = await service.saveCountProgress(anil, 'count', { version: 3, lines: [{ id: 'line', physicalStock: 7 }] });
+    expect([recounted.payload.lines[0].systemStock, recounted.payload.lines[0].physicalStock]).toEqual([8, 7]);
+    expect(state.movements).toEqual([]);
+  });
+
+  it('refuses the old submit, approve and post actions on a count', async () => {
+    const { service } = counting();
+    for (const action of ['SUBMIT', 'POST', 'APPROVE'])
+      await expect(service.transition(actor, 'count', { version: 1, action })).rejects.toThrow('A stock count is signed off by the person who counted it, then approved or rejected from Stock counts › Approvals');
+  });
+});
+
+describe('Stock count approval', () => {
+  const anil = { id: 'anil', branchId: 'branch', role: 'PHARMACIST' };
+  const doctor = { id: 'doctor', branchId: 'branch', role: 'DOCTOR' };
+  async function failure(promise: Promise<unknown>) {
+    try { await promise; } catch (error: any) { return { status: error.getStatus?.(), body: error.getResponse?.() }; }
+    throw new Error('Expected the operation to fail');
+  }
+  async function signed(counted: number, signer = anil) {
+    const f = fixture();
+    f.state.item.name = 'Isotroin 10';
+    f.state.users.push(
+      { id: 'anil', branchId: 'branch', firstName: 'Anil', lastName: 'Deshmukh', role: 'PHARMACIST', isActive: true },
+      { id: 'doctor', branchId: 'branch', firstName: 'Priya', lastName: 'Menon', role: 'DOCTOR', isActive: true },
+    );
+    f.add('count', 'COUNT', 0, { origin: 'CYCLE', assigneeId: signer.id, lines: [{ id: 'line', inventoryId: 'batch', name: 'Isotroin 10', quantity: 0, unitPrice: 12.5, systemStock: 10 }] });
+    await f.service.signOffCount(signer, 'count', { version: 1, requestKey: 'sign', lines: [{ id: 'line', physicalStock: counted }], note: 'Counted twice' });
+    return f;
+  }
+
+  it('applies the counted difference to the current stock, so a sale after the count does not block approval', async () => {
+    const { state, service } = await signed(7);
+    state.item.currentStock = 8;
+    state.movements.push({ id: 'sale', branchId: 'branch', itemId: 'batch', type: 'SALE', quantity: 2, quantityDelta: -2 });
+    const approved = await service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Two strips broken in the drawer' });
+    expect([approved.status, approved.approvedBy, approved.postedBy, state.item.currentStock]).toEqual(['POSTED', 'doctor', 'doctor', 5]);
+    expect(state.movements.at(-1)).toMatchObject({ userId: 'doctor', quantityDelta: -3, reason: 'Stock count approved: Two strips broken in the drawer', reference: 'WF-count' });
+    expect(state.audits.map((a: any) => [a.auditorId, a.systemStock, a.physicalStock, a.variance, JSON.parse(a.notes).approvedBy])).toEqual([['anil', 10, 7, -3, 'doctor']]);
+    expect(approved.payload.decision).toMatchObject({ decision: 'APPROVE', by: 'doctor', reason: 'Two strips broken in the drawer', selfApproval: false });
+    expect(state.events.map((e: any) => [e.action, e.actorId, e.toStatus])).toEqual([['SIGN_OFF', 'anil', 'AWAITING_APPROVAL'], ['APPROVE', 'doctor', 'POSTED']]);
+    expect(state.events[1].detail).toMatchObject({ reason: 'Two strips broken in the drawer', stockEffect: true, adjustments: [{ inventoryId: 'batch', delta: -3 }] });
+  });
+
+  it('adds stock when the shelf holds more than the system', async () => {
+    const { state, service } = await signed(13);
+    await service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Found an unrecorded box' });
+    expect([state.item.currentStock, state.movements.at(-1).quantityDelta]).toEqual([13, 3]);
+  });
+
+  it('refuses a decrease larger than the stock left now', async () => {
+    const { state, service } = await signed(2);
+    state.item.currentStock = 5;
+    expect(await failure(service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Approve' }))).toEqual({
+      status: 409,
+      body: { code: 'COUNT_DELTA_BELOW_STOCK', stockEffect: 'NONE', message: 'Isotroin 10: the count found 8 fewer than the system had, but only 5 pieces are left now. The count cannot be right. Reject it and ask for a fresh count.' },
+    });
+    expect([state.item.currentStock, state.documents[0].status, state.movements.length]).toEqual([5, 'AWAITING_APPROVAL', 0]);
+  });
+
+  it('names the protected balances when the count is below held stock', async () => {
+    const { state, service, add } = await signed(2);
+    add('hold', 'HOLD', 5);
+    await service.transition(actor, 'hold', { version: 1, action: 'POST' });
+    const { body } = await failure(service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Approve' })) as any;
+    expect(body).toMatchObject({ code: 'INVENTORY_HELD_STOCK', stockEffect: 'NONE', recovery: { action: 'REVIEW_BATCH', inventoryId: 'batch', quantities: { onHand: 10, held: 5, available: 5, requested: 8 } } });
+    expect([state.item.currentStock, state.item.heldStock, state.documents[0].status]).toEqual([10, 5, 'AWAITING_APPROVAL']);
+  });
+
+  it('rejects with a reason, changes no stock and records who decided', async () => {
+    const { state, service } = await signed(7);
+    expect((await failure(service.decideCount(doctor, 'count', 'REJECT', { version: 2, requestKey: 'decide', reason: ' ' }))).body).toMatchObject({ message: 'Give a reason for rejecting this count' });
+    const rejected = await service.decideCount(doctor, 'count', 'REJECT', { version: 2, requestKey: 'decide', reason: 'Recount the top shelf' });
+    expect([rejected.status, rejected.payload.decision.decision, rejected.payload.decision.by, rejected.payload.decision.reason]).toEqual(['REJECTED', 'REJECT', 'doctor', 'Recount the top shelf']);
+    expect([state.item.currentStock, state.movements.length, state.audits.length]).toEqual([10, 0, 0]);
+  });
+
+  it('replays a decision and refuses the same key with another answer', async () => {
+    const { state, service } = await signed(7);
+    const input = { version: 2, requestKey: 'decide', reason: 'Two strips broken' };
+    await service.decideCount(doctor, 'count', 'APPROVE', input);
+    expect((await service.decideCount(doctor, 'count', 'APPROVE', input)).status).toBe('POSTED');
+    expect(await failure(service.decideCount(doctor, 'count', 'REJECT', input))).toMatchObject({ status: 409, body: { code: 'COUNT_REQUEST_KEY_REUSED' } });
+    expect([state.item.currentStock, state.movements.length, state.events.length]).toEqual([7, 1, 2]);
+  });
+
+  it('keeps the signer from deciding their own count while another approver is active', async () => {
+    const { state, service } = await signed(7, doctor);
+    expect(await failure(service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine', selfApproval: true }))).toEqual({
+      status: 403, body: { code: 'COUNT_SEPARATION_OF_DUTIES', message: 'You signed this count, so someone else decides it. Ask Rajesh Iyer.' },
+    });
+    expect(await failure(service.decideCount(anil, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine' }))).toMatchObject({ status: 403, body: { message: 'A doctor or an administrator decides stock count differences' } });
+    await service.decideCount(actor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine' });
+    expect([state.documents[0].status, state.documents[0].approvedBy, state.item.currentStock]).toEqual(['POSTED', 'operator', 7]);
+  });
+
+  it('lets the only approver decide their own count once they confirm it', async () => {
+    const { state, service } = await signed(7, doctor);
+    state.users.find((u: any) => u.id === 'operator').isActive = false;
+    expect(await failure(service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine' }))).toEqual({
+      status: 400, body: { code: 'COUNT_SELF_APPROVAL_CONFIRM', message: 'You are the only approver in this branch. Confirm that you are deciding your own count.' },
+    });
+    const approved = await service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine', selfApproval: true });
+    expect([approved.status, approved.payload.decision.selfApproval, state.events.at(-1).detail.selfApproval, state.item.currentStock]).toEqual(['POSTED', true, true, 7]);
   });
 });

@@ -8,7 +8,7 @@ const settings = (overrides: Partial<ReconciliationSettings> = {}): Reconciliati
   cycleStart: '2026-11-01',
   ...overrides,
 });
-const batch = (n: number, lastSignedAt: string | null = null): PlanBatch => ({ id: `b${String(n).padStart(2, '0')}`, name: `Item ${String(n).padStart(2, '0')}`, lastSignedAt });
+const batch = (n: number, lastCountedAt: string | null = null): PlanBatch => ({ id: `b${String(n).padStart(2, '0')}`, name: `Item ${String(n).padStart(2, '0')}`, lastCountedAt });
 const sixty = Array.from({ length: 60 }, (_, i) => batch(i + 1));
 
 describe('reconciliation settings', () => {

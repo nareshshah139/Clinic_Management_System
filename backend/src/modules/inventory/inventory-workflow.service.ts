@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
   DEFAULT_INVENTORY_SETTINGS,
@@ -60,6 +60,7 @@ const FINANCIAL = new Set(['CREDIT_NOTE']);
 const SALES = new Set(['COUNTER_SALE', 'QUOTATION', 'SALES_RETURN']);
 const REORDER = new Set(['SHORTBOOK', 'PURCHASE_ORDER', 'TARGET_REVIEW']);
 const clean = (v: unknown) => String(v ?? '').trim();
+const fingerprintOf = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const RETURN_KINDS = ['SUPPLIER_RETURN', 'CREDIT_NOTE'];
 export type CreditNoteInput = {
   requestKey: string;
@@ -346,6 +347,8 @@ export class InventoryWorkflowService {
           })
         : null;
       if (id && !old) throw new NotFoundException('Document not found');
+      if (old?.kind === 'COUNT')
+        throw new BadRequestException('Enter counted quantities from Stock counts › My counts');
       if (
         old &&
         (old.kind !== dto.kind || !['DRAFT', 'CHALLAN'].includes(old.status))
@@ -1402,23 +1405,43 @@ export class InventoryWorkflowService {
       );
     });
   }
+  private async requestKeyFree(tx: any, actor: WorkflowActor, documentId: string, key: string) {
+    const elsewhere = await tx.inventoryWorkflowEvent.findFirst({
+      where: { branchId: actor.branchId, documentId: { not: documentId }, action: { in: ['SIGN_OFF', 'APPROVE', 'REJECT'] }, detail: { path: ['requestKey'], equals: key } },
+      select: { id: true },
+    });
+    if (elsewhere)
+      throw new ConflictException({ code: 'COUNT_REQUEST_KEY_REUSED', message: 'This request was already used for another stock count. Reload and try again.' });
+  }
   /**
    * @cc [owner:nareshshah139,label:product] count-sign-off-locks
    * Sign-off MUST record who, when, every batch's system and counted quantity, the variance and any
    * note, and lock the count. Every line must be counted and a difference needs a note. With no
    * difference the count posts without changing stock; any difference waits for an approver.
-   * Replaying the same request key returns the signed record.
+   * Replaying the same request key returns the signed record; the same key with other figures gets 409.
    */
   async signOffCount(actor: WorkflowActor, id: string, input: Record<string, any>) {
     await this.authorize(actor, 'COUNT', true);
     const key = clean(input?.requestKey);
     if (!key || key.length > 150) throw new BadRequestException('A request key is required');
+    const note = clean(input?.note).slice(0, 1000);
+    const print = fingerprintOf({
+      note,
+      lines: (Array.isArray(input?.lines) ? input.lines : [])
+        .map((l: any) => [clean(l?.id), l?.physicalStock === '' || l?.physicalStock == null ? null : Number(l.physicalStock), clean(l?.note)])
+        .sort((a: any[], b: any[]) => String(a[0]).localeCompare(String(b[0]))),
+    });
     return this.transaction(async (tx) => {
       const doc = await this.openCount(tx, actor, id);
-      if (doc.payload.signOff?.requestKey === key) return this.plain(doc);
+      if (doc.payload.signOff?.requestKey === key) {
+        if (doc.payload.signOff.fingerprint !== print)
+          throw new ConflictException({ code: 'COUNT_REQUEST_KEY_REUSED', message: 'This sign-off was already recorded with different figures. Reload to see the signed record.' });
+        return this.plain(doc);
+      }
       if (doc.status !== 'DRAFT')
         throw new ConflictException('This count was already signed off. Reload to see the signed record.');
       await this.countAssigneeOnly(tx, actor, doc);
+      await this.requestKeyFree(tx, actor, doc.id, key);
       if (doc.version !== Number(input?.version))
         throw new ConflictException('This count changed in another window. Reload to see the latest counts.');
       const lines = await this.countLines(tx, actor, doc, input.lines);
@@ -1430,12 +1453,11 @@ export class InventoryWorkflowService {
           lineIds: missing.map((l) => l.id),
         });
       const differing = lines.filter((l) => l.physicalStock !== l.systemStock);
-      const note = clean(input.note).slice(0, 1000);
       if (differing.length && !note)
         throw new BadRequestException({ code: 'COUNT_NOTE_REQUIRED', message: 'Add a note explaining the differences before signing off.' });
       const at = new Date();
       const next = differing.length ? 'AWAITING_APPROVAL' : 'POSTED';
-      const payload = { ...doc.payload, lines, signOff: { by: actor.id, at: at.toISOString(), note, requestKey: key } };
+      const payload = { ...doc.payload, lines, signOff: { by: actor.id, at: at.toISOString(), note, requestKey: key, fingerprint: print } };
       const updated = await tx.inventoryWorkflowDocument.update({
         where: { id: doc.id, branchId: actor.branchId, version: doc.version },
         data: {
@@ -1445,16 +1467,9 @@ export class InventoryWorkflowService {
           ...(next === 'POSTED' ? { postedAt: at, postedBy: actor.id } : {}),
         },
       });
-      for (const line of lines) {
-        const item = await tx.inventoryItem.findFirst({ where: { id: line.inventoryId, branchId: actor.branchId } });
-        if (item)
-          await tx.inventoryItem.update({
-            where: { id: item.id },
-            data: { metadata: JSON.stringify({ ...jsonObject(item.metadata), lastSignedCountAt: at.toISOString(), lastSignedCountDocumentId: doc.id }) },
-          });
-      }
       if (next === 'POSTED') await this.recordCount(tx, actor, updated);
       await this.event(tx, updated, actor, 'SIGN_OFF', doc.status, {
+        requestKey: key,
         note,
         counted: lines.length,
         differences: differing.map((l) => ({ lineId: l.id, inventoryId: l.inventoryId, systemStock: l.systemStock, physicalStock: l.physicalStock, note: l.note })),
@@ -1469,7 +1484,8 @@ export class InventoryWorkflowService {
    * unless nobody else can, and then only after confirming. Approval applies each line's
    * counted-minus-system difference to the batch's current stock, so sales after the count do not
    * block it, and logs the reason and approver on the movement. Rejection changes no stock and leaves
-   * the batches uncounted for the cycle. Replaying the same request key returns the decision.
+   * the batches uncounted for the cycle. Replaying the same request key returns the decision; the
+   * same key with another answer gets 409. A decrease larger than the stock left now is refused.
    */
   async decideCount(actor: WorkflowActor, id: string, decision: 'APPROVE' | 'REJECT', input: Record<string, any>) {
     await this.authorize(actor, 'COUNT');
@@ -1480,12 +1496,18 @@ export class InventoryWorkflowService {
     const reason = clean(input?.reason).slice(0, 500);
     if (!reason)
       throw new BadRequestException(decision === 'APPROVE' ? 'Give a reason for approving the stock change' : 'Give a reason for rejecting this count');
+    const print = fingerprintOf({ decision, reason, selfApproval: input?.selfApproval === true });
     const settings = await this.settings(actor);
     return this.transaction(async (tx) => {
       const doc = await this.openCount(tx, actor, id);
-      if (doc.payload.decision?.requestKey === key) return this.plain(doc);
+      if (doc.payload.decision?.requestKey === key) {
+        if (doc.payload.decision.fingerprint !== print)
+          throw new ConflictException({ code: 'COUNT_REQUEST_KEY_REUSED', message: 'This count was already decided with a different answer. Reload to see its current status.' });
+        return this.plain(doc);
+      }
       if (doc.status !== 'AWAITING_APPROVAL')
         throw new ConflictException('This count is no longer waiting for approval. Reload to see its current status.');
+      await this.requestKeyFree(tx, actor, doc.id, key);
       if (doc.version !== Number(input?.version))
         throw new ConflictException('This count changed in another window. Reload to see its current status.');
       const signer = doc.payload.signOff?.by || doc.createdBy;
@@ -1494,7 +1516,7 @@ export class InventoryWorkflowService {
         const others = await tx.user.findMany({
           where: { branchId: actor.branchId, isActive: true, role: { in: [...INVENTORY_APPROVERS] }, id: { not: actor.id } },
           select: { firstName: true, lastName: true },
-          orderBy: { firstName: 'asc' },
+          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
         });
         if (others.length)
           throw new ForbiddenException({
@@ -1507,8 +1529,26 @@ export class InventoryWorkflowService {
             message: 'You are the only approver in this branch. Confirm that you are deciding your own count.',
           });
       }
+      const lines: WorkflowLine[] = doc.payload.lines || [];
+      if (decision === 'APPROVE') {
+        const items = await tx.inventoryItem.findMany({
+          where: { branchId: actor.branchId, id: { in: lines.map((l) => l.inventoryId) } },
+          select: { id: true, name: true, unit: true, currentStock: true },
+        });
+        const byId = new Map<string, any>(items.map((i: any) => [i.id, i]));
+        for (const line of lines) {
+          const item = byId.get(line.inventoryId);
+          const delta = (line.physicalStock ?? 0) - (line.systemStock ?? 0);
+          if (!item || item.currentStock + delta >= 0) continue;
+          throw new ConflictException({
+            code: 'COUNT_DELTA_BELOW_STOCK',
+            message: `${item.name}: the count found ${-delta} fewer than the system had, but only ${item.currentStock} ${String(item.unit || 'units').toLowerCase()} are left now. The count cannot be right. Reject it and ask for a fresh count.`,
+            stockEffect: 'NONE',
+          });
+        }
+      }
       const at = new Date();
-      const payload = { ...doc.payload, decision: { decision, by: actor.id, at: at.toISOString(), reason, requestKey: key, selfApproval: self } };
+      const payload = { ...doc.payload, decision: { decision, by: actor.id, at: at.toISOString(), reason, requestKey: key, fingerprint: print, selfApproval: self } };
       const status = decision === 'APPROVE' ? 'POSTED' : 'REJECTED';
       const updated = await tx.inventoryWorkflowDocument.update({
         where: { id: doc.id, branchId: actor.branchId, version: doc.version },
@@ -1526,11 +1566,12 @@ export class InventoryWorkflowService {
         await this.recordCount(tx, actor, updated);
       }
       await this.event(tx, updated, actor, decision, doc.status, {
+        requestKey: key,
         reason,
         selfApproval: self,
         stockEffect: status === 'POSTED',
         ...(status === 'POSTED'
-          ? { adjustments: (payload.lines as WorkflowLine[]).filter((l) => l.physicalStock !== l.systemStock).map((l) => ({ inventoryId: l.inventoryId, delta: l.physicalStock! - l.systemStock! })) }
+          ? { adjustments: lines.filter((l) => l.physicalStock !== l.systemStock).map((l) => ({ inventoryId: l.inventoryId, delta: l.physicalStock! - l.systemStock! })) }
           : {}),
       });
       return this.plain(updated);

@@ -73,14 +73,14 @@ export function cycleOn(settings: Pick<ReconciliationSettings, 'cycleDays' | 'cy
   return { start, end: addDays(start, settings.cycleDays - 1), day, days: settings.cycleDays, daysLeft: settings.cycleDays - day + 1 };
 }
 
-export type PlanBatch = { id: string; name: string; lastSignedAt: string | null };
+export type PlanBatch = { id: string; name: string; lastCountedAt: string | null };
 export type Assignment = { assigneeId: string; requestKey: string; batchIds: string[] };
 
 export const cycleRequestKey = (cycle: Cycle, today: string, assigneeId: string) => `cycle:${cycle.start}:${today}:${assigneeId}`;
 
 const byNeed = (a: PlanBatch, b: PlanBatch) =>
-  (a.lastSignedAt === null ? 0 : 1) - (b.lastSignedAt === null ? 0 : 1) ||
-  (a.lastSignedAt ?? '').localeCompare(b.lastSignedAt ?? '') ||
+  (a.lastCountedAt === null ? 0 : 1) - (b.lastCountedAt === null ? 0 : 1) ||
+  (a.lastCountedAt ?? '').localeCompare(b.lastCountedAt ?? '') ||
   collator.compare(a.name, b.name) ||
   a.id.localeCompare(b.id);
 

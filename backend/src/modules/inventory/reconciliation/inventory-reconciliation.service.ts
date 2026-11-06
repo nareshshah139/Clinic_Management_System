@@ -63,14 +63,14 @@ export class InventoryReconciliationService {
           branchId,
           kind: 'COUNT',
           OR: [
-            { status: 'DRAFT', payload: { path: ['origin'], equals: 'CYCLE' } },
+            { status: 'DRAFT', payload: { path: ['cycle', 'start'], equals: cycleStart } },
             { status: { in: ['AWAITING_APPROVAL', 'APPROVED', 'POSTED'] }, updatedAt: { gte: clinicDayStart(cycleStart) } },
           ],
         },
         select: { id: true, status: true, payload: true, postedAt: true },
       }),
     ]);
-    const batches: PlanBatch[] = items.map((item: any) => ({ id: item.id, name: item.name, lastSignedAt: jsonObject(item.metadata).lastSignedCountAt ?? null }));
+    const batches: PlanBatch[] = items.map((item: any) => ({ id: item.id, name: item.name, lastCountedAt: jsonObject(item.metadata).lastCountAt ?? null }));
     const covered = new Set<string>();
     const reserved = new Set<string>();
     for (const doc of docs as CountDoc[]) {
