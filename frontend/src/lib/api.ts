@@ -335,6 +335,13 @@ export class ApiClient {
     }, { retryUnsafe: Boolean(opts?.idempotencyKey) });
   }
 
+  async put<T>(endpoint: string, data: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   async delete<T>(endpoint: string): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'DELETE',
@@ -422,6 +429,31 @@ export class ApiClient {
 
   async getRooms() {
     return this.get<import('./types').GetRoomsResponse>('/appointments/rooms');
+  }
+
+  // Doctor availability
+  async getDoctorAvailability(doctorId: string, params?: { from?: string; to?: string }) {
+    return this.get<import('./doctor-availability').DoctorAvailability>(`/doctor-availability/${doctorId}`, params);
+  }
+
+  async getDoctorDay(doctorId: string, date: string) {
+    return this.get<import('./doctor-availability').DoctorDay>(`/doctor-availability/${doctorId}/day`, { date });
+  }
+
+  async replaceDoctorHours(doctorId: string, hours: import('./doctor-availability').WeeklyShift[]) {
+    return this.put<import('./doctor-availability').DoctorAvailability>(`/doctor-availability/${doctorId}/hours`, { hours });
+  }
+
+  async getBranchHolidays(params?: { from?: string; to?: string }) {
+    return this.get<import('./doctor-availability').TimeOff[]>('/doctor-availability/holidays', params);
+  }
+
+  async createTimeOff(body: import('./doctor-availability').NewTimeOff) {
+    return this.post<import('./doctor-availability').TimeOff>('/doctor-availability/time-off', body);
+  }
+
+  async deleteTimeOff(id: string) {
+    return this.delete<{ deleted: boolean; id: string }>(`/doctor-availability/time-off/${id}`);
   }
 
   async getAllRooms() {

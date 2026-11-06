@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
+import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/lib/doctor-availability';
 import { useToast } from '@/hooks/use-toast';
 import { createCleanupTimeouts, getISTDateString, formatPatientName } from '@/lib/utils';
 import type { User, Patient, TimeSlotConfig, AppointmentInSlot } from '@/lib/types';
@@ -117,31 +118,18 @@ export default function AppointmentsCalendar({
   }, [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.stepMinutes, timeSlotConfig.timezone]);
 
   // Apply doctor working hours when doctor/date changes (mirrors AppointmentScheduler behavior)
+  const [doctorDay, setDoctorDay] = useState<DoctorDay | null>(null);
   useEffect(() => {
+    let cancelled = false;
     const applyHours = async () => {
-      if (!doctorId || !date) return;
-      try {
-        const res: any = await apiClient.getUser(doctorId);
-        const meta = (res?.metadata && typeof res.metadata === 'object') ? res.metadata : (res?.metadata ? JSON.parse(res.metadata) : {});
-        const wh = meta?.workingHours;
-        if (!wh) return;
-        const tz = 'Asia/Kolkata';
-        const noonUtc = new Date(`${date}T12:00:00.000Z`);
-        const localNoon = new Date(noonUtc.toLocaleString('en-US', { timeZone: tz }));
-        const dayKey = ['sun','mon','tue','wed','thu','fri','sat'][localNoon.getDay()];
-        const byDay = wh?.byDay?.[dayKey] || {};
-        const startHour = Number.isInteger(byDay?.startHour) ? byDay.startHour : wh?.startHour;
-        const endHour = Number.isInteger(byDay?.endHour) ? byDay.endHour : wh?.endHour;
-        setSlotConfig((prev) => ({
-          ...prev,
-          ...(Number.isInteger(startHour) ? { startHour } : {}),
-          ...(Number.isInteger(endHour) ? { endHour } : {}),
-        }));
-      } catch (error) {
-        console.error('Failed to apply working hours', error);
-      }
+      const day = doctorId && date ? await loadDoctorDay(doctorId, date) : null;
+      if (cancelled) return;
+      setDoctorDay(day);
+      const hours = gridHoursFor(day);
+      if (hours) setSlotConfig((prev) => ({ ...prev, ...hours }));
     };
     void applyHours();
+    return () => { cancelled = true; };
   }, [doctorId, date]);
 
   // Keep grid dropdown aligned if stepMinutes changes
@@ -689,6 +677,12 @@ export default function AppointmentsCalendar({
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {doctorDay && doctorDay.blocked.length > 0 && (
+            <div role="status" className="p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
+              Not bookable: {doctorDay.blocked.map(describeBlock).join('; ')}
             </div>
           )}
 

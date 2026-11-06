@@ -13,6 +13,8 @@ describe('AppointmentsService.create', () => {
     user: { findFirst: jest.fn(), findUnique: jest.fn() },
     branch: { findUnique: jest.fn() },
     room: { findFirst: jest.fn() },
+    doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
+    doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
     appointment: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
@@ -26,6 +28,8 @@ describe('AppointmentsService.create', () => {
 
   const txMock: any = {
     $executeRaw: jest.fn(),
+    doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
+    doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
     appointment: {
       findFirst: jest.fn(),
       create: jest.fn(),
