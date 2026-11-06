@@ -6,6 +6,7 @@ import { Prisma, UserRole, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { readDoctorSignature, signatureDataUrl } from './doctor-signature';
+import { letterheadDataUrl, readDoctorLetterhead } from './doctor-letterhead';
 
 @Injectable()
 export class UsersService {
@@ -27,23 +28,12 @@ export class UsersService {
     if (user.role !== 'DOCTOR' || !await this.prisma.user.findFirst({
       where: { id: user.id, branchId: user.branchId, role: 'DOCTOR', isActive: true },
       select: { id: true },
-    })) throw new ForbiddenException('Only the logged-in doctor can change her signature.');
+    })) throw new ForbiddenException('Only the logged-in doctor can change their own signature or letterhead.');
   }
 
   async uploadOwnSignature(user: { id: string; branchId: string; role: string }, file?: Express.Multer.File) {
     await this.requireSignatureOwner(user);
-    const url = await signatureDataUrl(file);
-    const signature = await this.prisma.$transaction(async tx => {
-      await tx.clinicAsset.updateMany({
-        where: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', isActive: true },
-        data: { isActive: false },
-      });
-      return tx.clinicAsset.create({
-        data: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', name: 'Doctor signature', url },
-        select: { id: true, url: true },
-      });
-    });
-    return { signature };
+    return { signature: await this.replaceOwnAsset(user, 'SIGNATURE', 'Doctor signature', await signatureDataUrl(file)) };
   }
 
   /**
@@ -53,17 +43,43 @@ export class UsersService {
    */
   async removeOwnSignature(user: { id: string; branchId: string; role: string }) {
     await this.requireSignatureOwner(user);
-    await this.prisma.$transaction(async tx => {
+    await this.replaceOwnAsset(user, 'SIGNATURE', 'Signature removed', null);
+    return { signature: null };
+  }
+
+  async getDoctorLetterhead(doctorId: string, branchId: string) {
+    return { letterhead: await readDoctorLetterhead(this.prisma, branchId, doctorId) };
+  }
+
+  async uploadOwnLetterhead(user: { id: string; branchId: string; role: string }, file?: Express.Multer.File) {
+    await this.requireSignatureOwner(user);
+    const letterhead = await this.replaceOwnAsset(user, 'LETTERHEAD', 'Doctor letterhead', await letterheadDataUrl(file));
+    return { letterhead: { ...letterhead, source: 'uploaded' as const } };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] letterhead-removal-persists
+   * Removing a letterhead MUST leave the authenticated doctor without a letterhead
+   * on subsequent reads, including when only the bundled default existed.
+   */
+  async removeOwnLetterhead(user: { id: string; branchId: string; role: string }) {
+    await this.requireSignatureOwner(user);
+    await this.replaceOwnAsset(user, 'LETTERHEAD', 'Letterhead removed', null);
+    return { letterhead: null };
+  }
+
+  /** Deactivates the doctor's current asset of this type; a null url records an explicit removal. */
+  private async replaceOwnAsset(user: { id: string; branchId: string }, type: 'SIGNATURE' | 'LETTERHEAD', name: string, url: string | null) {
+    return this.prisma.$transaction(async tx => {
       await tx.clinicAsset.updateMany({
-        where: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', isActive: true },
+        where: { branchId: user.branchId, ownerId: user.id, type, isActive: true },
         data: { isActive: false },
       });
-      // Persist the choice even when there was no uploaded asset to deactivate.
-      await tx.clinicAsset.create({
-        data: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', name: 'Signature removed', url: '', isActive: false },
+      return tx.clinicAsset.create({
+        data: { branchId: user.branchId, ownerId: user.id, type, name, url: url ?? '', isActive: url !== null },
+        select: { id: true, url: true },
       });
     });
-    return { signature: null };
   }
 
   // User Management Methods

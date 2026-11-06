@@ -524,6 +524,7 @@ enum AssetType {
   LOGO
   STAMP
   SIGNATURE
+  LETTERHEAD
 }
 
 model ClinicAsset {

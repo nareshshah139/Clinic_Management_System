@@ -4,7 +4,8 @@ import { displayCalendarDate, displayClinicTime } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PRESCRIPTION_LETTERHEAD_URL, PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, prescriptionLetterheadUrl } from '@/lib/prescription-letterhead';
+import { PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, printBackgroundKey, savedPrintBackground } from '@/lib/prescription-letterhead';
+import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -405,7 +406,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   // Print customization (moved from PrescriptionBuilder)
-  const [printBgUrl, setPrintBgUrl] = useState<string>(PRESCRIPTION_LETTERHEAD_URL);
+  // Custom background override; empty means the doctor's own letterhead.
+  const [printBgUrl, setPrintBgUrl] = useState<string>('');
   const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(PRESCRIPTION_TOP_MARGIN_PX);
   const [printLeftMarginPx, setPrintLeftMarginPx] = useState<number>(45);
   const [printRightMarginPx, setPrintRightMarginPx] = useState<number>(45);
@@ -432,7 +434,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   // Persist customization locally so users keep their letterhead and layout
   useEffect(() => {
     try {
-      const bg = localStorage.getItem('rx_print_bg_url');
       const top = localStorage.getItem('rx_margin_top_px');
       const left = localStorage.getItem('rx_margin_left_px');
       const right = localStorage.getItem('rx_margin_right_px');
@@ -452,7 +453,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       const frames = localStorage.getItem('rx_frames_enabled');
       const headerMm = localStorage.getItem('rx_header_mm');
       const footerMm = localStorage.getItem('rx_footer_mm');
-      if (bg) setPrintBgUrl(prescriptionLetterheadUrl(bg));
       if (top) setPrintTopMarginPx(Number(top));
       if (left) setPrintLeftMarginPx(Number(left));
       if (right) setPrintRightMarginPx(Number(right));
@@ -474,7 +474,20 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       if (footerMm) setFooterHeightMm(Number(footerMm));
     } catch {}
   }, []);
-  useEffect(() => { try { localStorage.setItem('rx_print_bg_url', printBgUrl || ''); } catch {} }, [printBgUrl]);
+  // The background override is kept per doctor so one doctor's choice never prints on another's prescriptions.
+  const { letterhead: doctorLetterhead, loading: doctorLetterheadLoading } = useDoctorLetterhead(doctorId);
+  const printBgLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (doctorLetterheadLoading) return;
+    let saved = '';
+    try { saved = savedPrintBackground(localStorage, doctorId, doctorLetterhead?.source); } catch {}
+    setPrintBgUrl(saved);
+    printBgLoadedFor.current = doctorId;
+  }, [doctorId, doctorLetterhead?.source, doctorLetterheadLoading]);
+  useEffect(() => {
+    if (printBgLoadedFor.current !== doctorId) return;
+    try { localStorage.setItem(printBackgroundKey(doctorId), printBgUrl || ''); } catch {}
+  }, [doctorId, printBgUrl]);
   useEffect(() => { try { localStorage.setItem('rx_margin_top_px', String(printTopMarginPx)); } catch {} }, [printTopMarginPx]);
   useEffect(() => { try { localStorage.setItem('rx_margin_left_px', String(printLeftMarginPx)); } catch {} }, [printLeftMarginPx]);
   useEffect(() => { try { localStorage.setItem('rx_margin_right_px', String(printRightMarginPx)); } catch {} }, [printRightMarginPx]);
@@ -2420,6 +2433,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div className="md:col-span-2 space-y-2">
                         <label className="text-sm text-gray-700">Print Background Image URL (optional)</label>
+                        <p className="text-xs text-gray-500">Leave empty to print on the doctor&apos;s own letterhead. Doctors upload theirs in Settings.</p>
                         <Input placeholder="https://.../letterhead.png" value={printBgUrl} onChange={(e) => setPrintBgUrl(e.target.value)} />
                         <div className="flex items-center gap-2 text-sm">
                           <input
