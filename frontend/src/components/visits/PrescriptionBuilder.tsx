@@ -2502,7 +2502,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         followUpInstructions: field('followUpInstructions', followUpInstructions),
         dermatology: {
           procedures: field('procedures', procedures.trim() ? [{ type: procedures.trim() }] : []),
-          medicationPlan: field('items', validItems),
+          medicationPlan: field('items', validItems.map(({ regimenState: _screenOnly, ...item }) => item)),
         },
       },
       examination: {

@@ -9,8 +9,6 @@ const labels: Record<string, string> = {
   wavelengthNm: 'Wavelength (nm)', fluenceJcm2: 'Fluence (J/cm²)', spotSizeMm: 'Spot size (mm)', pulseMs: 'Pulse duration (ms)',
   followUpDate: 'Follow-up date', validUntil: 'Prescription valid until', isGeneric: 'Generic medicine',
 };
-const hiddenKeys = new Set(['regimenState', 'gstRate', 'language', 'drugId', 'inventoryItemId']);
-const visibleEntries = (value: object) => Object.entries(value).filter(([key]) => !hiddenKeys.has(key));
 export function clinicalLabel(key: string): string {
   return labels[key] || (key.includes('(') ? key : key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase()));
 }
@@ -26,7 +24,7 @@ export function hasClinicalValue(value: unknown): boolean {
   value = normalizeClinicalValue(value);
   if (value == null || (typeof value === 'string' && !value.trim())) return false;
   if (Array.isArray(value)) return value.some(hasClinicalValue);
-  if (typeof value === 'object') return visibleEntries(value as object).some(([, item]) => hasClinicalValue(item));
+  if (typeof value === 'object') return Object.values(value as object).some(hasClinicalValue);
   return true;
 }
 
@@ -46,7 +44,7 @@ export function ClinicalHistoryDetails({ value }: { value: unknown }): ReactNode
     ))}</ul>;
   }
   if (normalized && typeof normalized === 'object') {
-    return <dl className="space-y-1.5">{visibleEntries(normalized).filter(([, item]) => hasClinicalValue(item)).map(([key, item]) => {
+    return <dl className="space-y-1.5">{Object.entries(normalized).filter(([, item]) => hasClinicalValue(item)).map(([key, item]) => {
       const structured = typeof normalizeClinicalValue(item) === 'object';
       return <div key={key} className={structured ? 'min-w-0 space-y-1' : 'min-w-0 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-0.5'}>
         <dt className="break-words text-xs font-medium leading-5 text-muted-foreground">{clinicalLabel(key)}</dt>

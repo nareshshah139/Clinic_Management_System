@@ -134,7 +134,9 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
   const day = encounterDay(raw);
   const visitTypeLabel = extractTextFromUnknown(scribe.visitType, []) || visit.visitType || undefined;
   const photoPreviews = Array.isArray(raw.photoPreviewUrls) ? raw.photoPreviewUrls.map(normalizeAssetUrl) : [];
-  const rxItems = visitMedicines(raw);
+  const issued = [raw.prescriptionItems, raw.prescription?.items].map(asRecordList).find((items) => items.length > 0) || [];
+  const planItems = asRecordList(planDermatology(raw.plan)?.medicationPlan);
+  const rxItems = (issued.length > 0 ? issued : planItems).map(cleanMedicine);
   const status = String(visit.status || '').toLowerCase().replaceAll('_', '-');
   return {
     dateLabel: displayCalendarDate(day, 'Unknown date'),
@@ -147,14 +149,14 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
     photoCount: Number(raw.photos || 0) || photoPreviews.length,
     photoPreviews: photoPreviews as string[],
     rxItems,
-    medicines: medicineNames(rxItems),
-    history: compactHistory(raw),
-    hasPrescription: Boolean(visit.prescription?.id) || rxItems.length > 0,
+    planItems,
+    issuedCount: issued.length,
+    medicines: medicineNames(rxItems.length > 0 ? rxItems : freeTextMedicines(raw.plan).map((name) => ({ name }))),
+    hasPrescription: Boolean(visit.prescription?.id) || issued.length > 0,
   };
 };
 
 type VisitView = 'summary' | 'compact' | 'full';
-type CompactHistoryEntry = { label: string; text: string };
 type MedicineItem = Record<string, unknown>;
 
 const asRecordList = (value: unknown): MedicineItem[] => {
@@ -164,77 +166,52 @@ const asRecordList = (value: unknown): MedicineItem[] => {
     : [];
 };
 
-export const visitMedicines = (visit: Record<string, any>): MedicineItem[] => {
-  const sources = [
-    visit.prescriptionItems,
-    visit.prescription?.items,
-    parseJsonObject<Record<string, any>>(visit.plan)?.dermatology?.medicationPlan,
-  ];
-  for (const source of sources) {
-    const items = asRecordList(source);
-    if (items.length > 0) return items;
-  }
-  return [];
+const omitKeys = (record: Record<string, unknown>, keys: string[]) =>
+  Object.fromEntries(Object.entries(record).filter(([key]) => !keys.includes(key)));
+
+const cleanMedicine = (item: MedicineItem): MedicineItem => {
+  const cleaned = omitKeys(item, ['regimenState', 'gstRate', 'drugId', 'inventoryItemId']);
+  return cleaned.name === cleaned.drugName ? omitKeys(cleaned, ['name']) : cleaned;
 };
 
-export const medicineNames = (items: MedicineItem[]): string[] => {
+const planDermatology = (plan: unknown) =>
+  parseJsonObject<Record<string, any>>(parseJsonObject<Record<string, unknown>>(plan)?.dermatology);
+
+const freeTextMedicines = (plan: unknown): string[] => {
+  const medications = planDermatology(plan)?.medications;
+  return [medications?.topicals, medications?.systemics]
+    .flatMap((text) => (typeof text === 'string' ? text.split('\n') : []))
+    .map((line) => line.trim())
+    .filter(Boolean);
+};
+
+const medicineKey = (name: string) => name.toLowerCase().replace(/\s+/g, ' ');
+
+const medicineNames = (items: MedicineItem[]): string[] => {
   const seen = new Set<string>();
   const names: string[] = [];
   for (const item of items) {
-    const raw = [item.drugName, item.name].find((candidate) => typeof candidate === 'string' && candidate.trim());
+    const raw = [item.drugName, item.name, item.medicine].find((candidate) => typeof candidate === 'string' && candidate.trim());
     if (typeof raw !== 'string') continue;
     const name = raw.trim();
-    const key = name.toLowerCase().replace(/\s+/g, ' ');
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (seen.has(medicineKey(name))) continue;
+    seen.add(medicineKey(name));
     names.push(name);
   }
   return names;
 };
 
-const familyHistoryText = (value: unknown): string | undefined => {
-  const family = parseJsonObject<Record<string, unknown>>(value);
-  if (!family) return extractTextList(value, ['text', 'name']).join('; ') || undefined;
-  const parts = [
-    family.dm === true && 'Diabetes',
-    family.htn === true && 'Hypertension',
-    family.thyroid === true && 'Thyroid disease',
-    ...extractTextList(family.others, ['text', 'name']),
-  ].filter((part): part is string => Boolean(part));
-  return parts.join('; ') || undefined;
-};
-
-const compactHistoryFields: [string, string][] = [
-  ['personalHistory', 'Personal history'],
-  ['pastHistory', 'Past history'],
-  ['medicationHistory', 'Medication history'],
-  ['menstrualHistory', 'Menstrual history'],
-  ['familyHistory', 'Family history'],
-  ['triggers', 'Triggers'],
-  ['priorTreatments', 'Prior treatments'],
-];
-
-export const compactHistory = (visit: Record<string, any>): CompactHistoryEntry[] => {
-  const source = normalizeStructuredValue(visit.history) || visit.historySummary;
-  if (typeof source === 'string') return source.trim() ? [{ label: 'History', text: source.trim() }] : [];
-  const history = parseJsonObject<Record<string, unknown>>(source);
-  if (!history) return [];
-  return compactHistoryFields
-    .map(([key, label]) => ({
-      label,
-      text: key === 'familyHistory' ? familyHistoryText(history[key]) : extractTextList(history[key], ['text', 'name']).join('; '),
-    }))
-    .filter((entry): entry is CompactHistoryEntry => Boolean(entry.text));
-};
-
-const withoutMedicationPlan = (plan: unknown): unknown => {
-  const parsed = parseJsonObject<Record<string, any>>(plan);
-  if (!parsed) return plan;
-  const { medicationPlan: _top, dermatology, ...rest } = parsed;
-  const derm = parseJsonObject<Record<string, unknown>>(dermatology);
-  if (!derm) return dermatology === undefined ? rest : { ...rest, dermatology };
-  const { medicationPlan: _nested, ...dermRest } = derm;
-  return { ...rest, dermatology: dermRest };
+const treatmentPlanWithoutDuplicate = (plan: unknown, planItems: MedicineItem[], shown: MedicineItem[]): unknown => {
+  const parsed = parseJsonObject<Record<string, unknown>>(plan);
+  const dermatology = planDermatology(plan);
+  if (!parsed || !dermatology || planItems.length === 0) return plan;
+  const duplicate = medicineNames(planItems).map(medicineKey).join('|') === medicineNames(shown).map(medicineKey).join('|');
+  return {
+    ...parsed,
+    dermatology: duplicate
+      ? omitKeys(dermatology, ['medicationPlan'])
+      : { ...dermatology, medicationPlan: planItems.map(cleanMedicine) },
+  };
 };
 
 const DetailSection = ({
@@ -261,12 +238,13 @@ export default function PatientHistoryVisitCard({
   className,
 }: PatientHistoryVisitCardProps) {
   const detailsId = useId();
-  const [view, setView] = useState<VisitView>(defaultCollapsed ? 'summary' : 'full');
-  const summary = view === 'summary';
   const data = useMemo(() => deriveVisitData(visit), [visit]);
 
   const raw = visit as Record<string, any>;
   const appointmentOnly = raw.entryType === 'appointment';
+  const history = normalizeStructuredValue(raw.history) || raw.historySummary;
+  const historyRecord = parseJsonObject<Record<string, unknown>>(history);
+  const compactHistory = historyRecord ? { personalHistory: historyRecord.personalHistory, ...historyRecord } : history;
   const fullVitals = parseJsonObject<Record<string, unknown>>(visit.vitals);
   const labeledVitals = fullVitals ? Object.fromEntries(Object.entries(fullVitals).map(([key, value]) => [
     ({ temperature: 'Temperature (°C)', temp: 'Temperature (°F)', oxygenSaturation: 'SpO₂ (%)', spo2: 'SpO₂ (%)' } as Record<string, string>)[key] || key, value,
@@ -274,12 +252,12 @@ export default function PatientHistoryVisitCard({
   const sections = [
     ['Complaint details', normalizeStructuredValue(visit.complaints)],
     ['Diagnosis details', normalizeStructuredValue(visit.diagnosis)],
-    ['History', normalizeStructuredValue(raw.history) || raw.historySummary],
+    ['History', history],
     ['Examination', normalizeStructuredValue(raw.exam) || raw.examSummary],
-    ['Treatment plan', withoutMedicationPlan(normalizeStructuredValue(visit.plan) || raw.planSummary)],
+    ['Treatment plan', treatmentPlanWithoutDuplicate(normalizeStructuredValue(visit.plan) || raw.planSummary, data.planItems, data.rxItems)],
     ['Vitals', labeledVitals || normalizeStructuredValue(visit.vitals)],
     ['Prescription', data.rxItems],
-    ['Prescription instructions', { ...raw.prescriptionMeta, ...(raw.prescription?.instructions ? { followUpInstructions: raw.prescription.instructions } : {}), ...(raw.prescription?.pharmacistNotes ? { pharmacistNotes: raw.prescription.pharmacistNotes } : {}), ...(raw.prescription?.validUntil ? { validUntil: formatMaybeDate(String(raw.prescription.validUntil)) } : {}) }],
+    ['Prescription instructions', { ...omitKeys({ ...raw.prescriptionMeta }, ['language']), ...(raw.prescription?.instructions ? { followUpInstructions: raw.prescription.instructions } : {}), ...(raw.prescription?.pharmacistNotes ? { pharmacistNotes: raw.prescription.pharmacistNotes } : {}), ...(raw.prescription?.validUntil ? { validUntil: formatMaybeDate(String(raw.prescription.validUntil)) } : {}) }],
     ['Follow-up date', visit.followUp ? formatMaybeDate(String(visit.followUp)) : undefined],
     ['Visit notes', normalizeStructuredValue(visit.scribeJson)],
     ['Lab orders', raw.labOrders],
@@ -288,7 +266,11 @@ export default function PatientHistoryVisitCard({
     ['Appointment notes', raw.appointmentNotes || raw.appointment?.notes],
   ].map(([title, value]) => ({ title: String(title), value })).filter(section => hasClinicalValue(section.value));
   const hasFullDetails = sections.length > 0 || data.photoPreviews.length > 0;
-  const hasExpandedContent = hasFullDetails || data.history.length > 0 || data.medicines.length > 0 || footerActions;
+  const hasCompact = hasClinicalValue(history) || data.medicines.length > 0;
+  const expandedView: VisitView = hasCompact ? 'compact' : 'full';
+  const [view, setView] = useState<VisitView>(defaultCollapsed ? 'summary' : expandedView);
+  const summary = view === 'summary';
+  const hasExpandedContent = hasFullDetails || hasCompact || footerActions;
 
   return (
     <Card
@@ -342,7 +324,7 @@ export default function PatientHistoryVisitCard({
               {data.hasPrescription && (
                 <span className="inline-flex items-center gap-1.5">
                   <Pill aria-hidden="true" className="h-3.5 w-3.5" />
-                  {data.rxItems.length > 0 ? `${data.rxItems.length} Rx Items` : 'Prescription'}
+                  {data.issuedCount > 0 ? `${data.issuedCount} Rx Items` : 'Prescription'}
                 </span>
               )}
             </div>
@@ -360,7 +342,7 @@ export default function PatientHistoryVisitCard({
                   className="h-8 min-h-8 px-2 text-xs"
                   aria-expanded={!summary}
                   aria-controls={detailsId}
-                  onClick={() => setView((current) => (current === 'summary' ? 'compact' : 'summary'))}
+                  onClick={() => setView((current) => (current === 'summary' ? expandedView : 'summary'))}
                 >
                   {summary ? 'Show details' : 'Hide details'}
                   <ChevronDown
@@ -376,18 +358,18 @@ export default function PatientHistoryVisitCard({
         {hasExpandedContent && (
           <div id={detailsId} hidden={summary} className="border-t border-border p-3">
             {!summary && <>
+              {hasCompact && hasFullDetails && (
+                <div className="mb-3 flex justify-end">
+                  <Button type="button" size="sm" variant="outline" className="h-8 min-h-8 px-2 text-xs" onClick={() => setView((current) => (current === 'full' ? 'compact' : 'full'))}>
+                    {view === 'full' ? 'Compact view' : 'Full details'}
+                  </Button>
+                </div>
+              )}
               {view === 'compact' ? (
                 <div className="space-y-3">
-                  {data.history.length > 0 && (
+                  {hasClinicalValue(history) && (
                     <DetailSection title="History">
-                      <dl className="space-y-1">
-                        {data.history.map((entry) => (
-                          <div key={entry.label} className="flex min-w-0 gap-2">
-                            <dt className="w-28 shrink-0 text-xs leading-5 text-muted-foreground">{entry.label}</dt>
-                            <dd className="min-w-0 whitespace-pre-wrap break-words text-foreground">{entry.text}</dd>
-                          </div>
-                        ))}
-                      </dl>
+                      <div className="max-w-lg"><ClinicalHistoryDetails value={compactHistory} /></div>
                     </DetailSection>
                   )}
                   {data.medicines.length > 0 && (
@@ -413,17 +395,6 @@ export default function PatientHistoryVisitCard({
                   </DetailSection>}
                 </div>
               )}
-              {hasFullDetails && <Button
-                type="button"
-                size="sm"
-                variant="link"
-                className="mt-2 h-8 min-h-8 px-0 text-xs"
-                aria-expanded={view === 'full'}
-                aria-controls={detailsId}
-                onClick={() => setView((current) => (current === 'full' ? 'compact' : 'full'))}
-              >
-                {view === 'full' ? 'Compact view' : 'Full details'}
-              </Button>}
               {footerActions && <div className="mt-3 border-t border-border pt-3">{footerActions}</div>}
             </>}
           </div>
