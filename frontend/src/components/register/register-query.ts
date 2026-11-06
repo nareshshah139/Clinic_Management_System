@@ -140,3 +140,9 @@ export function errorMessage(error: unknown): string {
   if (Array.isArray(message)) return message.filter((part) => typeof part === 'string').join('. ') || 'Something went wrong';
   return typeof message === 'string' && message ? message : 'Something went wrong';
 }
+
+export function shortName(name: string) {
+  const [first, ...rest] = name.trim().split(/\s+/);
+  const last = rest.at(-1);
+  return last ? `${first} ${last[0]}.` : first;
+}

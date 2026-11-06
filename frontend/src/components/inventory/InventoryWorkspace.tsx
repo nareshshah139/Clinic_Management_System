@@ -1,18 +1,17 @@
 "use client";
-import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
+import { displayClinicDate } from '@/lib/date-display';
 import { getISTDateString } from '@/lib/utils';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import "./inventory-readability.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, RefreshCw, Plus, FileDown } from "lucide-react";
+import { ArrowLeft, ArrowRight, RefreshCw, Plus } from "lucide-react";
 import { InventoryAction } from "./InventoryPresentation";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import { useInventoryResource } from "./useInventoryResource";
-import { purchaseInvoiceStatusLabel } from "@/lib/purchase-invoice-review";
 import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
 import { PurchaseLedger } from "@/components/pharmacy/PurchaseLedger";
 import { ComplianceCenter } from "@/components/pharmacy/ComplianceCenter";
@@ -24,6 +23,7 @@ import { ReplenishmentCenter } from "./ReplenishmentCenter";
 import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
 import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
 import { WorkspaceStock } from "./WorkspaceStock";
+import { PurchaseRegister } from "./purchase/PurchaseRegister";
 import { InventoryUpdates } from "./InventoryUpdates";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
@@ -46,7 +46,7 @@ const menus: Record<string, string[][]> = {
   today: [],
   purchases: [
     ["intake", "Scan or enter bill"],
-    ["register", "Saved bills"],
+    ["register", "Purchase bills"],
     ["csv", "Import CSV"],
     ["gmail", "Gmail intake"],
     ["suppliers", "Suppliers"],
@@ -228,6 +228,11 @@ export function InventoryWorkspace() {
   const primaryTasks = availableTasks.slice(0, 3);
   const moreTasks = availableTasks.slice(3);
   const switchTask = (id: string) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1" });
+  const purchaseRegisterParams = (next: URLSearchParams) => {
+    const merged = new URLSearchParams({ area: "purchases", view: "register" });
+    next.forEach((value, key) => merged.set(key, value));
+    if (merged.toString() !== window.location.search.slice(1)) router.replace(`${path}?${merged}`, { scroll: false });
+  };
   const switchArea = (a: string) => {
     router.push(`${path}?area=${a}`, { scroll: false });
     setInitial(null);
@@ -385,9 +390,12 @@ export function InventoryWorkspace() {
           )}
           {area === "purchases" && view === "register" && (
             <PurchaseRegister
-              query={query}
-              navigate={navigate}
+              searchParams={params}
+              onParamsChange={purchaseRegisterParams}
               onOpen={invoice}
+              onNew={() => navigate({ return: origin(), view: "intake", new: requestKey(), invoice: "", receipt: "", intake: "", document: "", item: "" })}
+              onLedger={() => switchTask("ledger")}
+              onSuppliers={() => switchTask("suppliers")}
             />
           )}
           {area === "purchases" && view === "suppliers" && (
@@ -717,211 +725,6 @@ function WorkspaceToday({ navigate, open }: any) {
           </ul>
         </>
       )}
-    </section>
-  );
-}
-/**
- * @cc [owner:nareshshah139,label:product;target] purchase-register-complete
- * The purchase register MUST allow retrieval of every authorized saved invoice and unfinished
- * upload, including records beyond the recent-preview limit, with status and source retained.
- * Acceptance: INV-18. Validation and open gaps:
- * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
- */
-function PurchaseRegister({ query, navigate, onOpen }: any) {
-  const q = new URLSearchParams({
-    page: query.page || "1", limit: "30",
-    ...(query.status === "UNPOSTED" ? { unposted: "true" } : query.status ? { status: query.status } : {}),
-    ...(query.from ? { startDate: query.from } : {}),
-    ...(query.to ? { endDate: query.to } : {}),
-    ...(query.gstin ? { distributorGstin: query.gstin } : {}),
-    ...(query.search ? { search: query.search } : {}),
-    ...(query.source ? { source: query.source } : {}),
-  });
-  const { data, error, status, reload } = useInventoryResource<any>("/pharmacy/purchase-invoices?" + q);
-  const loading = status === "loading";
-  return (
-    <section className="space-y-4">
-      <h2 className="text-2xl font-semibold">Purchase register</h2>
-      <div className="flex flex-wrap gap-3">
-        <label className="flex-1 text-sm">
-          Search
-          <input
-            placeholder="Invoice number or supplier"
-            className={inputClass}
-            value={query.search || ""}
-            onChange={(e) => navigate({ search: e.target.value, page: "1" })}
-          />
-        </label>
-        <label className="text-sm">
-          Source
-          <select
-            className={inputClass}
-            value={query.source || ""}
-            onChange={(e) => navigate({ source: e.target.value, page: "1" })}
-          >
-            <option value="">All sources</option>
-            {["MANUAL", "OCR", "CSV", "GMAIL"].map((v) => (
-              <option key={v}>{v}</option>
-            ))}
-          </select>
-        </label>
-        <InventoryAction
-          label="Export full purchase register"
-          className="self-end"
-          onClick={() =>
-            window.open(
-              "/api/inventory/workspace/purchases/export?" +
-                new URLSearchParams({
-                  format: "xlsx",
-                  ...(query.status === "UNPOSTED"
-                    ? { unposted: "true" }
-                    : query.status
-                      ? { status: query.status }
-                      : {}),
-                  ...(query.from ? { startDate: query.from } : {}),
-                  ...(query.to ? { endDate: query.to } : {}),
-                  ...(query.gstin ? { distributorGstin: query.gstin } : {}),
-                  ...(query.search ? { search: query.search } : {}),
-                  ...(query.source ? { source: query.source } : {}),
-                }),
-              "_blank",
-            )
-          }
-        >
-          <FileDown className="h-4 w-4" />
-        </InventoryAction>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="text-sm">
-          Status
-          <select
-            className={inputClass}
-            value={query.status || ""}
-            onChange={(e) => navigate({ status: e.target.value, page: "1" })}
-          >
-            <option value="">All</option>
-            {[
-              "UNPOSTED",
-              "DRAFT",
-              "OCR_REVIEW_REQUIRED",
-              "RECONCILIATION_FAILED",
-              "REVIEWED",
-              "STOCK_COMMITTED",
-              "CANCELLED",
-            ].map((s) => (
-              <option key={s} value={s}>{s === "UNPOSTED" ? "Stock not added" : s === "OCR_REVIEW_REQUIRED" ? "OCR checks needed" : s === "RECONCILIATION_FAILED" ? "Corrections or manual review needed" : purchaseInvoiceStatusLabel({ status: s })}</option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm">
-          Supplier GSTIN
-          <input
-            className={inputClass}
-            value={query.gstin || ""}
-            onChange={(e) =>
-              navigate({ gstin: e.target.value.toUpperCase(), page: "1" })
-            }
-          />
-        </label>
-        {["from", "to"].map((k) => (
-          <label key={k} className="text-sm">
-            {k === "from" ? "From date" : "To date"}
-            <input
-              type="date"
-              className={inputClass}
-              value={query[k] || ""}
-              onChange={(e) => navigate({ [k]: e.target.value, page: "1" })}
-            />
-          </label>
-        ))}
-      </div>
-      {error && <div role="alert"><p>{error}</p><Button variant="outline" onClick={() => void reload()}>Retry invoices</Button></div>}
-      <p role="status" className="text-sm">
-        {loading
-          ? "Loading invoices…"
-          : error
-            ? "Invoices unavailable"
-            : `${data?.pagination?.total ?? 0} invoices`}
-      </p>
-      <div className="overflow-x-auto rounded-md border">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-muted">
-            <tr>
-              {[
-                "Invoice",
-                "Supplier",
-                "Date",
-                "Status",
-                "Amount",
-                "Original",
-              ].map((t) => (
-                <th className="p-3" key={t}>
-                  {t}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {data && !data.data.length && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">No invoices match these filters.</td></tr>}
-            {data?.data.map((d: any) => (
-              <tr key={d.id}>
-                <td className="p-3">
-                  <button
-                    className="font-medium underline"
-                    onClick={() => onOpen(d.id)}
-                  >
-                    {d.invoiceNumber}
-                  </button>
-                </td>
-                <td className="p-3">
-                  {d.distributorName}
-                  <p className="text-xs text-muted-foreground">
-                    {d.distributorGstin}
-                  </p>
-                </td>
-                <td className="p-3">{displayUtcDate(d.invoiceDate)}</td>
-                <td className="p-3">
-                  {purchaseInvoiceStatusLabel(d)}
-                </td>
-                <td className="p-3 text-right tabular-nums">{fmtMoney(d.netPayable)}</td>
-                <td className="p-3">
-                  {d.documents?.map((f: any) => (
-                    <a
-                      key={f.id}
-                      href={`/api/pharmacy/purchase-invoices/documents/${f.id}`}
-                      className="block underline"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {f.fileName}
-                    </a>
-                  ))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex justify-between gap-3">
-        <Button
-          variant="outline"
-          disabled={loading || !(data?.pagination.page > 1)}
-          onClick={() => navigate({ page: String(data.pagination.page - 1) })}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          disabled={
-            loading ||
-            !data?.pagination ||
-            data.pagination.page >= data.pagination.pages
-          }
-          onClick={() => navigate({ page: String(data.pagination.page + 1) })}
-        >
-          Next
-        </Button>
-      </div>
     </section>
   );
 }
