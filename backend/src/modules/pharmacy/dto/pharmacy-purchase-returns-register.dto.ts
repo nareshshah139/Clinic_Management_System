@@ -98,4 +98,12 @@ export class QueryPurchaseReturnsDto implements PurchaseReturnsQuery {
   @Min(1)
   @Max(100)
   limit: number = 50;
+
+  @ApiPropertyOptional({
+    enum: ['xlsx'],
+    description: 'xlsx downloads every filtered return and credit note in the requested order instead of one page',
+  })
+  @IsOptional()
+  @IsIn(['xlsx'])
+  format?: 'xlsx';
 }

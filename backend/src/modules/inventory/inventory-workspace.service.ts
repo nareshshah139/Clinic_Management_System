@@ -5,6 +5,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { randomUUID } from 'node:crypto';
 import { PharmacyPurchaseLedgerService } from '../pharmacy/pharmacy-purchase-ledger.service';
 import { PharmacyPurchaseRegisterService } from '../pharmacy/pharmacy-purchase-register.service';
+import { PharmacyPurchaseReturnsRegisterService } from '../pharmacy/pharmacy-purchase-returns-register.service';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
@@ -183,9 +184,10 @@ export class InventoryWorkspaceService {
     const ledger=new PharmacyPurchaseLedgerService(this.prisma),supplierAlerts=has('pharmacy:purchase-ledger:read')?await ledger.getAlerts(actor.branchId):null;
     const supplierOverdue=supplierAlerts?{count:supplierAlerts.overdue.length,amount:money(supplierAlerts.overdue.reduce((n:number,r:any)=>n+r.outstanding,0)),asOf:supplierAlerts.asOfDate}:null;
     const pendingPurchase=has('inventory:po:read')?await new PharmacyPurchaseRegisterService(this.prisma,ledger).toReviewCount(actor):0;
+    const creditNotesAwaited=has('inventory:po:read')?await new PharmacyPurchaseReturnsRegisterService(this.prisma).awaitedCount(actor):null;
     const pendingEdits = ['OWNER','ADMIN','DOCTOR','PHARMACIST'].includes(actor.role) && has('pharmacy:drug:inventory-change:read')
       ? await this.prisma.drugInventoryChangeRequest.count({where:{branchId:actor.branchId,status:'PENDING'}}) : null;
-    return {pendingEdits,pendingPurchase,supplierOverdue,branchId:actor.branchId,asOf:new Date().toISOString(),lowStock:low?.total,expiring:expiring?.total,capabilities:caps,stock:stock?{total:stock.total,quality:stock.quality,valuation:stock.valuation}:null,queues:active,purchases,unlinked,recent:docs.rows.slice(0,8)};
+    return {pendingEdits,pendingPurchase,creditNotesAwaited,supplierOverdue,branchId:actor.branchId,asOf:new Date().toISOString(),lowStock:low?.total,expiring:expiring?.total,capabilities:caps,stock:stock?{total:stock.total,quality:stock.quality,valuation:stock.valuation}:null,queues:active,purchases,unlinked,recent:docs.rows.slice(0,8)};
   }
   async suppliers(actor:WorkflowActor){await this.require(actor,'inventory:item:read');return this.prisma.supplier.findMany({where:{branchId:actor.branchId},orderBy:{name:'asc'}});}
   async owners(actor:WorkflowActor){await this.workflow.permissions(actor);return this.prisma.user.findMany({where:{branchId:actor.branchId,isActive:true},select:{id:true,firstName:true,lastName:true,role:true},orderBy:{firstName:'asc'}});}

@@ -1,6 +1,8 @@
 import {
+  awaitedTotals,
   purchaseReturnEntry,
   purchaseReturnsPage,
+  purchaseReturnsSheet,
   returnCreditState,
   type PurchaseReturnsQuery,
   type ReturnDocumentRecord,
@@ -38,6 +40,7 @@ const doc = (overrides: Partial<ReturnDocumentRecord> = {}): ReturnDocumentRecor
   distributorName: 'Linae Distributors',
   sourceBillNo: 'LIN-1',
   credit: credit(),
+  awaitedSince: null,
   ...overrides,
 });
 
@@ -93,6 +96,7 @@ describe('purchase returns register', () => {
       credit: { id: 'credit-1', amount: 500, applied: 200, available: 300 },
       state: 'ADJUSTED',
       reason: 'EXPIRY',
+      awaitedSince: null,
     });
   });
 
@@ -122,6 +126,7 @@ describe('purchase returns register', () => {
         payload: { date: '2026-10-06', returnType: 'BREAKAGE' },
         totalAmount: 150,
         credit: null,
+        awaitedSince: new Date('2026-10-14T20:00:00Z'),
       }),
       asha,
       now,
@@ -164,8 +169,28 @@ describe('purchase returns register', () => {
     ),
   ];
 
+  const STANDING = { held: 812.5, awaited: { amount: 670, count: 2 } };
+
+  it('counts credit notes awaited across all dates, from the clinic day the goods went on challan', () => {
+    expect(awaitedTotals(entries())).toEqual({ amount: 670, count: 2 });
+    expect(awaitedTotals(entries(), medico.toLowerCase())).toEqual({ amount: 0, count: 0 });
+    expect(entries().map((row) => [row.returnRef, row.awaitedSince])).toEqual([
+      ['RET-1', null], ['RET-2', '2026-10-15'], ['RET-3', null], ['RET-4', null], ['Rate difference', null], ['RET-OLD', null],
+    ]);
+  });
+
+  it('writes the credit note register to a sheet with one row per return or credit note', () => {
+    expect(purchaseReturnsSheet(purchaseReturnsPage(entries(), query({ state: 'AWAITED' }), STANDING).rows)).toEqual([
+      {
+        'Sr No': 1, 'Credit Note No.': '', 'Return Ref': 'RET-2', Type: 'Return', 'Entry Date': '2026-10-06 10:30', 'Return Date': '2026-10-06',
+        'Credit Note Date': '', 'Entry By': 'Asha Rao', Distributor: 'Linae Distributors', GSTIN: linae, 'Against Bill': 'LIN-1', Reason: 'Breakage',
+        'Return Value': 150, 'Credit Note Amount': '', 'Set Off': 0, Available: 0, Status: 'Credit note awaited',
+      },
+    ]);
+  });
+
   it('numbers rows by entry, totals credit held and awaited, and states what the count leaves out', () => {
-    const page = purchaseReturnsPage(entries(), query());
+    const page = purchaseReturnsPage(entries(), query(), STANDING);
     expect(page.rows.map((row) => [row.srNo, row.returnRef, row.state])).toEqual([
       [1, 'RET-1', 'RECEIVED'],
       [2, 'RET-2', 'AWAITED'],
@@ -174,8 +199,8 @@ describe('purchase returns register', () => {
       [5, 'Rate difference', 'CANCELLED'],
     ]);
     expect(page.totals).toEqual({
-      held: 500,
-      awaited: { amount: 150, count: 1 },
+      held: 812.5,
+      awaited: { amount: 670, count: 2 },
       count: 3,
       excluded: { drafts: 1, cancelled: 1 },
     });
@@ -188,7 +213,7 @@ describe('purchase returns register', () => {
 
   it('filters by credit note number, return reference, distributor, state, type, reason and entry person', () => {
     const refs = (overrides: Partial<PurchaseReturnsQuery>) =>
-      purchaseReturnsPage(entries(), query(overrides)).rows.map((row) => row.returnRef);
+      purchaseReturnsPage(entries(), query(overrides), STANDING).rows.map((row) => row.returnRef);
     expect(refs({ field: 'creditNoteNo', q: 'med-cn' })).toEqual(['RET-3']);
     expect(refs({ field: 'returnRef', q: 'ret-2' })).toEqual(['RET-2']);
     expect(refs({ field: 'distributor', q: '27AAAAA' })).toEqual(['RET-3']);
@@ -202,11 +227,11 @@ describe('purchase returns register', () => {
 
   it('sorts by the amount shown, the credit note number and the lifecycle state', () => {
     const order = (sortBy: PurchaseReturnsQuery['sortBy'], sortDir: 'asc' | 'desc') =>
-      purchaseReturnsPage(entries(), query({ sortBy, sortDir })).rows.map((row) => row.returnRef);
+      purchaseReturnsPage(entries(), query({ sortBy, sortDir }), STANDING).rows.map((row) => row.returnRef);
     expect(order('amount', 'desc')).toEqual(['RET-1', 'RET-2', 'RET-3', 'RET-4', 'Rate difference']);
     expect(order('creditNoteNo', 'asc')).toEqual(['RET-2', 'RET-4', 'Rate difference', 'RET-1', 'RET-3']);
     expect(order('state', 'asc')).toEqual(['RET-4', 'RET-2', 'RET-1', 'RET-3', 'Rate difference']);
-    expect(purchaseReturnsPage(entries(), query({ page: 2, limit: 2 })).rows.map((row) => row.srNo)).toEqual([3, 4]);
+    expect(purchaseReturnsPage(entries(), query({ page: 2, limit: 2 }), STANDING).rows.map((row) => row.srNo)).toEqual([3, 4]);
   });
 });
 

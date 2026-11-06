@@ -132,6 +132,7 @@ export type PurchaseRegisterPage = {
   };
   entryByOptions: Person[];
   distributorOptions: Distributor[];
+  onlyDistributor: string | null;
 };
 
 export type PurchaseInvoiceRecord = {
@@ -360,7 +361,13 @@ export function purchaseRegisterPage(
     },
     entryByOptions: entryByOptions(ranged),
     distributorOptions: distributorOptions(ranged),
+    onlyDistributor: onlyDistributor(rows),
   };
+}
+
+function onlyDistributor(rows: PurchaseRegisterRow[]) {
+  const gstins = new Set(rows.map((row) => row.distributor.gstin.toUpperCase()));
+  return gstins.size === 1 ? [...gstins][0] : null;
 }
 
 const PAYMENT_LABEL: Record<PaymentState, string> = {
@@ -372,7 +379,7 @@ const PAYMENT_LABEL: Record<PaymentState, string> = {
   CANCELLED: 'Cancelled',
 };
 
-const clinicTime = new Intl.DateTimeFormat('en-GB', {
+export const clinicTime = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Asia/Kolkata',
   hour: '2-digit',
   minute: '2-digit',

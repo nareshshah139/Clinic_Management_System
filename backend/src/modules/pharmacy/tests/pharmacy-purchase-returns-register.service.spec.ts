@@ -45,13 +45,10 @@ describe('PharmacyPurchaseReturnsRegisterService', () => {
       { branchId: 'branch-1' },
       now,
     );
-    expect(prisma.inventoryWorkflowDocument.findMany.mock.calls[0][0].where).toEqual({
+    expect(prisma.inventoryWorkflowDocument.findMany.mock.calls.map((call: any) => call[0].where)).toContainEqual({
       branchId: 'branch-1',
       kind: { in: ['SUPPLIER_RETURN', 'CREDIT_NOTE'] },
-    });
-    expect(prisma.inventorySupplierCredit.findMany.mock.calls[0][0].where).toEqual({
-      branchId: 'branch-1',
-      documentId: { in: ['ret-1', 'cn-2'] },
+      updatedAt: { gte: new Date('2026-03-29T18:30:00.000Z') },
     });
     expect(
       page.rows.map((row) => [row.srNo, row.returnRef, row.distributor.name, row.sourceBillNo, row.entryBy?.name ?? null, row.state, row.creditNote, row.reason]),

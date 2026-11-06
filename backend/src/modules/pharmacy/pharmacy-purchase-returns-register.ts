@@ -1,5 +1,6 @@
-import { RETURN_REASONS, supplierReturnReason, type ReturnReason } from '../inventory/supplier-return';
+import { RETURN_REASONS, RETURN_REASON_LABELS, supplierReturnReason, type ReturnReason } from '../inventory/supplier-return';
 import { clinicDay, clinicDayOf, collator, compareValues, money, pageOf } from './register-utils';
+import { clinicTime } from './pharmacy-purchase-register';
 import { creditBalance, type SupplierCreditRecord } from './supplier-credit-balance';
 import { MONEY_TOLERANCE } from './purchase-payment-balance';
 
@@ -42,6 +43,7 @@ export type PurchaseReturnRow = {
   credit: { id: string; amount: number; applied: number; available: number } | null;
   state: ReturnCreditState;
   reason: ReturnReason | null;
+  awaitedSince: string | null;
 };
 
 export type PurchaseReturnEntry = Omit<PurchaseReturnRow, 'srNo'>;
@@ -95,6 +97,7 @@ export type ReturnDocumentRecord = {
   distributorName: string | null;
   sourceBillNo: string | null;
   credit: ReturnCreditRecord | null;
+  awaitedSince: Date | null;
 };
 
 const DRAFT_STATUSES = ['DRAFT', 'AWAITING_APPROVAL', 'APPROVED'];
@@ -123,6 +126,7 @@ export function purchaseReturnEntry(
   const balance = doc.credit ? creditBalance(doc.credit, now) : null;
   const number = doc.credit?.creditNoteNumber ?? null;
   const gstin = (doc.supplierGstin ?? '').toUpperCase();
+  const state = returnCreditState(doc.status, balance ? { number, ...balance } : null);
   return {
     id: doc.id,
     kind: doc.kind as ReturnKind,
@@ -143,8 +147,9 @@ export function purchaseReturnEntry(
     sourceBillNo: doc.sourceBillNo,
     returnValue: money(Number(doc.totalAmount ?? 0)),
     credit: doc.credit && balance ? { id: doc.credit.id, ...balance } : null,
-    state: returnCreditState(doc.status, balance ? { number, ...balance } : null),
+    state,
     reason: doc.kind === 'SUPPLIER_RETURN' ? supplierReturnReason(payload) : null,
+    awaitedSince: state === 'AWAITED' && doc.awaitedSince ? clinicDay(doc.awaitedSince) : null,
   };
 }
 
@@ -206,10 +211,21 @@ function options(rows: PurchaseReturnEntry[]) {
   };
 }
 
-export function purchaseReturnsPage(entries: PurchaseReturnEntry[], query: PurchaseReturnsQuery): PurchaseReturnsPage {
+export type StandingCredit = { held: number; awaited: { amount: number; count: number } };
+
+export function awaitedTotals(entries: PurchaseReturnEntry[], distributorGstin?: string) {
+  const gstin = distributorGstin?.trim().toUpperCase();
+  const awaited = entries.filter((row) => row.state === 'AWAITED' && (!gstin || row.distributor.gstin === gstin));
+  return { amount: sum(awaited.map((row) => row.returnValue)), count: awaited.length };
+}
+
+export function purchaseReturnsPage(
+  entries: PurchaseReturnEntry[],
+  query: PurchaseReturnsQuery,
+  standing: StandingCredit,
+): PurchaseReturnsPage {
   const rows = purchaseReturnRows(entries, query);
   const of = (...states: ReturnCreditState[]) => rows.filter((row) => states.includes(row.state));
-  const awaited = of('AWAITED');
   const drafts = of('DRAFT').length;
   const cancelled = of('CANCELLED').length;
   return {
@@ -218,11 +234,45 @@ export function purchaseReturnsPage(entries: PurchaseReturnEntry[], query: Purch
     page: query.page,
     limit: query.limit,
     totals: {
-      held: sum(of('RECEIVED', 'ADJUSTED').map((row) => row.credit?.available ?? 0)),
-      awaited: { amount: sum(awaited.map((row) => row.returnValue)), count: awaited.length },
+      held: standing.held,
+      awaited: standing.awaited,
       count: rows.length - drafts - cancelled,
       excluded: { drafts, cancelled },
     },
     ...options(entries.filter((row) => inRange(row, query))),
   };
+}
+
+const STATE_LABELS: Record<ReturnCreditState, string> = {
+  DRAFT: 'Draft',
+  AWAITED: 'Credit note awaited',
+  RECEIVED: 'Received',
+  ADJUSTED: 'Adjusted',
+  USED: 'Fully used',
+  CANCELLED: 'Cancelled',
+};
+
+export function purchaseReturnsSheet(rows: PurchaseReturnRow[]) {
+  return rows.map((row) => {
+    const entryAt = new Date(row.entryAt);
+    return {
+      'Sr No': row.srNo,
+      'Credit Note No.': row.creditNote?.number ?? '',
+      'Return Ref': row.returnRef,
+      Type: row.kind === 'CREDIT_NOTE' ? 'Credit note' : 'Return',
+      'Entry Date': `${clinicDay(entryAt)} ${clinicTime.format(entryAt)}`,
+      'Return Date': row.returnDate,
+      'Credit Note Date': row.creditNote?.date ?? '',
+      'Entry By': row.entryBy?.name ?? '',
+      Distributor: row.distributor.name,
+      GSTIN: row.distributor.gstin,
+      'Against Bill': row.sourceBillNo ?? '',
+      Reason: row.reason ? RETURN_REASON_LABELS[row.reason] : '',
+      'Return Value': row.returnValue,
+      'Credit Note Amount': row.creditNote?.amount ?? '',
+      'Set Off': row.credit?.applied ?? 0,
+      Available: row.credit?.available ?? 0,
+      Status: STATE_LABELS[row.state],
+    };
+  });
 }

@@ -94,13 +94,13 @@ describe('PharmacyPurchaseRegisterService', () => {
     expect(Object.keys(page)).not.toContain('canSettle');
   });
 
-  it('reports credit held per distributor on the page and the net position only when one distributor is chosen', async () => {
+  it('reports credit held per distributor on the page, the one distributor a filtered list narrows to, and the position on its own call', async () => {
     const all = await service.list(query(), branch, now);
-    expect([all.creditHeld, all.distributorPosition]).toEqual([{ '36ABCDE1234F1Z5': 400 }, null]);
+    expect([all.creditHeld, all.onlyDistributor]).toEqual([{ '36ABCDE1234F1Z5': 400 }, '36ABCDE1234F1Z5']);
     expect(ledger.creditHeld.mock.calls[0]).toEqual(['branch-1', now, ['36ABCDE1234F1Z5']]);
+    expect(ledger.distributorPosition).not.toHaveBeenCalled();
 
-    const one = await service.list(query({ distributorGstin: '36ABCDE1234F1Z5' }), branch, now);
-    expect(one.distributorPosition).toEqual({
+    expect(await service.position('36ABCDE1234F1Z5', branch, now)).toEqual({
       gstin: '36ABCDE1234F1Z5', name: 'Linae Distributors', outstanding: 850, creditHeld: 400, net: 450,
     });
   });

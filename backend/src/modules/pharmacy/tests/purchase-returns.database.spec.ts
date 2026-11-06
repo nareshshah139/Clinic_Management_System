@@ -222,9 +222,10 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
       { from: '2026-04-01', to: '2027-03-31', distributorGstin: linae, sortBy: 'srNo', sortDir: 'asc', page: 1, limit: 50 },
       { branchId },
     );
-    expect([page.distributorPosition, page.creditHeld]).toEqual([
+    expect([await register.position(linae, { branchId }), page.creditHeld, page.onlyDistributor]).toEqual([
       { gstin: linae, name: 'Linae Distributors', outstanding: 4400, creditHeld: 200, net: 4200 },
       { [linae]: 200 },
+      linae,
     ]);
   });
 
@@ -508,5 +509,30 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     expect([credit.kind, credit.state, credit.creditNote, credit.credit?.available]).toEqual([
       'CREDIT_NOTE', 'RECEIVED', { number: 'CN-SC-1', date: '2026-11-04', amount: credit.returnValue }, credit.returnValue,
     ]);
+  });
+
+  it('totals credit held and awaited across all dates for the distributor, whatever period the list shows', async () => {
+    const all = await returnsPage();
+    const lateWeek = await returnsPage({ from: '2026-11-04', to: '2026-11-04' });
+    expect(lateWeek.rows).toEqual([]);
+    expect([lateWeek.totals.held, lateWeek.totals.awaited]).toEqual([all.totals.held, all.totals.awaited]);
+    expect(lateWeek.totals.held).toBe((await position()).creditHeld);
+    expect((await returnsPage({ from: '2026-11-04', to: '2026-11-04', distributorGstin: '27AAAAA0000A1Z5' })).totals).toMatchObject({
+      held: 0, awaited: { amount: 0, count: 0 },
+    });
+  });
+
+  it('lists a distributor that holds credit but has no bills in Payments & dues, with a ledger to open', async () => {
+    await db.supplier.create({ data: { id: 'supplier-2', branchId, name: 'Medico Agencies', gstNumber: '27AAAAA0000A1Z5' } });
+    await db.inventorySupplierCredit.create({
+      data: { branchId, supplierGstin: '27AAAAA0000A1Z5', documentId: 'medico-doc', reference: 'MED-RET', amount: 300, creditNoteNumber: 'MED-CN-1', receivedAt: new Date('2026-11-01T05:00:00Z') },
+    });
+    const medico = (await ledger.getDistributorSummaries(branchId)).distributors.find((summary) => summary.distributorGstin === '27AAAAA0000A1Z5');
+    expect([medico?.distributorName, medico?.invoiceCount, medico?.outstanding, medico?.creditHeld, medico?.netPayable]).toEqual([
+      'Medico Agencies', 0, 0, 300, -300,
+    ]);
+    const detail = await ledger.getDistributorLedger(branchId, '27AAAAA0000A1Z5');
+    expect([detail.distributorName, detail.invoices, detail.runningLedger]).toEqual(['Medico Agencies', [], []]);
+    await expect(ledger.getDistributorLedger(branchId, '29BBBBB0000B1Z5')).rejects.toMatchObject({ status: 404 });
   });
 });

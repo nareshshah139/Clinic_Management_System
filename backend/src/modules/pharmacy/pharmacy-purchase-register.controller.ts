@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Header,
@@ -52,5 +53,17 @@ export class PharmacyPurchaseRegisterController {
       type: file.mimeType,
       disposition: `attachment; filename="${file.fileName}"`,
     });
+  }
+
+  @Get('position')
+  @Header('Cache-Control', 'private, no-store')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
+  @ApiOperation({ summary: "One distributor's position across all posted bills: due, credit held and net payable" })
+  @ApiResponse({ status: 200, description: 'Due, credit held and net for the distributor, as Payments & dues computes them' })
+  @ApiResponse({ status: 400, description: 'distributorGstin is missing or not a GSTIN' })
+  position(@Query('distributorGstin') distributorGstin: string, @Request() req: any) {
+    if (!/^[0-9A-Z]{15}$/i.test(String(distributorGstin ?? '').trim())) throw new BadRequestException('Choose a distributor by GSTIN');
+    return this.purchaseRegister.position(distributorGstin, { branchId: req.user.branchId });
   }
 }

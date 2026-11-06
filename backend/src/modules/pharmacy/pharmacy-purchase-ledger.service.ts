@@ -293,6 +293,15 @@ export class PharmacyPurchaseLedgerService {
     return creditHeldByDistributor(credits, asOfDate);
   }
 
+  private async supplierNames(branchId: string, gstins: string[]) {
+    if (!gstins.length) return new Map<string, string>();
+    const suppliers = await (this.prisma as any).supplier.findMany({
+      where: { branchId, gstNumber: { in: gstins } },
+      select: { gstNumber: true, name: true },
+    });
+    return new Map<string, string>(suppliers.map((supplier: any) => [String(supplier.gstNumber).toUpperCase(), supplier.name]));
+  }
+
   async distributorPosition(branchId: string, distributorGstin: string, asOfDate = new Date()) {
     const gstin = distributorGstin.trim().toUpperCase();
     const [invoices, held] = await Promise.all([
@@ -305,7 +314,7 @@ export class PharmacyPurchaseLedgerService {
     const creditHeld = held.get(gstin) ?? 0;
     return {
       gstin,
-      name: invoices[0]?.distributorName ?? null,
+      name: invoices[0]?.distributorName ?? (await this.supplierNames(branchId, [gstin])).get(gstin) ?? null,
       outstanding,
       creditHeld,
       net: this.money(outstanding - creditHeld),
@@ -319,6 +328,9 @@ export class PharmacyPurchaseLedgerService {
     ]);
     const groups = this.groupInvoicesByDistributor(invoices);
     const fiscalYearStart = this.fiscalYearStart(asOfDate);
+    const billed = new Set([...groups.values()].map((group) => group[0].distributorGstin.trim().toUpperCase()));
+    const creditOnly = [...held].filter(([gstin, amount]) => amount > 0 && !billed.has(gstin)).map(([gstin]) => gstin);
+    const names = await this.supplierNames(branchId, creditOnly);
 
     return {
       asOfDate: asOfDate.toISOString(),
@@ -330,7 +342,14 @@ export class PharmacyPurchaseLedgerService {
           const creditHeld = held.get(summary.distributorGstin.trim().toUpperCase()) ?? 0;
           return { ...summary, creditHeld, netPayable: this.money(summary.outstanding - creditHeld) };
         })
-        .sort((a, b) => b.outstanding - a.outstanding),
+        .concat(
+          creditOnly.map((gstin) => {
+            const creditHeld = held.get(gstin)!;
+            const summary = this.buildDistributorSummary([], asOfDate, fiscalYearStart);
+            return { ...summary, distributorGstin: gstin, distributorName: names.get(gstin) ?? gstin, creditHeld, netPayable: this.money(-creditHeld) };
+          }),
+        )
+        .sort((a, b) => b.outstanding - a.outstanding || b.creditHeld - a.creditHeld),
     };
   }
 
@@ -341,7 +360,8 @@ export class PharmacyPurchaseLedgerService {
   ) {
     const gstin = distributorGstin.trim().toUpperCase();
     const invoices = await this.findLedgerInvoices(branchId, gstin, asOfDate);
-    if (invoices.length === 0) {
+    const creditOnly = invoices.length === 0 && ((await this.creditHeld(branchId, asOfDate, [gstin])).get(gstin) ?? 0) > 0;
+    if (invoices.length === 0 && !creditOnly) {
       throw new NotFoundException('Distributor ledger not found');
     }
 
@@ -420,7 +440,7 @@ export class PharmacyPurchaseLedgerService {
 
     return {
       distributorGstin: gstin,
-      distributorName: invoices[0].distributorName,
+      distributorName: invoices[0]?.distributorName ?? (await this.supplierNames(branchId, [gstin])).get(gstin) ?? gstin,
       asOfDate: asOfDate.toISOString(),
       balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff less payment reversals recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       invoices: invoiceRows,
@@ -744,8 +764,8 @@ export class PharmacyPurchaseLedgerService {
     }
 
     return {
-      distributorGstin: invoices[0].distributorGstin,
-      distributorName: invoices[0].distributorName,
+      distributorGstin: invoices[0]?.distributorGstin ?? '',
+      distributorName: invoices[0]?.distributorName ?? '',
       invoiceCount: invoices.length,
       invoiceTotal,
       paid,

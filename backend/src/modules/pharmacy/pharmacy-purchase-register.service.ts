@@ -19,7 +19,6 @@ export type PurchaseRegisterActor = { branchId: string };
 
 export type PurchaseRegisterListing = PurchaseRegisterPage & {
   creditHeld: Record<string, number>;
-  distributorPosition: DistributorPosition | null;
 };
 
 export type PurchaseRegisterFile = {
@@ -41,18 +40,14 @@ export class PharmacyPurchaseRegisterService {
     now = new Date(),
   ): Promise<PurchaseRegisterListing> {
     const page = purchaseRegisterPage(await this.entries(query, actor, now), query);
-    const gstin = query.distributorGstin?.trim();
-    const [held, distributorPosition] = await Promise.all([
-      this.ledger.creditHeld(actor.branchId, now, [
-        ...new Set(page.rows.map((row) => row.distributor.gstin.toUpperCase())),
-      ]),
-      gstin ? this.ledger.distributorPosition(actor.branchId, gstin, now) : null,
+    const held = await this.ledger.creditHeld(actor.branchId, now, [
+      ...new Set(page.rows.map((row) => row.distributor.gstin.toUpperCase())),
     ]);
-    return {
-      ...page,
-      creditHeld: Object.fromEntries([...held].filter(([, amount]) => amount > 0)),
-      distributorPosition,
-    };
+    return { ...page, creditHeld: Object.fromEntries([...held].filter(([, amount]) => amount > 0)) };
+  }
+
+  position(distributorGstin: string, actor: PurchaseRegisterActor, now = new Date()): Promise<DistributorPosition> {
+    return this.ledger.distributorPosition(actor.branchId, distributorGstin, now);
   }
 
   async toReviewCount(actor: PurchaseRegisterActor, now = new Date()): Promise<number> {
