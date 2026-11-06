@@ -721,7 +721,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     ] });
     await editSelectedInvoice();
     const recovery = screen.getByRole('region', { name: 'Historical stock recovery' });
-    expect(within(recovery).getByRole('link', { name: 'Open Counts & audit' })).toHaveAttribute('href', '/dashboard/inventory?area=stock&view=COUNT');
+    expect(within(recovery).getByRole('link', { name: 'Open Stock counts' })).toHaveAttribute('href', '/dashboard/inventory?area=stock&view=COUNT');
     expect(within(recovery).getByText(/Supplier accounting remains separate/)).toBeVisible();
     expect(within(recovery).getByText(/inventory administrator.*physical count/i)).toBeVisible();
     fireEvent.click(within(recovery).getByRole('button', { name: 'Copy historical stock handoff' }));

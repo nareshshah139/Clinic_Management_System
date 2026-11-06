@@ -357,7 +357,7 @@ export function WorkspaceStock({
               {!capabilities?.kinds?.COUNT?.write && (
                 <section className="space-y-2 rounded-md border p-4" aria-label="Batch recovery handoff">
                   {item.drugs?.length > 1 && <p>This batch is linked to more than one product. Its physical product must be verified before reconciliation.</p>}
-                  <p>Ask a colleague with Counts &amp; audit write access to open this batch, verify its product identity when needed, and record a fresh physical count. Viewing this batch or sharing this reference does not change stock.</p>
+                  <p>Ask a colleague who can count stock to open this batch, verify its product identity when needed, and record a fresh physical count. Viewing this batch or sharing this reference does not change stock.</p>
                   <label className="block">Batch recovery reference
                     <input className="mt-1 w-full rounded-md border p-2" readOnly value={`/dashboard/inventory?area=stock&view=list&item=${encodeURIComponent(item.id)}`} onFocus={event => event.currentTarget.select()} />
                   </label>

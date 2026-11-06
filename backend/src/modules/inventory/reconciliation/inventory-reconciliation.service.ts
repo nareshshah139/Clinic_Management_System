@@ -236,7 +236,11 @@ export class InventoryReconciliationService {
     const all = docs.map((doc) => this.row(doc, people));
     const personOptions = [...new Map(all.flatMap((r) => [r.assignedTo, r.signedBy]).filter((p): p is { id: string; name: string } => !!p).map((p) => [p.id, p])).values()].sort((a, b) => compareValues(a.name, b.name));
     const state = COUNT_STATES.includes(q.state) ? (q.state as CountState) : null;
-    const filtered = all.filter((r) => (!q.person || r.assignedTo?.id === q.person || r.signedBy?.id === q.person) && (!state || r.state === state));
+    const needle = String(q.q ?? '').trim().toLowerCase();
+    const items = new Map(docs.map((doc) => [doc.id, (doc.payload?.lines || []).map((l: WorkflowLine) => `${l.name ?? ''} ${l.batchNumber ?? ''}`.toLowerCase()).join('\n')]));
+    const matches = (r: (typeof all)[number]) =>
+      !needle || [r.reference, r.assignedTo?.name, r.signedBy?.name, items.get(r.id)].some((text) => String(text ?? '').toLowerCase().includes(needle));
+    const filtered = all.filter((r) => (!q.person || r.assignedTo?.id === q.person || r.signedBy?.id === q.person) && (!state || r.state === state) && matches(r));
     const sortBy: CountSort = COUNT_SORTS.includes(q.sortBy) ? q.sortBy : 'date';
     const dir = q.sortDir === 'asc' ? 1 : -1;
     const key = (r: (typeof all)[number]): string | number =>

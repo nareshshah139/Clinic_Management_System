@@ -26,6 +26,9 @@ import { WorkspaceStock } from "./WorkspaceStock";
 import { PurchaseBills } from "./purchase/PurchaseBills";
 import { canRecordSupplierPayments } from "./purchase/purchase-register-model";
 import { InventoryUpdates } from "./InventoryUpdates";
+import { StockCounts } from "./counts/StockCounts";
+import { formatRupees } from "@/lib/pharmacy-invoice-print";
+import type { ReconciliationCards } from "./counts/count-model";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
   fmtMoney,
@@ -62,7 +65,7 @@ const menus: Record<string, string[][]> = {
   stock: [
     ["list", "Stock list"],
     ["approvals", "Approve corrections"],
-    ["COUNT", "Counts & audit"],
+    ["COUNT", "Stock counts"],
     ["LOSS", "Loss & breakage"],
     ["HOLD", "Blocked stock"],
     ["CORRECTION", "Corrections"],
@@ -234,6 +237,11 @@ export function InventoryWorkspace() {
     next.forEach((value, key) => merged.set(key, value));
     if (merged.toString() !== window.location.search.slice(1)) router.replace(`${path}?${merged}`, { scroll: false });
   };
+  const countRegisterParams = (tab: string, next: URLSearchParams) => {
+    const merged = new URLSearchParams({ area: "stock", view: "COUNT", tab });
+    next.forEach((value, key) => merged.set(key, value));
+    if (merged.toString() !== window.location.search.slice(1)) router.replace(`${path}?${merged}`, { scroll: false });
+  };
   const switchArea = (a: string) => {
     router.push(`${path}?area=${a}`, { scroll: false });
     setInitial(null);
@@ -353,6 +361,9 @@ export function InventoryWorkspace() {
               onInvoice={invoice}
             />
           )}
+          {area === "stock" && view === "COUNT" && (
+            <StockCounts searchParams={params} navigate={navigate} onRegisterParams={countRegisterParams} />
+          )}
           {area === "stock" && view === "approvals" && (
             canReadEdits ? <InventoryUpdates /> : <p role="alert">You do not have access to price/stock approvals.</p>
           )}
@@ -456,6 +467,7 @@ export function InventoryWorkspace() {
           {area === "sales" && view === "history" && <PharmacyInvoiceList />}
 
           {view !== "TARGET_REVIEW" &&
+          view !== "COUNT" &&
           workflowKinds[view] &&
           (query.document || query.new || query.recoverRequest) ? (
             <WorkflowDocumentEditor
@@ -479,6 +491,7 @@ export function InventoryWorkspace() {
             />
           ) : (
             area !== "reorder" &&
+            view !== "COUNT" &&
             workflowKinds[view] && (
               <WorkflowRegister
                 key={view}
@@ -548,6 +561,36 @@ export function InventoryWorkspace() {
  * Acceptance: INV-02. Validation and open gaps:
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] reconciliation-today-cards
+ * Today MUST remind, never block: the signed-in counter's count due, an approver's queue with its
+ * net value, and a cycle that is short or behind for whoever configures it.
+ */
+export function reconciliationRows(cards: ReconciliationCards | null) {
+  if (!cards) return [];
+  const counts = { area: "stock", view: "COUNT" };
+  return [
+    ...(cards.due ? [{
+      label: `Stock count due today · ${cards.due.items} ${cards.due.items === 1 ? "item" : "items"}`,
+      count: cards.due.items,
+      detail: "Count your assigned batches and sign off.",
+      target: counts,
+    }] : []),
+    ...(cards.approvals?.count ? [{
+      label: `Counts awaiting your approval · ${formatRupees(cards.approvals.netValue)}`,
+      count: cards.approvals.count,
+      detail: "Signed counts with differences. Stock changes only when you approve.",
+      target: { ...counts, tab: "approvals" },
+    }] : []),
+    ...(cards.behind ? [{
+      label: `Reconciliation behind: ${cards.behind.remaining} ${cards.behind.remaining === 1 ? "batch" : "batches"} not counted this cycle`,
+      count: cards.behind.remaining,
+      detail: cards.behind.message,
+      note: cards.behind.message,
+      target: { ...counts, tab: "settings" },
+    }] : []),
+  ];
+}
 function WorkspaceToday({ navigate, open }: any) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState("");
@@ -620,12 +663,7 @@ function WorkspaceToday({ navigate, open }: any) {
       detail: "Continue from a retained photo or PDF.",
       target: { area: "purchases", view: "intake" },
     },
-    {
-      label: "Counts awaiting completion",
-      count: queue("COUNT"),
-      detail: "Enter physical counts or approve a reviewed variance.",
-      target: { area: "stock", view: "COUNT", status: "OPEN" },
-    },
+    ...reconciliationRows(data?.reconciliation ?? null),
     ...(data?.creditNotesAwaited != null
       ? [
           {
@@ -693,6 +731,7 @@ function WorkspaceToday({ navigate, open }: any) {
                   </span>
                   <span className="flex-1">
                     <strong>{r.label}</strong>
+                    {"note" in r && r.note && <span className="mt-0.5 block text-sm">{r.note}</span>}
                   </span>
                   <ArrowRight className="h-5 w-5" />
                 </button>
@@ -765,12 +804,7 @@ function WorkflowRegister({
     setBusy(true);
     setError("");
     try {
-      const path =
-        kind === "COUNT"
-          ? "counts"
-          : kind === "SHORTBOOK"
-            ? "shortbook/refresh"
-            : "targets/propose";
+      const path = kind === "SHORTBOOK" ? "shortbook/refresh" : "targets/propose";
       const d = await apiClient.post<any>("/inventory/workspace/" + path, {
         requestKey: requestKey(),
       });
@@ -808,16 +842,12 @@ function WorkflowRegister({
         </div>
         {capabilities?.kinds?.[kind]?.write && (
           <div className="flex flex-wrap gap-2">
-            {["COUNT", "SHORTBOOK", "TARGET_REVIEW"].includes(kind) && (
+            {["SHORTBOOK", "TARGET_REVIEW"].includes(kind) && (
               <Button disabled={busy} onClick={generate}>
-                {kind === "COUNT"
-                  ? "Start stock count"
-                  : kind === "SHORTBOOK"
-                    ? "Add low-stock demand"
-                    : "Generate target proposal"}
+                {kind === "SHORTBOOK" ? "Add low-stock demand" : "Generate target proposal"}
               </Button>
             )}
-            {!["COUNT", "TARGET_REVIEW", "CORRECTION"].includes(kind) && (
+            {!["TARGET_REVIEW", "CORRECTION"].includes(kind) && (
               <Button
                 variant={kind === "SHORTBOOK" ? "outline" : "default"}
                 onClick={onNew}
