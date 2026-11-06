@@ -299,10 +299,10 @@ function makeCheck(t) {
     console.log(`${pass ? "PASS" : "FAIL"} ${id} ${name}\n${detail.split("\n").map((l) => `    ${l}`).join("\n")}`);
   }
 
-  const shortDay = (day) => `${day.slice(8)}/${day.slice(5, 7)}`;
+  const shortDay = (day) => (day >= FY.from && day <= FY.to ? `${day.slice(8)}/${day.slice(5, 7)}` : ddmmyyyy(day));
   const badgeLines = (b) => {
     const s = st(b);
-    if (s.scheduledOnly) return [`Scheduled ${shortDay(s.schedDay)}`];
+    if (s.scheduledOnly) return [`Scheduled ${shortDay(s.schedDay)}`, ...(s.state === "OVERDUE" ? [`was due ${shortDay(b.dueDay)}`] : [])];
     const scheduled = s.sched > 0 ? [`${fmt(s.sched)} scheduled ${shortDay(s.schedDay)}`] : [];
     switch (s.state) {
       case "PAID": return ["Paid"];
@@ -1161,7 +1161,7 @@ function makeCheck(t) {
     const part = all.find((b) => b.plan === "FUTURE_PART");
     const rows = await readAll(page);
     const by = Object.fromEntries(rows.map((r) => [r.billNo, r]));
-    s.check("fully covered bill: badge reads Scheduled dd/mm only", by[full.billNo].payment, [`Scheduled ${shortDay(full.schedDay)}`]);
+    s.check("fully covered bill: badge reads Scheduled with the full date outside this financial year", by[full.billNo].payment, badgeLines(full));
     s.check("fully covered bill: no Mark paid", by[full.billNo].markPaid, null);
     s.ok("fully covered bill: sr text names the full date", by[full.billNo].paymentSr.includes("Payment scheduled for 15/01/2099"), by[full.billNo].paymentSr);
     s.check("fully covered bill still owes the balance in the footer basis (state is Due)", [stateOf(full), st(full).outstanding], ["DUE", full.net]);
@@ -1236,7 +1236,9 @@ function makeCheck(t) {
     const istTime = (ms) => new Date(ms + 19800000).toISOString().slice(11, 16);
     const label = (b) => {
       const x = st(b);
-      return x.state === "OVERDUE" ? `Overdue · ${x.lateDays} day${x.lateDays === 1 ? "" : "s"}${x.partlyPaid ? " · part paid" : ""}` : x.state === "PARTIAL" ? "Part paid" : "Due";
+      if (x.scheduledOnly) return `Scheduled ${x.schedDay}${x.state === "OVERDUE" ? ` · was due ${b.dueDay}` : ""}`;
+      const base = x.state === "OVERDUE" ? `Overdue · ${x.lateDays} day${x.lateDays === 1 ? "" : "s"}${x.partlyPaid ? " · part paid" : ""}` : x.state === "PARTIAL" ? "Part paid" : "Due";
+      return x.sched > 0 ? `${base} · ${x.sched / 100} scheduled ${x.schedDay}` : base;
     };
     const wanted = [...expected].sort((a, b) => b.entryAt - a.entryAt).map((b) => ({
       "Sr No": rank.get(b.billNo), "Bill No": b.billNo, "Entry Date": `${istDay(new Date(b.entryAt))} ${istTime(b.entryAt)}`, "Bill Date": b.billDay, "Entry By": b.entryBy ?? "", Distributor: b.distributor, GSTIN: b.gstin,

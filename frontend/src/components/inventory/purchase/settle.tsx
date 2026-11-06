@@ -41,7 +41,7 @@ function OverdueDays({ days }: { days: number }) {
   );
 }
 
-const noteClass = 'max-w-36 whitespace-normal text-xs leading-tight font-medium text-foreground';
+const noteClass = 'max-w-28 whitespace-normal text-xs leading-tight font-medium text-foreground';
 
 function ScheduledBadge({ row, day, today }: { row: PurchaseRegisterRow; day: string; today: string }) {
   const wasDue = wasDueNote(row, today);
