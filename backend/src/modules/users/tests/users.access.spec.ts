@@ -25,6 +25,8 @@ describe('/users access control', () => {
     },
     role: { findFirst: jest.fn(async () => ({ id: 'role', name: 'ADMIN' })), findUnique: jest.fn(async () => ({ id: 'role', name: 'ADMIN' })) },
   };
+  db.user.updateMany = jest.fn(async () => ({ count: 1 }));
+  db.user.findUnique = jest.fn(async ({ where }) => users[where.id] ?? null);
   const as = (id: string) => ({ 'x-user': id });
 
   beforeAll(async () => {
