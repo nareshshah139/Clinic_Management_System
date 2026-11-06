@@ -1295,7 +1295,9 @@ function makeCheck(t) {
     await settle(page);
     s.check("back on Sales: Today is still set", await rangeText(page), todayText);
     s.check("back on Sales: Period preset still Today", await periodSelect(page).inputValue(), "today");
-    s.check("back on Sales: rows are today's", (await readRows(page)).map(rowKey).sort(), rowsOf(todaySales).sort());
+    const backRows = await readRows(page);
+    s.check("back on Sales: rows are today's", backRows.filter((r) => !r.empty).map(rowKey).sort(), rowsOf(todaySales).sort());
+    if (!todaySales.length) s.ok("back on Sales: no sales today shows the empty state", /No sales/.test(backRows[0]?.empty ?? ""), backRows);
     s.check("Sales URL kept from/to", [new URL(page.url()).searchParams.get("from"), new URL(page.url()).searchParams.get("to")], [data.today, data.today]);
 
     await page.getByRole("tab", { name: "Returns" }).click();

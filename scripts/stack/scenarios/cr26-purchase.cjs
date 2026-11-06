@@ -33,6 +33,8 @@ function natural(a, b) {
 }
 const plain = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
+const vis = (page) => page.locator('[role="tabpanel"]:visible');
+
 let sink = [];
 const watch = (page) => {
   page.on("pageerror", (e) => sink.push({ type: "pageerror", text: e.message.slice(0, 300) }));
@@ -130,7 +132,8 @@ function makeCheck(t) {
     await page.waitForTimeout(550);
     await page.waitForFunction(
       () => {
-        const busy = document.querySelector("[aria-busy]");
+        const panel = [...document.querySelectorAll('[role="tabpanel"]')].find((p) => !p.hidden && p.getClientRects().length);
+        const busy = panel?.querySelector("[aria-busy]");
         return busy && busy.getAttribute("aria-busy") === "false" && (document.body.innerText.includes("Outstanding ₹") || document.body.innerText.includes("No purchase bills") || document.querySelector('[role="alert"]'));
       },
       null,
@@ -141,12 +144,12 @@ function makeCheck(t) {
 
   const goto = async (page, route = REGISTER) => {
     await page.goto(`${stack.base}${route}`, { waitUntil: "domcontentloaded", timeout: 240000 });
-    await page.locator("table").first().waitFor({ timeout: 240000 });
+    await vis(page).locator("table").first().waitFor({ timeout: 240000 });
     await settle(page);
   };
 
   const readRows = (page) =>
-    page.locator("table tbody tr").evaluateAll((trs) =>
+    vis(page).locator("table tbody tr").evaluateAll((trs) =>
       trs.map((tr) => {
         const tds = [...tr.querySelectorAll("td")];
         if (tds.length < 8) return { empty: tr.innerText.trim() };
@@ -170,10 +173,10 @@ function makeCheck(t) {
     );
 
   async function footer(page) {
-    const raw = (await page.locator('[role="status"]', { hasText: "Outstanding ₹" }).first().innerText()).replace(/ /g, " ");
+    const raw = (await vis(page).locator('[role="status"]', { hasText: "Outstanding ₹" }).first().innerText()).replace(/ /g, " ");
     const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
     const m = lines[0].match(/^Bills (₹[\d,]+\.\d{2}) · Outstanding (₹[\d,]+\.\d{2}) · (\d+) bills?$/);
-    const pager = await page.locator('nav[aria-label="Purchase bills pages"] span').first().innerText().catch(() => null);
+    const pager = await vis(page).locator('nav[aria-label="Purchase bills pages"] span').first().innerText().catch(() => null);
     return { summary: lines[0], amount: m?.[1], outstanding: m?.[2], count: m && Number(m[3]), note: lines[1] ?? null, pager };
   }
 
@@ -191,7 +194,7 @@ function makeCheck(t) {
     return rows;
   }
 
-  const selectByLabel = (page, label) => page.locator("label").filter({ hasText: new RegExp(`^\\s*${label}`) }).locator("select");
+  const selectByLabel = (page, label) => vis(page).locator("label").filter({ hasText: new RegExp(`^\\s*${label}`) }).locator("select");
   const openMore = async (page) => {
     const btn = page.getByRole("button", { name: /More filters/ });
     if ((await btn.getAttribute("aria-expanded")) !== "true") await btn.click();
@@ -242,7 +245,7 @@ function makeCheck(t) {
       b.schedDay = scheduledOn.get(b.id) || null;
     }
   }
-  const rowFor = (page, billNo) => page.locator("tbody tr").filter({ has: page.getByRole("button", { name: `Open bill ${billNo}`, exact: true }) });
+  const rowFor = (page, billNo) => vis(page).locator("tbody tr").filter({ has: page.getByRole("button", { name: `Open bill ${billNo}`, exact: true }) });
   const undoButton = (page, billNo) => page.getByRole("button", { name: `Undo payment for bill ${billNo}`, exact: true });
   const markPaidButton = (page, billNo) => page.getByRole("button", { name: `Mark bill ${billNo} paid`, exact: true });
   const pick = (states, extra = (b) => st(b).payable > 1) => {
@@ -320,20 +323,23 @@ function makeCheck(t) {
     await page.goto(`${stack.base}/dashboard/inventory`, { waitUntil: "domcontentloaded", timeout: 240000 });
     // CR-26 fix round: the Purchases area opens on Purchase bills by itself (it is the first menu item), so there is no second click.
     const areas = page.getByRole("navigation", { name: "Inventory areas" });
-    for (let attempt = 0; attempt < 8 && !(await page.locator("table").first().isVisible().catch(() => false)); attempt++) {
+    for (let attempt = 0; attempt < 8 && !(await vis(page).locator("table").first().isVisible().catch(() => false)); attempt++) {
       await areas.getByRole("button", { name: "Purchases", exact: true }).click();
-      await page.locator("table").first().waitFor({ timeout: 6000 }).catch(() => {});
+      await vis(page).locator("table").first().waitFor({ timeout: 6000 }).catch(() => {});
     }
-    await page.locator("table").first().waitFor({ timeout: 240000 });
+    await vis(page).locator("table").first().waitFor({ timeout: 240000 });
     await settle(page);
   }
 
   await scenario("01", "default-fy-rows-footer", async (s) => {
     const { page } = s.track(await open("pharmacist"));
+    const hiddenCalls = [];
+    page.on("request", (r) => /purchase-returns-register/.test(r.url()) && hiddenCalls.push(r.url()));
     await goRegisterFromMenu(page);
+    s.check("hidden Returns panel makes no requests while Purchase is shown", hiddenCalls, []);
     s.ok("URL is purchases register", /area=purchases/.test(page.url()) && /view=register/.test(page.url()), page.url());
     s.check("single 'Purchase bills' landmark/heading (no duplicate h2)", [await page.getByRole("heading", { name: "Purchase bills" }).count(), await page.getByRole("region", { name: "Purchase bills" }).count()], [0, 1]);
-    const heads = await page.locator("thead th").evaluateAll((ths) =>
+    const heads = await vis(page).locator("thead th").evaluateAll((ths) =>
       ths.map((th) => {
         const c = th.cloneNode(true);
         const sr = [...c.querySelectorAll(".sr-only")].map((n) => n.textContent.trim());
@@ -344,7 +350,7 @@ function makeCheck(t) {
     // ADAPT: the Settle column is gone (Mark paid lives in the Payment cell), so 8 headers; the Payment header carries an sr-only sort hint.
     s.check("column headers (visible text)", heads.map((h) => h.text), ["Sr No", "Bill No", "Entry Date", "Bill Date", "Entry By", "Distributor", "Bill Amount", "Payment"]);
     s.check("Payment header sr-only hint", heads[7].sr, ["(by amount outstanding)"]);
-    s.check("default period preset", await page.locator('select[aria-label="Period"]').evaluate((el) => el.selectedOptions[0].textContent), "FY 2026-27");
+    s.check("default period preset", await vis(page).locator('select[aria-label="Period"]').evaluate((el) => el.selectedOptions[0].textContent), "FY 2026-27");
     s.check("default range shown", await page.getByRole("button", { name: /^Change dates/ }).getAttribute("aria-label"), "Change dates, 01/04/2026 to 31/03/2027");
     const fy = fyBills();
     const ranks = rankOf(fy);
@@ -384,7 +390,7 @@ function makeCheck(t) {
     const expectedOrder = (cmp, dir, tieFlips) =>
       [...fy].sort((a, b) => dir * cmp(a, b) || (tieFlips ? dir : 1) * (rank.get(a.billNo) - rank.get(b.billNo))).map((b) => b.billNo);
     for (const head of heads) {
-      const th = page.locator("thead th", { hasText: head.th });
+      const th = vis(page).locator("thead th", { hasText: head.th });
       const seen = {};
       for (let click = 0; click < 2; click++) {
         await th.locator("button").click();
@@ -393,7 +399,7 @@ function makeCheck(t) {
         const dir = attr === "ascending" ? 1 : attr === "descending" ? -1 : 0;
         s.ok(`${head.label}: aria-sort set after click ${click + 1}`, dir !== 0, attr);
         seen[attr] = true;
-        const others = await page.locator("thead th[aria-sort]").evaluateAll((els) => els.filter((e) => e.getAttribute("aria-sort") !== "none").length);
+        const others = await vis(page).locator("thead th[aria-sort]").evaluateAll((els) => els.filter((e) => e.getAttribute("aria-sort") !== "none").length);
         s.check(`${head.label}: only one header active`, others, 1);
         const rows = await readAll(page);
         const got = rows.map((r) => r.billNo);
@@ -706,7 +712,7 @@ function makeCheck(t) {
     await s.shot(page, "08-remembered-mode");
     await dialogOf(page).getByRole("button", { name: "Cancel" }).click();
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.locator("table").first().waitFor();
+    await vis(page).locator("table").first().waitFor();
     await settle(page);
     await showBill(page, c.billNo);
     await markPaidButton(page, c.billNo).click();
@@ -737,7 +743,7 @@ function makeCheck(t) {
     const rr = await readAll(readonly.page);
     s.ok("ledger reader without write: register loads with badges", rr.length === fy.length && rr.every((r) => r.payment.length > 0), rr.length);
     s.check("ledger reader without write: no Mark paid", rr.filter((r) => r.markPaid).length, 0);
-    s.check("ledger reader without write: same 8 columns (no Settle column in either role)", await readonly.page.locator("thead th").count(), 8);
+    s.check("ledger reader without write: same 8 columns (no Settle column in either role)", await vis(readonly.page).locator("thead th").count(), 8);
     await s.shot(readonly.page, "09-no-ledger-write");
 
     const rec = s.track(await open("reception"));
@@ -958,7 +964,7 @@ function makeCheck(t) {
     const probes = [];
     for (let attempt = 1; attempt <= 4; attempt++) {
       await page.goto(`${stack.base}${REGISTER}&from=2026-03-01&to=${FY.to}&gstin=${dist.gstin}`, { waitUntil: "domcontentloaded", timeout: 240000 });
-      await page.locator('select[aria-label="Period"]').waitFor({ timeout: 240000 });
+      await vis(page).locator('select[aria-label="Period"]').waitFor({ timeout: 240000 });
       await page.waitForTimeout(4000);
       probes.push({ shown: await page.getByRole("button", { name: /^Change dates/ }).getAttribute("aria-label"), url: page.url().replace(stack.base, "") });
     }
@@ -967,7 +973,7 @@ function makeCheck(t) {
     s.ok("deep-link gstin filter is honored on every load", probes.every((p) => p.url.includes(`gstin=${dist.gstin}`)), probes);
     await goto(page);
     const setFrom = async (text) => {
-      await page.locator('select[aria-label="Period"]').selectOption("custom");
+      await vis(page).locator('select[aria-label="Period"]').selectOption("custom");
       const panel = page.getByRole("group", { name: "Custom dates" });
       await panel.getByLabel("From").fill(text);
       await panel.getByLabel("From").press("Enter");
@@ -1263,7 +1269,7 @@ function makeCheck(t) {
     const expectedNotPosted = all.filter((b) => !["STOCK_COMMITTED", "CANCELLED"].includes(b.status));
     s.check("Today card count = unposted bills", Number(cardText.match(/^\d+/)?.[0]), expectedNotPosted.length);
     await card.click();
-    await page.locator("table").first().waitFor({ timeout: 240000 });
+    await vis(page).locator("table").first().waitFor({ timeout: 240000 });
     await settle(page);
     const url = new URL(page.url());
     s.check("card opens the purchase bills register", [url.searchParams.get("area"), url.searchParams.get("view"), url.searchParams.get("pay")], ["purchases", "register", "NOT_POSTED"]);
@@ -1387,7 +1393,7 @@ function makeCheck(t) {
         };
       });
     const start = await geometry();
-    await page.locator("table").evaluate((t) => { t.parentElement.scrollLeft = t.parentElement.scrollWidth; });
+    await vis(page).locator("table").evaluate((t) => { t.parentElement.scrollLeft = t.parentElement.scrollWidth; });
     await page.waitForTimeout(300);
     const end = await geometry();
     s.ok("390: the table scrolls sideways", end.scrollLeft > 100, { start, end });
