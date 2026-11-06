@@ -889,8 +889,8 @@ const watch = (page) => {
         await page.getByRole("heading", { name: "RET-APX-01" }).waitFor({ timeout: 120000 });
         await page.waitForTimeout(800);
         s.check(`${w}: document date reads dd/mm/yyyy, no sideways scroll`, [/^\d{2}\/\d{2}\/\d{4}$/.test(await page.getByLabel("Date", { exact: true }).inputValue()), await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth <= 0)], [true, true]);
-        await page.getByRole("heading", { name: "RET-APX-01" }).scrollIntoViewIfNeeded();
-        await page.evaluate(() => window.scrollBy(0, -16));
+        await page.getByRole("heading", { name: "RET-APX-01" }).evaluate((el) => el.scrollIntoView({ block: "start" }));
+        await page.waitForTimeout(300);
         await s.shot(page, `26-return-document-${w}`);
       }
     });
