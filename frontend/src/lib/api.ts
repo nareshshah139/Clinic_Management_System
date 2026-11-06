@@ -18,6 +18,8 @@ import type {
   RescheduleAppointmentPayload,
 } from './types';
 
+export type DoctorLetterhead = { id: string; url: string; source: 'uploaded' | 'bundled' };
+
 export class ApiClient {
   private baseURL: string;
   private token: string | null = null;
@@ -802,6 +804,20 @@ export class ApiClient {
 
   async removeOwnSignature() {
     return this.delete('/users/me/signature');
+  }
+
+  async getDoctorLetterhead(doctorId: string) {
+    return this.get<{ letterhead: DoctorLetterhead | null }>(`/users/${encodeURIComponent(doctorId)}/letterhead`);
+  }
+
+  async uploadOwnLetterhead(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.request<{ letterhead: DoctorLetterhead }>('/users/me/letterhead', { method: 'POST', body: formData });
+  }
+
+  async removeOwnLetterhead() {
+    return this.delete('/users/me/letterhead');
   }
 
   async deleteUser(id: string) {

@@ -7,6 +7,9 @@ import { ConsultationType, TELE_VIDEO_DISCLAIMER } from '../visits/consultation'
 import { VisitsService } from '../visits/visits.service';
 import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional, ForbiddenException } from '@nestjs/common';
 import { readDoctorSignature } from '../users/doctor-signature';
+
+/** Assets only their doctor may change, through the /users/me endpoints. */
+const DOCTOR_OWNED_ASSET_TYPES: readonly string[] = ['SIGNATURE', 'LETTERHEAD'];
 import { PrismaService } from '../../shared/database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
@@ -1233,8 +1236,8 @@ export class PrescriptionsService {
     // including by changing an existing signature's type to LOGO or STAMP.
     const existing = body.id ? await this.prisma.clinicAsset.findFirst({ where: { id: body.id, branchId } }) : null;
     if (body.id && !existing) throw new NotFoundException('Asset not found');
-    if (body.type === 'SIGNATURE' || existing?.type === 'SIGNATURE') {
-      throw new ForbiddenException('Change your signature from your own doctor settings.');
+    if (DOCTOR_OWNED_ASSET_TYPES.includes(body.type) || DOCTOR_OWNED_ASSET_TYPES.includes(existing?.type as string)) {
+      throw new ForbiddenException('Change your signature or letterhead from your own doctor settings.');
     }
     const data = {
       branchId,
@@ -1258,7 +1261,7 @@ export class PrescriptionsService {
   async deleteClinicAsset(branchId: string, id: string) {
     const asset = await this.prisma.clinicAsset.findFirst({ where: { id, branchId } });
     if (!asset) throw new NotFoundException('Asset not found');
-    if (asset.type === 'SIGNATURE') throw new ForbiddenException('Remove your signature from your own doctor settings.');
+    if (DOCTOR_OWNED_ASSET_TYPES.includes(asset.type)) throw new ForbiddenException('Remove your signature or letterhead from your own doctor settings.');
     await this.prisma.clinicAsset.delete({ where: { id } });
     return { id };
   }

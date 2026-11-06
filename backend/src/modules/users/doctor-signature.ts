@@ -6,6 +6,12 @@ import { PrismaService } from '../../shared/database/prisma.service';
 
 export const MAX_SIGNATURE_BYTES = 2 * 1024 * 1024;
 
+/** Dr. Praneeta Jain is the only doctor with bundled print assets (signature and letterhead). */
+export function isBundledAssetDoctor(doctor: { firstName: string; lastName: string } | null | undefined): boolean {
+  const name = doctor && `${doctor.firstName} ${doctor.lastName}`.trim().replace(/^dr\.?\s+/i, '').replace(/\s+/g, ' ').toLowerCase();
+  return name === 'praneeta jain';
+}
+
 /**
  * @cc [owner:nareshshah139,label:product;security] doctor-signature-default
  * The bundled signature is available only for an active Dr. Praneeta Jain in
@@ -24,8 +30,7 @@ export async function readDoctorSignature(prisma: PrismaService, branchId: strin
       where: { id: doctorId, branchId, role: 'DOCTOR', isActive: true },
       select: { firstName: true, lastName: true },
     });
-    const name = doctor && `${doctor.firstName} ${doctor.lastName}`.trim().replace(/^dr\.?\s+/i, '').replace(/\s+/g, ' ').toLowerCase();
-    if (name !== 'praneeta jain') return null;
+    if (!isBundledAssetDoctor(doctor)) return null;
     const history = await prisma.clinicAsset.findFirst({
       where: { branchId, ownerId: doctorId, type: 'SIGNATURE' }, select: { id: true },
     });

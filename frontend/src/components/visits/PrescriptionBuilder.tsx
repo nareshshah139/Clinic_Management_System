@@ -30,6 +30,7 @@ import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRe
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
+import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -183,7 +184,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  */
 /**
  * @cc [owner:nareshshah139,label:product] built-in-letterhead-page-flow
- * The supplied Dr. Praneeta Jain letterhead MUST repeat on every preview and export
+ * The supplied Dr. Praneeta Jain letterhead, used for her prescriptions, MUST repeat on every preview and export
  * page. Its continuation pages MUST use the same pagination margins without an
  * automatic downward shift; explicit user content offsets remain available.
  */
@@ -708,9 +709,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [renderedSignatureUrl, setRenderedSignatureUrl] = useState<string | null>(null);
   const pagedJsProcessRef = useRef<(() => Promise<void>) | null>(null);
   const [sharingEmail, setSharingEmail] = useState(false);
-  // Default uses the supplied LINAE letterhead; explicit custom backgrounds remain available.
+  // Default uses the prescribing doctor's own letterhead; explicit custom backgrounds remain available.
   const [letterheadOption, setLetterheadOption] = useState<'default' | 'none'>('default');
-  const resolvedPrintBgUrl = prescriptionLetterheadUrl(printBgUrl);
+  const { letterhead: doctorLetterhead } = useDoctorLetterhead(visitData?.doctor?.id || doctorId);
+  const resolvedPrintBgUrl = prescriptionLetterheadUrl(printBgUrl, doctorLetterhead?.url);
+  const letterheadLabel = !resolvedPrintBgUrl ? 'none uploaded'
+    : resolvedPrintBgUrl === PRESCRIPTION_LETTERHEAD_URL ? 'Dr. Praneeta Jain'
+    : resolvedPrintBgUrl === doctorLetterhead?.url ? "doctor's own" : 'Custom';
   const useLetterheadForDownload = useMemo(() => letterheadOption !== 'none', [letterheadOption]);
   // Live margin overrides (px). Null -> use printer profile or provided defaults
   const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
@@ -2401,7 +2406,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       max-height: ${pagedPrintPageHeight} !important;
       overflow: hidden !important;
       box-sizing: border-box !important;
-      background-image: ${letterheadOption === 'none' ? 'none' : `url('${resolvedPrintBgUrl}')`};
+      background-image: ${letterheadOption === 'none' || !resolvedPrintBgUrl ? 'none' : `url('${resolvedPrintBgUrl}')`};
       background-repeat: no-repeat;
       background-position: top left;
       background-size: ${pagedPrintPageWidth} ${pagedPrintPageHeight};
@@ -3166,12 +3171,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   // Computed effective margins (depend on printer profile and overrides)
   const effectiveTopMarginPx = useMemo(() => {
     const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
-    return prescriptionPageMargin(overrideTopMarginPx ?? prof.topMarginPx ?? printTopMarginPx, 'top', printBgUrl, useLetterheadForDownload);
-  }, [activeProfileId, printerProfiles, overrideTopMarginPx, printTopMarginPx, printBgUrl, useLetterheadForDownload]);
+    return prescriptionPageMargin(overrideTopMarginPx ?? prof.topMarginPx ?? printTopMarginPx, 'top', resolvedPrintBgUrl, useLetterheadForDownload);
+  }, [activeProfileId, printerProfiles, overrideTopMarginPx, printTopMarginPx, resolvedPrintBgUrl, useLetterheadForDownload]);
   const effectiveBottomMarginPx = useMemo(() => {
     const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
-    return prescriptionPageMargin(overrideBottomMarginPx ?? prof.bottomMarginPx ?? printBottomMarginPx, 'bottom', printBgUrl, useLetterheadForDownload);
-  }, [activeProfileId, printerProfiles, overrideBottomMarginPx, printBottomMarginPx, printBgUrl, useLetterheadForDownload]);
+    return prescriptionPageMargin(overrideBottomMarginPx ?? prof.bottomMarginPx ?? printBottomMarginPx, 'bottom', resolvedPrintBgUrl, useLetterheadForDownload);
+  }, [activeProfileId, printerProfiles, overrideBottomMarginPx, printBottomMarginPx, resolvedPrintBgUrl, useLetterheadForDownload]);
   const effectiveTopMarginMm = useMemo(() => Math.max(0, Math.round((effectiveTopMarginPx / 3.78) * 10) / 10), [effectiveTopMarginPx]);
   const effectiveBottomMarginMm = useMemo(() => Math.max(0, Math.round((effectiveBottomMarginPx / 3.78) * 10) / 10), [effectiveBottomMarginPx]);
 
@@ -5513,7 +5518,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 
                 #pagedjs-container .pagedjs_pagebox,
                 #prescription-print-host .prescription-print-pages .pagedjs_pagebox {
-                  background-image: ${letterheadOption === 'none' ? 'none' : `url('${resolvedPrintBgUrl}')`};
+                  background-image: ${letterheadOption === 'none' || !resolvedPrintBgUrl ? 'none' : `url('${resolvedPrintBgUrl}')`};
                   background-repeat: no-repeat;
                   background-position: top left;
                   background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
@@ -6111,7 +6116,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         <SelectValue placeholder="Select letterhead" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="default">Letterhead ({resolvedPrintBgUrl === PRESCRIPTION_LETTERHEAD_URL ? 'Dr. Praneeta Jain' : 'Custom'})</SelectItem>
+                        <SelectItem value="default">Letterhead ({letterheadLabel})</SelectItem>
                         <SelectItem value="none">None (Plain)</SelectItem>
                       </SelectContent>
                     </Select>
