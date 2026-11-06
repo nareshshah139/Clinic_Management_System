@@ -252,6 +252,9 @@ export class AuditLogsService {
   }
 
   async deleteOldLogs(daysToKeep: number = 90) {
+    if (!Number.isFinite(daysToKeep) || daysToKeep < 0) {
+      throw new RangeError('daysToKeep must be a non-negative number');
+    }
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
