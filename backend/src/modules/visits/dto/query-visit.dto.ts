@@ -10,6 +10,7 @@ import {
   Max,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { OmitType } from '@nestjs/mapped-types';
 import { ConsultationType } from '../consultation';
 
 export class QueryVisitsDto {
@@ -131,3 +132,6 @@ export class DoctorVisitsDto {
   @Max(100)
   limit?: number = 50;
 }
+
+/** Query string for GET /visits/doctor/:doctorId; a class so the validation pipe converts `limit` to a number. */
+export class DoctorVisitsQueryDto extends OmitType(DoctorVisitsDto, ['doctorId'] as const) {}
