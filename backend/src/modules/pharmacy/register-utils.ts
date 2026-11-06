@@ -1,4 +1,5 @@
 import { ValidationArguments, registerDecorator } from 'class-validator';
+import type { PrismaService } from '../../shared/database/prisma.service';
 export { money } from '../inventory/inventory-stock';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -102,4 +103,24 @@ export function mobileDigits(value: string) {
           ? digits.slice(1)
           : digits;
   return local.slice(-10);
+}
+
+export type RegisterPerson = { id: string; name: string };
+
+export async function peopleById(
+  prisma: Pick<PrismaService, 'user'>,
+  ids: (string | null)[],
+) {
+  const wanted = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  if (!wanted.length) return new Map<string, RegisterPerson>();
+  const users = await prisma.user.findMany({
+    where: { id: { in: wanted } },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  return new Map(
+    users.map((user) => [
+      user.id,
+      { id: user.id, name: `${user.firstName} ${user.lastName}`.trim() },
+    ]),
+  );
 }

@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
   ClinicIdentity,
-  Person,
   SalesRegisterPage,
   SalesRegisterQuery,
   billEntry,
@@ -12,7 +11,7 @@ import {
   salesRegisterPage,
   workflowEntry,
 } from './pharmacy-sales-register';
-import { clinicDayRange } from './register-utils';
+import { clinicDayRange, peopleById } from './register-utils';
 
 type PharmacyBills = Awaited<
   ReturnType<PharmacySalesRegisterService['pharmacyBills']>
@@ -79,7 +78,7 @@ export class PharmacySalesRegisterService {
     ]);
 
     const [people, links] = await Promise.all([
-      this.people([
+      peopleById(this.prisma, [
         ...bills.map((bill) => bill.createdById),
         ...documents.map((doc) => doc.createdBy),
       ]),
@@ -121,21 +120,6 @@ export class PharmacySalesRegisterService {
         },
       },
     });
-  }
-
-  private async people(ids: (string | null)[]) {
-    const wanted = [...new Set(ids.filter((id): id is string => Boolean(id)))];
-    if (!wanted.length) return new Map<string, Person>();
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: wanted } },
-      select: { id: true, firstName: true, lastName: true },
-    });
-    return new Map(
-      users.map((user) => [
-        user.id,
-        { id: user.id, name: `${user.firstName} ${user.lastName}`.trim() },
-      ]),
-    );
   }
 
   private async returnLinks(branchId: string, documents: ReturnLinks[]) {
