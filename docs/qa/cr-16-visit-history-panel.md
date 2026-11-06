@@ -33,7 +33,7 @@ With this change, 20 checks pass at 1440 px and 390 px:
 
 Unit tests: `frontend/__tests__/visits` passes 19 suites and 206 tests. The production TypeScript check passes.
 
-Evidence: `output/cr16-visit-history/checks.json` and the compact and full screenshots in the same folder.
+Evidence: `output/cr16-visit-history/checks.json`, the compact and full screenshots in the same folder, and `baseline-expanded.png` showing `main` before the change.
 
 ## Not included
 
