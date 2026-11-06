@@ -1,0 +1,21 @@
+{
+  "base": "http://localhost:3000",
+  "checks": [
+    "desktop: summary card hides the history panel until opened",
+    "desktop: compact view shows complaints, history and each medicine name once, with no regimen or internal fields",
+    "desktop: full details keeps the regimen once, without Regimen State, Touched, Gst Rate, Language or IDs",
+    "desktop: Compact view and Hide details return; reopening starts compact",
+    "desktop: draft visit lists medicines from its saved plan, case-insensitive duplicates merged",
+    "desktop: legacy string history and JSON prescription items render",
+    "desktop: a visit with no history or medicines shows no empty headings",
+    "desktop: no horizontal overflow and no page errors",
+    "mobile: summary card hides the history panel until opened",
+    "mobile: compact view shows complaints, history and each medicine name once, with no regimen or internal fields",
+    "mobile: full details keeps the regimen once, without Regimen State, Touched, Gst Rate, Language or IDs",
+    "mobile: Compact view and Hide details return; reopening starts compact",
+    "mobile: draft visit lists medicines from its saved plan, case-insensitive duplicates merged",
+    "mobile: legacy string history and JSON prescription items render",
+    "mobile: a visit with no history or medicines shows no empty headings",
+    "mobile: no horizontal overflow and no page errors"
+  ]
+}
