@@ -1,4 +1,4 @@
-import { addDays, financialYear, formatDisplayDay, isDay, parseDisplayDay, rangePresets } from '@/lib/date-ranges';
+import { addDays, financialYear, formatDisplayDay, isDay, parseDisplayDay, rangeError, rangePresets } from '@/lib/date-ranges';
 import { displayClinicDateTimeCompact } from '@/lib/date-display';
 
 it('names and bounds every preset from the clinic day', () => {
@@ -43,4 +43,13 @@ it('shows the entry time compactly and the year only outside the current one', (
   expect(displayClinicDateTimeCompact('2025-12-28T05:00:00.000Z', '2026-11-06')).toBe('28 Dec 2025, 10:30 am');
   expect(displayClinicDateTimeCompact('2026-12-31T19:00:00.000Z', '2027-01-15')).toBe('01 Jan, 12:30 am');
   expect(displayClinicDateTimeCompact('not a date', '2026-11-06')).toBe('—');
+});
+
+describe('rangeError', () => {
+  it('accepts up to 400 days and names the first problem otherwise', () => {
+    expect(rangeError({ from: '2026-04-01', to: '2027-03-31' })).toBeNull();
+    expect(rangeError({ from: '2025-04-01', to: '2026-05-05' })).toBeNull();
+    expect(rangeError({ from: '2025-04-01', to: '2026-05-06' })).toBe('Pick at most 400 days at a time.');
+    expect(rangeError({ from: '2026-05-01', to: '2026-03-31' })).toBe('The From date is after the To date.');
+  });
 });

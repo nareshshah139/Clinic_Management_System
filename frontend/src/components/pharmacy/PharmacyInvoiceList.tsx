@@ -48,10 +48,12 @@ type PaymentStatusFilter = PharmacyPaymentStatusType | 'all';
 type PaymentMethodFilter = PharmacyPaymentMethodType | 'all';
 type DateRange = 'all' | 'today' | 'week' | 'month' | 'quarter';
 
+const initialSearch = () => (typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('search') || '');
+
 export function PharmacyInvoiceList() {
   const [invoices, setInvoices] = useState<PharmacyInvoiceSummary[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(typeof window==='undefined'?'':new URLSearchParams(window.location.search).get('search')||'');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const paymentInFlight = useRef(false);
   const [pendingPaymentIds, setPendingPaymentIds] = useState<string[]>([]);
@@ -60,7 +62,7 @@ export function PharmacyInvoiceList() {
   }, [invoices]);
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all');
-  const [dateRange, setDateRange] = useState<DateRange>('today');
+  const [dateRange, setDateRange] = useState<DateRange>(() => (initialSearch() ? 'all' : 'today'));
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,

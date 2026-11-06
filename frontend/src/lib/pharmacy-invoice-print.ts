@@ -174,6 +174,8 @@ export function renderSaleReceiptHtml(doc: any, clinic?: ClinicIdentity | null):
   });
 }
 
+const PRINT_FRAME_LIFETIME_MS = 60_000;
+
 export function printHtml(html: string): Promise<void> {
   document.querySelectorAll('iframe[data-print-frame]').forEach((frame) => frame.remove());
   const frame = document.createElement('iframe');
@@ -186,7 +188,7 @@ export function printHtml(html: string): Promise<void> {
     frame.onload = () => {
       const view = frame.contentWindow;
       if (view) {
-        view.addEventListener('afterprint', () => frame.remove(), { once: true });
+        setTimeout(() => frame.remove(), PRINT_FRAME_LIFETIME_MS);
         view.focus();
         view.print();
       }

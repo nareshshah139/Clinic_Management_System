@@ -299,3 +299,80 @@ it('commits a typed dd/mm/yyyy date on Enter and refuses a From after To without
   expect(screen.getByRole('alert')).toHaveTextContent('Enter the To date as dd/mm/yyyy, year 2000 or later.');
   expect(lastRequest()).toMatchObject({ from: '2026-11-05', to: '2027-03-31' });
 });
+
+it('with FY 2025-26 open, typing From then To never requests a range longer than 400 days', async () => {
+  mockQuery = 'from=2025-04-01&to=2026-03-31';
+  render(<SalesPage />);
+  await screen.findByText('PHI-2026-014');
+  fireEvent.click(screen.getByRole('button', { name: 'Change dates, 01/04/2025 to 31/03/2026' }));
+  const calls = registerCalls().length;
+
+  const from = panel().getByLabelText('From');
+  fireEvent.change(from, { target: { value: '01/05/2026' } });
+  fireEvent.blur(from);
+  expect(screen.getByRole('alert')).toHaveTextContent('The From date is after the To date.');
+  expect(registerCalls()).toHaveLength(calls);
+
+  const to = panel().getByLabelText('To');
+  fireEvent.change(to, { target: { value: '31/05/2026' } });
+  fireEvent.blur(to);
+  await waitFor(() => expect(lastRequest()).toMatchObject({ from: '2026-05-01', to: '2026-05-31' }));
+  expect(registerCalls().slice(calls).map(([, params]) => [(params as { from: string }).from, (params as { to: string }).to])).toEqual([['2026-05-01', '2026-05-31']]);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it('refuses a typed range of 426 days with an inline message and no request', async () => {
+  mockQuery = 'from=2025-04-01&to=2026-03-31';
+  render(<SalesPage />);
+  await screen.findByText('PHI-2026-014');
+  fireEvent.click(screen.getByRole('button', { name: 'Change dates, 01/04/2025 to 31/03/2026' }));
+  const calls = registerCalls().length;
+  const to = panel().getByLabelText('To');
+  fireEvent.change(to, { target: { value: '31/05/2026' } });
+  fireEvent.blur(to);
+  expect(screen.getByRole('alert')).toHaveTextContent('Pick at most 400 days at a time.');
+  expect(registerCalls()).toHaveLength(calls);
+});
+
+it('returns tab drops CREDIT from the URL and calls a credit refund Store credit', async () => {
+  mockQuery = 'tab=returns&pay=CREDIT';
+  get.mockResolvedValue(
+    response({ rows: [row({ id: 'SALES_RETURN:r', source: 'SALES_RETURN', recordId: 'r', billNo: 'SR-1', paymentModes: ['CREDIT'] })] }),
+  );
+  render(<SalesPage />);
+  expect(await screen.findByText('Store credit')).toBeInTheDocument();
+  expect(lastRequest().paymentMode).toBeUndefined();
+  expect(panel().queryByText('Due (unpaid)')).not.toBeInTheDocument();
+  expect(panel().queryByText('Credit')).not.toBeInTheDocument();
+});
+
+it('resets the filters when the sidebar link is clicked again and the URL loses its parameters', async () => {
+  mockQuery = 'q=abc&pay=UPI';
+  const view = render(<SalesPage />);
+  await screen.findByText('PHI-2026-014');
+  expect(lastRequest()).toMatchObject({ q: 'abc', paymentMode: 'UPI' });
+  expect(panel().getByPlaceholderText('Bill number')).toHaveValue('abc');
+
+  mockQuery = '';
+  view.rerender(<SalesPage />);
+  await waitFor(() => expect(lastRequest().paymentMode).toBeUndefined());
+  expect(lastRequest()).not.toHaveProperty('q');
+  expect(panel().getByPlaceholderText('Bill number')).toHaveValue('');
+});
+
+it('dims the footer total while a new page of results is loading so old totals never pair with a new label', async () => {
+  render(<SalesPage />);
+  const total = await screen.findByText('Total Amount ₹1,234.50 · 1 bill');
+  const status = total.closest('[role="status"]')!;
+  expect(status).toHaveAttribute('aria-busy', 'false');
+  let finish: (value: SalesRegisterResponse) => void = () => undefined;
+  get.mockReturnValueOnce(new Promise<SalesRegisterResponse>((resolve) => { finish = resolve; }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Bill Amount' }));
+  await waitFor(() => expect(status).toHaveAttribute('aria-busy', 'true'));
+  expect(status).toHaveClass('opacity-50');
+
+  finish(response({ totals: { amount: 99, count: 3, collected: null, excluded: { drafts: 0, cancelled: 0 } } }));
+  expect(await screen.findByText('Total Amount ₹99.00 · 3 bills')).toBeInTheDocument();
+  expect(status).toHaveAttribute('aria-busy', 'false');
+});

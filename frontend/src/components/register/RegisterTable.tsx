@@ -8,7 +8,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import type { SortDirection } from './register-query';
 
 export const registerHeadClass =
-  'sticky -top-4 md:-top-6 z-20 h-12 whitespace-normal bg-muted px-1! py-1! text-sm leading-tight font-semibold text-foreground first:left-0 first:z-30 first:rounded-tl-lg first:pl-1.5! last:rounded-tr-lg last:pr-1! max-xl:first:border-r max-xl:first:border-border';
+  'sticky top-0 xl:-top-6 z-20 h-12 whitespace-normal bg-muted px-1! py-1! text-sm leading-tight font-semibold text-foreground first:left-0 first:z-30 first:rounded-tl-lg first:pl-1.5! last:rounded-tr-lg last:pr-1! max-xl:first:border-r max-xl:first:border-border';
 
 export const registerCellClass = 'px-1! py-2! text-sm first:pl-1.5! last:pr-1!';
 
@@ -18,7 +18,7 @@ export const registerStickyCellClass =
 export function RegisterTable({ label, containerRef, children }: { label: string; containerRef?: Ref<HTMLDivElement>; children: ReactNode }) {
   return (
     <TooltipProvider delayDuration={200}>
-      <div ref={containerRef} className="@container relative w-full scroll-mt-24 overflow-x-auto rounded-lg border border-border bg-background xl:overflow-visible">
+      <div ref={containerRef} className="@container relative w-full scroll-mt-24 overflow-auto rounded-lg border border-border bg-background max-xl:max-h-[calc(100dvh-16rem)] max-xl:min-h-48 xl:overflow-visible">
         <table aria-label={label} className="w-full border-separate max-xl:min-w-[60rem] border-spacing-0 tabular-nums tracking-[-0.02em] [&_td]:border-b [&_td]:border-border [&_th]:border-b [&_th]:border-border [&_tr:last-child>td]:border-b-0">
           {children}
         </table>

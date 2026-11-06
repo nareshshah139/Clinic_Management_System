@@ -46,7 +46,7 @@ describe('register utilities', () => {
       '2026-07-09',
       null,
       null,
-      null,
+      '2026-07-09',
       null,
       null,
       null,

@@ -60,6 +60,7 @@ describe('Inventory workflow business dates', () => {
       '',
       ' 2026-10-24 ',
       '2026-10-24T19:00:00.000Z',
+      '2026-10-24T10:00:00',
     ])
       await save(date);
     expect(saved.map((doc) => doc.payload.date)).toEqual([
@@ -67,10 +68,11 @@ describe('Inventory workflow business dates', () => {
       '2026-10-25',
       '2026-10-24',
       '2026-10-25',
+      '2026-10-24',
     ]);
   });
 
-  it.each(['2026-02-30', '24/10/2026', '2026-10-24T10:00:00'])(
+  it.each(['2026-02-30', '24/10/2026', '2026-02-30T10:00:00'])(
     'rejects %s without saving it',
     async (date) => {
       await expect(save(date)).rejects.toThrow(

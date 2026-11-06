@@ -69,3 +69,8 @@ it('flattens a server validation list into one sentence', () => {
   expect(errorMessage({ message: 'HTTP 500' })).toBe('HTTP 500');
   expect(errorMessage(null)).toBe('Something went wrong');
 });
+
+it('ignores a URL range longer than 400 days', () => {
+  expect(parse('from=2025-04-01&to=2026-05-06')).toMatchObject({ from: '2026-04-01', to: '2027-03-31' });
+  expect(parse('from=2025-04-01&to=2026-05-05')).toMatchObject({ from: '2025-04-01', to: '2026-05-05' });
+});

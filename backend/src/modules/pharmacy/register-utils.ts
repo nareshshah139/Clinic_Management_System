@@ -5,6 +5,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const CALENDAR_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const ZONED_TIMESTAMP =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+const ZONELESS_TIMESTAMP =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?$/;
 export const MAX_REGISTER_RANGE_DAYS = 400;
 
 const clinicDayFormat = new Intl.DateTimeFormat('en-CA', {
@@ -27,6 +29,8 @@ export function clinicDayOf(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const text = value.trim();
   if (isCalendarDay(text)) return text;
+  if (ZONELESS_TIMESTAMP.test(text) && isCalendarDay(text.slice(0, 10)))
+    return text.slice(0, 10);
   if (!ZONED_TIMESTAMP.test(text) || !isCalendarDay(text.slice(0, 10)))
     return null;
   const instant = new Date(text);

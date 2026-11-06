@@ -393,6 +393,7 @@ export function SalesRegister({
         limit={data?.limit ?? 50}
         total={failed ? 0 : data?.total ?? 0}
         label={`${copy.table} pages`}
+        busy={load.status === 'loading' && !!data}
         onPage={goToPage}
       />
     </div>
