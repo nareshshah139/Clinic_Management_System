@@ -285,9 +285,10 @@ export class UsersService {
   }
 
   // Password Management Methods
-  async changePassword(id: string, changePasswordDto: ChangePasswordDto, _branchId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
+  async changePassword(id: string, changePasswordDto: ChangePasswordDto, actor: { id: string; branchId: string; role: string }) {
+    this.requireSelfOrManager(actor, id);
+    const user = await this.prisma.user.findFirst({
+      where: { id, branchId: actor.branchId },
     });
 
     if (!user) {
@@ -364,7 +365,9 @@ export class UsersService {
   }
 
   // Profile Management Methods
-  async updateProfile(id: string, updateProfileDto: UpdateProfileDto, branchId: string) {
+  async updateProfile(id: string, updateProfileDto: UpdateProfileDto, actor: { id: string; branchId: string; role: string }) {
+    this.requireSelfOrManager(actor, id);
+    const branchId = actor.branchId;
     const user = await this.prisma.user.findFirst({
       where: { id, branchId },
     });
@@ -942,8 +945,22 @@ export class UsersService {
     };
   }
 
-  // Helper to format user object consistently
-  private formatUser(user: any) {
+  /**
+   * @cc [owner:nareshshah139,label:security] user-self-service
+   * A user's profile and password MUST be changeable only by that user or by an OWNER, ADMIN
+   * or DOCTOR (the roles RolesGuard treats as managers); every other role is forbidden.
+   */
+  private requireSelfOrManager(actor: { id: string; role: string }, userId: string) {
+    if (actor.id !== userId && !['OWNER', 'ADMIN', 'DOCTOR'].includes(actor.role)) {
+      throw new ForbiddenException('You can only change your own profile and password.');
+    }
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] user-secrets-never-returned
+   * User API responses MUST NOT include password hashes, reset tokens or Google refresh tokens.
+   */
+  private formatUser({ password: _password, resetToken: _resetToken, resetTokenExpiry: _resetTokenExpiry, googleRefreshToken: _googleRefreshToken, ...user }: any) {
     let permissionsParsed: string[] | null = null;
     let metadataParsed: any = null;
     try {

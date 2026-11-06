@@ -333,7 +333,7 @@ describe('UsersService', () => {
       bcrypt.hash.mockResolvedValue('hashedNewPassword');
       mockPrisma.user.update.mockResolvedValue({});
 
-      const result = await service.changePassword('user-123', changePasswordDto, 'branch-123');
+      const result = await service.changePassword('user-123', changePasswordDto, { id: 'user-123', branchId: 'branch-123', role: 'RECEPTION' });
 
       expect(result).toEqual({ message: 'Password changed successfully' });
     });
@@ -343,7 +343,7 @@ describe('UsersService', () => {
       mockPrisma.user.findFirst.mockResolvedValue(mockUser);
       bcrypt.compare.mockResolvedValue(false);
 
-      await expect(service.changePassword('user-123', changePasswordDto, 'branch-123')).rejects.toThrow(
+      await expect(service.changePassword('user-123', changePasswordDto, { id: 'user-123', branchId: 'branch-123', role: 'RECEPTION' })).rejects.toThrow(
         UnauthorizedException,
       );
     });
@@ -358,7 +358,7 @@ describe('UsersService', () => {
 
       mockPrisma.user.findFirst.mockResolvedValue(mockUser);
 
-      await expect(service.changePassword('user-123', invalidDto, 'branch-123')).rejects.toThrow(
+      await expect(service.changePassword('user-123', invalidDto, { id: 'user-123', branchId: 'branch-123', role: 'RECEPTION' })).rejects.toThrow(
         BadRequestException,
       );
     });

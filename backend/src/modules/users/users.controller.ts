@@ -7,6 +7,11 @@ import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
+
+/** Changing users, roles, permissions and branches is limited to clinic managers (RolesGuard also admits DOCTOR). */
+const MANAGE = [UserRole.OWNER, UserRole.ADMIN];
 
 interface AuthenticatedRequest {
   user: {
@@ -55,6 +60,7 @@ export class UsersController {
 
   // User Management Endpoints
   @Post()
+  @Roles(...MANAGE)
   createUser(@Body() createUserDto: CreateUserDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.createUser(createUserDto, req.user.branchId);
   }
@@ -80,18 +86,20 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @Roles(...MANAGE)
   updateUser(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.updateUser(id, updateUserDto, req.user.branchId);
   }
 
   @Delete(':id')
+  @Roles(...MANAGE)
   deleteUser(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.usersService.deleteUser(id, req.user.branchId);
   }
 
   @Post(':id/change-password')
   changePassword(@Param('id') id: string, @Body() changePasswordDto: ChangePasswordDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.changePassword(id, changePasswordDto, req.user.branchId);
+    return this.usersService.changePassword(id, changePasswordDto, req.user);
   }
 
   @Post('reset-password')
@@ -106,26 +114,30 @@ export class UsersController {
 
   @Patch(':id/profile')
   updateProfile(@Param('id') id: string, @Body() updateProfileDto: UpdateProfileDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.updateProfile(id, updateProfileDto, req.user.branchId);
+    return this.usersService.updateProfile(id, updateProfileDto, req.user);
   }
 
   @Patch(':id/role')
+  @Roles(...MANAGE)
   assignRole(@Param('id') id: string, @Body() assignRoleDto: AssignRoleDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.assignRole(id, assignRoleDto, req.user.branchId);
   }
 
   @Patch(':id/permissions')
+  @Roles(...MANAGE)
   updatePermissions(@Param('id') id: string, @Body() updatePermissionsDto: UpdatePermissionsDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.updatePermissions(id, updatePermissionsDto, req.user.branchId);
   }
 
   @Patch(':id/status')
+  @Roles(...MANAGE)
   updateUserStatus(@Param('id') id: string, @Body() userStatusDto: UserStatusDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.updateUserStatus(id, userStatusDto, req.user.branchId);
   }
 
   // Branch Management Endpoints
   @Post('branches')
+  @Roles(...MANAGE)
   createBranch(@Body() createBranchDto: CreateBranchDto) {
     return this.usersService.createBranch(createBranchDto);
   }
@@ -141,17 +153,20 @@ export class UsersController {
   }
 
   @Patch('branches/:id')
+  @Roles(...MANAGE)
   updateBranch(@Param('id') id: string, @Body() updateBranchDto: UpdateBranchDto) {
     return this.usersService.updateBranch(id, updateBranchDto);
   }
 
   @Delete('branches/:id')
+  @Roles(...MANAGE)
   deleteBranch(@Param('id') id: string) {
     return this.usersService.deleteBranch(id);
   }
 
   // Permission Management Endpoints
   @Post('permissions')
+  @Roles(...MANAGE)
   createPermission(@Body() createPermissionDto: CreatePermissionDto) {
     return this.usersService.createPermission(createPermissionDto);
   }
@@ -167,17 +182,20 @@ export class UsersController {
   }
 
   @Patch('permissions/:id')
+  @Roles(...MANAGE)
   updatePermission(@Param('id') id: string, @Body() updatePermissionDto: UpdatePermissionDto) {
     return this.usersService.updatePermission(id, updatePermissionDto);
   }
 
   @Delete('permissions/:id')
+  @Roles(...MANAGE)
   deletePermission(@Param('id') id: string) {
     return this.usersService.deletePermission(id);
   }
 
   // Role Management Endpoints
   @Post('roles')
+  @Roles(...MANAGE)
   createRole(@Body() createRoleDto: CreateRoleDto) {
     return this.usersService.createRole(createRoleDto);
   }
@@ -193,11 +211,13 @@ export class UsersController {
   }
 
   @Patch('roles/:id')
+  @Roles(...MANAGE)
   updateRole(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
     return this.usersService.updateRole(id, updateRoleDto);
   }
 
   @Delete('roles/:id')
+  @Roles(...MANAGE)
   deleteRole(@Param('id') id: string) {
     return this.usersService.deleteRole(id);
   }
