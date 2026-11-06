@@ -12,6 +12,8 @@ describe('AppointmentsService - Conflicts', () => {
     patient: { findFirst: jest.fn() },
     user: { findFirst: jest.fn() },
     room: { findFirst: jest.fn() },
+    doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
+    doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
     appointment: {
       create: jest.fn(),
       findMany: jest.fn(),

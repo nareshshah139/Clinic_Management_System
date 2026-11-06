@@ -88,6 +88,9 @@ model User {
   ownedPrinterProfiles         PrinterProfile[]
   templateUsages               TemplateUsage[]
   experimentAssignments        ExperimentAssignment[]
+  workingHours                 DoctorWorkingHours[]
+  timeOff                      DoctorTimeOff[]               @relation("DoctorTimeOffDoctor")
+  createdTimeOff               DoctorTimeOff[]               @relation("DoctorTimeOffCreatedBy")
 
   @@map("users")
 }
@@ -147,8 +150,47 @@ model Branch {
   templateUsages           TemplateUsage[]
   translationMemoryEntries TranslationMemoryEntry[]
   layoutExperiments        LayoutExperiment[]
+  doctorWorkingHours       DoctorWorkingHours[]
+  doctorTimeOff            DoctorTimeOff[]
 
   @@map("branches")
+}
+
+/// Weekly recurring hours. weekday is 0=Sunday..6=Saturday and minutes count from midnight, both in clinic time (IST).
+model DoctorWorkingHours {
+  id          String   @id @default(cuid())
+  branchId    String
+  doctorId    String
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  doctor      User     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, weekday])
+  @@map("doctor_working_hours")
+}
+
+/// Leave, blocked-off time, and branch holidays (doctorId null).
+model DoctorTimeOff {
+  id          String      @id @default(cuid())
+  branchId    String
+  doctorId    String?
+  kind        TimeOffKind
+  startsAt    DateTime
+  endsAt      DateTime
+  reason      String?
+  createdById String?
+  createdAt   DateTime    @default(now())
+  branch      Branch      @relation(fields: [branchId], references: [id])
+  doctor      User?       @relation("DoctorTimeOffDoctor", fields: [doctorId], references: [id], onDelete: Cascade)
+  createdBy   User?       @relation("DoctorTimeOffCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([branchId, startsAt])
+  @@index([doctorId, startsAt])
+  @@map("doctor_time_off")
 }
 
 model Permission {
@@ -1958,6 +2000,12 @@ enum DrugInventoryChangeRequestStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum TimeOffKind {
+  LEAVE
+  HOLIDAY
+  BLOCKED
 }
 
 enum UserRole {

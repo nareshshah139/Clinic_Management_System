@@ -24,6 +24,21 @@ import { AppointmentStatus, Prisma, VisitType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WhatsAppTemplatesService } from '../whatsapp-templates/whatsapp-templates.service';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
+import {
+  BlockedInterval,
+  MinuteInterval,
+  istClock,
+  istDayEnd,
+  istDayStart,
+  minutesToHhmm,
+  overlaps,
+  slotToMinutes,
+  timeOffOverlappingSlot,
+} from '../doctor-availability/availability';
+import {
+  loadDayAvailability,
+  loadTimeOff,
+} from '../doctor-availability/availability.queries';
 
 type WhatsAppTemplateComponent = {
   type: 'body';
@@ -82,6 +97,8 @@ export class AppointmentsService {
     if (!doctor) {
       throw new NotFoundException('Doctor not found in this branch');
     }
+
+    await this.assertNoTimeOff(doctorId, date, slot, branchId);
 
     // Validate room if provided
     if (roomId) {
@@ -473,6 +490,13 @@ export class AppointmentsService {
       throw new BadRequestException(canReschedule.reason);
     }
 
+    await this.assertNoTimeOff(
+      appointment.doctorId,
+      rescheduleDto.date,
+      rescheduleDto.slot,
+      branchId,
+    );
+
     // Check for new scheduling conflicts
     const conflicts = await this.checkSchedulingConflicts(
       appointment.doctorId,
@@ -670,86 +694,26 @@ export class AppointmentsService {
       bookedSlots.push(...roomBookedSlots);
     }
 
-    // Determine clinic hours (fallback to defaults if not provided or invalid)
-    // Attempt to read working hours from doctor.metadata if available
-    let doctorStart: number | undefined;
-    let doctorEnd: number | undefined;
-    try {
-      if (doctor?.metadata) {
-        const meta =
-          typeof doctor.metadata === 'string'
-            ? JSON.parse(doctor.metadata)
-            : doctor.metadata;
-        const hours = meta?.workingHours;
-        if (hours && typeof hours === 'object') {
-          // Allow per-day override; fallback to generic startHour/endHour if present
-          // Resolve weekday in clinic timezone to avoid UTC off-by-one
-          const tz = 'Asia/Kolkata';
-          const noonUtc = new Date(`${date}T12:00:00.000Z`); // noon UTC mapped to local day deterministically
-          const localNoon = new Date(
-            noonUtc.toLocaleString('en-US', { timeZone: tz }),
-          );
-          const day = localNoon.getDay(); // 0-6 in clinic TZ
-          const dayKey = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][day];
-          const byDay = hours?.byDay?.[dayKey];
-          const startCandidate = byDay?.startHour ?? hours?.startHour;
-          const endCandidate = byDay?.endHour ?? hours?.endHour;
-          if (Number.isInteger(startCandidate)) doctorStart = startCandidate;
-          if (Number.isInteger(endCandidate)) doctorEnd = endCandidate;
-        }
-      }
-    } catch {}
+    const day = await loadDayAvailability(this.prisma, branchId, doctor, date);
+    const hasOverride =
+      Number.isInteger(startHour) || Number.isInteger(endHour);
+    const workingIntervals = hasOverride
+      ? [this.overrideInterval(day.working, startHour, endHour)]
+      : day.working;
 
-    const clinicStart = Number.isInteger(startHour)
-      ? (startHour as number)
-      : Number.isInteger(doctorStart)
-        ? (doctorStart as number)
-        : 9;
-    const clinicEnd = Number.isInteger(endHour)
-      ? (endHour as number)
-      : Number.isInteger(doctorEnd)
-        ? (doctorEnd as number)
-        : 18;
-    const normalizedStart = Math.max(0, Math.min(23, clinicStart));
-    const normalizedEnd = Math.max(
-      normalizedStart + 1,
-      Math.min(24, clinicEnd),
+    const allSlots = workingIntervals.flatMap((interval) =>
+      this.slotsWithin(interval, durationMinutes),
     );
 
-    // Generate all possible slots for the day
-    const allSlots = SchedulingUtils.generateTimeSlots(
-      normalizedStart,
-      normalizedEnd,
-      durationMinutes,
-    );
-
-    // Filter out booked slots by overlap, not exact string equality
-    let availableSlots = allSlots.filter((slot) =>
-      bookedSlots.every((b) => !SchedulingUtils.doTimeSlotsOverlap(slot, b)),
-    );
-
-    // For same-day scheduling, filter out past slots based on local time
-    const getLocalDateStr = (d: Date): string => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const da = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${da}`;
-    };
-    // Align same-day filtering with clinic timezone (Asia/Kolkata)
-    const now = new Date();
-    const tz = 'Asia/Kolkata';
-    const todayTz = new Date(now.toLocaleString('en-US', { timeZone: tz }));
-    const todayStr = getLocalDateStr(todayTz);
-    if (date === todayStr) {
-      const nowTz = todayTz;
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
-      availableSlots = availableSlots.filter((slot) => {
-        const parsed = SchedulingUtils.parseTimeSlot(slot);
-        const [h, mm] = parsed.start.split(':').map((v) => parseInt(v, 10));
-        const startMinutes = h * 60 + mm;
-        return startMinutes > nowMinutes;
-      });
-    }
+    const now = istClock(new Date());
+    const availableSlots = allSlots.filter((slot) => {
+      const range = slotToMinutes(slot);
+      return (
+        bookedSlots.every((b) => !SchedulingUtils.doTimeSlotsOverlap(slot, b)) &&
+        day.blocked.every((b) => !overlaps(b, range)) &&
+        (date !== now.date || range.start > now.minutes)
+      );
+    });
 
     return {
       date,
@@ -757,6 +721,9 @@ export class AppointmentsService {
       roomId,
       availableSlots,
       bookedSlots: [...new Set(bookedSlots)], // Remove duplicates
+      hoursSource: day.source,
+      workingIntervals,
+      timeOff: day.blocked,
     };
   }
 
@@ -1045,6 +1012,60 @@ export class AppointmentsService {
     return {};
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] time-off-blocks-booking
+   * Creating or rescheduling an appointment MUST fail with 409 when the slot overlaps the
+   * doctor's leave or blocked time, or a branch-wide holiday. Booking outside working
+   * hours stays allowed; the UI only warns.
+   */
+  private async assertNoTimeOff(
+    doctorId: string,
+    date: string,
+    slot: string,
+    branchId: string,
+  ) {
+    const timeOff = await loadTimeOff(
+      this.prisma,
+      branchId,
+      doctorId,
+      istDayStart(date),
+      istDayEnd(date),
+    );
+    const hit = timeOffOverlappingSlot(date, slot, timeOff);
+    if (!hit) return;
+    const message = describeTimeOff(hit);
+    throw new ConflictException({
+      message,
+      conflicts: [{ type: 'time_off', message, timeOff: hit }],
+      suggestions: [],
+    });
+  }
+
+  /** Explicit startHour/endHour query params replace the doctor's hours with one window. */
+  private overrideInterval(
+    working: MinuteInterval[],
+    startHour?: number,
+    endHour?: number,
+  ): MinuteInterval {
+    const doctorStart = working.length
+      ? Math.floor(working[0].start / 60)
+      : 9;
+    const doctorEnd = working.length
+      ? Math.ceil(working[working.length - 1].end / 60)
+      : 18;
+    const start = Math.max(0, Math.min(23, startHour ?? doctorStart));
+    const end = Math.max(start + 1, Math.min(24, endHour ?? doctorEnd));
+    return { start: start * 60, end: end * 60 };
+  }
+
+  private slotsWithin(interval: MinuteInterval, duration: number): string[] {
+    const slots: string[] = [];
+    for (let m = interval.start; m < interval.end; m += duration) {
+      slots.push(`${minutesToHhmm(m)}-${minutesToHhmm(m + duration)}`);
+    }
+    return slots;
+  }
+
   // Private helper methods
   private validateAppointmentInputs(dto: CreateAppointmentDto): void {
     if (!SchedulingUtils.isValidTimeSlot(dto.slot)) {
@@ -1234,4 +1255,16 @@ export class AppointmentsService {
     }
   }
 
+}
+
+function describeTimeOff(block: BlockedInterval): string {
+  const reason = block.reason ? ` (${block.reason})` : '';
+  switch (block.kind) {
+    case 'LEAVE':
+      return `Doctor is on leave at this time${reason}`;
+    case 'HOLIDAY':
+      return `The clinic is closed for a holiday at this time${reason}`;
+    case 'BLOCKED':
+      return `Doctor's time is blocked off at this time${reason}`;
+  }
 }

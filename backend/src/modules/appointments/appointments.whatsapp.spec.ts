@@ -57,6 +57,8 @@ describe('AppointmentsService WhatsApp flow', () => {
         }),
       },
       room: { findFirst: jest.fn() },
+      doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
+      doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
       appointment: {
         findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),

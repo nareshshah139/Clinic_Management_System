@@ -7,7 +7,7 @@ export interface TimeSlot {
 }
 
 export interface SchedulingConflict {
-  type: 'doctor' | 'room' | 'resource';
+  type: 'doctor' | 'room' | 'resource' | 'time_off';
   message: string;
   conflictingAppointment?: {
     id: string;

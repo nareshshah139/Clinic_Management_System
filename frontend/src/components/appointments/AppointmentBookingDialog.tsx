@@ -11,7 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { getErrorMessage, filterRoomsByVisitType, formatPatientName, addMinutesToHHMM, doTimeSlotsOverlap, getSlotDurationMinutes, hhmmToMinutes } from '@/lib/utils';
+import { getErrorMessage, filterRoomsByVisitType, formatPatientName, addMinutesToHHMM, doTimeSlotsOverlap, getSlotDurationMinutes } from '@/lib/utils';
+import { checkSlot, loadDoctorDay, type DoctorDay } from '@/lib/doctor-availability';
 import type { 
   Patient, 
   Room, 
@@ -70,49 +71,18 @@ export default function AppointmentBookingDialog({
     return `${start}-${newEnd}`;
   }, [slot, durationMinutes]);
 
-  // Load doctor's working hours for warnings
-  const [workingHours, setWorkingHours] = useState<{ startHour?: number; endHour?: number } | null>(null);
+  const [doctorDay, setDoctorDay] = useState<DoctorDay | null>(null);
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
-      try {
-        if (!doctorId) return;
-        const res: any = await apiClient.getUser(doctorId);
-        const meta = (res?.metadata && typeof res.metadata === 'object') ? res.metadata : (res?.metadata ? JSON.parse(res.metadata) : {});
-        const wh = meta?.workingHours;
-        if (!wh) { setWorkingHours(null); return; }
-        // Resolve effective hours for date using byDay if present
-        const tz = 'Asia/Kolkata';
-        const noonUtc = new Date(`${date}T12:00:00.000Z`);
-        const localNoon = new Date(noonUtc.toLocaleString('en-US', { timeZone: tz }));
-        const dayKey = ['sun','mon','tue','wed','thu','fri','sat'][localNoon.getDay()];
-        const byDay = wh?.byDay?.[dayKey] || {};
-        const startHour = Number.isInteger(byDay?.startHour) ? byDay.startHour : wh?.startHour;
-        const endHour = Number.isInteger(byDay?.endHour) ? byDay.endHour : wh?.endHour;
-        setWorkingHours({ startHour, endHour });
-      } catch {
-        setWorkingHours(null);
-      }
+      const day = doctorId && date ? await loadDoctorDay(doctorId, date) : null;
+      if (!cancelled) setDoctorDay(day);
     };
     void load();
+    return () => { cancelled = true; };
   }, [doctorId, date]);
 
-  const outOfHoursMessage = (() => {
-    if (!workingHours?.startHour && !workingHours?.endHour) return '';
-    const [s, e] = (derivedSlot || '').split('-');
-    if (!s || !e) return '';
-    const startMin = hhmmToMinutes(s);
-    const endMin = hhmmToMinutes(e);
-    const startHour = workingHours?.startHour ?? 9;
-    const endHour = workingHours?.endHour ?? 18;
-    const dayStartMin = startHour * 60;
-    const dayEndMin = endHour * 60;
-    if (startMin < dayStartMin || endMin > dayEndMin) {
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const fmt = (h: number) => `${pad(h)}:00`;
-      return `Warning: selected time ${derivedSlot} is outside doctor's working hours (${fmt(startHour)}-${fmt(endHour)}).`;
-    }
-    return '';
-  })();
+  const slotCheck = checkSlot(doctorDay, derivedSlot);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -313,8 +283,11 @@ export default function AppointmentBookingDialog({
             <p className="text-xs text-gray-500 mt-1">Adjusts end time and validates room availability for the new duration.</p>
           </div>
 
-          {outOfHoursMessage && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-800 text-sm">{outOfHoursMessage}</div>
+          {slotCheck.blocked && (
+            <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">{slotCheck.blocked}</div>
+          )}
+          {slotCheck.warning && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-800 text-sm">{slotCheck.warning}</div>
           )}
 
           {/* Validation Errors */}
@@ -463,7 +436,7 @@ export default function AppointmentBookingDialog({
             </Button>
             <Button 
               onClick={handleConfirm} 
-              disabled={loading || (visitType === 'PROCEDURE' && !selectedRoomId)}
+              disabled={loading || Boolean(slotCheck.blocked) || (visitType === 'PROCEDURE' && !selectedRoomId)}
             >
               {loading ? 'Booking...' : 'Confirm Booking'}
             </Button>
