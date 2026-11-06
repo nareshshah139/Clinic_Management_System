@@ -150,7 +150,7 @@ export function footerSummary(totals: PurchaseRegisterResponse['totals']) {
 
 export const excludedNote = ({ cancelled }: { cancelled: number }) => (cancelled > 0 ? `${cancelled} cancelled not included` : '');
 
-export function settleDateError(text: string, today: string): { day: string } | { error: string } {
+export function parseSettleDate(text: string, today: string): { day: string } | { error: string } {
   const day = parseDisplayDay(text);
   if (!day) return { error: 'Enter the payment date as dd/mm/yyyy.' };
   if (day > today) return { error: `The payment date cannot be after today, ${formatDisplayDay(today)}.` };

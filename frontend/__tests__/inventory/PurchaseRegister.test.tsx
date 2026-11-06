@@ -103,7 +103,7 @@ it('asks for this financial year, newest entries first, and totals bills and out
     ],
   ]);
   expect(within(table).getAllByRole('columnheader').map((head) => head.textContent?.trim())).toEqual([
-    'Sr No', 'Bill No', 'Entry Date', 'Bill Date', 'Entry By', 'Distributor', 'Bill Amount', 'Payment',
+    'Sr No', 'Bill No', 'Entry Date', 'Bill Date', 'Entry By', 'Distributor', 'Bill Amount', 'Payment', 'Settle',
   ]);
   expect(screen.getByText('Bills ₹3,000.00 · Outstanding ₹1,450.00 · 5 bills')).toBeInTheDocument();
   expect(screen.getByText('1 cancelled not included')).toBeInTheDocument();
@@ -172,10 +172,10 @@ it('shows a badge for every payment state and offers Mark paid only on bills tha
   renderRegister();
   await screen.findByText('MED-7');
   const table = screen.getByRole('table', { name: 'Purchase bills' });
-  const payments = within(table).getAllByRole('row').slice(1).map((tr) => tr.cells[7].textContent?.replace('Mark paid', '').trim());
+  const payments = within(table).getAllByRole('row').slice(1).map((tr) => tr.cells[7].textContent);
   expect(payments).toEqual([
-    'Due ₹1,000.00',
-    'Overdue ₹300.00 · 6d',
+    'Due',
+    'Overdue · 6d',
     '₹150.00 duepart paid',
     'Paid',
     'Not posted. In review. Post stock before paying',
@@ -187,8 +187,9 @@ it('shows a badge for every payment state and offers Mark paid only on bills tha
 it('hides Mark paid from someone who cannot record supplier payments', async () => {
   get.mockResolvedValue(response({ canSettle: false }));
   renderRegister();
-  await screen.findByText('Overdue ₹300.00 · 6d');
+  await screen.findByText('Overdue · 6d');
   expect(markPaidButtons()).toEqual([]);
+  expect(screen.queryByRole('columnheader', { name: 'Settle' })).not.toBeInTheDocument();
 });
 
 it('records the outstanding amount once across a retry, then undoes it from the toast', async () => {

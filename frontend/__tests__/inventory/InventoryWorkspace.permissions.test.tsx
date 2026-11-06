@@ -111,7 +111,7 @@ it('shows purchase bills from the purchase register with their payment state', a
   render(<InventoryWorkspace/>);
   const table = await screen.findByRole('table', {name: 'Purchase bills'});
   expect(table).toHaveTextContent('LIN-101');
-  expect(table).toHaveTextContent('Due ₹1,000.00');
+  expect(table).toHaveTextContent('₹1,000.00Due');
   expect(screen.getByRole('button', {name: 'Purchase bills'})).toHaveAttribute('aria-current', 'page');
   const reads = (apiClient.get as jest.Mock).mock.calls.map(([path, params]) => [path, params?.distributorGstin]).filter(([path]) => !path.includes('capabilities'));
   expect(reads).toEqual([['/pharmacy/purchase-register', '36ABCDE1234F1Z5']]);

@@ -16,13 +16,13 @@ import {
   SETTLE_MODE_LABELS,
   readSettleMode,
   rememberSettleMode,
-  settleDateError,
+  parseSettleDate,
   type PurchaseRegisterRow,
   type RecordedPayment,
   type SettleMode,
 } from './purchase-register-model';
 
-const PANEL_WIDTH = 352;
+const PANEL_WIDTH = 400;
 const GAP = 8;
 
 const browserStorage = () => {
@@ -71,7 +71,7 @@ export function MarkPaidDialog({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (saving) return;
-    const date = settleDateError(dateText, today);
+    const date = parseSettleDate(dateText, today);
     if ('error' in date) {
       setError(date.error);
       return;
@@ -119,7 +119,7 @@ export function MarkPaidDialog({
           }}
           className={cn(
             'fixed z-50 flex flex-col gap-3 border border-border bg-popover p-4 text-popover-foreground shadow-xl outline-none',
-            style ? 'rounded-lg' : 'inset-x-0 bottom-0 max-h-[90dvh] overflow-y-auto rounded-t-xl pb-[max(1rem,env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/3 sm:w-[22rem] sm:-translate-x-1/2 sm:rounded-lg',
+            style ? 'rounded-lg' : 'inset-x-0 bottom-0 max-h-[90dvh] overflow-y-auto rounded-t-xl pb-[max(1rem,env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/3 sm:w-[25rem] sm:-translate-x-1/2 sm:rounded-lg',
           )}
         >
           <form onSubmit={submit} className="flex flex-col gap-3" noValidate>

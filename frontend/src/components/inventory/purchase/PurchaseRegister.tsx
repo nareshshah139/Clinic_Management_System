@@ -63,26 +63,25 @@ import {
 
 const badgeText = 'whitespace-nowrap px-1.5 py-0.5 text-xs font-semibold';
 
-type Column = { key: string; label: string; sort?: SortKey; align?: 'right'; className?: string; cell: (row: PurchaseRegisterRow) => ReactNode };
+type Column = { key: string; label: string; hideLabel?: boolean; sort?: SortKey; align?: 'right'; className?: string; cell: (row: PurchaseRegisterRow) => ReactNode };
 
 function PaymentBadge({ row }: { row: PurchaseRegisterRow }) {
   const { state, outstanding, overdueDays } = row.payment;
-  const due = formatRupees(outstanding);
   switch (state) {
     case 'PAID':
       return <Badge variant="success" className={badgeText}>Paid</Badge>;
     case 'DUE':
-      return <Badge variant="danger" className={badgeText}>Due {due}</Badge>;
+      return <Badge variant="danger" className={badgeText}>Due</Badge>;
     case 'OVERDUE':
       return (
         <Badge variant="destructive" className={cn(badgeText, 'bg-destructive-text text-white dark:bg-destructive')}>
-          Overdue {due} · {overdueDays}d
+          Overdue · {overdueDays}d
         </Badge>
       );
     case 'PARTIAL':
       return (
-        <span className="inline-flex flex-wrap items-center gap-x-1.5">
-          <Badge variant="warning" className={badgeText}>{due} due</Badge>
+        <span className="flex flex-col items-start gap-0.5">
+          <Badge variant="warning" className={badgeText}>{formatRupees(outstanding)} due</Badge>
           <span className="whitespace-nowrap text-xs text-muted-foreground">
             part paid{overdueDays > 0 ? ` · ${overdueDays}d late` : ''}
           </span>
@@ -214,27 +213,24 @@ export function PurchaseRegister({
   const linkClass =
     'whitespace-nowrap rounded-sm text-left font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
-  const paymentCell = (row: PurchaseRegisterRow) => (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1" onClick={stop}>
-      <PaymentBadge row={row} />
-      {canMarkPaid(row, canSettle) && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-8 px-2.5 text-sm"
-          aria-label={`Mark bill ${row.billNo} paid`}
-          aria-haspopup="dialog"
-          onClick={(event) => {
-            settleAnchor.current = event.currentTarget;
-            setSettling(row);
-          }}
-        >
-          Mark paid
-        </Button>
-      )}
-    </div>
-  );
+  const settleCell = (row: PurchaseRegisterRow) =>
+    canMarkPaid(row, canSettle) && (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm"
+        aria-label={`Mark bill ${row.billNo} paid`}
+        aria-haspopup="dialog"
+        onClick={(event) => {
+          stop(event);
+          settleAnchor.current = event.currentTarget;
+          setSettling(row);
+        }}
+      >
+        Mark paid
+      </Button>
+    );
 
   const columns: Column[] = [
     { key: 'srNo', label: 'Sr No', sort: 'srNo', className: cn('w-[1%] tabular-nums', registerStickyCellClass), cell: (row) => row.srNo },
@@ -250,7 +246,7 @@ export function PurchaseRegister({
       ),
     },
     { key: 'entryAt', label: 'Entry Date', sort: 'entryAt', className: 'w-[1%]', cell: (row) => <RegisterDateTime value={row.entryAt} today={today} /> },
-    { key: 'billDate', label: 'Bill Date', sort: 'billDate', className: 'w-[1%] whitespace-nowrap', cell: (row) => displayCalendarDate(row.billDate) },
+    { key: 'billDate', label: 'Bill Date', sort: 'billDate', className: 'w-[1%] whitespace-normal @min-[68rem]:whitespace-nowrap', cell: (row) => displayCalendarDate(row.billDate) },
     { key: 'entryBy', label: 'Entry By', className: 'w-[1%] whitespace-nowrap', cell: (row) => (row.entryBy ? <span title={row.entryBy.name}>{shortName(row.entryBy.name)}</span> : '—') },
     {
       key: 'distributor',
@@ -260,7 +256,7 @@ export function PurchaseRegister({
       cell: (row) => (
         <div title={row.distributor.gstin}>
           <div className="font-medium [overflow-wrap:anywhere]">{row.distributor.name}</div>
-          <div className="hidden whitespace-nowrap font-mono text-sm text-muted-foreground @min-[68rem]:block">{row.distributor.gstin}</div>
+          <div className="truncate font-mono text-xs text-muted-foreground">{row.distributor.gstin}</div>
         </div>
       ),
     },
@@ -272,7 +268,8 @@ export function PurchaseRegister({
       className: 'w-[1%] whitespace-nowrap',
       cell: (row) => <span className={cn('font-semibold', row.invoiceState === 'CANCELLED' && 'line-through')}>{formatRupees(row.amount)}</span>,
     },
-    { key: 'payment', label: 'Payment', sort: 'outstanding', className: 'w-[1%] min-w-[11rem] whitespace-normal', cell: paymentCell },
+    { key: 'payment', label: 'Payment', sort: 'outstanding', className: 'w-[1%] whitespace-nowrap', cell: (row) => <PaymentBadge row={row} /> },
+    ...(canSettle ? [{ key: 'settle', label: 'Settle', hideLabel: true, className: 'w-[1%] whitespace-nowrap py-1! text-right', cell: settleCell }] : []),
   ];
 
   const footerSummaryText = failed ? 'Total not available' : data ? footerSummary(data.totals) : <Skeleton className="h-6 w-72" />;
@@ -380,7 +377,9 @@ export function PurchaseRegister({
                     onSort={() => dispatch({ type: 'sort', key: column.sort! })}
                   />
                 ) : (
-                  <RegisterHead key={column.key} align={column.align}>{column.label}</RegisterHead>
+                  <RegisterHead key={column.key} align={column.align}>
+                    {column.hideLabel ? <span className="sr-only">{column.label}</span> : column.label}
+                  </RegisterHead>
                 ),
               )}
             </TableRow>
