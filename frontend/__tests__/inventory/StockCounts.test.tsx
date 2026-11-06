@@ -109,7 +109,7 @@ describe('counting sheet', () => {
     fireEvent.change(fields[2], { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign off count' }));
     const dialog = await screen.findByRole('dialog', { name: 'Sign off this count' });
-    expect(within(dialog).getByText('3 items, 1 differ: net −3 units, −₹37.50.')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Sign off this count3 items, 1 differ: net −3 units, −₹37.50.');
     expect(within(dialog).getByText('System 10 · counted 7')).toBeInTheDocument();
     await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Sign off and send for approval' }));

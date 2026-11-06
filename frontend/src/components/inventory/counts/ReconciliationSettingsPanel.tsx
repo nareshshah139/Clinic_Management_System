@@ -33,7 +33,10 @@ export function ReconciliationSettingsPanel({ summary, onSaved }: { summary: Rec
   const id = useId();
   const dropped = saved.assigneeIds.filter((person) => !staff.some((candidate) => candidate.id === person)).length;
   const values = { cycleDays: whole(text.cycleDays, LIMITS.cycleDays), itemsPerPersonPerDay: whole(text.itemsPerPersonPerDay, LIMITS.itemsPerPersonPerDay) };
-  const preview = values.cycleDays && values.itemsPerPersonPerDay ? forecastMessage({ cycleDays: values.cycleDays, itemsPerPersonPerDay: values.itemsPerPersonPerDay, assigneeIds: assignees }, summary.forecast.batches) : null;
+  const preview =
+    values.cycleDays && values.itemsPerPersonPerDay
+      ? forecastMessage({ cycleDays: values.cycleDays, itemsPerPersonPerDay: values.itemsPerPersonPerDay, assigneeIds: assignees }, summary.forecast.batches)
+      : null;
   const changed =
     enabled !== saved.enabled ||
     values.cycleDays !== saved.cycleDays ||
@@ -76,7 +79,9 @@ export function ReconciliationSettingsPanel({ summary, onSaved }: { summary: Rec
     const invalid = values[field] === null;
     return (
       <div className="flex flex-col gap-1">
-        <label htmlFor={`${id}-${field}`} className="text-sm font-medium">{label}</label>
+        <label htmlFor={`${id}-${field}`} className="text-sm font-medium">
+          {label}
+        </label>
         <Input
           id={`${id}-${field}`}
           inputMode="numeric"
@@ -151,15 +156,25 @@ export function ReconciliationSettingsPanel({ summary, onSaved }: { summary: Rec
             <div aria-hidden="true" className="h-2 w-full max-w-md overflow-hidden rounded-full bg-muted">
               <div className={cn('h-full rounded-full', forecast.behind ? 'bg-warning-text' : 'bg-primary')} style={{ width: `${progress}%` }} />
             </div>
-            {forecast.behind && <p className="text-sm text-warning-text">Behind: {batchCount(forecast.remaining)} still to count with {cycle.daysLeft} {cycle.daysLeft === 1 ? 'day' : 'days'} left.</p>}
+            {forecast.behind && (
+              <p className="text-sm text-warning-text">
+                Behind: {batchCount(forecast.remaining)} still to count with {cycle.daysLeft} {cycle.daysLeft === 1 ? 'day' : 'days'} left.
+              </p>
+            )}
           </>
         ) : (
           <p className="text-base">Reconciliation is off, so no counts are assigned. {batchCount(forecast.batches)} are in stock.</p>
         )}
       </section>
-      {error && <p role="alert" className="text-sm font-medium text-destructive-text">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm font-medium text-destructive-text">
+          {error}
+        </p>
+      )}
       <div className="flex gap-2">
-        <Button type="submit" disabled={saving || !changed}>{saving ? 'Saving…' : 'Save settings'}</Button>
+        <Button type="submit" disabled={saving || !changed}>
+          {saving ? 'Saving…' : 'Save settings'}
+        </Button>
         {changed && (
           <Button
             type="button"

@@ -144,6 +144,7 @@ export class InventoryReconciliationService {
     return this.prisma.user.findMany({
       where: { branchId: actor.branchId, isActive: true, role: { in: [...INVENTORY_APPROVERS] as any }, id: { not: actor.id } },
       select: { id: true, firstName: true, lastName: true },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
   }
 

@@ -81,14 +81,20 @@ export function StartCountDialog({ anchor, onClose, onStarted }: { anchor: HTMLE
       footer={() => (
         <>
           <DialogClose asChild>
-            <Button type="button" variant="outline" disabled={saving}>Cancel</Button>
+            <Button type="button" variant="outline" disabled={saving}>
+              Cancel
+            </Button>
           </DialogClose>
-          <Button type="submit" disabled={saving}>{saving ? 'Starting…' : chosen.length ? `Count ${batchCount(chosen.length)}` : 'Count'}</Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? 'Starting…' : chosen.length ? `Count ${batchCount(chosen.length)}` : 'Count'}
+          </Button>
         </>
       )}
     >
       <div className="flex flex-col gap-1">
-        <label htmlFor={id} className="text-sm font-medium">Item or batch</label>
+        <label htmlFor={id} className="text-sm font-medium">
+          Item or batch
+        </label>
         <Input id={id} ref={searchRef} type="search" value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 text-base md:text-sm" />
       </div>
       {listed.length > 0 && (
@@ -96,7 +102,12 @@ export function StartCountDialog({ anchor, onClose, onStarted }: { anchor: HTMLE
           {listed.map((batch) => (
             <li key={batch.id}>
               <label className="flex items-start gap-2 px-3 py-2 text-sm">
-                <input type="checkbox" className="mt-1 size-4" checked={chosen.some((picked) => picked.id === batch.id)} onChange={(event) => toggle(batch, event.target.checked)} />
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4"
+                  checked={chosen.some((picked) => picked.id === batch.id)}
+                  onChange={(event) => toggle(batch, event.target.checked)}
+                />
                 <span className="min-w-0">
                   <BatchLine line={{ name: batch.name, batchNumber: batch.batchNumber, expiryDate: batch.expiryDate ?? '' }} />
                   <span className="block">{batch.storageLocation || 'Location not recorded'}</span>
@@ -107,7 +118,11 @@ export function StartCountDialog({ anchor, onClose, onStarted }: { anchor: HTMLE
         </ul>
       )}
       {results !== null && !results.length && <p className="text-sm">No batch in stock matches “{search.trim()}”.</p>}
-      {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-destructive-text">
+          {error}
+        </p>
+      )}
     </ActionDialog>
   );
 }

@@ -23,7 +23,7 @@ const entryOf = (line: CountLine): Entry => ({ count: line.physicalStock === nul
 export function sheetLine(line: CountLine, entry: Entry): CountLine {
   const parsed = parseCount(entry.count);
   const counted = typeof parsed === 'number' ? parsed : null;
-  const system = line.physicalStock !== null && counted === line.physicalStock ? line.systemStock : line.currentStock ?? line.systemStock;
+  const system = line.physicalStock !== null && counted === line.physicalStock ? line.systemStock : (line.currentStock ?? line.systemStock);
   return { ...line, systemStock: system, physicalStock: counted, note: entry.note };
 }
 
@@ -140,11 +140,16 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
   return (
     <section aria-labelledby="count-sheet-title" className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id="count-sheet-title" tabIndex={-1} className="text-xl font-semibold">{detail.reference}</h2>
+        <h2 id="count-sheet-title" tabIndex={-1} className="text-xl font-semibold">
+          {detail.reference}
+        </h2>
         <p className="text-sm">Count what is on the shelf. Enter 0 when a batch is not there.</p>
       </div>
       <div role="list" aria-label="Batches to count" className="flex flex-col rounded-lg border border-border">
-        <div aria-hidden="true" className="hidden gap-x-3 rounded-t-lg bg-muted px-3 py-2 text-sm font-semibold sm:grid sm:grid-cols-[minmax(12rem,2.4fr)_minmax(5rem,1fr)_4.5rem_6.5rem_minmax(7.5rem,1.2fr)_minmax(9rem,1.8fr)]">
+        <div
+          aria-hidden="true"
+          className="hidden gap-x-3 rounded-t-lg bg-muted px-3 py-2 text-sm font-semibold sm:grid sm:grid-cols-[minmax(12rem,2.4fr)_minmax(5rem,1fr)_4.5rem_6.5rem_minmax(7.5rem,1.2fr)_minmax(9rem,1.8fr)]"
+        >
           <span>Item</span>
           <span>Location</span>
           <span className="text-right">System</span>
@@ -162,7 +167,7 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
               key={line.id}
               role="listitem"
               className={cn(
-                'grid grid-cols-3 items-center gap-x-3 gap-y-1.5 border-t border-border px-3 py-2.5 first:border-t-0 sm:grid-cols-[minmax(12rem,2.4fr)_minmax(5rem,1fr)_4.5rem_6.5rem_minmax(7.5rem,1.2fr)_minmax(9rem,1.8fr)] sm:py-2 sm:first-of-type:border-t-0',
+                'grid grid-cols-3 items-start gap-x-3 sm:items-center gap-y-1.5 border-t border-border px-3 py-2.5 first:border-t-0 sm:grid-cols-[minmax(12rem,2.4fr)_minmax(5rem,1fr)_4.5rem_6.5rem_minmax(7.5rem,1.2fr)_minmax(9rem,1.8fr)] sm:py-2 sm:first-of-type:border-t-0',
                 (bad || flagged) && 'bg-destructive-soft/40',
               )}
             >
@@ -179,7 +184,11 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
               </div>
               <div>
                 <label htmlFor={`count-${line.id}`} className="block text-xs sm:sr-only">
-                  Counted<span className="sr-only"> quantity of {line.name}, batch {line.batchNumber || 'not recorded'}</span>
+                  Counted
+                  <span className="sr-only">
+                    {' '}
+                    quantity of {line.name}, batch {line.batchNumber || 'not recorded'}
+                  </span>
                 </label>
                 <Input
                   id={`count-${line.id}`}
@@ -208,7 +217,9 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
                 <Difference line={line} />
               </div>
               <div className="col-span-3 sm:col-span-1">
-                <label htmlFor={`note-${line.id}`} className="sr-only">Note for {line.name}</label>
+                <label htmlFor={`note-${line.id}`} className="sr-only">
+                  Note for {line.name}
+                </label>
                 <Input
                   id={`note-${line.id}`}
                   value={raw.note}
@@ -223,31 +234,37 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
           );
         })}
       </div>
-      <div className="sticky -bottom-4 z-20 -mx-4 -mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border bg-background px-4 py-3 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] md:-bottom-6 md:-mx-6 md:-mb-6 md:px-6">
+      <div className="sticky -bottom-4 z-20 -mx-4 -mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-background px-4 py-3 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] md:-bottom-6 md:-mx-6 md:-mb-6 md:px-6">
         <div className="flex min-w-0 flex-col gap-1">
-          <p className="text-base font-semibold tabular-nums">
+          <p className="whitespace-nowrap text-base font-semibold tabular-nums">
             {figures.counted} of {figures.items} counted
             {figures.differences > 0 && <span className="font-normal"> · {figures.differences} differ</span>}
           </p>
-          <div aria-hidden="true" className="h-1.5 w-48 max-w-full overflow-hidden rounded-full bg-muted">
+          <div aria-hidden="true" className="h-1.5 w-48 max-w-full overflow-hidden rounded-full bg-muted max-sm:hidden">
             <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${figures.items ? (100 * figures.counted) / figures.items : 0}%` }} />
           </div>
           <p role="status" aria-live="polite" className="text-sm">
-            {saveState === 'saving' ? 'Saving…' : saveState === 'failed' ? 'Not saved. Check your connection; your counts stay on this screen.' : (
-              <span className="inline-flex items-center gap-1"><Check aria-hidden="true" className="size-4" /> Saved</span>
+            {saveState === 'saving' ? (
+              'Saving…'
+            ) : saveState === 'failed' ? (
+              'Not saved. Check your connection; your counts stay on this screen.'
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                <Check aria-hidden="true" className="size-4" /> Saved
+              </span>
             )}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <Button ref={signButton} className="h-11 px-5 text-base" onClick={() => void startSignOff()}>
-            Sign off count
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Button ref={signButton} aria-label="Sign off count" className="h-11 px-5 text-base" onClick={() => void startSignOff()}>
+            Sign off<span className="max-sm:hidden"> count</span>
           </Button>
-          {figures.differences > 0 && (
-            <span className="whitespace-nowrap text-sm tabular-nums">Net {formatRupees(figures.netValue)}</span>
-          )}
+          {figures.differences > 0 && <span className="whitespace-nowrap text-sm tabular-nums max-sm:hidden">Net {formatRupees(figures.netValue)}</span>}
         </div>
         {prompt && (
-          <p role="alert" className="w-full text-sm font-medium text-destructive-text">{prompt}</p>
+          <p role="alert" className="w-full text-sm font-medium text-destructive-text">
+            {prompt}
+          </p>
         )}
       </div>
       {signing && signButton.current && (
@@ -272,7 +289,8 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
             setSigning(false);
             toast({
               title: signed.state === 'POSTED_NO_DIFF' ? 'Count signed off. Stock confirmed.' : 'Count signed off and sent for approval.',
-              description: signed.state === 'POSTED_NO_DIFF' ? `All ${itemCount(signed.items)} match the system.` : 'Stock changes only when a doctor or administrator approves it.',
+              description:
+                signed.state === 'POSTED_NO_DIFF' ? `All ${itemCount(signed.items)} match the system.` : 'Stock changes only when a doctor or administrator approves it.',
             });
             onSigned(signed);
           }}

@@ -5,11 +5,11 @@ import { Lock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { Button } from '@/components/ui/button';
-import { BatchLine, CountStateBadge, Difference } from './count-parts';
+import { BatchLine, CountStateBadge, Difference, SummaryLine } from './count-parts';
 import { DecisionDialog, type Decision } from './DecisionDialog';
-import { clinicStamp, countSummary, summarySentence, type CountDetail } from './count-model';
+import { clinicStamp, countSummary, type CountDetail } from './count-model';
 
-const join = (names: string[]) => (names.length <= 1 ? names[0] ?? '' : `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`);
+const join = (names: string[]) => (names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`);
 
 /**
  * @cc [owner:nareshshah139,label:product] count-signed-record
@@ -29,7 +29,9 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
     <section aria-labelledby="count-record-title" className="flex min-w-0 flex-col gap-4">
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 id="count-record-title" tabIndex={-1} className="text-xl font-semibold">{detail.reference}</h2>
+          <h2 id="count-record-title" tabIndex={-1} className="text-xl font-semibold">
+            {detail.reference}
+          </h2>
           <CountStateBadge state={detail.state} />
           <span className="text-sm">{detail.origin === 'CYCLE' ? 'Cycle count' : 'On-demand count'}</span>
         </div>
@@ -41,7 +43,9 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
             </span>
           </p>
         ) : (
-          <p className="text-base">Assigned to <strong>{detail.assignedTo?.name ?? 'a former staff member'}</strong>. Only they can enter and sign it off.</p>
+          <p className="text-base">
+            Assigned to <strong>{detail.assignedTo?.name ?? 'a former staff member'}</strong>. Only they can enter and sign it off.
+          </p>
         )}
         {detail.signOffNote && (
           <blockquote className="border-l-4 border-border pl-3 text-base">
@@ -57,7 +61,9 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
           </p>
         )}
         {detail.state === 'POSTED_NO_DIFF' && <p className="text-base">Every batch matched the system, so stock was confirmed without a change.</p>}
-        <p className="text-base font-semibold tabular-nums">{summarySentence(figures)}</p>
+        <p className="text-base font-semibold tabular-nums">
+          <SummaryLine figures={figures} />
+        </p>
       </header>
 
       {awaiting && detail.can.decide && (
@@ -69,7 +75,9 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={(event) => setActing({ decision: 'approve', anchor: event.currentTarget })}>Approve and adjust stock</Button>
-            <Button variant="outline" onClick={(event) => setActing({ decision: 'reject', anchor: event.currentTarget })}>Reject</Button>
+            <Button variant="outline" onClick={(event) => setActing({ decision: 'reject', anchor: event.currentTarget })}>
+              Reject
+            </Button>
           </div>
         </div>
       )}
@@ -78,7 +86,10 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
       )}
 
       <div role="list" aria-label="Counted batches" className="flex flex-col rounded-lg border border-border">
-        <div aria-hidden="true" className="hidden gap-x-3 rounded-t-lg bg-muted px-3 py-2 text-sm font-semibold sm:grid sm:grid-cols-[minmax(12rem,2.6fr)_4.5rem_4.5rem_minmax(7rem,1fr)_minmax(10rem,2fr)]">
+        <div
+          aria-hidden="true"
+          className="hidden gap-x-3 rounded-t-lg bg-muted px-3 py-2 text-sm font-semibold sm:grid sm:grid-cols-[minmax(12rem,2.6fr)_4.5rem_4.5rem_minmax(7rem,1fr)_minmax(10rem,2fr)]"
+        >
           <span>Item</span>
           <span className="text-right">System</span>
           <span className="text-right">Counted</span>
@@ -86,7 +97,11 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
           <span>Note</span>
         </div>
         {shown.map((line) => (
-          <div key={line.id} role="listitem" className="grid grid-cols-3 gap-x-3 gap-y-1 border-t border-border px-3 py-2.5 first-of-type:border-t-0 sm:grid-cols-[minmax(12rem,2.6fr)_4.5rem_4.5rem_minmax(7rem,1fr)_minmax(10rem,2fr)] sm:items-center">
+          <div
+            key={line.id}
+            role="listitem"
+            className="grid grid-cols-3 gap-x-3 gap-y-1 border-t border-border px-3 py-2.5 first-of-type:border-t-0 sm:grid-cols-[minmax(12rem,2.6fr)_4.5rem_4.5rem_minmax(7rem,1fr)_minmax(10rem,2fr)] sm:items-center"
+          >
             <div className="col-span-3 min-w-0 sm:col-span-1">
               <BatchLine line={line} />
               {line.history && <span className="block text-sm font-medium text-warning-text">{line.history}</span>}
@@ -112,9 +127,7 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
           Show all {detail.lines.length} batches
         </Button>
       )}
-      {figures.differences > 0 && (
-        <p className="whitespace-nowrap text-sm tabular-nums">Net value of the differences {formatRupees(figures.netValue)}</p>
-      )}
+      {figures.differences > 0 && <p className="whitespace-nowrap text-sm tabular-nums">Net value of the differences {formatRupees(figures.netValue)}</p>}
 
       {acting && (
         <DecisionDialog
@@ -130,7 +143,10 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
             setActing(null);
             toast({
               title: decided.state === 'REJECTED' ? 'Count rejected. Stock unchanged.' : 'Approved. Stock adjusted.',
-              description: decided.state === 'REJECTED' ? 'These batches go back into the cycle to be counted again.' : `${decided.differences} ${decided.differences === 1 ? 'batch' : 'batches'} adjusted by the counted difference.`,
+              description:
+                decided.state === 'REJECTED'
+                  ? 'These batches go back into the cycle to be counted again.'
+                  : `${decided.differences} ${decided.differences === 1 ? 'batch' : 'batches'} adjusted by the counted difference.`,
             });
             onDecided(decided);
           }}

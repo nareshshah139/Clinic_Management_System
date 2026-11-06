@@ -4,7 +4,7 @@ import { Check } from 'lucide-react';
 import { displayUtcDate } from '@/lib/date-display';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { COUNT_STATE_BADGE, COUNT_STATE_LABELS, signedRupees, signedUnits, type CountLine, type CountState } from './count-model';
+import { COUNT_STATE_BADGE, COUNT_STATE_LABELS, COUNT_STATE_SHORT, itemCount, signedRupees, signedUnits, type CountLine, type CountState, type countSummary } from './count-model';
 
 const expiry = (value: string) => (value ? displayUtcDate(value).replace(/^\d{2} /, '') : '');
 
@@ -41,10 +41,24 @@ export function Difference({ line, withValue = true }: { line: Pick<CountLine, '
   );
 }
 
-export function CountStateBadge({ state }: { state: CountState }) {
+export function SummaryLine({ figures }: { figures: ReturnType<typeof countSummary> }) {
+  if (!figures.differences) return <>{itemCount(figures.items)}, all match the system.</>;
+  const units = Math.abs(figures.netUnits) === 1 ? 'unit' : 'units';
+  return (
+    <>
+      {itemCount(figures.items)}, {figures.differences} differ: net{' '}
+      <span className="whitespace-nowrap">
+        {signedUnits(figures.netUnits)} {units}
+      </span>
+      , <span className="whitespace-nowrap">{signedRupees(figures.netValue)}</span>.
+    </>
+  );
+}
+
+export function CountStateBadge({ state, short = false }: { state: CountState; short?: boolean }) {
   return (
     <Badge variant={COUNT_STATE_BADGE[state]} className="whitespace-nowrap px-1.5 py-0 text-xs font-semibold leading-[1.125rem]">
-      {COUNT_STATE_LABELS[state]}
+      {(short ? COUNT_STATE_SHORT : COUNT_STATE_LABELS)[state]}
     </Badge>
   );
 }

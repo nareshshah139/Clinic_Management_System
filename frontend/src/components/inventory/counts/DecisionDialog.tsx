@@ -98,7 +98,9 @@ export function DecisionDialog({
       footer={() => (
         <>
           <DialogClose asChild>
-            <Button type="button" variant="outline" disabled={saving}>Cancel</Button>
+            <Button type="button" variant="outline" disabled={saving}>
+              Cancel
+            </Button>
           </DialogClose>
           <Button type="submit" variant={approve ? 'default' : 'destructive'} disabled={saving}>
             {saving ? (approve ? 'Approving…' : 'Rejecting…') : approve ? 'Approve and adjust stock' : 'Reject count'}
@@ -113,9 +115,12 @@ export function DecisionDialog({
             const diff = line.difference ?? 0;
             return (
               <li key={line.id} className="flex flex-col gap-0.5 px-3 py-2">
-                <span className="font-semibold">{line.name} <span className="font-normal">· {line.batchNumber}</span></span>
+                <span className="font-semibold">
+                  {line.name} <span className="font-normal">· {line.batchNumber}</span>
+                </span>
                 <span className="tabular-nums">
-                  {now} now <span aria-hidden="true">→</span><span className="sr-only">becomes</span> <strong>{now + diff}</strong> ({signedUnits(diff)})
+                  {now} now <span aria-hidden="true">→</span>
+                  <span className="sr-only">becomes</span> <strong>{now + diff}</strong> ({signedUnits(diff)})
                 </span>
                 {line.currentStock !== null && line.currentStock !== line.systemStock && (
                   <span className="text-xs">It was {line.systemStock} when counted; stock has moved since.</span>
@@ -126,7 +131,9 @@ export function DecisionDialog({
         </ul>
       )}
       <div className="flex flex-col gap-1">
-        <label htmlFor={id} className="text-sm font-medium">Reason (required)</label>
+        <label htmlFor={id} className="text-sm font-medium">
+          Reason (required)
+        </label>
         <Textarea
           id={id}
           ref={reasonRef}
@@ -149,7 +156,9 @@ export function DecisionDialog({
         </label>
       )}
       {error && (
-        <p id={`${id}-error`} role="alert" className="text-sm text-destructive-text">{error}</p>
+        <p id={`${id}-error`} role="alert" className="text-sm text-destructive-text">
+          {error}
+        </p>
       )}
     </ActionDialog>
   );

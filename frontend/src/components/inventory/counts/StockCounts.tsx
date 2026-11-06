@@ -21,7 +21,12 @@ import { RECONCILIATION, batchCount, countPath, failureMessage, failureOf, itemC
 type Load<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 'error'; error: string } | { status: 'denied' };
 const TABS = ['mine', 'approvals', 'history', 'settings'] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABELS: Record<Tab, string> = { mine: 'My counts', approvals: 'Approvals', history: 'History', settings: 'Settings' };
+const TAB_LABELS: Record<Tab, string> = {
+  mine: 'My counts',
+  approvals: 'Approvals',
+  history: 'History',
+  settings: 'Settings',
+};
 
 function useLoad<T>(path: string | null) {
   const [load, setLoad] = useState<Load<T>>({ status: 'loading' });
@@ -50,9 +55,14 @@ function useLoad<T>(path: string | null) {
 
 function Failed({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
-    <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive-border bg-destructive-soft px-4 py-3 text-base text-destructive-text">
+    <div
+      role="alert"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive-border bg-destructive-soft px-4 py-3 text-base text-destructive-text"
+    >
       <span>Could not load stock counts. {error}</span>
-      <Button variant="outline" onClick={onRetry}>Retry</Button>
+      <Button variant="outline" onClick={onRetry}>
+        Retry
+      </Button>
     </div>
   );
 }
@@ -61,7 +71,11 @@ function CountDocument({ id, onBack, onChanged }: { id: string; onBack: () => vo
   const { load, reload, set } = useLoad<CountDetail>(countPath(id));
   const focusHeading = () => requestAnimationFrame(() => document.getElementById('count-record-title')?.focus());
   const stale = (message: string) => {
-    toast({ variant: 'warning', title: 'This count changed', description: `${message} Showing the latest saved version.` });
+    toast({
+      variant: 'warning',
+      title: 'This count changed',
+      description: `${message} Showing the latest saved version.`,
+    });
     void reload();
   };
   return (
@@ -75,7 +89,7 @@ function CountDocument({ id, onBack, onChanged }: { id: string; onBack: () => vo
       {load.status === 'ready' &&
         (load.data.state === 'ASSIGNED' && load.data.can.count ? (
           <CountSheet
-            key={load.data.id}
+            key={`${load.data.id}:${load.data.version}`}
             detail={load.data}
             onStale={stale}
             onSigned={(signed) => {
@@ -107,12 +121,20 @@ function MyCounts({ summary, onOpen, onSettings }: { summary: ReconciliationSumm
     <div className="flex flex-col gap-4">
       {settings.enabled ? (
         <p className="text-base">
-          Cycle {formatDisplayDay(cycle.start)} to {formatDisplayDay(cycle.end)} · day {cycle.day} of {cycle.days} · <span className="tabular-nums">{forecast.covered} of {batchCount(forecast.batches)}</span> counted
+          Cycle {formatDisplayDay(cycle.start)} to {formatDisplayDay(cycle.end)} · day {cycle.day} of {cycle.days} ·{' '}
+          <span className="tabular-nums">
+            {forecast.covered} of {batchCount(forecast.batches)}
+          </span>{' '}
+          counted
         </p>
       ) : (
         <p className="text-base">
           Stock reconciliation is off, so no counts are assigned.{' '}
-          {onSettings && <button type="button" className="underline underline-offset-4" onClick={onSettings}>Turn it on in Settings</button>}
+          {onSettings && (
+            <button type="button" className="underline underline-offset-4" onClick={onSettings}>
+              Turn it on in Settings
+            </button>
+          )}
         </p>
       )}
       {mine.length ? (
@@ -125,11 +147,20 @@ function MyCounts({ summary, onOpen, onSettings }: { summary: ReconciliationSumm
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="flex flex-wrap items-center gap-2 font-semibold">
                     {count.reference}
-                    {count.day === summary.today && count.origin === 'CYCLE' && <Badge variant="info" className="px-1.5 py-0 text-xs">Due today</Badge>}
-                    {count.day < summary.today && <Badge variant="warning" className="px-1.5 py-0 text-xs">From {formatDisplayDay(count.day)}</Badge>}
+                    {count.day === summary.today && count.origin === 'CYCLE' && (
+                      <Badge variant="info" className="px-1.5 py-0 text-xs">
+                        Due today
+                      </Badge>
+                    )}
+                    {count.day < summary.today && (
+                      <Badge variant="warning" className="px-1.5 py-0 text-xs">
+                        From {formatDisplayDay(count.day)}
+                      </Badge>
+                    )}
                   </span>
                   <span className="text-sm tabular-nums">
-                    {itemCount(count.items)} · {count.counted} counted{left ? ` · ${left} left` : ' · ready to sign off'}
+                    {itemCount(count.items)} · {count.counted} counted
+                    {left ? ` · ${left} left` : ' · ready to sign off'}
                   </span>
                 </div>
                 <Button variant={index === 0 ? 'default' : 'outline'} onClick={() => onOpen(count.id)} aria-label={`${label}: ${count.reference}`}>
@@ -175,8 +206,7 @@ export function StockCounts({
   const documentId = searchParams.get('document');
   const requested = searchParams.get('tab') as Tab | null;
 
-  if (documentId)
-    return <CountDocument key={documentId} id={documentId} onBack={() => navigate({ document: '' })} onChanged={() => void reload()} />;
+  if (documentId) return <CountDocument key={documentId} id={documentId} onBack={() => navigate({ document: '' })} onChanged={() => void reload()} />;
   if (load.status === 'denied') return <RegisterDenied noun="stock counts" />;
   if (load.status === 'error') return <Failed error={load.error} onRetry={() => void reload()} />;
   if (load.status === 'loading') return <LoadingSkeleton variant="cards" label="Loading stock counts…" />;
@@ -184,29 +214,51 @@ export function StockCounts({
   const summary = load.data;
   const visible = TABS.filter((tab) => (tab !== 'approvals' || summary.canApprove) && (tab !== 'settings' || summary.canConfigure));
   const tab: Tab = requested && visible.includes(requested) ? requested : 'mine';
-  const switchTab = (next: string) => navigate({ tab: next === 'mine' ? '' : next, document: '', from: '', to: '', q: '', state: '', person: '', sort: '', dir: '', page: '' });
+  const switchTab = (next: string) =>
+    navigate({
+      tab: next === 'mine' ? '' : next,
+      document: '',
+      from: '',
+      to: '',
+      q: '',
+      state: '',
+      person: '',
+      sort: '',
+      dir: '',
+      page: '',
+    });
   const open = (id: string) => navigate({ document: id });
 
   return (
     <section aria-labelledby="stock-counts-title" className="flex min-w-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="stock-counts-title" className="text-2xl font-semibold">Stock counts</h2>
-        {summary.canCount && (
-          <Button variant="outline" className="h-10" onClick={(event) => setStarting(event.currentTarget)}>
-            <Plus aria-hidden="true" /> Count an item
-          </Button>
-        )}
-      </div>
+      <h2 id="stock-counts-title" className="sr-only">
+        Stock counts
+      </h2>
       <Tabs value={tab} onValueChange={switchTab}>
-        <TabsList aria-label="Stock count views" className="flex-nowrap overflow-x-auto">
-          {visible.map((value) => (
-            <TabsTrigger key={value} value={value} className="min-h-10 px-3 text-sm sm:px-4">
-              {TAB_LABELS[value]}
-              {value === 'mine' && summary.mine.length > 0 && <Badge variant="brand" className="ml-1.5 min-w-6 text-xs">{summary.mine.length}</Badge>}
-              {value === 'approvals' && !!summary.approvals?.count && <Badge variant="warning" className="ml-1.5 min-w-6 text-xs">{summary.approvals.count}</Badge>}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <TabsList aria-label="Stock count views" className="w-full flex-nowrap justify-start overflow-x-auto sm:w-fit">
+            {visible.map((value) => (
+              <TabsTrigger key={value} value={value} className="min-h-10 flex-none whitespace-nowrap px-2 text-sm [overflow-wrap:normal] sm:px-4">
+                {TAB_LABELS[value]}
+                {value === 'mine' && summary.mine.length > 0 && (
+                  <Badge variant="brand" className="ml-1.5 min-w-6 text-xs">
+                    {summary.mine.length}
+                  </Badge>
+                )}
+                {value === 'approvals' && !!summary.approvals?.count && (
+                  <Badge variant="warning" className="ml-1.5 min-w-6 text-xs">
+                    {summary.approvals.count}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {summary.canCount && (
+            <Button variant="outline" className="h-10" onClick={(event) => setStarting(event.currentTarget)}>
+              <Plus aria-hidden="true" /> Count an item
+            </Button>
+          )}
+        </div>
         <TabsContent value="mine" className="min-w-0 pt-2">
           <MyCounts summary={summary} onOpen={open} onSettings={summary.canConfigure ? () => switchTab('settings') : null} />
         </TabsContent>

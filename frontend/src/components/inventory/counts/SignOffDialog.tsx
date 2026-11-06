@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { requestKey } from '@/components/inventory/workspace-model';
 import { ActionDialog, DialogClose } from '@/components/inventory/purchase/ActionDialog';
-import { BatchLine, Difference } from './count-parts';
-import { countPath, countSummary, failureMessage, failureOf, summarySentence, type CountDetail, type CountLine } from './count-model';
+import { BatchLine, Difference, SummaryLine } from './count-parts';
+import { countPath, countSummary, failureMessage, failureOf, type CountDetail, type CountLine } from './count-model';
 
 /**
  * @cc [owner:nareshshah139,label:product] count-sign-off-dialog
@@ -81,7 +81,7 @@ export function SignOffDialog({
       anchor={anchor}
       width={460}
       title="Sign off this count"
-      description={summarySentence(figures)}
+      description={<SummaryLine figures={figures} />}
       saving={saving}
       initialFocus={noteRef}
       onClose={onClose}
@@ -89,7 +89,9 @@ export function SignOffDialog({
       footer={() => (
         <>
           <DialogClose asChild>
-            <Button type="button" variant="outline" disabled={saving}>Keep counting</Button>
+            <Button type="button" variant="outline" disabled={saving}>
+              Keep counting
+            </Button>
           </DialogClose>
           <Button type="submit" disabled={saving}>
             {saving ? 'Signing…' : needsNote ? 'Sign off and send for approval' : 'Sign off'}
@@ -103,7 +105,9 @@ export function SignOffDialog({
             <li key={line.id} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
               <span className="min-w-0">
                 <BatchLine line={line} />
-                <span className="block">System {line.systemStock} · counted {line.physicalStock}</span>
+                <span className="block">
+                  System {line.systemStock} · counted {line.physicalStock}
+                </span>
               </span>
               <Difference line={line} />
             </li>
@@ -129,7 +133,9 @@ export function SignOffDialog({
           className="text-base md:text-sm"
         />
         {error && (
-          <p id={`${noteId}-error`} role="alert" className="text-sm text-destructive-text">{error}</p>
+          <p id={`${noteId}-error`} role="alert" className="text-sm text-destructive-text">
+            {error}
+          </p>
         )}
       </div>
       <p className="text-sm">

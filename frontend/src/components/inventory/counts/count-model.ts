@@ -16,6 +16,12 @@ export const COUNT_STATE_LABELS: Record<CountState, string> = {
   CANCELLED: 'Cancelled',
 };
 
+export const COUNT_STATE_SHORT: Record<CountState, string> = {
+  ...COUNT_STATE_LABELS,
+  AWAITING_APPROVAL: 'Awaiting approval',
+  POSTED_NO_DIFF: 'No differences',
+};
+
 export const COUNT_STATE_BADGE: Record<CountState, 'neutral' | 'warning' | 'success' | 'danger' | 'info'> = {
   ASSIGNED: 'info',
   AWAITING_APPROVAL: 'warning',
@@ -200,7 +206,8 @@ export function forecastMessage(settings: Pick<ReconciliationSettings, 'cycleDay
   const neededPerDay = Math.ceil(batches / (settings.cycleDays * staff));
   const more = Math.ceil(batches / (settings.cycleDays * perDay)) - staff;
   const addPeople = more === 1 ? 'add a person' : `add ${more} people`;
-  const fix = neededPerDay <= ITEMS_PER_DAY_MAX ? `Raise items per day to ${neededPerDay} or ${addPeople}.` : `${addPeople[0].toUpperCase()}${addPeople.slice(1)} or lengthen the cycle.`;
+  const fix =
+    neededPerDay <= ITEMS_PER_DAY_MAX ? `Raise items per day to ${neededPerDay} or ${addPeople}.` : `${addPeople[0].toUpperCase()}${addPeople.slice(1)} or lengthen the cycle.`;
   return { short: true, message: `${lead} ${capacity} of ${batches} batches in stock. ${fix}` };
 }
 
