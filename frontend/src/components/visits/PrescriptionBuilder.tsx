@@ -1045,6 +1045,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     [patientId, visitId, doctorId, validItems.length, standalone, ensureVisitId]
   );
 
+  /**
+   * @cc [owner:nareshshah139,label:product] compact-print-vertical-spacing
+   * Space-optimized print MUST tighten the gaps between blocks, Rx rows and the
+   * signature so a typical prescription fits one page, without shrinking text.
+   * The normal layout MUST keep its original spacing.
+   */
+  const printBlockPadding = spaceOptimized ? 'py-0.5' : 'py-3';
+  const rxRowPadding = spaceOptimized ? '2px 0' : '6px 0';
   const patientName = useMemo(() => visitData?.patient?.name || patientData?.name || '—', [visitData, patientData]);
   const patientCodeDisplay = useMemo(() => visitData?.patient?.patientCode || patientData?.patientCode || '', [visitData, patientData]);
   const reviewDateDisplay = useMemo(() => {
@@ -5676,7 +5684,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   {/* Patient Info */}
                   {includeSections.patientInfo && (
                     spaceOptimized ? (
-                      <div className="py-2 text-sm flex flex-wrap gap-x-4 gap-y-1 items-baseline">
+                      <div className="py-1 text-sm flex flex-wrap gap-x-4 gap-y-1 items-baseline">
                         <span className="text-gray-800">{todayStr}</span>
                         <span className="font-semibold">{patientName}</span>
                         {patientAgeSex ? <span className="text-gray-700">{patientAgeSex}</span> : null}
@@ -5723,10 +5731,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       entries.push({ label: 'PR', value: <>{vitalsPulse} bpm</> });
                     }
                     return (
-                      <div className="py-3">
-                        <div className="font-semibold mb-1">Vitals</div>
+                      <div className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2' : ''}`}>
+                        <div className={`font-semibold ${spaceOptimized ? 'shrink-0 text-sm' : 'mb-1'}`}>Vitals{spaceOptimized ? ':' : ''}</div>
                         {spaceOptimized ? (
-                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                          <div className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
                             {entries.map((e, idx) => (
                               <span key={`vitals-${idx}`} className="text-gray-800"><span className="text-gray-600 mr-1">{e.label}:</span>{e.value}</span>
                             ))}
@@ -5745,7 +5753,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Diagnosis */}
                 {includeSections.diagnosis && (
-                  <div className="py-3 text-sm">
+                  <div className={`${printBlockPadding} text-sm`}>
                     <div className={`flex flex-wrap gap-2 items-start ${spaceOptimized ? '' : 'mb-1'}`}>
                       <span className="font-semibold">Diagnosis:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{(diagnosis?.trim() || '').length > 0 ? tt('diagnosis', diagnosis) : '—'}</span>
@@ -5755,7 +5763,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Chief Complaints */}
                 {(chiefComplaints?.trim()?.length > 0) && (
-                  <div className={`py-3 ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                  <div className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
                     <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Chief Complaints{spaceOptimized ? ':' : ''}</div>
                     <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('chiefComplaints', chiefComplaints)}</div>
                   </div>
@@ -5763,7 +5771,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Histories */}
                 {!!(pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length) && (
-                  <div className="py-3 text-sm">
+                  <div className={`${printBlockPadding} text-sm`}>
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">History:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{historyLine || '—'}</span>
@@ -5773,7 +5781,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Personal history */}
                 {!!personalHistory?.trim() && (
-                  <div className="py-3 text-sm" data-personal-history>
+                  <div className={`${printBlockPadding} text-sm`} data-personal-history>
                     <div className={spaceOptimized ? 'flex flex-wrap gap-2 items-start' : ''}>
                       <div className={`font-semibold ${spaceOptimized ? '' : 'mb-1'}`}>Personal history{spaceOptimized ? ':' : ''}</div>
                       <div className={spaceOptimized ? 'flex-1 min-w-[200px] whitespace-pre-wrap' : 'whitespace-pre-wrap'}>{tt('personalHistory', personalHistory)}</div>
@@ -5783,7 +5791,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Family History */}
                 {(familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || !!familyHistoryOthers?.trim()?.length) && (
-                  <div className="py-3 text-sm">
+                  <div className={`${printBlockPadding} text-sm`}>
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">Family History:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{familyHistoryLine || '—'}</span>
@@ -5793,12 +5801,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Medications */}
                 {includeSections.medications && (
-                  <div className={`py-3 ${breakBeforeMedications ? 'pb-before-page' : ''}`}>
-                    <div className="font-semibold mb-2">Rx</div>
+                  <div className={`${printBlockPadding} ${breakBeforeMedications ? 'pb-before-page' : ''}`}>
+                    <div className={`font-semibold ${spaceOptimized ? 'mb-0.5' : 'mb-2'}`}>Rx</div>
                     {validItems.length > 0 ? (
                       rxPrintFormat === 'TABLE' ? (
                         <div className="text-sm" style={{ width: '100%' }}>
-                          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #d1d5db', background: '#f9fafb', fontWeight: 500, padding: '6px 0' }}>
+                          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #d1d5db', background: '#f9fafb', fontWeight: 500, padding: rxRowPadding }}>
                             <div style={{ flex: '2 1 0%', padding: '0 12px' }}>Medicine</div>
                             <div style={{ flex: '1 1 0%', padding: '0 12px' }}>Frequency</div>
                             <div style={{ flex: '1 1 0%', padding: '0 12px' }}>When</div>
@@ -5806,7 +5814,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             <div style={{ flex: '1.5 1 0%', padding: '0 12px' }}>Instructions</div>
                           </div>
                           {validItems.map((it: any, idx: number) => (
-                            <div key={`rx-row-${idx}`} className="rx-row" style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', padding: '6px 0' }}>
+                            <div key={`rx-row-${idx}`} className="rx-row" style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', padding: rxRowPadding }}>
                               <div style={{ flex: '2 1 0%', padding: '0 12px' }}>{it.drugName}</div>
                               <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</div>
                               <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{it.timing || '—'}</div>
@@ -5838,7 +5846,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Investigations */}
                 {(Array.isArray(investigations) && investigations.length > 0) && (
-                  <div className={`py-3 ${breakBeforeInvestigations ? 'pb-before-page' : ''}`}>
+                  <div className={`${printBlockPadding} ${breakBeforeInvestigations ? 'pb-before-page' : ''}`}>
                     <div className="text-sm flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">Investigations:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{investigations.map((inv, i) => tt(`investigations.${i}`, inv)).join(', ')}</span>
@@ -5848,15 +5856,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Counseling / Advice */}
                 {(counselingText?.trim()?.length) ? (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">Counseling</div>
-                    <div className="text-sm whitespace-pre-wrap">{tt('counseling', counselingText)}</div>
+                  <div className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Counseling{spaceOptimized ? ':' : ''}</div>
+                    <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('counseling', counselingText)}</div>
                   </div>
                 ) : null}
 
                 {/* Procedures */}
                 {(procedures?.trim()?.length > 0) && (
-                  <div className="py-3 text-sm">
+                  <div className={`${printBlockPadding} text-sm`}>
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">Procedures:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{tt('procedures', procedures)}</span>
@@ -5866,7 +5874,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Procedure Planned */}
         {(procedurePlanned?.trim()?.length > 0) && (
-                  <div className="py-3 text-sm">
+                  <div className={`${printBlockPadding} text-sm`}>
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">Procedure Planned:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{tt('procedurePlanned', procedurePlanned)}</span>
@@ -5877,16 +5885,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {/* Custom Sections */}
                 {customSections.length > 0 && customSections.map((s, i) => (
                   (s.title?.trim() || s.content?.trim()) ? (
-                    <div key={`cs-${s.id}`} className="py-3">
-                      <div className="font-semibold mb-1">{tt(`custom.${i}.title`, s.title)}</div>
-                      <div className="text-sm whitespace-pre-wrap">{tt(`custom.${i}.content`, s.content)}</div>
+                    <div key={`cs-${s.id}`} className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                      {!spaceOptimized || s.title?.trim() ? <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>{tt(`custom.${i}.title`, s.title)}{spaceOptimized ? ':' : ''}</div> : null}
+                      <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt(`custom.${i}.content`, s.content)}</div>
                     </div>
                   ) : null
                 ))}
 
                 {/* Review Date */}
                 {reviewDateDisplay ? (
-                  <div className={`py-3 ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                  <div className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
                     <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Review Date{spaceOptimized ? ':' : ''}</div>
                     <div className={`text-sm ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{reviewDateDisplay}</div>
                   </div>
@@ -5894,7 +5902,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Follow-up Instructions */}
                 {(followUpInstructions?.trim()?.length) ? (
-                  <div className={`py-3 ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''} ${breakBeforeFollowUp ? 'pb-before-page' : ''}`}>
+                  <div className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''} ${breakBeforeFollowUp ? 'pb-before-page' : ''}`}>
                     <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>{spaceOptimized ? 'Follow-up:' : 'Follow-up Instructions'}</div>
                     <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('followUpInstructions', followUpInstructions)}</div>
                   </div>
@@ -5905,7 +5913,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {isTeleVideo && <p data-tele-video-disclaimer className="mt-4 border-t pt-3 text-sm text-gray-700">{TELE_VIDEO_DISCLAIMER}</p>}
                 {/* Signature */}
                 {includeSections.doctorSignature && (
-                  <div className="doctor-signature-block pt-6 mt-4 border-t" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                  <div className={`doctor-signature-block border-t ${spaceOptimized ? 'pt-2 mt-2' : 'pt-6 mt-4'}`} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                     <div className="flex justify-end text-sm">
                       <div className="text-right">
                         {printedSignatureUrl ? (

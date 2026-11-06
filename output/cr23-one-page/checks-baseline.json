@@ -1,0 +1,146 @@
+{
+  "normal": {
+    "pages": 2,
+    "height": 808,
+    "fields": {
+      "Diagnosis": {
+        "labelTop": 384.421875,
+        "labelRight": 271.3125,
+        "valueTop": 384.421875,
+        "valueLeft": 279.3125,
+        "fontSize": "14px"
+      },
+      "Chief Complaints": {
+        "labelTop": 432.421875,
+        "labelRight": 909.859375,
+        "valueTop": 457.421875,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "History": {
+        "labelTop": 501.421875,
+        "labelRight": 255.59375,
+        "valueTop": 501.421875,
+        "valueLeft": 263.59375,
+        "fontSize": "14px"
+      },
+      "Personal history": {
+        "labelTop": 545.421875,
+        "labelRight": 909.859375,
+        "valueTop": 569.421875,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "Investigations": {
+        "labelTop": 1056.421875,
+        "labelRight": 299.546875,
+        "valueTop": 1056.421875,
+        "valueLeft": 307.546875,
+        "fontSize": "14px"
+      }
+    }
+  },
+  "optimized": {
+    "pages": 2,
+    "height": 831,
+    "fields": {
+      "Diagnosis": {
+        "labelTop": 328.421875,
+        "labelRight": 271.3125,
+        "valueTop": 328.421875,
+        "valueLeft": 279.3125,
+        "fontSize": "14px"
+      },
+      "Chief Complaints": {
+        "labelTop": 372.421875,
+        "labelRight": 317.359375,
+        "valueTop": 372.421875,
+        "valueLeft": 325.359375,
+        "fontSize": "14px"
+      },
+      "History": {
+        "labelTop": 416.421875,
+        "labelRight": 255.59375,
+        "valueTop": 416.421875,
+        "valueLeft": 263.59375,
+        "fontSize": "14px"
+      },
+      "Personal history": {
+        "labelTop": 460.421875,
+        "labelRight": 313.40625,
+        "valueTop": 460.421875,
+        "valueLeft": 321.40625,
+        "fontSize": "14px"
+      },
+      "Investigations": {
+        "labelTop": 947.421875,
+        "labelRight": 299.546875,
+        "valueTop": 947.421875,
+        "valueLeft": 307.546875,
+        "fontSize": "14px"
+      },
+      "Procedures": {
+        "labelTop": 991.421875,
+        "labelRight": 280.96875,
+        "valueTop": 991.421875,
+        "valueLeft": 288.96875,
+        "fontSize": "14px"
+      },
+      "Procedure Planned": {
+        "labelTop": 1035.421875,
+        "labelRight": 329.90625,
+        "valueTop": 1035.421875,
+        "valueLeft": 337.90625,
+        "fontSize": "14px"
+      },
+      "Review Date": {
+        "labelTop": 1079.421875,
+        "labelRight": 287.46875,
+        "valueTop": 1079.421875,
+        "valueLeft": 295.46875,
+        "fontSize": "14px"
+      }
+    }
+  },
+  "restored": {
+    "pages": 2,
+    "height": 808,
+    "fields": {
+      "Diagnosis": {
+        "labelTop": -849.578125,
+        "labelRight": 271.3125,
+        "valueTop": -849.578125,
+        "valueLeft": 279.3125,
+        "fontSize": "14px"
+      },
+      "Chief Complaints": {
+        "labelTop": -801.578125,
+        "labelRight": 909.859375,
+        "valueTop": -776.578125,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "History": {
+        "labelTop": -732.578125,
+        "labelRight": 255.59375,
+        "valueTop": -732.578125,
+        "valueLeft": 263.59375,
+        "fontSize": "14px"
+      },
+      "Personal history": {
+        "labelTop": -688.578125,
+        "labelRight": 909.859375,
+        "valueTop": -664.578125,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "Investigations": {
+        "labelTop": -177.578125,
+        "labelRight": 299.546875,
+        "valueTop": -177.578125,
+        "valueLeft": 307.546875,
+        "fontSize": "14px"
+      }
+    }
+  }
+}

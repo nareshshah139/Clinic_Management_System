@@ -117,6 +117,7 @@ async function main() {
         await page.waitForFunction(value => document.querySelector('input[type="date"]')?.value === value, {}, scenario.reviewDate);
         await clickText(page, 'Print Preview');
         await page.waitForSelector('#pagedjs-container .pagedjs_page', { timeout: 30000 });
+        await new Promise(resolve => setTimeout(resolve, 4000));
         const normal = await measureFields(page, false);
         if (scenario.name !== 'empty') {
           for (const field of normal) assert(field && field.valueTop > field.labelTop, `Normal heading should be above its value: ${JSON.stringify(field)}`);
