@@ -1361,7 +1361,10 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(batchInputs[19]).toHaveAccessibleName('Batch');
     expect(batchInputs[19]).toHaveValue('BATCH-20');
     fireEvent.change(batchInputs[19], { target: { value: 'CORRECTED-20' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    // A role query over twenty review rows costs seconds in JSDOM; find the button by its label.
+    const saveDraft = screen.getByText('Save draft').closest('button')!;
+    expect(saveDraft).toHaveAccessibleName('Save draft');
+    fireEvent.click(saveDraft);
     await waitFor(() => expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalled());
     const saved = api.createPharmacyPurchaseInvoiceDraft.mock.calls[0][0] as { items: typeof items; netPayable: number };
     expect(saved.items).toHaveLength(20);
