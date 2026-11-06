@@ -67,6 +67,20 @@ async function toggleOptimized(page, enabled) {
     const content = document.querySelector('#pagedjs-container #prescription-print-content');
     return content && !!content.querySelector(':scope > .text-gray-700') === !enabled;
   }, {}, enabled);
+  await settle(page);
+}
+
+async function settle(page) {
+  let previous = '';
+  for (let stable = 0; stable < 3;) {
+    await new Promise(resolve => setTimeout(resolve, 700));
+    const snapshot = await page.evaluate(() => {
+      const root = document.querySelector('#pagedjs-container');
+      return root ? `${root.querySelectorAll('.pagedjs_page').length}:${root.textContent.length}` : '';
+    });
+    stable = snapshot && snapshot === previous && !snapshot.startsWith('0:') ? stable + 1 : 0;
+    previous = snapshot;
+  }
 }
 
 /**
@@ -117,7 +131,7 @@ async function main() {
         await page.waitForFunction(value => document.querySelector('input[type="date"]')?.value === value, {}, scenario.reviewDate);
         await clickText(page, 'Print Preview');
         await page.waitForSelector('#pagedjs-container .pagedjs_page', { timeout: 30000 });
-        await new Promise(resolve => setTimeout(resolve, 4000));
+        await settle(page);
         const normal = await measureFields(page, false);
         if (scenario.name !== 'empty') {
           for (const field of normal) assert(field && field.valueTop > field.labelTop, `Normal heading should be above its value: ${JSON.stringify(field)}`);

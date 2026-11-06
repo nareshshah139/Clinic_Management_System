@@ -5886,7 +5886,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {customSections.length > 0 && customSections.map((s, i) => (
                   (s.title?.trim() || s.content?.trim()) ? (
                     <div key={`cs-${s.id}`} className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
-                      {!spaceOptimized || s.title?.trim() ? <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>{tt(`custom.${i}.title`, s.title)}{spaceOptimized ? ':' : ''}</div> : null}
+                      {!spaceOptimized || s.title?.trim() ? <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>{tt(`custom.${i}.title`, s.title)}{spaceOptimized && s.content?.trim() ? ':' : ''}</div> : null}
                       <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt(`custom.${i}.content`, s.content)}</div>
                     </div>
                   ) : null

@@ -1,144 +1,255 @@
 {
   "normal": {
     "pages": 2,
-    "height": 808,
+    "height": 1673,
+    "rxRows": 9,
+    "signatureOnLastPage": true,
     "fields": {
-      "Diagnosis": {
+      "Vitals": {
         "labelTop": 384.421875,
+        "labelRight": 909.859375,
+        "valueTop": 409.421875,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "Diagnosis": {
+        "labelTop": 481.421875,
         "labelRight": 271.3125,
-        "valueTop": 384.421875,
+        "valueTop": 481.421875,
         "valueLeft": 279.3125,
         "fontSize": "14px"
       },
       "Chief Complaints": {
-        "labelTop": 432.421875,
+        "labelTop": 529.421875,
         "labelRight": 909.859375,
-        "valueTop": 457.421875,
+        "valueTop": 554.421875,
         "valueLeft": 206.125,
         "fontSize": "14px"
       },
       "History": {
-        "labelTop": 501.421875,
+        "labelTop": 598.421875,
         "labelRight": 255.59375,
-        "valueTop": 501.421875,
+        "valueTop": 598.421875,
         "valueLeft": 263.59375,
         "fontSize": "14px"
       },
       "Personal history": {
-        "labelTop": 545.421875,
+        "labelTop": 642.421875,
         "labelRight": 909.859375,
-        "valueTop": 569.421875,
+        "valueTop": 666.421875,
         "valueLeft": 206.125,
         "fontSize": "14px"
       },
       "Investigations": {
-        "labelTop": 1056.421875,
+        "labelTop": 1499.9375,
         "labelRight": 299.546875,
-        "valueTop": 1056.421875,
+        "valueTop": 1499.9375,
         "valueLeft": 307.546875,
+        "fontSize": "14px"
+      },
+      "Procedures": {
+        "labelTop": 1543.9375,
+        "labelRight": 280.96875,
+        "valueTop": 1543.9375,
+        "valueLeft": 288.96875,
+        "fontSize": "14px"
+      },
+      "Procedure Planned": {
+        "labelTop": 1587.9375,
+        "labelRight": 329.90625,
+        "valueTop": 1587.9375,
+        "valueLeft": 337.90625,
+        "fontSize": "14px"
+      },
+      "Allergies": {
+        "labelTop": 1631.9375,
+        "labelRight": 909.859375,
+        "valueTop": 1656.9375,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "Review Date": {
+        "labelTop": 1700.9375,
+        "labelRight": 909.859375,
+        "valueTop": 1725.9375,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "Follow-up Instructions": {
+        "labelTop": 1769.9375,
+        "labelRight": 909.859375,
+        "valueTop": 1794.9375,
+        "valueLeft": 206.125,
         "fontSize": "14px"
       }
     }
   },
   "optimized": {
     "pages": 2,
-    "height": 831,
+    "height": 1673,
+    "rxRows": 9,
+    "signatureOnLastPage": true,
     "fields": {
-      "Diagnosis": {
+      "Vitals": {
         "labelTop": 328.421875,
+        "labelRight": 909.859375,
+        "valueTop": 353.421875,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "Diagnosis": {
+        "labelTop": 397.421875,
         "labelRight": 271.3125,
-        "valueTop": 328.421875,
+        "valueTop": 397.421875,
         "valueLeft": 279.3125,
         "fontSize": "14px"
       },
       "Chief Complaints": {
-        "labelTop": 372.421875,
+        "labelTop": 441.421875,
         "labelRight": 317.359375,
-        "valueTop": 372.421875,
+        "valueTop": 441.421875,
         "valueLeft": 325.359375,
         "fontSize": "14px"
       },
       "History": {
-        "labelTop": 416.421875,
+        "labelTop": 485.421875,
         "labelRight": 255.59375,
-        "valueTop": 416.421875,
+        "valueTop": 485.421875,
         "valueLeft": 263.59375,
         "fontSize": "14px"
       },
       "Personal history": {
-        "labelTop": 460.421875,
+        "labelTop": 529.421875,
         "labelRight": 313.40625,
-        "valueTop": 460.421875,
+        "valueTop": 529.421875,
         "valueLeft": 321.40625,
         "fontSize": "14px"
       },
       "Investigations": {
-        "labelTop": 947.421875,
+        "labelTop": 1016.421875,
         "labelRight": 299.546875,
-        "valueTop": 947.421875,
+        "valueTop": 1016.421875,
         "valueLeft": 307.546875,
         "fontSize": "14px"
       },
       "Procedures": {
-        "labelTop": 991.421875,
+        "labelTop": 1060.421875,
         "labelRight": 280.96875,
-        "valueTop": 991.421875,
+        "valueTop": 1060.421875,
         "valueLeft": 288.96875,
         "fontSize": "14px"
       },
       "Procedure Planned": {
-        "labelTop": 1035.421875,
+        "labelTop": 1434.9375,
         "labelRight": 329.90625,
-        "valueTop": 1035.421875,
+        "valueTop": 1434.9375,
         "valueLeft": 337.90625,
         "fontSize": "14px"
       },
+      "Allergies": {
+        "labelTop": 1478.9375,
+        "labelRight": 909.859375,
+        "valueTop": 1503.9375,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
       "Review Date": {
-        "labelTop": 1079.421875,
+        "labelTop": 1547.9375,
         "labelRight": 287.46875,
-        "valueTop": 1079.421875,
+        "valueTop": 1547.9375,
         "valueLeft": 295.46875,
+        "fontSize": "14px"
+      },
+      "Follow-up": {
+        "labelTop": 1591.9375,
+        "labelRight": 272.84375,
+        "valueTop": 1591.9375,
+        "valueLeft": 280.84375,
         "fontSize": "14px"
       }
     }
   },
   "restored": {
     "pages": 2,
-    "height": 808,
+    "height": 1673,
+    "rxRows": 9,
+    "signatureOnLastPage": true,
     "fields": {
-      "Diagnosis": {
+      "Vitals": {
         "labelTop": -849.578125,
+        "labelRight": 909.859375,
+        "valueTop": -824.578125,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "Diagnosis": {
+        "labelTop": -752.578125,
         "labelRight": 271.3125,
-        "valueTop": -849.578125,
+        "valueTop": -752.578125,
         "valueLeft": 279.3125,
         "fontSize": "14px"
       },
       "Chief Complaints": {
-        "labelTop": -801.578125,
+        "labelTop": -704.578125,
         "labelRight": 909.859375,
-        "valueTop": -776.578125,
+        "valueTop": -679.578125,
         "valueLeft": 206.125,
         "fontSize": "14px"
       },
       "History": {
-        "labelTop": -732.578125,
+        "labelTop": -635.578125,
         "labelRight": 255.59375,
-        "valueTop": -732.578125,
+        "valueTop": -635.578125,
         "valueLeft": 263.59375,
         "fontSize": "14px"
       },
       "Personal history": {
-        "labelTop": -688.578125,
+        "labelTop": -591.578125,
         "labelRight": 909.859375,
-        "valueTop": -664.578125,
+        "valueTop": -567.578125,
         "valueLeft": 206.125,
         "fontSize": "14px"
       },
       "Investigations": {
-        "labelTop": -177.578125,
+        "labelTop": 265.9375,
         "labelRight": 299.546875,
-        "valueTop": -177.578125,
+        "valueTop": 265.9375,
         "valueLeft": 307.546875,
+        "fontSize": "14px"
+      },
+      "Procedures": {
+        "labelTop": 309.9375,
+        "labelRight": 280.96875,
+        "valueTop": 309.9375,
+        "valueLeft": 288.96875,
+        "fontSize": "14px"
+      },
+      "Procedure Planned": {
+        "labelTop": 353.9375,
+        "labelRight": 329.90625,
+        "valueTop": 353.9375,
+        "valueLeft": 337.90625,
+        "fontSize": "14px"
+      },
+      "Allergies": {
+        "labelTop": 397.9375,
+        "labelRight": 909.859375,
+        "valueTop": 422.9375,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "Review Date": {
+        "labelTop": 466.9375,
+        "labelRight": 909.859375,
+        "valueTop": 491.9375,
+        "valueLeft": 206.125,
+        "fontSize": "14px"
+      },
+      "Follow-up Instructions": {
+        "labelTop": 535.9375,
+        "labelRight": 909.859375,
+        "valueTop": 560.9375,
+        "valueLeft": 206.125,
         "fontSize": "14px"
       }
     }

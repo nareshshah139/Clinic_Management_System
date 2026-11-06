@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
 
-const output = path.resolve(__dirname, '../../output/cr23-one-page');
+const output = path.resolve(process.env.CR23_OUTPUT || path.join(require('node:os').tmpdir(), 'cr23-one-page'));
 const baseUrl = process.env.CR23_BASE_URL || 'http://localhost:3000';
 const patient = { id: '00000000-0000-4000-8000-000000000011', name: 'SYNTHETIC CR23 PATIENT', gender: 'MALE', age: 29, branchId: 'synthetic' };
 const doctor = { id: '00000000-0000-4000-8000-000000000012', firstName: 'Test', lastName: 'Doctor', role: 'DOCTOR', branchId: 'synthetic', isActive: true };
@@ -32,7 +32,9 @@ const draft = {
   procedures: 'Scalp scraping for KOH',
   procedurePlanned: 'Narrow band UVB phototherapy',
   followUpInstructions: 'Post care — 7 days',
+  customSections: [{ id: 'cs-1', title: 'Allergies', content: 'Sulfa drugs' }],
 };
+const inlineLabels = ['Vitals', 'Diagnosis', 'Chief Complaints', 'History', 'Personal history', 'Investigations', 'Procedures', 'Procedure Planned', 'Allergies', 'Review Date', 'Follow-up'];
 
 async function setOptimized(page, enabled) {
   const box = page.locator('label', { hasText: 'Space-optimized layout' }).locator('input');
@@ -41,17 +43,32 @@ async function setOptimized(page, enabled) {
   await page.waitForFunction(enabled => {
     const content = document.querySelector('#pagedjs-container #prescription-print-content');
     return content && !!content.querySelector(':scope > .text-gray-700') === !enabled;
-  }, enabled);
-  await page.waitForTimeout(1500);
+  }, enabled, { timeout: 60000 });
+  await settle(page);
+}
+
+async function settle(page) {
+  let previous = '';
+  for (let stable = 0; stable < 3;) {
+    await page.waitForTimeout(700);
+    const snapshot = await page.evaluate(() => {
+      const root = document.querySelector('#pagedjs-container');
+      const pages = root ? root.querySelectorAll('.pagedjs_page').length : 0;
+      const height = root ? [...root.querySelectorAll('.pagedjs_page_content')].flatMap(el => [...el.children]).reduce((sum, el) => sum + el.getBoundingClientRect().height, 0) : 0;
+      return `${pages}:${Math.round(height)}`;
+    });
+    stable = snapshot === previous && !snapshot.startsWith('0:') ? stable + 1 : 0;
+    previous = snapshot;
+  }
 }
 
 function measure(page) {
   return page.evaluate(() => {
     const root = document.querySelector('#pagedjs-container');
     const pages = root.querySelectorAll('.pagedjs_page').length;
-    const labels = ['Chief Complaints', 'History', 'Personal history', 'Diagnosis', 'Investigations', 'Procedures', 'Procedure Planned', 'Review Date', 'Follow-up', 'Follow-up Instructions'];
+    const labels = ['Vitals', 'Chief Complaints', 'History', 'Personal history', 'Diagnosis', 'Investigations', 'Procedures', 'Procedure Planned', 'Allergies', 'Review Date', 'Follow-up', 'Follow-up Instructions'];
     const fields = {};
-    for (const el of root.querySelectorAll('#prescription-print-content span, #prescription-print-content div')) {
+    for (const el of root.querySelectorAll('.pagedjs_page_content span, .pagedjs_page_content div')) {
       if (el.children.length) continue;
       const name = el.textContent.trim().replace(/:$/, '');
       if (!labels.includes(name) || fields[name]) continue;
@@ -61,9 +78,12 @@ function measure(page) {
       const v = value.getBoundingClientRect();
       fields[name] = { labelTop: l.top, labelRight: l.right, valueTop: v.top, valueLeft: v.left, fontSize: getComputedStyle(value).fontSize };
     }
-    const content = [...root.querySelectorAll('#prescription-print-content')];
+    const content = [...root.querySelectorAll('.pagedjs_page_content')].flatMap(el => [...el.children]);
     const height = content.reduce((sum, el) => sum + el.getBoundingClientRect().height, 0);
-    return { pages, height: Math.round(height), fields };
+    const rxRows = root.querySelectorAll('.rx-row').length;
+    const lastPage = [...root.querySelectorAll('.pagedjs_page')].pop();
+    const signatureOnLastPage = !!lastPage?.querySelector('.doctor-signature-block');
+    return { pages, height: Math.round(height), rxRows, signatureOnLastPage, fields };
   });
 }
 
@@ -73,7 +93,7 @@ async function main() {
   const page = await browser.newPage({ viewport: { width: 1500, height: 1100 } });
   await page.addInitScript(({ key, draft }) => { localStorage.clear(); localStorage.setItem(key, JSON.stringify(draft)); }, { key: `rxDraft:${patient.id}:${visitId}`, draft });
   await page.context().addCookies([{ name: 'auth_token', value: 'synthetic-browser-fixture', url: baseUrl }]);
-  const visit = { id: visitId, patientId: patient.id, doctorId: doctor.id, patient, doctor, complaints: [{ complaint: draft.chiefComplaints }], history: {}, exam: {}, plan: { followUpDate: reviewDate, followUpInstructions: draft.followUpInstructions }, diagnosis: [], createdAt: '2026-10-25T09:00:00Z' };
+  const visit = { id: visitId, patientId: patient.id, doctorId: doctor.id, patient, doctor, complaints: [{ complaint: draft.chiefComplaints }], history: {}, exam: {}, vitals: { height: 172, weight: 70, systolicBP: 118, diastolicBP: 76, heartRate: 72 }, plan: { followUpDate: reviewDate, followUpInstructions: draft.followUpInstructions }, diagnosis: [], createdAt: '2026-10-25T09:00:00Z' };
   await page.route('**/api/**', route => {
     const route_ = new URL(route.request().url()).pathname.slice(4);
     let body = [];
@@ -95,11 +115,11 @@ async function main() {
   try {
     await page.goto(`${baseUrl}/dashboard/visits?visitId=${visitId}`, { waitUntil: 'networkidle', timeout: 120000 });
     await page.getByRole('tab', { name: /^\s*Prescription\b/ }).first().click({ timeout: 60000 });
-    await page.waitForFunction(n => document.querySelectorAll('input[value]').length && [...document.querySelectorAll('input')].filter(i => i.value.startsWith('Tab. ') || i.value.startsWith('Cap. ') || i.value.endsWith('cream')).length >= n, 5, { timeout: 60000 }).catch(() => {});
+    await page.waitForFunction(names => names.every(name => [...document.querySelectorAll('input')].some(input => input.value === name)), draft.items.map(item => item.drugName), { timeout: 60000 });
     await page.getByRole('button', { name: 'Print Preview', exact: true }).click();
     await page.waitForSelector('#pagedjs-container .pagedjs_page', { timeout: 60000 });
     await setOptimized(page, false);
-    await page.waitForTimeout(1500);
+    await settle(page);
     const normal = await measure(page);
     await page.screenshot({ path: path.join(output, 'normal.png') });
     await setOptimized(page, true);
@@ -112,19 +132,25 @@ async function main() {
 
     const result = { normal, optimized, restored };
     fs.writeFileSync(path.join(output, process.env.CR23_LABEL ? `checks-${process.env.CR23_LABEL}.json` : 'checks.json'), JSON.stringify(result, null, 2));
-    console.log(JSON.stringify({ normalPages: normal.pages, optimizedPages: optimized.pages, normalHeight: normal.height, optimizedHeight: optimized.height, fields: Object.keys(optimized.fields) }));
+    console.log(JSON.stringify({ rxRows: optimized.rxRows, normalPages: normal.pages, optimizedPages: optimized.pages, normalHeight: normal.height, optimizedHeight: optimized.height, fields: Object.keys(optimized.fields) }));
 
+    for (const [name, state] of Object.entries({ normal, optimized, restored })) {
+      assert.equal(state.rxRows, draft.items.length, `${name}: every medicine must render`);
+      assert(state.signatureOnLastPage, `${name}: the signature must render on the last page`);
+      assert(state.fields.Diagnosis, `${name}: the prescription body must render`);
+    }
     if (process.env.CR23_BASELINE) return;
     assert.equal(optimized.pages, 1, 'Space-optimised prescription with 9 medicines and 10 investigations must fit on one page');
-    for (const name of ['Chief Complaints', 'History', 'Personal history', 'Diagnosis', 'Investigations', 'Procedures', 'Procedure Planned', 'Review Date', 'Follow-up']) {
+    for (const name of inlineLabels) {
       const f = optimized.fields[name];
       assert(f, `${name} must print in the optimised layout`);
       assert(Math.abs(f.labelTop - f.valueTop) < 3, `${name} heading and value must share a line`);
       assert(f.valueLeft > f.labelRight, `${name} value must follow its heading`);
     }
-    for (const [name, f] of Object.entries(optimized.fields)) {
+    for (const name of inlineLabels) {
       const n = normal.fields[name] || normal.fields[`${name} Instructions`];
-      if (n) assert.equal(f.fontSize, n.fontSize, `${name} text size must not shrink`);
+      assert(n, `${name} must print in the normal layout`);
+      assert.equal(optimized.fields[name].fontSize, n.fontSize, `${name} text size must not shrink`);
     }
     assert.equal(restored.height, normal.height, 'Unticking must restore the normal spacing');
     assert.equal(restored.pages, normal.pages, 'Unticking must restore the normal page count');
