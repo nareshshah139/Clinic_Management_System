@@ -1,37 +1,17 @@
 import { Prisma } from '@prisma/client';
 import { PrescriptionQueueStatus } from './dto/pharmacy-prescription-queue.dto';
-
-export const queueFrequencyPerDay: Record<string, number> = {
-  once_daily: 1,
-  od: 1,
-  daily: 1,
-  twice_daily: 2,
-  bid: 2,
-  bd: 2,
-  three_times_daily: 3,
-  tid: 3,
-  tds: 3,
-  four_times_daily: 4,
-  qid: 4,
-  qds: 4,
-  every_12_hours: 2,
-  every_8_hours: 3,
-  every_6_hours: 4,
-  every_4_hours: 6,
-  weekly: 1 / 7,
-  monthly: 1 / 30,
-};
-
-export const queueDurationDays: Record<string, number> = {
-  day: 1,
-  days: 1,
-  week: 7,
-  weeks: 7,
-  month: 30,
-  months: 30,
-  year: 365,
-  years: 365,
-};
+import {
+  measuredDosageUnits,
+  measuredNameWords,
+  measuredPackUnits,
+  measuredSellingUnits,
+  packSellingUnits,
+  doseTolerance,
+  quantityScale,
+  queueDurationDays,
+  queueFrequencyPerDay,
+  queueInstructionSchedules,
+} from './pharmacy-billing-quantity';
 
 export type PrescriptionQueueLifecycle = {
   id: string;
@@ -72,6 +52,25 @@ const numericLookup = (
     ' ',
   )} END`;
 
+const textArray = (values: string[]) => Prisma.sql`ARRAY[${Prisma.join(values)}]::text[]`;
+const words = (value: Prisma.Sql) => Prisma.sql`string_to_array(${value}, '_')`;
+const float = (value: number) => Prisma.raw(`${value}::double precision`);
+const snapped = (value: Prisma.Sql) =>
+  Prisma.sql`floor((${value}) * ${float(quantityScale)} + ${float(0.5)}) / ${float(quantityScale)}`;
+
+const medicationNameSql = () => normalized(
+  Prisma.sql`coalesce(nullif(item->>'drugName', ''), nullif(item->>'brandName', ''), nullif(item->>'genericName', ''), 'Unknown drug')`,
+);
+
+const instructionLookup = (key: Prisma.Sql) => Prisma.sql`
+  CASE ${Prisma.join(
+    queueInstructionSchedules.map(
+      ({ pattern, perDay }) =>
+        Prisma.sql`WHEN ${key} ~ ${pattern} THEN ${perDay}::double precision`,
+    ),
+    ' ',
+  )} END`;
+
 /**
  * @cc [owner:nareshshah139,label:product] queue-live-status-selection
  * Status filtering and total MUST use all branch prescriptions, posted invoice coverage,
@@ -86,7 +85,9 @@ const numericLookup = (
 /**
  * @cc [owner:nareshshah139,label:product] queue-coverage-no-double-credit
  * Posted invoice units MUST be allocated once in prescription order, with invoice items ordered
- * by ID. Filtering MUST agree with detail coverage when multiple lines match the same product.
+ * by ID. Each line's need and each invoice unit's value MUST follow prescribedNeed and
+ * sellingUnitValue for the invoice item's inventory. Filtering MUST agree with detail coverage
+ * when multiple lines match the same product.
  */
 export function queueStatusPage(
   branchId: string,
@@ -99,17 +100,21 @@ export function queueStatusPage(
     Prisma.sql`coalesce(item->>'quantity', item->>'prescribedQuantity', item->>'totalQuantity', item->>'qty')`,
   );
   const duration = positiveNumber(Prisma.sql`item->>'duration'`);
-  const frequency = numericLookup(
+  const frequency = Prisma.sql`coalesce(${instructionLookup(
+    normalized(Prisma.sql`coalesce(item->>'instructions', '')`),
+  )}, ${numericLookup(
     queueFrequencyPerDay,
     normalized(Prisma.sql`coalesce(item->>'frequency', '')`),
-  );
+  )})`;
   const multiplier = numericLookup(
     queueDurationDays,
-    normalized(Prisma.sql`coalesce(nullif(item->>'durationUnit', ''), 'days')`),
+    Prisma.sql`coalesce(nullif(${normalized(Prisma.sql`coalesce(item->>'durationUnit', '')`)}, ''), 'days')`,
   );
-  const medicationName = normalized(
-    Prisma.sql`coalesce(nullif(item->>'drugName', ''), nullif(item->>'brandName', ''), nullif(item->>'genericName', ''), 'Unknown drug')`,
-  );
+  const doses = Prisma.sql`ceil(${frequency} * ${duration} * ${multiplier} - ${float(doseTolerance)})`;
+  const lineMeasured = Prisma.sql`(${normalized(Prisma.sql`coalesce(item->>'dosageUnit', '')`)} = ANY(${textArray(measuredDosageUnits)})
+    OR ${words(medicationNameSql())} && ${textArray(measuredNameWords)}
+    OR ${words(normalized(Prisma.sql`coalesce(item->>'genericName', '')`))} && ${textArray(measuredNameWords)})`;
+  const medicationName = medicationNameSql();
   const invoiceName = normalized(Prisma.sql`coalesce(d.name, '')`);
   return Prisma.sql`
     WITH RECURSIVE branch_prescriptions AS MATERIALIZED (
@@ -123,17 +128,26 @@ export function queueStatusPage(
       LEFT JOIN pharmacy_dispense_tasks t ON t."prescriptionId" = p.id AND t."branchId" = ${branchId}
       WHERE patient."branchId" = ${branchId} AND coalesce(to_jsonb(p)->>'status', 'ACTIVE') NOT IN ('DRAFT', 'CANCELLED')
         AND to_jsonb(v)->>'deletedAt' IS NULL
-    ), medications AS (
-      SELECT p.id, item, ordinal, coalesce(${explicit}, ceil(${frequency} * ${duration} * ${multiplier})) AS quantity,
+    ), lines AS (
+      SELECT p.id, item, ordinal, ${explicit} AS explicit, ${doses} AS doses, ${lineMeasured} AS measured,
         ${medicationName} AS name
       FROM branch_prescriptions p
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.items) = 'array' THEN p.items ELSE '[]'::jsonb END) WITH ORDINALITY AS source(item, ordinal)
+    ), medications AS (
+      SELECT id, item, ordinal, name, measured, explicit IS NULL AND doses IS NOT NULL AS need_in_doses,
+        CASE WHEN explicit IS NOT NULL THEN explicit WHEN doses IS NOT NULL THEN doses WHEN measured THEN 1 END AS quantity
+      FROM lines
     ), invoice_pool AS (
       SELECT i."prescriptionId" AS id,
         jsonb_agg(jsonb_build_object('drugId', ii."drugId", 'inventoryItemId', ii."inventoryItemId",
-          'name', ${invoiceName}, 'remaining', ii.quantity) ORDER BY ii.id) AS items
+          'name', ${invoiceName}, 'remaining', ii.quantity,
+          'measured', coalesce(inv.unit::text = ANY(${textArray(measuredSellingUnits)})
+            OR ${normalized(Prisma.sql`coalesce(inv."packUnit", '')`)} = ANY(${textArray(measuredPackUnits)}), false),
+          'packs', coalesce(inv.unit::text = ANY(${textArray(packSellingUnits)}), false),
+          'packSize', inv."packSize") ORDER BY ii.id) AS items
       FROM pharmacy_invoices i JOIN branch_prescriptions p ON p.id = i."prescriptionId"
       JOIN pharmacy_invoice_items ii ON ii."invoiceId" = i.id LEFT JOIN drugs d ON d.id = ii."drugId"
+      LEFT JOIN inventory_items inv ON inv.id = ii."inventoryItemId"
       WHERE i."branchId" = ${branchId} AND i.status IN ('CONFIRMED', 'DISPENSED', 'COMPLETED')
       GROUP BY i."prescriptionId"
     ), coverage AS (
@@ -141,26 +155,39 @@ export function queueStatusPage(
         NULL::double precision AS quantity, 0::double precision AS dispensed
       FROM branch_prescriptions p LEFT JOIN invoice_pool pool ON pool.id = p.id
       UNION ALL
-      SELECT m.id, m.ordinal, allocated.remaining, m.quantity, allocated.dispensed
+      SELECT m.id, m.ordinal, allocated.remaining, allocated.quantity, allocated.dispensed
       FROM coverage previous JOIN medications m ON m.id = previous.id AND m.ordinal = previous.ordinal + 1
       CROSS JOIN LATERAL (
         SELECT coalesce(jsonb_agg(jsonb_set(invoice, '{remaining}',
-          to_jsonb((invoice->>'remaining')::double precision - taken)) ORDER BY position), '[]'::jsonb) AS remaining,
-          coalesce(sum(taken), 0)::double precision AS dispensed
+          to_jsonb((invoice->>'remaining')::double precision - taken / per_unit)) ORDER BY position), '[]'::jsonb) AS remaining,
+          coalesce(m.quantity, max(need)) AS quantity,
+          least(coalesce(m.quantity, max(need), 'Infinity'::double precision), coalesce(sum(value ORDER BY position), 0)) AS dispensed
         FROM (
-          SELECT invoice, position, least(available, greatest(0,
-            coalesce(m.quantity, 'Infinity'::double precision) - coalesce(sum(available) OVER (
+          SELECT invoice, position, per_unit, value, need, least(value, greatest(0,
+            coalesce(need, 'Infinity'::double precision) - coalesce(sum(value) OVER (
               ORDER BY position ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0))) AS taken
           FROM (
-            SELECT invoice, position, CASE WHEN CASE
-              WHEN nullif(m.item->>'inventoryItemId', '') IS NOT NULL AND invoice->>'inventoryItemId' IS NOT NULL
-                THEN m.item->>'inventoryItemId' = invoice->>'inventoryItemId'
-              WHEN nullif(m.item->>'drugId', '') IS NOT NULL THEN m.item->>'drugId' = invoice->>'drugId'
-              ELSE m.name <> '' AND invoice->>'name' <> '' AND
-                (strpos(m.name, invoice->>'name') > 0 OR strpos(invoice->>'name', m.name) > 0)
-              END THEN greatest(0, (invoice->>'remaining')::double precision) ELSE 0 END AS available
-            FROM jsonb_array_elements(previous.remaining) WITH ORDINALITY AS pool(invoice, position)
-          ) candidates
+            SELECT invoice, position, per_unit, ${snapped(Prisma.sql`available * per_unit`)} AS value,
+              coalesce(m.quantity, CASE WHEN bool_or(matched AND (invoice->>'measured')::boolean) OVER () THEN 1::double precision END) AS need
+            FROM (
+              SELECT invoice, position, matched, CASE WHEN matched THEN greatest(0, (invoice->>'remaining')::double precision) ELSE 0 END AS available, CASE
+                WHEN NOT m.need_in_doses THEN 1::double precision
+                WHEN m.measured OR (invoice->>'measured')::boolean THEN m.quantity
+                WHEN (invoice->>'packs')::boolean THEN
+                  CASE WHEN (invoice->>'packSize')::double precision > 0 THEN (invoice->>'packSize')::double precision ELSE m.quantity END
+                ELSE 1::double precision END AS per_unit
+              FROM (
+                SELECT invoice, position, coalesce(CASE
+                  WHEN nullif(m.item->>'inventoryItemId', '') IS NOT NULL AND invoice->>'inventoryItemId' IS NOT NULL
+                    THEN m.item->>'inventoryItemId' = invoice->>'inventoryItemId'
+                  WHEN nullif(m.item->>'drugId', '') IS NOT NULL THEN m.item->>'drugId' = invoice->>'drugId'
+                  ELSE m.name <> '' AND invoice->>'name' <> '' AND
+                    (strpos(m.name, invoice->>'name') > 0 OR strpos(invoice->>'name', m.name) > 0)
+                  END, false) AS matched
+                FROM jsonb_array_elements(previous.remaining) WITH ORDINALITY AS pool(invoice, position)
+              ) pool
+            ) candidates
+          ) valued
         ) portions
       ) allocated
     ), invoice_state AS (

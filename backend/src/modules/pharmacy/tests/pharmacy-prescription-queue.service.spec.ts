@@ -157,8 +157,8 @@ describe('PharmacyPrescriptionQueueService', () => {
       prescription({
         items: JSON.stringify([
           {
-            drugName: 'Clindamycin Gel',
-            frequency: 'Apply at night',
+            drugName: 'Doxycycline 100',
+            frequency: 'As directed',
           },
         ]),
         pharmacyInvoices: [
@@ -170,7 +170,7 @@ describe('PharmacyPrescriptionQueueService', () => {
                 quantity: 1,
                 drug: {
                   id: 'drug-1',
-                  name: 'Clindamycin Gel',
+                  name: 'Doxycycline 100',
                 },
               },
             ],
@@ -187,6 +187,27 @@ describe('PharmacyPrescriptionQueueService', () => {
       quantityInferred: false,
       dispensedQuantity: 1,
       coverageStatus: 'unknown',
+    });
+  });
+
+  it('counts one tube as covering a gel line with no schedule', async () => {
+    prisma.prescription.findFirst.mockResolvedValue(
+      prescription({
+        items: JSON.stringify([{ drugName: 'Clindamycin Gel', frequency: 'Apply at night' }]),
+        pharmacyInvoices: [
+          { id: 'pharm-invoice-1', status: 'CONFIRMED', items: [{ quantity: 1, drug: { id: 'drug-1', name: 'Clindamycin Gel' } }] },
+        ],
+      }),
+    );
+
+    const entry = await service.findOne('rx-1', branchId);
+
+    expect(entry.status).toBe(PrescriptionQueueStatus.DISPENSED);
+    expect(entry.medications[0]).toMatchObject({
+      prescribedQuantity: 1,
+      quantityInferred: true,
+      dispensedQuantity: 1,
+      coverageStatus: 'covered',
     });
   });
 
