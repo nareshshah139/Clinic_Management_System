@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { CreatePharmacyPurchasePaymentDto, ReversePharmacyPurchasePaymentDto, ReallocatePharmacyPurchasePaymentDto } from './dto/pharmacy-purchase-ledger.dto';
 import { MONEY_TOLERANCE, daysPastDue, invoiceOutstanding, invoiceSettled, paymentStatus, payableBalance, scheduledPayments, splitByEffectiveDate } from './purchase-payment-balance';
 import { clinicDay, clinicDayStart, isCalendarDay } from './register-utils';
+import { SUPPLIER_CREDIT_BALANCE_SELECT, creditHeldByDistributor } from './supplier-credit-balance';
 
 type LedgerInvoice = {
   id: string;
@@ -277,8 +278,42 @@ export class PharmacyPurchaseLedgerService {
     }
   }
 
+  async creditHeld(branchId: string, asOfDate = new Date(), distributorGstins?: string[]) {
+    const credits = await (this.prisma as any).inventorySupplierCredit.findMany({
+      where: {
+        branchId,
+        creditNoteNumber: { not: null },
+        ...(distributorGstins ? { supplierGstin: { in: distributorGstins.map((gstin) => gstin.trim().toUpperCase()) } } : {}),
+      },
+      select: SUPPLIER_CREDIT_BALANCE_SELECT,
+    });
+    return creditHeldByDistributor(credits, asOfDate);
+  }
+
+  async distributorPosition(branchId: string, distributorGstin: string, asOfDate = new Date()) {
+    const gstin = distributorGstin.trim().toUpperCase();
+    const [invoices, held] = await Promise.all([
+      this.findLedgerInvoices(branchId, gstin, asOfDate),
+      this.creditHeld(branchId, asOfDate, [gstin]),
+    ]);
+    const outstanding = invoices.length
+      ? this.buildDistributorSummary(invoices, asOfDate, this.fiscalYearStart(asOfDate)).outstanding
+      : 0;
+    const creditHeld = held.get(gstin) ?? 0;
+    return {
+      gstin,
+      name: invoices[0]?.distributorName ?? null,
+      outstanding,
+      creditHeld,
+      net: this.money(outstanding - creditHeld),
+    };
+  }
+
   async getDistributorSummaries(branchId: string, asOfDate = new Date()) {
-    const invoices = await this.findLedgerInvoices(branchId, undefined, asOfDate);
+    const [invoices, held] = await Promise.all([
+      this.findLedgerInvoices(branchId, undefined, asOfDate),
+      this.creditHeld(branchId, asOfDate),
+    ]);
     const groups = this.groupInvoicesByDistributor(invoices);
     const fiscalYearStart = this.fiscalYearStart(asOfDate);
 
@@ -287,13 +322,11 @@ export class PharmacyPurchaseLedgerService {
       balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff less payment reversals recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       tcsThreshold: TCS_THRESHOLD_AMOUNT,
       distributors: Array.from(groups.values())
-        .map((groupInvoices) =>
-          this.buildDistributorSummary(
-            groupInvoices,
-            asOfDate,
-            fiscalYearStart,
-          ),
-        )
+        .map((groupInvoices) => {
+          const summary = this.buildDistributorSummary(groupInvoices, asOfDate, fiscalYearStart);
+          const creditHeld = held.get(summary.distributorGstin.trim().toUpperCase()) ?? 0;
+          return { ...summary, creditHeld, netPayable: this.money(summary.outstanding - creditHeld) };
+        })
         .sort((a, b) => b.outstanding - a.outstanding),
     };
   }

@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { PharmacyPurchaseLedgerService } from './pharmacy-purchase-ledger.service';
 import {
+  DistributorPosition,
   PurchaseEntry,
   PurchaseRegisterPage,
   PurchaseRegisterQuery,
@@ -15,6 +17,11 @@ import { clinicDay, clinicDayRange, peopleById } from './register-utils';
 
 export type PurchaseRegisterActor = { branchId: string };
 
+export type PurchaseRegisterListing = PurchaseRegisterPage & {
+  creditHeld: Record<string, number>;
+  distributorPosition: DistributorPosition | null;
+};
+
 export type PurchaseRegisterFile = {
   data: Buffer;
   fileName: string;
@@ -23,14 +30,29 @@ export type PurchaseRegisterFile = {
 
 @Injectable()
 export class PharmacyPurchaseRegisterService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ledger: PharmacyPurchaseLedgerService,
+  ) {}
 
   async list(
     query: PurchaseRegisterQuery,
     actor: PurchaseRegisterActor,
     now = new Date(),
-  ): Promise<PurchaseRegisterPage> {
-    return purchaseRegisterPage(await this.entries(query, actor, now), query);
+  ): Promise<PurchaseRegisterListing> {
+    const page = purchaseRegisterPage(await this.entries(query, actor, now), query);
+    const gstin = query.distributorGstin?.trim();
+    const [held, distributorPosition] = await Promise.all([
+      this.ledger.creditHeld(actor.branchId, now, [
+        ...new Set(page.rows.map((row) => row.distributor.gstin.toUpperCase())),
+      ]),
+      gstin ? this.ledger.distributorPosition(actor.branchId, gstin, now) : null,
+    ]);
+    return {
+      ...page,
+      creditHeld: Object.fromEntries([...held].filter(([, amount]) => amount > 0)),
+      distributorPosition,
+    };
   }
 
   async export(

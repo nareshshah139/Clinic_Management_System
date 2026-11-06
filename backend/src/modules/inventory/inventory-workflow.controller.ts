@@ -220,6 +220,13 @@ export class InventoryWorkflowController {
   ) {
     return this.workflow.transition(r.user, id, b);
   }
+  @Post('documents/:id/credit-note') recordCreditNote(
+    @Request() r: any,
+    @Param('id') id: string,
+    @Body() b: Record<string, any>,
+  ) {
+    return this.workflow.recordCreditNote(r.user, id, b);
+  }
   @Get('intake') intakeList(@Request() r: any) {
     return this.workspace.intake(r.user);
   }
@@ -234,6 +241,15 @@ export class InventoryWorkflowController {
     @Body() b: Record<string, any>,
   ) {
     return this.workspace.allocateCredit(r.user, b);
+  }
+  @Get('credits/set-off') setOffOptions(@Request() r: any, @Query() q: any) {
+    return this.workspace.setOffOptions(r.user, q);
+  }
+  @Post('credits/set-off') setOff(
+    @Request() r: any,
+    @Body() b: Record<string, any>,
+  ) {
+    return this.workspace.setOff(r.user, b);
   }
   @Post('credits/allocations/:id/reverse') reverseCredit(
     @Request() r: any,

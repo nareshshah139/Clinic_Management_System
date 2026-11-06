@@ -111,6 +111,14 @@ export type PurchaseRegisterQuery = {
   limit: number;
 };
 
+export type DistributorPosition = {
+  gstin: string;
+  name: string | null;
+  outstanding: number;
+  creditHeld: number;
+  net: number;
+};
+
 export type PurchaseRegisterPage = {
   rows: PurchaseRegisterRow[];
   total: number;
