@@ -1,5 +1,6 @@
 "use client";
 import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
+import { getISTDateString } from '@/lib/utils';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import "./inventory-readability.css";
@@ -137,7 +138,8 @@ export function InventoryWorkspace() {
   const origin = () => query.return || params.toString();
   const back = () => {
     const destination = query.return;
-    if (destination) router.push(`${path}?${destination}`, { scroll: false });
+    if (destination?.startsWith("/") && !destination.startsWith("//")) router.push(destination, { scroll: false });
+    else if (destination) router.push(`${path}?${destination}`, { scroll: false });
     else
       navigate({
         document: "",
@@ -466,7 +468,7 @@ export function InventoryWorkspace() {
                     sourceId: doc.id,
                     supplierId: doc.supplierId,
                     payload: {
-                      date: new Date().toISOString().slice(0, 10),
+                      date: getISTDateString(),
                       reason: "Purchase order receipt",
                       lines: doc.payload.lines.map((l: any) => ({
                         ...l,

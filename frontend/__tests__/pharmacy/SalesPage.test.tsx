@@ -17,6 +17,7 @@ const row = (overrides: Partial<SalesRegisterRow>): SalesRegisterRow => ({
   source: 'PHARMACY_BILL',
   recordId: 'inv-14',
   billNo: 'PHI-2026-014',
+  reservedNo: null,
   state: 'FINAL',
   entryAt: '2026-11-05T09:00:00.000Z',
   billDate: '2026-11-05',
@@ -25,7 +26,8 @@ const row = (overrides: Partial<SalesRegisterRow>): SalesRegisterRow => ({
   mobile: '+91 98765 43210',
   amount: 1234.5,
   paymentModes: ['UPI'],
-  linkedBillNo: null,
+  due: 0,
+  linkedBillNos: [],
   ...overrides,
 });
 
@@ -34,17 +36,19 @@ const response = (overrides: Partial<SalesRegisterResponse> = {}): SalesRegister
   total: 1,
   page: 1,
   limit: 50,
-  totals: { amount: 1234.5, count: 1, excluded: { drafts: 0, cancelled: 0 } },
+  totals: { amount: 1234.5, count: 1, collected: null, excluded: { drafts: 0, cancelled: 0 } },
   entryByOptions: [
     { id: 'user-asha', name: 'Asha Rao' },
     { id: 'user-ravi', name: 'Ravi Kumar' },
   ],
-  clinicName: 'Skin Care Clinic',
+  clinic: { name: 'Skin Care Clinic', address: '12 MG Road, Pune', gstin: '27ABCDE1234F1Z5' },
   ...overrides,
 });
 
 const get = jest.mocked(apiClient.get);
-const lastRequest = () => get.mock.calls[get.mock.calls.length - 1][1] as Record<string, unknown>;
+const registerCalls = () => get.mock.calls.filter(([url]) => url === '/pharmacy/sales-register');
+const panel = () => within(screen.getByRole('tabpanel'));
+const lastRequest = () => registerCalls()[registerCalls().length - 1][1] as Record<string, unknown>;
 
 beforeAll(() => {
   jest.useFakeTimers({ now: new Date('2026-11-06T06:00:00.000Z'), doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'nextTick', 'queueMicrotask'] });
@@ -53,124 +57,245 @@ afterAll(() => jest.useRealTimers());
 beforeEach(() => {
   mockQuery = '';
   jest.clearAllMocks();
+  document.querySelectorAll('iframe').forEach((frame) => frame.remove());
   get.mockResolvedValue(response());
 });
 
-it('asks for this financial year, newest entries first, by default', async () => {
+it('asks only for the open tab: this financial year, newest entries first', async () => {
   render(<SalesPage />);
   await screen.findByText('PHI-2026-014');
-  expect(get).toHaveBeenCalledWith('/pharmacy/sales-register', {
-    register: 'sales',
-    from: '2026-04-01',
-    to: '2027-03-31',
-    paymentMode: undefined,
-    state: undefined,
-    source: undefined,
-    entryById: undefined,
-    sortBy: 'entryAt',
-    sortDir: 'desc',
-    page: 1,
-    limit: 50,
-  });
+  expect(registerCalls()).toEqual([
+    [
+      '/pharmacy/sales-register',
+      {
+        register: 'sales',
+        from: '2026-04-01',
+        to: '2027-03-31',
+        paymentMode: undefined,
+        state: undefined,
+        source: undefined,
+        entryById: undefined,
+        sortBy: 'entryAt',
+        sortDir: 'desc',
+        page: 1,
+        limit: 50,
+      },
+    ],
+  ]);
+  expect(screen.getByRole('table', { name: 'Sales' })).toBeInTheDocument();
 });
 
-it('sorts from the column header and reports the direction', async () => {
+it('sorts text ascending and amounts descending on the first click, and reports the direction', async () => {
   render(<SalesPage />);
   await screen.findByText('PHI-2026-014');
-  const header = screen.getByRole('columnheader', { name: /Bill No/ });
-  expect(header).toHaveAttribute('aria-sort', 'none');
+  const billNo = screen.getByRole('columnheader', { name: /Bill No/ });
+  expect(billNo).toHaveAttribute('aria-sort', 'none');
 
-  fireEvent.click(within(header).getByRole('button', { name: 'Bill No' }));
+  fireEvent.click(within(billNo).getByRole('button', { name: 'Bill No' }));
   await waitFor(() => expect(lastRequest()).toMatchObject({ sortBy: 'billNo', sortDir: 'asc' }));
-  expect(header).toHaveAttribute('aria-sort', 'ascending');
-
-  fireEvent.click(within(header).getByRole('button', { name: 'Bill No' }));
+  expect(billNo).toHaveAttribute('aria-sort', 'ascending');
+  fireEvent.click(within(billNo).getByRole('button', { name: 'Bill No' }));
   await waitFor(() => expect(lastRequest()).toMatchObject({ sortBy: 'billNo', sortDir: 'desc' }));
-  expect(header).toHaveAttribute('aria-sort', 'descending');
-  expect(screen.getByRole('columnheader', { name: /Entry Date/ })).toHaveAttribute('aria-sort', 'none');
+
+  const amount = screen.getByRole('columnheader', { name: /Bill Amount/ });
+  fireEvent.click(within(amount).getByRole('button', { name: 'Bill Amount' }));
+  await waitFor(() => expect(lastRequest()).toMatchObject({ sortBy: 'amount', sortDir: 'desc' }));
+  expect(amount).toHaveAttribute('aria-sort', 'descending');
+  expect(billNo).toHaveAttribute('aria-sort', 'none');
 });
 
-it('combines search, payment type and more filters, and counts the hidden ones', async () => {
+it('combines search, payment and more filters, counts only applied ones, and keeps them in the URL', async () => {
   render(<SalesPage />);
   await screen.findByText('PHI-2026-014');
 
-  fireEvent.change(screen.getByLabelText('Search by'), { target: { value: 'patient' } });
-  fireEvent.change(screen.getByPlaceholderText('Search patient name'), { target: { value: 'meera' } });
-  fireEvent.change(screen.getByLabelText('Payment type'), { target: { value: 'UPI' } });
+  fireEvent.change(panel().getByLabelText('Search by'), { target: { value: 'patient' } });
+  fireEvent.change(panel().getByPlaceholderText('Patient name'), { target: { value: 'meera' } });
+  fireEvent.change(panel().getByLabelText('Payment'), { target: { value: 'UPI' } });
   fireEvent.click(screen.getByRole('button', { name: 'More filters' }));
-  fireEvent.change(screen.getByLabelText('State'), { target: { value: 'FINAL' } });
-  fireEvent.change(screen.getByLabelText('Entry by'), { target: { value: 'user-asha' } });
+  fireEvent.change(panel().getByLabelText('State'), { target: { value: 'FINAL' } });
+  fireEvent.change(panel().getByLabelText('Entry by'), { target: { value: 'user-asha' } });
 
   await waitFor(() =>
     expect(lastRequest()).toMatchObject({ field: 'patient', q: 'meera', paymentMode: 'UPI', state: 'FINAL', entryById: 'user-asha', page: 1 }),
   );
-  expect(screen.getByRole('button', { name: 'More filters 2 active' })).toHaveAttribute('aria-expanded', 'true');
-  expect(mockReplace).toHaveBeenLastCalledWith(
-    '/dashboard/pharmacy/sales?field=patient&q=meera&pay=UPI&state=FINAL&by=user-asha',
-    { scroll: false },
-  );
+  const more = screen.getByRole('button', { name: 'More filters 2 active' });
+  expect(mockReplace).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales?field=patient&q=meera&pay=UPI&state=FINAL&by=user-asha', { scroll: false });
+
+  fireEvent.keyDown(panel().getByLabelText('State'), { key: 'Escape' });
+  expect(more).toHaveAttribute('aria-expanded', 'false');
+  expect(more).toHaveFocus();
+  expect(panel().queryByLabelText('State')).not.toBeInTheDocument();
 });
 
-it('marks an unsaved bill as Draft in place of its number', async () => {
-  get.mockResolvedValue(response({ rows: [row({ id: 'PHARMACY_BILL:d', recordId: 'd', billNo: null, state: 'DRAFT' })] }));
+it('sends a draft bill to the invoice list that can finish it, and blocks print and WhatsApp with a reason', async () => {
+  get.mockResolvedValue(response({ rows: [row({ id: 'PHARMACY_BILL:d', recordId: 'd', billNo: null, reservedNo: 'PHI-2026-075', state: 'DRAFT', paymentModes: [] })] }));
   render(<SalesPage />);
-  const open = await screen.findByRole('button', { name: 'Open draft bill for Meera Shah' });
+  const open = await screen.findByRole('link', { name: 'Open draft bill for Meera Shah' });
   expect(open).toHaveTextContent('Draft');
+  expect(open).toHaveAttribute('href', '/dashboard/pharmacy/invoices?search=PHI-2026-075');
+  expect(screen.getByText('PHI-2026-075 not final')).toBeInTheDocument();
+
+  const print = screen.getByRole('button', { name: 'Print draft bill for Meera Shah' });
+  expect(print).toHaveAttribute('aria-disabled', 'true');
+  expect(print).toHaveAttribute('tabindex', '-1');
+  expect(print).toHaveAccessibleDescription('Finish this draft bill first');
+  fireEvent.click(print);
+  expect(document.querySelector('iframe')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Send draft bill for Meera Shah on WhatsApp' })).toHaveAccessibleDescription('Finish this draft bill first');
 });
 
-it('links WhatsApp to the patient mobile with the bill details', async () => {
+it('writes the WhatsApp message with clinic, date, modes and balance due', async () => {
+  get.mockResolvedValue(response({ rows: [row({ paymentModes: ['UPI', 'CASH'], due: 200 })] }));
   render(<SalesPage />);
   const link = await screen.findByRole('link', { name: 'Send PHI-2026-014 on WhatsApp' });
-  expect(link).toHaveAttribute(
-    'href',
-    'https://wa.me/919876543210?text=Skin%20Care%20Clinic%0ABill%20No%3A%20PHI-2026-014%0ABill%20Date%3A%2005%20Nov%202026%0AAmount%3A%20%E2%82%B91%2C234.50',
-  );
+  const text = 'Dear Meera Shah, thank you for visiting Skin Care Clinic. Your pharmacy bill PHI-2026-014 dated 05/11/2026 is ₹1,234.50 (UPI, Cash). Balance due ₹200.00.';
+  expect(link).toHaveAttribute('href', `https://wa.me/919876543210?text=${encodeURIComponent(text)}`);
   expect(link).toHaveAttribute('target', '_blank');
+  expect(screen.getByText('Due ₹200.00')).toBeInTheDocument();
 });
 
-it('disables WhatsApp when the bill has no mobile number', async () => {
+it('keeps a disabled WhatsApp action out of the tab order but explains why', async () => {
   get.mockResolvedValue(response({ rows: [row({ billNo: 'PHI-2026-015', mobile: null })] }));
   render(<SalesPage />);
   const button = await screen.findByRole('button', { name: 'Send PHI-2026-015 on WhatsApp' });
   expect(button).toHaveAttribute('aria-disabled', 'true');
-  expect(screen.queryByRole('link', { name: 'Send PHI-2026-015 on WhatsApp' })).not.toBeInTheDocument();
+  expect(button).toHaveAttribute('tabindex', '-1');
+  expect(button).toHaveAccessibleDescription('No mobile number');
+  expect(screen.getByText('—', { selector: 'td' })).toBeInTheDocument();
 });
 
-it('explains an empty result and clears the filters from there', async () => {
-  get.mockResolvedValue(response({ rows: [], total: 0, totals: { amount: 0, count: 0, excluded: { drafts: 0, cancelled: 0 } } }));
+it('prints a counter-sale receipt into a hidden frame with the clinic header and escaped text', async () => {
+  get.mockImplementation(async (url: string) => {
+    if (url === '/inventory/workspace/documents/cs-7') {
+      return {
+        kind: 'COUNTER_SALE',
+        reference: 'CS-2026-007',
+        totalAmount: 4554.64,
+        payload: { date: '2026-11-05', customerName: '<b>Yusuf</b>', paymentMode: 'UPI', lines: [{ name: 'Benzac AC gel', batchNumber: 'B12', quantity: 2, unitPrice: 2277.32, total: 4554.64 }] },
+      };
+    }
+    return response({ rows: [row({ id: 'COUNTER_SALE:cs-7', source: 'COUNTER_SALE', recordId: 'cs-7', billNo: 'CS-2026-007' })] });
+  });
   render(<SalesPage />);
-  await screen.findByText('No sales match your search');
-  fireEvent.change(screen.getByPlaceholderText('Search bill number'), { target: { value: 'PHI-9' } });
+  expect(await screen.findByText('Counter sale')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Print CS-2026-007' }));
+
+  await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
+  const html = document.querySelector('iframe')!.srcdoc;
+  expect(html).toContain('<div class="clinic-name">Skin Care Clinic</div><div>12 MG Road, Pune</div><div>GSTIN: 27ABCDE1234F1Z5</div>');
+  expect(html).toContain('&lt;b&gt;Yusuf&lt;/b&gt;');
+  expect(html).toContain('<td style="text-align:right">₹4,554.64</td>');
+  expect(html).toContain('<strong>Payment mode:</strong> UPI');
+});
+
+it('names an empty period differently from an empty search, and Clear filters returns focus to the search box', async () => {
+  get.mockResolvedValue(response({ rows: [], total: 0, totals: { amount: 0, count: 0, collected: null, excluded: { drafts: 0, cancelled: 0 } } }));
+  render(<SalesPage />);
+  await screen.findByText('No sales in this period');
+  expect(screen.getByText('Nothing recorded between 01/04/2026 and 31/03/2027.')).toBeInTheDocument();
+
+  const search = panel().getByPlaceholderText('Bill number');
+  fireEvent.change(search, { target: { value: 'PHI-9' } });
   await waitFor(() => expect(lastRequest()).toMatchObject({ field: 'billNo', q: 'PHI-9' }));
+  expect(screen.getByText('No sales match your search')).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-
   await waitFor(() => expect(lastRequest()).not.toHaveProperty('q'));
-  expect(screen.getByPlaceholderText('Search bill number')).toHaveValue('');
-  expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
-  expect(screen.getAllByRole('button', { name: 'New sale' })).toHaveLength(2);
+  expect(search).toHaveValue('');
+  expect(search).toHaveFocus();
 });
 
-it('opens the Returns tab from the link and lists returns with refund modes', async () => {
+it('opens Returns from the URL with an Against bill column and links that come back to this tab', async () => {
   mockQuery = 'tab=returns';
   get.mockResolvedValue(
-    response({ rows: [row({ id: 'SALES_RETURN:r', source: 'SALES_RETURN', recordId: 'r', billNo: 'SR-1', linkedBillNo: 'PHI-2026-007', paymentModes: ['CASH'] })] }),
+    response({ rows: [row({ id: 'SALES_RETURN:r', source: 'SALES_RETURN', recordId: 'r', billNo: 'SR-1', linkedBillNos: ['PHI-2026-007', 'PHI-2026-009'], paymentModes: ['CASH'] })] }),
   );
   render(<SalesPage />);
-  expect(await screen.findByText('Against PHI-2026-007')).toBeInTheDocument();
+  expect(await screen.findByText('PHI-2026-009')).toBeInTheDocument();
   expect(screen.getByRole('tab', { name: 'Returns' })).toHaveAttribute('aria-selected', 'true');
+  expect(registerCalls()).toHaveLength(1);
   expect(lastRequest()).toMatchObject({ register: 'returns', from: '2026-04-01', to: '2027-03-31' });
+  expect(screen.getByRole('table', { name: 'Sales returns' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Against bill' })).toBeInTheDocument();
   expect(screen.getByRole('columnheader', { name: 'Refund' })).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Open SR-1' })).toHaveAttribute('href', '/dashboard/inventory?area=sales&view=SALES_RETURN&document=r');
-  fireEvent.click(screen.getByRole('button', { name: 'New return' }));
-  expect(mockPush.mock.calls[0][0]).toMatch(/^\/dashboard\/inventory\?area=sales&view=SALES_RETURN&new=[0-9a-f]{32}$/);
+  expect(screen.getByRole('link', { name: 'Open SR-1' })).toHaveAttribute(
+    'href',
+    '/dashboard/inventory?area=sales&view=SALES_RETURN&document=r&return=%2Fdashboard%2Fpharmacy%2Fsales%3Ftab%3Dreturns',
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: /New return/ }));
+  expect(mockPush.mock.calls[0][0]).toMatch(
+    /^\/dashboard\/inventory\?area=sales&view=SALES_RETURN&new=[0-9a-f]{32}&return=%2Fdashboard%2Fpharmacy%2Fsales%3Ftab%3Dreturns$/,
+  );
+
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Sales' }));
+  expect(mockPush).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales', { scroll: false });
 });
 
-it('pins the total of every matching final bill with what it leaves out', async () => {
-  get.mockResolvedValue(response({ total: 136, totals: { amount: 47891, count: 132, excluded: { drafts: 3, cancelled: 1 } } }));
+it('pins the total of every matching final bill and what it leaves out', async () => {
+  get.mockResolvedValue(response({ total: 136, totals: { amount: 47891, count: 132, collected: null, excluded: { drafts: 3, cancelled: 1 } } }));
   render(<SalesPage />);
-  const total = await screen.findByText(/^Total Amount/);
-  expect(total).toHaveTextContent('Total Amount ₹47,891.00 · 132 bills');
-  expect(screen.getByText('Excludes 3 drafts and 1 cancelled')).toBeInTheDocument();
-  expect(screen.getByText('1–50 of 136')).toBeInTheDocument();
+  expect(await screen.findByText('Total Amount ₹47,891.00 · 132 bills')).toBeInTheDocument();
+  expect(screen.getByText('3 drafts and 1 cancelled not included')).toBeInTheDocument();
+  expect(screen.getByText('1–50 of 136 rows')).toBeInTheDocument();
+});
+
+it('shows what was collected by the chosen payment mode', async () => {
+  mockQuery = 'pay=UPI';
+  get.mockResolvedValue(response({ total: 21, totals: { amount: 47891, count: 20, collected: 12000, excluded: { drafts: 0, cancelled: 0 } } }));
+  render(<SalesPage />);
+  expect(await screen.findByText('Collected by UPI ₹12,000.00 · 20 bills')).toBeInTheDocument();
+  expect(screen.queryByText(/Total Amount/)).not.toBeInTheDocument();
+});
+
+it('pages with aria-disabled controls and clamps a page past the end', async () => {
+  mockQuery = 'page=9';
+  get.mockImplementation(async (_url: string, params?: Record<string, unknown>) =>
+    params?.page === 9 ? response({ rows: [], total: 60, page: 9 }) : response({ total: 60, page: Number(params?.page) }),
+  );
+  render(<SalesPage />);
+  await waitFor(() => expect(lastRequest()).toMatchObject({ page: 2 }));
+  expect(await screen.findByText('51–60 of 60 rows')).toBeInTheDocument();
+
+  const next = screen.getByRole('button', { name: 'Next page' });
+  expect(next).toHaveAttribute('aria-disabled', 'true');
+  fireEvent.click(next);
+  expect(lastRequest()).toMatchObject({ page: 2 });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+  await waitFor(() => expect(lastRequest()).toMatchObject({ page: 1 }));
+});
+
+it('replaces a stale total with a plain error and a retry when the range is rejected', async () => {
+  render(<SalesPage />);
+  expect(await screen.findByText('Total Amount ₹1,234.50 · 1 bill')).toBeInTheDocument();
+  get.mockRejectedValueOnce(Object.assign(new Error('Choose a date range of at most 400 days'), { body: { message: ['Choose a date range of at most 400 days'] } }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Bill Amount' }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not load sales. Choose a date range of at most 400 days');
+  expect(screen.queryByText(/Total Amount/)).not.toBeInTheDocument();
+  expect(screen.getByText('Total not available')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(await screen.findByText('Total Amount ₹1,234.50 · 1 bill')).toBeInTheDocument();
+});
+
+it('commits a typed dd/mm/yyyy date on Enter and refuses a From after To without touching the other date', async () => {
+  render(<SalesPage />);
+  await screen.findByText('PHI-2026-014');
+  fireEvent.click(screen.getByRole('button', { name: 'Change dates, 01/04/2026 to 31/03/2027' }));
+
+  const from = panel().getByLabelText('From');
+  fireEvent.change(from, { target: { value: '05/11/2026' } });
+  fireEvent.keyDown(from, { key: 'Enter' });
+  await waitFor(() => expect(lastRequest()).toMatchObject({ from: '2026-11-05', to: '2027-03-31' }));
+
+  const to = panel().getByLabelText('To');
+  fireEvent.change(to, { target: { value: '01/11/2026' } });
+  fireEvent.blur(to);
+  expect(screen.getByRole('alert')).toHaveTextContent('The From date is after the To date.');
+  fireEvent.change(to, { target: { value: '01/11/0202' } });
+  fireEvent.blur(to);
+  expect(screen.getByRole('alert')).toHaveTextContent('Enter the To date as dd/mm/yyyy, year 2000 or later.');
+  expect(lastRequest()).toMatchObject({ from: '2026-11-05', to: '2027-03-31' });
 });

@@ -131,3 +131,16 @@ it('reloads the current query when an older mutation retains its reload callback
   expect(view.result.current.data).toEqual({label:'/current-query'});
   expect((apiClient.get as jest.Mock).mock.calls.map(([url])=>url)).toEqual(['/old-query','/current-query','/current-query']);
 });
+
+it('returns to the Sales register a document was opened from, and refuses another site',async()=>{
+  (apiClient.get as jest.Mock).mockImplementation(async(path:string)=>path.includes('capabilities')?{kinds:{SALES_RETURN:{read:true,write:false}}}:{rows:[],total:0,totalPages:1});
+  mockQuery=`area=sales&view=SALES_RETURN&recoverRequest=k&return=${encodeURIComponent('/dashboard/pharmacy/sales?tab=returns&q=SR-1')}`;
+  const first = render(<InventoryWorkspace/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Back from recovery'}));
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales?tab=returns&q=SR-1',{scroll:false});
+  first.unmount();
+  mockQuery=`area=sales&view=SALES_RETURN&recoverRequest=k&return=${encodeURIComponent('//evil.example/x')}`;
+  render(<InventoryWorkspace/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Back from recovery'}));
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/dashboard/inventory?//evil.example/x',{scroll:false});
+});

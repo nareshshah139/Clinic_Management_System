@@ -1,166 +1,198 @@
-import { displayClinicDate } from '@/lib/date-display';
+import { displayCalendarDate, displayClinicDate } from '@/lib/date-display';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 
-export function renderPharmacyInvoiceHtml(invoice: any): string {
-  const dateStr = invoice.invoiceDate ? displayClinicDate(invoice.invoiceDate) : displayClinicDate(invoice.createdAt);
-  
-  const itemsRows = (invoice.items || []).map((item: any) => {
-    const itemName = item.itemType === 'PACKAGE' 
-      ? (item.package?.name || 'Unknown Package')
-      : (item.drug?.name || 'Unknown Drug');
-    
-    return `
-      <tr>
-        <td style="padding:6px;border:1px solid #ddd;">${itemName}</td>
-        <td style="padding:6px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
-        <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${item.unitPrice?.toFixed(2) || '0.00'}</td>
-        <td style="padding:6px;border:1px solid #ddd;text-align:right;">${item.discountPercent || 0}%</td>
-        <td style="padding:6px;border:1px solid #ddd;text-align:right;">${item.taxPercent || 0}%</td>
-        <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${item.totalAmount?.toFixed(2) || '0.00'}</td>
-      </tr>
-    `;
-  }).join('');
+export type ClinicIdentity = {
+  name: string;
+  address?: string;
+  phone?: string;
+  gstin?: string;
+  drugLicence?: string;
+};
 
-  const patientName = invoice.patient?.name || invoice.billingName || 'N/A';
-  const patientPhone = invoice.patient?.phone || invoice.billingPhone || 'N/A';
-  const billingAddress = invoice.billingAddress || invoice.patient?.address || '';
+type Column = { label: string; align?: 'center' | 'right'; width?: string };
+type PrintDocument = {
+  title: string;
+  meta: [string, string][];
+  party: string[];
+  columns: Column[];
+  rows: string[][];
+  totals: [string, string][];
+  grandTotal: [string, string];
+  notes?: string;
+  clinic?: ClinicIdentity | null;
+};
 
-  return `
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>Invoice ${invoice?.invoiceNumber || ''}</title>
-        ${getGlobalPrintStyleTag()}
-        <style>
-          @media print {
-            body { margin: 12mm; }
-            .no-print { display: none; }
-          }
-          body { 
-            font-family: Arial, sans-serif; 
-            padding: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-          }
-          h1 { 
-            margin-bottom: 8px;
-            color: #1a1a1a;
-          }
-          .invoice-header {
-            border-bottom: 2px solid #333;
-            padding-bottom: 12px;
-            margin-bottom: 20px;
-          }
-          .muted { 
-            color: #666;
-            font-size: 14px;
-          }
-          .billing-section {
-            margin: 20px 0;
-            padding: 15px;
-            background: #f9f9f9;
-            border-radius: 4px;
-          }
-          table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 20px;
-          }
-          th { 
-            background: #f5f5f5;
-            font-weight: bold;
-            padding: 10px 6px !important;
-          }
-          th, td {
-            border: 1px solid #ddd;
-          }
-          .totals-section {
-            margin-top: 20px;
-            text-align: right;
-            padding: 15px;
-            background: #f9f9f9;
-            border-radius: 4px;
-          }
-          .totals-section div {
-            margin: 8px 0;
-          }
-          .grand-total {
-            font-size: 20px;
-            font-weight: bold;
-            color: #1a1a1a;
-            border-top: 2px solid #333;
-            padding-top: 12px;
-            margin-top: 12px;
-          }
-          .print-button {
-            margin: 20px 0;
-            padding: 12px 24px;
-            background: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-          }
-          .print-button:hover {
-            background: #1d4ed8;
-          }
-        </style>
-      </head>
-      <body style="--print-header-height: 28mm;">
-        <div class="print-fixed-header">
-          <div class="invoice-header">
-            <h1>Pharmacy Invoice</h1>
-            <div class="muted">
-              <strong>Invoice #:</strong> ${invoice?.invoiceNumber || ''}<br/>
-              <strong>Date:</strong> ${dateStr}<br/>
-              <strong>Status:</strong> ${invoice?.status || 'N/A'}
-            </div>
-          </div>
-        </div>
-        <div class="print-content">
-        
-        <div class="billing-section">
-          <strong>Bill To:</strong><br />
-          <div style="margin-top: 8px;">
-            ${patientName}<br/>
-            ${patientPhone}${billingAddress ? '<br/>' + billingAddress : ''}
-          </div>
-        </div>
+const ENTITIES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
-        <button class="print-button no-print" onclick="window.print()">🖨️ Print Invoice</button>
+export function escapeHtml(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ENTITIES[char]);
+}
 
-        <table>
-          <thead>
-            <tr>
-              <th style="text-align:left;">Item</th>
-              <th style="width: 80px;">Qty</th>
-              <th style="text-align:right;width: 100px;">Unit Price</th>
-              <th style="text-align:right;width: 80px;">Disc%</th>
-              <th style="text-align:right;width: 80px;">Tax%</th>
-              <th style="text-align:right;width: 120px;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsRows}
-          </tbody>
-        </table>
+export function formatRupees(value: unknown): string {
+  const amount = Number(value) || 0;
+  const text = Math.abs(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${amount < 0 ? '-' : ''}₹${text}`;
+}
 
-        <div class="totals-section">
-          <div><strong>Subtotal:</strong> ₹${invoice.subtotal?.toFixed(2) || '0.00'}</div>
-          <div><strong>Discount:</strong> -₹${invoice.discountAmount?.toFixed(2) || '0.00'}</div>
-          <div><strong>Tax:</strong> ₹${invoice.taxAmount?.toFixed(2) || '0.00'}</div>
-          <div class="grand-total"><strong>Grand Total:</strong> ₹${invoice.totalAmount?.toFixed(2) || '0.00'}</div>
-        </div>
+const percent = (value: unknown) => `${Number(value) || 0}%`;
 
-        ${invoice.notes ? `
-          <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
-            <strong>Notes:</strong><br/>
-            ${invoice.notes}
-          </div>
-        ` : ''}
-        </div>
-      </body>
-    </html>
-  `;
+function clinicHeader(clinic?: ClinicIdentity | null) {
+  if (!clinic?.name) return '';
+  const lines = [
+    clinic.address,
+    clinic.phone && `Phone: ${clinic.phone}`,
+    [clinic.gstin && `GSTIN: ${clinic.gstin}`, clinic.drugLicence && `Drug licence: ${clinic.drugLicence}`].filter(Boolean).join(' · '),
+  ].filter(Boolean);
+  return `<div class="clinic"><div class="clinic-name">${escapeHtml(clinic.name)}</div>${lines.map((line) => `<div>${escapeHtml(line)}</div>`).join('')}</div>`;
+}
+
+function renderPrintDocument(doc: PrintDocument): string {
+  const cell = (column: Column, value: string) =>
+    `<td style="text-align:${column.align ?? 'left'}">${escapeHtml(value)}</td>`;
+  const head = doc.columns
+    .map((column) => `<th style="text-align:${column.align ?? 'left'}${column.width ? `;width:${column.width}` : ''}">${escapeHtml(column.label)}</th>`)
+    .join('');
+  const body = doc.rows.map((row) => `<tr>${row.map((value, index) => cell(doc.columns[index], value)).join('')}</tr>`).join('');
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${escapeHtml(doc.title)}</title>
+    ${getGlobalPrintStyleTag()}
+    <style>
+      @media print { body { margin: 12mm; } .no-print { display: none; } }
+      body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; color: #1a1a1a; }
+      .clinic { text-align: center; margin-bottom: 12px; font-size: 14px; line-height: 1.5; }
+      .clinic-name { font-size: 22px; font-weight: bold; }
+      h1 { margin: 0 0 8px; font-size: 20px; }
+      .header { border-bottom: 2px solid #333; padding-bottom: 12px; margin-bottom: 16px; }
+      .meta { font-size: 14px; line-height: 1.6; }
+      .party { margin: 16px 0; padding: 12px; background: #f6f6f6; border-radius: 4px; line-height: 1.6; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th, td { border: 1px solid #ddd; padding: 6px; font-variant-numeric: tabular-nums; }
+      th { background: #f2f2f2; }
+      .totals { margin-top: 16px; text-align: right; line-height: 1.8; font-variant-numeric: tabular-nums; }
+      .grand { font-size: 20px; font-weight: bold; border-top: 2px solid #333; padding-top: 8px; margin-top: 8px; }
+      .notes { margin-top: 16px; padding: 12px; background: #f6f6f6; border-radius: 4px; }
+      .print-button { margin: 16px 0; padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
+    </style>
+  </head>
+  <body>
+    ${clinicHeader(doc.clinic)}
+    <div class="header">
+      <h1>${escapeHtml(doc.title)}</h1>
+      <div class="meta">${doc.meta.map(([label, value]) => `<strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}`).join('<br/>')}</div>
+    </div>
+    <div class="party"><strong>Bill to:</strong><br/>${doc.party.map(escapeHtml).join('<br/>')}</div>
+    <button class="print-button no-print" onclick="window.print()">Print</button>
+    <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+    <div class="totals">
+      ${doc.totals.map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`).join('')}
+      <div class="grand"><strong>${escapeHtml(doc.grandTotal[0])}:</strong> ${escapeHtml(doc.grandTotal[1])}</div>
+    </div>
+    ${doc.notes ? `<div class="notes"><strong>Notes:</strong><br/>${escapeHtml(doc.notes)}</div>` : ''}
+  </body>
+</html>`;
+}
+
+export function renderPharmacyInvoiceHtml(invoice: any, clinic?: ClinicIdentity | null): string {
+  const party = [
+    invoice.patient?.name || invoice.billingName || 'N/A',
+    invoice.patient?.phone || invoice.billingPhone || 'N/A',
+    invoice.billingAddress || invoice.patient?.address || '',
+  ].filter(Boolean);
+  return renderPrintDocument({
+    title: `Pharmacy Invoice ${invoice?.invoiceNumber || ''}`.trim(),
+    clinic,
+    meta: [
+      ['Invoice #', invoice?.invoiceNumber || ''],
+      ['Date', displayClinicDate(invoice.invoiceDate || invoice.createdAt)],
+      ['Status', invoice?.status || 'N/A'],
+    ],
+    party,
+    columns: [
+      { label: 'Item' },
+      { label: 'Qty', align: 'center', width: '64px' },
+      { label: 'Unit Price', align: 'right', width: '110px' },
+      { label: 'Disc%', align: 'right', width: '64px' },
+      { label: 'Tax%', align: 'right', width: '64px' },
+      { label: 'Amount', align: 'right', width: '120px' },
+    ],
+    rows: (invoice.items || []).map((item: any) => [
+      item.itemType === 'PACKAGE' ? item.package?.name || 'Unknown Package' : item.drug?.name || 'Unknown Drug',
+      String(item.quantity ?? ''),
+      formatRupees(item.unitPrice),
+      percent(item.discountPercent),
+      percent(item.taxPercent),
+      formatRupees(item.totalAmount),
+    ]),
+    totals: [
+      ['Subtotal', formatRupees(invoice.subtotal)],
+      ['Discount', formatRupees(-(Number(invoice.discountAmount) || 0))],
+      ['Tax', formatRupees(invoice.taxAmount)],
+    ],
+    grandTotal: ['Grand Total', formatRupees(invoice.totalAmount)],
+    notes: invoice.notes || undefined,
+  });
+}
+
+const MODE_LABELS: Record<string, string> = {
+  CASH: 'Cash', UPI: 'UPI', CARD: 'Card', NETBANKING: 'Net banking', WALLET: 'Wallet', INSURANCE: 'Insurance', CREDIT: 'Credit', OTHER: 'Other',
+};
+
+export function renderSaleReceiptHtml(doc: any, clinic?: ClinicIdentity | null): string {
+  const payload = doc?.payload ?? {};
+  const isReturn = doc?.kind === 'SALES_RETURN';
+  const mode = isReturn ? payload.refundMode : payload.paymentMode;
+  const lines: any[] = payload.lines ?? [];
+  return renderPrintDocument({
+    title: `${isReturn ? 'Sales Return' : 'Pharmacy Receipt'} ${doc?.reference || ''}`.trim(),
+    clinic,
+    meta: [
+      [isReturn ? 'Return #' : 'Bill #', doc?.reference || ''],
+      ['Date', displayCalendarDate(payload.date, '') || displayClinicDate(doc?.createdAt)],
+      [isReturn ? 'Refund mode' : 'Payment mode', mode ? MODE_LABELS[mode] ?? String(mode) : '—'],
+    ],
+    party: [payload.customerName || 'Walk-in customer', payload.customerPhone].filter(Boolean),
+    columns: [
+      { label: 'Item' },
+      { label: 'Batch', width: '110px' },
+      { label: 'Qty', align: 'center', width: '64px' },
+      { label: 'Rate', align: 'right', width: '110px' },
+      { label: 'Amount', align: 'right', width: '120px' },
+    ],
+    rows: lines.map((line) => [
+      line.name || 'Item',
+      line.batchNumber || '—',
+      String(line.quantity ?? ''),
+      formatRupees(line.unitPrice),
+      formatRupees(line.total ?? (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0)),
+    ]),
+    totals: [],
+    grandTotal: [isReturn ? 'Refund total' : 'Total', formatRupees(doc?.totalAmount ?? lines.reduce((sum, line) => sum + (Number(line.total) || 0), 0))],
+    notes: payload.notes || undefined,
+  });
+}
+
+export function printHtml(html: string): Promise<void> {
+  document.querySelectorAll('iframe[data-print-frame]').forEach((frame) => frame.remove());
+  const frame = document.createElement('iframe');
+  frame.dataset.printFrame = 'true';
+  frame.title = 'Print preview';
+  frame.setAttribute('aria-hidden', 'true');
+  frame.tabIndex = -1;
+  Object.assign(frame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
+  return new Promise((resolve) => {
+    frame.onload = () => {
+      const view = frame.contentWindow;
+      if (view) {
+        view.addEventListener('afterprint', () => frame.remove(), { once: true });
+        view.focus();
+        view.print();
+      }
+      resolve();
+    };
+    frame.srcdoc = html;
+    document.body.appendChild(frame);
+  });
 }

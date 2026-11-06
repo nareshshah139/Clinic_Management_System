@@ -1,54 +1,66 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { requestKey } from '@/components/inventory/workspace-model';
 import { SalesRegister } from '@/components/pharmacy/sales/SalesRegister';
-import type { Register } from '@/components/pharmacy/sales/sales-register-model';
+import { REGISTERS, REGISTER_COPY, newEntryHref, salesTabHref, type Register } from '@/components/pharmacy/sales/sales-register-model';
 
-const PATH = '/dashboard/pharmacy/sales';
 const NO_PARAMS = new URLSearchParams();
 
 function SalesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const urlTab: Register = searchParams.get('tab') === 'returns' ? 'returns' : 'sales';
-  const [tab, setTab] = useState<Register>(urlTab);
+  const tab: Register = searchParams.get('tab') === 'returns' ? 'returns' : 'sales';
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const params = useRef<Record<Register, string>>({ sales: '', returns: '' });
 
-  useEffect(() => setTab(urlTab), [urlTab]);
-
-  const replaceParams = useCallback(
-    (params: URLSearchParams) => {
-      const next = new URLSearchParams(params);
-      if (tab === 'returns') next.set('tab', 'returns');
-      const query = next.toString();
-      if (query === new URLSearchParams(window.location.search).toString()) return;
-      router.replace(query ? `${PATH}?${query}` : PATH, { scroll: false });
-    },
-    [router, tab],
-  );
+  const recordParams = (register: Register) => (next: URLSearchParams) => {
+    params.current[register] = next.toString();
+    if (register !== tabRef.current) return;
+    const href = salesTabHref(register, next);
+    if (href !== `${window.location.pathname}${window.location.search}`) router.replace(href, { scroll: false });
+  };
 
   return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <PageHeader title="Sales" />
-      <Tabs value={tab} onValueChange={(value: string) => setTab(value as Register)}>
-        <TabsList aria-label="Sales registers" className="w-fit">
-          <TabsTrigger value="sales" className="min-h-10 px-5">Sales</TabsTrigger>
-          <TabsTrigger value="returns" className="min-h-10 px-5">Returns</TabsTrigger>
-        </TabsList>
-        {(['sales', 'returns'] as const).map((register) => (
-          <TabsContent key={register} value={register} className="pt-2">
+    <Tabs value={tab} onValueChange={(value: string) => router.push(salesTabHref(value as Register, params.current[value as Register]), { scroll: false })}>
+      <div className="flex min-w-0 flex-col gap-3">
+        <PageHeader
+          title="Sales"
+          className="items-center justify-start gap-x-6 gap-y-3"
+          actions={
+            <>
+              <TabsList aria-label="Sales registers">
+                <TabsTrigger value="sales" className="min-h-10 px-4 text-sm">Sales</TabsTrigger>
+                <TabsTrigger value="returns" className="min-h-10 px-4 text-sm">Returns</TabsTrigger>
+              </TabsList>
+              <Button
+                className="h-10 text-sm"
+                onClick={() => router.push(newEntryHref(tab, salesTabHref(tab, params.current[tab]), requestKey()))}
+              >
+                <Plus aria-hidden="true" /> {REGISTER_COPY[tab].newLabel}
+              </Button>
+            </>
+          }
+        />
+        {REGISTERS.map((register) => (
+          <TabsContent key={register} value={register} forceMount hidden={register !== tab} className="min-w-0">
             <SalesRegister
               register={register}
-              searchParams={register === urlTab ? searchParams : NO_PARAMS}
-              onParamsChange={replaceParams}
+              active={register === tab}
+              searchParams={register === tab ? searchParams : NO_PARAMS}
+              onParamsChange={recordParams(register)}
             />
           </TabsContent>
         ))}
-      </Tabs>
-    </div>
+      </div>
+    </Tabs>
   );
 }
 

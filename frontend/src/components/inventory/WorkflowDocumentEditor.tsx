@@ -1,5 +1,6 @@
 "use client";
 import { displayUtcDate, displayClinicDateTime } from '@/lib/date-display';
+import { getISTDateString } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import { useEffect, useRef, useState } from "react";
@@ -107,12 +108,12 @@ export function WorkflowDocumentEditor({
     [linkedSource, setLinkedSource] = useState<any>(null),
     [form, setForm] = useState<any>(() => ({
       kind,
-      reference: `${kind.replaceAll("_", "-")}-${new Date().toISOString().slice(0, 10)}`,
+      reference: `${kind.replaceAll("_", "-")}-${getISTDateString()}`,
       requestKey: requestKey(),
       supplierId: "",
       sourceId: "",
       payload: {
-        date: new Date().toISOString().slice(0, 10),
+        date: getISTDateString(),
         reason: "",
         lines: [],
         ...initial?.payload,
