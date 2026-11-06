@@ -134,7 +134,7 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
   const day = encounterDay(raw);
   const visitTypeLabel = extractTextFromUnknown(scribe.visitType, []) || visit.visitType || undefined;
   const photoPreviews = Array.isArray(raw.photoPreviewUrls) ? raw.photoPreviewUrls.map(normalizeAssetUrl) : [];
-  const rxItems = Array.isArray(raw.prescriptionItems) ? raw.prescriptionItems : [];
+  const rxItems = visitMedicines(raw);
   const status = String(visit.status || '').toLowerCase().replaceAll('_', '-');
   return {
     dateLabel: displayCalendarDate(day, 'Unknown date'),
@@ -147,8 +147,94 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
     photoCount: Number(raw.photos || 0) || photoPreviews.length,
     photoPreviews: photoPreviews as string[],
     rxItems,
+    medicines: medicineNames(rxItems),
+    history: compactHistory(raw),
     hasPrescription: Boolean(visit.prescription?.id) || rxItems.length > 0,
   };
+};
+
+type VisitView = 'summary' | 'compact' | 'full';
+type CompactHistoryEntry = { label: string; text: string };
+type MedicineItem = Record<string, unknown>;
+
+const asRecordList = (value: unknown): MedicineItem[] => {
+  const normalized = normalizeStructuredValue(value);
+  return Array.isArray(normalized)
+    ? normalized.filter((entry): entry is MedicineItem => Boolean(entry) && typeof entry === 'object')
+    : [];
+};
+
+export const visitMedicines = (visit: Record<string, any>): MedicineItem[] => {
+  const sources = [
+    visit.prescriptionItems,
+    visit.prescription?.items,
+    parseJsonObject<Record<string, any>>(visit.plan)?.dermatology?.medicationPlan,
+  ];
+  for (const source of sources) {
+    const items = asRecordList(source);
+    if (items.length > 0) return items;
+  }
+  return [];
+};
+
+export const medicineNames = (items: MedicineItem[]): string[] => {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const item of items) {
+    const raw = [item.drugName, item.name].find((candidate) => typeof candidate === 'string' && candidate.trim());
+    if (typeof raw !== 'string') continue;
+    const name = raw.trim();
+    const key = name.toLowerCase().replace(/\s+/g, ' ');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+};
+
+const familyHistoryText = (value: unknown): string | undefined => {
+  const family = parseJsonObject<Record<string, unknown>>(value);
+  if (!family) return extractTextList(value, ['text', 'name']).join('; ') || undefined;
+  const parts = [
+    family.dm === true && 'Diabetes',
+    family.htn === true && 'Hypertension',
+    family.thyroid === true && 'Thyroid disease',
+    ...extractTextList(family.others, ['text', 'name']),
+  ].filter((part): part is string => Boolean(part));
+  return parts.join('; ') || undefined;
+};
+
+const compactHistoryFields: [string, string][] = [
+  ['personalHistory', 'Personal history'],
+  ['pastHistory', 'Past history'],
+  ['medicationHistory', 'Medication history'],
+  ['menstrualHistory', 'Menstrual history'],
+  ['familyHistory', 'Family history'],
+  ['triggers', 'Triggers'],
+  ['priorTreatments', 'Prior treatments'],
+];
+
+export const compactHistory = (visit: Record<string, any>): CompactHistoryEntry[] => {
+  const source = normalizeStructuredValue(visit.history) || visit.historySummary;
+  if (typeof source === 'string') return source.trim() ? [{ label: 'History', text: source.trim() }] : [];
+  const history = parseJsonObject<Record<string, unknown>>(source);
+  if (!history) return [];
+  return compactHistoryFields
+    .map(([key, label]) => ({
+      label,
+      text: key === 'familyHistory' ? familyHistoryText(history[key]) : extractTextList(history[key], ['text', 'name']).join('; '),
+    }))
+    .filter((entry): entry is CompactHistoryEntry => Boolean(entry.text));
+};
+
+const withoutMedicationPlan = (plan: unknown): unknown => {
+  const parsed = parseJsonObject<Record<string, any>>(plan);
+  if (!parsed) return plan;
+  const { medicationPlan: _top, dermatology, ...rest } = parsed;
+  const derm = parseJsonObject<Record<string, unknown>>(dermatology);
+  if (!derm) return dermatology === undefined ? rest : { ...rest, dermatology };
+  const { medicationPlan: _nested, ...dermRest } = derm;
+  return { ...rest, dermatology: dermRest };
 };
 
 const DetailSection = ({
@@ -175,7 +261,8 @@ export default function PatientHistoryVisitCard({
   className,
 }: PatientHistoryVisitCardProps) {
   const detailsId = useId();
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const [view, setView] = useState<VisitView>(defaultCollapsed ? 'summary' : 'full');
+  const summary = view === 'summary';
   const data = useMemo(() => deriveVisitData(visit), [visit]);
 
   const raw = visit as Record<string, any>;
@@ -189,9 +276,9 @@ export default function PatientHistoryVisitCard({
     ['Diagnosis details', normalizeStructuredValue(visit.diagnosis)],
     ['History', normalizeStructuredValue(raw.history) || raw.historySummary],
     ['Examination', normalizeStructuredValue(raw.exam) || raw.examSummary],
-    ['Treatment plan', normalizeStructuredValue(visit.plan) || raw.planSummary],
+    ['Treatment plan', withoutMedicationPlan(normalizeStructuredValue(visit.plan) || raw.planSummary)],
     ['Vitals', labeledVitals || normalizeStructuredValue(visit.vitals)],
-    ['Prescription Items', hasClinicalValue(raw.prescriptionItems) ? raw.prescriptionItems : normalizeStructuredValue(raw.prescription?.items)],
+    ['Prescription', data.rxItems],
     ['Prescription instructions', { ...raw.prescriptionMeta, ...(raw.prescription?.instructions ? { followUpInstructions: raw.prescription.instructions } : {}), ...(raw.prescription?.pharmacistNotes ? { pharmacistNotes: raw.prescription.pharmacistNotes } : {}), ...(raw.prescription?.validUntil ? { validUntil: formatMaybeDate(String(raw.prescription.validUntil)) } : {}) }],
     ['Follow-up date', visit.followUp ? formatMaybeDate(String(visit.followUp)) : undefined],
     ['Visit notes', normalizeStructuredValue(visit.scribeJson)],
@@ -200,7 +287,8 @@ export default function PatientHistoryVisitCard({
     ['Consents', raw.consents],
     ['Appointment notes', raw.appointmentNotes || raw.appointment?.notes],
   ].map(([title, value]) => ({ title: String(title), value })).filter(section => hasClinicalValue(section.value));
-  const hasExpandedContent = sections.length > 0 || data.photoPreviews.length > 0 || footerActions;
+  const hasFullDetails = sections.length > 0 || data.photoPreviews.length > 0;
+  const hasExpandedContent = hasFullDetails || data.history.length > 0 || data.medicines.length > 0 || footerActions;
 
   return (
     <Card
@@ -229,13 +317,13 @@ export default function PatientHistoryVisitCard({
           <dl className="space-y-1 text-sm leading-snug">
             <div className="flex min-w-0 gap-2">
               <dt className="w-28 shrink-0 text-xs leading-5 text-muted-foreground">Chief Complaint</dt>
-              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', collapsed && 'line-clamp-2', data.chiefComplaint ? 'text-foreground' : 'text-muted-foreground')}>
+              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', summary && 'line-clamp-2', data.chiefComplaint ? 'text-foreground' : 'text-muted-foreground')}>
                 {data.chiefComplaint || 'Not recorded'}
               </dd>
             </div>
             <div className="flex min-w-0 gap-2">
               <dt className="w-28 shrink-0 text-xs leading-5 text-muted-foreground">Diagnosis</dt>
-              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', collapsed && 'line-clamp-2', data.primaryDiagnosis ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', summary && 'line-clamp-2', data.primaryDiagnosis ? 'font-medium text-foreground' : 'text-muted-foreground')}>
                 {data.primaryDiagnosis || 'Not recorded'}
               </dd>
             </div>
@@ -270,14 +358,14 @@ export default function PatientHistoryVisitCard({
                   size="sm"
                   variant="ghost"
                   className="h-8 min-h-8 px-2 text-xs"
-                  aria-expanded={!collapsed}
+                  aria-expanded={!summary}
                   aria-controls={detailsId}
-                  onClick={() => setCollapsed((current) => !current)}
+                  onClick={() => setView((current) => (current === 'summary' ? 'compact' : 'summary'))}
                 >
-                  {collapsed ? 'Show details' : 'Hide details'}
+                  {summary ? 'Show details' : 'Hide details'}
                   <ChevronDown
                     aria-hidden="true"
-                    className={cn('h-4 w-4 transition-transform motion-reduce:transition-none', !collapsed && 'rotate-180')}
+                    className={cn('h-4 w-4 transition-transform motion-reduce:transition-none', !summary && 'rotate-180')}
                   />
                 </Button>
               )}
@@ -286,21 +374,56 @@ export default function PatientHistoryVisitCard({
         )}
 
         {hasExpandedContent && (
-          <div id={detailsId} hidden={collapsed} className="border-t border-border p-3">
-            {!collapsed && <>
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] items-start gap-x-6 gap-y-4">
-                {sections.map(section => (
-                  <DetailSection key={section.title} title={section.title}>
-                    <ClinicalHistoryDetails value={section.value} />
-                  </DetailSection>
-                ))}
-                {data.photoPreviews.length > 0 && <DetailSection title="Photos">
-                  <div className="flex flex-wrap gap-2">{data.photoPreviews.map((url, index) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <a key={index} href={url} target="_blank" rel="noreferrer" aria-label={`Open visit photo ${index + 1}`} className="rounded-md focus-visible:outline-2 focus-visible:outline-ring"><img src={url} alt={`Visit photo preview ${index + 1}`} loading="lazy" width={120} height={80} className="h-20 w-30 rounded-md border border-border object-cover" /></a>
-                  ))}</div>
-                </DetailSection>}
-              </div>
+          <div id={detailsId} hidden={summary} className="border-t border-border p-3">
+            {!summary && <>
+              {view === 'compact' ? (
+                <div className="space-y-3">
+                  {data.history.length > 0 && (
+                    <DetailSection title="History">
+                      <dl className="space-y-1">
+                        {data.history.map((entry) => (
+                          <div key={entry.label} className="flex min-w-0 gap-2">
+                            <dt className="w-28 shrink-0 text-xs leading-5 text-muted-foreground">{entry.label}</dt>
+                            <dd className="min-w-0 whitespace-pre-wrap break-words text-foreground">{entry.text}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </DetailSection>
+                  )}
+                  {data.medicines.length > 0 && (
+                    <DetailSection title="Medicines">
+                      <ul className="space-y-0.5 text-foreground">
+                        {data.medicines.map((name) => <li key={name.toLowerCase()} className="min-w-0 break-words">{name}</li>)}
+                      </ul>
+                    </DetailSection>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] items-start gap-x-6 gap-y-4">
+                  {sections.map(section => (
+                    <DetailSection key={section.title} title={section.title}>
+                      <ClinicalHistoryDetails value={section.value} />
+                    </DetailSection>
+                  ))}
+                  {data.photoPreviews.length > 0 && <DetailSection title="Photos">
+                    <div className="flex flex-wrap gap-2">{data.photoPreviews.map((url, index) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <a key={index} href={url} target="_blank" rel="noreferrer" aria-label={`Open visit photo ${index + 1}`} className="rounded-md focus-visible:outline-2 focus-visible:outline-ring"><img src={url} alt={`Visit photo preview ${index + 1}`} loading="lazy" width={120} height={80} className="h-20 w-30 rounded-md border border-border object-cover" /></a>
+                    ))}</div>
+                  </DetailSection>}
+                </div>
+              )}
+              {hasFullDetails && <Button
+                type="button"
+                size="sm"
+                variant="link"
+                className="mt-2 h-8 min-h-8 px-0 text-xs"
+                aria-expanded={view === 'full'}
+                aria-controls={detailsId}
+                onClick={() => setView((current) => (current === 'full' ? 'compact' : 'full'))}
+              >
+                {view === 'full' ? 'Compact view' : 'Full details'}
+              </Button>}
               {footerActions && <div className="mt-3 border-t border-border pt-3">{footerActions}</div>}
             </>}
           </div>
