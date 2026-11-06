@@ -7,6 +7,7 @@ describe('PharmacyPurchaseRegisterService', () => {
   const branch = { branchId: 'branch-1' };
   let prisma: any;
   let service: PharmacyPurchaseRegisterService;
+  let ledger: any;
 
   const query = (overrides: Partial<PurchaseRegisterQuery> = {}): PurchaseRegisterQuery => ({
     from: '2026-04-01',
@@ -50,7 +51,13 @@ describe('PharmacyPurchaseRegisterService', () => {
         ),
       },
     };
-    service = new PharmacyPurchaseRegisterService(prisma);
+    ledger = {
+      creditHeld: jest.fn(async () => new Map([['36ABCDE1234F1Z5', 400], ['27AAAAA0000A1Z5', 0]])),
+      distributorPosition: jest.fn(async (_branch: string, gstin: string) => ({
+        gstin, name: 'Linae Distributors', outstanding: 850, creditHeld: 400, net: 450,
+      })),
+    };
+    service = new PharmacyPurchaseRegisterService(prisma, ledger);
   });
 
   it('reads this branch bills in the clinic-time range with only unreversed payments already in effect', async () => {
@@ -85,6 +92,17 @@ describe('PharmacyPurchaseRegisterService', () => {
       excluded: { notPosted: 1, cancelled: 0 },
     });
     expect(Object.keys(page)).not.toContain('canSettle');
+  });
+
+  it('reports credit held per distributor on the page and the net position only when one distributor is chosen', async () => {
+    const all = await service.list(query(), branch, now);
+    expect([all.creditHeld, all.distributorPosition]).toEqual([{ '36ABCDE1234F1Z5': 400 }, null]);
+    expect(ledger.creditHeld.mock.calls[0]).toEqual(['branch-1', now, ['36ABCDE1234F1Z5']]);
+
+    const one = await service.list(query({ distributorGstin: '36ABCDE1234F1Z5' }), branch, now);
+    expect(one.distributorPosition).toEqual({
+      gstin: '36ABCDE1234F1Z5', name: 'Linae Distributors', outstanding: 850, creditHeld: 400, net: 450,
+    });
   });
 
   it('keeps a payment dated tomorrow out of the balance but off the amount that can be paid now', async () => {

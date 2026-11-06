@@ -69,6 +69,7 @@ model User {
   visits                     Visit[]
   pharmacyInvoices           PharmacyInvoice[]  @relation("PharmacyInvoiceDoctor")
   createdPharmacyInvoices    PharmacyInvoice[]  @relation("PharmacyInvoiceCreator")
+  receivedSupplierCredits    InventorySupplierCredit[] @relation("SupplierCreditReceiver")
   partnerDailySalesSubmitted PartnerDailySale[] @relation("PartnerDailySaleSubmittedBy")
   createdPackages            PharmacyPackage[]  @relation("PharmacyPackageCreator")
   whatsappTemplates          WhatsAppTemplate[]
@@ -1762,8 +1763,14 @@ model InventorySupplierCredit {
   amount       Decimal @db.Decimal(16, 2)
   applied      Decimal @default(0) @db.Decimal(16, 2)
   createdAt    DateTime @default(now())
+  creditNoteNumber String?
+  creditNoteDate   DateTime? @db.Date
+  receivedAt       DateTime?
+  receivedById     String?
+  receivedBy       User? @relation("SupplierCreditReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
   allocations  InventoryCreditAllocation[]
 
+  @@unique([branchId, supplierGstin, creditNoteNumber], map: "inventory_supplier_credits_credit_note_key")
   @@index([branchId, supplierGstin])
   @@map("inventory_supplier_credits")
 }

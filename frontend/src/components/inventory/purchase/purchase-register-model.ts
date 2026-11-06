@@ -3,7 +3,7 @@ import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { financialYear, formatDisplayDay, parseDisplayDay } from '@/lib/date-ranges';
 import { errorMessage, type RegisterQuery, type RegisterQueryConfig } from '@/components/register/register-query';
 
-export const PURCHASE_REGISTERS = ['purchases'] as const;
+export const PURCHASE_REGISTERS = ['purchases', 'returns'] as const;
 export const PURCHASE_SOURCES = ['MANUAL', 'OCR', 'CSV', 'GMAIL'] as const;
 export const INVOICE_STATES = ['DRAFT', 'OCR_REVIEW', 'RECONCILIATION_FAILED', 'REVIEWED', 'POSTED', 'CANCELLED'] as const;
 export const INVOICE_STATE_FILTERS = ['DRAFT', 'IN_REVIEW', 'OCR_REVIEW', 'RECONCILIATION_FAILED', 'REVIEWED', 'POSTED', 'CANCELLED'] as const;
@@ -55,6 +55,8 @@ export type PurchaseRegisterRow = {
   };
 };
 
+export type DistributorPosition = { gstin: string; name: string | null; outstanding: number; creditHeld: number; net: number };
+
 export type PurchaseRegisterResponse = {
   rows: PurchaseRegisterRow[];
   total: number;
@@ -63,6 +65,8 @@ export type PurchaseRegisterResponse = {
   totals: { amount: number; outstanding: number; count: number; excluded: { notPosted: number; cancelled: number } };
   entryByOptions: Person[];
   distributorOptions: Distributor[];
+  creditHeld: Record<string, number>;
+  distributorPosition: DistributorPosition | null;
 };
 
 export type RecordedPayment = {
@@ -76,8 +80,9 @@ export const SETTLE_MODE_STORAGE_KEY = 'purchase-register.settle-mode';
 export const UNDO_REASON = 'Undone from purchase list';
 export const UNDO_WINDOW_MS = 30_000;
 
-export const PURCHASE_REGISTER_COPY: Record<PurchaseRegisterKind, { tab: string; noun: string; table: string; endpoint: string }> = {
-  purchases: { tab: 'Purchase', noun: 'purchase bills', table: 'Purchase bills', endpoint: '/pharmacy/purchase-register' },
+export const PURCHASE_REGISTER_COPY: Record<PurchaseRegisterKind, { tab: string; noun: string; table: string; endpoint: string; exportable: boolean }> = {
+  purchases: { tab: 'Purchase', noun: 'purchase bills', table: 'Purchase bills', endpoint: '/pharmacy/purchase-register', exportable: true },
+  returns: { tab: 'Returns', noun: 'purchase returns', table: 'Purchase returns', endpoint: '/pharmacy/purchase-returns-register', exportable: false },
 };
 
 const LEDGER_WRITER_ROLES: readonly string[] = [UserRole.OWNER, UserRole.ADMIN, UserRole.DOCTOR, UserRole.PHARMACIST, UserRole.ACCOUNTANT];

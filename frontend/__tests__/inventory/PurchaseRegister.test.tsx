@@ -164,7 +164,7 @@ it('sorts by Sr No, amount and outstanding, and reports the direction', async ()
 it('combines distributor search, payment status and more filters, and keeps them in the URL', async () => {
   renderRegister();
   await screen.findByText('MED-7');
-  fireEvent.change(screen.getByLabelText('Search by'), { target: { value: 'distributor' } });
+  fireEvent.change(within(screen.getByRole('tabpanel')).getByLabelText('Search by'), { target: { value: 'distributor' } });
   fireEvent.change(screen.getByPlaceholderText('Distributor name or GSTIN'), { target: { value: 'linae' } });
   fireEvent.change(screen.getByLabelText('Payment status'), { target: { value: 'OUTSTANDING' } });
   fireEvent.click(screen.getByRole('button', { name: 'More filters' }));

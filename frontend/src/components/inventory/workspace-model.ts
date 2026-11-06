@@ -1,6 +1,6 @@
 export const workflowKinds:Record<string,{label:string;area:string;help:string;primary:string}>={
  OPENING_STOCK:{label:'Opening stock entries',area:'stock',help:'Set the opening balance of a new batch with no prior movements. This creates no supplier payable.',primary:'Post opening stock'},
- SUPPLIER_RETURN:{label:'Supplier returns',area:'stock',help:'Save a draft, send stock out on a challan, then finalise the supplier credit.',primary:'Create return challan'},
+ SUPPLIER_RETURN:{label:'Supplier returns',area:'purchases',help:'Save a draft and send the goods back on a challan. Record the distributor\'s credit note from Purchase bills › Returns when it arrives.',primary:'Create return challan'},
  SALES_RETURN:{label:'Customer returns',area:'sales',help:'Select the original sale and choose restock, quarantine or loss for each returned batch.',primary:'Post return'},
  LOSS:{label:'Loss & breakage',area:'stock',help:'Record a reason and remove damaged or lost units from available stock.',primary:'Post stock loss'},
  HOLD:{label:'Blocked stock',area:'stock',help:'Hold units from sale while keeping them in physical stock. Release from this record.',primary:'Block stock'},

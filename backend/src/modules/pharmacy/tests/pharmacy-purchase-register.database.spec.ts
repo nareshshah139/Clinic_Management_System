@@ -87,7 +87,7 @@ databaseTests('Purchase register on PostgreSQL', () => {
     );
     db = new PrismaClient({ datasourceUrl: url.toString() });
     ledger = new PharmacyPurchaseLedgerService(db as any);
-    register = new PharmacyPurchaseRegisterService(db as any);
+    register = new PharmacyPurchaseRegisterService(db as any, ledger);
   }, 120000);
 
   afterAll(async () => {

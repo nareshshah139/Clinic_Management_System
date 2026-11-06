@@ -31,6 +31,7 @@ describe('PharmacyPurchaseLedgerService', () => {
         findMany: jest.fn(),
       },
       inventoryCreditAllocation: {findMany:jest.fn().mockResolvedValue([])},
+      inventorySupplierCredit: { findMany: jest.fn().mockResolvedValue([]) },
       pharmacyPurchasePayment: {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
@@ -268,6 +269,37 @@ describe('PharmacyPurchaseLedgerService', () => {
         tcsRemaining: 0,
       }),
     );
+  });
+
+  it('nets credit notes held against the distributor dues, counting only recorded, unreversed and unused credit as of the cutoff', async () => {
+    prisma.pharmacyPurchaseInvoice.findMany.mockResolvedValue([invoice({ netPayable: 1000, dueDate: null })]);
+    const credit = (overrides: any) => ({
+      supplierGstin: gstin,
+      amount: 300,
+      createdAt: new Date('2026-05-01T00:00:00.000Z'),
+      reversedAt: null,
+      creditNoteNumber: 'CN-1',
+      receivedAt: new Date('2026-05-02T00:00:00.000Z'),
+      allocations: [],
+      ...overrides,
+    });
+    prisma.inventorySupplierCredit.findMany.mockResolvedValue([
+      credit({ allocations: [{ amount: 120, createdAt: new Date('2026-05-03T00:00:00.000Z'), reversedAt: null }] }),
+      credit({ creditNoteNumber: 'CN-2', amount: 50, allocations: [{ amount: 50, createdAt: new Date('2026-05-03T00:00:00.000Z'), reversedAt: new Date('2026-05-04T00:00:00.000Z') }] }),
+      credit({ creditNoteNumber: 'CN-LATER', receivedAt: new Date('2026-05-09T00:00:00.000Z') }),
+      credit({ creditNoteNumber: 'CN-GONE', reversedAt: new Date('2026-05-04T00:00:00.000Z') }),
+    ]);
+
+    const summary = (await service.getDistributorSummaries(branchId, new Date('2026-05-06T00:00:00.000Z'))).distributors[0];
+
+    expect([summary.outstanding, summary.creditHeld, summary.netPayable]).toEqual([1000, 230, 770]);
+    expect(await service.distributorPosition(branchId, gstin.toLowerCase(), new Date('2026-05-06T00:00:00.000Z'))).toEqual({
+      gstin,
+      name: 'Linae Distributors',
+      outstanding: 1000,
+      creditHeld: 230,
+      net: 770,
+    });
   });
 
   it('returns aging buckets and due alerts from outstanding invoices', async () => {

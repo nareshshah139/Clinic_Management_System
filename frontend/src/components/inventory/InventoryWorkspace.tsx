@@ -63,7 +63,6 @@ const menus: Record<string, string[][]> = {
     ["list", "Stock list"],
     ["approvals", "Approve corrections"],
     ["COUNT", "Counts & audit"],
-    ["SUPPLIER_RETURN", "Supplier returns"],
     ["LOSS", "Loss & breakage"],
     ["HOLD", "Blocked stock"],
     ["CORRECTION", "Corrections"],
@@ -394,8 +393,11 @@ export function InventoryWorkspace() {
             <PurchaseBills
               searchParams={params}
               onParamsChange={purchaseRegisterParams}
+              onTabChange={(next) => router.push(`${path}?${new URLSearchParams({ area: "purchases", view: "register", ...Object.fromEntries(next) })}`, { scroll: false })}
               canSettle={canRecordSupplierPayments(caps, user?.role)}
               onOpen={invoice}
+              onOpenReturn={open}
+              onNewReturn={() => task("SUPPLIER_RETURN")}
               onNew={() => navigate({ return: origin(), view: "intake", new: requestKey(), invoice: "", receipt: "", intake: "", document: "", item: "" })}
               onLedger={caps.ledger ? (gstin?: string) => switchTask("ledger", { gstin: gstin ?? "" }) : null}
               onSuppliers={() => switchTask("suppliers")}
@@ -616,7 +618,7 @@ function WorkspaceToday({ navigate, open }: any) {
       label: "Supplier returns in progress",
       count: queue("SUPPLIER_RETURN"),
       detail: "Complete the challan and supplier credit.",
-      target: { area: "stock", view: "SUPPLIER_RETURN", status: "OPEN" },
+      target: { area: "purchases", view: "register", tab: "returns" },
     },
     {
       label: "Orders awaiting receipt",
