@@ -67,4 +67,3 @@ prod-backup*.list
 output/stack/
 .claude/worktrees/
 output/pdf/
-output/pdf/
