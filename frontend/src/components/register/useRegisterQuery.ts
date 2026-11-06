@@ -27,7 +27,7 @@ export function useRegisterQuery<Filter extends string, Sort extends string, Dat
   enabled = true,
 }: {
   config: RegisterQueryConfig<Filter, Sort>;
-  searchParams: Pick<URLSearchParams, 'get'>;
+  searchParams: Pick<URLSearchParams, 'get' | 'toString'>;
   onParamsChange: (params: URLSearchParams) => void;
   fetchPage: (query: RegisterQuery<Filter, Sort>) => Promise<Data>;
   enabled?: boolean;
@@ -56,9 +56,40 @@ export function useRegisterQuery<Filter extends string, Sort extends string, Dat
     return () => clearTimeout(timer);
   }, [draft, query.q]);
 
+  const queryRef = useRef(query);
+  queryRef.current = query;
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+  const pending = useRef<string[]>([]);
+  const keyOf = useCallback(
+    (value: RegisterQuery<Filter, Sort>) => queryParams(config, value, today).toString(),
+    [config, today],
+  );
+
   useEffect(() => {
-    paramsRef.current(queryParams(config, query, today));
-  }, [config, query, today]);
+    const params = queryParams(config, query, today);
+    if (enabled && params.toString() !== keyOf(parseQuery(config, searchParamsRef.current, today))) pending.current.push(params.toString());
+    paramsRef.current(params);
+  }, [config, query, today, enabled, keyOf]);
+
+  const incoming = searchParams.toString();
+  useEffect(() => {
+    if (!enabled) return;
+    const parsed = parseQuery(config, searchParamsRef.current, today);
+    const key = keyOf(parsed);
+    if (key === keyOf(queryRef.current)) {
+      pending.current = [];
+      return;
+    }
+    const echoed = pending.current.indexOf(key);
+    if (echoed >= 0) {
+      pending.current = pending.current.slice(echoed + 1);
+      return;
+    }
+    pending.current = [];
+    setDraft(parsed.q);
+    dispatch({ type: 'load', query: parsed });
+  }, [incoming, enabled, config, today, keyOf]);
 
   useEffect(() => {
     if (!started) return;

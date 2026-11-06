@@ -33,6 +33,7 @@ import {
   workflowKinds,
   labelStatus,
   downloadCsv,
+  returnDestination,
 } from "./workspace-model";
 
 const areas = [
@@ -137,11 +138,11 @@ export function InventoryWorkspace() {
   );
   const origin = () => query.return || params.toString();
   const back = () => {
-    const destination = query.return;
-    if (destination?.startsWith("/") && !destination.startsWith("//")) router.push(destination, { scroll: false });
-    else if (destination) router.push(`${path}?${destination}`, { scroll: false });
+    const destination = returnDestination(query.return, path, window.location.origin);
+    if (destination) router.push(destination, { scroll: false });
     else
       navigate({
+        return: "",
         document: "",
         new: "",
         invoice: "",

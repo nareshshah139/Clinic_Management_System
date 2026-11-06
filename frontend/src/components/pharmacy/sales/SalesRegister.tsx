@@ -32,10 +32,10 @@ import {
   FILTER_KEYS,
   MORE_FILTERS,
   PAYMENT_FILTER_LABELS,
-  PAYMENT_MODES,
-  PAYMENT_MODE_LABELS,
+  REGISTER_QUERY,
   REGISTER_COPY,
-  SALES_QUERY,
+  paymentBadgeLabel,
+  paymentModesFor,
   SEARCH_FIELD_OPTIONS,
   SOURCE_FILTER_LABELS,
   STATE_LABELS,
@@ -108,7 +108,7 @@ async function printRow(row: SalesRegisterRow, clinic: ClinicIdentity | null) {
   }
 }
 
-function PaymentCell({ row }: { row: SalesRegisterRow }) {
+function PaymentCell({ row, register }: { row: SalesRegisterRow; register: Register }) {
   if (!row.paymentModes.length && row.due <= 0) return <span aria-label="None">—</span>;
   return (
     <div className="flex flex-wrap items-center gap-1">
@@ -118,8 +118,8 @@ function PaymentCell({ row }: { row: SalesRegisterRow }) {
         </Badge>
       )}
       {row.paymentModes.map((mode) => (
-        <Badge key={mode} variant="outline" className={cn(badgeText, MODE_BADGE[mode] ?? 'border-border bg-muted text-foreground')}>
-          {PAYMENT_MODE_LABELS[mode]}
+        <Badge key={mode} variant="outline" className={cn(badgeText, (register === 'returns' && mode === 'CREDIT' ? undefined : MODE_BADGE[mode]) ?? 'border-border bg-muted text-foreground')}>
+          {paymentBadgeLabel(register, mode)}
         </Badge>
       ))}
     </div>
@@ -134,7 +134,7 @@ export function SalesRegister({
 }: {
   register: Register;
   active: boolean;
-  searchParams: Pick<URLSearchParams, 'get'>;
+  searchParams: Pick<URLSearchParams, 'get' | 'toString'>;
   onParamsChange: (params: URLSearchParams) => void;
 }) {
   const router = useRouter();
@@ -146,14 +146,14 @@ export function SalesRegister({
     [register],
   );
   const { today, query, dispatch, draft, setDraft, clear, load, retry } = useRegisterQuery({
-    config: SALES_QUERY,
+    config: REGISTER_QUERY[register],
     searchParams,
     onParamsChange,
     fetchPage,
     enabled: active,
   });
 
-  const returnTo = useMemo(() => salesTabHref(register, queryParams(SALES_QUERY, query, today)), [register, query, today]);
+  const returnTo = useMemo(() => salesTabHref(register, queryParams(REGISTER_QUERY[register], query, today)), [register, query, today]);
   const data = load.data;
   const rows = data?.rows ?? [];
   const clinic = data?.clinic ?? null;
@@ -182,7 +182,7 @@ export function SalesRegister({
 
   const billName = (row: SalesRegisterRow) => row.billNo ?? `draft ${copy.one} for ${row.patientName ?? 'walk-in customer'}`;
   const setFilter = (key: (typeof FILTER_KEYS)[number]) => (value: string) => dispatch({ type: 'filter', key, value });
-  const paymentModes = register === 'sales' ? PAYMENT_MODES : PAYMENT_MODES.filter((mode) => mode !== 'CREDIT');
+  const paymentModes = paymentModesFor(register);
   const entryByOptions = (data?.entryByOptions ?? []).map((person) => ({ value: person.id, label: person.name }));
   if (query.filters.entryById && !entryByOptions.some((option) => option.value === query.filters.entryById)) {
     entryByOptions.push({ value: query.filters.entryById, label: 'Selected person' });
@@ -236,7 +236,7 @@ export function SalesRegister({
       className: 'w-[1%]',
       cell: (row) => <span className={cn('font-semibold', row.state === 'CANCELLED' && 'line-through')}>{formatRupees(row.amount)}</span>,
     },
-    { key: 'payment', label: copy.payment, className: 'whitespace-normal', cell: (row) => <PaymentCell row={row} /> },
+    { key: 'payment', label: copy.payment, className: 'whitespace-normal', cell: (row) => <PaymentCell row={row} register={register} /> },
   ];
 
   const footerSummaryText = failed

@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { CalendarDays, SlidersHorizontal, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { formatDisplayDay, parseDisplayDay, rangePresets, type DayRange } from '@/lib/date-ranges';
+import { formatDisplayDay, parseDisplayDay, rangeError, rangePresets, type DayRange } from '@/lib/date-ranges';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -184,19 +184,21 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
     setError('');
   }, [range.from, range.to]);
 
-  const commit = (bound: Bound) => {
-    const day = parseDisplayDay(text[bound]);
-    if (!day) {
-      setError(`Enter the ${BOUND_LABEL[bound]} date as dd/mm/yyyy, year 2000 or later.`);
+  const commit = () => {
+    const from = parseDisplayDay(text.from);
+    const to = parseDisplayDay(text.to);
+    const invalid = !from ? 'From' : !to ? 'To' : null;
+    if (invalid || !from || !to) {
+      setError(`Enter the ${invalid} date as dd/mm/yyyy, year 2000 or later.`);
       return;
     }
-    const next = { ...range, [bound]: day };
-    if (next.from > next.to) {
-      setError('The From date is after the To date.');
+    const problem = rangeError({ from, to });
+    if (problem) {
+      setError(problem);
       return;
     }
     setError('');
-    if (next.from !== range.from || next.to !== range.to) onChange(next);
+    if (from !== range.from || to !== range.to) onChange({ from, to });
   };
 
   return (
@@ -243,9 +245,9 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
                   aria-invalid={!!error}
                   aria-describedby={error ? errorId : undefined}
                   onChange={(event) => setText((current) => ({ ...current, [bound]: event.target.value }))}
-                  onBlur={() => commit(bound)}
+                  onBlur={commit}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') commit(bound);
+                    if (event.key === 'Enter') commit();
                   }}
                   className="h-10 w-36 text-sm tabular-nums md:text-sm"
                 />

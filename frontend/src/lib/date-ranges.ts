@@ -2,6 +2,7 @@ export type DayRange = { from: string; to: string };
 export type RangePreset = { id: string; label: string; range: DayRange };
 
 export const MIN_YEAR = 2000;
+export const MAX_RANGE_DAYS = 400;
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
@@ -62,4 +63,10 @@ export function rangePresets(today: string): RangePreset[] {
     { id: 'this-fy', label: financialYearLabel(thisYear), range: thisYear },
     { id: 'last-fy', label: financialYearLabel(lastYear), range: lastYear },
   ];
+}
+
+export function rangeError({ from, to }: DayRange): string | null {
+  if (from > to) return 'The From date is after the To date.';
+  const span = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1;
+  return span > MAX_RANGE_DAYS ? `Pick at most ${MAX_RANGE_DAYS} days at a time.` : null;
 }

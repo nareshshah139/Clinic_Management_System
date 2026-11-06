@@ -64,6 +64,18 @@ export const SALES_QUERY: RegisterQueryConfig<FilterKey, SortKey> = {
   defaultSort: { by: 'entryAt', dir: 'desc' },
 };
 
+const RETURN_PAYMENT_MODES = PAYMENT_MODES.filter((mode) => mode !== 'CREDIT');
+
+export const REGISTER_QUERY: Record<Register, RegisterQueryConfig<FilterKey, SortKey>> = {
+  sales: SALES_QUERY,
+  returns: { ...SALES_QUERY, filters: { ...SALES_QUERY.filters, paymentMode: { param: 'pay', values: RETURN_PAYMENT_MODES } } },
+};
+
+export const paymentModesFor = (register: Register): readonly PaymentMode[] => (register === 'returns' ? RETURN_PAYMENT_MODES : PAYMENT_MODES);
+
+export const paymentBadgeLabel = (register: Register, mode: PaymentMode) =>
+  register === 'returns' && mode === 'CREDIT' ? 'Store credit' : PAYMENT_MODE_LABELS[mode];
+
 export const MORE_FILTERS = ['state', 'source', 'entryById'] as const satisfies readonly FilterKey[];
 
 export const PAYMENT_MODE_LABELS: Record<PaymentMode, string> = {

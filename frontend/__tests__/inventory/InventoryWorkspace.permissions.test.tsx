@@ -142,5 +142,5 @@ it('returns to the Sales register a document was opened from, and refuses anothe
   mockQuery=`area=sales&view=SALES_RETURN&recoverRequest=k&return=${encodeURIComponent('//evil.example/x')}`;
   render(<InventoryWorkspace/>);
   fireEvent.click(await screen.findByRole('button',{name:'Back from recovery'}));
-  expect(mockRouter.push).toHaveBeenLastCalledWith('/dashboard/inventory?//evil.example/x',{scroll:false});
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/dashboard/inventory?area=sales&view=SALES_RETURN',{scroll:false});
 });

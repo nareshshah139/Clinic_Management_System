@@ -1,4 +1,4 @@
-import { financialYear, isDay } from '@/lib/date-ranges';
+import { financialYear, isDay, rangeError } from '@/lib/date-ranges';
 
 export const SORT_DIRECTIONS = ['asc', 'desc'] as const;
 export type SortDirection = (typeof SORT_DIRECTIONS)[number];
@@ -30,7 +30,8 @@ export type RegisterQueryAction<Filter extends string, Sort extends string> =
   | { type: 'filter'; key: Filter; value: string }
   | { type: 'sort'; key: Sort }
   | { type: 'page'; page: number }
-  | { type: 'clear'; today: string };
+  | { type: 'clear'; today: string }
+  | { type: 'load'; query: RegisterQuery<Filter, Sort> };
 
 type Params = Pick<URLSearchParams, 'get'>;
 
@@ -64,7 +65,7 @@ export function parseQuery<Filter extends string, Sort extends string>(
   query.q = read('q');
   const from = read('from');
   const to = read('to');
-  if (isDay(from) && isDay(to) && from <= to) Object.assign(query, { from, to });
+  if (isDay(from) && isDay(to) && !rangeError({ from, to })) Object.assign(query, { from, to });
   for (const key of filterKeys(config)) {
     const { param, values } = config.filters[key];
     const value = read(param);
@@ -119,6 +120,8 @@ export function reduceQuery<Filter extends string, Sort extends string>(
     }
     case 'page':
       return { ...query, page: Math.max(1, Math.floor(action.page)) };
+    case 'load':
+      return action.query;
     case 'clear':
       return { ...defaultQuery(config, action.today), sortBy: query.sortBy, sortDir: query.sortDir };
   }
