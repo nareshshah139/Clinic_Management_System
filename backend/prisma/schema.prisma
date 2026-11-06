@@ -59,6 +59,7 @@ model User {
   deviceLogs                 DeviceLog[]
   inventoryAudits            InventoryAudit[]
   patientProfile             Patient?           @relation("PatientPortalUser")
+  primaryPatients            Patient[]          @relation("PatientPrimaryDoctor")
   purchaseOrders             PurchaseOrder[]
   reorderRules               ReorderRule[]
   stockAdjustments           StockAdjustment[]
@@ -216,6 +217,7 @@ model Patient {
   medicalHistory   String?
   consultationType String?
   portalUserId     String?           @unique
+  primaryDoctorId  String?
   branchId         String
   isArchived       Boolean           @default(false)
   archivedAt       DateTime?
@@ -229,6 +231,7 @@ model Patient {
   newInvoices      NewInvoice[]
   branch           Branch            @relation(fields: [branchId], references: [id])
   portalUser       User?             @relation("PatientPortalUser", fields: [portalUserId], references: [id])
+  primaryDoctor    User?             @relation("PatientPrimaryDoctor", fields: [primaryDoctorId], references: [id], onDelete: SetNull)
   referrals        Referral[]
   visits           Visit[]
   pharmacyInvoices PharmacyInvoice[]
@@ -245,6 +248,7 @@ model Patient {
   @@index([isArchived])
   @@index([branchId, name])
   @@index([branchId, phone])
+  @@index([branchId, primaryDoctorId])
   @@map("patients")
 }
 

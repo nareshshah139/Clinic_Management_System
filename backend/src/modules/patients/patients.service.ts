@@ -62,9 +62,17 @@ export class PatientsService {
     return new Date(now.getFullYear() - age, 0, 1);
   }
 
-  async create(createPatientDto: CreatePatientDto, branchId: string) {
+  /**
+   * @cc [owner:nareshshah139,label:product] patient-primary-doctor
+   * A patient's primary doctor MUST be an active doctor in the patient's branch, or none.
+   * A doctor who registers a patient without choosing one becomes the primary doctor;
+   * other staff leave it empty, and the patient's first visit assigns that visit's doctor.
+   */
+  async create(createPatientDto: CreatePatientDto, branchId: string, creator?: { id: string; role: string }) {
     const normalizedPhone = this.normalizePhone(createPatientDto.phone);
-    const { dob: dobStr, age, ...rest } = createPatientDto;
+    const { dob: dobStr, age, primaryDoctorId: requestedDoctorId, ...rest } = createPatientDto;
+    const primaryDoctorId = await this.resolvePrimaryDoctor(
+      requestedDoctorId !== undefined ? requestedDoctorId : creator?.role === 'DOCTOR' ? creator.id : null, branchId);
 
     let dob: Date | null = null;
     let resolvedAge: number | null = age != null ? age : null;
@@ -89,8 +97,19 @@ export class PatientsService {
         branchId,
         dob,
         age: resolvedAge,
+        primaryDoctorId,
       }),
     );
+  }
+
+  private async resolvePrimaryDoctor(doctorId: string | null | undefined, branchId: string): Promise<string | null> {
+    if (!doctorId) return null;
+    const doctor = await this.prisma.user.findFirst({
+      where: { id: doctorId, branchId, role: 'DOCTOR', isActive: true },
+      select: { id: true },
+    });
+    if (!doctor) throw new BadRequestException('Primary doctor must be an active doctor in this branch');
+    return doctor.id;
   }
 
   /**
@@ -99,10 +118,10 @@ export class PatientsService {
    * or their total count. Recent registration or an undeleted visit may qualify.
    */
   async findAll(
-    options: { page: number; limit: number; search?: string; gender?: string; consultationType?: string; dateRange?: string },
+    options: { page: number; limit: number; search?: string; gender?: string; consultationType?: string; dateRange?: string; primaryDoctorId?: string },
     branchId: string,
   ) {
-    const { page, limit, search, gender, consultationType, dateRange } = options;
+    const { page, limit, search, gender, consultationType, dateRange, primaryDoctorId } = options;
     const skip = (page - 1) * limit;
 
     // Optimize search by requiring minimum 2 characters and using more efficient queries
@@ -169,6 +188,7 @@ export class PatientsService {
       isArchived: false,
       ...(genderVariants ? { gender: { in: genderVariants } } : {}),
       ...(consultationType ? { consultationType } : {}),
+      ...(primaryDoctorId ? { primaryDoctorId } : {}),
       ...(andConditions.length > 0 ? { AND: andConditions } : {}),
     } as any;
 
@@ -196,13 +216,15 @@ export class PatientsService {
           consultationType: true,
           createdAt: true,
           updatedAt: true,
+          primaryDoctor: { select: { id: true, firstName: true, lastName: true } },
+          visits: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, createdAt: true } },
         },
       }),
       this.prisma.patient.count({ where }),
     ]);
 
     return {
-      data: patients,
+      data: patients.map(({ visits, ...patient }) => ({ ...patient, lastVisitAt: visits[0]?.createdAt ?? null })),
       meta: {
         page,
         limit,
@@ -237,6 +259,8 @@ export class PatientsService {
         emergencyContact: true,
         allergies: true,
         photoUrl: true,
+        primaryDoctorId: true,
+        primaryDoctor: { select: { id: true, firstName: true, lastName: true } },
         referralSource: true,
         secondaryPhone: true,
         maritalStatus: true,
@@ -317,8 +341,11 @@ export class PatientsService {
   async update(id: string, updatePatientDto: UpdatePatientDto, branchId: string) {
     await this.findOne(id, branchId);
 
-    const { dob, age, phone, ...rest } = updatePatientDto as any;
+    const { dob, age, phone, primaryDoctorId, ...rest } = updatePatientDto as any;
     const updateData: any = { ...rest };
+    if (primaryDoctorId !== undefined) {
+      updateData.primaryDoctorId = await this.resolvePrimaryDoctor(primaryDoctorId, branchId);
+    }
 
     if (age != null) {
       updateData.age = age;
