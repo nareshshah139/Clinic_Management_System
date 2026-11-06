@@ -70,16 +70,12 @@ export class ApiClient {
   }
 
   // Auth
-  async forgotPassword(email: string) {
-    return this.post<{ message: string }>('/auth/forgot-password', { email });
-  }
-
   async issueResetCode(userId: string) {
     return this.post<{ code: string; expiresAt: string }>(`/auth/users/${encodeURIComponent(userId)}/reset-code`, {});
   }
 
-  async resetPassword(token: string, password: string, confirmPassword: string) {
-    return this.post<{ message: string }>('/auth/reset-password', { token, password, confirmPassword });
+  async resetPassword(code: string, password: string, confirmPassword: string) {
+    return this.post<{ message: string }>('/auth/reset-password', { code, password, confirmPassword });
   }
 
   async login(identifier: string, password: string) {

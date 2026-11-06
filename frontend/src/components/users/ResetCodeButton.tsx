@@ -37,14 +37,14 @@ export function ResetCodeButton({ user }: { user: { id: string; firstName: strin
           <div className="space-y-3 text-sm text-gray-700">
             <p>Give this code to {name} in person. It works once and expires {displayClinicDateTime(step.expiresAt)}.</p>
             <p className="rounded-md border bg-gray-50 py-3 text-center font-mono text-2xl tracking-widest" aria-label="Reset code">{step.code}</p>
-            <p>They open the sign-in page, choose <strong>Have a reset code?</strong>, enter the code and pick a new password. You won&apos;t see their new password.</p>
+            <p>They open the sign-in page, choose <strong>enter your reset code</strong>, type the code and pick a new password. You won&apos;t see their new password.</p>
             <p className="text-xs text-gray-500">This code is shown only once. Closing this window does not cancel it; issuing another code does.</p>
             <Button type="button" variant="outline" size="sm" onClick={() => void navigator.clipboard?.writeText(step.code)}>Copy code</Button>
           </div>
         ) : (
           <div className="space-y-3 text-sm text-gray-700">
             <p>Only issue a code to {name} after confirming in person that they are asking. Anyone with the code can set this account&apos;s password.</p>
-            <p>Issuing a code cancels any reset link already emailed to them. It is recorded in the audit log.</p>
+            <p>Issuing a code cancels any earlier code for them. It is recorded in the audit log.</p>
             {step.kind === 'error' && <p role="alert" className="text-red-700">{step.message}</p>}
             <Button type="button" disabled={step.kind === 'issuing'} onClick={() => void issue()}>
               {step.kind === 'issuing' ? 'Creating code…' : 'I have confirmed who is asking. Create code'}

@@ -1,15 +1,11 @@
-import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
-
-export class ForgotPasswordDto {
-  @IsEmail()
-  email: string;
-}
+import { IsString, MaxLength, MinLength } from 'class-validator';
 
 export class ResetPasswordDto {
+  /** The 8-character code a manager issued; dashes and spaces are allowed. */
   @IsString()
   @MinLength(8)
-  @MaxLength(128)
-  token: string;
+  @MaxLength(16)
+  code: string;
 
   @IsString()
   @MinLength(8)

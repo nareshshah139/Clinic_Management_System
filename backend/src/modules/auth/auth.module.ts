@@ -7,7 +7,6 @@ import { AuthController } from './auth.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PasswordResetService } from './password-reset.service';
-import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -18,7 +17,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
       },
     ]),
     PrismaModule,
-    NotificationsModule,
     ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

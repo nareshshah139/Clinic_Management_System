@@ -3,8 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { PasswordResetService } from './password-reset.service';
-import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
-import { Headers } from '@nestjs/common';
+import { ResetPasswordDto } from './dto/password-reset.dto';
 import { UserRole } from '@prisma/client';
 import { Roles } from '../../shared/decorators/roles.decorator';
 import { PrismaService } from '../../shared/database/prisma.service';
@@ -33,12 +32,6 @@ export class AuthController {
     private readonly passwordReset: PasswordResetService,
   ) {}
 
-  @Public()
-  @Post('forgot-password')
-  @Throttle({ default: { ttl: 60_000, limit: 3 } })
-  forgotPassword(@Body() body: ForgotPasswordDto, @Headers('origin') origin?: string) {
-    return this.passwordReset.requestReset(body.email, origin);
-  }
 
   @Post('users/:id/reset-code')
   @Roles(UserRole.OWNER, UserRole.ADMIN)
@@ -50,7 +43,7 @@ export class AuthController {
   @Post('reset-password')
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   resetPassword(@Body() body: ResetPasswordDto) {
-    return this.passwordReset.resetPassword(body.token, body.password, body.confirmPassword);
+    return this.passwordReset.resetPassword(body.code, body.password, body.confirmPassword);
   }
 
   @Public()
