@@ -1,14 +1,22 @@
 # Print line spacing, tighter space-optimized layout and PDF export fix
 
-## Downloaded PDFs no longer drop or shift content
+## Downloaded PDFs now match the preview
 
-**Symptom.** The clinic reported that when a prescription runs past one page, part of page 2 in the downloaded PDF is covered by the top of the letterhead. Reproducing this showed that the PDF pages did not match the preview at all. Text was larger, wrapped differently, and was cut off at the bottom of pages. In the synthetic 23-medicine prescription below, the PDF lost Zimba cream, Cap. Antoxid-HC and Extra medicine 8 entirely. The space-optimized PDF lost Procedure Planned, Allergies, Review Date and Follow-up.
+**Reported symptom.** The clinic reported that when a prescription runs past one page, part of page 2 in the downloaded PDF is covered by the top of the letterhead.
+
+**What was found.** With the built-in Dr. Praneeta Jain letterhead, that overlap did **not** reproduce. Before and after this fix, page 2 content starts below the letterhead. A different defect did reproduce: the PDF pages did not match the preview. Text was larger, wrapped differently, and was cut off at the bottom of pages. In the synthetic 23-medicine prescription below, the PDF lost Zimba cream, Cap. Antoxid-HC and Extra medicine 8 entirely. The space-optimized PDF lost Procedure Planned, Allergies, Review Date and Follow-up.
 
 **Cause.** Paged.js paginates the preview inside `#pagedjs-container`. That container sets the print font (Fira Sans), a 14 px base size, and `--app-text-increase: 0`, which switches off the app's enlarged screen text. Download PDF (`renderPrescriptionPages` in `frontend/src/lib/pdf-export.ts`) copies only the container's contents into an off-screen wrapper and removes every `id`. None of those container rules reached the wrapper, so html2canvas drew the pages with the larger screen text and a different font. Each page was then laid out differently from the way Paged.js had split it.
 
 **Fix.** The export wrapper now gets the class `prescription-pdf-export`. `globals.css` and the print font rule in `PrescriptionBuilder.tsx` apply the same print scope to that class as to `#pagedjs-container`. The PDF now uses the same text size and font as the preview, so each PDF page matches its preview page. The browser Print button already used a correctly scoped host (`#prescription-print-host`) and is unchanged.
 
-With the Dr. Praneeta Jain letterhead, the protected top margin already keeps continuation pages below the letterhead in the preview. The new check asserts this for every page in every scenario. It also checks that each PDF page matches its preview.
+**Still open: the reported overlap.** This fix does not explain the overlap the clinic reported. The following existing settings could produce it, but none was tested:
+
+- A printer profile with a negative vertical content offset (`contentOffsetYPx`) shifts the content of every page upward.
+- A custom letterhead image does not get the protected minimum top margin that the built-in letterhead gets (`prescriptionPageMargin` in `frontend/src/lib/prescription-letterhead.ts`).
+- A top margin overridden with the slider, below the letterhead's height, has no protection either.
+
+To confirm, ask the clinic for a PDF that shows the overlap, together with the letterhead, printer profile and margin settings that produced it.
 
 ## More space saved in the space-optimized layout
 
@@ -55,13 +63,13 @@ Each prescription is checked in both layouts at all three line spacings, for 30 
 
 - Every medicine renders, and the signature is on the last page.
 - No page is blank.
-- On every page, the first text starts below the letterhead band, which is the top 16% of the page.
+- On every preview page, the first text starts below the letterhead band, which is the top 16% of the page. The PDF images are not checked for this directly. They are compared with the preview pages instead.
 - Text stays at 14 px, and the line height matches the chosen spacing.
 - In the space-optimized layout, each heading shares a line with its value.
 - In the space-optimized layout, typical, minimal and follow-up-only fit on one page.
 - Content height decreases from Normal to Compact to Tight in each layout.
 
-For five states, the script also clicks **Download PDF** with the save calls stubbed, converts the PDF to images, and compares each page with its preview page. Those states are typical/optimized/tight, long-text/optimized/normal, heavy/normal/normal, heavy/normal/tight and heavy/optimized/compact. The comparison counts the text rows that appear in one image but not within 1 px in the other. It first aligns the two images vertically, allowing a shift of up to 16 px, because html2canvas places all content about 8 px lower than the preview.
+For five states, the script also clicks **Download PDF** with the save calls stubbed, converts the PDF to images, and compares each page with its preview page. Those states are typical/optimized/tight, long-text/optimized/normal, heavy/normal/normal, heavy/normal/tight and heavy/optimized/compact. The comparison counts the text rows that appear in one image but not within 1 px in the other. It first aligns the two images vertically, allowing a shift of up to 16 px, because html2canvas draws text glyphs about 8 px lower inside their boxes than Chrome does. Row borders line up exactly.
 
 | PDF compared with preview | Text rows that differ |
 | --- | --- |
