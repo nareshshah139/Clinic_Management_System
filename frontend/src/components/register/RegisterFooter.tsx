@@ -38,7 +38,7 @@ export function RegisterFooter({
   return (
     <div className="sticky -bottom-4 z-30 -mx-4 -mb-4 flex items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-background px-3 py-1.5 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] sm:flex-wrap sm:gap-x-4 sm:px-4 sm:py-2.5 md:-bottom-6 md:-mx-6 md:-mb-6 md:px-6 md:py-3">
       <div role="status" aria-live="polite" aria-busy={busy} className={cn('min-w-0 flex-1 transition-opacity sm:flex-none', busy && 'opacity-50')}>
-        <div className="line-clamp-2 text-sm font-semibold leading-tight sm:line-clamp-none sm:text-lg sm:leading-6">{summary}</div>
+        <div className="text-sm font-semibold leading-tight sm:text-lg sm:leading-6">{summary}</div>
         {note && <p className="text-sm text-foreground max-sm:sr-only">{note}</p>}
       </div>
       {total > 0 && (

@@ -122,7 +122,7 @@ it('asks for this financial year, newest entries first, and totals posted bills 
   ]);
   expect(screen.getByRole('tablist', { name: 'Purchase registers' })).toHaveTextContent('Purchase');
   expect(screen.queryByRole('heading', { name: 'Purchase bills' })).not.toBeInTheDocument();
-  expect(screen.getByText(/^Bills ₹3,000\.00/).textContent).toBe('Bills ₹3,000.00 · Outstanding ₹1,950.00 · 5 bills');
+  expect(screen.getAllByRole('status').find((el) => /^Bills/.test(el.textContent ?? ''))!.firstElementChild!.textContent).toBe('Bills ₹3,000.00 · Outstanding in these 5 bills ₹1,950.00');
   expect(screen.getByText('1 not posted and 1 cancelled not included')).toBeInTheDocument();
   expect(screen.getByText('1–7 of 7 rows')).toBeInTheDocument();
 });
@@ -207,13 +207,13 @@ it('exports from the register endpoint with every filter on screen', async () =>
 
 it('links Outstanding to Payments & dues for the filtered supplier, and hides it without ledger access', async () => {
   const { unmount } = renderRegister('gstin=36ABCDE1234F1Z5');
-  fireEvent.click(await screen.findByRole('button', { name: 'Outstanding ₹1,950.00, open Payments & dues' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Outstanding in these 5 bills ₹1,950.00, open Payments & dues' }));
   expect(onLedger.mock.calls).toEqual([['36ABCDE1234F1Z5']]);
   unmount();
 
   renderRegister('', { ledger: false });
   await screen.findByText('MED-7');
-  expect(screen.getByText(/^Bills ₹3,000\.00/).textContent).toBe('Bills ₹3,000.00 · Outstanding ₹1,950.00 · 5 bills');
+  expect(screen.getAllByRole('status').find((el) => /^Bills/.test(el.textContent ?? ''))!.firstElementChild!.textContent).toBe('Bills ₹3,000.00 · Outstanding in these 5 bills ₹1,950.00');
   fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), { key: 'Enter' });
   expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent?.trim())).toEqual(['Export to Excel', 'Suppliers']);
 });

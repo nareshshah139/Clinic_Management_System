@@ -120,7 +120,7 @@ function renderBills(query = 'tab=returns', { canSettle = true } = {}) {
 
 const table = () => screen.getByRole('table', { name: 'Purchase returns' });
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-const rowOf = (ref: string) => within(table()).getByRole('button', { name: new RegExp(`Open (Return|Credit) ${escape(ref)}$`) }).closest('tr')!;
+const rowOf = (ref: string) => within(table()).getByRole('button', { name: new RegExp(`^Open (draft )?(return|credit) ${escape(ref)}$`, 'i') }).closest('tr')!;
 const statusCell = (ref: string) => rowOf(ref).cells[7];
 const amountCell = (ref: string) => rowOf(ref).cells[6];
 
@@ -161,12 +161,15 @@ it('lists returns for this financial year with the credit note columns, states a
     'Draft',
     'Cancelled',
   ]);
-  expect(rowOf('RET-1').cells[1]).toHaveTextContent('Record credit noteOpen Return RET-1');
-  expect(rowOf('RET-5').cells[1]).toHaveTextContent('—No credit note yetOpen Return RET-5');
-  expect(rowOf('RET-2').cells[1]).toHaveTextContent('CN-80Open Return RET-2');
+  expect(within(statusCell('Rate difference')).getByText('Cancelled')).not.toHaveClass('line-through');
+  expect(within(amountCell('Rate difference')).getByText('₹40.00')).toHaveClass('line-through');
+  expect(rowOf('RET-1').cells[1]).toHaveTextContent(/^Record credit noteOpen Return RET-1· against bill LIN-1$/);
+  expect(rowOf('RET-5').cells[1]).toHaveTextContent(/^Open draft return RET-5RET-5$/);
+  expect(rowOf('RET-2').cells[1]).toHaveTextContent(/^CN-80Open Return RET-2· against bill LIN-1$/);
   expect(rowOf('RET-2').cells[3]).toHaveTextContent('04 Nov');
-  expect(rowOf('RET-3').cells[5]).toHaveTextContent('Linae DistributorsBill LIN-1Breakage');
-  expect(within(rowOf('RET-3').cells[5]).getByText('Breakage')).not.toHaveClass('truncate');
+  expect(rowOf('RET-3').cells[5]).toHaveTextContent(/^Linae DistributorsBreakage$/);
+  expect(within(rowOf('RET-3').cells[5]).getByText('Linae Distributors')).toHaveAttribute('title', 'Linae Distributors · GSTIN 36ABCDE1234F1Z5');
+  expect(within(rowOf('RET-3').cells[1]).getByText('LIN-1')).not.toHaveClass('truncate');
   expect(amountCell('RET-1')).toHaveTextContent('₹224.00return value');
   expect(amountCell('RET-2')).toHaveTextContent('₹100.00Return ₹112.00');
   expect(amountCell('RET-3')).toHaveTextContent(/^₹200\.00$/);
@@ -206,7 +209,7 @@ it('exports the credit note register with the filters on screen', async () => {
   open.mockRestore();
 });
 
-it('records a credit note with today and the return value as defaults, says when the amount is less, then focuses Set off and offers it in the toast', async () => {
+it('records a credit note typed from the note, with the return value one tap away, says when the amount is less, then focuses Set off and offers it in the toast', async () => {
   let reloads = 0;
   get.mockImplementation(async (url: string) => {
     if (url === '/inventory/workspace/credits/set-off') return setOffOptions;
@@ -220,19 +223,30 @@ it('records a credit note with today and the return value as defaults, says when
   renderBills();
   fireEvent.click(await screen.findByRole('button', { name: 'Record credit note for return RET-1' }));
   const dialog = screen.getByRole('dialog', { name: 'Record credit note from Linae Distributors' });
-  expect(dialog).toHaveAccessibleDescription('For return RET-1 against bill LIN-1 · return value ₹224.00');
+  expect(dialog).toHaveAccessibleDescription('For return RET-1 against bill LIN-1');
   const number = within(dialog).getByLabelText('Credit note no.');
   expect(number).toHaveFocus();
-  expect(within(dialog).getByLabelText('Credit note date')).toHaveValue('06/11/2026');
   const amount = within(dialog).getByLabelText('Amount (₹)');
-  expect(amount).toHaveValue('224');
-  expect(within(dialog).queryByText(/than the return value/)).not.toBeInTheDocument();
+  expect([(within(dialog).getByLabelText('Credit note date') as HTMLInputElement).value, (amount as HTMLInputElement).value]).toEqual(['', '']);
+  expect(amount).toHaveAccessibleDescription('Return value ₹224.00 Same as return value');
+  await armed();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Record credit note' }));
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter the credit note number from the distributor’s note.');
+  fireEvent.change(number, { target: { value: 'CN-91' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Record credit note' }));
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter the date printed on the credit note, as dd/mm/yyyy.');
+  expect(within(dialog).getByLabelText('Credit note date')).toHaveFocus();
+  fireEvent.change(within(dialog).getByLabelText('Credit note date'), { target: { value: '05/11/2026' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Record credit note' }));
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter the amount printed on the credit note.');
+  expect(amount).toHaveFocus();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Same as return value' }));
+  expect([(amount as HTMLInputElement).value, document.activeElement]).toEqual(['224', amount]);
+  expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
 
   fireEvent.change(amount, { target: { value: '210' } });
   expect(within(dialog).getByText('₹14.00 less than your return value. Fine if the distributor’s note says so.')).toBeInTheDocument();
   fireEvent.change(number, { target: { value: ' cn-91 ' } });
-  fireEvent.change(within(dialog).getByLabelText('Credit note date'), { target: { value: '05/11/2026' } });
-  await armed();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Record credit note' }));
 
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -253,6 +267,7 @@ it('asks once more before recording a credit note for more than the return value
   const dialog = screen.getByRole('dialog');
   fireEvent.change(within(dialog).getByLabelText('Credit note no.'), { target: { value: 'CN-92' } });
   fireEvent.change(within(dialog).getByLabelText('Credit note date'), { target: { value: '01/11/2026' } });
+  fireEvent.change(within(dialog).getByLabelText('Amount (₹)'), { target: { value: '224' } });
   await armed();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Record credit note' }));
   expect(within(dialog).getByRole('alert')).toHaveTextContent('The credit note date cannot be before the return date, 02/11/2026.');
@@ -304,6 +319,8 @@ it('keeps the dialog open on a duplicate credit note number and marks the number
   fireEvent.click(await screen.findByRole('button', { name: 'Record credit note for return RET-1' }));
   const dialog = screen.getByRole('dialog');
   fireEvent.change(within(dialog).getByLabelText('Credit note no.'), { target: { value: 'CN-77' } });
+  fireEvent.change(within(dialog).getByLabelText('Credit note date'), { target: { value: '05/11/2026' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Same as return value' }));
   await armed();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Record credit note' }));
   expect(await within(dialog).findByRole('alert')).toHaveTextContent('Credit note CN-77 is already recorded for this distributor on return RET-3.');
@@ -312,15 +329,21 @@ it('keeps the dialog open on a duplicate credit note number and marks the number
   expect(within(dialog).getByLabelText('Amount (₹)')).not.toHaveAttribute('aria-invalid');
 });
 
-it('closes and refetches when the return changed elsewhere', async () => {
+it('closes and refetches when the return changed elsewhere, keeping what was typed in the message', async () => {
   post.mockRejectedValue(Object.assign(new Error('stale'), { status: 409, body: { message: 'This return changed. Reload to see its latest status.' } }));
   renderBills();
   fireEvent.click(await screen.findByRole('button', { name: 'Record credit note for return RET-1' }));
-  fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Credit note no.'), { target: { value: 'CN-1' } });
+  const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Credit note no.'), { target: { value: 'cn-1' } });
+  fireEvent.change(within(dialog).getByLabelText('Credit note date'), { target: { value: '05/11/2026' } });
+  fireEvent.change(within(dialog).getByLabelText('Amount (₹)'), { target: { value: '220' } });
   await armed();
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Record credit note' }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Record credit note' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(await screen.findByText('This return changed')).toBeInTheDocument();
+  expect(
+    screen.getByText('The list now shows its latest status. Your entry was not saved: credit note CN-1, 05/11/2026, ₹220.00.'),
+  ).toBeInTheDocument();
   expect(returnsCalls()).toHaveLength(2);
 });
 
@@ -329,10 +352,16 @@ it('sets a credit off oldest due first, shows what is left as amounts change, an
   renderBills();
   fireEvent.click(await screen.findByRole('button', { name: 'Set off credit note CN-80 against bills' }));
   const dialog = screen.getByRole('dialog', { name: 'Set off credit from Linae Distributors' });
+  expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
   const first = await within(dialog).findByLabelText('Set off against bill LIN-2, up to ₹60.00');
   expect(get.mock.calls.find(([url]) => url === '/inventory/workspace/credits/set-off')![1]).toEqual({ creditId: 'credit-2' });
-  expect(dialog).toHaveAccessibleDescription('₹100.00 available from credit note CN-80. Bills due first are filled first.');
+  expect(dialog).toHaveAccessibleDescription('₹100.00 available from credit note CN-80. Filled from the oldest due date.');
   expect(first).toHaveFocus();
+  expect(within(dialog).getAllByRole('columnheader').map((head) => head.textContent)).toEqual(['Bill', 'Due date', 'To pay', 'Set off ₹']);
+  expect(within(dialog).getAllByRole('rowheader').map((head) => head.textContent)).toEqual([
+    'LIN-2Due 20 Oct, overdue', 'LIN-3Due 01 Nov, overdue', 'LIN-4Due —',
+  ]);
+  expect(within(within(dialog).getAllByRole('row')[1]).getAllByText('20 Oct')[0].closest('span')).toHaveClass('text-destructive-text');
   expect(['LIN-2', 'LIN-3', 'LIN-4'].map((no) => (within(dialog).getByLabelText(new RegExp(`bill ${no},`)) as HTMLInputElement).value)).toEqual(['60', '40', '']);
   expect(within(dialog).getByRole('status')).toHaveTextContent('₹0.00 credit left after this');
 
@@ -354,6 +383,8 @@ it('sets a credit off oldest due first, shows what is left as amounts change, an
     { requestKey: options.idempotencyKey, creditId: 'credit-2', allocations: [{ purchaseInvoiceId: 'bill-2', amount: 60 }, { purchaseInvoiceId: 'bill-3', amount: 10 }] },
   ]);
   expect(await screen.findByText('Set off ₹70.00 against bills LIN-2, LIN-3.', { selector: 'div' })).toBeInTheDocument();
+  expect(screen.getByText('Undo is in the Status column for 30 seconds.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
 
   post.mockResolvedValue({ id: 'so-1', reversed: ['a-1', 'a-2'] });
   fireEvent.click(await screen.findByRole('button', { name: 'Undo set-off of credit note CN-80' }));
@@ -396,7 +427,7 @@ it('shows the distributor position on the Purchase tab across all bills, on its 
   expect(get.mock.calls.filter(([url]) => url === '/pharmacy/purchase-register/position')).toEqual([
     ['/pharmacy/purchase-register/position', { distributorGstin: linae.gstin }],
   ]);
-  fireEvent.click(within(strip).getByRole('button', { name: 'Set off credit' }));
+  fireEvent.click(within(strip).getByRole('button', { name: 'Set off all ₹180.00' }));
   await screen.findByLabelText(/bill LIN-2,/);
   expect(get.mock.calls.find(([url]) => url === '/inventory/workspace/credits/set-off')![1]).toEqual({ distributorGstin: linae.gstin });
   unmount();
@@ -411,7 +442,8 @@ it('shows the distributor position on the Purchase tab across all bills, on its 
 it('offers held credit from Mark paid and opens the set-off for that bill only, with its row marked and focused', async () => {
   renderBills('');
   fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-2 paid' }));
-  const pay = screen.getByRole('dialog', { name: 'Pay ₹1,000.00 to Linae Distributors' });
+  const pay = screen.getByRole('dialog', { name: 'Settle bill LIN-2 · ₹1,000.00' });
+  expect(pay).toHaveAccessibleDescription('Linae Distributors');
   expect(pay).toHaveTextContent('₹180.00 credit from Linae Distributors is available.');
   expect(within(pay).getByLabelText('Mode')).toHaveFocus();
   fireEvent.click(within(pay).getByRole('button', { name: 'Set off ₹180.00 instead' }));
@@ -419,35 +451,148 @@ it('offers held credit from Mark paid and opens the set-off for that bill only, 
   const input = await within(dialog).findByLabelText(/bill LIN-2,/);
   expect(['LIN-2', 'LIN-3', 'LIN-4'].map((no) => (within(dialog).getByLabelText(new RegExp(`bill ${no},`)) as HTMLInputElement).value)).toEqual(['60', '', '']);
   expect(input).toHaveFocus();
-  expect(input.closest('tr')).toHaveTextContent('LIN-2Bill you were paying');
   expect(dialog).toHaveAccessibleDescription('₹100.00 available from credit note CN-80. Filled against the bill you were paying.');
+  expect(input.closest('tr')!.querySelector('th')).toHaveTextContent('LIN-2Bill you were payingDue 20 Oct, overdue');
 });
 
-it('makes set-off the first choice in Mark paid when the credit held covers the bill, then offers Undo on the bill', async () => {
+it('sets the credit off from Mark paid in one step when the credit held covers the bill, then offers Undo on the bill and in the toast', async () => {
   let settled = false;
   get.mockImplementation(async (url: string) => {
-    if (url === '/inventory/workspace/credits/set-off') return { ...setOffOptions, available: 1200, bills: [{ id: 'bill-2', billNo: 'LIN-2', billDate: '2026-10-05', dueDate: '2026-11-20', payable: 1000 }] };
-    if (url === '/pharmacy/purchase-register/position') return { gstin: linae.gstin, name: linae.name, outstanding: 1000, creditHeld: 1200, net: -200 };
+    if (url === '/pharmacy/purchase-register/position') return { gstin: linae.gstin, name: linae.name, outstanding: settled ? 0 : 1000, creditHeld: settled ? 200 : 1200, net: settled ? -200 : -200 };
     return purchasesResponse({
-      creditHeld: { [linae.gstin]: 1200 },
+      creditHeld: { [linae.gstin]: settled ? 200 : 1200 },
       rows: [settled ? bill({ payment: { ...bill().payment, state: 'PAID', credit: 1000, outstanding: 0, payable: 0 } }) : bill()],
     });
   });
-  post.mockImplementation(async (url: string) => {
+  post.mockImplementation(async () => {
     settled = true;
     return { setOffId: 'so-9', allocations: [], bills: [{ id: 'bill-2', billNo: 'LIN-2', payableAfter: 0 }], credits: [] };
   });
   renderBills('');
   fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-2 paid' }));
-  const pay = screen.getByRole('dialog', { name: 'Pay ₹1,000.00 to Linae Distributors' });
+  const pay = screen.getByRole('dialog', { name: 'Settle bill LIN-2 · ₹1,000.00' });
   expect(pay).toHaveTextContent('₹1,200.00 credit from Linae Distributors covers this bill. Set it off, or record a payment below.');
   const setOff = within(pay).getByRole('button', { name: 'Set off ₹1,000.00 credit' });
   expect(setOff).toHaveFocus();
+  await armed();
   fireEvent.click(setOff);
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  const [[url, body, options]] = post.mock.calls as [string, Record<string, unknown>, { idempotencyKey: string }][];
+  expect([url, body]).toEqual([
+    '/inventory/workspace/credits/set-off',
+    { requestKey: options.idempotencyKey, distributorGstin: linae.gstin, allocations: [{ purchaseInvoiceId: 'bill-2', amount: 1000 }] },
+  ]);
+  expect(get.mock.calls.filter(([url]) => url === '/inventory/workspace/credits/set-off')).toEqual([]);
+  expect(await screen.findByRole('button', { name: 'Undo credit set-off for bill LIN-2' })).toBeInTheDocument();
+  expect(screen.getByText('Set off ₹1,000.00 of credit against bill LIN-2.', { selector: 'div' })).toBeInTheDocument();
+  expect(screen.getByText('Undo is in the Payment column for 30 seconds.')).toBeInTheDocument();
+
+  post.mockResolvedValue({ id: 'so-9', reversed: ['a-1'] });
+  fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+  await waitFor(() => expect(post.mock.calls[1]?.slice(0, 2)).toEqual(['/inventory/workspace/credits/set-off/so-9/reverse', { reason: 'Undone from purchase list' }]));
+});
+
+it('lists returns as cards on a phone: distributor and amount, then the credit note and return, then the status and its action', async () => {
+  const matchMedia = jest.mocked(window.matchMedia);
+  const desktop = matchMedia.getMockImplementation();
+  matchMedia.mockImplementation((query: string) => ({ ...desktop!(query), matches: query === '(max-width: 639px)' }));
+  try {
+    renderBills();
+    const list = await screen.findByRole('list', { name: 'Purchase returns' });
+    expect(screen.queryByRole('table', { name: 'Purchase returns' })).not.toBeInTheDocument();
+    const cards = within(list).getAllByRole('listitem');
+    expect(cards.slice(0, 3).map((card) => [...card.firstElementChild!.children].map((line) => line.textContent))).toEqual([
+      ['Linae Distributors₹224.00', 'Record credit noteOpen Return RET-1· against bill LIN-1return value', 'Credit note awaited · 23d, for 23 days since the challan'],
+      ['Linae Distributors₹100.00', 'CN-80Open Return RET-2· against bill LIN-1Return ₹112.00', 'Received₹100.00 leftSet off'],
+      ['Linae Distributors₹200.00', 'CN-77Open Return RET-3· against bill LIN-1', 'Adjusted₹80.00 leftSet off'],
+    ]);
+    expect(within(cards[1]).getByRole('button', { name: 'Correct credit note CN-80' })).toBeInTheDocument();
+    fireEvent.click(within(cards[1]).getByRole('button', { name: 'Set off credit note CN-80 against bills' }));
+    expect(await screen.findByRole('dialog', { name: 'Set off credit from Linae Distributors' })).toBeInTheDocument();
+    expect(onOpenReturn).not.toHaveBeenCalled();
+    fireEvent.click(within(cards[0]).getByText('Linae Distributors'));
+    expect(onOpenReturn.mock.calls).toEqual([['SUPPLIER_RETURN', 'ret-1']]);
+  } finally {
+    matchMedia.mockImplementation(desktop!);
+  }
+});
+
+it('shows a distributor’s position on the Returns tab and sets off all of its held credit, with Undo on each credit it used', async () => {
+  const position = { gstin: linae.gstin, name: linae.name, outstanding: 1460, creditHeld: 180, net: 1280 };
+  get.mockImplementation(async (url: string) => {
+    if (url === '/pharmacy/purchase-returns-register') return returnsResponse();
+    if (url === '/pharmacy/purchase-register/position') return position;
+    if (url === '/inventory/workspace/credits/set-off')
+      return { ...setOffOptions, available: 180, credits: [...setOffOptions.credits, { id: 'credit-3', number: 'CN-77', date: '2026-11-05', reference: 'RET-3', available: 80 }] };
+    return purchasesResponse();
+  });
+  post.mockResolvedValue({
+    setOffId: 'so-all',
+    allocations: [
+      { id: 'a-1', creditId: 'credit-2', creditNoteNumber: 'CN-80', purchaseInvoiceId: 'bill-2', amount: 60 },
+      { id: 'a-2', creditId: 'credit-2', creditNoteNumber: 'CN-80', purchaseInvoiceId: 'bill-3', amount: 40 },
+      { id: 'a-3', creditId: 'credit-3', creditNoteNumber: 'CN-77', purchaseInvoiceId: 'bill-3', amount: 80 },
+    ],
+    bills: [{ id: 'bill-2', billNo: 'LIN-2', payableAfter: 0 }, { id: 'bill-3', billNo: 'LIN-3', payableAfter: 680 }],
+    credits: [],
+  });
+  renderBills(`tab=returns&gstin=${linae.gstin}`);
+  const strip = await screen.findByRole('region', { name: 'Linae Distributors position across all bills' });
+  expect(strip).toHaveTextContent('Due₹1,460.00− Credit held₹180.00= Net payable₹1,280.00');
+  fireEvent.click(within(strip).getByRole('button', { name: 'Set off all ₹180.00' }));
   const dialog = await screen.findByRole('dialog', { name: 'Set off credit from Linae Distributors' });
   await within(dialog).findByLabelText(/bill LIN-2,/);
+  expect(dialog).toHaveAccessibleDescription('₹180.00 available from 2 credit notes. Filled from the oldest due date.');
+  expect(get.mock.calls.filter(([url]) => url === '/inventory/workspace/credits/set-off').map(([, params]) => params)).toEqual([{ distributorGstin: linae.gstin }]);
   await armed();
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Set off ₹1,000.00' }));
-  expect(await screen.findByRole('button', { name: 'Undo credit set-off for bill LIN-2' })).toBeInTheDocument();
-  expect(post.mock.calls[0][1]).toMatchObject({ distributorGstin: linae.gstin, allocations: [{ purchaseInvoiceId: 'bill-2', amount: 1000 }] });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Set off ₹180.00' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(post.mock.calls[0][1]).toMatchObject({ distributorGstin: linae.gstin, allocations: [{ purchaseInvoiceId: 'bill-2', amount: 60 }, { purchaseInvoiceId: 'bill-3', amount: 120 }] });
+  expect(await screen.findByRole('button', { name: 'Undo set-off of credit note CN-80' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Undo set-off of credit note CN-77' })).toBeInTheDocument();
+  expect(get.mock.calls.filter(([url]) => url === '/pharmacy/purchase-register/position')).toHaveLength(2);
+
+  post.mockResolvedValue({ id: 'so-all', reversed: ['a-1', 'a-2', 'a-3'] });
+  fireEvent.click(screen.getByRole('button', { name: 'Undo set-off of credit note CN-77' }));
+  await waitFor(() => expect(screen.queryByRole('button', { name: /^Undo set-off of credit note/ })).not.toBeInTheDocument());
+  expect(post.mock.calls.map(([url]) => url)).toEqual(['/inventory/workspace/credits/set-off', '/inventory/workspace/credits/set-off/so-all/reverse']);
+});
+
+it('says no credit notes are awaited when the Awaited filter finds none', async () => {
+  get.mockResolvedValue(returnsResponse({ rows: [], total: 0 }));
+  renderBills('tab=returns&state=AWAITED');
+  expect(await screen.findByText('No credit notes awaited')).toBeInTheDocument();
+  expect(screen.getByText('Every return dated between 01/04/2026 and 31/03/2027 has its credit note recorded.')).toBeInTheDocument();
+});
+
+it('asks for the number on a credit set off before numbers were kept, keeping its amount, and offers no set-off until it has one', async () => {
+  const legacy = ret({
+    id: 'old', returnRef: 'OLD-RET', state: 'ADJUSTED', returnValue: 75.5, sourceBillNo: null, reason: null, returnDate: '2026-06-01',
+    credit: { id: 'legacy-credit', amount: 75.5, applied: 20, available: 55.5 },
+  });
+  get.mockImplementation(async (url: string) => (url === '/pharmacy/purchase-returns-register' ? returnsResponse({ rows: [legacy], total: 1 }) : purchasesResponse()));
+  renderBills();
+  const record = await screen.findByRole('button', { name: 'Record credit note for return OLD-RET' });
+  expect(statusCell('OLD-RET')).toHaveTextContent(/^Adjusted₹55.50 left$/);
+  fireEvent.click(record);
+  const dialog = screen.getByRole('dialog', { name: 'Record credit note from Linae Distributors' });
+  expect(within(dialog).getByLabelText('Amount (₹)')).toHaveValue('75.5');
+  expect(within(dialog).getByLabelText('Amount (₹)')).toHaveAttribute('readonly');
+  expect(dialog).toHaveTextContent('₹20.00 of this credit is already set off against bills, so its amount stays ₹75.50.');
+  expect(within(dialog).queryByRole('button', { name: 'Same as return value' })).not.toBeInTheDocument();
+});
+
+it('closes Mark paid and refreshes the bill when its balance changed before the one-step set-off', async () => {
+  get.mockImplementation(async (url: string) => {
+    if (url === '/pharmacy/purchase-register/position') return { gstin: linae.gstin, name: linae.name, outstanding: 1000, creditHeld: 1200, net: -200 };
+    return purchasesResponse({ creditHeld: { [linae.gstin]: 1200 } });
+  });
+  post.mockRejectedValue(Object.assign(new Error('changed'), { status: 409, body: { code: 'BALANCE_CHANGED', message: 'The balance of bill LIN-2 changed: ₹400.00 is left to pay.' } }));
+  renderBills('');
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-2 paid' }));
+  await armed();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Set off ₹1,000.00 credit' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(await screen.findByText('The balance of bill LIN-2 changed: ₹400.00 is left to pay. The list now shows the latest amounts.')).toBeInTheDocument();
 });

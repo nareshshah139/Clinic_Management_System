@@ -20,6 +20,17 @@ const shortDay = (day: string) => {
   return day.slice(0, 4) === getISTDateString().slice(0, 4) ? text.slice(0, -5) : text;
 };
 
+function DueDate({ bill, today }: { bill: SetOffOptions['bills'][number]; today: string }) {
+  if (!bill.dueDate) return <span title={`No due date; billed ${displayCalendarDate(bill.billDate)}`}>—</span>;
+  const overdue = bill.dueDate < today;
+  return (
+    <span className={cn('whitespace-nowrap', overdue && 'font-semibold text-destructive-text')}>
+      {shortDay(bill.dueDate)}
+      {overdue && <span className="sr-only">, overdue</span>}
+    </span>
+  );
+}
+
 export type SetOffScope = { creditId: string } | { distributorGstin: string };
 
 export function SetOffCreditDialog({
@@ -40,6 +51,7 @@ export function SetOffCreditDialog({
   onStale: (failure: Extract<WriteFailure, { kind: 'stale' }>) => void;
 }) {
   const [key] = useState(requestKey);
+  const [today] = useState(getISTDateString);
   const [options, setOptions] = useState<SetOffOptions | null>(null);
   const [loadError, setLoadError] = useState('');
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -125,14 +137,14 @@ export function SetOffCreditDialog({
         options ? (
           <>
             <span className="font-semibold">{formatRupees(options.available)}</span> available from {creditLabel}.{' '}
-            {billId ? 'Filled against the bill you were paying.' : 'Bills due first are filled first.'}
+            {billId ? 'Filled against the bill you were paying.' : 'Filled from the oldest due date.'}
           </>
         ) : (
           'Loading open bills…'
         )
       }
       saving={saving}
-      initialFocus={firstRef}
+      initialFocus={cancelRef}
       onClose={onClose}
       onSubmit={submit}
       footer={() => (
@@ -165,41 +177,45 @@ export function SetOffCreditDialog({
       )}
       {options && options.bills.length > 0 && (
         <table className="w-full border-separate border-spacing-0 text-sm tabular-nums">
-          <caption className="sr-only">Open bills from {name}, due first at the top</caption>
+          <caption className="sr-only">Open bills from {name}, oldest due date first</caption>
           <thead>
             <tr className="text-left">
               <th scope="col" className="pb-1 font-semibold">Bill</th>
-              <th scope="col" className="pb-1 font-semibold">Due</th>
+              <th scope="col" className="pb-1 font-semibold max-sm:hidden">Due date</th>
               <th scope="col" className="pb-1 text-right font-semibold">To pay</th>
-              <th scope="col" className="pb-1 pl-2 text-right font-semibold">Set off ₹</th>
+              <th scope="col" className="whitespace-nowrap pb-1 pl-2 text-right font-semibold">Set off ₹</th>
             </tr>
           </thead>
           <tbody>
-            {options.bills.map((bill) => (
-              <tr key={bill.id} className={cn(bill.id === billId && 'bg-info-soft')}>
-                <th scope="row" className="whitespace-nowrap border-t border-border py-1.5 pl-1 pr-2 text-left font-medium">
-                  {bill.billNo}
-                  {bill.id === billId && <span className="block text-xs font-medium leading-tight">Bill you were paying</span>}
-                </th>
-                <td className="whitespace-nowrap border-t border-border py-1.5 pr-2">{bill.dueDate ? shortDay(bill.dueDate) : <span title={`No due date; billed ${displayCalendarDate(bill.billDate)}`}>—</span>}</td>
-                <td className="whitespace-nowrap border-t border-border py-1.5 text-right">{formatRupees(bill.payable)}</td>
-                <td className="border-t border-border py-1.5 pl-2">
-                  <Input
-                    id={inputId(bill.id)}
-                    ref={bill.id === focusBill ? firstRef : undefined}
-                    inputMode="decimal"
-                    aria-label={`Set off against bill ${bill.billNo}, up to ${formatRupees(bill.payable)}`}
-                    value={amounts[bill.id] ?? ''}
-                    disabled={saving}
-                    placeholder="0"
-                    onChange={(event) => setAmounts((current) => ({ ...current, [bill.id]: event.target.value }))}
-                    aria-invalid={check?.invalidBill === bill.id || undefined}
-                    aria-describedby={check?.invalidBill === bill.id && error ? errorId : undefined}
-                    className="ml-auto h-9 w-24 text-right text-sm tabular-nums md:text-sm"
-                  />
-                </td>
-              </tr>
-            ))}
+            {options.bills.map((bill) => {
+              const due = <DueDate bill={bill} today={today} />;
+              return (
+                <tr key={bill.id} className={cn(bill.id === billId && 'bg-info-soft')}>
+                  <th scope="row" className="border-t border-border py-1.5 pl-1 pr-2 text-left font-medium">
+                    <span className="whitespace-nowrap">{bill.billNo}</span>
+                    {bill.id === billId && <span className="block text-xs font-medium leading-tight">Bill you were paying</span>}
+                    <span className="block text-xs font-medium leading-tight sm:hidden">Due {due}</span>
+                  </th>
+                  <td className="whitespace-nowrap border-t border-border py-1.5 pr-2 max-sm:hidden">{due}</td>
+                  <td className="whitespace-nowrap border-t border-border py-1.5 text-right">{formatRupees(bill.payable)}</td>
+                  <td className="border-t border-border py-1.5 pl-2">
+                    <Input
+                      id={inputId(bill.id)}
+                      ref={bill.id === focusBill ? firstRef : undefined}
+                      inputMode="decimal"
+                      aria-label={`Set off against bill ${bill.billNo}, up to ${formatRupees(bill.payable)}`}
+                      value={amounts[bill.id] ?? ''}
+                      disabled={saving}
+                      placeholder="0"
+                      onChange={(event) => setAmounts((current) => ({ ...current, [bill.id]: event.target.value }))}
+                      aria-invalid={check?.invalidBill === bill.id || undefined}
+                      aria-describedby={check?.invalidBill === bill.id && error ? errorId : undefined}
+                      className="ml-auto h-9 w-20 text-right text-sm tabular-nums sm:w-24 md:text-sm"
+                    />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

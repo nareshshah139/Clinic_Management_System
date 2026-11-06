@@ -14,8 +14,10 @@ import {
 import { apiClient } from "@/lib/api";
 import { InventoryAction } from "./InventoryPresentation";
 import { workflowDocumentPresentation, type DocumentKnowledge, type DocumentReference } from "./workflow-document-state";
-import { RETURN_REASONS, RETURN_REASON_LABELS, returnReasonValue } from "./purchase/purchase-returns-model";
+import { RETURN_REASONS, RETURN_REASON_LABELS, returnChangeNote, returnReasonValue } from "./purchase/purchase-returns-model";
 import { RecordCreditNoteDialog } from "./purchase/RecordCreditNoteDialog";
+import { SetOffCreditDialog } from "./purchase/SetOffCreditDialog";
+import { DayField, isCalendarDay } from "./DayField";
 import { Button } from "@/components/ui/button";
 import {
   workflowKinds,
@@ -25,6 +27,8 @@ import {
   inputClass,
   downloadCsv,
 } from "./workspace-model";
+
+const DAY_TEXT_KINDS = ["SUPPLIER_RETURN", "CREDIT_NOTE"];
 
 type Props = {
   kind: string;
@@ -136,6 +140,9 @@ export function WorkflowDocumentEditor({
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [recording, setRecording] = useState<HTMLElement | null>(null),
+    [recordedCredit, setRecordedCredit] = useState<{ notice: string; id: string; available: number } | null>(null),
+    [settingOff, setSettingOff] = useState<HTMLElement | null>(null),
+    [undoableSetOff, setUndoableSetOff] = useState<{ notice: string; id: string } | null>(null),
     [reversal, setReversal] = useState(""),
     [showReverse, setShowReverse] = useState(false);
   const lock = useRef(false),
@@ -523,6 +530,17 @@ export function WorkflowDocumentEditor({
    */
   const perform = async (action?: string) => {
     if (lock.current || !presentation.canMutate) return;
+    const badDay = editable && DAY_TEXT_KINDS.includes(kind)
+      ? [["date", "date"], ...(kind === "CREDIT_NOTE" ? [["creditNoteDate", "credit note date"]] : [])].find(
+          ([key]) => form.payload[key] && !isCalendarDay(form.payload[key]),
+        )
+      : undefined;
+    if (badDay) {
+      setNotice("");
+      setError(`Enter the ${badDay[1]} as dd/mm/yyyy.`);
+      feedback.current?.focus();
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError("");
@@ -725,12 +743,37 @@ export function WorkflowDocumentEditor({
           </p>
         )}
         {notice && (
-          <p
+          <div
             role="status"
-            className="rounded-md border border-green-600 bg-green-50 p-3 text-green-900"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-green-600 bg-green-50 p-3 text-green-900"
           >
-            {notice}
-          </p>
+            <p>{notice}</p>
+            {undoableSetOff?.notice === notice && (
+              <Button
+                variant="outline"
+                className="h-10"
+                disabled={busy}
+                onClick={async () => {
+                  const { id: setOffId } = undoableSetOff;
+                  setUndoableSetOff(null);
+                  try {
+                    await apiClient.post(`/inventory/workspace/credits/set-off/${encodeURIComponent(setOffId)}/reverse`, { reason: "Undone from the return document" });
+                    setNotice("Set-off undone. The credit is back with the distributor.");
+                  } catch (failure: any) {
+                    setError(failure?.status === 409 ? "This set-off was already undone." : `Could not undo the set-off. ${failure?.message ?? ""} You can reverse it from Payments & dues.`.trim());
+                  }
+                  feedback.current?.focus();
+                }}
+              >
+                Undo
+              </Button>
+            )}
+            {recordedCredit?.notice === notice && capabilities?.creditWrite && (
+              <Button aria-haspopup="dialog" className="h-10" onClick={(event) => setSettingOff(event.currentTarget)}>
+                Set off {fmtMoney(recordedCredit.available)} now
+              </Button>
+            )}
+          </div>
         )}
       </div>
       <fieldset
@@ -745,15 +788,19 @@ export function WorkflowDocumentEditor({
             onChange={(e) => setForm({ ...form, reference: e.target.value })}
           />
         </label>
-        <label className="text-sm">
-          Date
-          <input
-            type="date"
-            className={inputClass}
-            value={form.payload.date}
-            onChange={(e) => payload("date", e.target.value)}
-          />
-        </label>
+        {DAY_TEXT_KINDS.includes(kind) ? (
+          <DayField label="Date" value={form.payload.date || ""} onChange={(value) => payload("date", value)} />
+        ) : (
+          <label className="text-sm">
+            Date
+            <input
+              type="date"
+              className={inputClass}
+              value={form.payload.date}
+              onChange={(e) => payload("date", e.target.value)}
+            />
+          </label>
+        )}
         {[
           "SUPPLIER_RETURN",
           "INWARD_CHALLAN",
@@ -931,16 +978,7 @@ export function WorkflowDocumentEditor({
                 placeholder="As printed on the distributor’s note"
               />
             </label>
-            <label className="text-sm">
-              Credit note date
-              <input
-                type="date"
-                className={inputClass}
-                max={getISTDateString()}
-                value={form.payload.creditNoteDate || ""}
-                onChange={(e) => payload("creditNoteDate", e.target.value)}
-              />
-            </label>
+            <DayField label="Credit note date" value={form.payload.creditNoteDate || ""} onChange={(value) => payload("creditNoteDate", value)} />
           </>
         )}
         {kind === "QUOTATION" && (
@@ -1481,12 +1519,49 @@ export function WorkflowDocumentEditor({
           onRecorded={async (recorded) => {
             setRecording(null);
             apply(await apiClient.get<any>(`/inventory/workspace/documents/${doc.id}`));
-            setNotice(`Credit note ${recorded.credit.number} recorded: ${fmtMoney(recorded.credit.amount)}. Set it off against bills from Purchase bills › Returns.`);
+            const { credit } = recorded;
+            const message =
+              credit.available > 0.005
+                ? `Credit note ${credit.number} recorded: ${fmtMoney(credit.amount)}. Set it off against the distributor’s bills now, or later from Purchase bills › Returns.`
+                : `Credit note ${credit.number} recorded: ${fmtMoney(credit.amount)}.`;
+            setNotice(message);
+            if (credit.available > 0.005) setRecordedCredit({ notice: message, id: credit.id, available: credit.available });
+            feedback.current?.focus();
+          }}
+          onStale={async (failure) => {
+            setRecording(null);
+            const seen = doc.version;
+            try {
+              const latest = await apiClient.get<any>(`/inventory/workspace/documents/${doc.id}`);
+              apply(latest);
+              setError(`This return changed while you were recording: ${returnChangeNote(latest.events ?? [], seen, labelStatus(latest.status))}. ${failure.entry ?? ""}`.trim());
+            } catch {
+              setError(`This return changed while you were recording, and its latest state could not be loaded. Reload the page. ${failure.entry ?? ""}`.trim());
+            }
+            feedback.current?.focus();
+          }}
+        />
+      )}
+      {settingOff && doc && recordedCredit && (
+        <SetOffCreditDialog
+          scope={{ creditId: recordedCredit.id }}
+          distributorName={suppliers.find((supplier) => supplier.id === doc.supplierId)?.name || doc.supplierGstin || "the distributor"}
+          anchor={settingOff}
+          onClose={() => setSettingOff(null)}
+          onDone={(result, total) => {
+            setSettingOff(null);
+            setRecordedCredit(null);
+            const billNos = [...new Set(result.bills.map((bill) => bill.billNo))];
+            const message = `Set off ${fmtMoney(total)} against bill${billNos.length === 1 ? "" : "s"} ${billNos.join(", ")}.`;
+            setNotice(message);
+            setUndoableSetOff({ notice: message, id: result.setOffId });
             feedback.current?.focus();
           }}
           onStale={(failure) => {
-            setRecording(null);
-            setError(`${failure.title}. Check saved status to see its latest state.`);
+            setSettingOff(null);
+            setRecordedCredit(null);
+            setError(`${failure.title}. ${failure.description}`);
+            feedback.current?.focus();
           }}
         />
       )}

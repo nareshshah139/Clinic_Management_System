@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Info, PackageX, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatDisplayDay } from '@/lib/date-ranges';
@@ -20,7 +20,8 @@ import { RegisterFooter } from '@/components/register/RegisterFooter';
 import { RecordCreditNoteDialog } from './RecordCreditNoteDialog';
 import { SetOffCreditDialog } from './SetOffCreditDialog';
 import { UNDO_REASON, UNDO_WINDOW_MS } from './purchase-register-model';
-import { returnColumns, type ReturnAct } from './returns-columns';
+import { returnView, type ReturnAct } from './returns-columns';
+import { DistributorPositionStrip, useDistributorPosition } from './DistributorPositionStrip';
 import { useRowAction, useUndoWindow } from './useRowAction';
 import type { SetOffResult } from './set-off-model';
 import {
@@ -50,7 +51,7 @@ import {
 
 export { ReturnStateBadge } from './returns-columns';
 
-type Acting = { act: ReturnAct; row: PurchaseReturnRow; anchor: HTMLElement };
+type Acting = { act: ReturnAct; row: PurchaseReturnRow; anchor: HTMLElement } | { act: 'setOffAll'; gstin: string; name: string; anchor: HTMLElement };
 
 export function PurchaseReturnsRegister({
   active,
@@ -81,14 +82,23 @@ export function PurchaseReturnsRegister({
   });
   const [acting, setActing] = useState<Acting | null>(null);
   const [announcement, setAnnouncement] = useState('');
-  const action = useRowAction({ reload, next: (row: PurchaseReturnRow) => canRecordCreditNote(row, canWrite) });
+  const gstin = query.filters.distributorGstin;
+  const { position, refresh: refreshPosition } = useDistributorPosition(active ? gstin.toUpperCase() : '');
+  const reloadAll = useCallback(async () => {
+    const fresh = await reload();
+    refreshPosition();
+    return fresh;
+  }, [reload, refreshPosition]);
+  const action = useRowAction({ reload: reloadAll, next: (row: PurchaseReturnRow) => canRecordCreditNote(row, canWrite) });
   const undoWindow = useUndoWindow<string>(UNDO_WINDOW_MS);
+  const undoing = useRef(new Set<string>());
 
   const data = load.data;
   const rows = data?.rows ?? [];
   const failed = load.status === 'error';
   const setFilter = (key: ReturnFilterKey) => (value: string) => dispatch({ type: 'filter', key, value });
   const indexOf = (row: PurchaseReturnRow) => rows.findIndex((candidate) => candidate.id === row.id);
+  const focusRow = (rowId: string) => action.focus(action.actionId(rowId), action.openId(rowId));
 
   const recorded = async (row: PurchaseReturnRow, result: RecordedCreditNote, corrected: boolean) => {
     setActing(null);
@@ -97,7 +107,7 @@ export function PurchaseReturnsRegister({
       ? `Credit note ${credit.number} corrected.`
       : `Credit note ${credit.number} recorded: ${formatRupees(credit.amount)} from ${row.distributor.name}.`;
     setAnnouncement(message);
-    const fresh = (await reload())?.rows ?? [];
+    const fresh = (await reloadAll())?.rows ?? [];
     const now = fresh.find((candidate) => candidate.id === row.id);
     const settable = now && canSetOff(now, canWrite);
     toast({
@@ -119,71 +129,91 @@ export function PurchaseReturnsRegister({
           }
         : {}),
     });
-    if (settable) action.focus(action.actionId(row.id), action.openId(row.id));
+    if (settable) focusRow(row.id);
     else action.focusAfter(fresh, row.id, indexOf(row));
   };
 
-  const setOffDone = async (row: PurchaseReturnRow, result: SetOffResult, total: number) => {
-    setActing(null);
-    const billNos = [...new Set(result.bills.map((bill) => bill.billNo))];
-    undoWindow.remember([row.id], result.setOffId);
-    const message = `Set off ${formatRupees(total)} against bill${billNos.length === 1 ? '' : 's'} ${billNos.join(', ')}.`;
-    setAnnouncement(message);
-    toast({ title: message, description: 'Undo is next to the credit note for 30 seconds.' });
-    await action.refresh(row.id, indexOf(row), (candidate) => canSetOff(candidate, canWrite));
-  };
-
-  const undo = async (row: PurchaseReturnRow, key = requestKey()) => {
-    const entry = undoWindow.entry(row.id);
-    if (!entry || entry.undoing) return;
-    const rowIds = undoWindow.sharing(entry.value);
-    undoWindow.mark(rowIds, entry.value, true);
+  const undo = async (setOffId: string, label: string, focusRowId: string | null, key = requestKey()) => {
+    if (undoing.current.has(setOffId)) return;
+    undoing.current.add(setOffId);
+    const rowIds = undoWindow.sharing(setOffId);
+    undoWindow.mark(rowIds, setOffId, true);
     try {
       await apiClient.post(
-        `/inventory/workspace/credits/set-off/${encodeURIComponent(entry.value)}/reverse`,
+        `/inventory/workspace/credits/set-off/${encodeURIComponent(setOffId)}/reverse`,
         { reason: UNDO_REASON },
         { idempotencyKey: key },
       );
       undoWindow.forget(rowIds);
-      toast({ title: 'Set-off undone', description: `Credit note ${row.creditNote?.number ?? row.returnRef} has its credit back.` });
-      await reload();
-      action.focus(action.actionId(row.id), action.openId(row.id));
+      toast({ title: 'Set-off undone', description: `${label} has its credit back.` });
+      await reloadAll();
+      if (focusRowId) focusRow(focusRowId);
     } catch (failure) {
       if ((failure as { status?: number } | null)?.status === 409) {
         undoWindow.forget(rowIds);
         toast({ variant: 'warning', title: 'This set-off was already undone', description: 'The list now shows the latest balance.' });
-        await reload();
-        action.focus(action.actionId(row.id), action.openId(row.id));
+        await reloadAll();
+        if (focusRowId) focusRow(focusRowId);
         return;
       }
-      undoWindow.mark(rowIds, entry.value, false);
+      undoWindow.mark(rowIds, setOffId, false);
       toast({
         variant: 'destructive',
         title: 'Could not undo the set-off',
         description: `${errorMessage(failure)} You can reverse it from Payments & dues.`,
         action: (
-          <ToastAction altText="Try undo again" onClick={() => void undo(row, key)}>
+          <ToastAction altText="Try undo again" onClick={() => void undo(setOffId, label, focusRowId, key)}>
             Try again
           </ToastAction>
         ),
       });
+    } finally {
+      undoing.current.delete(setOffId);
     }
   };
 
-  const stale = async (row: PurchaseReturnRow, failure: Extract<WriteFailure, { kind: 'stale' }>) => {
+  const setOffDone = async (result: SetOffResult, total: number, from: PurchaseReturnRow | null, anchor: HTMLElement) => {
+    setActing(null);
+    const creditIds = new Set(result.allocations.map((allocation) => allocation.creditId));
+    const rowIds = rows.filter((row) => row.credit && creditIds.has(row.credit.id)).map((row) => row.id);
+    if (from && !rowIds.includes(from.id)) rowIds.push(from.id);
+    undoWindow.remember(rowIds, result.setOffId);
+    const billNos = [...new Set(result.bills.map((bill) => bill.billNo))];
+    const numbers = [...new Set(result.allocations.map((allocation) => allocation.creditNoteNumber).filter(Boolean))];
+    const label = numbers.length === 1 ? `Credit note ${numbers[0]}` : from ? `Credit note ${from.creditNote?.number ?? from.returnRef}` : `${numbers.length} credit notes`;
+    const message = `Set off ${formatRupees(total)} against bill${billNos.length === 1 ? '' : 's'} ${billNos.join(', ')}.`;
+    setAnnouncement(message);
+    const focusRowId = from?.id ?? rowIds[0] ?? null;
+    toast({
+      title: message,
+      description: 'Undo is in the Status column for 30 seconds.',
+      action: (
+        <ToastAction altText={`Undo the set-off of ${formatRupees(total)}`} onClick={() => void undo(result.setOffId, label, focusRowId)}>
+          Undo
+        </ToastAction>
+      ),
+    });
+    if (from) await action.refresh(from.id, indexOf(from), (candidate) => canSetOff(candidate, canWrite));
+    else {
+      await reloadAll();
+      if (anchor.isConnected) anchor.focus();
+    }
+  };
+
+  const stale = async (row: PurchaseReturnRow | null, failure: Extract<WriteFailure, { kind: 'stale' }>) => {
     setActing(null);
     toast({ variant: 'destructive', title: failure.title, description: failure.description });
-    await action.refresh(row.id, indexOf(row), () => false);
+    if (row) await action.refresh(row.id, indexOf(row), () => false);
+    else await reloadAll();
   };
 
   const entryByOptions = (data?.entryByOptions ?? []).map((person) => ({ value: person.id, label: person.name }));
   if (query.filters.entryById && !entryByOptions.some((option) => option.value === query.filters.entryById))
     entryByOptions.push({ value: query.filters.entryById, label: 'Selected person' });
   const distributorOptions = (data?.distributorOptions ?? []).map((d) => ({ value: d.gstin, label: d.name }));
-  const gstin = query.filters.distributorGstin;
   if (gstin && !distributorOptions.some((option) => option.value === gstin)) distributorOptions.push({ value: gstin, label: gstin });
 
-  const columns = returnColumns({
+  const { columns, card } = returnView({
     today,
     canWrite,
     actionId: action.actionId,
@@ -193,11 +223,16 @@ export function PurchaseReturnsRegister({
         const entry = undoWindow.pending[rowId];
         return entry ? (entry.undoing ? 'undoing' : 'ready') : null;
       },
-      run: (row) => void undo(row),
+      run: (row) => {
+        const entry = undoWindow.entry(row.id);
+        if (entry) void undo(entry.value, `Credit note ${row.creditNote?.number ?? row.returnRef}`, row.id);
+      },
     },
     onOpen: (row) => onOpen(row.kind, row.id),
     onAct: (act, row, anchor) => setActing({ act, row, anchor }),
   });
+
+  const awaitedOnly = query.filters.state === 'AWAITED';
 
   if (load.status === 'denied') {
     return <RegisterDenied noun="purchase returns" />;
@@ -283,6 +318,15 @@ export function PurchaseReturnsRegister({
         {view.filtered && <ClearFilters onClear={clearAll} />}
       </FilterBar>
 
+      {gstin && position && !failed && (
+        <DistributorPositionStrip
+          position={position}
+          name={position.name ?? distributorOptions.find((option) => option.value === position.gstin)?.label ?? position.gstin}
+          canSetOff={canWrite}
+          onSetOff={(anchor) => setActing({ act: 'setOffAll', gstin: position.gstin, name: position.name ?? position.gstin, anchor })}
+        />
+      )}
+
       <RegisterGrid
         label="Purchase returns"
         noun="purchase returns"
@@ -292,15 +336,20 @@ export function PurchaseReturnsRegister({
         sort={{ by: query.sortBy, dir: query.sortDir }}
         onSort={(key) => dispatch({ type: 'sort', key })}
         onRowClick={(row) => onOpen(row.kind, row.id)}
-        onRetry={() => void reload()}
+        onRetry={() => void reloadAll()}
         containerRef={tableRef}
         compact
         dense
+        card={card}
         empty={
           <EmptyState
             icon={PackageX}
-            title={`No purchase returns ${view.searching ? 'match your search' : 'in this period'}`}
-            description={`Nothing returned to a distributor with a return date between ${formatDisplayDay(query.from)} and ${formatDisplayDay(query.to)}${view.searching ? ' with these filters' : ''}.`}
+            title={awaitedOnly ? 'No credit notes awaited' : `No purchase returns ${view.searching ? 'match your search' : 'in this period'}`}
+            description={
+              awaitedOnly
+                ? `Every return dated between ${formatDisplayDay(query.from)} and ${formatDisplayDay(query.to)} has its credit note recorded${view.moreCount || query.q.trim() ? ' for these filters' : ''}.`
+                : `Nothing returned to a distributor with a return date between ${formatDisplayDay(query.from)} and ${formatDisplayDay(query.to)}${view.searching ? ' with these filters' : ''}.`
+            }
             action={
               view.filtered ? (
                 <Button variant="outline" onClick={clearAll}>Clear filters</Button>
@@ -325,7 +374,7 @@ export function PurchaseReturnsRegister({
 
       <p role="status" className="sr-only">{announcement}</p>
 
-      {acting && acting.act !== 'setOff' && (
+      {acting && (acting.act === 'record' || acting.act === 'correct') && (
         <RecordCreditNoteDialog
           row={acting.row}
           anchor={acting.anchor}
@@ -341,8 +390,18 @@ export function PurchaseReturnsRegister({
           distributorName={acting.row.distributor.name}
           anchor={acting.anchor}
           onClose={() => setActing(null)}
-          onDone={(result, total) => void setOffDone(acting.row, result, total)}
+          onDone={(result, total) => void setOffDone(result, total, acting.row, acting.anchor)}
           onStale={(failure) => void stale(acting.row, failure)}
+        />
+      )}
+      {acting?.act === 'setOffAll' && (
+        <SetOffCreditDialog
+          scope={{ distributorGstin: acting.gstin }}
+          distributorName={acting.name}
+          anchor={acting.anchor}
+          onClose={() => setActing(null)}
+          onDone={(result, total) => void setOffDone(result, total, null, acting.anchor)}
+          onStale={(failure) => void stale(null, failure)}
         />
       )}
     </div>

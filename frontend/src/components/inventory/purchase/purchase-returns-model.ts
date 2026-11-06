@@ -132,11 +132,12 @@ export function returnsRequestParams(query: ReturnsQuery) {
   };
 }
 
-export const canRecordCreditNote = (row: PurchaseReturnRow, canWrite: boolean) => canWrite && row.state === 'AWAITED';
+export const canRecordCreditNote = (row: PurchaseReturnRow, canWrite: boolean) =>
+  canWrite && row.creditNote === null && ['AWAITED', 'ADJUSTED', 'USED'].includes(row.state);
 export const canCorrectCreditNote = (row: PurchaseReturnRow, canWrite: boolean) =>
   canWrite && row.creditNote !== null && ['RECEIVED', 'ADJUSTED', 'USED'].includes(row.state);
 export const canSetOff = (row: PurchaseReturnRow, canWrite: boolean) =>
-  canWrite && (row.state === 'RECEIVED' || row.state === 'ADJUSTED') && (row.credit?.available ?? 0) > MONEY_TOLERANCE;
+  canWrite && row.creditNote !== null && (row.state === 'RECEIVED' || row.state === 'ADJUSTED') && (row.credit?.available ?? 0) > MONEY_TOLERANCE;
 export const amountLocked = (row: CreditNoteTarget) => (row.credit?.applied ?? 0) > MONEY_TOLERANCE;
 export const differsFromReturn = (amount: number, row: CreditNoteTarget) => Math.abs(amount - row.returnValue) > MONEY_TOLERANCE;
 export const CONFIRM_OVER_RUPEES = 1;
@@ -163,10 +164,12 @@ export function parseCreditNote(
   const number = input.number.trim().replace(/\s+/g, ' ');
   if (!number) return { field: 'number', error: 'Enter the credit note number from the distributor’s note.' };
   if (number.length > 50) return { field: 'number', error: 'The credit note number can have at most 50 characters.' };
+  if (!input.date.trim()) return { field: 'date', error: 'Enter the date printed on the credit note, as dd/mm/yyyy.' };
   const date = parseDisplayDay(input.date);
   if (!date) return { field: 'date', error: 'Enter the credit note date as dd/mm/yyyy.' };
   if (date > today) return { field: 'date', error: `The credit note date cannot be after today, ${formatDisplayDay(today)}.` };
   if (date < returnDate) return { field: 'date', error: `The credit note date cannot be before the return date, ${formatDisplayDay(returnDate)}.` };
+  if (!input.amount.trim()) return { field: 'amount', error: 'Enter the amount printed on the credit note.' };
   const amount = Number(input.amount.replace(/[₹,\s]/g, ''));
   if (!Number.isFinite(amount) || amount <= 0) return { field: 'amount', error: 'Enter the credit note amount in rupees.' };
   return { value: { number: number.toUpperCase(), date, amount: Math.round(amount * 100) / 100 } };
@@ -180,7 +183,7 @@ export function differenceNote(amount: number, row: CreditNoteTarget) {
 }
 
 export type WriteFailure =
-  | { kind: 'stale'; title: string; description: string }
+  | { kind: 'stale'; title: string; description: string; entry?: string }
   | { kind: 'field'; field: 'number' | 'date' | 'amount'; message: string }
   | { kind: 'inline'; message: string };
 
@@ -202,4 +205,25 @@ export function setOffFailure(error: unknown): WriteFailure {
   if (status === 409 || status === 404)
     return { kind: 'stale', title: 'The balance changed', description: `${errorMessage(error)} The list now shows the latest amounts.` };
   return { kind: 'inline', message: errorMessage(error) };
+}
+
+type ReturnEvent = { action: string; version: number; toStatus: string; detail?: { after?: { number?: string; amount?: number } } | null };
+
+export function returnChangeNote(events: readonly ReturnEvent[], sinceVersion: number, statusLabel: string) {
+  const latest = events.filter((event) => event.version > sinceVersion).at(-1);
+  const after = latest?.detail?.after;
+  switch (latest?.action) {
+    case 'CREDIT_NOTE':
+      return `credit note ${after?.number} for ${formatRupees(after?.amount ?? 0)} was recorded on it`;
+    case 'CREDIT_NOTE_CORRECTED':
+      return `its credit note was corrected to ${after?.number} for ${formatRupees(after?.amount ?? 0)}`;
+    case 'CANCEL':
+      return 'it was cancelled';
+    case 'REVERSE':
+      return 'it was reversed';
+    case 'POST':
+      return 'it was posted';
+    default:
+      return `it is now ${statusLabel}`;
+  }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Plus, Receipt } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { displayCalendarDate, displayClinicDateTimeCompact } from '@/lib/date-display';
@@ -16,7 +16,7 @@ import { RegisterDenied, RegisterGrid, shortName, type RegisterColumn } from '@/
 import { ClearFilters, DateRangeFilter, FilterBar, FilterSelect, MoreFilters, RegisterSearch } from '@/components/register/RegisterFilters';
 import { RegisterFooter } from '@/components/register/RegisterFooter';
 import { BillDocuments } from './BillDocuments';
-import { DistributorPositionStrip } from './DistributorPositionStrip';
+import { DistributorPositionStrip, useDistributorPosition } from './DistributorPositionStrip';
 import { MarkPaidDialog } from './MarkPaidDialog';
 import { SetOffCreditDialog } from './SetOffCreditDialog';
 import { PaymentCell, useSettleBill } from './settle';
@@ -37,7 +37,6 @@ import {
   type FilterKey,
   type PurchaseQuery,
   type PurchaseRegisterResponse,
-  type DistributorPosition,
   type PurchaseRegisterRow,
   type SortKey,
 } from './purchase-register-model';
@@ -55,8 +54,6 @@ const linkClass =
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
 type SettingOff = { gstin: string; name: string; anchor: HTMLElement; billId?: string };
-
-const POSITION_ENDPOINT = '/pharmacy/purchase-register/position';
 
 export function PurchaseRegister({
   active,
@@ -93,30 +90,15 @@ export function PurchaseRegister({
   const data = load.data;
   const rows = data?.rows ?? [];
   const failed = load.status === 'error';
-  const [positionVersion, setPositionVersion] = useState(0);
-  const [position, setPosition] = useState<DistributorPosition | null>(null);
+  const positionGstin = active && data ? (query.filters.distributorGstin || data.onlyDistributor || '').toUpperCase() : '';
+  const { position, refresh: refreshPosition } = useDistributorPosition(positionGstin);
   const reloadAll = useCallback(async () => {
     const fresh = await reload();
-    setPositionVersion((version) => version + 1);
+    refreshPosition();
     return fresh;
-  }, [reload]);
+  }, [reload, refreshPosition]);
   const settle = useSettleBill({ rows, canSettle, today, reload: reloadAll });
   const creditHeldBy = (gstinOf: string) => data?.creditHeld?.[gstinOf.toUpperCase()] ?? 0;
-  const positionGstin = active && data ? (query.filters.distributorGstin || data.onlyDistributor || '').toUpperCase() : '';
-  useEffect(() => {
-    if (!positionGstin) {
-      setPosition(null);
-      return;
-    }
-    let live = true;
-    apiClient.get<DistributorPosition>(POSITION_ENDPOINT, { distributorGstin: positionGstin }).then(
-      (loaded) => live && setPosition(loaded),
-      () => live && setPosition(null),
-    );
-    return () => {
-      live = false;
-    };
-  }, [positionGstin, positionVersion]);
   const setFilter = (key: FilterKey) => (value: string) => dispatch({ type: 'filter', key, value });
 
   const entryByOptions = (data?.entryByOptions ?? []).map((person) => ({ value: person.id, label: person.name }));
@@ -186,25 +168,27 @@ export function PurchaseRegister({
     );
   }
 
-  const outstanding = data && formatRupees(data.totals.outstanding);
+  const money = (value: number) => <span className="whitespace-nowrap">{formatRupees(value)}</span>;
+  const outstandingLabel = data && `Outstanding in ${data.totals.count === 1 ? 'this bill' : `these ${billCount(data.totals.count)}`}`;
   const summary = failed ? (
     'Total not available'
   ) : data ? (
     <>
-      Bills {formatRupees(data.totals.amount)} ·{' '}
+      Bills {money(data.totals.amount)} ·{' '}
       {onLedger ? (
         <button
           type="button"
           onClick={() => onLedger(gstin || undefined)}
-          aria-label={`Outstanding ${outstanding}, open Payments & dues`}
+          aria-label={`${outstandingLabel} ${formatRupees(data.totals.outstanding)}, open Payments & dues`}
           className="inline rounded-sm text-left underline underline-offset-4 hover:decoration-2 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          Outstanding {outstanding}
+          {outstandingLabel} {money(data.totals.outstanding)}
         </button>
       ) : (
-        <>Outstanding {outstanding}</>
-      )}{' '}
-      · {billCount(data.totals.count)}
+        <>
+          {outstandingLabel} {money(data.totals.outstanding)}
+        </>
+      )}
     </>
   ) : (
     <Skeleton className="h-6 w-72" />
@@ -255,7 +239,7 @@ export function PurchaseRegister({
         {view.filtered && <ClearFilters onClear={clearAll} />}
       </FilterBar>
 
-      {position && position.gstin === positionGstin && !failed && (
+      {position && !failed && (
         <DistributorPositionStrip
           position={position}
           name={position.name ?? distributorOptions.find((option) => option.value === position.gstin)?.label ?? position.gstin}
@@ -314,6 +298,11 @@ export function PurchaseRegister({
             const { row, anchor } = settle.settling!;
             settle.close();
             setSettingOff({ gstin: row.distributor.gstin, name: row.distributor.name, anchor, billId: row.id });
+          }}
+          onSetOffDone={(result, total) => {
+            const { row } = settle.settling!;
+            settle.close();
+            void settle.setOff(result, total, { rowId: row.id });
           }}
           onClose={settle.close}
           onPaid={(payment, amount) => void settle.paid(payment, amount)}

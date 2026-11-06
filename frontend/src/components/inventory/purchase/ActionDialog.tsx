@@ -9,7 +9,7 @@ const EDGE = 16;
 const ARM_DELAY_MS = 300;
 
 export type DialogOutcome = 'done' | 'stay';
-type HandOff = (run: () => void) => void;
+export type HandOff = (run: () => void) => void;
 
 function anchoredStyle(anchor: HTMLElement, width: number, height: number): CSSProperties | undefined {
   if (window.innerWidth < 640) return undefined;

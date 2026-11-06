@@ -1,5 +1,6 @@
 'use client';
 
+import type { MouseEvent, ReactNode } from 'react';
 import { Pencil } from 'lucide-react';
 import { displayCalendarDate, displayClinicDateTimeCompact } from '@/lib/date-display';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
@@ -20,33 +21,40 @@ import {
 const badgeText = 'whitespace-nowrap px-1.5 py-0 text-xs font-semibold leading-[1.125rem]';
 const noteClass = 'whitespace-nowrap text-xs font-medium leading-tight';
 const actionClass = 'h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm lg:min-h-8!';
-const linkClass =
-  'flex min-w-0 flex-col items-start rounded-sm text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&:hover_.ref]:underline';
+const primaryLinkClass =
+  '-my-0.5 whitespace-nowrap rounded-sm py-0.5 text-left font-semibold leading-[1.125rem] text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
+const refClass =
+  'whitespace-nowrap rounded-sm text-left text-xs font-medium leading-tight underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 const compactDay = (day: string, today: string) => (day.endsWith(` ${today.slice(0, 4)}`) ? day.slice(0, -5) : day);
+const keepButtonClicks = (event: MouseEvent) => {
+  if ((event.target as HTMLElement).closest('button')) event.stopPropagation();
+};
 
-export function ReturnStateBadge({ row, today }: { row: PurchaseReturnRow; today: string }) {
-  const available = row.credit?.available ?? 0;
+function AwaitedBadge({ row, today }: { row: PurchaseReturnRow; today: string }) {
+  const days = awaitedDays(row, today);
+  return (
+    <Badge variant="warning" className={badgeText}>
+      Credit note awaited
+      {days !== null && (
+        <>
+          <span aria-hidden="true"> · {days === 0 ? 'today' : `${days}d`}</span>
+          <span className="sr-only">{days === 0 ? ', challan sent today' : `, for ${days} ${days === 1 ? 'day' : 'days'} since the challan`}</span>
+        </>
+      )}
+    </Badge>
+  );
+}
+
+export function ReturnStateBadge({ row, today, inline = false }: { row: PurchaseReturnRow; today: string; inline?: boolean }) {
   switch (row.state) {
-    case 'AWAITED': {
-      const days = awaitedDays(row, today);
-      return (
-        <Badge variant="warning" className={badgeText}>
-          Credit note awaited
-          {days !== null && (
-            <>
-              <span aria-hidden="true"> · {days === 0 ? 'today' : `${days}d`}</span>
-              <span className="sr-only">{days === 0 ? ', challan sent today' : `, for ${days} ${days === 1 ? 'day' : 'days'} since the challan`}</span>
-            </>
-          )}
-        </Badge>
-      );
-    }
+    case 'AWAITED':
+      return <AwaitedBadge row={row} today={today} />;
     case 'RECEIVED':
     case 'ADJUSTED':
       return (
-        <span className="flex flex-col items-start">
+        <span className={cn('flex', inline ? 'items-center gap-1.5' : 'flex-col items-start')}>
           <Badge variant="info" className={badgeText}>{row.state === 'RECEIVED' ? 'Received' : 'Adjusted'}</Badge>
-          <span className={noteClass}>{formatRupees(available)} left</span>
+          <span className={noteClass}>{formatRupees(row.credit?.available ?? 0)} left</span>
         </span>
       );
     case 'USED':
@@ -54,21 +62,13 @@ export function ReturnStateBadge({ row, today }: { row: PurchaseReturnRow; today
     case 'DRAFT':
       return <Badge variant="neutral" className={badgeText}>Draft</Badge>;
     case 'CANCELLED':
-      return <Badge variant="neutral" className={cn(badgeText, 'line-through')}>Cancelled</Badge>;
+      return <Badge variant="neutral" className={badgeText}>Cancelled</Badge>;
   }
 }
 
 export type ReturnAct = 'record' | 'correct' | 'setOff';
 
-export function returnColumns({
-  today,
-  canWrite,
-  actionId,
-  openId,
-  undo,
-  onOpen,
-  onAct,
-}: {
+type ReturnViewInput = {
   today: string;
   canWrite: boolean;
   actionId: (rowId: string) => string;
@@ -76,9 +76,126 @@ export function returnColumns({
   undo: { pending: (rowId: string) => 'ready' | 'undoing' | null; run: (row: PurchaseReturnRow) => void };
   onOpen: (row: PurchaseReturnRow) => void;
   onAct: (act: ReturnAct, row: PurchaseReturnRow, anchor: HTMLButtonElement) => void;
-}): RegisterColumn<PurchaseReturnRow, ReturnSortKey>[] {
-  const noun = (row: PurchaseReturnRow) => (row.kind === 'CREDIT_NOTE' ? 'credit' : 'return');
-  return [
+};
+
+const noun = (row: PurchaseReturnRow) => (row.kind === 'CREDIT_NOTE' ? 'credit' : 'return');
+const Noun = (row: PurchaseReturnRow) => (row.kind === 'CREDIT_NOTE' ? 'Credit' : 'Return');
+
+export function returnView({ today, canWrite, actionId, openId, undo, onOpen, onAct }: ReturnViewInput) {
+  const draft = (row: PurchaseReturnRow) => row.state === 'DRAFT';
+
+  const lead = (row: PurchaseReturnRow): ReactNode => {
+    if (canRecordCreditNote(row, canWrite))
+      return (
+        <button
+          id={actionId(row.id)}
+          type="button"
+          className={primaryLinkClass}
+          aria-label={`Record credit note for ${noun(row)} ${row.returnRef}`}
+          aria-haspopup="dialog"
+          onClick={(event) => onAct('record', row, event.currentTarget)}
+        >
+          Record credit note
+        </button>
+      );
+    if (draft(row))
+      return (
+        <button id={openId(row.id)} type="button" className={primaryLinkClass} onClick={() => onOpen(row)}>
+          Open draft<span className="sr-only"> {noun(row)} {row.returnRef}</span>
+        </button>
+      );
+    if (row.creditNote) return <span className="whitespace-nowrap font-semibold leading-[1.125rem]">{row.creditNote.number}</span>;
+    return (
+      <span className="leading-[1.125rem]">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">No credit note yet</span>
+      </span>
+    );
+  };
+
+  const reference = (row: PurchaseReturnRow): ReactNode => (
+    <span className="flex min-w-0 items-baseline gap-1 text-xs font-medium leading-tight">
+      {draft(row) ? (
+        <span className="whitespace-nowrap">{row.returnRef}</span>
+      ) : (
+        <button id={openId(row.id)} type="button" onClick={() => onOpen(row)} className={refClass}>
+          <span className="sr-only">Open {Noun(row)} </span>
+          {row.returnRef}
+        </button>
+      )}
+      {row.sourceBillNo && (
+        <span className="whitespace-nowrap">
+          <span aria-hidden="true">· </span>
+          <span className="sr-only">against bill </span>
+          {row.sourceBillNo}
+        </span>
+      )}
+    </span>
+  );
+
+  const correct = (row: PurchaseReturnRow): ReactNode =>
+    canCorrectCreditNote(row, canWrite) && (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-8 shrink-0 lg:min-h-8!"
+        aria-label={`Correct credit note ${row.creditNote!.number}`}
+        aria-haspopup="dialog"
+        title="Correct the number, date or amount"
+        onClick={(event) => onAct('correct', row, event.currentTarget)}
+      >
+        <Pencil aria-hidden="true" className="size-4" />
+      </Button>
+    );
+
+  const actions = (row: PurchaseReturnRow): ReactNode => {
+    const pending = undo.pending(row.id);
+    return (
+      <span className="flex items-center gap-1">
+        {pending && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 whitespace-nowrap! px-2 text-sm font-semibold underline underline-offset-4 lg:min-h-8!"
+            aria-label={`Undo set-off of credit note ${row.creditNote?.number ?? row.returnRef}`}
+            disabled={pending === 'undoing'}
+            onClick={() => undo.run(row)}
+          >
+            {pending === 'undoing' ? 'Undoing…' : 'Undo'}
+          </Button>
+        )}
+        {canSetOff(row, canWrite) && (
+          <Button
+            id={actionId(row.id)}
+            type="button"
+            variant="outline"
+            size="sm"
+            className={actionClass}
+            aria-label={`Set off credit note ${row.creditNote?.number ?? row.returnRef} against bills`}
+            aria-haspopup="dialog"
+            onClick={(event) => onAct('setOff', row, event.currentTarget)}
+          >
+            Set off
+          </Button>
+        )}
+      </span>
+    );
+  };
+
+  const amount = (row: PurchaseReturnRow) => (
+    <span className={cn('whitespace-nowrap font-semibold leading-[1.125rem]', row.state === 'CANCELLED' && 'line-through')}>
+      {formatRupees(row.creditNote?.amount ?? row.returnValue)}
+    </span>
+  );
+  const amountNote = (row: PurchaseReturnRow): ReactNode => {
+    if (!row.creditNote) return <span className={noteClass}>{noun(row)} value</span>;
+    if (Math.abs(row.creditNote.amount - row.returnValue) > 0.01) return <span className={noteClass}>Return {formatRupees(row.returnValue)}</span>;
+    return null;
+  };
+
+  const columns: RegisterColumn<PurchaseReturnRow, ReturnSortKey>[] = [
     { key: 'srNo', label: 'Sr No', sort: 'srNo', className: 'w-[1%] tabular-nums', cell: (row) => row.srNo },
     {
       key: 'creditNoteNo',
@@ -89,55 +206,11 @@ export function returnColumns({
       className: 'w-[1%]',
       cell: (row) => (
         <span className="flex items-start gap-0.5">
-          {canRecordCreditNote(row, canWrite) ? (
-            <span className="flex flex-col items-start">
-              <button
-                id={actionId(row.id)}
-                type="button"
-                className="-my-0.5 whitespace-nowrap rounded-sm py-0.5 text-left font-semibold leading-[1.125rem] text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                aria-label={`Record credit note for ${noun(row)} ${row.returnRef}`}
-                aria-haspopup="dialog"
-                onClick={(event) => onAct('record', row, event.currentTarget)}
-              >
-                Record credit note
-              </button>
-              <button id={openId(row.id)} type="button" onClick={() => onOpen(row)} className={linkClass}>
-                <span className="ref whitespace-nowrap text-xs font-medium leading-tight underline-offset-4">
-                  <span className="sr-only">Open {row.kind === 'CREDIT_NOTE' ? 'Credit' : 'Return'} </span>
-                  {row.returnRef}
-                </span>
-              </button>
-            </span>
-          ) : (
-            <button id={openId(row.id)} type="button" onClick={() => onOpen(row)} className={linkClass}>
-              {row.creditNote ? (
-                <span className="ref whitespace-nowrap font-semibold leading-[1.125rem] underline-offset-4">{row.creditNote.number}</span>
-              ) : (
-                <span className="leading-[1.125rem]">
-                  <span aria-hidden="true">—</span>
-                  <span className="sr-only">No credit note yet</span>
-                </span>
-              )}
-              <span className="ref whitespace-nowrap text-xs font-medium leading-tight underline-offset-4">
-                <span className="sr-only">Open {row.kind === 'CREDIT_NOTE' ? 'Credit' : 'Return'} </span>
-                {row.returnRef}
-              </span>
-            </button>
-          )}
-          {canCorrectCreditNote(row, canWrite) && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0 lg:min-h-8!"
-              aria-label={`Correct credit note ${row.creditNote!.number}`}
-              aria-haspopup="dialog"
-              title="Correct the number, date or amount"
-              onClick={(event) => onAct('correct', row, event.currentTarget)}
-            >
-              <Pencil aria-hidden="true" className="size-4" />
-            </Button>
-          )}
+          <span className="flex flex-col items-start">
+            {lead(row)}
+            {reference(row)}
+          </span>
+          {correct(row)}
         </span>
       ),
     },
@@ -173,23 +246,16 @@ export function returnColumns({
       key: 'distributor',
       label: 'Distributor',
       sort: 'distributor',
-      className: 'w-full max-w-0 min-w-[9rem]',
+      className: 'w-full max-w-0 min-w-[8rem]',
       cell: (row) => (
-        <span className="flex min-w-0 flex-col">
-          <span title={`${row.distributor.name} · GSTIN ${row.distributor.gstin}`} className="truncate font-medium leading-[1.125rem]">{row.distributor.name}</span>
-          {(row.sourceBillNo || row.reason) && (
-            <span className="flex min-w-0 items-center gap-1.5">
-              {row.sourceBillNo && (
-                <span title={`Bill ${row.sourceBillNo}`} className="truncate text-xs font-medium leading-tight">
-                  Bill {row.sourceBillNo}
-                </span>
-              )}
-              {row.reason && (
-                <Badge variant="neutral" className="shrink-0 whitespace-nowrap px-1.5 py-0 text-xs font-medium leading-4">
-                  {RETURN_REASON_LABELS[row.reason]}
-                </Badge>
-              )}
-            </span>
+        <span className="flex min-w-0 flex-col items-start">
+          <span title={`${row.distributor.name} · GSTIN ${row.distributor.gstin}`} className="block max-w-full truncate font-medium leading-[1.125rem]">
+            {row.distributor.name}
+          </span>
+          {row.reason && (
+            <Badge variant="neutral" className="whitespace-nowrap px-1.5 py-0 text-xs font-medium leading-4">
+              {RETURN_REASON_LABELS[row.reason]}
+            </Badge>
           )}
         </span>
       ),
@@ -200,62 +266,50 @@ export function returnColumns({
       sort: 'amount',
       align: 'right',
       className: 'w-[1%] whitespace-nowrap',
-      cell: (row) => {
-        const amount = row.creditNote?.amount ?? row.returnValue;
-        const differs = row.creditNote && Math.abs(row.creditNote.amount - row.returnValue) > 0.01;
-        return (
-          <span className="flex flex-col items-end">
-            <span className={cn('font-semibold leading-[1.125rem]', row.state === 'CANCELLED' && 'line-through')}>{formatRupees(amount)}</span>
-            {!row.creditNote && <span className={noteClass}>{noun(row)} value</span>}
-            {differs && <span className={noteClass}>Return {formatRupees(row.returnValue)}</span>}
-          </span>
-        );
-      },
+      cell: (row) => (
+        <span className="flex flex-col items-end">
+          {amount(row)}
+          {amountNote(row)}
+        </span>
+      ),
     },
     {
       key: 'state',
       label: 'Status',
       sort: 'state',
       interactive: true,
-      pinnedEnd: true,
       className: 'w-[1%] whitespace-nowrap py-0.5!',
-      cell: (row) => {
-        const pending = undo.pending(row.id);
-        return (
-          <div className="flex items-center justify-between gap-2 max-sm:flex-col max-sm:items-start max-sm:gap-1">
-            <ReturnStateBadge row={row} today={today} />
-            <span className="flex items-center gap-1">
-              {pending && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 whitespace-nowrap! px-2 text-sm font-semibold underline underline-offset-4 lg:min-h-8!"
-                  aria-label={`Undo set-off of credit note ${row.creditNote?.number ?? row.returnRef}`}
-                  disabled={pending === 'undoing'}
-                  onClick={() => undo.run(row)}
-                >
-                  {pending === 'undoing' ? 'Undoing…' : 'Undo'}
-                </Button>
-              )}
-              {canSetOff(row, canWrite) && (
-                <Button
-                  id={actionId(row.id)}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={actionClass}
-                  aria-label={`Set off credit note ${row.creditNote?.number ?? row.returnRef} against bills`}
-                  aria-haspopup="dialog"
-                  onClick={(event) => onAct('setOff', row, event.currentTarget)}
-                >
-                  Set off
-                </Button>
-              )}
-            </span>
-          </div>
-        );
-      },
+      cell: (row) => (
+        <div className="flex items-center justify-between gap-2">
+          <ReturnStateBadge row={row} today={today} />
+          {actions(row)}
+        </div>
+      ),
     },
   ];
+
+  const card = (row: PurchaseReturnRow) => (
+    <div className="flex flex-col gap-1 text-sm tabular-nums" onClick={keepButtonClicks}>
+      <div className="flex items-baseline justify-between gap-3">
+        <span title={`${row.distributor.name} · GSTIN ${row.distributor.gstin}`} className="min-w-0 truncate font-medium">
+          {row.distributor.name}
+        </span>
+        {amount(row)}
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
+          {lead(row)}
+          {reference(row)}
+          {correct(row)}
+        </span>
+        {amountNote(row)}
+      </div>
+      <div className="flex min-h-8 items-center justify-between gap-2">
+        <ReturnStateBadge row={row} today={today} inline />
+        {actions(row)}
+      </div>
+    </div>
+  );
+
+  return { columns, card };
 }

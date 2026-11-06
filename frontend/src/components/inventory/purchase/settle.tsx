@@ -135,7 +135,7 @@ export function useSettleBill({
   const undoWindow = useUndoWindow<Undoable>(UNDO_WINDOW_MS);
   const { remember, forget } = undoWindow;
 
-  const undo = async (row: PurchaseRegisterRow, key = requestKey()) => {
+  const undo = async (row: Pick<PurchaseRegisterRow, 'id' | 'billNo'>, key = requestKey()) => {
     const entry = undoWindow.entry(row.id);
     if (!entry || entry.undoing) return;
     const undoable = entry.value;
@@ -229,7 +229,20 @@ export function useSettleBill({
     );
     const message = `Set off ${formatRupees(total)} of credit against bill${billNos.length === 1 ? '' : 's'} ${billNos.join(', ')}.`;
     setAnnouncement(message);
-    toast({ title: message, description: 'Undo is next to the bill for 30 seconds.' });
+    const [first] = result.bills;
+    toast({
+      title: message,
+      description: 'Undo is in the Payment column for 30 seconds.',
+      ...(first
+        ? {
+            action: (
+              <ToastAction altText={`Undo the set-off against bill${billNos.length === 1 ? '' : 's'} ${billNos.join(', ')}`} onClick={() => void undo(first)}>
+                Undo
+              </ToastAction>
+            ),
+          }
+        : {}),
+    });
     if (from) await action.refresh(from.rowId, rows.findIndex((candidate) => candidate.id === from.rowId));
     else await reload();
   };

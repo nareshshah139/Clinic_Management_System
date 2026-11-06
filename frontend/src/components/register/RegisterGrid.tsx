@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { PHONE_QUERY, useMediaQuery } from '@/hooks/use-media-query';
 import type { SortDirection } from './register-query';
 import type { RegisterLoad } from './useRegisterQuery';
 
@@ -76,6 +77,7 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
   containerRef,
   compact = false,
   dense = false,
+  card,
 }: {
   label: string;
   noun: string;
@@ -87,10 +89,12 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
   onRowClick: (row: Row) => void;
   onRetry: () => void;
   empty: ReactNode;
-  containerRef?: Ref<HTMLDivElement>;
+  containerRef?: Ref<HTMLDivElement | HTMLUListElement>;
   compact?: boolean;
   dense?: boolean;
+  card?: (row: Row) => ReactNode;
 }) {
+  const phone = useMediaQuery(PHONE_QUERY);
   const rowClass = compact ? undefined : 'h-[52px]';
   const padClass = dense ? 'py-1!' : compact ? 'py-1.5!' : 'py-2!';
   const loaded = load.data !== null;
@@ -111,58 +115,76 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
       >
         {firstLoad && <span role="status" className="sr-only">Loading {noun}…</span>}
         <TooltipProvider delayDuration={200}>
-          <div ref={containerRef} className="@container relative w-full scroll-mt-24 overflow-auto rounded-lg border border-border bg-background max-xl:max-h-[calc(100dvh-16rem)] max-xl:min-h-48 xl:overflow-visible">
-            <table aria-label={label} className="w-full border-separate max-xl:min-w-[60rem] border-spacing-0 tabular-nums tracking-[-0.02em] [&_td]:border-b [&_td]:border-border [&_th]:border-b [&_th]:border-border [&_tr:last-child>td]:border-b-0">
-              <TableHeader className="static! z-auto! bg-transparent!">
-                <TableRow className="hover:bg-transparent">
-                  {columns.map((column) => {
-                    const active = column.sort !== undefined && sort.by === column.sort;
-                    return (
-                      <TableHead
-                        key={column.key}
-                        aria-sort={column.sort === undefined ? undefined : active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                        className={cn(headClass, column.pinned && pinnedHeadClass, column.pinnedEnd && pinnedEndHeadClass, column.align === 'right' && 'text-right')}
-                      >
-                        {column.sort === undefined ? (
-                          <HeadLabel column={column as RegisterColumn<unknown>} />
-                        ) : (
-                          <SortButton column={column as RegisterColumn<unknown>} active={active} direction={sort.dir} onSort={() => onSort(column.sort!)} />
-                        )}
-                      </TableHead>
-                    );
-                  })}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {firstLoad &&
-                  Array.from({ length: 6 }, (_, i) => (
-                    <TableRow key={i} className={rowClass}>
+          {phone && card ? (
+            <ul ref={containerRef as Ref<HTMLUListElement>} aria-label={label} className="flex flex-col rounded-lg border border-border bg-background">
+              {firstLoad &&
+                Array.from({ length: 4 }, (_, i) => (
+                  <li key={i} className="flex flex-col gap-2 border-b border-border px-3 py-3 last:border-b-0">
+                    <Skeleton className="h-5 w-full" />
+                    <Skeleton className="h-5 w-2/3" />
+                  </li>
+                ))}
+              {loaded && rows.length === 0 && <li className="px-3 py-2">{empty}</li>}
+              {rows.map((row) => (
+                <li key={row.id} className="cursor-pointer border-b border-border px-3 py-2.5 last:border-b-0 hover:bg-[var(--accent-soft)]" onClick={() => onRowClick(row)}>
+                  {card(row)}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div ref={containerRef as Ref<HTMLDivElement>} className="@container relative w-full scroll-mt-24 overflow-auto rounded-lg border border-border bg-background max-xl:max-h-[calc(100dvh-16rem)] max-xl:min-h-48 xl:overflow-visible">
+              <table aria-label={label} className="w-full border-separate max-xl:min-w-[60rem] border-spacing-0 tabular-nums tracking-[-0.02em] [&_td]:border-b [&_td]:border-border [&_th]:border-b [&_th]:border-border [&_tr:last-child>td]:border-b-0">
+                <TableHeader className="static! z-auto! bg-transparent!">
+                  <TableRow className="hover:bg-transparent">
+                    {columns.map((column) => {
+                      const active = column.sort !== undefined && sort.by === column.sort;
+                      return (
+                        <TableHead
+                          key={column.key}
+                          aria-sort={column.sort === undefined ? undefined : active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                          className={cn(headClass, column.pinned && pinnedHeadClass, column.pinnedEnd && pinnedEndHeadClass, column.align === 'right' && 'text-right')}
+                        >
+                          {column.sort === undefined ? (
+                            <HeadLabel column={column as RegisterColumn<unknown>} />
+                          ) : (
+                            <SortButton column={column as RegisterColumn<unknown>} active={active} direction={sort.dir} onSort={() => onSort(column.sort!)} />
+                          )}
+                        </TableHead>
+                      );
+                    })}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {firstLoad &&
+                    Array.from({ length: 6 }, (_, i) => (
+                      <TableRow key={i} className={rowClass}>
+                        {columns.map((column) => (
+                          <TableCell key={column.key} className={cn(cellClass, padClass)}><Skeleton className="h-5 w-full min-w-12" /></TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  {loaded && rows.length === 0 && (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={columns.length} className="whitespace-normal">{empty}</TableCell>
+                    </TableRow>
+                  )}
+                  {rows.map((row) => (
+                    <TableRow key={row.id} className={cn('group cursor-pointer', rowClass)} onClick={() => onRowClick(row)}>
                       {columns.map((column) => (
-                        <TableCell key={column.key} className={cn(cellClass, padClass)}><Skeleton className="h-5 w-full min-w-12" /></TableCell>
+                        <TableCell
+                          key={column.key}
+                          onClick={column.interactive ? stopRowClick : undefined}
+                          className={cn(cellClass, padClass, column.pinned && pinnedCellClass, column.pinnedEnd && pinnedEndCellClass, column.align === 'right' && 'text-right', column.className)}
+                        >
+                          {column.cell(row)}
+                        </TableCell>
                       ))}
                     </TableRow>
                   ))}
-                {loaded && rows.length === 0 && (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={columns.length} className="whitespace-normal">{empty}</TableCell>
-                  </TableRow>
-                )}
-                {rows.map((row) => (
-                  <TableRow key={row.id} className={cn('group cursor-pointer', rowClass)} onClick={() => onRowClick(row)}>
-                    {columns.map((column) => (
-                      <TableCell
-                        key={column.key}
-                        onClick={column.interactive ? stopRowClick : undefined}
-                        className={cn(cellClass, padClass, column.pinned && pinnedCellClass, column.pinnedEnd && pinnedEndCellClass, column.align === 'right' && 'text-right', column.className)}
-                      >
-                        {column.cell(row)}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </table>
-          </div>
+                </TableBody>
+              </table>
+            </div>
+          )}
         </TooltipProvider>
       </div>
     </>

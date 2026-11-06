@@ -9,7 +9,9 @@ import { requestKey } from '@/components/inventory/workspace-model';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { filterControlClass, filterLabelClass } from '@/components/register/RegisterFilters';
-import { ActionDialog, DialogClose, type DialogOutcome } from './ActionDialog';
+import { ActionDialog, DialogClose, type DialogOutcome, type HandOff } from './ActionDialog';
+import { setOffFailure } from './purchase-returns-model';
+import type { SetOffResult } from './set-off-model';
 import {
   SETTLE_MODES,
   SETTLE_MODE_LABELS,
@@ -31,6 +33,7 @@ export function MarkPaidDialog({
   onPaid,
   onStale,
   onSetOff,
+  onSetOffDone,
 }: {
   row: PurchaseRegisterRow;
   anchor: HTMLElement;
@@ -39,10 +42,12 @@ export function MarkPaidDialog({
   onPaid: (payment: RecordedPayment, amount: number) => void;
   onStale: (failure: Extract<SettleFailure, { kind: 'stale' }>) => void;
   onSetOff?: () => void;
+  onSetOffDone?: (result: SetOffResult, total: number) => void;
 }) {
   const amount = row.payment.payable;
   const [today] = useState(getISTDateString);
   const [key] = useState(requestKey);
+  const [setOffKey] = useState(requestKey);
   const [mode, setMode] = useState<SettleMode>(readSettleMode);
   const [dateText, setDateText] = useState(() => formatDisplayDay(today));
   const [reference, setReference] = useState('');
@@ -53,7 +58,30 @@ export function MarkPaidDialog({
   const setOffRef = useRef<HTMLButtonElement>(null);
   const errorId = useId();
 
-  const covers = creditHeld > 0 && creditHeld + 0.005 >= amount && !!onSetOff;
+  const covers = creditHeld > 0 && creditHeld + 0.005 >= amount && !!onSetOffDone;
+  const offersCredit = creditHeld > 0 && (covers || !!onSetOff);
+
+  const settleByCredit = async (handOff: HandOff) => {
+    if (saving || !onSetOffDone) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await apiClient.post<SetOffResult>(
+        '/inventory/workspace/credits/set-off',
+        { requestKey: setOffKey, distributorGstin: row.distributor.gstin, allocations: [{ purchaseInvoiceId: row.id, amount }] },
+        { idempotencyKey: setOffKey },
+      );
+      handOff(() => onSetOffDone(result, amount));
+    } catch (failure) {
+      const outcome = setOffFailure(failure);
+      if (outcome.kind === 'stale') {
+        handOff(() => onStale(outcome));
+        return;
+      }
+      setError({ message: outcome.message });
+      setSaving(false);
+    }
+  };
 
   const submit = async (): Promise<DialogOutcome> => {
     const date = parseSettleDate(dateText, today, row.billDate);
@@ -99,12 +127,19 @@ export function MarkPaidDialog({
   return (
     <ActionDialog
       anchor={anchor}
-      title={<>Pay {formatRupees(amount)} to {row.distributor.name}</>}
+      title={offersCredit ? <>Settle bill {row.billNo} · {formatRupees(amount)}</> : <>Pay {formatRupees(amount)} to {row.distributor.name}</>}
       description={
-        <>
-          For bill <span className="font-semibold">{row.billNo}</span>
-          {settled > 0 && <> · {formatRupees(settled)} already settled</>}
-        </>
+        offersCredit ? (
+          <>
+            {row.distributor.name}
+            {settled > 0 && <> · {formatRupees(settled)} already settled</>}
+          </>
+        ) : (
+          <>
+            For bill <span className="font-semibold">{row.billNo}</span>
+            {settled > 0 && <> · {formatRupees(settled)} already settled</>}
+          </>
+        )
       }
       saving={saving}
       initialFocus={covers ? setOffRef : modeRef}
@@ -116,21 +151,21 @@ export function MarkPaidDialog({
             <Button type="button" variant="ghost" className="h-10" disabled={saving}>Cancel</Button>
           </DialogClose>
           <Button type="submit" variant={covers ? 'outline' : 'default'} className="h-10" disabled={saving}>
-            {saving ? 'Recording…' : `Record payment ${formatRupees(amount)}`}
+            {saving ? 'Saving…' : `Record payment ${formatRupees(amount)}`}
           </Button>
         </>
       )}
     >
       {(handOff) => (
         <>
-          {covers && onSetOff ? (
+          {covers ? (
             <div className="flex flex-col items-start gap-2 rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm text-foreground">
               <p>
-                <span className="font-semibold">{formatRupees(creditHeld)}</span> credit from {row.distributor.name} covers this bill. Set it off,
-                or record a payment below.
+                <span className="whitespace-nowrap font-semibold">{formatRupees(creditHeld)}</span> credit from {row.distributor.name} covers this bill. Set
+                it off, or record a payment below.
               </p>
-              <Button ref={setOffRef} type="button" className="h-10" disabled={saving} onClick={() => handOff(onSetOff)}>
-                Set off {formatRupees(amount)} credit
+              <Button ref={setOffRef} type="button" className="h-10" disabled={saving} onClick={() => void settleByCredit(handOff)}>
+                {saving ? 'Setting off…' : `Set off ${formatRupees(amount)} credit`}
               </Button>
             </div>
           ) : (
@@ -138,7 +173,7 @@ export function MarkPaidDialog({
             onSetOff && (
               <p className="flex flex-wrap items-center gap-x-2 rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm text-foreground">
                 <span>
-                  <span className="font-semibold">{formatRupees(creditHeld)}</span> credit from {row.distributor.name} is available.
+                  <span className="whitespace-nowrap font-semibold">{formatRupees(creditHeld)}</span> credit from {row.distributor.name} is available.
                 </span>
                 <button
                   type="button"

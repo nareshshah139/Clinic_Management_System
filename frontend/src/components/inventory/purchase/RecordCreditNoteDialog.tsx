@@ -45,8 +45,8 @@ export function RecordCreditNoteDialog({
   const [today] = useState(getISTDateString);
   const [key] = useState(requestKey);
   const [number, setNumber] = useState(correcting ? row.creditNote!.number : '');
-  const [dateText, setDateText] = useState(() => formatDisplayDay(correcting && row.creditNote!.date ? row.creditNote!.date : today));
-  const [amountText, setAmountText] = useState(() => String(correcting ? row.creditNote!.amount : locked ? row.credit!.amount : row.returnValue));
+  const [dateText, setDateText] = useState(() => (correcting && row.creditNote!.date ? formatDisplayDay(row.creditNote!.date) : ''));
+  const [amountText, setAmountText] = useState(() => (correcting ? String(row.creditNote!.amount) : locked ? String(row.credit!.amount) : ''));
   const [reason, setReason] = useState('');
   const [confirmed, setConfirmed] = useState<number | null>(null);
   const [error, setError] = useState<{ field?: Field; message: string } | null>(null);
@@ -54,6 +54,7 @@ export function RecordCreditNoteDialog({
   const refs = { number: useRef<HTMLInputElement>(null), date: useRef<HTMLInputElement>(null), amount: useRef<HTMLInputElement>(null), reason: useRef<HTMLInputElement>(null) };
   const errorId = useId();
   const warningId = useId();
+  const hintId = useId();
   const noun = row.kind === 'CREDIT_NOTE' ? 'supplier credit' : 'return';
 
   const typed = amountOf(amountText);
@@ -100,7 +101,9 @@ export function RecordCreditNoteDialog({
     } catch (failure) {
       const outcome = creditNoteFailure(failure);
       if (outcome.kind === 'stale') {
-        onStale(outcome);
+        const { number: typedNumber, date, amount } = parsed.value;
+        const entry = `Your entry was not saved: credit note ${typedNumber}, ${formatDisplayDay(date)}, ${formatRupees(amount)}.`;
+        onStale({ ...outcome, description: `${outcome.description} ${entry}`, entry });
         return 'done';
       }
       setSaving(false);
@@ -119,7 +122,8 @@ export function RecordCreditNoteDialog({
       description={
         <>
           For {noun} <span className="font-semibold">{row.returnRef}</span>
-          {row.sourceBillNo && <> against bill {row.sourceBillNo}</>} · {noun} value {formatRupees(row.returnValue)}
+          {row.sourceBillNo && <> against bill {row.sourceBillNo}</>}
+          {locked && <> · {noun} value {formatRupees(row.returnValue)}</>}
         </>
       }
       saving={saving}
@@ -175,7 +179,7 @@ export function RecordCreditNoteDialog({
             disabled={saving}
             readOnly={locked}
             aria-readonly={locked || undefined}
-            aria-describedby={describedBy('amount', differs && !locked && warningId)}
+            aria-describedby={describedBy('amount', !locked && hintId, differs && !locked && warningId)}
             onChange={(event) => {
               setAmountText(event.target.value);
               setConfirmed(null);
@@ -185,6 +189,26 @@ export function RecordCreditNoteDialog({
           />
         </label>
       </div>
+      {!locked && (
+        <p id={hintId} className="-mt-1.5 flex flex-wrap items-center justify-end gap-x-2 text-sm">
+          <span>
+            {noun === 'return' ? 'Return' : 'Credit'} value <span className="whitespace-nowrap font-semibold">{formatRupees(row.returnValue)}</span>
+          </span>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              setAmountText(String(row.returnValue));
+              setConfirmed(null);
+              if (error?.field === 'amount') setError(null);
+              refs.amount.current?.focus();
+            }}
+            className="min-h-8 rounded-sm font-semibold text-primary underline underline-offset-4 hover:decoration-2 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            Same as {noun} value
+          </button>
+        </p>
+      )}
       {correcting && (
         <label className={cn('flex flex-col gap-1', filterLabelClass)}>
           Why correct it?
