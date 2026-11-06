@@ -183,6 +183,28 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     expect(indexes[0].indexdef).toContain('WHERE (("reversedAt" IS NULL) AND ("creditNoteNumber" IS NOT NULL))');
   });
 
+  it('matches the migrations for supplier credits, allocations and set-offs, the partial index aside, which Prisma cannot see', async () => {
+    const shadow = `cr27_shadow_${randomUUID().replaceAll('-', '')}`;
+    const url = new URL(process.env.PURCHASE_RETURNS_TEST_DATABASE_URL!);
+    url.pathname = `/${shadow}`;
+    url.search = '';
+    await admin.$executeRawUnsafe(`CREATE DATABASE "${shadow}"`);
+    try {
+      const diff = execFileSync(
+        process.execPath,
+        [
+          require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-schema-datamodel', 'prisma/schema.prisma',
+          '--to-migrations', 'prisma/migrations', '--shadow-database-url', url.toString(), '--script',
+        ],
+        { stdio: 'pipe', encoding: 'utf8' },
+      );
+      const statements = diff.split(';').filter((statement) => /inventory_(supplier_credits|credit_allocations|credit_set_offs)/.test(statement));
+      expect(statements).toEqual([]);
+    } finally {
+      await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${shadow}" WITH (FORCE)`);
+    }
+  }, 120000);
+
   it('sends a return on challan: stock for the batch drops with a movement, and it waits for the credit note', async () => {
     await raiseReturn('RET-1', 20);
     expect(await stock()).toBe(80);

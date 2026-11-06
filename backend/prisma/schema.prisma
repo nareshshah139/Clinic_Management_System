@@ -1770,6 +1770,7 @@ model InventorySupplierCredit {
   receivedBy       User? @relation("SupplierCreditReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
   allocations  InventoryCreditAllocation[]
 
+  // A number is unique per distributor among open credits only: a partial unique index Prisma cannot express, made in migration 20261107090000_supplier_credit_note_reuse.
   @@index([branchId, supplierGstin])
   @@map("inventory_supplier_credits")
 }
