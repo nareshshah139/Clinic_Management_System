@@ -105,15 +105,21 @@ it('uses the inventory-matched ID even when search returns another medicine firs
   expect(api.get).toHaveBeenCalledWith('/drugs/drug-0');
 });
 
-it('uses the queue quantity inference when an older prescription omitted explicit quantities', async () => {
+it('fills the stock check billing quantity when an older prescription omitted explicit quantities', async () => {
   const original = api.getPrescription.getMockImplementation()!;
   api.getPrescription.mockImplementation(async id => ({ ...await original(id) as any, items: names.map(drugName => ({ drugName, frequency: 'TWICE_DAILY', duration: 7, durationUnit: 'DAYS' })) }));
   const get = api.get.getMockImplementation()!;
-  api.get.mockImplementation(async (url, query) => url.endsWith('/stock-check') ? { items: stock.map(item => ({ ...item, prescribedQuantity: 14 })) } as any : get(url, query));
+  const review = { reason: 'pack_item', message: 'Sold per bottle. Filled 1; confirm how many the course needs.' };
+  api.get.mockImplementation(async (url, query) => url.endsWith('/stock-check') ? { items: stock.map((item, index) => ({
+    ...item, prescribedQuantity: 14,
+    billingQuantity: index === 3 ? { quantity: 1, unit: 'BOTTLES', review } : { quantity: 2, unit: 'STRIPS', review: null },
+  })) } as any : get(url, query));
   render(<PharmacyPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
-  expect(screen.getAllByLabelText('Quantity').map(input => (input as HTMLInputElement).value)).toEqual(['14', '14', '14', '14']);
+  expect(screen.getAllByLabelText('Quantity').map(input => (input as HTMLInputElement).value)).toEqual(['2', '2', '2', '1']);
+  expect(within(screen.getByRole('heading', { name: names[3], level: 4 }).closest('[data-invoice-item]') as HTMLElement).getByRole('status')).toHaveTextContent(review.message);
+  expect(within(screen.getByRole('heading', { name: names[0], level: 4 }).closest('[data-invoice-item]') as HTMLElement).queryByText(review.message)).not.toBeInTheDocument();
 });
 
 it('retrying an inventory failure preserves removed lines and reviewed quantities', async () => {
