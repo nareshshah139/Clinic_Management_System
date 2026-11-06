@@ -343,8 +343,9 @@ export class PrescriptionsController {
   @Get('printer-profiles')
   listPrinterProfiles(
     @Request() req: AuthenticatedRequest,
+    @Query('doctorId') doctorId?: string,
   ) {
-    return this.prescriptionsService.listPrinterProfiles(req.user.branchId, req.user.id);
+    return this.prescriptionsService.listPrinterProfiles(req.user.branchId, req.user.id, doctorId?.trim() || undefined);
   }
 
   @Post('printer-profiles')

@@ -474,6 +474,47 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       if (footerMm) setFooterHeightMm(Number(footerMm));
     } catch {}
   }, []);
+  /** Applies a doctor's saved print layout (margins, offsets, design aids); the letterhead is resolved separately. */
+  const applyDoctorPrintLayout = useCallback((p: any) => {
+    if (p.margins) {
+      if (typeof p.margins.topPx === 'number') setPrintTopMarginPx(p.margins.topPx);
+      if (typeof p.margins.leftPx === 'number') setPrintLeftMarginPx(p.margins.leftPx);
+      if (typeof p.margins.rightPx === 'number') setPrintRightMarginPx(p.margins.rightPx);
+      if (typeof p.margins.bottomPx === 'number') setPrintBottomMarginPx(p.margins.bottomPx);
+    }
+    if (p.contentOffset) {
+      if (typeof p.contentOffset.xPx === 'number') setContentOffsetXPx(p.contentOffset.xPx);
+      if (typeof p.contentOffset.yPx === 'number') setContentOffsetYPx(p.contentOffset.yPx);
+    }
+    if (p.designAids) {
+      if (typeof p.designAids.enabled === 'boolean') setDesignAidsEnabled(p.designAids.enabled);
+      if (typeof p.designAids.showGrid === 'boolean') setDesignShowGrid(p.designAids.showGrid);
+      if (typeof p.designAids.showRulers === 'boolean') setDesignShowRulers(p.designAids.showRulers);
+      if (typeof p.designAids.snapToGrid === 'boolean') setDesignSnapToGrid(p.designAids.snapToGrid);
+      if (typeof p.designAids.gridSizePx === 'number') setDesignGridSizePx(p.designAids.gridSizePx);
+      if (typeof p.designAids.nudgeStepPx === 'number') setDesignNudgeStepPx(p.designAids.nudgeStepPx);
+    }
+  }, []);
+
+  /**
+   * @cc [owner:nareshshah139,label:product] doctor-print-layout-default
+   * Opening a visit MUST apply the visit doctor's saved print layout when one exists, so each
+   * doctor prints with their own margins without loading it by hand. Without a saved layout the
+   * existing browser settings stay in effect.
+   */
+  useEffect(() => {
+    if (!doctorId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const u = await apiClient.get(`/users/${encodeURIComponent(doctorId)}`) as any;
+        const p = (u && (u.metadata || u?.user?.metadata)?.rxPrintProfile) || u?.rxPrintProfile;
+        if (!cancelled && p) applyDoctorPrintLayout(p);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [doctorId, applyDoctorPrintLayout]);
+
   // The background override is kept per doctor so one doctor's choice never prints on another's prescriptions.
   const { letterhead: doctorLetterhead, loading: doctorLetterheadLoading } = useDoctorLetterhead(doctorId);
   const printBgLoadedFor = useRef<string | null>(null);
@@ -2603,24 +2644,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                                   const p = (u && (u.metadata || u?.user?.metadata)?.rxPrintProfile) || (u?.rxPrintProfile);
                                   if (!p) { toast({ title: 'No profile found', description: 'Save a profile first' }); return; }
                                   if (p.printBgUrl) setPrintBgUrl(p.printBgUrl);
-                                  if (p.margins) {
-                                    if (typeof p.margins.topPx === 'number') setPrintTopMarginPx(p.margins.topPx);
-                                    if (typeof p.margins.leftPx === 'number') setPrintLeftMarginPx(p.margins.leftPx);
-                                    if (typeof p.margins.rightPx === 'number') setPrintRightMarginPx(p.margins.rightPx);
-                                    if (typeof p.margins.bottomPx === 'number') setPrintBottomMarginPx(p.margins.bottomPx);
-                                  }
-                                  if (p.contentOffset) {
-                                    if (typeof p.contentOffset.xPx === 'number') setContentOffsetXPx(p.contentOffset.xPx);
-                                    if (typeof p.contentOffset.yPx === 'number') setContentOffsetYPx(p.contentOffset.yPx);
-                                  }
-                                  if (p.designAids) {
-                                    if (typeof p.designAids.enabled === 'boolean') setDesignAidsEnabled(p.designAids.enabled);
-                                    if (typeof p.designAids.showGrid === 'boolean') setDesignShowGrid(p.designAids.showGrid);
-                                    if (typeof p.designAids.showRulers === 'boolean') setDesignShowRulers(p.designAids.showRulers);
-                                    if (typeof p.designAids.snapToGrid === 'boolean') setDesignSnapToGrid(p.designAids.snapToGrid);
-                                    if (typeof p.designAids.gridSizePx === 'number') setDesignGridSizePx(p.designAids.gridSizePx);
-                                    if (typeof p.designAids.nudgeStepPx === 'number') setDesignNudgeStepPx(p.designAids.nudgeStepPx);
-                                  }
+                                  applyDoctorPrintLayout(p);
                                   toast({ variant: 'success', title: 'Loaded', description: 'Doctor profile applied' });
                                 } catch (e) {
                                   console.error('Load profile failed', e);
