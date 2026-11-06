@@ -114,6 +114,12 @@ const navigation: NavigationItem[] = [
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "RECEPTION"],
   },
   {
+    name: "Pharmacy Report", section: "Pharmacy",
+    href: "/dashboard/pharmacy-report",
+    icon: BarChart3,
+    allowedRoles: ["OWNER", "ADMIN", "DOCTOR"],
+  },
+  {
     name: "Reports", section: "Admin",
     href: "/dashboard/reports",
     icon: BarChart3,

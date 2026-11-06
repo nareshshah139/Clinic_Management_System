@@ -1,0 +1,2 @@
+@cc [owner:nareshshah139,label:testing] synthetic-pharmacy-report-isolation
+pharmacy-reports-synthetic-db.cjs MUST accept only the fixed synthetic loopback database target and MUST roll back its fixtures on success or failure.
