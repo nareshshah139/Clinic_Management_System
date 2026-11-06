@@ -9,12 +9,12 @@ import { PermissionsGuard } from '../../../shared/guards/permissions.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { PharmacyPurchaseReturnsRegisterController } from '../pharmacy-purchase-returns-register.controller';
 import { PharmacyPurchaseReturnsRegisterService } from '../pharmacy-purchase-returns-register.service';
-import { pharmacistDefaultPermissions } from './pharmacist-permissions';
+import { ROLE_PERMISSIONS } from '../../../shared/access/role-permissions';
 
 describe('Purchase returns register access through HTTP', () => {
   let app: INestApplication;
   let role: UserRole;
-  let userPermissions: string[];
+  let userPermissions: readonly string[];
   const service = { list: jest.fn().mockResolvedValue({ rows: [], total: 0 }) };
 
   beforeAll(async () => {
@@ -56,9 +56,9 @@ describe('Purchase returns register access through HTTP', () => {
   });
 
   it.each([
-    [UserRole.PHARMACIST, pharmacistDefaultPermissions()],
-    [UserRole.DOCTOR, []],
-    [UserRole.ADMIN, []],
+    [UserRole.PHARMACIST, ROLE_PERMISSIONS.PHARMACIST],
+    [UserRole.DOCTOR, ROLE_PERMISSIONS.DOCTOR],
+    [UserRole.ADMIN, ROLE_PERMISSIONS.ADMIN],
   ])('returns the register to %s', async (who, permissions) => {
     role = who;
     userPermissions = permissions;
@@ -67,8 +67,8 @@ describe('Purchase returns register access through HTTP', () => {
     expect(service.list.mock.calls[0][1]).toEqual({ branchId: 'branch-1' });
   });
 
-  it('refuses a pharmacist without purchase read access', async () => {
-    role = UserRole.PHARMACIST;
+  it('refuses reception without purchase read access', async () => {
+    role = UserRole.RECEPTION;
     userPermissions = [];
     await request(app.getHttpServer()).get('/pharmacy/purchase-returns-register?from=2026-04-01&to=2027-03-31').expect(403);
   });

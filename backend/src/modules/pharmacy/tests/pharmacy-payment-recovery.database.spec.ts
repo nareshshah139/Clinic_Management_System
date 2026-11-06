@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { InventoryWorkspaceService } from '../../inventory/inventory-workspace.service';
 import { PharmacyPurchaseLedgerService } from '../pharmacy-purchase-ledger.service';
 import { PharmacyPurchasePaymentModeDto } from '../dto/pharmacy-purchase-ledger.dto';
+import { permissionGrants } from '../../../shared/access/permission-grants';
 
 const databaseTests = process.env.PAYMENT_RECOVERY_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -162,7 +163,7 @@ databaseTests('Supplier payment recovery with real PostgreSQL', () => {
   it('restores the balance used by supplier-credit allocation and keeps ledger totals reconciled', async () => {
     const payment = await pay();
     await service.reversePayment(payment.id, correction(payment), branchId, userId);
-    const workflow = { permissions: async () => new Set(['*']), transaction: (run: any) => prisma.$transaction(run, { isolationLevel: 'Serializable' }) };
+    const workflow = { permissions: async () => permissionGrants(['*']), transaction: (run: any) => prisma.$transaction(run, { isolationLevel: 'Serializable' }) };
     const workspace = new InventoryWorkspaceService(prisma, workflow as any);
     const actor = { id: userId, branchId, role: 'ACCOUNTANT' };
     expect((await workspace.credits(actor)).invoices.find(row => row.id === a.id)!.outstanding).toBe(100);

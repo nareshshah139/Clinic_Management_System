@@ -24,6 +24,7 @@ import { PharmacyPurchaseInvoiceService } from '../pharmacy/pharmacy-purchase-in
 import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { ReportsService } from '../reports/reports.service';
+import { grantsForRole, parsePermissionList, permissionGranted } from '../../shared/access/permission-grants';
 import {
   CreatePharmacyAgentSessionDto,
   RejectPharmacyAgentProposalDto,
@@ -1505,25 +1506,17 @@ export class PharmacyAgentService implements OnModuleInit {
       select: { permissions: true, role: true },
     });
     if (!dbUser) return false;
-    const userPermissions = this.parsePermissions(dbUser.permissions);
     const role = await prisma.role.findFirst({
       where: { name: dbUser.role },
       select: { permissions: true },
     });
-    const rolePermissions = this.parsePermissions(role?.permissions);
-    return new Set([...rolePermissions, ...userPermissions]).has(permission);
-  }
-
-  private parsePermissions(value?: string | null): string[] {
-    if (!value) return [];
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed)
-        ? parsed.filter((item) => typeof item === 'string')
-        : [];
-    } catch {
-      return [];
-    }
+    return permissionGranted(
+      grantsForRole(dbUser.role, [
+        ...parsePermissionList(role?.permissions),
+        ...parsePermissionList(dbUser.permissions),
+      ]),
+      permission,
+    );
   }
 
   private detectAttachmentKind(file: Express.Multer.File) {

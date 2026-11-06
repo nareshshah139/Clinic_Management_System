@@ -1,4 +1,5 @@
 import { InventoryWorkflowService } from '../inventory-workflow.service';
+import { permissionGrants } from '../../../shared/access/permission-grants';
 
 const actor = { id: 'operator', branchId: 'branch', role: 'OWNER' };
 
@@ -28,7 +29,7 @@ describe('Inventory workflow business dates', () => {
     };
     tx.$transaction = (run: any) => run(tx);
     service = new InventoryWorkflowService(tx);
-    jest.spyOn(service, 'permissions').mockResolvedValue(new Set(['*']));
+    jest.spyOn(service, 'permissions').mockResolvedValue(permissionGrants(['*']));
     jest.useFakeTimers({
       now: new Date('2026-10-24T20:00:00.000Z'),
       doNotFake: [

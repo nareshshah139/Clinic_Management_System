@@ -80,7 +80,7 @@ export function WorkspaceStock({
   onBack,
 }: Props) {
   const { user } = useDashboardUser();
-  const canSubmitEdits = ["OWNER", "ADMIN", "PHARMACIST"].includes(user?.role || "");
+  const canSubmitEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const [stockEdit, setStockEdit] = useState<{ item: any; field: 'price' | 'stock' } | null>(null);
   const stockQuery = stockPageQuery(query);
   const selectionScope = JSON.stringify(Object.entries(stockQuery)

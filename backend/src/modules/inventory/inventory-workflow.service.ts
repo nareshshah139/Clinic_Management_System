@@ -9,7 +9,10 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
   DEFAULT_INVENTORY_SETTINGS,
+  INVENTORY_APPROVERS,
+  mayApproveDocument,
   SaveWorkflowDocumentDto,
+  SELF_APPROVERS,
   TransitionWorkflowDto,
   WORKFLOW_KINDS,
   WorkflowActor,
@@ -25,6 +28,12 @@ import {
 } from './inventory-stock';
 import { clinicDay, clinicDayOf, isCalendarDay } from '../pharmacy/register-utils';
 import { CREDIT_NOTE_NUMBER_MAX, creditNoteNumberOf, returnReasonOf } from './supplier-return';
+import {
+  grantsForRole,
+  parsePermissionList,
+  permissionGrants,
+  PermissionGrants,
+} from '../../shared/access/permission-grants';
 
 const FINAL = new Set([
   'POSTED',
@@ -34,7 +43,6 @@ const FINAL = new Set([
   'CANCELLED',
   'REJECTED',
 ]);
-const APPROVERS = new Set(['OWNER', 'ADMIN', 'MANAGER']);
 const FINANCIAL = new Set(['CREDIT_NOTE']);
 const SALES = new Set(['COUNTER_SALE', 'QUOTATION', 'SALES_RETURN']);
 const REORDER = new Set(['SHORTBOOK', 'PURCHASE_ORDER', 'TARGET_REVIEW']);
@@ -71,7 +79,7 @@ const amount = (v: unknown, name: string, fallback = 0) => {
 export class InventoryWorkflowService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async permissions(actor: WorkflowActor): Promise<Set<string>> {
+  async permissions(actor: WorkflowActor): Promise<PermissionGrants> {
     if (!actor.id || !actor.branchId)
       throw new ForbiddenException('Authenticated branch and user required');
     const user = await this.prisma.user.findFirst({
@@ -82,20 +90,16 @@ export class InventoryWorkflowService {
       throw new ForbiddenException(
         'User is not in the active branch or role changed',
       );
-    if (['OWNER', 'ADMIN', 'DOCTOR'].includes(user.role)) return new Set(['*']);
     const role = await this.prisma.role.findFirst({
       where: { name: user.role },
       select: { permissions: true },
     });
-    const parse = (v: unknown): string[] => {
-      try {
-        const p = Array.isArray(v) ? v : JSON.parse(String(v || '[]'));
-        return Array.isArray(p) ? p.filter((x) => typeof x === 'string') : [];
-      } catch {
-        return [];
-      }
-    };
-    return new Set([...parse(user.permissions), ...parse(role?.permissions)]);
+    return permissionGrants(
+      grantsForRole(user.role, [
+        ...parsePermissionList(user.permissions),
+        ...parsePermissionList(role?.permissions),
+      ]),
+    );
   }
   private permissionFor(kind: string, write: boolean) {
     if (FINANCIAL.has(kind))
@@ -109,15 +113,16 @@ export class InventoryWorkflowService {
   async authorize(actor: WorkflowActor, kind: string, write = false) {
     const p = await this.permissions(actor);
     const required = this.permissionFor(kind, write);
-    if (!p.has('*') && !p.has(required))
+    if (!p.has(required))
       throw new ForbiddenException(`This action requires ${required}`);
   }
   async capabilities(actor: WorkflowActor) {
     const p = await this.permissions(actor),
-      has = (key: string) => p.has('*') || p.has(key);
+      has = (key: string) => p.has(key);
     return {
-      approve: APPROVERS.has(actor.role),
-      settings: APPROVERS.has(actor.role),
+      approve: INVENTORY_APPROVERS.has(actor.role),
+      selfApprove: SELF_APPROVERS.has(actor.role),
+      settings: INVENTORY_APPROVERS.has(actor.role),
       itemWrite: has('inventory:item:update'),
       itemCreate: has('inventory:item:create'),
       supplierWrite: has('inventory:supplier:create'),
@@ -184,7 +189,7 @@ export class InventoryWorkflowService {
     };
   }
   async saveSettings(actor: WorkflowActor, input: Record<string, any>) {
-    if (!APPROVERS.has(actor.role))
+    if (!INVENTORY_APPROVERS.has(actor.role))
       throw new ForbiddenException(
         'An inventory manager must configure automation and approvals',
       );
@@ -678,7 +683,7 @@ export class InventoryWorkflowService {
   async documents(actor: WorkflowActor, query: Record<string, any> = {}) {
     const perms = await this.permissions(actor);
     const kinds = WORKFLOW_KINDS.filter(
-      (k) => perms.has('*') || perms.has(this.permissionFor(k, false)),
+      (k) => perms.has(this.permissionFor(k, false)),
     );
     const where: any = { branchId: actor.branchId, kind: { in: kinds } };
     if (query.kind) {
@@ -895,8 +900,12 @@ export class InventoryWorkflowService {
         throw new BadRequestException('Only drafts can be submitted');
       next = 'AWAITING_APPROVAL';
     } else if (dto.action === 'APPROVE') {
-      if (!APPROVERS.has(actor.role))
+      if (!INVENTORY_APPROVERS.has(actor.role))
         throw new ForbiddenException('A manager must approve this document');
+      if (!mayApproveDocument(actor, doc))
+        throw new ForbiddenException(
+          'Another approver must approve a document you created',
+        );
       if (doc.status !== 'AWAITING_APPROVAL')
         throw new BadRequestException('Document is not awaiting approval');
       next = 'APPROVED';
@@ -930,7 +939,7 @@ export class InventoryWorkflowService {
       if (
         doc.kind === 'COUNT' &&
         doc.status !== 'APPROVED' &&
-        !APPROVERS.has(actor.role)
+        !mayApproveDocument(actor, doc)
       ) {
         if (
           lines.some(
@@ -959,7 +968,7 @@ export class InventoryWorkflowService {
       data: {
         status: next,
         version: { increment: 1 },
-        ...(dto.action === 'APPROVE' || (doc.kind === 'COUNT' && next === 'POSTED' && APPROVERS.has(actor.role)) ? { approvedBy: actor.id } : {}),
+        ...(dto.action === 'APPROVE' || (doc.kind === 'COUNT' && next === 'POSTED' && mayApproveDocument(actor, doc)) ? { approvedBy: actor.id } : {}),
         ...(next === 'POSTED'
           ? { postedAt: new Date(), postedBy: actor.id }
           : {}),
@@ -1900,7 +1909,7 @@ export class InventoryWorkflowService {
     doc: any,
     reason: string,
   ) {
-    if (!APPROVERS.has(actor.role))
+    if (!INVENTORY_APPROVERS.has(actor.role))
       throw new ForbiddenException('A manager must reverse posted documents');
     if (!reason) throw new BadRequestException('A reversal reason is required');
     if (['CORRECTION', 'TARGET_REVIEW'].includes(doc.kind))

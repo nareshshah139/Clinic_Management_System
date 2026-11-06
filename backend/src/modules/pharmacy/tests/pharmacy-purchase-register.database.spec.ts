@@ -9,6 +9,7 @@ import { PharmacyPurchaseLedgerService } from '../pharmacy-purchase-ledger.servi
 import { PharmacyPurchaseRegisterService } from '../pharmacy-purchase-register.service';
 import { PharmacyPurchasePaymentModeDto } from '../dto/pharmacy-purchase-ledger.dto';
 import type { PurchaseRegisterQuery } from '../pharmacy-purchase-register';
+import { permissionGrants } from '../../../shared/access/permission-grants';
 
 const databaseTests = process.env.PURCHASE_REGISTER_TEST_DATABASE_URL
   ? describe
@@ -151,7 +152,7 @@ databaseTests('Purchase register on PostgreSQL', () => {
     await pay(bills['LIN-2'], linae, 500);
     await pay(bills['LIN-3'], linae, 100);
     const workflow = {
-      permissions: async () => new Set(['*']),
+      permissions: async () => permissionGrants(['*']),
       transaction: (run: any) => db.$transaction(run, { isolationLevel: 'Serializable' }),
     };
     workspace = new InventoryWorkspaceService(db as any, workflow as any);

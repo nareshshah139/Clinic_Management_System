@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { WorkflowDocumentEditor } from '@/components/inventory/WorkflowDocumentEditor';
 import { apiClient } from '@/lib/api';
+import roleCapabilities from '../fixtures/workspace-capabilities.json';
 
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
 jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: { id: 'operator', branchId: 'branch' } }) }));
@@ -391,4 +392,16 @@ it.each([false, true])('keeps malformed retained line objects in recovery instea
   expectWritesBlocked();
   fireEvent.click(screen.getByRole('button', { name: 'Check saved status' }));
   expect(apiClient.post).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['DOCTOR', 'operator', []],
+  ['DOCTOR', 'pharmacist-1', ['Approve document']],
+  ['ADMIN', 'operator', ['Approve document']],
+  ['PHARMACIST', 'doctor-1', []],
+] as const)('offers %s approval of a count created by %s only when another person submitted it or self-approval already existed', async (role, createdBy, offered) => {
+  defaultGet({ ...savedDocument('COUNT', 'AWAITING_APPROVAL'), createdBy } as any);
+  mount('COUNT', { id: 'saved-document', capabilities: roleCapabilities[role] });
+  await screen.findByText(/waiting for manager approval/i);
+  expect(screen.queryAllByRole('button', { name: 'Approve document' }).map((button) => button.textContent)).toEqual(offered);
 });

@@ -410,7 +410,7 @@ describe('PharmacyAgentService safety helpers', () => {
 });
 
 describe('Pharmacy proposal action authorization', () => {
-  function setup(canUpdate: boolean) {
+  function setup(canUpdate: boolean, role = 'MANAGER', stored = ['inventory:item:read', ...(canUpdate ? ['inventory:item:update'] : [])]) {
     const item = { id: 'item-1', updatedAt: new Date('2026-11-04T00:00:00.000Z'), storageLocation: 'Shelf A' };
     const action = { id:'action-1',actionType:'update_inventory_item',targetType:'inventory_item',targetId:item.id,expectedVersion:item.updatedAt,permissionRequired:'inventory:item:read',input:{storageLocation:'Shelf B'} };
     const proposal = {id:'proposal-1',branchId:'branch-1',sessionId:'session-1',status:'PENDING_REVIEW',actions:[action]};
@@ -419,7 +419,7 @@ describe('Pharmacy proposal action authorization', () => {
       pharmacyAgentProposalAction:{update:jest.fn().mockResolvedValue({})},
       pharmacyAgentAuditEvent:{create:jest.fn().mockResolvedValue({})},
       inventoryItem:{findFirst:jest.fn().mockResolvedValue(item)},
-      user:{findUnique:jest.fn().mockResolvedValue({role:'PHARMACIST',permissions:JSON.stringify(['inventory:item:read',...(canUpdate?['inventory:item:update']:[])])})},
+      user:{findUnique:jest.fn().mockResolvedValue({role,permissions:JSON.stringify(stored)})},
       role:{findFirst:jest.fn().mockResolvedValue({permissions:'[]'})},
     };
     const inventory = {updateInventoryItem:jest.fn(async (_id, input)=>{item.storageLocation=input.storageLocation;return {...item};})};
@@ -427,15 +427,20 @@ describe('Pharmacy proposal action authorization', () => {
   }
   it('rejects a proposal that substitutes read access for the required write permission', async () => {
     const {item,prisma,service}=setup(false);
-    await expect(service.applyProposal('proposal-1',{id:'operator',branchId:'branch-1',role:'PHARMACIST'})).rejects.toThrow('inventory:item:update');
+    await expect(service.applyProposal('proposal-1',{id:'operator',branchId:'branch-1',role:'MANAGER'})).rejects.toThrow('inventory:item:update');
     expect(item.storageLocation).toBe('Shelf A');
     expect(prisma.pharmacyAgentProposalAction.update).not.toHaveBeenCalled();
   });
   it('applies the same correction for an operator with the canonical write permission', async () => {
     const {item,service}=setup(true);
-    const result = await service.applyProposal('proposal-1',{id:'operator',branchId:'branch-1',role:'PHARMACIST'});
+    const result = await service.applyProposal('proposal-1',{id:'operator',branchId:'branch-1',role:'MANAGER'});
     expect(result.proposal.status).toBe('APPLIED');
     expect(item.storageLocation).toBe('Shelf B');
     expect(result.proposal.actions[0].permissionRequired).toBe('inventory:item:update');
+  });
+  it('applies it for a pharmacist with no stored permissions', async () => {
+    const {item,service}=setup(false,'PHARMACIST',[]);
+    const result = await service.applyProposal('proposal-1',{id:'operator',branchId:'branch-1',role:'PHARMACIST'});
+    expect([result.proposal.status, item.storageLocation]).toEqual(['APPLIED', 'Shelf B']);
   });
 });

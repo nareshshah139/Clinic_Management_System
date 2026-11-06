@@ -90,15 +90,15 @@ function makeCheck(t) {
   const countByState = (list) => list.reduce((m, b) => ((m[stateOf(b)] = (m[stateOf(b)] || 0) + 1), m), {});
   console.log(`SEED fy=${fyBills().length} all=${all.length} states=${JSON.stringify(countByState(fyBills()))} totals=${JSON.stringify(totalsOf(fyBills()))}`);
 
-  const readonlyPermissions = JSON.parse((await stack.db.user.findUnique({ where: { id: stack.users.pharmacist.id } })).permissions).filter((p) => p !== "pharmacy:purchase-ledger:write");
-  const pharmacistRow = await stack.db.user.findUnique({ where: { id: stack.users.pharmacist.id } });
+  const receptionRow = await stack.db.user.findUnique({ where: { id: stack.users.reception.id } });
+  const readonlyPermissions = [...JSON.parse(receptionRow.permissions), "pharmacy:purchase-invoice:read", "pharmacy:purchase-ledger:read"];
   await stack.db.user.create({
     data: {
-      branchId: stack.branch.id, email: "kiran.more@stack.example.invalid", firstName: "Kiran", lastName: "More", role: "PHARMACIST", password: pharmacistRow.password,
+      branchId: stack.branch.id, email: "kiran.more@stack.example.invalid", firstName: "Kiran", lastName: "More", role: "RECEPTION", password: receptionRow.password,
       permissions: JSON.stringify(readonlyPermissions),
     },
   }).then((u) => {
-    stack.users.readonly = { id: u.id, email: u.email, password: stack.users.pharmacist.password, role: "PHARMACIST", firstName: "Kiran", lastName: "More" };
+    stack.users.readonly = { id: u.id, email: u.email, password: stack.users.reception.password, role: "RECEPTION", firstName: "Kiran", lastName: "More" };
   });
 
   const browser = await chromium.launch();
@@ -735,9 +735,9 @@ function makeCheck(t) {
     const readonly = s.track(await open("readonly"));
     await goto(readonly.page);
     const rr = await readAll(readonly.page);
-    s.ok("pharmacist without ledger write: register loads with badges", rr.length === fy.length && rr.every((r) => r.payment.length > 0), rr.length);
-    s.check("pharmacist without ledger write: no Mark paid", rr.filter((r) => r.markPaid).length, 0);
-    s.check("pharmacist without ledger write: same 8 columns (no Settle column in either role)", await readonly.page.locator("thead th").count(), 8);
+    s.ok("ledger reader without write: register loads with badges", rr.length === fy.length && rr.every((r) => r.payment.length > 0), rr.length);
+    s.check("ledger reader without write: no Mark paid", rr.filter((r) => r.markPaid).length, 0);
+    s.check("ledger reader without write: same 8 columns (no Settle column in either role)", await readonly.page.locator("thead th").count(), 8);
     await s.shot(readonly.page, "09-no-ledger-write");
 
     const rec = s.track(await open("reception"));

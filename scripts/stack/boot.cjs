@@ -89,10 +89,15 @@ function permissionsFor(prefixes) {
   return [...found].filter((p) => prefixes.includes(p.split(":")[0])).sort();
 }
 
+function seededPermissions(role) {
+  req("ts-node").register({ transpileOnly: true, project: path.join(root, "backend/tsconfig.json") });
+  return [...require(path.join(root, "backend/src/shared/access/role-permissions.ts")).ROLE_PERMISSIONS[role]];
+}
+
 const PEOPLE = [
   { key: "owner", role: "OWNER", firstName: "Rajesh", lastName: "Iyer", email: "rajesh.iyer@stack.example.invalid", prefixes: [] },
   { key: "doctor", role: "DOCTOR", firstName: "Priya", lastName: "Menon", email: "priya.menon@stack.example.invalid", prefixes: [] },
-  { key: "pharmacist", role: "PHARMACIST", firstName: "Anil", lastName: "Deshmukh", email: "anil.deshmukh@stack.example.invalid", prefixes: ["inventory", "pharmacy"] },
+  { key: "pharmacist", role: "PHARMACIST", firstName: "Anil", lastName: "Deshmukh", email: "anil.deshmukh@stack.example.invalid", seeded: true },
   { key: "reception", role: "RECEPTION", firstName: "Sunita", lastName: "Patil", email: "sunita.patil@stack.example.invalid", prefixes: ["appointments", "billing", "rooms"] },
 ];
 
@@ -261,7 +266,7 @@ async function bootStack(opts = {}) {
           lastName: p.lastName,
           role: p.role,
           password: hash,
-          permissions: JSON.stringify(permissionsFor(p.prefixes)),
+          permissions: JSON.stringify(p.seeded ? seededPermissions(p.role) : permissionsFor(p.prefixes)),
         },
       });
       stack.users[p.key] = { id: user.id, email: p.email, password: PASSWORD, role: p.role, firstName: p.firstName, lastName: p.lastName };

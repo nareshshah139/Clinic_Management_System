@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
-import { WorkflowActor } from './inventory-workflow.types';
+import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus } from './inventory-stock';
 import { clinicDay } from '../pharmacy/register-utils';
 
@@ -10,7 +10,7 @@ const MODEL = 'observed-demand-cover-v2';
 const DAY = 86400000;
 const linesOf = (doc: any): any[] => Array.isArray(doc?.payload?.lines) ? doc.payload.lines : [];
 const manager = (actor: WorkflowActor) => {
-  if (!['OWNER', 'ADMIN', 'MANAGER'].includes(actor.role)) throw new ForbiddenException('An inventory manager must approve this action');
+  if (!INVENTORY_APPROVERS.has(actor.role)) throw new ForbiddenException('An inventory manager must approve this action');
 };
 
 @Injectable()

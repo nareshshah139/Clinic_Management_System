@@ -3,6 +3,10 @@ import { IsArray, IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } 
 export const WORKFLOW_KINDS = ['OPENING_STOCK', 'SUPPLIER_RETURN', 'SALES_RETURN', 'LOSS', 'HOLD', 'COUNT', 'CORRECTION', 'SHORTBOOK', 'PURCHASE_ORDER', 'INWARD_CHALLAN', 'GATE_PASS', 'QUOTATION', 'COUNTER_SALE', 'CREDIT_NOTE', 'TARGET_REVIEW'] as const;
 export type WorkflowKind = typeof WORKFLOW_KINDS[number];
 export type WorkflowActor = { id: string; branchId: string; role: string; permissions?: string | string[] };
+export const INVENTORY_APPROVERS: ReadonlySet<string> = new Set(['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR']);
+export const SELF_APPROVERS: ReadonlySet<string> = new Set(['OWNER', 'ADMIN', 'MANAGER']);
+export const mayApproveDocument = (actor: WorkflowActor, doc: { createdBy: string }) =>
+  INVENTORY_APPROVERS.has(actor.role) && (SELF_APPROVERS.has(actor.role) || doc.createdBy !== actor.id);
 export type WorkflowLine = {
   id: string; inventoryId: string; name?: string; batchNumber?: string; expiryDate?: string;
   unit?: string; quantity: number; freeQuantity?: number; unitPrice?: number; mrp?: number;

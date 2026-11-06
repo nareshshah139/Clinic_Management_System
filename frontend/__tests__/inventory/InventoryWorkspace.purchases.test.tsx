@@ -2,6 +2,7 @@ import { StrictMode, useSyncExternalStore } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { InventoryWorkspace } from '@/components/inventory/InventoryWorkspace';
 import { apiClient } from '@/lib/api';
+import roleCapabilities from '../fixtures/workspace-capabilities.json';
 
 const mockUrl = {
   search: '',
@@ -147,13 +148,15 @@ it('tells reception without register access so, instead of showing Forbidden res
 });
 
 it.each([
-  ['PHARMACIST', true, ['Mark bill LIN-101 paid']],
-  ['RECEPTION', true, []],
-  ['PHARMACIST', false, []],
-])('offers Mark paid to %s with ledger write %s only when the ledger would accept it', async (role, creditWrite, buttons) => {
+  ['PHARMACIST', roleCapabilities.PHARMACIST, ['Mark bill LIN-101 paid']],
+  ['DOCTOR', roleCapabilities.DOCTOR, ['Mark bill LIN-101 paid']],
+  ['ADMIN', roleCapabilities.ADMIN, ['Mark bill LIN-101 paid']],
+  ['RECEPTION', { ...roleCapabilities.RECEPTION, ledger: true, creditWrite: true }, []],
+  ['PHARMACIST', { ...roleCapabilities.PHARMACIST, creditWrite: false }, []],
+])('offers Mark paid to %s only when the ledger would accept it', async (role, capabilities, buttons) => {
   mockRole = role;
   mockUrl.set('/dashboard/inventory?area=purchases&view=register');
-  serve({ ledger: true, creditWrite }, async () => ({ ...emptyRegister, rows: [dueBill], total: 1 }));
+  serve(capabilities, async () => ({ ...emptyRegister, rows: [dueBill], total: 1 }));
   render(<InventoryWorkspace />);
   await screen.findByText('LIN-101');
   expect(screen.queryAllByRole('button', { name: /^Mark bill/ }).map((button) => button.getAttribute('aria-label'))).toEqual(buttons);
@@ -176,11 +179,11 @@ const returnsPage = {
   entryByOptions: [], distributorOptions: [],
 };
 
-it.each(['PHARMACIST', 'DOCTOR', 'ADMIN'])('lets %s open the Returns tab with Record credit note and Set off offered', async (role) => {
+it.each(['PHARMACIST', 'DOCTOR', 'ADMIN'] as const)('lets %s open the Returns tab with Record credit note and Set off offered', async (role) => {
   mockRole = role;
   mockUrl.set('/dashboard/inventory?area=purchases&view=register&tab=returns');
   get.mockImplementation(async (path: string) => {
-    if (path === '/inventory/workspace/capabilities') return { kinds: {}, ledger: true, creditWrite: true };
+    if (path === '/inventory/workspace/capabilities') return roleCapabilities[role];
     if (path === '/pharmacy/purchase-returns-register') return returnsPage;
     if (path === '/pharmacy/purchase-register') return { ...emptyRegister, creditHeld: {}, distributorPosition: null };
     throw new Error(`Unexpected ${path}`);

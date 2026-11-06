@@ -6,7 +6,7 @@ import { InventoryWorkflowService } from './inventory-workflow.service';
 import { InventoryWorkspaceService } from './inventory-workspace.service';
 import { InventoryReplenishmentService } from './inventory-replenishment.service';
 import { jsonObject } from './inventory-stock';
-import { WorkflowActor } from './inventory-workflow.types';
+import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
 import { InventoryOperation, logInventoryAutomation } from './inventory-observability';
 
 @Injectable()
@@ -75,7 +75,7 @@ export class InventoryWorkflowScheduler {
     let failed = false;
     try {
       const settings: any = await this.workflow.settings(actor);
-      if (!scheduled && !['OWNER', 'ADMIN', 'MANAGER'].includes(actor.role)) throw new ForbiddenException('A manager must run branch automation');
+      if (!scheduled && !INVENTORY_APPROVERS.has(actor.role)) throw new ForbiddenException('A manager must run branch automation');
       const today = new Date().toISOString().slice(0, 10), outcomes: any[] = [];
       const attempt = async (name: string, step: InventoryOperation, execute: () => Promise<any>) => {
         const stepStarted = Date.now();

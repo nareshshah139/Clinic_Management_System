@@ -4,6 +4,7 @@ import { InventoryImportService } from '../inventory-import.service';
 import { PharmacyPurchaseInvoiceService } from '../../pharmacy/pharmacy-purchase-invoice.service';
 import { reconcileInventoryLedger } from '../inventory-ledger';
 import { InventoryIdentityRecoveryService } from '../inventory-identity-recovery.service';
+import { permissionGrants } from '../../../shared/access/permission-grants';
 
 const actor = { id: 'operator', branchId: 'branch', role: 'OWNER' };
 
@@ -62,7 +63,7 @@ function fixture() {
     try { return await run(tx); } catch (error) { Object.assign(state, before); throw error; }
   };
   const service = new InventoryWorkflowService(tx);
-  jest.spyOn(service, 'permissions').mockResolvedValue(new Set(['*']));
+  jest.spyOn(service, 'permissions').mockResolvedValue(permissionGrants(['*']));
   jest.spyOn(service, 'settings').mockResolvedValue(DEFAULT_INVENTORY_SETTINGS as any);
   const add = (id: string, kind: string, quantity: number, extra: any = {}) => {
     const doc = { id, branchId: 'branch', version: 1, kind, status: 'DRAFT', reference: id, requestKey: id,
@@ -366,5 +367,40 @@ describe('Actionable inventory guard evidence', () => {
     expect(body.message).toContain('Product');
     expect(body.message).toContain('whole number');
     expect(state.documents).toEqual([]);
+  });
+});
+
+describe('Count approval by role', () => {
+  const variance = { lines: [{ id: 'line', inventoryId: 'batch', quantity: 0, unitPrice: 1, systemStock: 10, physicalStock: 7 }] };
+
+  it.each([
+    ['ADMIN', 'operator', 'POSTED', 'operator', 7],
+    ['MANAGER', 'operator', 'POSTED', 'operator', 7],
+    ['DOCTOR', 'pharmacist-1', 'POSTED', 'operator', 7],
+    ['DOCTOR', 'operator', 'AWAITING_APPROVAL', undefined, 10],
+    ['PHARMACIST', 'operator', 'AWAITING_APPROVAL', undefined, 10],
+  ])('%s posting a variance count created by %s leaves it %s', async (role, createdBy, status, approvedBy, stock) => {
+    const { state, service, add } = fixture();
+    add('count', 'COUNT', 0, variance).createdBy = createdBy;
+    await service.transition({ ...actor, role }, 'count', { version: 1, action: 'POST' });
+    const doc = state.documents.find((d: any) => d.id === 'count');
+    expect([doc.status, doc.approvedBy, state.item.currentStock]).toEqual([status, approvedBy, stock]);
+  });
+
+  it('lets a doctor approve a colleague\'s count but not their own, and never a pharmacist', async () => {
+    const { state, service, add } = fixture();
+    const own: any = add('own', 'COUNT', 0, variance);
+    Object.assign(own, { status: 'AWAITING_APPROVAL', createdBy: 'operator' });
+    const colleague: any = add('colleague', 'COUNT', 0, variance);
+    Object.assign(colleague, { status: 'AWAITING_APPROVAL', createdBy: 'pharmacist-1' });
+    const doctor = { ...actor, role: 'DOCTOR' };
+    await expect(service.transition(doctor, 'own', { version: 1, action: 'APPROVE' })).rejects.toThrow('Another approver must approve a document you created');
+    await expect(service.transition({ ...actor, role: 'PHARMACIST' }, 'colleague', { version: 1, action: 'APPROVE' })).rejects.toThrow('A manager must approve this document');
+    await service.transition(doctor, 'colleague', { version: 1, action: 'APPROVE' });
+    await service.transition({ ...actor, role: 'ADMIN' }, 'own', { version: 1, action: 'APPROVE' });
+    expect(state.documents.map((d: any) => [d.id, d.status, d.approvedBy])).toEqual([
+      ['own', 'APPROVED', 'operator'],
+      ['colleague', 'APPROVED', 'operator'],
+    ]);
   });
 });

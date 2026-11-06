@@ -7,7 +7,7 @@ import { PharmacyPurchaseLedgerService } from '../pharmacy/pharmacy-purchase-led
 import { PharmacyPurchaseRegisterService } from '../pharmacy/pharmacy-purchase-register.service';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
-import { WorkflowActor } from './inventory-workflow.types';
+import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
 import { inventoryProductName } from './inventory-names';
 import { clinicDay } from '../pharmacy/register-utils';
@@ -32,7 +32,7 @@ export class InventoryWorkspaceService {
   constructor(private readonly prisma: PrismaService, private readonly workflow: InventoryWorkflowService) {}
   async require(actor: WorkflowActor, permission: string) {
     const p = await this.workflow.permissions(actor);
-    if (!p.has('*') && !p.has(permission)) throw new ForbiddenException(`This action requires ${permission}`);
+    if (!p.has(permission)) throw new ForbiddenException(`This action requires ${permission}`);
   }
   private present(item: any) {
     const metadata = jsonObject(item.metadata), priceBasis = metadata.purchaseInvoice?.priceBasis || metadata.priceBasis;
@@ -183,16 +183,16 @@ export class InventoryWorkspaceService {
    * allowed to read the approval queue, without pagination or catalog-size limits.
    */
   async overview(actor:WorkflowActor) {
-    const caps=await this.workflow.capabilities(actor),p=await this.workflow.permissions(actor),has=(x:string)=>p.has('*')||p.has(x);
+    const caps=await this.workflow.capabilities(actor),p=await this.workflow.permissions(actor),has=(x:string)=>p.has(x);
     const stock=has('inventory:item:read')?await this.stock(actor):null;
     const docs=(await this.workflow.documents(actor,{limit:100}));
     const active=await this.prisma.inventoryWorkflowDocument.groupBy({by:['kind','status'],where:{branchId:actor.branchId,kind:{in:Object.keys(caps.kinds).filter(k=>caps.kinds[k].read)}},_count:true});
     const purchases=has('inventory:po:read')?await this.prisma.pharmacyPurchaseInvoice.groupBy({by:['status'],where:{branchId:actor.branchId},_count:true}):[];
     const unlinked=has('inventory:po:read')?await this.prisma.pharmacyPurchaseInvoiceDocument.count({where:{branchId:actor.branchId,purchaseInvoiceId:null}}):0;
     const low=stock?await this.stock(actor,{stock:'LOW'}):null,expiring=stock?await this.stock(actor,{expiryMonths:'3'}):null;
-    const supplierAlerts=has('pharmacy:purchase-ledger:read')?await new PharmacyPurchaseLedgerService(this.prisma).getAlerts(actor.branchId):null;
+    const ledger=new PharmacyPurchaseLedgerService(this.prisma),supplierAlerts=has('pharmacy:purchase-ledger:read')?await ledger.getAlerts(actor.branchId):null;
     const supplierOverdue=supplierAlerts?{count:supplierAlerts.overdue.length,amount:money(supplierAlerts.overdue.reduce((n:number,r:any)=>n+r.outstanding,0)),asOf:supplierAlerts.asOfDate}:null;
-    const pendingPurchase=has('inventory:po:read')?await new PharmacyPurchaseRegisterService(this.prisma).toReviewCount(actor):0;
+    const pendingPurchase=has('inventory:po:read')?await new PharmacyPurchaseRegisterService(this.prisma,ledger).toReviewCount(actor):0;
     const pendingEdits = ['OWNER','ADMIN','DOCTOR','PHARMACIST'].includes(actor.role) && has('pharmacy:drug:inventory-change:read')
       ? await this.prisma.drugInventoryChangeRequest.count({where:{branchId:actor.branchId,status:'PENDING'}}) : null;
     return {pendingEdits,pendingPurchase,supplierOverdue,branchId:actor.branchId,asOf:new Date().toISOString(),lowStock:low?.total,expiring:expiring?.total,capabilities:caps,stock:stock?{total:stock.total,quality:stock.quality,valuation:stock.valuation}:null,queues:active,purchases,unlinked,recent:docs.rows.slice(0,8)};
@@ -536,7 +536,7 @@ export class InventoryWorkspaceService {
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
   async correctMovement(actor:WorkflowActor,input:Record<string,any>) {
-    await this.require(actor,'inventory:adjustment:create');if(!['OWNER','ADMIN','MANAGER'].includes(actor.role))throw new ForbiddenException('A manager must correct a posted movement');
+    await this.require(actor,'inventory:adjustment:create');if(!INVENTORY_APPROVERS.has(actor.role))throw new ForbiddenException('A manager must correct a posted movement');
     if(!input.reason?.trim()||!input.requestKey)throw new BadRequestException('Reason and request key are required');
     return this.workflow.transaction(async tx=>{
       const duplicate=await tx.inventoryWorkflowDocument.findUnique({where:{branchId_requestKey:{branchId:actor.branchId,requestKey:input.requestKey}}});if(duplicate)return duplicate;

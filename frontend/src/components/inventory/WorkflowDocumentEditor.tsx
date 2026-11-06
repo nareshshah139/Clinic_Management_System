@@ -139,7 +139,8 @@ export function WorkflowDocumentEditor({
   const lock = useRef(false),
     feedback = useRef<HTMLDivElement>(null);
   const canWrite = !!capabilities?.kinds?.[kind]?.write;
-  const presentation = workflowDocumentPresentation(kind, knowledge, { write: canWrite, approve: !!capabilities?.approve });
+  const mayApprove = !!capabilities?.approve && (!!capabilities?.selfApprove || doc?.createdBy !== user?.id);
+  const presentation = workflowDocumentPresentation(kind, knowledge, { write: canWrite, approve: mayApprove });
   const editable = presentation.canEdit;
   const apply = (v: any) => {
     if (!v?.id || !Array.isArray(v.payload?.lines) || typeof v.version !== "number") throw new Error("The server returned an incomplete document. Check saved status before continuing.");

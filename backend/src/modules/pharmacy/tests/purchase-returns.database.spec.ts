@@ -11,7 +11,7 @@ import { PharmacyPurchaseRegisterService } from '../pharmacy-purchase-register.s
 import { PharmacyPurchaseReturnsRegisterService } from '../pharmacy-purchase-returns-register.service';
 import { PharmacyPurchasePaymentModeDto } from '../dto/pharmacy-purchase-ledger.dto';
 import type { PurchaseReturnsQuery } from '../pharmacy-purchase-returns-register';
-import { pharmacistDefaultPermissions } from './pharmacist-permissions';
+import { ROLE_PERMISSIONS } from '../../../shared/access/role-permissions';
 
 const databaseTests = process.env.PURCHASE_RETURNS_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -299,12 +299,12 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
   });
 
   it.each([
-    ['PHARMACIST', 'kiran', () => pharmacistDefaultPermissions()],
-    ['DOCTOR', 'priya', () => []],
-    ['ADMIN', 'ravi', () => []],
+    ['PHARMACIST', 'kiran', ROLE_PERMISSIONS.PHARMACIST],
+    ['DOCTOR', 'priya', ROLE_PERMISSIONS.DOCTOR],
+    ['ADMIN', 'ravi', ROLE_PERMISSIONS.ADMIN],
   ])('lets a %s raise a return, record its credit note and set it off', async (role, id, permissions) => {
     await db.user.create({
-      data: { id, firstName: id, lastName: 'Synthetic', email: `${id}@example.test`, password: 'x', role: role as any, branchId, permissions: JSON.stringify(permissions()) },
+      data: { id, firstName: id, lastName: 'Synthetic', email: `${id}@example.test`, password: 'x', role: role as any, branchId, permissions: JSON.stringify(permissions) },
     });
     const who = { id, branchId, role };
     expect((await workflow.capabilities(who)).creditWrite).toBe(true);

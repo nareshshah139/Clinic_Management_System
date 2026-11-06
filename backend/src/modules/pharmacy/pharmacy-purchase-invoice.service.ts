@@ -23,6 +23,7 @@ import { validate, ValidationError } from 'class-validator';
 import { extractWithCodexOAuth, purchaseOcrCodexConfig } from '../../shared/codex/codex-oauth';
 import sharp from 'sharp';
 import type { Express } from 'express';
+import { grantsForRole, parsePermissionList, permissionGrants } from '../../shared/access/permission-grants';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { clinicDayOf, clinicDayRange, clinicDayStart } from './register-utils';
 import {
@@ -112,12 +113,8 @@ export class PharmacyPurchaseInvoiceService {
     const role = dbUser?.role;
     const universal = user.role === 'OWNER' || role === 'ADMIN' || role === 'DOCTOR';
     const eligible = universal || ['RECEPTION', 'PHARMACIST'].includes(user.role);
-    const parse = (value: string | null | undefined): string[] => {
-      try { const parsed = JSON.parse(value || '[]'); return Array.isArray(parsed) ? parsed.filter(p => typeof p === 'string') : []; }
-      catch { return []; }
-    };
     const roleRecord = dbUser ? await this.prisma.role.findFirst({ where: { name: role }, select: { permissions: true } }) : null;
-    const permissions = new Set([...parse(dbUser?.permissions), ...parse(roleRecord?.permissions)]);
+    const permissions = permissionGrants(grantsForRole(role, [...parsePermissionList(dbUser?.permissions), ...parsePermissionList(roleRecord?.permissions)]));
     const has = (...keys: string[]) => eligible && (universal || keys.some(key => permissions.has(key)));
     const read = has('pharmacy:purchase-invoice:read', 'inventory:po:read');
     const create = has('pharmacy:purchase-invoice:create', 'inventory:po:create');
