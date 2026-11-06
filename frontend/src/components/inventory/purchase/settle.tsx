@@ -22,7 +22,7 @@ import {
   paymentText,
   scheduledNote,
   shortDay,
-  PurchaseRegisterRow as _Row,
+  wasDueNote,
   type PurchaseRegisterResponse,
   type PurchaseRegisterRow,
   type RecordedPayment,
@@ -41,24 +41,30 @@ function OverdueDays({ days }: { days: number }) {
   );
 }
 
-function ScheduledBadge({ day }: { day: string }) {
+const noteClass = 'max-w-36 whitespace-normal text-xs leading-tight font-medium text-foreground';
+
+function ScheduledBadge({ row, day, today }: { row: PurchaseRegisterRow; day: string; today: string }) {
+  const wasDue = wasDueNote(row, today);
   return (
-    <Badge variant="info" className={badgeText}>
-      <span aria-hidden="true">Scheduled {shortDay(day)}</span>
-      <span className="sr-only">Payment scheduled for {formatDisplayDay(day)}</span>
-    </Badge>
+    <span className="flex flex-col items-start gap-0.5">
+      <Badge variant="info" className={badgeText}>
+        <span aria-hidden="true">Scheduled {shortDay(day, today)}</span>
+        <span className="sr-only">Payment scheduled for {formatDisplayDay(day)}</span>
+      </Badge>
+      {wasDue && <span className={noteClass}>{wasDue}</span>}
+    </span>
   );
 }
 
-export function PaymentBadge({ row }: { row: PurchaseRegisterRow }) {
-  if (isScheduledOnly(row) && row.payment.scheduledOn) return <ScheduledBadge day={row.payment.scheduledOn} />;
-  const scheduled = scheduledNote(row);
+export function PaymentBadge({ row, today }: { row: PurchaseRegisterRow; today: string }) {
+  if (isScheduledOnly(row) && row.payment.scheduledOn) return <ScheduledBadge row={row} day={row.payment.scheduledOn} today={today} />;
+  const scheduled = scheduledNote(row, today);
   const badge = <OwedBadge row={row} />;
   if (!scheduled || !['DUE', 'OVERDUE', 'PARTIAL'].includes(row.payment.state)) return badge;
   return (
     <span className="flex flex-col items-start gap-0.5">
       {badge}
-      <span className="whitespace-nowrap text-xs leading-tight font-medium text-foreground">{scheduled}</span>
+      <span className={noteClass}>{scheduled}</span>
     </span>
   );
 }
@@ -66,7 +72,7 @@ export function PaymentBadge({ row }: { row: PurchaseRegisterRow }) {
 function OwedBadge({ row }: { row: PurchaseRegisterRow }) {
   const { state, outstanding, overdueDays, partlyPaid } = row.payment;
   const settled = row.payment.paid + row.payment.credit;
-  const note = (text: string) => <span className="whitespace-nowrap text-xs leading-tight font-medium text-foreground">{text}</span>;
+  const note = (text: string) => <span className={noteClass}>{text}</span>;
   switch (state) {
     case 'PAID':
       return <Badge variant="success" className={badgeText}>Paid</Badge>;
@@ -112,16 +118,18 @@ type Recent = { payment: RecordedPayment; undoing: boolean };
 export function useSettleBill({
   rows,
   canSettle,
+  today,
   reload,
 }: {
   rows: readonly PurchaseRegisterRow[];
   canSettle: boolean;
+  today: string;
   reload: () => Promise<PurchaseRegisterResponse | null>;
 }) {
   const ids = useId();
   const [settling, setSettling] = useState<Settling | null>(null);
   const [recent, setRecent] = useState<Record<string, Recent>>({});
-  const [focusId, setFocusId] = useState<string | null>(null);
+  const [focusIds, setFocusIds] = useState<string[]>([]);
   const [announcement, setAnnouncement] = useState('');
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const recentRef = useRef(recent);
@@ -131,10 +139,10 @@ export function useSettleBill({
   const openId = (rowId: string) => `${ids}open-${rowId}`;
 
   useEffect(() => {
-    if (!focusId) return;
-    document.getElementById(focusId)?.focus();
-    setFocusId(null);
-  }, [focusId, rows]);
+    if (!focusIds.length) return;
+    focusIds.map((id) => document.getElementById(id)).find((element) => element)?.focus();
+    setFocusIds([]);
+  }, [focusIds, rows]);
 
   useEffect(() => {
     const pending = timers.current;
@@ -156,7 +164,7 @@ export function useSettleBill({
     const index = fresh.findIndex((row) => row.id === rowId);
     const next = fresh.slice(index >= 0 ? index + 1 : Math.max(0, oldIndex)).find((row) => canMarkPaid(row, canSettle));
     const landing = index >= 0 ? rowId : fresh[Math.min(Math.max(0, oldIndex), fresh.length - 1)]?.id;
-    setFocusId(next ? settleId(next.id) : landing ? openId(landing) : null);
+    setFocusIds([...(next ? [settleId(next.id)] : []), ...(landing ? [openId(landing)] : [])]);
   };
 
   const undo = async (row: PurchaseRegisterRow, key = requestKey()) => {
@@ -172,9 +180,20 @@ export function useSettleBill({
       forget(row.id);
       const fresh = (await reload())?.rows ?? [];
       const now = fresh.find((candidate) => candidate.id === row.id);
-      toast({ title: 'Payment undone', description: `Bill ${row.billNo}: ${now ? paymentText(now) : 'no longer paid'}.` });
-      if (now) setFocusId(canMarkPaid(now, canSettle) ? settleId(row.id) : openId(row.id));
+      toast({ title: 'Payment undone', description: `Bill ${row.billNo}: ${now ? paymentText(now, today) : 'no longer paid'}.` });
+      if (now) setFocusIds([settleId(row.id), openId(row.id)]);
     } catch (failure) {
+      if ((failure as { status?: number } | null)?.status === 409) {
+        forget(row.id);
+        toast({
+          variant: 'warning',
+          title: 'This payment was already undone',
+          description: `The list now shows bill ${row.billNo}’s latest balance.`,
+        });
+        await reload();
+        setFocusIds([settleId(row.id), openId(row.id)]);
+        return;
+      }
       remember(row.id, entry.payment);
       toast({
         variant: 'destructive',
@@ -224,10 +243,10 @@ export function useSettleBill({
     const { row } = settling;
     const oldIndex = rows.findIndex((candidate) => candidate.id === row.id);
     setSettling(null);
-    toast({ variant: 'destructive', title: failure.title, description: failure.description });
+    toast({ variant: 'warning', title: failure.title, description: failure.description });
     const fresh = (await reload())?.rows ?? [];
     const now = fresh.find((candidate) => candidate.id === row.id);
-    if (now && canMarkPaid(now, canSettle)) setFocusId(settleId(row.id));
+    if (now && canMarkPaid(now, canSettle)) setFocusIds([settleId(row.id), openId(row.id)]);
     else focusAfter(fresh, row.id, oldIndex);
   };
 
@@ -239,6 +258,7 @@ export function useSettleBill({
     stale,
     recent,
     undo,
+    today,
     settleId,
     openId,
     announcement,
@@ -256,35 +276,34 @@ export function PaymentCell({
 }) {
   const recent = settle.recent[row.id];
   return (
-    <div className="flex items-center justify-between gap-2">
-      <PaymentBadge row={row} />
-      {recent ? (
+    <div className="flex items-center gap-2">
+      <PaymentBadge row={row} today={settle.today} />
+      {recent && (
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8 px-2 text-sm font-semibold underline underline-offset-4 lg:min-h-8!"
+          className="h-8 whitespace-nowrap! px-2 text-sm font-semibold underline underline-offset-4 lg:min-h-8!"
           aria-label={`Undo payment for bill ${row.billNo}`}
           disabled={recent.undoing}
           onClick={() => void settle.undo(row)}
         >
           {recent.undoing ? 'Undoing…' : 'Undo'}
         </Button>
-      ) : (
-        canMarkPaid(row, canSettle) && (
-          <Button
-            id={settle.settleId(row.id)}
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm lg:min-h-8!"
-            aria-label={`Mark bill ${row.billNo} paid`}
-            aria-haspopup="dialog"
-            onClick={(event) => settle.open(row, event.currentTarget)}
-          >
-            Mark paid
-          </Button>
-        )
+      )}
+      {canMarkPaid(row, canSettle) && (
+        <Button
+          id={settle.settleId(row.id)}
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm lg:min-h-8!"
+          aria-label={`Mark bill ${row.billNo} paid`}
+          aria-haspopup="dialog"
+          onClick={(event) => settle.open(row, event.currentTarget)}
+        >
+          Mark paid
+        </Button>
       )}
     </div>
   );

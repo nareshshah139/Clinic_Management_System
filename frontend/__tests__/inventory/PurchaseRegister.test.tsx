@@ -127,6 +127,12 @@ it('asks for this financial year, newest entries first, and totals posted bills 
   expect(screen.getByText('1–7 of 7 rows')).toBeInTheDocument();
 });
 
+it('says 1 row, not 1 rows, for a single bill', async () => {
+  get.mockResolvedValue(response({ rows: [ROWS[0]], total: 1 }));
+  renderRegister();
+  expect(await screen.findByText('1–1 of 1 row')).toBeInTheDocument();
+});
+
 it('opens a bill from its number or its row', async () => {
   renderRegister();
   fireEvent.click(await screen.findByRole('button', { name: 'Open bill MED-7' }));
@@ -342,8 +348,40 @@ it('warns when a payment leaves part of the bill unpaid', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-101 paid' }));
   fireEvent.click(screen.getByRole('button', { name: 'Record payment ₹1,000.00' }));
   expect(await screen.findByText('Recorded ₹1,000.00; ₹200.00 still due')).toBeInTheDocument();
-  await waitFor(() => expect(paymentCell('LIN-101')).toHaveTextContent('₹200.00 due₹1,000.00 paidUndo'));
+  await waitFor(() => expect(paymentCell('LIN-101')).toHaveTextContent('₹200.00 due₹1,000.00 paidUndoMark paid'));
   expect(registerCalls()).toHaveLength(2);
+  expect(screen.getByRole('button', { name: 'Mark bill MED-7 paid' })).toHaveFocus();
+  expect(within(paymentCell('LIN-101')).getByRole('button', { name: 'Undo payment for bill LIN-101' })).toHaveClass('whitespace-nowrap!');
+});
+
+it('keeps focus on the bill when an under-paid bill is the only row, and undoes after its Mark paid is offered again', async () => {
+  const only = (payment: Partial<PurchaseRegisterRow['payment']>) => response({ rows: [row({ payment })], total: 1 });
+  get.mockResolvedValueOnce(only({})).mockResolvedValue(only({ state: 'PARTIAL', paid: 800, outstanding: 200, partlyPaid: true }));
+  post.mockResolvedValueOnce(recorded('payment-1', 200));
+  renderRegister();
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-101 paid' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Record payment ₹1,000.00' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Open bill LIN-101' })).toHaveFocus());
+  expect(document.activeElement).not.toBe(document.body);
+  expect(paymentCell('LIN-101')).toHaveTextContent('₹200.00 due₹800.00 paidUndoMark paid');
+});
+
+it('forgets an Undo the server says was already reversed, and shows the latest balance', async () => {
+  get
+    .mockResolvedValueOnce(response())
+    .mockResolvedValueOnce(withPayment('bill-a', { state: 'PAID', paid: 1000, outstanding: 0 }))
+    .mockResolvedValue(response());
+  post.mockResolvedValueOnce(recorded('payment-1')).mockRejectedValueOnce({ status: 409, body: { message: 'This payment was already reversed' } });
+  renderRegister();
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-101 paid' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Record payment ₹1,000.00' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Undo payment for bill LIN-101' }));
+  expect(await screen.findByText('This payment was already undone')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Undo payment for bill LIN-101' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  expect(paymentCell('LIN-101')).toHaveTextContent('DueMark paid');
+  expect(registerCalls()).toHaveLength(3);
+  expect(post).toHaveBeenCalledTimes(2);
 });
 
 it('offers Undo in a toast when the paid bill drops out of the filtered list', async () => {
@@ -367,7 +405,9 @@ it.each([
   renderRegister();
   fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-101 paid' }));
   fireEvent.click(screen.getByRole('button', { name: 'Record payment ₹1,000.00' }));
-  expect(await screen.findByText(title)).toBeInTheDocument();
+  const toast = (await screen.findByText(title)).closest('li')!;
+  expect(toast).toHaveClass('bg-yellow-50');
+  expect(toast).not.toHaveClass('bg-destructive');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   await waitFor(() => expect(paymentCell('LIN-101')).toHaveTextContent('₹400.00 due₹600.00 paidMark paid'));
   expect(registerCalls()).toHaveLength(2);
@@ -448,7 +488,7 @@ describe('payments dated in the future', () => {
     get.mockResolvedValue(scheduled({}));
     renderRegister();
     await screen.findByText('LIN-101');
-    expect(paymentCell('LIN-101')).toHaveTextContent('Due₹400.00 scheduled 15/01Mark paid');
+    expect(paymentCell('LIN-101')).toHaveTextContent('Due₹400.00 scheduled 15/01/2099Mark paid');
     fireEvent.click(screen.getByRole('button', { name: 'Mark bill LIN-101 paid' }));
     const dialog = screen.getByRole('dialog', { name: 'Pay ₹600.00 to Linae Distributors' });
     await armed();
@@ -463,8 +503,18 @@ describe('payments dated in the future', () => {
     renderRegister();
     await screen.findByText('LIN-101');
     expect(markPaidButtons()).toEqual([]);
-    expect(paymentCell('LIN-101')).toHaveTextContent('Scheduled 15/01Payment scheduled for 15/01/2099');
+    expect(paymentCell('LIN-101')).toHaveTextContent('Scheduled 15/01/2099Payment scheduled for 15/01/2099');
     expect(within(paymentCell('LIN-101')).getByText('Payment scheduled for 15/01/2099')).toHaveClass('sr-only');
+  });
+
+  it('drops the year for a payment scheduled in this financial year and says an overdue bill was due earlier', async () => {
+    get.mockResolvedValue(
+      scheduled({ state: 'OVERDUE', outstanding: 400, scheduled: 400, scheduledOn: '2026-11-20', payable: 0, dueDate: '2026-10-28', overdueDays: 9 }),
+    );
+    renderRegister();
+    await screen.findByText('LIN-101');
+    expect(markPaidButtons()).toEqual([]);
+    expect(paymentCell('LIN-101')).toHaveTextContent('Scheduled 20/11Payment scheduled for 20/11/2026was due 28/10');
   });
 });
 

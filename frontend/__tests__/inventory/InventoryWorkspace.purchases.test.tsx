@@ -56,7 +56,7 @@ function serve(capabilities: Record<string, unknown>, register: () => Promise<un
     if (path === '/inventory/workspace/capabilities') return { kinds: {}, ...capabilities };
     if (path === '/pharmacy/purchase-register') return register();
     if (path === '/inventory/workspace/overview') {
-      return { asOf: '2026-11-06T06:00:00.000Z', purchases: [{ status: 'OCR_REVIEW_REQUIRED', _count: 3 }], queues: [], recent: [], lowStock: 0, expiring: 0, unlinked: 0 };
+      return { asOf: '2026-11-06T06:00:00.000Z', purchases: [{ status: 'OCR_REVIEW_REQUIRED', _count: 3 }], pendingPurchase: 2, queues: [], recent: [], lowStock: 0, expiring: 0, unlinked: 0 };
     }
     throw new Error(`Unexpected ${path}`);
   });
@@ -104,6 +104,25 @@ it('opens the bills still to post from the Today card', async () => {
   await waitFor(() => expect(registerRequests()).toHaveLength(1));
   expect(registerRequests()[0]).toMatchObject({ paymentState: 'NOT_POSTED', from: '2026-04-01', to: '2027-03-31' });
   expect(screen.getByLabelText('Payment status')).toHaveValue('NOT_POSTED');
+});
+
+it('counts on the Today card the bills the register lists, not every unposted bill ever entered', async () => {
+  mockUrl.set('/dashboard/inventory?area=today');
+  serve({ ledger: true, creditWrite: true });
+  render(<InventoryWorkspace />);
+  expect(await screen.findByRole('button', { name: /Purchase invoices to review/ })).toHaveTextContent(/^2Purchase invoices to review/);
+});
+
+it.each([
+  [true, 1],
+  [false, 0],
+])('with ledger access %s, lists Payments & dues in the Purchases menu %i time(s)', async (ledger, listed) => {
+  mockUrl.set('/dashboard/inventory?area=purchases&view=register');
+  serve({ ledger, creditWrite: ledger });
+  render(<InventoryWorkspace />);
+  await screen.findByRole('tab', { name: 'Purchase' });
+  await waitFor(() => expect(screen.getAllByRole('option', { name: 'Suppliers' })).toHaveLength(2));
+  expect(screen.queryAllByRole('option', { name: 'Payments & dues' })).toHaveLength(listed * 2);
 });
 
 it('opens Purchases on the bills register', async () => {

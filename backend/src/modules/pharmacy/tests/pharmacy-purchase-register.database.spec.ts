@@ -309,7 +309,7 @@ databaseTests('Purchase register on PostgreSQL', () => {
         invoiceDate: new Date('2026-03-31T10:00:00+05:30'),
         billType: 'CREDIT',
         doctorNameOrRegNo: 'Synthetic',
-        status: 'OCR_REVIEW' as any,
+        status: 'REVIEWED' as any,
         grossAmount: 10,
         taxableAmount: 10,
         totalGst: 0,

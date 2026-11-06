@@ -152,6 +152,23 @@ describe('purchase register rows', () => {
     expect(covered).toMatchObject({ state: 'DUE', outstanding: 1000, scheduled: 1000, scheduledOn: '2099-01-15', payable: 0 });
   });
 
+  it('words scheduled payments in the spreadsheet, including an overdue bill they fully cover', () => {
+    const sheetPayment = (overrides: Partial<PurchaseInvoiceRecord>) =>
+      purchaseRegisterSheet(
+        purchaseRegisterRows([{ ...purchaseEntry(invoice(overrides), null, TODAY) }], query()),
+      )[0].Payment;
+    const future = (amount: number) => ({
+      amount,
+      payment: { paymentDate: new Date('2099-01-14T18:30:00.000Z') },
+    });
+    expect(
+      sheetPayment({ dueDate: new Date('2026-10-27T18:30:00.000Z'), scheduledAllocations: [future(1000)] }),
+    ).toBe('Scheduled 2099-01-15 · was due 2026-10-28');
+    expect(
+      sheetPayment({ dueDate: new Date('2026-10-27T18:30:00.000Z'), scheduledAllocations: [future(400)] }),
+    ).toBe('Overdue · 9 days · 400 scheduled 2099-01-15');
+  });
+
   it('carries the original uploaded documents on the row', () => {
     const documents = [{ id: 'doc-1', fileName: 'bill.pdf', mimeType: 'application/pdf' }];
     expect(purchaseEntry(invoice({ documents }), null, TODAY).documents).toEqual(documents);

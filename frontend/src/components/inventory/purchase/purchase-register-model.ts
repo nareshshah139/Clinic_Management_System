@@ -1,6 +1,6 @@
 import { UserRole } from '@cms/shared-types';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
-import { formatDisplayDay, parseDisplayDay } from '@/lib/date-ranges';
+import { financialYear, formatDisplayDay, parseDisplayDay } from '@/lib/date-ranges';
 import { errorMessage, type RegisterQuery, type RegisterQueryConfig } from '@/components/register/register-query';
 
 export const PURCHASE_REGISTERS = ['purchases'] as const;
@@ -139,7 +139,13 @@ export const canMarkPaid = (row: PurchaseRegisterRow, canSettle: boolean) =>
 export const isScheduledOnly = (row: PurchaseRegisterRow) =>
   owed(row) && row.payment.payable <= MONEY_TOLERANCE && row.payment.scheduled > MONEY_TOLERANCE;
 
-export const shortDay = (day: string) => formatDisplayDay(day).slice(0, 5);
+export function shortDay(day: string, today: string) {
+  const { from, to } = financialYear(today);
+  return day >= from && day <= to ? formatDisplayDay(day).slice(0, 5) : formatDisplayDay(day);
+}
+
+export const wasDueNote = ({ payment }: PurchaseRegisterRow, today: string) =>
+  payment.state === 'OVERDUE' && payment.dueDate ? `was due ${shortDay(payment.dueDate, today)}` : null;
 
 export const documentHref = (documentId: string) => `/api/pharmacy/purchase-invoices/documents/${encodeURIComponent(documentId)}`;
 
@@ -179,17 +185,20 @@ export function excludedNote({ notPosted, cancelled }: { notPosted: number; canc
 
 export const daysText = (days: number) => plural(days, 'day', 'days');
 
-export function scheduledNote({ payment }: PurchaseRegisterRow) {
+export function scheduledNote({ payment }: PurchaseRegisterRow, today: string) {
   return payment.scheduled > MONEY_TOLERANCE && payment.scheduledOn
-    ? `${formatRupees(payment.scheduled)} scheduled ${shortDay(payment.scheduledOn)}`
+    ? `${formatRupees(payment.scheduled)} scheduled ${shortDay(payment.scheduledOn, today)}`
     : null;
 }
 
-export function paymentText(row: PurchaseRegisterRow) {
+export function paymentText(row: PurchaseRegisterRow, today: string) {
   const { payment } = row;
   const due = formatRupees(payment.outstanding);
-  if (isScheduledOnly(row)) return `Payment scheduled for ${formatDisplayDay(payment.scheduledOn!)}`;
-  const scheduled = scheduledNote(row);
+  if (isScheduledOnly(row)) {
+    const wasDue = wasDueNote(row, today);
+    return `Payment scheduled for ${formatDisplayDay(payment.scheduledOn!)}${wasDue ? `, ${wasDue}` : ''}`;
+  }
+  const scheduled = scheduledNote(row, today);
   const text = baseText(row, due);
   return scheduled && owed(row) ? `${text}, ${scheduled}` : text;
 }

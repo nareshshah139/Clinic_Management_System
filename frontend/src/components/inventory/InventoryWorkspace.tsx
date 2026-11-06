@@ -226,7 +226,7 @@ export function InventoryWorkspace() {
     void loadPermissions();
     return () => { permissionRequest.current += 1; };
   }, [loadPermissions]);
-  const availableTasks = (menus[area] || []).filter(([id]) => id !== "approvals" || canReadEdits);
+  const availableTasks = (menus[area] || []).filter(([id]) => (id !== "approvals" || canReadEdits) && (id !== "ledger" || caps?.ledger));
   const primaryTasks = availableTasks.slice(0, 3);
   const moreTasks = availableTasks.slice(3);
   const switchTask = (id: string, extra: Record<string, string> = {}) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1", ...extra });
@@ -291,7 +291,7 @@ export function InventoryWorkspace() {
               })
             }
           >
-            {menus[area].filter(([id]) => id !== "approvals" || canReadEdits).map(([id, label]) => (
+            {availableTasks.map(([id, label]) => (
               <option key={id} value={id}>
                 {label}
               </option>
@@ -595,12 +595,7 @@ function WorkspaceToday({ navigate, open }: any) {
     },
     {
       label: "Purchase invoices to review",
-      count:
-        data?.purchases
-          ?.filter(
-            (p: any) => !["STOCK_COMMITTED", "CANCELLED"].includes(p.status),
-          )
-          .reduce((n: number, p: any) => n + p._count, 0) || 0,
+      count: data?.pendingPurchase || 0,
       detail:
         "Open the invoice, resolve highlighted checks and confirm stock status.",
       target: { area: "purchases", view: "register", pay: "NOT_POSTED" },

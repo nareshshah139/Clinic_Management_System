@@ -20,7 +20,7 @@ export function BillDocuments({ billNo, documents }: { billNo: string; documents
           <span aria-hidden="true" className="text-xs font-semibold">{documents.length}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
+      <DropdownMenuContent align="start" side="top" collisionPadding={{ bottom: 96 }}>
         {documents.map((document) => (
           <DropdownMenuItem key={document.id} asChild>
             <a href={documentHref(document.id)} target="_blank" rel="noopener noreferrer">{document.fileName}</a>

@@ -12,7 +12,7 @@ export function RegisterFooter({
   page,
   limit,
   total,
-  unit = 'rows',
+  unit = 'row',
   label,
   busy = false,
   onPage,
@@ -45,7 +45,7 @@ export function RegisterFooter({
         <nav aria-label={label} className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <span className="text-xs tabular-nums sm:text-sm">
             <span aria-hidden="true" className="sm:hidden">{first}–{end}/{total}</span>
-            <span className="max-sm:sr-only">{first}–{end} of {total} {unit}</span>
+            <span className="max-sm:sr-only">{first}–{end} of {total} {unit}{total === 1 ? '' : 's'}</span>
           </span>
           <Button variant="outline" size="icon" className="size-10 aria-disabled:cursor-not-allowed aria-disabled:opacity-50" aria-label="Previous page" aria-disabled={!hasPrevious} onClick={step(page - 1, hasPrevious)}>
             <ChevronLeft aria-hidden="true" />

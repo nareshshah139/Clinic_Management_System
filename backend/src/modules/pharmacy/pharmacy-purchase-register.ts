@@ -372,9 +372,18 @@ const clinicTime = new Intl.DateTimeFormat('en-GB', {
 });
 
 function paymentLabel(payment: PurchasePayment) {
-  if (payment.state !== 'OVERDUE') return PAYMENT_LABEL[payment.state];
-  const days = `${payment.overdueDays} day${payment.overdueDays === 1 ? '' : 's'}`;
-  return [PAYMENT_LABEL.OVERDUE, days, ...(payment.partlyPaid ? ['part paid'] : [])].join(' · ');
+  const owed = payment.outstanding > MONEY_TOLERANCE;
+  const scheduled = owed && payment.scheduled > MONEY_TOLERANCE && payment.scheduledOn;
+  if (scheduled && payment.payable <= MONEY_TOLERANCE) {
+    const wasDue = payment.state === 'OVERDUE' && payment.dueDate ? [`was due ${payment.dueDate}`] : [];
+    return [`Scheduled ${payment.scheduledOn}`, ...wasDue].join(' · ');
+  }
+  const base = (() => {
+    if (payment.state !== 'OVERDUE') return [PAYMENT_LABEL[payment.state]];
+    const days = `${payment.overdueDays} day${payment.overdueDays === 1 ? '' : 's'}`;
+    return [PAYMENT_LABEL.OVERDUE, days, ...(payment.partlyPaid ? ['part paid'] : [])];
+  })();
+  return [...base, ...(scheduled ? [`${payment.scheduled} scheduled ${payment.scheduledOn}`] : [])].join(' · ');
 }
 
 export function purchaseRegisterSheet(rows: PurchaseRegisterRow[]) {

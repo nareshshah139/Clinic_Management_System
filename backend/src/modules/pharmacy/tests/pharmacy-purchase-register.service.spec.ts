@@ -111,7 +111,7 @@ describe('PharmacyPurchaseRegisterService', () => {
       {
         'Sr No': 1, 'Bill No': 'LIN-1', 'Entry Date': '2026-10-01 10:30', 'Bill Date': '2026-10-01',
         'Entry By': 'Asha Rao', Distributor: 'Linae Distributors', GSTIN: '36ABCDE1234F1Z5',
-        'Bill Amount': 1000, Payment: 'Part paid', Outstanding: 600,
+        'Bill Amount': 1000, Payment: 'Part paid · 250 scheduled 2026-11-07', Outstanding: 600,
       },
       {
         'Sr No': 2, 'Bill No': 'LIN-2', 'Entry Date': '2026-10-02 10:30', 'Bill Date': '2026-10-01',

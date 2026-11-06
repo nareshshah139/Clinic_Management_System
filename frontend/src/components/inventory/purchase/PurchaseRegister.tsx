@@ -42,7 +42,7 @@ import {
 const compactDay = (day: string, today: string) => (day.endsWith(` ${today.slice(0, 4)}`) ? day.slice(0, -5) : day);
 
 const linkClass =
-  'whitespace-nowrap rounded-sm text-left font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
+  'max-w-28 truncate whitespace-nowrap sm:max-w-none rounded-sm text-left font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 /**
  * @cc [owner:nareshshah139,label:product;target] purchase-register-complete
@@ -87,7 +87,7 @@ export function PurchaseRegister({
   const data = load.data;
   const rows = data?.rows ?? [];
   const failed = load.status === 'error';
-  const settle = useSettleBill({ rows, canSettle, reload });
+  const settle = useSettleBill({ rows, canSettle, today, reload });
   const setFilter = (key: FilterKey) => (value: string) => dispatch({ type: 'filter', key, value });
 
   const entryByOptions = (data?.entryByOptions ?? []).map((person) => ({ value: person.id, label: person.name }));
@@ -109,7 +109,7 @@ export function PurchaseRegister({
       className: 'w-[1%]',
       cell: (row) => (
         <span className="flex items-center gap-1">
-          <button id={settle.openId(row.id)} type="button" onClick={() => onOpen(row.id)} aria-label={`Open bill ${row.billNo}`} className={linkClass}>
+          <button id={settle.openId(row.id)} type="button" onClick={() => onOpen(row.id)} aria-label={`Open bill ${row.billNo}`} title={row.billNo} className={linkClass}>
             {row.billNo}
           </button>
           <BillDocuments billNo={row.billNo} documents={row.documents} />
