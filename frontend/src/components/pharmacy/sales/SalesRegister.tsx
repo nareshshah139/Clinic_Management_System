@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useRef, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useMemo, type MouseEvent } from 'react';
 import { MessageCircle, Plus, Printer } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { displayCalendarDate } from '@/lib/date-display';
@@ -15,22 +15,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
-import { countFilters, isRangeDefault, queryParams } from '@/components/register/register-query';
+import { queryParams } from '@/components/register/register-query';
 import { useRegisterQuery } from '@/components/register/useRegisterQuery';
-import {
-  RegisterDateTime,
-  RegisterHead,
-  RegisterTable,
-  SortableHead,
-  registerCellClass,
-  registerStickyCellClass,
-} from '@/components/register/RegisterTable';
+import { RegisterDateTime, RegisterDenied, RegisterGrid, shortName, type RegisterColumn } from '@/components/register/RegisterGrid';
 import { ClearFilters, DateRangeFilter, FilterBar, FilterSelect, MoreFilters, RegisterSearch } from '@/components/register/RegisterFilters';
 import { RegisterFooter } from '@/components/register/RegisterFooter';
 import { RowAction } from '@/components/register/RowAction';
 import {
-  FILTER_KEYS,
   MORE_FILTERS,
   PAYMENT_FILTER_LABELS,
   REGISTER_QUERY,
@@ -48,13 +39,13 @@ import {
   printBlockedReason,
   requestParams,
   salesTabHref,
-  shortName,
   whatsappAction,
   type PaymentMode,
   type Register,
   type SalesQuery,
   type SalesRegisterResponse,
   type SalesRegisterRow,
+  type FilterKey,
   type SortKey,
 } from './sales-register-model';
 
@@ -65,8 +56,6 @@ const MODE_BADGE: Partial<Record<PaymentMode, string>> = {
   CREDIT: 'border-destructive-border bg-destructive-soft text-destructive-text',
 };
 const badgeText = 'whitespace-nowrap px-1.5 py-0.5 text-xs font-semibold';
-
-type Column = { key: string; label: string; sort?: SortKey; align?: 'right'; className?: string; cell: (row: SalesRegisterRow) => ReactNode };
 
 async function openInvoice(id: string) {
   const view = window.open('', '_blank');
@@ -130,14 +119,13 @@ export function SalesRegister({
 }) {
   const router = useRouter();
   const copy = REGISTER_COPY[register];
-  const searchRef = useRef<HTMLInputElement>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
   const fetchPage = useCallback(
     (query: SalesQuery) => apiClient.get<SalesRegisterResponse>('/pharmacy/sales-register', requestParams(register, query)),
     [register],
   );
-  const { today, query, dispatch, draft, setDraft, clear, load, retry } = useRegisterQuery({
+  const { today, query, dispatch, draft, setDraft, load, reload, view, searchRef, tableRef, clearAll, goToPage } = useRegisterQuery({
     config: REGISTER_QUERY[register],
+    more: MORE_FILTERS,
     searchParams,
     onParamsChange,
     fetchPage,
@@ -148,31 +136,17 @@ export function SalesRegister({
   const data = load.data;
   const rows = data?.rows ?? [];
   const clinic = data?.clinic ?? null;
-  const firstLoad = !data && load.status === 'loading';
   const failed = load.status === 'error';
-  const searching = query.q.trim() !== '' || draft.trim() !== '' || countFilters(query, FILTER_KEYS) > 0;
-  const rangeChanged = !isRangeDefault(query, today);
-  const filtered = searching || rangeChanged;
-  const moreCount = countFilters(query, MORE_FILTERS);
-  const barCount = countFilters(query, FILTER_KEYS) + (rangeChanged ? 1 : 0);
 
-  const clearAll = () => {
-    clear();
-    searchRef.current?.focus();
-  };
   const startNew = () => router.push(newEntryHref(register, returnTo, requestKey()));
   const openRow = (row: SalesRegisterRow) => {
     const href = openHref(row, returnTo);
     if (href) router.push(href);
     else void openInvoice(row.recordId);
   };
-  const goToPage = (page: number) => {
-    dispatch({ type: 'page', page });
-    tableRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-  };
 
   const billName = (row: SalesRegisterRow) => row.billNo ?? `draft ${copy.one} for ${row.patientName ?? 'walk-in customer'}`;
-  const setFilter = (key: (typeof FILTER_KEYS)[number]) => (value: string) => dispatch({ type: 'filter', key, value });
+  const setFilter = (key: FilterKey) => (value: string) => dispatch({ type: 'filter', key, value });
   const paymentModes = paymentModesFor(register);
   const entryByOptions = (data?.entryByOptions ?? []).map((person) => ({ value: person.id, label: person.name }));
   if (query.filters.entryById && !entryByOptions.some((option) => option.value === query.filters.entryById)) {
@@ -203,8 +177,26 @@ export function SalesRegister({
     );
   };
 
-  const columns: Column[] = [
-    { key: 'billNo', label: 'Bill No', sort: 'billNo', className: cn('w-[1%] whitespace-normal', registerStickyCellClass), cell: billCell },
+  const actionsCell = (row: SalesRegisterRow) => {
+    const whatsapp = whatsappAction(row, clinic?.name ?? '');
+    const name = billName(row);
+    return (
+      <div className="inline-flex">
+        <RowAction icon={Printer} label={`Print ${name}`} hint="Print" reason={printBlockedReason(row)} onClick={() => void printRow(row, clinic)} />
+        <RowAction
+          icon={MessageCircle}
+          label={`Send ${name} on WhatsApp`}
+          hint="Send on WhatsApp"
+          reason={'reason' in whatsapp ? whatsapp.reason : null}
+          href={'href' in whatsapp ? whatsapp.href : undefined}
+          className="text-success-text"
+        />
+      </div>
+    );
+  };
+
+  const columns: RegisterColumn<SalesRegisterRow, SortKey>[] = [
+    { key: 'billNo', label: 'Bill No', sort: 'billNo', pinned: true, className: 'w-[1%] whitespace-normal', cell: billCell },
     ...(register === 'returns'
       ? [{ key: 'against', label: 'Against bill', className: 'w-[1%]', cell: (row: SalesRegisterRow) => (row.linkedBillNos.length ? row.linkedBillNos.map((no) => <div key={no}>{no}</div>) : '—') }]
       : []),
@@ -228,6 +220,7 @@ export function SalesRegister({
       cell: (row) => <span className={cn('font-semibold', row.state === 'CANCELLED' && 'line-through')}>{formatRupees(row.amount)}</span>,
     },
     { key: 'payment', label: copy.payment, className: 'whitespace-normal', cell: (row) => <PaymentCell row={row} register={register} /> },
+    { key: 'actions', label: 'Actions', hideLabel: true, align: 'right', interactive: true, className: 'w-[1%] py-1! pl-1!', cell: actionsCell },
   ];
 
   const footerSummaryText = failed
@@ -237,10 +230,12 @@ export function SalesRegister({
       : <Skeleton className="h-6 w-64" />;
   const footerNote = failed ? `Could not load ${copy.name}. Retry to see the latest total.` : data ? excludedNote(data.totals.excluded) : '';
 
+  if (load.status === 'denied') return <RegisterDenied noun={copy.name} />;
+
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <FilterBar
-        count={barCount}
+        count={view.barCount}
         search={
           <RegisterSearch
             fields={SEARCH_FIELD_OPTIONS}
@@ -260,7 +255,7 @@ export function SalesRegister({
           options={paymentModes.map((mode) => ({ value: mode, label: PAYMENT_FILTER_LABELS[mode] }))}
           onChange={setFilter('paymentMode')}
         />
-        <MoreFilters count={moreCount}>
+        <MoreFilters count={view.moreCount}>
           <FilterSelect
             label="State"
             allLabel="All"
@@ -279,103 +274,34 @@ export function SalesRegister({
           )}
           <FilterSelect label="Entry by" allLabel="Anyone" value={query.filters.entryById} options={entryByOptions} onChange={setFilter('entryById')} />
         </MoreFilters>
-        {filtered && <ClearFilters onClear={clearAll} />}
+        {view.filtered && <ClearFilters onClear={clearAll} />}
       </FilterBar>
 
-      {failed && (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive-border bg-destructive-soft px-4 py-3 text-base text-destructive-text">
-          <span>Could not load {copy.name}. {load.error}</span>
-          <Button variant="outline" onClick={retry}>Retry</Button>
-        </div>
-      )}
-
-      <div
-        aria-busy={load.status === 'loading'}
-        inert={failed || undefined}
-        className={cn('transition-opacity', load.status === 'loading' && data && 'opacity-60', failed && data && 'opacity-30')}
-      >
-        {firstLoad && <span role="status" className="sr-only">Loading {copy.name}…</span>}
-        <RegisterTable label={copy.table} containerRef={tableRef}>
-          <TableHeader className="static! z-auto! bg-transparent!">
-            <TableRow className="hover:bg-transparent">
-              {columns.map((column) =>
-                column.sort ? (
-                  <SortableHead
-                    key={column.key}
-                    label={column.label}
-                    align={column.align}
-                    active={query.sortBy === column.sort}
-                    direction={query.sortDir}
-                    onSort={() => dispatch({ type: 'sort', key: column.sort! })}
-                  />
-                ) : (
-                  <RegisterHead key={column.key} align={column.align}>{column.label}</RegisterHead>
-                ),
-              )}
-              <RegisterHead align="right"><span className="sr-only">Actions</span></RegisterHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {firstLoad &&
-              Array.from({ length: 6 }, (_, i) => (
-                <TableRow key={i} className="h-[52px]">
-                  {Array.from({ length: columns.length + 1 }, (_, j) => (
-                    <TableCell key={j} className={registerCellClass}><Skeleton className="h-5 w-full min-w-16" /></TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            {data && rows.length === 0 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={columns.length + 1} className="whitespace-normal">
-                  <EmptyState
-                    title={`No ${copy.name} ${searching ? 'match your search' : 'in this period'}`}
-                    description={`Nothing recorded between ${formatDisplayDay(query.from)} and ${formatDisplayDay(query.to)}${searching ? ' with these filters' : ''}.`}
-                    action={
-                      filtered ? (
-                        <Button variant="outline" onClick={clearAll}>Clear filters</Button>
-                      ) : (
-                        <Button onClick={startNew}><Plus aria-hidden="true" /> {copy.newLabel}</Button>
-                      )
-                    }
-                  />
-                </TableCell>
-              </TableRow>
-            )}
-            {rows.map((row) => {
-              const whatsapp = whatsappAction(row, clinic?.name ?? '');
-              const name = billName(row);
-              return (
-                <TableRow key={row.id} className="group h-[52px] cursor-pointer" onClick={() => openRow(row)}>
-                  {columns.map((column) => (
-                    <TableCell key={column.key} className={cn(registerCellClass, column.align === 'right' && 'text-right', column.className)}>
-                      {column.cell(row)}
-                    </TableCell>
-                  ))}
-                  <TableCell className={cn(registerCellClass, 'w-[1%] py-1! pl-1! text-right')} onClick={(event: MouseEvent) => event.stopPropagation()}>
-                    <div className="inline-flex">
-                      <RowAction
-                        icon={Printer}
-                        label={`Print ${name}`}
-                        hint="Print"
-                        reason={printBlockedReason(row)}
-                        onClick={() => void printRow(row, clinic)}
-                      />
-                      <RowAction
-                        icon={MessageCircle}
-                        label={`Send ${name} on WhatsApp`}
-                        hint="Send on WhatsApp"
-                        reason={'reason' in whatsapp ? whatsapp.reason : null}
-                        href={'href' in whatsapp ? whatsapp.href : undefined}
-                        className="text-success-text"
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </RegisterTable>
-      </div>
+      <RegisterGrid
+        label={copy.table}
+        noun={copy.name}
+        columns={columns}
+        rows={rows}
+        load={load}
+        sort={{ by: query.sortBy, dir: query.sortDir }}
+        onSort={(key) => dispatch({ type: 'sort', key })}
+        onRowClick={openRow}
+        onRetry={() => void reload()}
+        containerRef={tableRef}
+        empty={
+          <EmptyState
+            title={`No ${copy.name} ${view.searching ? 'match your search' : 'in this period'}`}
+            description={`Nothing recorded between ${formatDisplayDay(query.from)} and ${formatDisplayDay(query.to)}${view.searching ? ' with these filters' : ''}.`}
+            action={
+              view.filtered ? (
+                <Button variant="outline" onClick={clearAll}>Clear filters</Button>
+              ) : (
+                <Button onClick={startNew}><Plus aria-hidden="true" /> {copy.newLabel}</Button>
+              )
+            }
+          />
+        }
+      />
 
       <RegisterFooter
         summary={footerSummaryText}

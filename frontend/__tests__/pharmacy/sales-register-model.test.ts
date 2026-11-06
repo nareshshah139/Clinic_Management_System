@@ -4,11 +4,11 @@ import {
   localMobile,
   openHref,
   salesTabHref,
-  shortName,
   whatsappAction,
   whatsappMessage,
   type SalesRegisterRow,
 } from '@/components/pharmacy/sales/sales-register-model';
+import { shortName } from '@/components/register/RegisterGrid';
 
 const row = (overrides: Partial<SalesRegisterRow> = {}): SalesRegisterRow => ({
   id: 'PHARMACY_BILL:1',

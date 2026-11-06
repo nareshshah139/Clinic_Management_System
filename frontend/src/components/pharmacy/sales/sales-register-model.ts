@@ -149,8 +149,6 @@ export function excludedNote({ drafts, cancelled }: { drafts: number; cancelled:
   return parts.length ? `${parts.join(' and ')} not included` : '';
 }
 
-export { shortName } from '@/components/register/register-query';
-
 export function localMobile(mobile: string | null): string | null {
   let digits = (mobile ?? '').replace(/\D/g, '');
   if (digits.startsWith('0091')) digits = digits.slice(4);

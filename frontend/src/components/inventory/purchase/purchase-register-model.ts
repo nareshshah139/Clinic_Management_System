@@ -1,9 +1,11 @@
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { formatDisplayDay, parseDisplayDay } from '@/lib/date-ranges';
-import type { RegisterQuery, RegisterQueryConfig } from '@/components/register/register-query';
+import { errorMessage, type RegisterQuery, type RegisterQueryConfig } from '@/components/register/register-query';
 
+export const PURCHASE_REGISTERS = ['purchases'] as const;
 export const PURCHASE_SOURCES = ['MANUAL', 'OCR', 'CSV', 'GMAIL'] as const;
-export const INVOICE_STATES = ['DRAFT', 'REVIEW', 'POSTED', 'CANCELLED'] as const;
+export const INVOICE_STATES = ['DRAFT', 'OCR_REVIEW', 'RECONCILIATION_FAILED', 'REVIEWED', 'POSTED', 'CANCELLED'] as const;
+export const INVOICE_STATE_FILTERS = ['DRAFT', 'IN_REVIEW', 'OCR_REVIEW', 'RECONCILIATION_FAILED', 'REVIEWED', 'POSTED', 'CANCELLED'] as const;
 export const PAYMENT_FILTERS = ['OUTSTANDING', 'DUE', 'OVERDUE', 'PARTIAL', 'PAID', 'NOT_POSTED'] as const;
 export const SETTLE_MODES = ['CASH', 'CHEQUE', 'NEFT', 'UPI', 'CARD'] as const;
 export const SEARCH_FIELDS = ['billNo', 'distributor'] as const;
@@ -11,8 +13,10 @@ export const SORT_KEYS = ['srNo', 'billNo', 'entryAt', 'billDate', 'distributor'
 export const FILTER_KEYS = ['paymentState', 'distributorGstin', 'invoiceState', 'source', 'entryById'] as const;
 export const MORE_FILTERS = ['distributorGstin', 'invoiceState', 'source', 'entryById'] as const satisfies readonly FilterKey[];
 
+export type PurchaseRegisterKind = (typeof PURCHASE_REGISTERS)[number];
 export type PurchaseSource = (typeof PURCHASE_SOURCES)[number];
 export type InvoiceState = (typeof INVOICE_STATES)[number];
+export type InvoiceStateFilter = (typeof INVOICE_STATE_FILTERS)[number];
 export type PaymentFilter = (typeof PAYMENT_FILTERS)[number];
 export type SettleMode = (typeof SETTLE_MODES)[number];
 export type SortKey = (typeof SORT_KEYS)[number];
@@ -33,7 +37,15 @@ export type PurchaseRegisterRow = {
   distributor: Distributor;
   amount: number;
   invoiceState: InvoiceState;
-  payment: { state: PaymentState; paid: number; credit: number; outstanding: number; dueDate: string | null; overdueDays: number };
+  payment: {
+    state: PaymentState;
+    paid: number;
+    credit: number;
+    outstanding: number;
+    partlyPaid: boolean;
+    dueDate: string | null;
+    overdueDays: number;
+  };
 };
 
 export type PurchaseRegisterResponse = {
@@ -41,24 +53,37 @@ export type PurchaseRegisterResponse = {
   total: number;
   page: number;
   limit: number;
-  totals: { amount: number; outstanding: number; count: number; excluded: { cancelled: number } };
+  totals: { amount: number; outstanding: number; count: number; excluded: { notPosted: number; cancelled: number } };
   entryByOptions: Person[];
   distributorOptions: Distributor[];
-  canSettle: boolean;
 };
 
-export type RecordedPayment = { id: string; updatedAt: string };
+export type RecordedPayment = {
+  id: string;
+  updatedAt: string;
+  allocations?: { purchaseInvoiceId: string; outstandingAfter?: number }[];
+};
 
 export const PAGE_SIZE = 50;
 export const SETTLE_MODE_STORAGE_KEY = 'purchase-register.settle-mode';
 export const UNDO_REASON = 'Undone from purchase list';
+export const UNDO_WINDOW_MS = 30_000;
+
+export const PURCHASE_REGISTER_COPY: Record<PurchaseRegisterKind, { tab: string; noun: string; table: string; endpoint: string }> = {
+  purchases: { tab: 'Purchase', noun: 'purchase bills', table: 'Purchase bills', endpoint: '/pharmacy/purchase-register' },
+};
+
+const LEDGER_WRITER_ROLES: readonly string[] = ['OWNER', 'ADMIN', 'DOCTOR', 'PHARMACIST', 'ACCOUNTANT'];
+
+export const canRecordSupplierPayments = (caps: { creditWrite?: boolean } | null | undefined, role: string | undefined) =>
+  caps?.creditWrite === true && LEDGER_WRITER_ROLES.includes(role ?? '');
 
 export const PURCHASE_QUERY: RegisterQueryConfig<FilterKey, SortKey> = {
   searchFields: SEARCH_FIELDS,
   filters: {
     paymentState: { param: 'pay', values: PAYMENT_FILTERS },
     distributorGstin: { param: 'gstin' },
-    invoiceState: { param: 'state', values: INVOICE_STATES },
+    invoiceState: { param: 'state', values: INVOICE_STATE_FILTERS },
     source: { param: 'source', values: PURCHASE_SOURCES },
     entryById: { param: 'by' },
   },
@@ -81,10 +106,13 @@ export const PAYMENT_FILTER_LABELS: Record<PaymentFilter, string> = {
   NOT_POSTED: 'Not posted',
 };
 
-export const INVOICE_STATE_LABELS: Record<InvoiceState, string> = {
+export const INVOICE_STATE_LABELS: Record<InvoiceStateFilter, string> = {
   DRAFT: 'Draft',
-  REVIEW: 'In review',
-  POSTED: 'Stock posted',
+  IN_REVIEW: 'Any review step',
+  OCR_REVIEW: 'OCR review required',
+  RECONCILIATION_FAILED: 'Reconciliation failed',
+  REVIEWED: 'Reviewed',
+  POSTED: 'Stock added',
   CANCELLED: 'Cancelled',
 };
 
@@ -116,60 +144,75 @@ export function requestParams(query: PurchaseQuery) {
   };
 }
 
-const EXPORT_STATUS: Partial<Record<InvoiceState, string>> = { DRAFT: 'DRAFT', POSTED: 'STOCK_COMMITTED', CANCELLED: 'CANCELLED' };
-const EXPORT_IGNORES: { key: FilterKey; label: string }[] = [
-  { key: 'paymentState', label: 'payment status' },
-  { key: 'entryById', label: 'entry by' },
-];
-
-export function exportRequest(query: PurchaseQuery) {
-  const q = query.q.trim();
-  const { distributorGstin, invoiceState, source } = query.filters;
-  const status = EXPORT_STATUS[invoiceState as InvoiceState];
-  const params = new URLSearchParams({
-    format: 'xlsx',
-    startDate: query.from,
-    endDate: query.to,
-    ...(q ? { search: q } : {}),
-    ...(distributorGstin ? { distributorGstin } : {}),
-    ...(source ? { source } : {}),
-    ...(status ? { status } : {}),
-  });
-  const ignored = [
-    ...EXPORT_IGNORES.filter(({ key }) => query.filters[key]).map(({ label }) => label),
-    ...(invoiceState === 'REVIEW' ? ['bill status'] : []),
-  ];
-  return { href: `/api/inventory/workspace/purchases/export?${params}`, ignored };
+export function exportHref(endpoint: string, query: PurchaseQuery) {
+  const params = new URLSearchParams({ format: 'xlsx' });
+  for (const [key, value] of Object.entries(requestParams(query))) if (value !== undefined) params.set(key, String(value));
+  return `/api${endpoint}?${params}`;
 }
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
-export function footerSummary(totals: PurchaseRegisterResponse['totals']) {
-  return `Bills ${formatRupees(totals.amount)} · Outstanding ${formatRupees(totals.outstanding)} · ${plural(totals.count, 'bill', 'bills')}`;
+export const billCount = (count: number) => plural(count, 'bill', 'bills');
+
+export function excludedNote({ notPosted, cancelled }: { notPosted: number; cancelled: number }) {
+  const parts = [notPosted > 0 && `${notPosted} not posted`, cancelled > 0 && `${cancelled} cancelled`].filter(Boolean);
+  return parts.length ? `${parts.join(' and ')} not included` : '';
 }
 
-export const excludedNote = ({ cancelled }: { cancelled: number }) => (cancelled > 0 ? `${cancelled} cancelled not included` : '');
+export const daysText = (days: number) => plural(days, 'day', 'days');
 
-export function parseSettleDate(text: string, today: string): { day: string } | { error: string } {
+export function paymentText({ payment }: PurchaseRegisterRow) {
+  const due = formatRupees(payment.outstanding);
+  switch (payment.state) {
+    case 'PAID':
+      return 'Paid';
+    case 'DUE':
+      return `Due ${due}`;
+    case 'OVERDUE':
+      return `${due} overdue by ${daysText(payment.overdueDays)}`;
+    case 'PARTIAL':
+      return `${due} due, part paid`;
+    case 'NOT_POSTED':
+      return 'Not posted';
+    case 'CANCELLED':
+      return 'Cancelled';
+  }
+}
+
+export function parseSettleDate(text: string, today: string, billDate: string): { day: string } | { error: string } {
   const day = parseDisplayDay(text);
   if (!day) return { error: 'Enter the payment date as dd/mm/yyyy.' };
   if (day > today) return { error: `The payment date cannot be after today, ${formatDisplayDay(today)}.` };
+  if (day < billDate) return { error: `The payment date cannot be before the bill date, ${formatDisplayDay(billDate)}.` };
   return { day };
 }
 
-export function readSettleMode(storage: Pick<Storage, 'getItem'> | null): SettleMode {
+export type SettleFailure = { kind: 'stale'; title: string; description: string } | { kind: 'inline'; message: string };
+
+export function settleFailure(error: unknown): SettleFailure {
+  const status = (error as { status?: number } | null)?.status;
+  const message = errorMessage(error);
+  if (status === 409) {
+    return { kind: 'stale', title: 'This payment was already recorded', description: 'The list now shows the bill’s latest balance.' };
+  }
+  if ((status === 400 || status === 404) && /outstanding|posted|not found/i.test(message)) {
+    return { kind: 'stale', title: 'This bill’s balance changed', description: 'Check the new amount before recording a payment.' };
+  }
+  return { kind: 'inline', message };
+}
+
+function withStorage<T>(use: (storage: Storage) => T, fallback: T): T {
   try {
-    const saved = storage?.getItem(SETTLE_MODE_STORAGE_KEY);
-    return (SETTLE_MODES as readonly string[]).includes(saved ?? '') ? (saved as SettleMode) : 'NEFT';
+    return use(window.localStorage);
   } catch {
-    return 'NEFT';
+    return fallback;
   }
 }
 
-export function rememberSettleMode(storage: Pick<Storage, 'setItem'> | null, mode: SettleMode) {
-  try {
-    storage?.setItem(SETTLE_MODE_STORAGE_KEY, mode);
-  } catch {
-    return;
-  }
-}
+export const readSettleMode = (): SettleMode =>
+  withStorage((storage) => {
+    const saved = storage.getItem(SETTLE_MODE_STORAGE_KEY) ?? '';
+    return (SETTLE_MODES as readonly string[]).includes(saved) ? (saved as SettleMode) : 'NEFT';
+  }, 'NEFT');
+
+export const rememberSettleMode = (mode: SettleMode) => withStorage((storage) => storage.setItem(SETTLE_MODE_STORAGE_KEY, mode), undefined);
