@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TableHead } from '@/components/ui/table';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { displayClinicDateTimeCompact } from '@/lib/date-display';
 import type { SortDirection } from './register-query';
 
 export const registerHeadClass =
@@ -69,5 +70,15 @@ export function SortableHead({
         </span>
       </button>
     </TableHead>
+  );
+}
+
+export function RegisterDateTime({ value, today }: { value: string; today: string }) {
+  const [date, time] = displayClinicDateTimeCompact(value, today).split(', ');
+  if (!time) return <>{date}</>;
+  return (
+    <span className="whitespace-nowrap @max-[70rem]:whitespace-normal">
+      <span className="whitespace-nowrap">{date},</span> <span className="whitespace-nowrap">{time}</span>
+    </span>
   );
 }

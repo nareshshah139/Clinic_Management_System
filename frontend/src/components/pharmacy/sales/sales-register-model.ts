@@ -149,11 +149,7 @@ export function excludedNote({ drafts, cancelled }: { drafts: number; cancelled:
   return parts.length ? `${parts.join(' and ')} not included` : '';
 }
 
-export function shortName(name: string) {
-  const [first, ...rest] = name.trim().split(/\s+/);
-  const last = rest.at(-1);
-  return last ? `${first} ${last[0]}.` : first;
-}
+export { shortName } from '@/components/register/register-query';
 
 export function localMobile(mobile: string | null): string | null {
   let digits = (mobile ?? '').replace(/\D/g, '');

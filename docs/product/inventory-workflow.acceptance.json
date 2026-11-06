@@ -2302,7 +2302,7 @@
       ],
       "status": "PARTIAL",
       "contractStatus": "SOURCE_SUPPORTED",
-      "file": "frontend/src/components/inventory/InventoryWorkspace.tsx",
+      "file": "frontend/src/components/inventory/purchase/PurchaseRegister.tsx",
       "anchor": "function PurchaseRegister(",
       "contract": "purchase-register-complete",
       "obligation": "The purchase register MUST allow retrieval of every authorized saved invoice and unfinished upload, including records beyond the recent-preview limit, with status and source retained.",
@@ -2444,8 +2444,8 @@
           ]
         }
       ],
-      "contractLine": 684,
-      "declarationLine": 690
+      "contractLine": 109,
+      "declarationLine": 115
     },
     {
       "id": "INV-19",

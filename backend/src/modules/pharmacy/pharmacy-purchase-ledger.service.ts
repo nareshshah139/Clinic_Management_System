@@ -7,8 +7,7 @@ import {
 import { PrismaService } from '../../shared/database/prisma.service';
 import { createHash } from 'node:crypto';
 import { CreatePharmacyPurchasePaymentDto, ReversePharmacyPurchasePaymentDto, ReallocatePharmacyPurchasePaymentDto } from './dto/pharmacy-purchase-ledger.dto';
-
-type PurchasePaymentStatus = 'PENDING' | 'PARTIALLY_PAID' | 'PAID';
+import { MONEY_TOLERANCE, invoiceOutstanding, paymentStatus } from './purchase-payment-balance';
 
 type LedgerInvoice = {
   id: string;
@@ -39,7 +38,6 @@ type LedgerInvoice = {
 
 const TCS_THRESHOLD_AMOUNT = 5000000;
 const TCS_APPROACHING_RATIO = 0.9;
-const MONEY_TOLERANCE = 0.01;
 
 @Injectable()
 export class PharmacyPurchaseLedgerService {
@@ -149,7 +147,7 @@ export class PharmacyPurchaseLedgerService {
             originalInvoice?.paymentAllocations,
           );
           const paidAfter = this.money(existingPaid + Number(originalInvoice?.creditApplied || 0) + allocation.amount);
-          const outstandingAfter = this.outstanding(invoice, paidAfter);
+          const outstandingAfter = invoiceOutstanding(invoice, paidAfter);
 
           return {
             id: allocation.id,
@@ -159,7 +157,7 @@ export class PharmacyPurchaseLedgerService {
             invoiceTotal: this.money(invoice.netPayable),
             paidAfter,
             outstandingAfter,
-            paymentStatus: this.paymentStatus(invoice.netPayable, paidAfter),
+            paymentStatus: paymentStatus(invoice.netPayable, paidAfter),
           };
         }),
       };
@@ -428,7 +426,7 @@ export class PharmacyPurchaseLedgerService {
     for (const invoice of invoices) {
       if (invoice.status !== 'STOCK_COMMITTED') throw new BadRequestException('Only posted purchase bills can receive payments');
       const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = this.outstanding(invoice, paid);
+      const outstanding = invoiceOutstanding(invoice, paid);
       if (outstanding <= 0) continue;
 
       const anchorDate = new Date(invoice.dueDate || invoice.invoiceDate);
@@ -477,7 +475,7 @@ export class PharmacyPurchaseLedgerService {
 
     for (const invoice of invoices) {
       const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = this.outstanding(invoice, paid);
+      const outstanding = invoiceOutstanding(invoice, paid);
       if (outstanding <= MONEY_TOLERANCE || !invoice.dueDate) continue;
 
       const dueDate = new Date(invoice.dueDate);
@@ -596,7 +594,7 @@ export class PharmacyPurchaseLedgerService {
       }
 
       const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = this.outstanding(invoice, paid);
+      const outstanding = invoiceOutstanding(invoice, paid);
       if (Math.round(allocation.amount * 100) > Math.round(outstanding * 100)) {
         throw new BadRequestException(
           `Allocation exceeds outstanding balance for invoice ${invoice.invoiceNumber}`,
@@ -666,8 +664,8 @@ export class PharmacyPurchaseLedgerService {
     for (const invoice of invoices) {
       const invoiceAmount = this.money(invoice.netPayable);
       const invoicePaid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = this.outstanding(invoice, invoicePaid);
-      const status = this.paymentStatus(invoiceAmount, invoicePaid);
+      const outstanding = invoiceOutstanding(invoice, invoicePaid);
+      const status = paymentStatus(invoiceAmount, invoicePaid);
       invoiceTotal = this.money(invoiceTotal + invoiceAmount);
       paid = this.money(paid + this.sumAllocations(invoice.paymentAllocations));
       credits = this.money(credits + Number(invoice.creditApplied || 0));
@@ -746,7 +744,7 @@ export class PharmacyPurchaseLedgerService {
 
   private invoiceLedgerRow(invoice: LedgerInvoice, asOfDate: Date) {
     const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-    const outstanding = this.outstanding(invoice, paid);
+    const outstanding = invoiceOutstanding(invoice, paid);
     return {
       id: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
@@ -756,7 +754,7 @@ export class PharmacyPurchaseLedgerService {
       paid: this.sumAllocations(invoice.paymentAllocations),
       creditApplied: Number(invoice.creditApplied || 0),
       outstanding,
-      paymentStatus: this.paymentStatus(invoice.netPayable, paid),
+      paymentStatus: paymentStatus(invoice.netPayable, paid),
       daysPastDue:
         outstanding > MONEY_TOLERANCE && invoice.dueDate
           ? this.daysBetween(new Date(invoice.dueDate), asOfDate)
@@ -787,16 +785,6 @@ export class PharmacyPurchaseLedgerService {
         0,
       ),
     );
-  }
-
-  private outstanding(invoice: { netPayable: number }, paid: number) {
-    return this.money(Math.max(Number(invoice.netPayable || 0) - paid, 0));
-  }
-
-  private paymentStatus(total: number, paid: number): PurchasePaymentStatus {
-    if (paid <= MONEY_TOLERANCE) return 'PENDING';
-    if (Number(total || 0) - paid <= MONEY_TOLERANCE) return 'PAID';
-    return 'PARTIALLY_PAID';
   }
 
   private lastPaymentDate(invoice: LedgerInvoice) {

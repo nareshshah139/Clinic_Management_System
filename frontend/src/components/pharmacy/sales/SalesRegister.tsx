@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useRef, type MouseEvent, type ReactNode } from 'react';
 import { MessageCircle, Plus, Printer } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { displayCalendarDate, displayClinicDateTimeCompact } from '@/lib/date-display';
+import { displayCalendarDate } from '@/lib/date-display';
 import { formatDisplayDay } from '@/lib/date-ranges';
 import { formatRupees, printHtml, renderPharmacyInvoiceHtml, renderSaleReceiptHtml, type ClinicIdentity } from '@/lib/pharmacy-invoice-print';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,7 @@ import { TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/tab
 import { countFilters, isRangeDefault, queryParams } from '@/components/register/register-query';
 import { useRegisterQuery } from '@/components/register/useRegisterQuery';
 import {
+  RegisterDateTime,
   RegisterHead,
   RegisterTable,
   SortableHead,
@@ -56,16 +57,6 @@ import {
   type SalesRegisterRow,
   type SortKey,
 } from './sales-register-model';
-
-function EntryDate({ value, today }: { value: string; today: string }) {
-  const [date, time] = displayClinicDateTimeCompact(value, today).split(', ');
-  if (!time) return <>{date}</>;
-  return (
-    <span className="whitespace-nowrap @max-[70rem]:whitespace-normal">
-      <span className="whitespace-nowrap">{date},</span> <span className="whitespace-nowrap">{time}</span>
-    </span>
-  );
-}
 
 const MODE_BADGE: Partial<Record<PaymentMode, string>> = {
   CASH: 'border-success-border bg-success-soft text-success-text',
@@ -217,7 +208,7 @@ export function SalesRegister({
     ...(register === 'returns'
       ? [{ key: 'against', label: 'Against bill', className: 'w-[1%]', cell: (row: SalesRegisterRow) => (row.linkedBillNos.length ? row.linkedBillNos.map((no) => <div key={no}>{no}</div>) : '—') }]
       : []),
-    { key: 'entryAt', label: 'Entry Date', sort: 'entryAt', className: 'w-[1%]', cell: (row) => <EntryDate value={row.entryAt} today={today} /> },
+    { key: 'entryAt', label: 'Entry Date', sort: 'entryAt', className: 'w-[1%]', cell: (row) => <RegisterDateTime value={row.entryAt} today={today} /> },
     { key: 'billDate', label: 'Bill Date', sort: 'billDate', className: 'w-[1%]', cell: (row) => displayCalendarDate(row.billDate) },
     { key: 'entryBy', label: 'Entry By', sort: 'entryBy', className: 'w-[1%]', cell: (row) => (row.entryBy ? <span title={row.entryBy.name}>{shortName(row.entryBy.name)}</span> : '—') },
     {
