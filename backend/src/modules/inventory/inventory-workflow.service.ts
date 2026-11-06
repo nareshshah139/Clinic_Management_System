@@ -27,7 +27,7 @@ import {
   writeStockMovement,
 } from './inventory-stock';
 import { clinicDay, clinicDayOf, isCalendarDay } from '../pharmacy/register-utils';
-import { CREDIT_NOTE_NUMBER_MAX, creditNoteNumberOf, isCreditNoteNumberClash, returnReasonOf } from './supplier-return';
+import { CREDIT_NOTE_NUMBER_MAX, creditNoteNumberOf, displayDay, isCreditNoteNumberClash, returnReasonOf, rupees } from './supplier-return';
 import {
   grantsForRole,
   parsePermissionList,
@@ -849,7 +849,6 @@ export class InventoryWorkflowService {
     doc: any,
     dto: TransitionWorkflowDto,
     settings: any,
-    creditNote?: CreditNoteInput,
   ): Promise<any> {
     const id = doc.id;
     const p = doc.payload as any,
@@ -990,8 +989,7 @@ export class InventoryWorkflowService {
           documentId: id,
           supplierGstin: doc.supplierGstin,
           reference: doc.reference,
-          amount: creditNote?.amount ?? doc.totalAmount,
-          ...(creditNote ? this.creditNoteFields(creditNote, actor) : {}),
+          amount: doc.totalAmount,
         },
       });
     if (next === 'POSTED' && doc.kind === 'TARGET_REVIEW') {
@@ -1051,10 +1049,9 @@ export class InventoryWorkflowService {
         });
       }
     }
-    await this.event(tx, updated, actor, creditNote ? 'CREDIT_NOTE' : dto.action, doc.status, {
+    await this.event(tx, updated, actor, dto.action, doc.status, {
       reason: clean(dto.reason) || p.reason,
       stockEffect: ['POSTED', 'CHALLAN'].includes(next),
-      ...(creditNote ? { requestKey: creditNote.requestKey, before: { credit: null }, after: this.creditNoteDetail(creditNote) } : {}),
     });
     return this.plain(updated);
   }
@@ -1116,6 +1113,9 @@ export class InventoryWorkflowService {
   }
   async recordCreditNote(actor: WorkflowActor, id: string, input: Record<string, any>) {
     const note = this.creditNoteInput(input);
+    const correction = input?.correct === true ? clean(input?.reason) : null;
+    if (correction === '') throw new BadRequestException('Enter why the credit note is being corrected');
+    if (correction && correction.length > 500) throw new BadRequestException('Keep the correction reason under 500 characters');
     const settings = await this.settings(actor);
     try {
       return await this.transaction(async (tx) => {
@@ -1128,11 +1128,15 @@ export class InventoryWorkflowService {
         await this.authorize(actor, doc.kind, true);
         await this.authorize(actor, 'CREDIT_NOTE', true);
         const replay = await tx.inventoryWorkflowEvent.findFirst({
-          where: { documentId: doc.id, action: 'CREDIT_NOTE', detail: { path: ['requestKey'], equals: note.requestKey } },
+          where: {
+            documentId: doc.id,
+            action: { in: ['CREDIT_NOTE', 'CREDIT_NOTE_CORRECTED'] },
+            detail: { path: ['requestKey'], equals: note.requestKey },
+          },
         });
         if (replay) return this.creditNoteOutcome(tx, doc.id);
         if (doc.version !== note.version)
-          throw new ConflictException('This return changed. Reload to see its latest status.');
+          throw new ConflictException(`This ${doc.kind === 'CREDIT_NOTE' ? 'supplier credit' : 'return'} changed. Reload to see its latest status.`);
         const taken = await tx.inventorySupplierCredit.findFirst({
           where: {
             branchId: actor.branchId,
@@ -1144,45 +1148,102 @@ export class InventoryWorkflowService {
           select: { reference: true },
         });
         if (taken) throw this.duplicateCreditNote(note.number, taken.reference);
+        const returnDay = clinicDayOf((doc.payload as any)?.date) ?? clinicDay(doc.createdAt);
+        if (note.date < returnDay)
+          throw new BadRequestException(
+            `The credit note date cannot be before the ${doc.kind === 'CREDIT_NOTE' ? 'supplier credit' : 'return'} date, ${displayDay(returnDay)}`,
+          );
+        if (correction) return this.correctCreditNote(tx, actor, doc, note, correction);
         if (doc.kind === 'SUPPLIER_RETURN' && doc.status === 'CHALLAN') {
-          await this.move(tx, actor, doc, { action: 'POST', version: note.version }, settings, note);
-          return this.creditNoteOutcome(tx, doc.id);
+          const posted = await this.move(tx, actor, doc, { action: 'POST', version: note.version }, settings);
+          return this.receiveCreditNote(tx, actor, posted, posted.status, note);
         }
         if (doc.status !== 'POSTED')
-          throw new BadRequestException('Send the goods on a return challan before recording the credit note');
-        const credit = await tx.inventorySupplierCredit.findUnique({ where: { documentId: doc.id } });
-        if (!credit || credit.reversedAt)
-          throw new BadRequestException('This return has no open supplier credit');
-        if (credit.creditNoteNumber)
-          throw new ConflictException({
-            code: 'CREDIT_NOTE_RECORDED',
-            message: `Credit note ${credit.creditNoteNumber} is already recorded for this return.`,
-          });
-        const before = Number(credit.amount);
-        if (Number(credit.applied) > 0 && money(before) !== note.amount)
           throw new BadRequestException(
-            `Part of this credit is already set off against bills, so its amount stays ${before.toFixed(2)}. Enter the number and date only.`,
+            doc.kind === 'CREDIT_NOTE'
+              ? 'Enter the credit note number and date on this supplier credit, then post it'
+              : 'Send the goods on a return challan before recording the credit note',
           );
-        const updated = await tx.inventoryWorkflowDocument.update({
-          where: { id: doc.id, version: doc.version },
-          data: { version: { increment: 1 } },
-        });
-        await tx.inventorySupplierCredit.update({
-          where: { id: credit.id, applied: credit.applied },
-          data: { amount: note.amount, ...this.creditNoteFields(note, actor) },
-        });
-        await this.event(tx, updated, actor, 'CREDIT_NOTE', doc.status, {
-          requestKey: note.requestKey,
-          stockEffect: false,
-          before: { amount: before, number: null },
-          after: this.creditNoteDetail(note),
-        });
-        return this.creditNoteOutcome(tx, doc.id);
+        return this.receiveCreditNote(tx, actor, doc, doc.status, note);
       });
     } catch (error) {
       if (isCreditNoteNumberClash(error)) throw this.duplicateCreditNote(note.number);
       throw error;
     }
+  }
+  private async receiveCreditNote(tx: any, actor: WorkflowActor, doc: any, fromStatus: string, note: CreditNoteInput) {
+    const credit = await tx.inventorySupplierCredit.findUnique({ where: { documentId: doc.id } });
+    if (credit?.reversedAt) throw new BadRequestException('This return has no open supplier credit');
+    if (credit?.creditNoteNumber)
+      throw new ConflictException({
+        code: 'CREDIT_NOTE_RECORDED',
+        message: `Credit note ${credit.creditNoteNumber} is already recorded for this ${doc.kind === 'CREDIT_NOTE' ? 'supplier credit' : 'return'}.`,
+      });
+    const before = credit ? money(Number(credit.amount)) : null;
+    if (credit && Number(credit.applied) > 0 && before !== note.amount)
+      throw new BadRequestException(
+        `Part of this credit is already set off against bills, so its amount stays ${rupees(before!)}. Enter the number and date only.`,
+      );
+    if (credit)
+      await tx.inventorySupplierCredit.update({
+        where: { id: credit.id, applied: credit.applied },
+        data: { amount: note.amount, ...this.creditNoteFields(note, actor) },
+      });
+    else
+      await tx.inventorySupplierCredit.create({
+        data: {
+          branchId: actor.branchId,
+          documentId: doc.id,
+          supplierGstin: doc.supplierGstin,
+          reference: doc.reference,
+          amount: note.amount,
+          ...this.creditNoteFields(note, actor),
+        },
+      });
+    const updated = await tx.inventoryWorkflowDocument.update({
+      where: { id: doc.id, version: doc.version },
+      data: { version: { increment: 1 } },
+    });
+    await this.event(tx, updated, actor, 'CREDIT_NOTE', fromStatus, {
+      requestKey: note.requestKey,
+      stockEffect: false,
+      before: { amount: before, number: null },
+      after: this.creditNoteDetail(note),
+    });
+    return this.creditNoteOutcome(tx, doc.id);
+  }
+  private async correctCreditNote(tx: any, actor: WorkflowActor, doc: any, note: CreditNoteInput, reason: string) {
+    const credit = doc.status === 'POSTED' ? await tx.inventorySupplierCredit.findUnique({ where: { documentId: doc.id } }) : null;
+    if (!credit || credit.reversedAt || !credit.creditNoteNumber)
+      throw new BadRequestException('Record the credit note before correcting it');
+    const before = {
+      number: credit.creditNoteNumber,
+      date: credit.creditNoteDate ? credit.creditNoteDate.toISOString().slice(0, 10) : null,
+      amount: money(Number(credit.amount)),
+    };
+    const applied = money(Number(credit.applied));
+    if (applied > 0 && before.amount !== note.amount)
+      throw new BadRequestException(
+        `${rupees(applied)} of this credit is already set off against bills, so its amount stays ${rupees(before.amount)}. Correct the number and date only.`,
+      );
+    if (before.number === note.number && before.date === note.date && before.amount === note.amount)
+      throw new BadRequestException('The credit note already reads this way. Change the number, date or amount to correct it.');
+    const updated = await tx.inventoryWorkflowDocument.update({
+      where: { id: doc.id, version: doc.version },
+      data: { version: { increment: 1 } },
+    });
+    await tx.inventorySupplierCredit.update({
+      where: { id: credit.id, applied: credit.applied },
+      data: { amount: note.amount, creditNoteNumber: note.number, creditNoteDate: new Date(`${note.date}T00:00:00.000Z`) },
+    });
+    await this.event(tx, updated, actor, 'CREDIT_NOTE_CORRECTED', doc.status, {
+      requestKey: note.requestKey,
+      reason,
+      stockEffect: false,
+      before,
+      after: this.creditNoteDetail(note),
+    });
+    return this.creditNoteOutcome(tx, doc.id);
   }
   /**
    * @cc [owner:nareshshah139,label:product] count-recovery-fresh-observation

@@ -33,3 +33,7 @@ export function isCreditNoteNumberClash(error: unknown) {
   const target = failure.meta?.target;
   return target === CREDIT_NOTE_INDEX || (Array.isArray(target) && target.includes('creditNoteNumber'));
 }
+
+const rupeeFormat = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
+export const rupees = (value: number) => rupeeFormat.format(value);
+export const displayDay = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)}`;

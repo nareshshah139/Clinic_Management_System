@@ -39,6 +39,7 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     returns.list({ from: '2026-04-01', to: '2027-03-31', sortBy: 'srNo', sortDir: 'asc', page: 1, limit: 50, ...overrides }, { branchId });
   const row = async (reference: string) => (await returnsPage()).rows.find((candidate) => candidate.returnRef === reference)!;
   const stock = async () => (await db.inventoryItem.findUniqueOrThrow({ where: { id: 'batch' } })).currentStock;
+  const topUp = () => db.inventoryItem.update({ where: { id: 'batch' }, data: { currentStock: { increment: 20 } } });
   const returnMovements = () => db.stockTransaction.count({ where: { branchId, itemId: 'batch', type: 'RETURN' } });
   const outstanding = async () =>
     Object.fromEntries(
@@ -363,5 +364,83 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     await workflow.recordCreditNote(actor, second.id, { requestKey: 'cn-rev-2', version: second.version, number: 'cn-reuse', date: '2026-11-05', amount: 11.2 });
     expect([(await row('RET-REUSE')).state, (await row('RET-REUSE')).creditNote?.number]).toEqual(['RECEIVED', 'CN-REUSE']);
     expect(await stock()).toBe(before - 1);
+  });
+
+  it('posts the return, then records the credit note as its own event that moves no stock', async () => {
+    await topUp();
+    await raiseReturn('RET-EVENTS', 1);
+    const ret = await row('RET-EVENTS');
+    await workflow.recordCreditNote(actor, ret.id, { requestKey: 'cn-events', version: ret.version, number: 'CN-EV', date: '2026-11-05', amount: 11 });
+    const events = await db.inventoryWorkflowEvent.findMany({ where: { documentId: ret.id }, orderBy: { createdAt: 'asc' }, select: { action: true, fromStatus: true, toStatus: true, detail: true } });
+    expect(events.map((event) => [event.action, event.fromStatus, event.toStatus, (event.detail as any).stockEffect])).toEqual([
+      ['CREATE', null, 'DRAFT', undefined],
+      ['CHALLAN', 'DRAFT', 'CHALLAN', true],
+      ['POST', 'CHALLAN', 'POSTED', true],
+      ['CREDIT_NOTE', 'POSTED', 'POSTED', false],
+    ]);
+    expect((events[3].detail as any).before).toEqual({ amount: 11.2, number: null });
+    expect((events[3].detail as any).after).toEqual({ number: 'CN-EV', date: '2026-11-05', amount: 11 });
+  });
+
+  it('corrects a recorded credit note: number and date always, amount only while nothing is set off, with the change on record', async () => {
+    await topUp();
+    await raiseReturn('RET-FIX', 2);
+    const ret = await row('RET-FIX');
+    await workflow.recordCreditNote(actor, ret.id, { requestKey: 'cn-fix-1', version: ret.version, number: 'CN-TYPO', date: '2026-11-04', amount: 22 });
+    const typo = await row('RET-FIX');
+    const fix = { requestKey: 'cn-fix-2', version: typo.version, number: 'CN-FIXED', date: '2026-11-05', amount: 21.5, correct: true };
+    await expect(workflow.recordCreditNote(actor, ret.id, { ...fix, reason: ' ' })).rejects.toMatchObject({
+      status: 400, message: 'Enter why the credit note is being corrected',
+    });
+    await workflow.recordCreditNote(actor, ret.id, { ...fix, reason: 'Misread the note' });
+    await workflow.recordCreditNote(actor, ret.id, { ...fix, reason: 'Misread the note' });
+    const fixed = await row('RET-FIX');
+    expect([fixed.state, fixed.creditNote, fixed.credit?.available]).toEqual(['RECEIVED', { number: 'CN-FIXED', date: '2026-11-05', amount: 21.5 }, 21.5]);
+    const corrections = await db.inventoryWorkflowEvent.findMany({ where: { documentId: ret.id, action: 'CREDIT_NOTE_CORRECTED' } });
+    expect(corrections.map((event) => [(event.detail as any).reason, (event.detail as any).before, (event.detail as any).after])).toEqual([
+      ['Misread the note', { number: 'CN-TYPO', date: '2026-11-04', amount: 22 }, { number: 'CN-FIXED', date: '2026-11-05', amount: 21.5 }],
+    ]);
+
+    await workspace.setOff(actor, { requestKey: 'set-off-fix', creditId: fixed.credit!.id, allocations: [{ purchaseInvoiceId: bills['LIN-1'], amount: 1.5 }] });
+    const adjusted = await row('RET-FIX');
+    const again = { requestKey: 'cn-fix-3', version: adjusted.version, number: 'CN-FIXED', date: '2026-11-05', correct: true, reason: 'Wrong amount' };
+    await expect(workflow.recordCreditNote(actor, ret.id, { ...again, amount: 20 })).rejects.toMatchObject({
+      status: 400,
+      message: '₹1.50 of this credit is already set off against bills, so its amount stays ₹21.50. Correct the number and date only.',
+    });
+    await workflow.recordCreditNote(actor, ret.id, { ...again, requestKey: 'cn-fix-4', number: 'CN-FIXED-2', amount: 21.5 });
+    expect([(await row('RET-FIX')).creditNote?.number, (await row('RET-FIX')).credit?.available]).toEqual(['CN-FIXED-2', 20]);
+  });
+
+  it('refuses a credit note dated before the return, naming the return date', async () => {
+    await topUp();
+    await raiseReturn('RET-EARLY', 1);
+    const ret = await row('RET-EARLY');
+    await expect(
+      workflow.recordCreditNote(actor, ret.id, { requestKey: 'cn-early', version: ret.version, number: 'CN-EARLY', date: '2026-11-01', amount: 11.2 }),
+    ).rejects.toMatchObject({ status: 400, message: 'The credit note date cannot be before the return date, 02/11/2026' });
+    expect((await row('RET-EARLY')).state).toBe('AWAITED');
+  });
+
+  it('records a credit note on a posted return that never had a credit, creating that credit', async () => {
+    await topUp();
+    await raiseReturn('RET-NOCREDIT', 1, 'POST');
+    const ret = await row('RET-NOCREDIT');
+    await db.inventorySupplierCredit.delete({ where: { documentId: ret.id } });
+    expect((await row('RET-NOCREDIT')).state).toBe('AWAITED');
+    await workflow.recordCreditNote(actor, ret.id, { requestKey: 'cn-nocredit', version: ret.version, number: 'CN-NC', date: '2026-11-05', amount: 11.2 });
+    const received = await row('RET-NOCREDIT');
+    expect([received.state, received.credit?.amount, received.credit?.available]).toEqual(['RECEIVED', 11.2, 11.2]);
+  });
+
+  it('tells a draft return to go on challan first, and leaves it a draft', async () => {
+    const draft = await workflow.saveDocument(actor, {
+      kind: 'SUPPLIER_RETURN', reference: 'RET-DRAFT', requestKey: randomUUID(), supplierId: 'supplier', purchaseInvoiceId: bills['LIN-1'],
+      payload: { date: '2026-11-02', lines: [{ inventoryId: 'batch', quantity: 1, unitPrice: 10, sourceLineId: purchaseLineId }] },
+    });
+    await expect(
+      workflow.recordCreditNote(actor, draft.id, { requestKey: 'cn-draft', version: draft.version, number: 'CN-DRAFT', date: '2026-11-05', amount: 11.2 }),
+    ).rejects.toMatchObject({ status: 400, message: 'Send the goods on a return challan before recording the credit note' });
+    expect((await row('RET-DRAFT')).state).toBe('DRAFT');
   });
 });
