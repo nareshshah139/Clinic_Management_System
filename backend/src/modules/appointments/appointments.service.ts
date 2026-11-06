@@ -20,7 +20,7 @@ import {
   AvailableSlotsDto,
 } from './dto/query-appointment.dto';
 import { SchedulingUtils, SchedulingConflict } from './utils/scheduling.utils';
-import { AppointmentStatus, VisitType, UserRole } from '@prisma/client';
+import { AppointmentStatus, Prisma, VisitType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WhatsAppTemplatesService } from '../whatsapp-templates/whatsapp-templates.service';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
@@ -116,18 +116,8 @@ export class AppointmentsService {
       });
     }
 
-    // Create appointment transactionally with tokenNumber generation to reduce race conditions
-    const appointment = await this.prisma.$transaction(async (tx) => {
-      const tokenNumber = await (async () => {
-        const startOfDay = new Date(`${date}T00:00:00.000Z`);
-        const endOfDay = new Date(`${date}T23:59:59.999Z`);
-        const last = await tx.appointment.findFirst({
-          where: { branchId, date: { gte: startOfDay, lte: endOfDay } },
-          orderBy: { tokenNumber: 'desc' },
-          select: { tokenNumber: true },
-        });
-        return ((last?.tokenNumber as number | null) || 0) + 1;
-      })();
+    const appointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
+      const tokenNumber = await this.nextDoctorToken(tx, branchId, doctorId, date);
 
       return tx.appointment.create({
         data: {
@@ -154,7 +144,7 @@ export class AppointmentsService {
           },
         },
       });
-    });
+    }));
 
     // Fire-and-forget notifications (if configured and doctor has enabled)
     if (this.notifications) {
@@ -508,10 +498,12 @@ export class AppointmentsService {
       });
     }
 
-    // Update appointment with new schedule
-    const rescheduledAppointment = await this.prisma.appointment.update({
+    // A new day means a place in that day's queue for this doctor.
+    const sameDay = appointment.date.toISOString().slice(0, 10) === rescheduleDto.date.slice(0, 10);
+    const rescheduledAppointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => tx.appointment.update({
       where: { id },
       data: {
+        ...(sameDay ? {} : { tokenNumber: await this.nextDoctorToken(tx, branchId, appointment.doctorId, rescheduleDto.date) }),
         date: new Date(rescheduleDto.date),
         slot: rescheduleDto.slot,
         roomId: rescheduleDto.roomId ?? appointment.roomId ?? undefined,
@@ -529,7 +521,7 @@ export class AppointmentsService {
           select: { id: true, name: true, type: true },
         },
       },
-    });
+    })));
 
     // Update linked Google Calendar event (non-blocking)
     void this.googleCalendar
@@ -1207,26 +1199,39 @@ export class AppointmentsService {
     return [...new Set(appointments.map((apt) => apt.slot))];
   }
 
-  private async generateTokenNumber(
-    date: string,
-    branchId: string,
-  ): Promise<number> {
-    const startOfDay = new Date(`${date}T00:00:00.000Z`);
-    const endOfDay = new Date(`${date}T23:59:59.999Z`);
-
-    const lastAppointment = await this.prisma.appointment.findFirst({
+  /**
+   * @cc [owner:nareshshah139,label:product] doctor-token-queue
+   * Token numbers MUST count each doctor's own queue for the day in a branch, starting at 1,
+   * so a patient's token reflects only that doctor's patients. Two appointments for the same
+   * doctor and day MUST NOT share a token, including under concurrent booking; the database
+   * unique index enforces it and booking retries on a collision.
+   */
+  private async nextDoctorToken(tx: Prisma.TransactionClient, branchId: string, doctorId: string, date: string): Promise<number> {
+    // Serialize allocation per doctor-day so concurrent bookings wait instead of colliding.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`appointment-token:${branchId}:${doctorId}:${date}`}))`;
+    const last = await tx.appointment.findFirst({
       where: {
         branchId,
-        date: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
+        doctorId,
+        date: { gte: new Date(`${date}T00:00:00.000Z`), lte: new Date(`${date}T23:59:59.999Z`) },
       },
-      orderBy: {
-        tokenNumber: 'desc',
-      },
+      orderBy: { tokenNumber: 'desc' },
+      select: { tokenNumber: true },
     });
-
-    return (lastAppointment?.tokenNumber || 0) + 1;
+    return (last?.tokenNumber ?? 0) + 1;
   }
+
+  private async withTokenRetry<T>(write: () => Promise<T>, attempts = 5): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await write();
+      } catch (error) {
+        const target = (error as Prisma.PrismaClientKnownRequestError)?.meta?.target;
+        const tokenCollision = (error as { code?: string })?.code === 'P2002'
+          && (Array.isArray(target) ? target.includes('tokenNumber') : String(target ?? '').includes('token'));
+        if (!tokenCollision || attempt >= attempts) throw error;
+      }
+    }
+  }
+
 }

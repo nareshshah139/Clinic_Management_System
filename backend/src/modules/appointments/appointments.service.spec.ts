@@ -25,6 +25,7 @@ describe('AppointmentsService.create', () => {
   };
 
   const txMock: any = {
+    $executeRaw: jest.fn(),
     appointment: {
       findFirst: jest.fn(),
       create: jest.fn(),
@@ -133,6 +134,9 @@ describe('AppointmentsService.create', () => {
 
     const dto = buildDto({ roomId: 'room-1' });
     const result = await service.create(dto, branchId);
+    expect(txMock.appointment.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ branchId, doctorId: dto.doctorId }),
+    }));
 
     expect(result).toBeTruthy();
     expect(txMock.appointment.create).toHaveBeenCalled();

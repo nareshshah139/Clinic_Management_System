@@ -272,6 +272,7 @@ model Appointment {
   newInvoices   NewInvoice[]
   visit         Visit?
 
+  @@unique([branchId, doctorId, date, tokenNumber], map: "appointments_doctor_day_token_key")
   @@map("appointments")
 }
 

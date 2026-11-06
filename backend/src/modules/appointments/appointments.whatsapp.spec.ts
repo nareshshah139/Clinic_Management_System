@@ -63,6 +63,7 @@ describe('AppointmentsService WhatsApp flow', () => {
       },
       $transaction: jest.fn().mockImplementation(async (cb: any) =>
         cb({
+          $executeRaw: jest.fn(),
           appointment: txAppointment,
         }),
       ),
