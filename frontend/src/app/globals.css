@@ -290,7 +290,7 @@
 
 @layer base {
   :root,
-  :where(#prescription-print-root, #pagedjs-container, #prescription-print-host) {
+  :where(#prescription-print-root, #pagedjs-container, #prescription-print-host, .prescription-pdf-export) {
     --text-xs: calc(0.75rem + var(--app-text-increase));
     --text-sm: calc(0.875rem + var(--app-text-increase));
     --text-base: calc(1rem + var(--app-text-increase));
@@ -300,7 +300,7 @@
     --text-3xl: calc(1.875rem + var(--app-text-increase));
     --text-4xl: calc(2.25rem + var(--app-text-increase));
   }
-  :where(#prescription-print-root, #pagedjs-container, #prescription-print-host) {
+  :where(#prescription-print-root, #pagedjs-container, #prescription-print-host, .prescription-pdf-export) {
     --app-text-increase: 0rem;
     font-size: 14px;
   }

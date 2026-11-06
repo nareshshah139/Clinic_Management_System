@@ -35,6 +35,13 @@ import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 // Minimal local types aligned with backend DTO enums
 type Language = 'EN' | 'TE' | 'HI';
 
+type PrintLineSpacing = 'normal' | 'compact' | 'tight';
+const PRINT_LINE_SPACING_OPTIONS: Array<{ value: PrintLineSpacing; label: string }> = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'compact', label: 'Compact' },
+  { value: 'tight', label: 'Tight' },
+];
+
 type DosageUnit = 'MG' | 'ML' | 'MCG' | 'IU' | 'TABLET' | 'CAPSULE' | 'DROP' | 'SPRAY' | 'PATCH' | 'INJECTION';
 
 type Frequency = string;
@@ -650,6 +657,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [previewJustUpdated, setPreviewJustUpdated] = useState(false);
   const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TABLE');
   const [spaceOptimized, setSpaceOptimized] = useState(false);
+  const [lineSpacing, setLineSpacing] = useState<PrintLineSpacing>('normal');
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
@@ -688,6 +696,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     overrideTopMarginPx: number | null;
     overrideBottomMarginPx: number | null;
     spaceOptimized: boolean;
+    lineSpacing: PrintLineSpacing;
     personalHistory: string | undefined;
   } | null>(null);
   const previewRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1053,6 +1062,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
    */
   const printBlockPadding = spaceOptimized ? 'py-0.5' : 'py-3';
   const rxRowPadding = spaceOptimized ? '2px 0' : '6px 0';
+  const rxCellPadding = spaceOptimized ? '0 6px' : '0 12px';
+  const rxColumnFlex = spaceOptimized
+    ? { medicine: '2 1 0%', frequency: '0.9 1 0%', timing: '0.9 1 0%', duration: '0.8 1 0%', instructions: '2.2 1 0%' }
+    : { medicine: '2 1 0%', frequency: '1 1 0%', timing: '1 1 0%', duration: '1 1 0%', instructions: '1.5 1 0%' };
   const patientName = useMemo(() => visitData?.patient?.name || patientData?.name || '—', [visitData, patientData]);
   const patientCodeDisplay = useMemo(() => visitData?.patient?.patientCode || patientData?.patientCode || '', [visitData, patientData]);
   const reviewDateDisplay = useMemo(() => {
@@ -3364,6 +3377,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       overrideTopMarginPx,
       overrideBottomMarginPx,
       spaceOptimized,
+      lineSpacing,
     };
 
     // Check if dependencies actually changed
@@ -3404,7 +3418,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [isTeleVideo, previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, personalHistory, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, avoidBreakInsideTables, translateForPreview]);
+  }, [isTeleVideo, previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, personalHistory, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, lineSpacing, avoidBreakInsideTables, translateForPreview]);
 
   // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
   useEffect(() => {
@@ -3477,6 +3491,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       letterheadOption,
       rxPrintFormat,
       spaceOptimized,
+      lineSpacing,
     });
     
     // Skip processing if: initial render is done AND content hash hasn't changed
@@ -4003,7 +4018,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       // Only clear the reference, not the container content
       // The container will be cleared by processWithPagedJs when it runs next
     };
-  }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, investigationsStringified, customSectionsStringified, followUpInstructions,
+  }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, lineSpacing, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
       designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, resolvedPrintBgUrl, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
@@ -5451,7 +5466,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 #pagedjs-container,
                 #pagedjs-container *,
                 #prescription-print-host .prescription-print-pages,
-                #prescription-print-host .prescription-print-pages * {
+                #prescription-print-host .prescription-print-pages *,
+                .prescription-pdf-export,
+                .prescription-pdf-export * {
                   font-family: 'Fira Sans', 'Segoe UI Symbol', 'Arial Unicode MS', system-ui, sans-serif !important;
                 }
                 #prescription-print-root, #prescription-print-root * {
@@ -5461,6 +5478,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 }
                 #prescription-print-root {
                   display: none !important; /* Only hide the root container itself */
+                }
+                [data-line-spacing="compact"],
+                [data-line-spacing="compact"] * {
+                  line-height: 1.3 !important;
+                }
+                [data-line-spacing="tight"],
+                [data-line-spacing="tight"] * {
+                  line-height: 1.2 !important;
                 }
                 ${rxPrintFormat === 'TEXT' ? `
                   /* Text print mode - hide non-text content in Paged.js output only */
@@ -5603,7 +5628,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   fontSize: '14px',
                 }}
               >
-                <div id="prescription-print-content">
+                <div id="prescription-print-content" data-line-spacing={lineSpacing}>
                   {(!spaceOptimized || isTeleVideo) && (
                     <div className="text-sm text-gray-700 mb-2">{todayStr}{isTeleVideo && <span data-consultation-label> • Consultation: Tele-video</span>}</div>
                   )}
@@ -5807,19 +5832,19 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       rxPrintFormat === 'TABLE' ? (
                         <div className="text-sm" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #d1d5db', background: '#f9fafb', fontWeight: 500, padding: rxRowPadding }}>
-                            <div style={{ flex: '2 1 0%', padding: '0 12px' }}>Medicine</div>
-                            <div style={{ flex: '1 1 0%', padding: '0 12px' }}>Frequency</div>
-                            <div style={{ flex: '1 1 0%', padding: '0 12px' }}>When</div>
-                            <div style={{ flex: '1 1 0%', padding: '0 12px' }}>Duration</div>
-                            <div style={{ flex: '1.5 1 0%', padding: '0 12px' }}>Instructions</div>
+                            <div style={{ flex: rxColumnFlex.medicine, padding: rxCellPadding }}>Medicine</div>
+                            <div style={{ flex: rxColumnFlex.frequency, padding: rxCellPadding }}>Frequency</div>
+                            <div style={{ flex: rxColumnFlex.timing, padding: rxCellPadding }}>When</div>
+                            <div style={{ flex: rxColumnFlex.duration, padding: rxCellPadding }}>Duration</div>
+                            <div style={{ flex: rxColumnFlex.instructions, padding: rxCellPadding }}>Instructions</div>
                           </div>
                           {validItems.map((it: any, idx: number) => (
                             <div key={`rx-row-${idx}`} className="rx-row" style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', padding: rxRowPadding }}>
-                              <div style={{ flex: '2 1 0%', padding: '0 12px' }}>{it.drugName}</div>
-                              <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</div>
-                              <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{it.timing || '—'}</div>
-                              <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{`${it.duration ?? '—'} ${String(it.durationUnit || '').toLowerCase()}`}</div>
-                              <div style={{ flex: '1.5 1 0%', padding: '0 12px' }}>{it.instructions ? tt(`items.${idx}.instructions`, it.instructions) : '—'}</div>
+                              <div style={{ flex: rxColumnFlex.medicine, padding: rxCellPadding }}>{it.drugName}</div>
+                              <div style={{ flex: rxColumnFlex.frequency, padding: rxCellPadding }}>{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</div>
+                              <div style={{ flex: rxColumnFlex.timing, padding: rxCellPadding }}>{it.timing || '—'}</div>
+                              <div style={{ flex: rxColumnFlex.duration, padding: rxCellPadding }}>{`${it.duration ?? '—'} ${String(it.durationUnit || '').toLowerCase()}`}</div>
+                              <div style={{ flex: rxColumnFlex.instructions, padding: rxCellPadding }}>{it.instructions ? tt(`items.${idx}.instructions`, it.instructions) : '—'}</div>
                             </div>
                           ))}
                         </div>
@@ -5892,21 +5917,31 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   ) : null
                 ))}
 
-                {/* Review Date */}
-                {reviewDateDisplay ? (
-                  <div className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
-                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Review Date{spaceOptimized ? ':' : ''}</div>
-                    <div className={`text-sm ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{reviewDateDisplay}</div>
-                  </div>
-                ) : null}
-
-                {/* Follow-up Instructions */}
-                {(followUpInstructions?.trim()?.length) ? (
-                  <div className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''} ${breakBeforeFollowUp ? 'pb-before-page' : ''}`}>
-                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>{spaceOptimized ? 'Follow-up:' : 'Follow-up Instructions'}</div>
-                    <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('followUpInstructions', followUpInstructions)}</div>
-                  </div>
-                ) : null}
+                {/* Review Date and Follow-up */}
+                {(() => {
+                  const hasFollowUp = !!followUpInstructions?.trim()?.length;
+                  const reviewDate = reviewDateDisplay ? (
+                    <div className={spaceOptimized ? 'flex items-baseline gap-2 shrink-0' : undefined}>
+                      <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Review Date{spaceOptimized ? ':' : ''}</div>
+                      <div className={`text-sm ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{reviewDateDisplay}</div>
+                    </div>
+                  ) : null;
+                  const followUp = hasFollowUp ? (
+                    <div className={spaceOptimized ? 'flex items-baseline gap-2 min-w-[55%] flex-1' : undefined}>
+                      <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>{spaceOptimized ? 'Follow-up:' : 'Follow-up Instructions'}</div>
+                      <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('followUpInstructions', followUpInstructions)}</div>
+                    </div>
+                  ) : null;
+                  if (spaceOptimized && reviewDate && followUp && !breakBeforeFollowUp) {
+                    return <div className={`${printBlockPadding} flex flex-wrap items-baseline gap-x-6 gap-y-0.5 text-sm`}>{reviewDate}{followUp}</div>;
+                  }
+                  return (
+                    <>
+                      {reviewDate ? <div className={`${printBlockPadding} ${spaceOptimized ? 'text-sm' : ''}`}>{reviewDate}</div> : null}
+                      {followUp ? <div className={`${printBlockPadding} ${spaceOptimized ? 'text-sm' : ''} ${breakBeforeFollowUp ? 'pb-before-page' : ''}`}>{followUp}</div> : null}
+                    </>
+                  );
+                })()}
 
                 {/* Keep the required disclaimer with the signature, independently of signature visibility. */}
                 <div data-prescription-signoff className={breakBeforeSignature ? 'pb-before-page' : undefined} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
@@ -6042,6 +6077,20 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       Space-optimized layout
                     </label>
                     <p className="text-xs text-gray-500">Inline headers for patient info, vitals, diagnosis, histories, and procedures. Forces Rx table format.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-sm text-gray-700">Line spacing</span>
+                    <Select value={lineSpacing} onValueChange={(v: PrintLineSpacing) => setLineSpacing(v)}>
+                      <SelectTrigger className="w-full" aria-label="Line spacing">
+                        <SelectValue placeholder="Select line spacing" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PRINT_LINE_SPACING_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500">Reduces the gap between lines on the printout. Text size stays the same.</p>
                   </div>
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Print Format</span>
