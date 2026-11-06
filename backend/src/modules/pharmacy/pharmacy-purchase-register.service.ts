@@ -11,7 +11,7 @@ import {
   purchaseRegisterSheet,
 } from './pharmacy-purchase-register';
 import { splitByEffectiveDate } from './purchase-payment-balance';
-import { clinicDay, clinicDayRange, peopleById } from './register-utils';
+import { clinicDay, clinicDayRange, financialYear, peopleById } from './register-utils';
 
 export type PurchaseRegisterActor = { branchId: string };
 
@@ -31,6 +31,18 @@ export class PharmacyPurchaseRegisterService {
     now = new Date(),
   ): Promise<PurchaseRegisterPage> {
     return purchaseRegisterPage(await this.entries(query, actor, now), query);
+  }
+
+  async toReviewCount(actor: PurchaseRegisterActor, now = new Date()): Promise<number> {
+    const query: PurchaseRegisterQuery = {
+      ...financialYear(clinicDay(now)),
+      paymentState: 'NOT_POSTED',
+      sortBy: 'srNo',
+      sortDir: 'asc',
+      page: 1,
+      limit: 1,
+    };
+    return (await this.list(query, actor, now)).total;
   }
 
   async export(

@@ -4,6 +4,7 @@ import { reconcileInventoryLedger } from './inventory-ledger';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PharmacyPurchaseLedgerService } from '../pharmacy/pharmacy-purchase-ledger.service';
+import { PharmacyPurchaseRegisterService } from '../pharmacy/pharmacy-purchase-register.service';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { WorkflowActor } from './inventory-workflow.types';
@@ -175,7 +176,7 @@ export class InventoryWorkspaceService {
     const low=stock?await this.stock(actor,{stock:'LOW'}):null,expiring=stock?await this.stock(actor,{expiryMonths:'3'}):null;
     const supplierAlerts=has('pharmacy:purchase-ledger:read')?await new PharmacyPurchaseLedgerService(this.prisma).getAlerts(actor.branchId):null;
     const supplierOverdue=supplierAlerts?{count:supplierAlerts.overdue.length,amount:money(supplierAlerts.overdue.reduce((n:number,r:any)=>n+r.outstanding,0)),asOf:supplierAlerts.asOfDate}:null;
-    const pendingPurchase=purchases.filter((g:any)=>!['STOCK_COMMITTED','CANCELLED'].includes(g.status)).reduce((n:number,g:any)=>n+g._count,0);
+    const pendingPurchase=has('inventory:po:read')?await new PharmacyPurchaseRegisterService(this.prisma).toReviewCount(actor):0;
     const pendingEdits = ['OWNER','ADMIN','DOCTOR','PHARMACIST'].includes(actor.role) && has('pharmacy:drug:inventory-change:read')
       ? await this.prisma.drugInventoryChangeRequest.count({where:{branchId:actor.branchId,status:'PENDING'}}) : null;
     return {pendingEdits,pendingPurchase,supplierOverdue,branchId:actor.branchId,asOf:new Date().toISOString(),lowStock:low?.total,expiring:expiring?.total,capabilities:caps,stock:stock?{total:stock.total,quality:stock.quality,valuation:stock.valuation}:null,queues:active,purchases,unlinked,recent:docs.rows.slice(0,8)};

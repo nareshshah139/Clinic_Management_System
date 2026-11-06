@@ -83,7 +83,9 @@ export class PharmacyPurchaseLedgerService {
         include: { allocations: true },
       });
       if (existing) {
-        if ((existing.requestFingerprint || this.paymentFingerprint(existing)) !== requestFingerprint)
+        const stored = existing.requestFingerprint || this.paymentFingerprint(existing);
+        const legacy = isCalendarDay(dto.paymentDate) ? this.paymentFingerprint({ ...dto, paymentDate: new Date(dto.paymentDate) }) : null;
+        if (stored !== requestFingerprint && stored !== legacy)
           throw new ConflictException('This payment request key was used for different details. Reload the recorded payment.');
         return existing;
       }
@@ -106,6 +108,7 @@ export class PharmacyPurchaseLedgerService {
         distributorGstin,
         invoices,
         allocations,
+        paymentDate,
         now: new Date(),
       });
       const invoiceById = new Map(
@@ -556,6 +559,7 @@ export class PharmacyPurchaseLedgerService {
     distributorGstin: string;
     invoices: LedgerInvoice[];
     allocations: { purchaseInvoiceId: string; amount: number }[];
+    paymentDate?: Date;
     now: Date;
   }) {
     const invoiceById = new Map(
@@ -587,6 +591,12 @@ export class PharmacyPurchaseLedgerService {
       ) {
         throw new BadRequestException(
           'Payment distributor GSTIN must match every allocated invoice',
+        );
+      }
+
+      if (params.paymentDate && clinicDay(params.paymentDate) < clinicDay(new Date(invoice.invoiceDate))) {
+        throw new BadRequestException(
+          `The payment date cannot be before the bill date for invoice ${invoice.invoiceNumber}`,
         );
       }
 

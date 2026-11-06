@@ -297,6 +297,60 @@ databaseTests('Purchase register on PostgreSQL', () => {
     ]);
   });
 
+  it('counts the bills to review exactly as the register lists them for the financial year', async () => {
+    await db.pharmacyPurchaseInvoice.create({
+      data: {
+        branchId,
+        createdBy: userId,
+        distributorName: 'Linae Distributors',
+        distributorGstin: linae,
+        distributorDlNo: 'synthetic',
+        invoiceNumber: 'LIN-OLD',
+        invoiceDate: new Date('2026-03-31T10:00:00+05:30'),
+        billType: 'CREDIT',
+        doctorNameOrRegNo: 'Synthetic',
+        status: 'OCR_REVIEW' as any,
+        grossAmount: 10,
+        taxableAmount: 10,
+        totalGst: 0,
+        netPayable: 10,
+      },
+    });
+    const now = new Date('2026-11-06T06:00:00.000Z');
+    const listed = await register.list(query({ paymentState: 'NOT_POSTED' }), actor(), now);
+    expect(listed.rows.map((row) => row.billNo)).toEqual(['LIN-4']);
+    expect(await register.toReviewCount(actor(), now)).toBe(1);
+  });
+
+  it('replays a payment retried under a legacy UTC-midnight fingerprint and rejects a payment dated before its bill', async () => {
+    const requestKey = randomUUID();
+    const legacy = await db.pharmacyPurchasePayment.create({
+      data: {
+        branchId,
+        requestKey,
+        requestFingerprint: (ledger as any).paymentFingerprint({
+          distributorGstin: medico,
+          distributorName: 'Medico Agencies',
+          paymentDate: new Date('2026-10-20'),
+          mode: 'NEFT',
+          amount: 400,
+          allocations: [{ purchaseInvoiceId: bills['MED-1'], amount: 400 }],
+        }),
+        distributorGstin: medico,
+        distributorName: 'Medico Agencies',
+        paymentDate: new Date('2026-10-20T00:00:00.000Z'),
+        mode: 'NEFT',
+        paidBy: userId,
+        amount: 400,
+        allocations: { create: [{ purchaseInvoiceId: bills['MED-1'], amount: 400 }] },
+      },
+    });
+    expect((await pay(bills['MED-1'], medico, 400, requestKey, '2026-10-20')).id).toBe(legacy.id);
+    await expect(pay(bills['MED-1'], medico, 100, randomUUID(), '2026-10-05')).rejects.toThrow(
+      'The payment date cannot be before the bill date for invoice MED-1',
+    );
+  });
+
   it('settles a bill once for its outstanding amount across a retry, and its reversal reopens it', async () => {
     const requestKey = randomUUID();
     const [first, retry] = await Promise.all([

@@ -47,6 +47,12 @@ export function clinicDayRange(from: string, to: string) {
   };
 }
 
+export function financialYear(day: string) {
+  const [year, month] = day.split('-').map(Number);
+  const start = month >= 4 ? year : year - 1;
+  return { from: `${start}-04-01`, to: `${start + 1}-03-31` };
+}
+
 export function registerRangeError(from: string, to: string): string | null {
   if (!isCalendarDay(from) || !isCalendarDay(to)) return null;
   if (from > to) return 'The start date must be on or before the end date';
