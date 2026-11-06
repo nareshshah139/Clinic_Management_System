@@ -173,6 +173,12 @@ export function getAllDurationUnitOptions(): string[] {
   return [...DEFAULT_DURATION_UNITS, ...getCustomDurationUnits()];
 }
 
+/**
+ * @cc [owner:nareshshah139,label:calculation] dose-pattern-presets-infer-daily-count
+ * Every preset offered in the prescription dose-pattern picker MUST infer the frequency whose
+ * daily count equals its meaning (n non-zero slots is n doses a day, qNh is every N hours,
+ * prn is as needed), so picking a preset never writes a different dosing frequency.
+ */
 export const DOSE_PATTERN_OPTIONS = [
   '1-0-0',
   '0-1-0',
@@ -189,6 +195,14 @@ export const DOSE_PATTERN_OPTIONS = [
   'prn',
 ] as const;
 
+/**
+ * @cc [owner:nareshshah139,label:safety;target] unknown-dose-text-never-becomes-a-frequency
+ * Known codes (od, qd, hs, bd, bid, tid, qid, qNh, prn and the spelled-out forms) MUST map to their
+ * exact frequency regardless of case and outer spacing, and blank or all-zero input MUST return null.
+ * Text that is neither a known code nor an N-N-N slot pattern (tds, sos, q3h, every 5 hours, 1.5-0-1)
+ * MUST return null so the doctor picks the frequency. This is a target obligation, not a pass claim:
+ * any unknown text containing digits is counted as slots (q3h gives ONCE_DAILY).
+ */
 export function inferFrequencyFromDosePattern(pattern: string): FrequencyOption | null {
   const raw = (pattern || '').trim().toLowerCase();
   if (!raw) return null;
@@ -234,6 +248,12 @@ export function inferFrequencyFromDosePattern(pattern: string): FrequencyOption 
   return null;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:safety] timing-inferred-only-from-single-slot-patterns
+ * Timing MUST be inferred only when the first three numbers of the pattern have exactly one slot
+ * non-zero (morning gives AM, afternoon or evening gives PM); every other input MUST return null
+ * so a multi-dose or unrecognised pattern never gets a single-period timing.
+ */
 export function inferTimingFromDosePattern(pattern: string): string | null {
   const raw = (pattern || '').trim().toLowerCase();
   if (!raw) return null;
