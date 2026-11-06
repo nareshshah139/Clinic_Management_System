@@ -276,6 +276,7 @@ describe('PharmacyPurchaseLedgerService', () => {
     const credit = (overrides: any) => ({
       supplierGstin: gstin,
       amount: 300,
+      applied: 0,
       createdAt: new Date('2026-05-01T00:00:00.000Z'),
       reversedAt: null,
       creditNoteNumber: 'CN-1',
@@ -284,7 +285,7 @@ describe('PharmacyPurchaseLedgerService', () => {
       ...overrides,
     });
     prisma.inventorySupplierCredit.findMany.mockResolvedValue([
-      credit({ allocations: [{ amount: 120, createdAt: new Date('2026-05-03T00:00:00.000Z'), reversedAt: null }] }),
+      credit({ applied: 120, allocations: [{ amount: 120, createdAt: new Date('2026-05-03T00:00:00.000Z'), reversedAt: null }] }),
       credit({ creditNoteNumber: 'CN-2', amount: 50, allocations: [{ amount: 50, createdAt: new Date('2026-05-03T00:00:00.000Z'), reversedAt: new Date('2026-05-04T00:00:00.000Z') }] }),
       credit({ creditNoteNumber: 'CN-LATER', receivedAt: new Date('2026-05-09T00:00:00.000Z') }),
       credit({ creditNoteNumber: 'CN-GONE', reversedAt: new Date('2026-05-04T00:00:00.000Z') }),
