@@ -5,7 +5,18 @@ describe('PharmacyPurchaseReturnsRegisterService', () => {
   const linae = '36ABCDE1234F1Z5';
 
   const prisma: any = {
-    $queryRaw: jest.fn(async () => []),
+    $queryRaw: jest.fn(async (sql: TemplateStringsArray) =>
+      sql.join('').includes('inventory_workflow_documents')
+        ? [
+            { status: 'CHALLAN', returnValue: '112.00', creditId: null, amount: null, applied: null, createdAt: null, allocated: '0' },
+            { status: 'POSTED', returnValue: '40.00', creditId: 'credit-2', amount: '40.00', applied: '0.00', createdAt: new Date('2026-10-06T05:00:00Z'), reversedAt: null, allocated: '0' },
+            { status: 'POSTED', returnValue: '75.50', creditId: 'legacy', amount: '75.50', applied: '20.00', createdAt: new Date('2026-06-01T05:00:00Z'), reversedAt: null, allocated: '0' },
+          ]
+        : [
+            { supplierGstin: linae, amount: '500.00', applied: '120.00', createdAt: new Date('2026-10-10T05:00:00Z'), reversedAt: null, creditNoteNumber: 'CN-1', receivedAt: new Date('2026-10-12T06:00:00Z'), allocated: '100.00' },
+            { supplierGstin: linae, amount: '60.00', applied: '0.00', createdAt: new Date('2026-10-10T05:00:00Z'), reversedAt: null, creditNoteNumber: 'CN-LATER', receivedAt: new Date('2026-11-07T06:00:00Z'), allocated: '0' },
+          ],
+    ),
     inventoryWorkflowDocument: {
       findMany: jest.fn(async () => [
         {
@@ -52,6 +63,6 @@ describe('PharmacyPurchaseReturnsRegisterService', () => {
       [1, 'RET-1', 'Linae Distributors', 'LIN-1', 'Asha Rao', 'RECEIVED', { number: 'CN-1', date: '2026-10-12', amount: 500 }, 'NEAR_EXPIRY'],
       [2, 'Rate difference', 'Linae Pharma (bill name)', 'LIN-1', null, 'AWAITED', null, null],
     ]);
-    expect([page.totals.count, page.totals.excluded]).toEqual([2, { drafts: 0, cancelled: 0 }]);
+    expect(page.totals).toEqual({ held: 380, awaited: { amount: 152, count: 2 }, count: 2, excluded: { drafts: 0, cancelled: 0 } });
   });
 });

@@ -205,6 +205,28 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     }
   }, 120000);
 
+  it('matches the migrations for supplier credits, allocations and set-offs, the partial index aside, which Prisma cannot see', async () => {
+    const shadow = `cr27_shadow_${randomUUID().replaceAll('-', '')}`;
+    const url = new URL(process.env.PURCHASE_RETURNS_TEST_DATABASE_URL!);
+    url.pathname = `/${shadow}`;
+    url.search = '';
+    await admin.$executeRawUnsafe(`CREATE DATABASE "${shadow}"`);
+    try {
+      const diff = execFileSync(
+        process.execPath,
+        [
+          require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-schema-datamodel', 'prisma/schema.prisma',
+          '--to-migrations', 'prisma/migrations', '--shadow-database-url', url.toString(), '--script',
+        ],
+        { stdio: 'pipe', encoding: 'utf8' },
+      );
+      const statements = diff.split(';').filter((statement) => /inventory_(supplier_credits|credit_allocations|credit_set_offs)/.test(statement));
+      expect(statements).toEqual([]);
+    } finally {
+      await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${shadow}" WITH (FORCE)`);
+    }
+  }, 120000);
+
   it('sends a return on challan: stock for the batch drops with a movement, and it waits for the credit note', async () => {
     await raiseReturn('RET-1', 20);
     expect(await stock()).toBe(80);
@@ -556,5 +578,77 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     const detail = await ledger.getDistributorLedger(branchId, '27AAAAA0000A1Z5');
     expect([detail.distributorName, detail.invoices, detail.runningLedger]).toEqual(['Medico Agencies', [], []]);
     await expect(ledger.getDistributorLedger(branchId, '29BBBBB0000B1Z5')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('reads a credit set off before allocations were kept as part used, on every surface, and never over-applies it', async () => {
+    await db.inventoryWorkflowDocument.create({
+      data: {
+        id: 'legacy-doc', branchId, kind: 'SUPPLIER_RETURN', status: 'POSTED', reference: 'OLD-RET', supplierId: 'supplier', supplierGstin: linae,
+        payload: { date: '2026-06-01', lines: [] }, totalAmount: 75.5, requestKey: 'legacy-doc', createdBy: 'asha', createdAt: new Date('2026-06-01T05:00:00Z'),
+      },
+    });
+    const awaitedBefore = (await returnsPage()).totals.awaited;
+    const legacy = await row('OLD-RET');
+    expect([legacy.state, legacy.creditNote, legacy.credit]).toEqual(['ADJUSTED', null, { id: 'legacy-credit', amount: 75.5, applied: 20, available: 55.5 }]);
+    expect((await returnsPage()).totals.awaited).toEqual(awaitedBefore);
+
+    const note = { version: legacy.version, number: 'OLD-CN', date: '2026-06-05' };
+    await expect(workflow.recordCreditNote(actor, legacy.id, { ...note, requestKey: 'cn-old-70', amount: 70 })).rejects.toMatchObject({
+      status: 400,
+      message: 'Part of this credit is already set off against bills, so its amount stays ₹75.50. Enter the number and date only.',
+    });
+    const heldBefore = (await position()).creditHeld;
+    const recorded = await workflow.recordCreditNote(actor, legacy.id, { ...note, requestKey: 'cn-old', amount: 75.5 });
+    expect(recorded.credit).toEqual({ id: 'legacy-credit', number: 'OLD-CN', date: '2026-06-05', amount: 75.5, applied: 20, available: 55.5 });
+    expect([(await row('OLD-RET')).state, (await position()).creditHeld - heldBefore]).toEqual(['ADJUSTED', 55.5]);
+    expect((await workspace.setOffOptions(actor, { creditId: 'legacy-credit' })).available).toBe(55.5);
+
+    await expect(
+      workspace.setOff(actor, { requestKey: 'old-too-much', creditId: 'legacy-credit', allocations: [{ purchaseInvoiceId: bills['LIN-1'], amount: 60 }] }),
+    ).rejects.toMatchObject({ status: 409, response: { code: 'BALANCE_CHANGED', message: 'The credit available changed: ₹55.50 is left to set off.' } });
+    await workspace.setOff(actor, { requestKey: 'old-rest', creditId: 'legacy-credit', allocations: [{ purchaseInvoiceId: bills['LIN-1'], amount: 55.5 }] });
+    const column = await db.inventorySupplierCredit.findUniqueOrThrow({ where: { id: 'legacy-credit' } });
+    expect([Number(column.applied), (await row('OLD-RET')).state, (await row('OLD-RET')).credit?.available, (await position()).creditHeld]).toEqual([
+      75.5, 'USED', 0, heldBefore,
+    ]);
+    const used = await row('OLD-RET');
+    await expect(workflow.transition(actor, used.id, { action: 'REVERSE', version: used.version, reason: 'Wrong distributor' } as any)).rejects.toMatchObject({
+      status: 400, message: '₹75.50 of this credit is set off against bills. Undo the set-off before reversing this return.',
+    });
+  });
+
+  it('counts every awaited credit in the footer, standalone credits without a number included, as the Awaited filter lists them', async () => {
+    await db.inventoryWorkflowDocument.create({
+      data: {
+        id: 'old-standalone', branchId, kind: 'CREDIT_NOTE', status: 'POSTED', reference: 'Rate difference', supplierId: 'supplier', supplierGstin: linae,
+        payload: { date: '2026-07-01', lines: [] }, totalAmount: 40, requestKey: 'old-standalone', createdBy: 'asha',
+      },
+    });
+    await db.inventorySupplierCredit.create({
+      data: { branchId, supplierGstin: linae, documentId: 'old-standalone', reference: 'Rate difference', amount: 40 },
+    });
+    const awaited = (await returnsPage({ state: 'AWAITED' })).rows;
+    expect(awaited.map((ret) => [ret.returnRef, ret.kind, ret.returnValue])).toEqual([
+      ['RET-2', 'SUPPLIER_RETURN', 56],
+      ['RET-EARLY', 'SUPPLIER_RETURN', 11.2],
+      ['Rate difference', 'CREDIT_NOTE', 40],
+    ]);
+    expect((await returnsPage()).totals.awaited).toEqual({ amount: 107.2, count: 3 });
+    expect((await returnsPage({ from: '2026-11-04', to: '2026-11-04', state: 'AWAITED' })).totals.awaited).toEqual({ amount: 107.2, count: 3 });
+  });
+
+  it('lists a return by its date however long before that it was last updated, and a draft dated after its last edit', async () => {
+    await topUp();
+    await raiseReturn('RET-BOUND', 1, 'POST');
+    const posted = await row('RET-BOUND');
+    await db.$executeRawUnsafe(`UPDATE "inventory_workflow_documents" SET "updatedAt" = '2026-11-01T00:00:00Z' WHERE "id" = $1`, posted.id);
+    const draft = await workflow.saveDocument(actor, {
+      kind: 'SUPPLIER_RETURN', reference: 'RET-LATER', requestKey: randomUUID(), supplierId: 'supplier', purchaseInvoiceId: bills['LIN-1'],
+      payload: { date: '2026-12-24', lines: [{ inventoryId: 'batch', quantity: 1, unitPrice: 10, sourceLineId: purchaseLineId }] },
+    });
+    await db.$executeRawUnsafe(`UPDATE "inventory_workflow_documents" SET "updatedAt" = '2026-10-01T00:00:00Z' WHERE "id" = $1`, draft.id);
+    expect((await returnsPage({ from: '2026-11-02', to: '2026-11-02', field: 'returnRef', q: 'RET-BOUND' })).rows.map((ret) => ret.returnRef)).toEqual(['RET-BOUND']);
+    const christmas = await returnsPage({ from: '2026-12-24', to: '2026-12-24' });
+    expect([christmas.rows.map((ret) => [ret.returnRef, ret.state]), christmas.totals.excluded]).toEqual([[['RET-LATER', 'DRAFT']], { drafts: 1, cancelled: 0 }]);
   });
 });

@@ -17,7 +17,6 @@ import {
 } from './pharmacy-purchase-returns-register';
 import { clinicDayStart, money, peopleById } from './register-utils';
 import {
-  EVERY_ALLOCATION,
   SUPPLIER_CREDIT_BALANCE_SELECT,
   creditBalance,
   creditHeldByDistributor,
@@ -43,15 +42,16 @@ const DOC_SELECT = {
 
 // Posting refuses a return dated more than a day ahead, and posting touches updatedAt, so a
 // return dated inside the range was last updated no earlier than two days before it starts.
-// Drafts and cancelled drafts never passed that check, so they are read whatever their date.
+// Drafts, and drafts cancelled or rejected, never passed that check, so they are read whatever their date.
 const RETURN_DATE_LEAD_DAYS = 2;
 
-type CreditTotalsRow = Omit<SupplierCreditRecord, 'allocations'> & { allocated: unknown };
-type OpenReturnRow = { status: string; totalAmount: Prisma.Decimal; credit: CreditTotalsRow | null };
+type CreditTotalsRow = Omit<SupplierCreditRecord, 'allocations'> & { allocated: Prisma.Decimal };
+// Columns of the credit are null when the return has no credit row.
+type OpenReturnRow = CreditTotalsRow & { status: string; returnValue: Prisma.Decimal; creditId: string | null };
 
-const withOpenAllocations = (row: CreditTotalsRow) => ({
-  ...row,
-  allocations: [{ amount: row.allocated, createdAt: row.createdAt, reversedAt: null }],
+const withOpenAllocations = ({ allocated, ...credit }: CreditTotalsRow): SupplierCreditRecord => ({
+  ...credit,
+  allocations: [{ amount: allocated, createdAt: credit.createdAt, reversedAt: null }],
 });
 
 @Injectable()
@@ -90,11 +90,9 @@ export class PharmacyPurchaseReturnsRegisterService {
           AND (${gstin}::text IS NULL OR c."supplierGstin" = ${gstin})
         GROUP BY c."id"`,
       this.prisma.$queryRaw<OpenReturnRow[]>`
-        SELECT d."status", d."totalAmount",
-               CASE WHEN c."id" IS NULL THEN NULL ELSE json_build_object(
-                 'supplierGstin', c."supplierGstin", 'amount', c."amount", 'applied', c."applied", 'createdAt', c."createdAt",
-                 'reversedAt', c."reversedAt", 'creditNoteNumber', c."creditNoteNumber", 'receivedAt', c."receivedAt",
-                 'allocated', COALESCE(SUM(a."amount") FILTER (WHERE a."reversedAt" IS NULL), 0)) END AS "credit"
+        SELECT d."status", d."totalAmount" AS "returnValue", c."id" AS "creditId", c."supplierGstin", c."amount", c."applied",
+               c."createdAt", c."reversedAt", c."creditNoteNumber", c."receivedAt",
+               COALESCE(SUM(a."amount") FILTER (WHERE a."reversedAt" IS NULL), 0) AS "allocated"
         FROM "inventory_workflow_documents" d
         LEFT JOIN "inventory_supplier_credits" c ON c."documentId" = d."id"
         LEFT JOIN "inventory_credit_allocations" a ON a."creditId" = c."id"
@@ -103,16 +101,13 @@ export class PharmacyPurchaseReturnsRegisterService {
         GROUP BY d."id", c."id"`,
     ]);
     const held = [...creditHeldByDistributor(credits.map(withOpenAllocations), now).values()].reduce((total, amount) => total + amount, 0);
-    const awaited = open.filter(
-      (row) =>
-        returnCreditState(
-          row.status,
-          row.credit ? { number: null, ...creditBalance(withOpenAllocations(row.credit), EVERY_ALLOCATION) } : null,
-        ) === 'AWAITED',
-    );
+    const awaited = open.filter(({ status, creditId, returnValue, ...credit }) => {
+      const balance = creditId ? creditBalance(withOpenAllocations(credit), now) : null;
+      return returnCreditState(status, balance && { number: null, ...balance }) === 'AWAITED';
+    });
     return {
       held: money(held),
-      awaited: { amount: money(awaited.reduce((total, row) => total + Number(row.totalAmount), 0)), count: awaited.length },
+      awaited: { amount: money(awaited.reduce((total, row) => total + Number(row.returnValue), 0)), count: awaited.length },
     };
   }
 
@@ -121,7 +116,7 @@ export class PharmacyPurchaseReturnsRegisterService {
     return this.build(actor, now, {
       branchId: actor.branchId,
       kind: { in: [...RETURN_KINDS] },
-      OR: [{ updatedAt: { gte: earliest } }, { status: { in: [...DRAFT_STATUSES, 'CANCELLED'] } }],
+      OR: [{ updatedAt: { gte: earliest } }, { status: { in: [...DRAFT_STATUSES, 'CANCELLED', 'REJECTED'] } }],
     });
   }
 
