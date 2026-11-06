@@ -21,6 +21,12 @@ import { ClinicInvestigationNameDto } from './dto/clinic-investigation.dto';
 
 const WRITE_ROLES = [UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER];
 
+/**
+ * @cc [owner:nareshshah139,label:security] clinic-investigation-route-access
+ * Listing MUST be open to OWNER, ADMIN, DOCTOR and NURSE. Creating, renaming and deleting MUST be
+ * open to OWNER, ADMIN and DOCTOR and MUST return 403 to every other role, NURSE included. Any
+ * other role MUST get 403 on every route, and a request without a user MUST NOT reach the service.
+ */
 @ApiTags('Clinic investigations')
 @Controller('clinic-investigations')
 @UseGuards(JwtAuthGuard)

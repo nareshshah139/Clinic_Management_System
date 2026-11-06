@@ -3,6 +3,11 @@ import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
 import { PharmacyPartnerSalesService } from '../pharmacy-partner-sales.service';
 
+/**
+ * @cc [owner:nareshshah139,label:testing] partner-recovery-local-database
+ * Acceptance tests MUST require a loopback database URL and mutate only a disposable random schema.
+ * Cleanup MUST remove only that schema; generated clients MUST remain outside shared dependencies.
+ */
 const databaseTests = process.env.PARTNER_RECOVERY_TEST_DATABASE_URL
   ? describe
   : describe.skip;
@@ -10,11 +15,6 @@ const { PrismaClient } = require(
   process.env.PARTNER_TEST_PRISMA_CLIENT || '@prisma/client',
 );
 
-/**
- * @cc [owner:nareshshah139,label:testing] partner-recovery-local-database
- * Acceptance tests MUST require a loopback database URL and mutate only a disposable random schema.
- * Cleanup MUST remove only that schema; generated clients MUST remain outside shared dependencies.
- */
 databaseTests('Partner stock recovery with PostgreSQL', () => {
   const schema = `partner_recovery_test_${randomUUID().replaceAll('-', '')}`;
   let admin: any;

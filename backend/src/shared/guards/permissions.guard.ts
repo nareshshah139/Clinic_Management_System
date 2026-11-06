@@ -3,6 +3,13 @@ import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY, PermissionRequirement } from '../decorators/permissions.decorator';
 import { PrismaService } from '../database/prisma.service';
 
+/**
+ * @cc [owner:nareshshah139,label:security] permission-gate
+ * OWNER (from the token) and ADMIN or DOCTOR (from the stored user role, not the token) MUST
+ * pass every Permissions() requirement. Other users MUST hold every string requirement and one
+ * entry of every alternative group in the union of their role and user grants. A missing user,
+ * id or record, malformed grant JSON or an empty group MUST grant nothing.
+ */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
   constructor(

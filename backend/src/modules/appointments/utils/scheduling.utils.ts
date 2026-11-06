@@ -34,7 +34,11 @@ export class SchedulingUtils {
   }
 
   /**
-   * Check if two time slots overlap
+   * @cc [owner:nareshshah139,label:integrity] slot-overlap-is-half-open-and-symmetric
+   * Two well-formed same-day slots (zero-padded HH:MM-HH:MM, end after start) overlap only when each
+   * starts before the other ends: a slot ending exactly when the next starts MUST NOT overlap, and
+   * containment, identity and partial overlap MUST overlap, in either argument order. Booking and
+   * rescheduling rely on this to refuse double-booking without refusing back-to-back visits.
    */
   static doTimeSlotsOverlap(slot1: string, slot2: string): boolean {
     const time1 = this.parseTimeSlot(slot1);
@@ -49,7 +53,10 @@ export class SchedulingUtils {
   }
 
   /**
-   * Generate time slots for a day based on clinic hours
+   * @cc [owner:nareshshah139,label:calculation] generated-slots-tile-the-clinic-day
+   * Generated slots MUST start at the start hour, be contiguous (each starts where the previous
+   * ends), have the requested length, use zero-padded HH:MM, and start before the end hour. A
+   * length that does not divide the hours evenly makes the last slot end after the end hour.
    */
   static generateTimeSlots(
     startHour: number = 9,
@@ -113,7 +120,11 @@ export class SchedulingUtils {
   }
 
   /**
-   * Validate time slot format
+   * @cc [owner:nareshshah139,label:integrity;target] bookable-slot-is-comparable
+   * A slot accepted for booking MUST be zero-padded HH:MM-HH:MM with an end after its start, because
+   * overlap checks only work on that shape. This is a target obligation, not a pass claim: unpadded
+   * hours ("9:00-10:00") and reversed or overnight slots ("10:30-10:00", "23:30-00:30") are
+   * accepted today and then never overlap anything, so they bypass the double-booking check.
    */
   static isValidTimeSlot(slot: string): boolean {
     const timeSlotRegex =
@@ -167,7 +178,10 @@ export class SchedulingUtils {
   }
 
   /**
-   * Check if an appointment can be rescheduled based on business rules
+   * @cc [owner:nareshshah139,label:state] completed-and-cancelled-cannot-reschedule
+   * A COMPLETED or CANCELLED appointment MUST NOT be reschedulable, whatever its date; every other
+   * status MAY be, subject to the minimum advance notice (0 means no notice is required, and the
+   * notice is measured from now to the appointment start).
    */
   static canRescheduleAppointment(
     appointmentDate: Date,
