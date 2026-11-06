@@ -27,6 +27,8 @@ describe('AppointmentsController - Conflicts (Integration)', () => {
       count: jest.fn(),
     },
     onModuleInit: jest.fn(),
+    $executeRaw: jest.fn(),
+    $transaction: jest.fn(async (cb: any) => cb(mockPrismaService)),
     $connect: jest.fn(),
     enableShutdownHooks: jest.fn(),
   };

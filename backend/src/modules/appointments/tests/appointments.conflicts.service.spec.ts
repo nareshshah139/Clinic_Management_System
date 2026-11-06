@@ -22,6 +22,8 @@ describe('AppointmentsService - Conflicts', () => {
       updateMany: jest.fn(),
       count: jest.fn(),
     },
+    $executeRaw: jest.fn(),
+    $transaction: jest.fn(async (cb: any) => cb(mockPrisma)),
   };
 
   const branchId = 'branch-xyz';

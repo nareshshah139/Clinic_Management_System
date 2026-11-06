@@ -110,30 +110,9 @@ export class AppointmentsService {
       }
     }
 
-    // Check for scheduling conflicts
-    const conflicts = await this.checkSchedulingConflicts(
-      doctorId,
-      roomId ?? null,
-      date,
-      slot,
-      branchId,
-    );
-    if (conflicts.length > 0) {
-      const suggestions = await this.getAlternativeSlots(
-        doctorId,
-        roomId ?? null,
-        date,
-        slot,
-        branchId,
-      );
-      throw new ConflictException({
-        message: 'Scheduling conflict detected',
-        conflicts,
-        suggestions,
-      });
-    }
-
     const appointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
+      await this.lockSchedule(tx, branchId, doctorId, roomId ?? null, date);
+      await this.assertSlotFree(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId);
       const tokenNumber = await this.nextDoctorToken(tx, branchId, doctorId, date);
 
       return tx.appointment.create({
@@ -497,34 +476,13 @@ export class AppointmentsService {
       branchId,
     );
 
-    // Check for new scheduling conflicts
-    const conflicts = await this.checkSchedulingConflicts(
-      appointment.doctorId,
-      rescheduleDto.roomId ?? appointment.roomId ?? null,
-      rescheduleDto.date,
-      rescheduleDto.slot,
-      branchId,
-      id, // Exclude current appointment from conflict check
-    );
-
-    if (conflicts.length > 0) {
-      const suggestions = await this.getAlternativeSlots(
-        appointment.doctorId,
-        rescheduleDto.roomId ?? appointment.roomId ?? null,
-        rescheduleDto.date,
-        rescheduleDto.slot,
-        branchId,
-      );
-      throw new ConflictException({
-        message: 'Scheduling conflict detected for new time slot',
-        conflicts,
-        suggestions,
-      });
-    }
-
     // A new day means a place in that day's queue for this doctor.
     const sameDay = appointment.date.toISOString().slice(0, 10) === rescheduleDto.date.slice(0, 10);
-    const rescheduledAppointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => tx.appointment.update({
+    const newRoomId = rescheduleDto.roomId ?? appointment.roomId ?? null;
+    const rescheduledAppointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
+      await this.lockSchedule(tx, branchId, appointment.doctorId, newRoomId, rescheduleDto.date);
+      await this.assertSlotFree(tx, 'Scheduling conflict detected for new time slot', appointment.doctorId, newRoomId, rescheduleDto.date, rescheduleDto.slot, branchId, id);
+      return tx.appointment.update({
       where: { id },
       data: {
         ...(sameDay ? {} : { tokenNumber: await this.nextDoctorToken(tx, branchId, appointment.doctorId, rescheduleDto.date) }),
@@ -545,7 +503,8 @@ export class AppointmentsService {
           select: { id: true, name: true, type: true },
         },
       },
-    })));
+    });
+    }));
 
     // Update linked Google Calendar event (non-blocking)
     void this.googleCalendar
@@ -1093,6 +1052,7 @@ export class AppointmentsService {
     slot: string,
     branchId: string,
     excludeAppointmentId?: string,
+    db: Prisma.TransactionClient = this.prisma,
   ): Promise<SchedulingConflict[]> {
     const conflicts: SchedulingConflict[] = [];
 
@@ -1112,7 +1072,7 @@ export class AppointmentsService {
     }
 
     // Check doctor conflicts
-    const doctorAppointments = await this.prisma.appointment.findMany({
+    const doctorAppointments = await db.appointment.findMany({
       where: {
         ...whereClause,
         doctorId,
@@ -1140,7 +1100,7 @@ export class AppointmentsService {
 
     // Check room conflicts if room is specified
     if (roomId) {
-      const roomAppointments = await this.prisma.appointment.findMany({
+      const roomAppointments = await db.appointment.findMany({
         where: {
           ...whereClause,
           roomId,
@@ -1227,9 +1187,30 @@ export class AppointmentsService {
    * doctor and day MUST NOT share a token, including under concurrent booking; the database
    * unique index enforces it and booking retries on a collision.
    */
-  private async nextDoctorToken(tx: Prisma.TransactionClient, branchId: string, doctorId: string, date: string): Promise<number> {
-    // Serialize allocation per doctor-day so concurrent bookings wait instead of colliding.
+  /**
+   * @cc [owner:nareshshah139,label:product] no-concurrent-double-booking
+   * Booking and rescheduling MUST check doctor and room conflicts inside the write transaction
+   * while holding the doctor-day lock (and the room-day lock when a room is set), so two
+   * concurrent requests can never both take overlapping slots. Locks are taken doctor first,
+   * then room, so lock order is fixed.
+   */
+  private async lockSchedule(tx: Prisma.TransactionClient, branchId: string, doctorId: string, roomId: string | null, date: string) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`appointment-token:${branchId}:${doctorId}:${date}`}))`;
+    if (roomId) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`appointment-room:${branchId}:${roomId}:${date}`}))`;
+  }
+
+  private async assertSlotFree(
+    tx: Prisma.TransactionClient, message: string, doctorId: string, roomId: string | null,
+    date: string, slot: string, branchId: string, excludeAppointmentId?: string,
+  ) {
+    const conflicts = await this.checkSchedulingConflicts(doctorId, roomId, date, slot, branchId, excludeAppointmentId, tx);
+    if (conflicts.length === 0) return;
+    const suggestions = await this.getAlternativeSlots(doctorId, roomId, date, slot, branchId);
+    throw new ConflictException({ message, conflicts, suggestions });
+  }
+
+  /** Callers hold the doctor-day lock from lockSchedule. */
+  private async nextDoctorToken(tx: Prisma.TransactionClient, branchId: string, doctorId: string, date: string): Promise<number> {
     const last = await tx.appointment.findFirst({
       where: {
         branchId,

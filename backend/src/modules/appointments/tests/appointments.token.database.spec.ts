@@ -70,4 +70,17 @@ databaseTests('Per-doctor token queue on PostgreSQL', () => {
     const sameDay = await service.reschedule(first.id, { date: day, slot: slot(31) } as any, 'branch');
     expect(sameDay.tokenNumber).toBe(7);
   });
+
+  it('lets only one of many simultaneous bookings take the same doctor slot', async () => {
+    const results = await Promise.allSettled(Array.from({ length: 8 }, () => book('doctor-a', 40, '2099-03-06')));
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter(r => r.status === 'rejected').every(r => (r as PromiseRejectedResult).reason?.status === 409)).toBe(true);
+  }, 60000);
+
+  it('lets only one doctor take a room for the same slot', async () => {
+    const room = await db.room.create({ data: { name: 'Laser', type: 'PROCEDURE', branchId: 'branch' } });
+    const results = await Promise.allSettled(['doctor-a', 'doctor-b'].flatMap(doctorId => [0, 1, 2].map(() =>
+      service.create({ patientId: 'patient', doctorId, roomId: room.id, date: '2099-03-07', slot: '10:00-10:30' } as any, 'branch'))));
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+  }, 60000);
 });
