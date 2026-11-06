@@ -5,6 +5,8 @@ import { AuthService } from './auth.service';
 import { PasswordResetService } from './password-reset.service';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { Headers } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
+import { Roles } from '../../shared/decorators/roles.decorator';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -36,6 +38,12 @@ export class AuthController {
   @Throttle({ default: { ttl: 60_000, limit: 3 } })
   forgotPassword(@Body() body: ForgotPasswordDto, @Headers('origin') origin?: string) {
     return this.passwordReset.requestReset(body.email, origin);
+  }
+
+  @Post('users/:id/reset-code')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  issueResetCode(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.passwordReset.issueResetCode(req.user, id);
   }
 
   @Public()

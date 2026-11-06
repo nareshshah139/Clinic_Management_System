@@ -55,9 +55,21 @@ describe('Reset password page', () => {
     await waitFor(() => expect(screen.getByRole('link', { name: 'Request a new link' })).toHaveAttribute('href', '/forgot-password'));
   });
 
-  it('explains a link without a reset code', async () => {
+  it('lets someone without a link enter the code an admin gave them', async () => {
     mockToken = null;
+    const reset = jest.spyOn(apiClient, 'resetPassword').mockResolvedValue({ message: 'ok' } as any);
     render(<ResetPasswordPage />);
-    expect(await screen.findByText(/missing its reset code/)).toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText('Reset code'), { target: { value: ' abcd-efgh ' } });
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'fresh-pass-1' } });
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'fresh-pass-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set new password' }));
+    expect(await screen.findByText(/Password updated/)).toBeInTheDocument();
+    expect(reset).toHaveBeenCalledWith('abcd-efgh', 'fresh-pass-1', 'fresh-pass-1');
+  });
+
+  it('hides the code field when the email link carries the token', async () => {
+    render(<ResetPasswordPage />);
+    await screen.findByLabelText('New password');
+    expect(screen.queryByLabelText('Reset code')).not.toBeInTheDocument();
   });
 });

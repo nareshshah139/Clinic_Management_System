@@ -33,6 +33,11 @@ databaseTests('Password reset on PostgreSQL', () => {
     const password = await bcrypt.hash('old-password', 4);
     await db.user.create({ data: { firstName: 'Asha', lastName: 'Rao', email: 'asha@example.test', password, role: 'RECEPTION', branchId: 'branch' } });
     await db.user.create({ data: { firstName: 'Gone', lastName: 'User', email: 'gone@example.test', password, role: 'RECEPTION', branchId: 'branch', isActive: false, status: 'INACTIVE' } });
+    for (const role of ['OWNER', 'ADMIN', 'DOCTOR'] as const) {
+      await db.user.create({ data: { id: role.toLowerCase(), firstName: role, lastName: 'Staff', email: `${role.toLowerCase()}@example.test`, password, role, branchId: 'branch' } });
+    }
+    await db.branch.create({ data: { id: 'other', name: 'Other', address: 'Synthetic' } });
+    await db.user.create({ data: { id: 'elsewhere', firstName: 'Else', lastName: 'Where', email: 'elsewhere@example.test', password, role: 'RECEPTION', branchId: 'other' } });
     service = new PasswordResetService(db as any, { sendEmail: async (mail: any) => { sent.push(mail); } } as any);
   }, 120000);
 
@@ -95,5 +100,45 @@ databaseTests('Password reset on PostgreSQL', () => {
     const token = tokenFrom(sent[0].text);
     await expect(service.resetPassword(token, 'mismatch-one', 'mismatch-two')).rejects.toThrow('do not match');
     await service.resetPassword(token, 'matching-pass', 'matching-pass');
+  });
+
+  const as = (role: string) => ({ id: role.toLowerCase(), branchId: 'branch', role });
+  const idOf = async (email: string) => (await db.user.findUniqueOrThrow({ where: { email } })).id;
+
+  it('lets an admin issue a one-time code that is typed by hand to set a new password', async () => {
+    const reception = await idOf('asha@example.test');
+    const { code, expiresAt } = await service.issueResetCode(as('ADMIN'), reception);
+    expect(code).toMatch(/^[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}$/);
+    expect(expiresAt.getTime() - Date.now()).toBeGreaterThan(23 * 3600_000);
+    const stored = await db.user.findUniqueOrThrow({ where: { id: reception } });
+    expect(stored.resetToken).not.toContain(code.replace('-', ''));
+    const audit = await db.auditLog.findFirstOrThrow({ where: { action: 'PASSWORD_RESET_CODE_ISSUED', entityId: reception } });
+    expect(audit.userId).toBe('admin');
+    expect(JSON.stringify(audit)).not.toContain(code.replace('-', ''));
+
+    await service.resetPassword(` ${code.toLowerCase().replace('-', ' ')} `, 'from-code-pass', 'from-code-pass');
+    expect(await bcrypt.compare('from-code-pass', await passwordOf('asha@example.test'))).toBe(true);
+    await expect(service.resetPassword(code, 'again-pass-1', 'again-pass-1')).rejects.toThrow('invalid or has expired');
+  });
+
+  it('replaces any pending email link', async () => {
+    await service.requestReset('asha@example.test', ORIGIN);
+    const link = tokenFrom(sent[0].text);
+    const { code } = await service.issueResetCode(as('ADMIN'), await idOf('asha@example.test'));
+    await expect(service.resetPassword(link, 'link-pass-1', 'link-pass-1')).rejects.toThrow('invalid or has expired');
+    await service.resetPassword(code, 'code-pass-1', 'code-pass-1');
+  });
+
+  it('never lets someone reset a user at or above their role', async () => {
+    await expect(service.issueResetCode(as('DOCTOR'), 'admin')).rejects.toThrow('at or above your role');
+    await expect(service.issueResetCode(as('DOCTOR'), 'doctor')).rejects.toThrow('at or above your role');
+    await expect(service.issueResetCode(as('ADMIN'), 'owner')).rejects.toThrow('at or above your role');
+    await expect(service.issueResetCode(as('RECEPTION'), await idOf('asha@example.test'))).rejects.toThrow('at or above your role');
+    await expect(service.issueResetCode(as('OWNER'), 'admin')).resolves.toHaveProperty('code');
+    await expect(service.issueResetCode(as('DOCTOR'), await idOf('asha@example.test'))).resolves.toHaveProperty('code');
+  });
+
+  it('only reaches staff in the issuer\'s branch', async () => {
+    await expect(service.issueResetCode(as('OWNER'), 'elsewhere')).rejects.toThrow('User not found');
   });
 });

@@ -11,7 +11,9 @@ import { Spinner } from '@/components/ui/spinner';
 
 function ResetPasswordForm() {
   const router = useRouter();
-  const token = useSearchParams().get('token') || '';
+  const linkToken = useSearchParams().get('token') || '';
+  const [code, setCode] = useState('');
+  const token = linkToken || code.trim();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [saving, setSaving] = useState(false);
@@ -20,6 +22,7 @@ function ResetPasswordForm() {
 
   const submit = async () => {
     setError('');
+    if (!token) { setError('Enter the reset code you were given.'); return; }
     if (password.length < 8 || password.length > 72) { setError('Use 8 to 72 characters.'); return; }
     if (password !== confirm) { setError('The two passwords do not match.'); return; }
     setSaving(true);
@@ -34,20 +37,21 @@ function ResetPasswordForm() {
     }
   };
 
-  if (!token) {
-    return (
-      <p role="alert" className="text-sm text-red-600">
-        This link is missing its reset code. <Link href="/forgot-password" className="underline">Request a new link</Link>.
-      </p>
-    );
-  }
   if (done) return <p role="status" className="text-sm text-gray-700">Password updated. Taking you to sign in…</p>;
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-4">
+      {!linkToken && (
+        <div>
+          <label className="text-sm text-gray-700" htmlFor="reset-code">Reset code</label>
+          <Input id="reset-code" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" autoCapitalize="characters"
+            placeholder="ABCD-EFGH" aria-describedby="reset-code-help" required autoFocus />
+          <p id="reset-code-help" className="mt-1 text-xs text-gray-500">The 8-character code your clinic admin gave you. No code? Ask an admin, or <Link href="/forgot-password" className="underline">reset by email</Link>.</p>
+        </div>
+      )}
       <div>
         <label className="text-sm text-gray-700" htmlFor="new-password">New password</label>
-        <Input id="new-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} aria-describedby="new-password-help" required autoFocus />
+        <Input id="new-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} aria-describedby="new-password-help" required autoFocus={!!linkToken} />
         <p id="new-password-help" className="mt-1 text-xs text-gray-500">At least 8 characters.</p>
       </div>
       <div>
@@ -56,7 +60,9 @@ function ResetPasswordForm() {
       </div>
       {error && (
         <p role="alert" className="text-sm text-red-600">
-          {error}{/expired|invalid/i.test(error) && <> <Link href="/forgot-password" className="underline">Request a new link</Link>.</>}
+          {error}{/expired|invalid/i.test(error) && (linkToken
+            ? <> <Link href="/forgot-password" className="underline">Request a new link</Link>.</>
+            : <> Check the code, or ask an admin for a new one.</>)}
         </p>
       )}
       <Button className="w-full" type="submit" disabled={saving || !password || !confirm}>

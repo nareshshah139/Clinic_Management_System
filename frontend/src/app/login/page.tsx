@@ -103,7 +103,9 @@ function LoginPageInner() {
               {loading ? 'Signing in…' : 'Sign in'}
             </Button>
             <p className="text-xs text-gray-500 text-center">Use your registered phone number or email with your password.</p>
-            <p className="text-sm text-center"><Link href="/forgot-password" className="text-blue-700 underline underline-offset-2">Forgot password?</Link></p>
+            <p className="text-sm text-center"><Link href="/forgot-password" className="text-blue-700 underline underline-offset-2">Forgot password?</Link>
+              <span className="mx-2 text-gray-400" aria-hidden="true">·</span>
+              <Link href="/reset-password" className="text-blue-700 underline underline-offset-2">Have a reset code?</Link></p>
           </form>
         </CardContent>
       </Card>

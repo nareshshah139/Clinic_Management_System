@@ -19,6 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import React, { useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { BranchHolidaySettings, DoctorAvailabilitySettings } from '@/components/users/DoctorAvailabilitySettings';
+import { ResetCodeButton } from '@/components/users/ResetCodeButton';
 
 import {
   parseMetadataObject,
@@ -521,9 +522,10 @@ export default function UsersManagement() {
                       <TableCell>{u.role}</TableCell>
                       <TableCell>{u.status}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2 [&_button]:whitespace-nowrap">
                           <Button variant="outline" size="sm" onClick={() => onEdit(u)}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
                           <Button variant="outline" size="sm" onClick={() => void onDelete(u)}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>
+                          <ResetCodeButton user={u} />
                           {u.role === 'DOCTOR' && (
                             <Dialog open={whOpen && selectedUser?.id === u.id} onOpenChange={(open: boolean) => { setWhOpen(open); if (!open) setSelectedUser(null); }}>
                               <DialogTrigger asChild>
