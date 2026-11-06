@@ -27,7 +27,7 @@ import {
   writeStockMovement,
 } from './inventory-stock';
 import { clinicDay, clinicDayOf, isCalendarDay } from '../pharmacy/register-utils';
-import { CREDIT_NOTE_NUMBER_MAX, creditNoteNumberOf, returnReasonOf } from './supplier-return';
+import { CREDIT_NOTE_NUMBER_MAX, creditNoteNumberOf, isCreditNoteNumberClash, returnReasonOf } from './supplier-return';
 import {
   grantsForRole,
   parsePermissionList,
@@ -1138,6 +1138,7 @@ export class InventoryWorkflowService {
             branchId: actor.branchId,
             supplierGstin: doc.supplierGstin,
             creditNoteNumber: note.number,
+            reversedAt: null,
             documentId: { not: doc.id },
           },
           select: { reference: true },
@@ -1179,7 +1180,7 @@ export class InventoryWorkflowService {
         return this.creditNoteOutcome(tx, doc.id);
       });
     } catch (error) {
-      if ((error as any)?.code === 'P2002') throw this.duplicateCreditNote(note.number);
+      if (isCreditNoteNumberClash(error)) throw this.duplicateCreditNote(note.number);
       throw error;
     }
   }

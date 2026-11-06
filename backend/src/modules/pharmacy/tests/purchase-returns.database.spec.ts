@@ -12,13 +12,14 @@ import { PharmacyPurchaseReturnsRegisterService } from '../pharmacy-purchase-ret
 import { PharmacyPurchasePaymentModeDto } from '../dto/pharmacy-purchase-ledger.dto';
 import type { PurchaseReturnsQuery } from '../pharmacy-purchase-returns-register';
 import { ROLE_PERMISSIONS } from '../../../shared/access/role-permissions';
+import { isCreditNoteNumberClash } from '../../inventory/supplier-return';
 
 const databaseTests = process.env.PURCHASE_RETURNS_TEST_DATABASE_URL ? describe : describe.skip;
 
 databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
   const schema = `purchase_returns_${randomUUID().replaceAll('-', '')}`;
   const linae = '36ABCDE1234F1Z5';
-  const migration = '20261106170000_supplier_credit_notes';
+  const migrations = ['20261106170000_supplier_credit_notes', '20261107090000_supplier_credit_note_reuse'];
   let admin: PrismaClient;
   let db: PrismaClient;
   let fixtures: string;
@@ -109,7 +110,8 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
       linae,
     );
     for (let run = 0; run < 2; run++)
-      prisma('db', 'execute', '--url', url.toString(), '--file', path.resolve(`prisma/migrations/${migration}/migration.sql`));
+      for (const migration of migrations)
+        prisma('db', 'execute', '--url', url.toString(), '--file', path.resolve(`prisma/migrations/${migration}/migration.sql`));
     await db.$disconnect();
     db = new PrismaClient({ datasourceUrl: url.toString() });
 
@@ -166,11 +168,13 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     expect([Number(legacy.amount), Number(legacy.applied), legacy.creditNoteNumber, legacy.creditNoteDate, legacy.receivedById]).toEqual([
       75.5, 20, null, null, null,
     ]);
-    const index = await db.$queryRawUnsafe<{ indexdef: string }[]>(
-      `SELECT indexdef FROM pg_indexes WHERE schemaname = $1 AND indexname = 'inventory_supplier_credits_credit_note_key'`,
+    const indexes = await db.$queryRawUnsafe<{ indexname: string; indexdef: string }[]>(
+      `SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = $1 AND indexname LIKE '%credit_note_key'`,
       schema,
     );
-    expect(index[0].indexdef).toContain('UNIQUE INDEX');
+    expect(indexes.map((index) => index.indexname)).toEqual(['inventory_supplier_credits_open_credit_note_key']);
+    expect(indexes[0].indexdef).toContain('UNIQUE INDEX');
+    expect(indexes[0].indexdef).toContain('WHERE (("reversedAt" IS NULL) AND ("creditNoteNumber" IS NOT NULL))');
   });
 
   it('sends a return on challan: stock for the batch drops with a movement, and it waits for the credit note', async () => {
@@ -227,6 +231,16 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     });
     expect((await row('RET-2')).state).toBe('AWAITED');
     expect(await stock()).toBe(75);
+  });
+
+  it('reports a clash on the open credit note index as a duplicate number, and no other unique clash', async () => {
+    const clash = await db.inventorySupplierCredit
+      .create({ data: { branchId, supplierGstin: linae, documentId: 'clash-doc', reference: 'CLASH', amount: 1, creditNoteNumber: 'CN-77' } })
+      .catch((error: unknown) => error);
+    const otherClash = await db.inventorySupplierCredit
+      .create({ data: { branchId, supplierGstin: linae, documentId: 'legacy-doc', reference: 'CLASH', amount: 1 } })
+      .catch((error: unknown) => error);
+    expect([isCreditNoteNumberClash(clash), isCreditNoteNumberClash(otherClash), (otherClash as any).code]).toEqual([true, false, 'P2002']);
   });
 
   it('accepts a number on a legacy posted return without changing its stock', async () => {
@@ -333,5 +347,21 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     expect((await returnsPage({ state: 'AWAITED' })).rows.map((ret) => ret.returnRef)).toEqual(['RET-2']);
     expect((await returnsPage({ field: 'creditNoteNo', q: 'cn-8' })).rows.map((ret) => ret.returnRef)).toEqual(['RET-OLD']);
     expect((await position()).creditHeld).toBe(page.totals.held);
+  });
+
+  it('frees the credit note number of a reversed return for the next return from that distributor', async () => {
+    const before = await stock();
+    await raiseReturn('RET-REV', 1);
+    const first = await row('RET-REV');
+    await workflow.recordCreditNote(actor, first.id, { requestKey: 'cn-rev-1', version: first.version, number: 'CN-REUSE', date: '2026-11-05', amount: 11.2 });
+    const posted = await row('RET-REV');
+    await workflow.transition(actor, posted.id, { action: 'REVERSE', version: posted.version, reason: 'Wrong distributor' } as any);
+    expect([(await row('RET-REV')).state, await stock()]).toEqual(['CANCELLED', before]);
+
+    await raiseReturn('RET-REUSE', 1);
+    const second = await row('RET-REUSE');
+    await workflow.recordCreditNote(actor, second.id, { requestKey: 'cn-rev-2', version: second.version, number: 'cn-reuse', date: '2026-11-05', amount: 11.2 });
+    expect([(await row('RET-REUSE')).state, (await row('RET-REUSE')).creditNote?.number]).toEqual(['RECEIVED', 'CN-REUSE']);
+    expect(await stock()).toBe(before - 1);
   });
 });

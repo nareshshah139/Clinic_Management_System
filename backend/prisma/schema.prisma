@@ -1770,7 +1770,6 @@ model InventorySupplierCredit {
   receivedBy       User? @relation("SupplierCreditReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
   allocations  InventoryCreditAllocation[]
 
-  @@unique([branchId, supplierGstin, creditNoteNumber], map: "inventory_supplier_credits_credit_note_key")
   @@index([branchId, supplierGstin])
   @@map("inventory_supplier_credits")
 }

@@ -238,14 +238,15 @@ async function bootStack(opts = {}) {
       env: { ...env, PRISMA_GENERATE_SKIP_AUTOINSTALL: "1" },
       stdio: "pipe",
     });
-    execFileSync(
-      process.execPath,
-      [
-        req.resolve("prisma/build/index.js"), "db", "execute", "--url", env.DATABASE_URL,
-        "--file", path.join(root, "backend/prisma/migrations/20261005093000_inventory_read_queries/migration.sql"),
-      ],
-      { cwd: prismaCwd, env: { ...env, PRISMA_GENERATE_SKIP_AUTOINSTALL: "1" }, stdio: "pipe" },
-    );
+    for (const migration of ["20261005093000_inventory_read_queries", "20261107090000_supplier_credit_note_reuse"])
+      execFileSync(
+        process.execPath,
+        [
+          req.resolve("prisma/build/index.js"), "db", "execute", "--url", env.DATABASE_URL,
+          "--file", path.join(root, `backend/prisma/migrations/${migration}/migration.sql`),
+        ],
+        { cwd: prismaCwd, env: { ...env, PRISMA_GENERATE_SKIP_AUTOINSTALL: "1" }, stdio: "pipe" },
+      );
     owned.db = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
     stack.db = owned.db;
 

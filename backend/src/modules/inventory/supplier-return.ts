@@ -24,3 +24,12 @@ export const CREDIT_NOTE_NUMBER_MAX = 50;
 
 export const creditNoteNumberOf = (value: unknown) =>
   String(value ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
+
+const CREDIT_NOTE_INDEX = 'inventory_supplier_credits_open_credit_note_key';
+
+export function isCreditNoteNumberClash(error: unknown) {
+  const failure = error as { code?: string; meta?: { target?: unknown } } | null;
+  if (failure?.code !== 'P2002') return false;
+  const target = failure.meta?.target;
+  return target === CREDIT_NOTE_INDEX || (Array.isArray(target) && target.includes('creditNoteNumber'));
+}
