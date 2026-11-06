@@ -152,6 +152,7 @@ model Branch {
   layoutExperiments        LayoutExperiment[]
   doctorWorkingHours       DoctorWorkingHours[]
   doctorTimeOff            DoctorTimeOff[]
+  clinicInvestigations     ClinicInvestigation[]
 
   @@map("branches")
 }
@@ -191,6 +192,20 @@ model DoctorTimeOff {
   @@index([branchId, startsAt])
   @@index([doctorId, startsAt])
   @@map("doctor_time_off")
+}
+
+model ClinicInvestigation {
+  id             String   @id @default(cuid())
+  branchId       String
+  name           String
+  normalizedName String
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  branch         Branch   @relation(fields: [branchId], references: [id])
+
+  @@unique([branchId, normalizedName])
+  @@map("clinic_investigations")
 }
 
 model Permission {

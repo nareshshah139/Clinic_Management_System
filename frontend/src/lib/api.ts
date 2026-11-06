@@ -439,6 +439,23 @@ export class ApiClient {
     return this.get<import('./types').GetRoomsResponse>('/appointments/rooms');
   }
 
+  // Clinic investigations
+  async getClinicInvestigations() {
+    return this.get<Array<{ id: string; name: string }>>('/clinic-investigations');
+  }
+
+  async createClinicInvestigation(data: { name: string }) {
+    return this.post<{ id: string; name: string }>('/clinic-investigations', data);
+  }
+
+  async renameClinicInvestigation(id: string, name: string) {
+    return this.patch<{ id: string; name: string }>(`/clinic-investigations/${id}`, { name });
+  }
+
+  async deleteClinicInvestigation(id: string) {
+    return this.delete<{ id: string }>(`/clinic-investigations/${id}`);
+  }
+
   // Doctor availability
   async getDoctorAvailability(doctorId: string, params?: { from?: string; to?: string }) {
     return this.get<import('./doctor-availability').DoctorAvailability>(`/doctor-availability/${doctorId}`, params);
