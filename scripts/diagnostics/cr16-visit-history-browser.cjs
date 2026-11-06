@@ -23,8 +23,9 @@ const visits = [
     complaints: [{ complaint: 'Acne flare on cheeks' }], diagnosis: [{ diagnosis: 'Acne vulgaris' }],
     history: { personalHistory: 'Vegetarian. Sleeps 6 hours.', pastHistory: 'Childhood eczema', familyHistory: { dm: false, htn: true }, triggers: 'Heat' },
     plan: { investigations: ['CBC'], dermatology: { medicationPlan: items } },
-    prescription: { id: 'rx-rich', items: JSON.stringify(items), instructions: 'Review in 4 weeks', language: 'HI' },
-    prescriptionItems: items, prescriptionMeta: { followUpInstructions: 'Review in 4 weeks', language: 'HI' },
+    prescription: { id: 'rx-rich', items: JSON.stringify(items), instructions: 'Review in 4 weeks', language: 'Hindi' },
+    prescriptionItems: items, prescriptionMeta: { followUpInstructions: 'Review in 4 weeks', language: 'Hindi' },
+    consents: [{ consentType: 'PROCEDURE', language: 'Telugu', text: 'Consent for chemical peel', method: 'SIGNATURE' }],
   },
   {
     ...visitBase, id: 'v-draft', status: 'IN_PROGRESS', encounterDate: '2026-10-10T10:00:00.000Z', createdAt: '2026-10-10T10:00:00.000Z',
@@ -41,13 +42,24 @@ const visits = [
     prescriptionItems: [], prescriptionMeta: {},
   },
   {
+    ...visitBase, id: 'v-form', encounterDate: '2026-08-20T10:00:00.000Z', createdAt: '2026-08-20T10:00:00.000Z',
+    complaints: [{ complaint: 'Itchy rash on arms' }], diagnosis: [],
+    history: { subjective: 'Itching for 3 weeks, worse at night' },
+    plan: { dermatology: { medications: { topicals: 'Adapalene gel\nSunscreen SPF 50' } } }, prescriptionItems: [], prescriptionMeta: {},
+  },
+  {
+    ...visitBase, id: 'v-vitals', encounterDate: '2026-08-10T10:00:00.000Z', createdAt: '2026-08-10T10:00:00.000Z',
+    complaints: [{ complaint: 'Routine weight check' }], diagnosis: [], history: {}, plan: {}, prescriptionItems: [], prescriptionMeta: {},
+    vitals: { weight: 61, height: 158 },
+  },
+  {
     ...visitBase, id: 'v-bare', encounterDate: '2026-08-01T10:00:00.000Z', createdAt: '2026-08-01T10:00:00.000Z',
     complaints: [{ complaint: 'Mole check' }], diagnosis: [], history: {}, plan: {}, prescriptionItems: [], prescriptionMeta: {},
   },
 ];
 
 const forbiddenInCompact = ['1-0-1', 'TWICE_DAILY', 'Twice', 'After meals', 'pea size', 'Regimen State', 'Touched', 'Gst Rate', 'Language', 'timing', 'Treatment plan', 'Prescription Items', 'Topical'];
-const forbiddenAnywhere = ['Regimen State', 'Touched', 'Gst Rate', 'Language', 'Prescription Items', 'cmdrug0000', 'cminv0000'];
+const forbiddenAnywhere = ['Regimen State', 'Touched', 'Gst Rate', 'Hindi', 'Prescription Items', 'cmdrug0000', 'cminv0000'];
 const checks = [];
 const report = message => { checks.push(message); console.log(message); };
 
@@ -92,7 +104,8 @@ async function run(viewport, label) {
   report(`${label}: compact view shows complaints, history and each medicine name once, with no regimen or internal fields`);
 
   const full = rich.getByRole('button', { name: /full details/i });
-  assert.equal(await full.getAttribute('aria-expanded'), 'false', `${label}: Full details starts collapsed`);
+  const firstHeading = rich.getByRole('heading', { name: 'History', exact: true });
+  assert((await full.boundingBox()).y < (await firstHeading.boundingBox()).y, `${label}: Full details switch sits above the panel content`);
   await full.click();
   content = await text(rich);
   assert(content.includes('1-0-1'), `${label}: full details keeps the regimen`);
@@ -100,9 +113,10 @@ async function run(viewport, label) {
   assert.equal(await rich.getByRole('heading', { name: 'Prescription', exact: true }).count(), 1, `${label}: one Prescription section`);
   for (const name of ['Benzac AC gel wash', 'Moisturex Hydra Gel Cream']) assert.equal(count(content, name), 1, `${label}: ${name} appears once in full details`);
   assertNone(content, forbiddenAnywhere, 'full details');
+  assert(content.includes('Telugu'), `${label}: consent language still shown`);
   assert(!/timing duration instructions/i.test(content), `${label}: stray regimen-state line removed`);
   await page.screenshot({ path: path.join(output, `${label}-full.png`), fullPage: true });
-  report(`${label}: full details keeps the regimen once, without Regimen State, Touched, Gst Rate, Language or IDs`);
+  report(`${label}: full details keeps the regimen once and the consent language, without Regimen State, Touched, Gst Rate, prescription Language or IDs`);
 
   await rich.getByRole('button', { name: /compact view/i }).click();
   assert(!(await text(rich)).includes('1-0-1'), `${label}: compact view returns`);
@@ -112,12 +126,26 @@ async function run(viewport, label) {
   report(`${label}: Compact view and Hide details return; reopening starts compact`);
 
   const draft = card('Dry patches on elbows');
+  assert(!(await text(draft)).includes('Rx Items'), `${label}: an unissued draft plan gets no Rx badge`);
   await draft.getByRole('button', { name: /show details/i }).click();
   content = await text(draft);
   assert(content.includes('Swims daily'), `${label}: draft history shown`);
   assert.equal(count(content.toLowerCase(), 'fucibet cream'), 1, `${label}: draft medicine from the saved plan listed once`);
   assertNone(content, forbiddenInCompact, 'draft compact view');
-  report(`${label}: draft visit lists medicines from its saved plan, case-insensitive duplicates merged`);
+  report(`${label}: draft visit lists medicines from its saved plan, case-insensitive duplicates merged, with no Rx badge`);
+
+  const form = card('Itchy rash on arms');
+  await form.getByRole('button', { name: /show details/i }).click();
+  content = await text(form);
+  for (const want of ['Itching for 3 weeks, worse at night', 'Adapalene gel', 'Sunscreen SPF 50']) assert(content.includes(want), `${label}: visit-form visit shows "${want}"`);
+  report(`${label}: history and free-text medicines from the visit form appear in the compact view`);
+
+  const vitals = card('Routine weight check');
+  await vitals.getByRole('button', { name: /show details/i }).click();
+  content = await text(vitals);
+  assert(content.includes('61'), `${label}: vitals-only visit opens straight to full details`);
+  assert.equal(await vitals.getByRole('button', { name: /full details|compact view/i }).count(), 0, `${label}: no view switch when compact has nothing`);
+  report(`${label}: a visit with only vitals opens its details in one click`);
 
   const legacy = card('Hair fall');
   await legacy.getByRole('button', { name: /show details/i }).click();
