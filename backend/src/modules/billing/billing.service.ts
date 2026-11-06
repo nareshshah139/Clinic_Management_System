@@ -712,7 +712,7 @@ export class BillingService {
       const itemTotal = (item.qty ?? item.quantity) * item.unitPrice;
       const itemDiscount = (item.discount || 0) * itemTotal / 100;
       const discountedItemTotal = itemTotal - itemDiscount;
-      const gstRate = item.gstRate || 18;
+      const gstRate = item.gstRate ?? 18;
       return sum + (discountedItemTotal * gstRate / 100);
     }, 0);
 
