@@ -127,6 +127,18 @@ export function formatIst(instant: string): string {
   return IST_FORMAT.format(new Date(instant));
 }
 
+const IST_DATE_FORMAT = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+const IST_OFFSET_MS = 330 * 60_000;
+const isIstMidnight = (instant: string) => (new Date(instant).getTime() + IST_OFFSET_MS) % 86_400_000 === 0;
+
+/** Whole-day time off (IST midnight to midnight) reads as dates; anything else shows times. */
+export function timeOffSpan(startsAt: string, endsAt: string): string {
+  if (!isIstMidnight(startsAt) || !isIstMidnight(endsAt)) return `${formatIst(startsAt)} – ${formatIst(endsAt)}`;
+  const first = IST_DATE_FORMAT.format(new Date(startsAt));
+  const last = IST_DATE_FORMAT.format(new Date(new Date(endsAt).getTime() - 86_400_000));
+  return first === last ? `${first} (all day)` : `${first} – ${last} (all day)`;
+}
+
 export function todayIst(): string {
   return new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
 }

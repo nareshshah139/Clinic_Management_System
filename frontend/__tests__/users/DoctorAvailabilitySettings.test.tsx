@@ -107,3 +107,14 @@ describe('checkSlot and gridHoursFor', () => {
     expect(gridHoursFor(day({ working: [] }))).toBeNull();
   });
 });
+
+describe('timeOffSpan', () => {
+  const { timeOffSpan } = jest.requireActual('@/lib/doctor-availability') as typeof import('@/lib/doctor-availability');
+  it('shows whole IST days as dates', () => {
+    expect(timeOffSpan('2026-11-30T18:30:00.000Z', '2026-12-01T18:30:00.000Z')).toBe('1 Dec 2026 (all day)');
+    expect(timeOffSpan('2026-11-30T18:30:00.000Z', '2026-12-03T18:30:00.000Z')).toBe('1 Dec 2026 – 3 Dec 2026 (all day)');
+  });
+  it('shows times for partial blocks', () => {
+    expect(timeOffSpan('2026-12-01T07:30:00.000Z', '2026-12-01T08:30:00.000Z')).toMatch(/1 Dec 2026.*13:00.*14:00/);
+  });
+});

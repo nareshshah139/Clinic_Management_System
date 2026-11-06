@@ -15,7 +15,7 @@ import {
   TIME_OFF_LABELS,
   WEEKDAYS,
   addDays,
-  formatIst,
+  timeOffSpan,
   hhmmToMinutes,
   istInstant,
   todayIst,
@@ -52,9 +52,6 @@ function weekError(week: Week): string {
   return '';
 }
 
-function timeOffSpan(t: TimeOff): string {
-  return `${formatIst(t.startsAt)} – ${formatIst(t.endsAt)}`;
-}
 
 export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false }: { doctorId: string; canManageHolidays?: boolean }) {
   const [data, setData] = useState<DoctorAvailability | null>(null);
@@ -163,11 +160,11 @@ export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false
             <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
               <div>
                 <span className="font-medium text-gray-900">{TIME_OFF_LABELS[t.kind]}</span>
-                <span className="text-gray-700"> · {timeOffSpan(t)}</span>
+                <span className="text-gray-700"> · {timeOffSpan(t.startsAt, t.endsAt)}</span>
                 {t.reason && <span className="text-gray-500"> · {t.reason}</span>}
               </div>
               {(t.doctorId || canManageHolidays) && (
-                <Button type="button" variant="ghost" size="sm" aria-label={`Remove ${TIME_OFF_LABELS[t.kind]} ${timeOffSpan(t)}`} onClick={() => void removeTimeOff(t.id)}>
+                <Button type="button" variant="ghost" size="sm" aria-label={`Remove ${TIME_OFF_LABELS[t.kind]} ${timeOffSpan(t.startsAt, t.endsAt)}`} onClick={() => void removeTimeOff(t.id)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               )}
@@ -291,10 +288,10 @@ export function BranchHolidaySettings() {
         {holidays.map((t) => (
           <li key={t.id} className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
             <div>
-              <span className="text-gray-900">{timeOffSpan(t)}</span>
+              <span className="text-gray-900">{timeOffSpan(t.startsAt, t.endsAt)}</span>
               {t.reason && <span className="text-gray-500"> · {t.reason}</span>}
             </div>
-            <Button type="button" variant="ghost" size="sm" aria-label={`Remove holiday ${timeOffSpan(t)}`} onClick={() => void remove(t.id)}>
+            <Button type="button" variant="ghost" size="sm" aria-label={`Remove holiday ${timeOffSpan(t.startsAt, t.endsAt)}`} onClick={() => void remove(t.id)}>
               <Trash2 className="h-4 w-4" />
             </Button>
           </li>
