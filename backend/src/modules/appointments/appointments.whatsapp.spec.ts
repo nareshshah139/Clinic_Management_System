@@ -28,6 +28,7 @@ describe('AppointmentsService WhatsApp flow', () => {
 
   const makePrisma = () => {
     const txAppointment = {
+      findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn().mockResolvedValue({ tokenNumber: 0 }),
       create: jest.fn().mockImplementation(async ({ data }) => ({
         ...data,
