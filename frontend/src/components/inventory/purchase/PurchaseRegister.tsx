@@ -42,7 +42,7 @@ import {
 const compactDay = (day: string, today: string) => (day.endsWith(` ${today.slice(0, 4)}`) ? day.slice(0, -5) : day);
 
 const linkClass =
-  'max-w-28 truncate whitespace-nowrap sm:max-w-none rounded-sm text-left font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
+  'max-w-28 truncate whitespace-nowrap sm:max-w-36 rounded-sm text-left font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 /**
  * @cc [owner:nareshshah139,label:product;target] purchase-register-complete
