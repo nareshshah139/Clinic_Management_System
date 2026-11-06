@@ -1,6 +1,7 @@
 import { InventoryWorkflowService } from '../inventory-workflow.service';
 import { InventoryWorkspaceService } from '../inventory-workspace.service';
 import { permissionGrants } from '../../../shared/access/permission-grants';
+import { PharmacySupplierCreditService } from '../../pharmacy/pharmacy-supplier-credit.service';
 
 describe('Recording a distributor credit note', () => {
   const actor = { id: 'asha', branchId: 'branch', role: 'ADMIN' };
@@ -29,7 +30,7 @@ describe('Recording a distributor credit note', () => {
 
 describe('Setting credit off against bills', () => {
   const actor = { id: 'asha', branchId: 'branch', role: 'ADMIN' };
-  const workspace = new InventoryWorkspaceService({} as any, { permissions: async () => permissionGrants(['*']) } as any);
+  const workspace = new InventoryWorkspaceService({} as any, { permissions: async () => permissionGrants(['*']) } as any, new PharmacySupplierCreditService({} as any));
   const message = (input: Record<string, unknown>) =>
     workspace.setOff(actor, { requestKey: 'key-1', creditId: 'credit-1', ...input }).then(
       () => 'accepted',

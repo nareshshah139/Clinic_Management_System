@@ -251,6 +251,13 @@ export class InventoryWorkflowController {
   ) {
     return this.workspace.setOff(r.user, b);
   }
+  @Post('credits/set-off/:id/reverse') reverseSetOff(
+    @Request() r: any,
+    @Param('id') id: string,
+    @Body() b: Record<string, any>,
+  ) {
+    return this.workspace.reverseSetOff(r.user, id, b.reason);
+  }
   @Post('credits/allocations/:id/reverse') reverseCredit(
     @Request() r: any,
     @Param('id') id: string,

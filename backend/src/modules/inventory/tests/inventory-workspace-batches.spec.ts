@@ -14,7 +14,7 @@ describe('stock batch identity and name corrections', () => {
     prisma = { inventoryItem: { findMany: jest.fn().mockResolvedValue([
       row('old', 0), row('new', 17), row('also-current', 2), row('expired', 1, { expiryDate: new Date('2020-01-31') }),
     ]) } };
-    service = new InventoryWorkspaceService(prisma, { permissions: async () => new Set(['inventory:item:read']) } as any);
+    service = new InventoryWorkspaceService(prisma, { permissions: async () => new Set(['inventory:item:read']) } as any, {} as any);
   });
   it('includes earlier batches of the same verified product and pack despite legacy category differences', async () => {
     const item = row('new', 17, { type: 'CONSUMABLE' });
@@ -25,7 +25,7 @@ describe('stock batch identity and name corrections', () => {
     prisma.pharmacyInvoice = { findMany: jest.fn().mockResolvedValue([]) };
     const earlier = row('old', 0, { type: 'MEDICINE' });
     prisma.inventoryItem.findMany.mockImplementation(async ({ where }: any) => where.type ? [item] : [earlier, item]);
-    service = new InventoryWorkspaceService(prisma, { permissions: async () => new Set(['inventory:item:read']), capabilities: async () => ({ kinds: {} }) } as any);
+    service = new InventoryWorkspaceService(prisma, { permissions: async () => new Set(['inventory:item:read']), capabilities: async () => ({ kinds: {} }) } as any, {} as any);
     const result = await service.item(actor, 'new');
     expect(result.batches.map(r => r.id)).toEqual(['old', 'new']);
     expect(prisma.inventoryItem.findMany.mock.calls[0][0].where).toEqual({

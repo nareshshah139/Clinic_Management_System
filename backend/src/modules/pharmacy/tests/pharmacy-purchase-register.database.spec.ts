@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
 import { InventoryWorkspaceService } from '../../inventory/inventory-workspace.service';
+import { PharmacySupplierCreditService } from '../pharmacy-supplier-credit.service';
 import { PharmacyPurchaseInvoiceService } from '../pharmacy-purchase-invoice.service';
 import { PharmacyPurchaseLedgerService } from '../pharmacy-purchase-ledger.service';
 import { PharmacyPurchaseRegisterService } from '../pharmacy-purchase-register.service';
@@ -155,9 +156,9 @@ databaseTests('Purchase register on PostgreSQL', () => {
       permissions: async () => permissionGrants(['*']),
       transaction: (run: any) => db.$transaction(run, { isolationLevel: 'Serializable' }),
     };
-    workspace = new InventoryWorkspaceService(db as any, workflow as any);
+    workspace = new InventoryWorkspaceService(db as any, workflow as any, new PharmacySupplierCreditService(db as any));
     const credit = await db.inventorySupplierCredit.create({
-      data: { branchId, supplierGstin: linae, documentId: randomUUID(), reference: 'SYN-CREDIT', amount: 50 },
+      data: { branchId, supplierGstin: linae, documentId: randomUUID(), reference: 'SYN-CREDIT', amount: 50, creditNoteNumber: 'SYN-CN-1' },
     });
     creditAllocationId = (
       await workspace.allocateCredit(actor(), {
@@ -166,7 +167,7 @@ databaseTests('Purchase register on PostgreSQL', () => {
         purchaseInvoiceId: bills['LIN-3'],
         amount: 50,
       })
-    ).id;
+    ).allocations[0].id;
   });
 
   it('shows the same balances as the supplier ledger for one distributor', async () => {

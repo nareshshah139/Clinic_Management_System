@@ -27,7 +27,15 @@ import {
   writeStockMovement,
 } from './inventory-stock';
 import { clinicDay, clinicDayOf, isCalendarDay } from '../pharmacy/register-utils';
-import { CREDIT_NOTE_NUMBER_MAX, creditNoteNumberOf, displayDay, isCreditNoteNumberClash, returnReasonOf, rupees } from './supplier-return';
+import {
+  CREDIT_NOTE_NUMBER_MAX,
+  creditNoteNumberOf,
+  displayDay,
+  isCreditNoteNumberClash,
+  returnMovementReason,
+  rupees,
+  supplierReturnReason,
+} from './supplier-return';
 import {
   grantsForRole,
   parsePermissionList,
@@ -626,10 +634,12 @@ export class InventoryWorkflowService {
       doctor: clean(source.doctorName || source.doctor),
       doctorName: clean(source.doctorName || source.doctor),
       returnBase: clean(source.returnBase || source.valuationBasis) || 'PTR',
-      returnType:
-        kind === 'SUPPLIER_RETURN'
-          ? (returnReasonOf(source.returnType) ?? 'OTHER')
-          : clean(source.returnType) || 'OTHER',
+      ...(kind === 'SUPPLIER_RETURN'
+        ? { returnReason: supplierReturnReason(source) ?? 'OTHER' }
+        : { returnType: clean(source.returnType) || 'OTHER' }),
+      ...(kind === 'CREDIT_NOTE'
+        ? { creditNoteNumber: creditNoteNumberOf(source.creditNoteNumber), creditNoteDate: clean(source.creditNoteDate) }
+        : {}),
       paymentMode: clean(source.paymentMode) || 'CASH',
       date: date ? clinicDayOf(date) : clinicDay(new Date()),
       expectedDate: clean(source.expectedDate),
@@ -990,6 +1000,14 @@ export class InventoryWorkflowService {
           supplierGstin: doc.supplierGstin,
           reference: doc.reference,
           amount: doc.totalAmount,
+          ...(doc.kind === 'CREDIT_NOTE'
+            ? {
+                creditNoteNumber: p.creditNoteNumber,
+                creditNoteDate: new Date(`${p.creditNoteDate}T00:00:00.000Z`),
+                receivedAt: new Date(),
+                receivedById: actor.id,
+              }
+            : {}),
         },
       });
     if (next === 'POSTED' && doc.kind === 'TARGET_REVIEW') {
@@ -1074,6 +1092,20 @@ export class InventoryWorkflowService {
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1e10)
       throw new BadRequestException('Enter the credit note amount in rupees, more than zero');
     return { requestKey: clean(input.requestKey), version, number, date, amount };
+  }
+  private async validateStandaloneCreditNote(tx: any, actor: WorkflowActor, doc: any) {
+    const number = creditNoteNumberOf(doc.payload.creditNoteNumber);
+    const date = clean(doc.payload.creditNoteDate);
+    if (!number) throw new BadRequestException("Enter the credit note number from the distributor's note");
+    if (number.length > CREDIT_NOTE_NUMBER_MAX)
+      throw new BadRequestException(`The credit note number can have at most ${CREDIT_NOTE_NUMBER_MAX} characters`);
+    if (!isCalendarDay(date)) throw new BadRequestException('Enter the credit note date as a calendar day');
+    if (date > clinicDay(new Date())) throw new BadRequestException('The credit note date cannot be after today');
+    const taken = await tx.inventorySupplierCredit.findFirst({
+      where: { branchId: actor.branchId, supplierGstin: doc.supplierGstin, creditNoteNumber: number, reversedAt: null },
+      select: { reference: true },
+    });
+    if (taken) throw this.duplicateCreditNote(number, taken.reference);
   }
   private creditNoteFields(note: CreditNoteInput, actor: WorkflowActor) {
     return {
@@ -1305,6 +1337,7 @@ export class InventoryWorkflowService {
       throw new BadRequestException('Enter a reason before posting');
     if (new Date(p.date).getTime() > Date.now() + 86400000)
       throw new BadRequestException('Document date cannot be in the future');
+    if (doc.kind === 'CREDIT_NOTE') await this.validateStandaloneCreditNote(tx, actor, doc);
     if (
       doc.kind === 'COUNT' &&
       !lines.some((l) => l.physicalStock !== undefined)
@@ -1520,7 +1553,7 @@ export class InventoryWorkflowService {
         type: options.type || (delta > 0 ? 'RETURN' : 'DAMAGED'),
         unitPrice: line.unitPrice,
         reference: `WF-${doc.reference}`,
-        reason: doc.payload.reason,
+        reason: doc.kind === 'SUPPLIER_RETURN' ? returnMovementReason(doc.payload) : doc.payload.reason,
         metadata: {
           workflowDocumentId: doc.id,
           workflowLineId: line.id,

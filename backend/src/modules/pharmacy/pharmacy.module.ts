@@ -8,6 +8,7 @@ import { PharmacyInvoiceService } from './pharmacy-invoice.service';
 import { PharmacyPurchaseInvoiceController } from './pharmacy-purchase-invoice.controller';
 import { PharmacyPurchaseInvoiceService } from './pharmacy-purchase-invoice.service';
 import { PharmacyPurchaseLedgerController } from './pharmacy-purchase-ledger.controller';
+import { PharmacySupplierCreditService } from './pharmacy-supplier-credit.service';
 import { PharmacyPurchaseLedgerService } from './pharmacy-purchase-ledger.service';
 import { PharmacyPartnerSalesController } from './pharmacy-partner-sales.controller';
 import { PharmacyPartnerSalesService } from './pharmacy-partner-sales.service';
@@ -50,6 +51,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacyInvoiceService,
     PharmacyPurchaseInvoiceService,
     PharmacyPurchaseLedgerService,
+    PharmacySupplierCreditService,
     PharmacyPartnerSalesService,
     PharmacyComplianceService,
     PharmacyPackageService,
@@ -64,6 +66,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacyInvoiceService,
     PharmacyPurchaseInvoiceService,
     PharmacyPurchaseLedgerService,
+    PharmacySupplierCreditService,
     PharmacyPartnerSalesService,
     PharmacyComplianceService,
     PharmacyPackageService,

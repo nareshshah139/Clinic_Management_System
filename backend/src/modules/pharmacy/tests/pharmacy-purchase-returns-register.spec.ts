@@ -64,10 +64,12 @@ describe('purchase returns register', () => {
         returnCreditState('POSTED', { number: 'CN-1', amount: 500, applied: 0 }),
         returnCreditState('POSTED', { number: 'CN-1', amount: 500, applied: 200 }),
         returnCreditState('POSTED', { number: 'CN-1', amount: 500, applied: 499.995 }),
+        returnCreditState('POSTED', { number: null, amount: 75.5, applied: 20 }),
+        returnCreditState('POSTED', { number: null, amount: 75.5, applied: 75.5 }),
         returnCreditState('REVERSED', { number: 'CN-1', amount: 500, applied: 0 }),
         returnCreditState('CANCELLED', null),
       ],
-    ).toEqual(['DRAFT', 'DRAFT', 'AWAITED', 'AWAITED', 'RECEIVED', 'ADJUSTED', 'USED', 'CANCELLED', 'CANCELLED']);
+    ).toEqual(['DRAFT', 'DRAFT', 'AWAITED', 'AWAITED', 'RECEIVED', 'ADJUSTED', 'USED', 'ADJUSTED', 'USED', 'CANCELLED', 'CANCELLED']);
   });
 
   it('shows the credit note as received from the distributor next to our own return value', () => {

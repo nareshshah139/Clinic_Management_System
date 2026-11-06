@@ -10,26 +10,16 @@ import { InventoryWorkflowService } from './inventory-workflow.service';
 import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
 import { inventoryProductName } from './inventory-names';
-import { clinicDay } from '../pharmacy/register-utils';
-import { invoiceOutstanding, invoiceSettled, payableBalance, scheduledPayments, splitByEffectiveDate } from '../pharmacy/purchase-payment-balance';
-
-const rupeeFormat = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
-const rupees = (value: number) => rupeeFormat.format(value);
-
-function billPayable(invoice: any, now = new Date()) {
-  const { inEffect, scheduled } = splitByEffectiveDate(invoice.paymentAllocations, now);
-  const outstanding = invoiceOutstanding(invoice, invoiceSettled({ creditApplied: invoice.creditApplied, paymentAllocations: inEffect }));
-  return payableBalance(outstanding, scheduledPayments(scheduled).scheduled);
-}
-
-const balanceChanged = (error: any) =>
-  ['P2025', 'P2034'].includes(error?.code)
-    ? new ConflictException({ code: 'BALANCE_CHANGED', message: 'The bill or credit balance changed while you were saving. Check the new amounts.' })
-    : error;
+import { PharmacySupplierCreditService } from '../pharmacy/pharmacy-supplier-credit.service';
+import { EVERY_ALLOCATION, creditBalance } from '../pharmacy/supplier-credit-balance';
 
 @Injectable()
 export class InventoryWorkspaceService {
-  constructor(private readonly prisma: PrismaService, private readonly workflow: InventoryWorkflowService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly workflow: InventoryWorkflowService,
+    private readonly supplierCredits: PharmacySupplierCreditService,
+  ) {}
   async require(actor: WorkflowActor, permission: string) {
     const p = await this.workflow.permissions(actor);
     if (!p.has(permission)) throw new ForbiddenException(`This action requires ${permission}`);
@@ -227,214 +217,32 @@ export class InventoryWorkspaceService {
   async credits(actor:WorkflowActor) {
     await this.require(actor,'pharmacy:purchase-ledger:read');
     const [credits,invoices]=await Promise.all([this.prisma.inventorySupplierCredit.findMany({where:{branchId:actor.branchId},include:{allocations:true},orderBy:{createdAt:'desc'}}),this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId:actor.branchId,status:'STOCK_COMMITTED'},include:{paymentAllocations:{where:{payment:{reversedAt:null}}}},orderBy:{invoiceDate:'desc'}})]);
-    return {credits:credits.map(c=>({...c,amount:Number(c.amount),applied:Number(c.applied),available:c.reversedAt?0:money(Number(c.amount)-Number(c.applied)),allocations:c.allocations.map(a=>({...a,amount:Number(a.amount)}))})),invoices:invoices.map(i=>({id:i.id,invoiceNumber:i.invoiceNumber,distributorGstin:i.distributorGstin,distributorName:i.distributorName,dueDate:i.dueDate,netPayable:i.netPayable,creditApplied:i.creditApplied,outstanding:money(i.netPayable-i.creditApplied-i.paymentAllocations.reduce((n,a)=>n+a.amount,0))}))};
+    return {credits:credits.map(c=>({...c,amount:Number(c.amount),applied:Number(c.applied),available:creditBalance(c,EVERY_ALLOCATION).available,allocations:c.allocations.map(a=>({...a,amount:Number(a.amount)}))})),invoices:invoices.map(i=>({id:i.id,invoiceNumber:i.invoiceNumber,distributorGstin:i.distributorGstin,distributorName:i.distributorName,dueDate:i.dueDate,netPayable:i.netPayable,creditApplied:i.creditApplied,outstanding:money(i.netPayable-i.creditApplied-i.paymentAllocations.reduce((n,a)=>n+a.amount,0))}))};
   }
   /**
    * @cc [owner:nareshshah139,label:product] credit-allocation-atomic
    * Credit allocation MUST atomically reduce one same-supplier posted bill and one available credit;
    * duplicate request keys, over-allocation and cross-branch records cannot create extra credit.
    */
-  async allocateCredit(actor:WorkflowActor,input:Record<string,any>) {
-    await this.require(actor,'pharmacy:purchase-ledger:write');
-    const value=money(Number(input.amount));if(!input.requestKey||!Number.isFinite(value)||value<=0)throw new BadRequestException('A positive amount and request key are required');
-    return this.workflow.transaction(async tx=>{
-      const exists=await tx.inventoryCreditAllocation.findUnique({where:{branchId_requestKey:{branchId:actor.branchId,requestKey:input.requestKey}}});if(exists)return exists;
-      const credit=await tx.inventorySupplierCredit.findFirst({where:{id:input.creditId,branchId:actor.branchId,reversedAt:null}});
-      const invoice=await tx.pharmacyPurchaseInvoice.findFirst({where:{id:input.purchaseInvoiceId,branchId:actor.branchId,status:'STOCK_COMMITTED'},include:{paymentAllocations:{where:{payment:{reversedAt:null}}}}});
-      if(!credit||!invoice||credit.supplierGstin!==invoice.distributorGstin)throw new BadRequestException('Select a posted bill for the same supplier GSTIN');
-      const outstanding=money(invoice.netPayable-invoice.creditApplied-invoice.paymentAllocations.reduce((n:number,a:any)=>n+a.amount,0));
-      if(value>money(Number(credit.amount)-Number(credit.applied))||value>outstanding)throw new BadRequestException('Amount exceeds available credit or bill balance');
-      await tx.inventorySupplierCredit.update({where:{id:credit.id,applied:credit.applied},data:{applied:{increment:value}}});
-      await tx.pharmacyPurchaseInvoice.update({where:{id:invoice.id,updatedAt:invoice.updatedAt},data:{creditApplied:{increment:value}}});
-      return tx.inventoryCreditAllocation.create({data:{branchId:actor.branchId,creditId:credit.id,purchaseInvoiceId:invoice.id,amount:value,requestKey:input.requestKey,createdBy:actor.id}});
-    });
-  }
-  private async openBills(db: any, branchId: string, gstin: string, ids?: string[]) {
-    const invoices = await db.pharmacyPurchaseInvoice.findMany({
-      where: { branchId, distributorGstin: gstin, status: 'STOCK_COMMITTED', ...(ids ? { id: { in: ids } } : {}) },
-      include: { paymentAllocations: { where: { payment: { reversedAt: null } }, include: { payment: { select: { paymentDate: true } } } } },
-    });
-    return invoices
-      .map((invoice: any) => ({
-        invoice,
-        payable: billPayable(invoice),
-      }))
-      .sort(
-        (a: any, b: any) =>
-          new Date(a.invoice.dueDate ?? a.invoice.invoiceDate).getTime() -
-            new Date(b.invoice.dueDate ?? b.invoice.invoiceDate).getTime() ||
-          new Date(a.invoice.invoiceDate).getTime() - new Date(b.invoice.invoiceDate).getTime() ||
-          a.invoice.id.localeCompare(b.invoice.id),
-      );
-  }
-  private async heldCredits(db: any, branchId: string, scope: { creditId?: string; gstin?: string }) {
-    const credits = await db.inventorySupplierCredit.findMany({
-      where: {
-        branchId,
-        reversedAt: null,
-        ...(scope.creditId ? { id: scope.creditId } : { supplierGstin: scope.gstin, creditNoteNumber: { not: null } }),
-      },
-      orderBy: [{ creditNoteDate: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
-    });
-    if (scope.creditId && !credits.length) throw new NotFoundException('This credit is no longer open');
-    if (credits.some((credit: any) => !credit.creditNoteNumber))
-      throw new BadRequestException("Record the distributor's credit note number before setting this credit off against bills");
-    return credits.map((credit: any) => ({
-      credit,
-      available: money(Number(credit.amount) - Number(credit.applied)),
-    }));
-  }
-  private scopeOf(input: Record<string, any>) {
-    const creditId = String(input?.creditId ?? '').trim() || undefined;
-    const gstin = String(input?.distributorGstin ?? '').trim().toUpperCase() || undefined;
-    if (!creditId && !gstin) throw new BadRequestException('Choose a distributor or a credit to set off');
-    return { creditId, gstin };
+  async allocateCredit(actor: WorkflowActor, input: Record<string, any>) {
+    await this.require(actor, 'pharmacy:purchase-ledger:write');
+    return this.supplierCredits.allocate(actor, input);
   }
   async setOffOptions(actor: WorkflowActor, input: Record<string, any>) {
     await this.require(actor, 'pharmacy:purchase-ledger:read');
-    const scope = this.scopeOf(input);
-    const credits = await this.heldCredits(this.prisma, actor.branchId, scope);
-    const gstin = credits[0]?.credit.supplierGstin ?? scope.gstin!;
-    const bills = (await this.openBills(this.prisma, actor.branchId, gstin)).filter((bill: any) => bill.payable > 0.01);
-    const supplier = await this.prisma.supplier.findFirst({ where: { branchId: actor.branchId, gstNumber: gstin }, select: { name: true } });
-    return {
-      distributor: { gstin, name: bills[0]?.invoice.distributorName ?? supplier?.name ?? gstin },
-      available: money(credits.reduce((sum: number, entry: any) => sum + Math.max(entry.available, 0), 0)),
-      credits: credits
-        .filter((entry: any) => entry.available > 0.01)
-        .map(({ credit, available }: any) => ({
-          id: credit.id,
-          number: credit.creditNoteNumber,
-          date: credit.creditNoteDate ? credit.creditNoteDate.toISOString().slice(0, 10) : null,
-          reference: credit.reference,
-          available,
-        })),
-      bills: bills.map(({ invoice, payable }: any) => ({
-        id: invoice.id,
-        billNo: invoice.invoiceNumber,
-        billDate: clinicDay(invoice.invoiceDate),
-        dueDate: invoice.dueDate ? clinicDay(invoice.dueDate) : null,
-        payable,
-      })),
-    };
+    return this.supplierCredits.setOffOptions(actor, input);
   }
   async setOff(actor: WorkflowActor, input: Record<string, any>) {
     await this.require(actor, 'pharmacy:purchase-ledger:write');
-    const requestKey = String(input?.requestKey ?? '').trim();
-    if (!requestKey || requestKey.length > 120) throw new BadRequestException('A request key is required');
-    const scope = this.scopeOf(input);
-    const wanted: { purchaseInvoiceId: string; amount: number }[] = (Array.isArray(input?.allocations) ? input.allocations : []).map(
-      (allocation: any) => ({ purchaseInvoiceId: String(allocation?.purchaseInvoiceId ?? ''), amount: money(Number(allocation?.amount)) }),
-    );
-    if (!wanted.length || wanted.length > 100) throw new BadRequestException('Choose at least one bill to set the credit off against');
-    if (wanted.some((allocation) => !allocation.purchaseInvoiceId || !Number.isFinite(allocation.amount) || allocation.amount <= 0))
-      throw new BadRequestException('Each bill needs an amount of more than zero');
-    if (new Set(wanted.map((allocation) => allocation.purchaseInvoiceId)).size !== wanted.length)
-      throw new BadRequestException('Each bill can appear only once');
-    return this.workflow.transaction(async (tx) => {
-      const replay = await tx.inventoryCreditAllocation.findMany({
-        where: { branchId: actor.branchId, requestKey: { startsWith: `${requestKey}:` } },
-      });
-      if (replay.length) return this.setOffOutcome(tx, actor, replay);
-      const credits = await this.heldCredits(tx, actor.branchId, scope);
-      const gstin = credits[0]?.credit.supplierGstin ?? scope.gstin;
-      const bills = await this.openBills(tx, actor.branchId, gstin, wanted.map((allocation) => allocation.purchaseInvoiceId));
-      const billOf = new Map(bills.map((bill: any) => [bill.invoice.id, bill]));
-      for (const allocation of wanted) {
-        const bill: any = billOf.get(allocation.purchaseInvoiceId);
-        if (!bill) throw new BadRequestException('Choose posted bills from the same distributor as the credit');
-        if (allocation.amount > bill.payable + 0.005)
-          throw new ConflictException({
-            code: 'BALANCE_CHANGED',
-            message: `The balance of bill ${bill.invoice.invoiceNumber} changed: ${rupees(Math.max(bill.payable, 0))} is left to pay.`,
-          });
-      }
-      const available = money(credits.reduce((sum: number, entry: any) => sum + Math.max(entry.available, 0), 0));
-      const total = money(wanted.reduce((sum, allocation) => sum + allocation.amount, 0));
-      if (total > available + 0.005)
-        throw new ConflictException({
-          code: 'BALANCE_CHANGED',
-          message: `The credit available changed: ${rupees(available)} is left to set off.`,
-        });
-      const created: any[] = [];
-      for (const allocation of wanted) {
-        let remaining = allocation.amount;
-        for (const entry of credits) {
-          if (remaining <= 0.005) break;
-          const take = money(Math.min(entry.available, remaining));
-          if (take <= 0) continue;
-          entry.available = money(entry.available - take);
-          remaining = money(remaining - take);
-          created.push(
-            await tx.inventoryCreditAllocation.create({
-              data: {
-                branchId: actor.branchId,
-                creditId: entry.credit.id,
-                purchaseInvoiceId: allocation.purchaseInvoiceId,
-                amount: take,
-                requestKey: `${requestKey}:${created.length + 1}`,
-                createdBy: actor.id,
-              },
-            }),
-          );
-        }
-        const bill: any = billOf.get(allocation.purchaseInvoiceId);
-        await tx.pharmacyPurchaseInvoice.update({
-          where: { id: bill.invoice.id, updatedAt: bill.invoice.updatedAt },
-          data: { creditApplied: { increment: allocation.amount } },
-        });
-      }
-      for (const entry of credits) {
-        const used = money(Number(entry.credit.amount) - Number(entry.credit.applied) - entry.available);
-        if (used > 0)
-          await tx.inventorySupplierCredit.update({
-            where: { id: entry.credit.id, applied: entry.credit.applied },
-            data: { applied: { increment: used } },
-          });
-      }
-      return this.setOffOutcome(tx, actor, created);
-    }).catch((error) => {
-      throw balanceChanged(error);
-    });
+    return this.supplierCredits.setOff(actor, input);
   }
-  private async setOffOutcome(tx: any, actor: WorkflowActor, allocations: any[]) {
-    const billIds = [...new Set(allocations.map((allocation) => allocation.purchaseInvoiceId))];
-    const creditIds = [...new Set(allocations.map((allocation) => allocation.creditId))];
-    const [invoices, credits] = await Promise.all([
-      tx.pharmacyPurchaseInvoice.findMany({
-        where: { branchId: actor.branchId, id: { in: billIds } },
-        include: { paymentAllocations: { where: { payment: { reversedAt: null } }, include: { payment: { select: { paymentDate: true } } } } },
-      }),
-      tx.inventorySupplierCredit.findMany({ where: { branchId: actor.branchId, id: { in: creditIds } } }),
-    ]);
-    const creditOf = new Map(credits.map((credit: any) => [credit.id, credit]));
-    return {
-      allocations: allocations.map((allocation) => ({
-        id: allocation.id,
-        creditId: allocation.creditId,
-        creditNoteNumber: (creditOf.get(allocation.creditId) as any)?.creditNoteNumber ?? null,
-        purchaseInvoiceId: allocation.purchaseInvoiceId,
-        amount: Number(allocation.amount),
-      })),
-      bills: invoices.map((invoice: any) => ({
-        id: invoice.id,
-        billNo: invoice.invoiceNumber,
-        payableAfter: billPayable(invoice),
-      })),
-      credits: credits.map((credit: any) => ({
-        id: credit.id,
-        number: credit.creditNoteNumber,
-        available: money(Number(credit.amount) - Number(credit.applied)),
-      })),
-    };
+  async reverseSetOff(actor: WorkflowActor, id: string, reason: string) {
+    await this.require(actor, 'pharmacy:purchase-ledger:write');
+    return this.supplierCredits.reverseSetOff(actor, id, reason);
   }
-  async reverseAllocation(actor:WorkflowActor,id:string,reason:string) {
-    await this.require(actor,'pharmacy:purchase-ledger:write');if(!reason?.trim())throw new BadRequestException('Enter a reversal reason');
-    return this.workflow.transaction(async tx=>{const a=await tx.inventoryCreditAllocation.findFirst({where:{id,branchId:actor.branchId}});if(!a)throw new NotFoundException('Allocation not found');if(a.reversedAt)return a;
-      await tx.inventorySupplierCredit.update({where:{id:a.creditId},data:{applied:{decrement:a.amount}}});
-      await tx.pharmacyPurchaseInvoice.update({where:{id:a.purchaseInvoiceId,branchId:actor.branchId},data:{creditApplied:{decrement:Number(a.amount)}}});
-      return tx.inventoryCreditAllocation.update({where:{id,reversedAt:null},data:{reversedAt:new Date(),reversedBy:actor.id,reversalReason:reason.trim()}});
-    });
+  async reverseAllocation(actor: WorkflowActor, id: string, reason: string) {
+    await this.require(actor, 'pharmacy:purchase-ledger:write');
+    return this.supplierCredits.reverseAllocation(actor, id, reason);
   }
   async createCount(actor:WorkflowActor,input:Record<string,any>) {
     await this.workflow.authorize(actor,'COUNT',true);

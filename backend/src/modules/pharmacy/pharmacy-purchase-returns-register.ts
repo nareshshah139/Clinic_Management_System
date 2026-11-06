@@ -1,4 +1,4 @@
-import { RETURN_REASONS, returnReasonOf, type ReturnReason } from '../inventory/supplier-return';
+import { RETURN_REASONS, supplierReturnReason, type ReturnReason } from '../inventory/supplier-return';
 import { clinicDay, clinicDayOf, collator, compareValues, money, pageOf } from './register-utils';
 import { creditBalance, type SupplierCreditRecord } from './supplier-credit-balance';
 import { MONEY_TOLERANCE } from './purchase-payment-balance';
@@ -107,9 +107,8 @@ export function returnCreditState(
   if (CLOSED_STATUSES.includes(status)) return 'CANCELLED';
   if (status === 'CHALLAN') return 'AWAITED';
   if (status !== 'POSTED') return 'DRAFT';
-  if (!credit?.number) return 'AWAITED';
-  if (credit.applied <= MONEY_TOLERANCE) return 'RECEIVED';
-  return credit.amount - credit.applied <= MONEY_TOLERANCE ? 'USED' : 'ADJUSTED';
+  if (credit && credit.applied > MONEY_TOLERANCE) return credit.amount - credit.applied <= MONEY_TOLERANCE ? 'USED' : 'ADJUSTED';
+  return credit?.number ? 'RECEIVED' : 'AWAITED';
 }
 
 const payloadOf = (payload: unknown) =>
@@ -145,7 +144,7 @@ export function purchaseReturnEntry(
     returnValue: money(Number(doc.totalAmount ?? 0)),
     credit: doc.credit && balance ? { id: doc.credit.id, ...balance } : null,
     state: returnCreditState(doc.status, balance ? { number, ...balance } : null),
-    reason: doc.kind === 'SUPPLIER_RETURN' ? returnReasonOf(payload.returnType) : null,
+    reason: doc.kind === 'SUPPLIER_RETURN' ? supplierReturnReason(payload) : null,
   };
 }
 

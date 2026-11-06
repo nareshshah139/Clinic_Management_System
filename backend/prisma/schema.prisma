@@ -1786,11 +1786,27 @@ model InventoryCreditAllocation {
   reversedBy        String?
   reversalReason    String?
   createdAt         DateTime @default(now())
+  setOffId          String?
   credit            InventorySupplierCredit @relation(fields: [creditId], references: [id], onDelete: Restrict)
+  setOff            InventoryCreditSetOff? @relation(fields: [setOffId], references: [id], onDelete: Restrict)
 
   @@unique([branchId, requestKey])
   @@index([branchId, purchaseInvoiceId])
+  @@index([setOffId])
   @@map("inventory_credit_allocations")
+}
+
+model InventoryCreditSetOff {
+  id          String @id @default(cuid())
+  branchId    String
+  requestKey  String
+  fingerprint String
+  createdBy   String
+  createdAt   DateTime @default(now())
+  allocations InventoryCreditAllocation[]
+
+  @@unique([branchId, requestKey])
+  @@map("inventory_credit_set_offs")
 }
 
 model InventoryWorkflowSettings {

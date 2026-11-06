@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import { InventoryWorkflowService } from '../../inventory/inventory-workflow.service';
 import { InventoryWorkspaceService } from '../../inventory/inventory-workspace.service';
 import { PharmacyPurchaseLedgerService } from '../pharmacy-purchase-ledger.service';
+import { PharmacySupplierCreditService } from '../pharmacy-supplier-credit.service';
 import { PharmacyPurchaseRegisterService } from '../pharmacy-purchase-register.service';
 import { PharmacyPurchaseReturnsRegisterService } from '../pharmacy-purchase-returns-register.service';
 import { PharmacyPurchasePaymentModeDto } from '../dto/pharmacy-purchase-ledger.dto';
@@ -19,7 +20,7 @@ const databaseTests = process.env.PURCHASE_RETURNS_TEST_DATABASE_URL ? describe 
 databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
   const schema = `purchase_returns_${randomUUID().replaceAll('-', '')}`;
   const linae = '36ABCDE1234F1Z5';
-  const migrations = ['20261106170000_supplier_credit_notes', '20261107090000_supplier_credit_note_reuse'];
+  const migrations = ['20261106170000_supplier_credit_notes', '20261107090000_supplier_credit_note_reuse', '20261107091000_supplier_credit_set_offs'];
   let admin: PrismaClient;
   let db: PrismaClient;
   let fixtures: string;
@@ -59,6 +60,7 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
       payload: {
         date: '2026-11-02',
         returnType: 'NEAR_EXPIRY',
+        reason: 'Short-dated batch',
         lines: [{ inventoryId: 'batch', quantity, unitPrice: 10, sourceLineId: purchaseLineId }],
       },
     });
@@ -81,7 +83,10 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
           .filter((line) => !/^\s*(creditNoteNumber|creditNoteDate|receivedAt|receivedById|receivedBy)\s/.test(line) && !/@@unique/.test(line))
           .join('\n'),
       )
-      .replace(/^\s*receivedSupplierCredits\s.*\n/m, '');
+      .replace(/^\s*receivedSupplierCredits\s.*\n/m, '')
+      .replace(/model InventoryCreditSetOff \{[\s\S]*?\n\}\n/, '')
+      .replace(/^\s*(setOffId|setOff)\s.*\n/gm, '')
+      .replace(/^\s*@@index\(\[setOffId\]\)\n/m, '');
     writeFileSync(path.join(fixtures, 'legacy.prisma'), legacy);
     const prisma = (...args: string[]) =>
       execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), ...args], {
@@ -150,7 +155,7 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
       })
     ).id;
     workflow = new InventoryWorkflowService(db as any);
-    workspace = new InventoryWorkspaceService(db as any, workflow);
+    workspace = new InventoryWorkspaceService(db as any, workflow, new PharmacySupplierCreditService(db as any));
     ledger = new PharmacyPurchaseLedgerService(db as any);
     register = new PharmacyPurchaseRegisterService(db as any, ledger);
     returns = new PharmacyPurchaseReturnsRegisterService(db as any);
@@ -182,7 +187,9 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     await raiseReturn('RET-1', 20);
     expect(await stock()).toBe(80);
     const movement = await db.stockTransaction.findFirstOrThrow({ where: { branchId, itemId: 'batch', type: 'RETURN' } });
-    expect([movement.quantity, movement.reference, movement.userId]).toEqual([20, 'WF-RET-1', 'asha']);
+    expect([movement.quantity, movement.reference, movement.userId, movement.reason]).toEqual([20, 'WF-RET-1', 'asha', 'Near expiry · Short-dated batch']);
+    const stored = await db.inventoryWorkflowDocument.findFirstOrThrow({ where: { reference: 'RET-1' } });
+    expect([(stored.payload as any).returnReason, (stored.payload as any).returnType]).toEqual(['NEAR_EXPIRY', undefined]);
     const ret = await row('RET-1');
     expect([ret.state, ret.returnValue, ret.creditNote, ret.reason, ret.sourceBillNo, ret.distributor.name]).toEqual([
       'AWAITED', 224, null, 'NEAR_EXPIRY', 'LIN-1', 'Linae Distributors',
@@ -442,5 +449,64 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
       workflow.recordCreditNote(actor, draft.id, { requestKey: 'cn-draft', version: draft.version, number: 'CN-DRAFT', date: '2026-11-05', amount: 11.2 }),
     ).rejects.toMatchObject({ status: 400, message: 'Send the goods on a return challan before recording the credit note' });
     expect((await row('RET-DRAFT')).state).toBe('DRAFT');
+  });
+
+  it('replays a set-off only for the identical request, refuses a reused key with other content, and never replays an undone set-off', async () => {
+    await topUp();
+    await raiseReturn('RET-KEY', 1);
+    const ret = await row('RET-KEY');
+    await workflow.recordCreditNote(actor, ret.id, { requestKey: 'cn-key', version: ret.version, number: 'CN-KEY', date: '2026-11-05', amount: 11.2 });
+    const creditId = (await row('RET-KEY')).credit!.id;
+    const before = (await outstanding())['LIN-1'];
+    const request = { requestKey: 'set-off-key', creditId, allocations: [{ purchaseInvoiceId: bills['LIN-1'], amount: 5 }] };
+    const first = await workspace.setOff(actor, request);
+    const replay = await workspace.setOff(actor, request);
+    expect([replay.setOffId, replay.allocations.map((allocation) => allocation.amount)]).toEqual([first.setOffId, [5]]);
+    await expect(workspace.setOff(actor, { ...request, allocations: [{ purchaseInvoiceId: bills['LIN-1'], amount: 6 }] })).rejects.toMatchObject({
+      status: 409, response: { code: 'REQUEST_KEY_REUSED' },
+    });
+    expect([(await outstanding())['LIN-1'], (await row('RET-KEY')).credit?.available]).toEqual([before - 5, 6.2]);
+
+    await workspace.reverseSetOff(actor, first.setOffId, 'Undo');
+    expect([(await outstanding())['LIN-1'], (await row('RET-KEY')).state, (await row('RET-KEY')).credit?.available]).toEqual([before, 'RECEIVED', 11.2]);
+    await expect(workspace.setOff(actor, request)).rejects.toMatchObject({ status: 409, response: { code: 'SET_OFF_UNDONE' } });
+    await expect(workspace.reverseSetOff(actor, first.setOffId, 'Undo')).rejects.toMatchObject({ status: 409, response: { code: 'SET_OFF_UNDONE' } });
+    expect((await outstanding())['LIN-1']).toBe(before);
+  });
+
+  it('sends the old allocate path through the set-off rules: a numbered credit, one bill, capped at what the bill has left to pay', async () => {
+    await expect(
+      workspace.allocateCredit(actor, { requestKey: 'old-legacy', creditId: 'legacy-credit', purchaseInvoiceId: bills['LIN-1'], amount: 5 }),
+    ).rejects.toMatchObject({ status: 400, message: "Record the distributor's credit note number before setting this credit off against bills" });
+    const creditId = (await row('RET-KEY')).credit!.id;
+    const payable = (await outstanding())['LIN-4'];
+    expect(payable).toBe(0);
+    await expect(
+      workspace.allocateCredit(actor, { requestKey: 'old-capped', creditId, purchaseInvoiceId: bills['LIN-4'], amount: 5 }),
+    ).rejects.toMatchObject({ status: 409, response: { code: 'BALANCE_CHANGED', message: 'The balance of bill LIN-4 changed: ₹0.00 is left to pay.' } });
+    const done = await workspace.allocateCredit(actor, { requestKey: 'old-ok', creditId, purchaseInvoiceId: bills['LIN-2'], amount: 2.2 });
+    expect([done.allocations.map((allocation) => allocation.amount), (await row('RET-KEY')).credit?.available]).toEqual([[2.2], 9]);
+  });
+
+  it('posts a standalone supplier credit as received only with its credit note number and date', async () => {
+    const save = (payload: Record<string, unknown>, reference: string) =>
+      workflow.saveDocument(actor, {
+        kind: 'CREDIT_NOTE', reference, requestKey: randomUUID(), supplierId: 'supplier',
+        payload: { date: '2026-11-03', lines: [{ inventoryId: 'batch', quantity: 1, unitPrice: 40 }], ...payload },
+      });
+    const bare = await save({}, 'SC-BARE');
+    await expect(workflow.transition(actor, bare.id, { action: 'POST', version: bare.version } as any)).rejects.toMatchObject({
+      status: 400, message: "Enter the credit note number from the distributor's note",
+    });
+    const taken = await save({ creditNoteNumber: 'cn-77', creditNoteDate: '2026-11-04' }, 'SC-TAKEN');
+    await expect(workflow.transition(actor, taken.id, { action: 'POST', version: taken.version } as any)).rejects.toMatchObject({
+      status: 409, response: { code: 'CREDIT_NOTE_DUPLICATE' },
+    });
+    const good = await save({ creditNoteNumber: ' cn-sc-1 ', creditNoteDate: '2026-11-04' }, 'SC-GOOD');
+    await workflow.transition(actor, good.id, { action: 'POST', version: good.version } as any);
+    const credit = await row('SC-GOOD');
+    expect([credit.kind, credit.state, credit.creditNote, credit.credit?.available]).toEqual([
+      'CREDIT_NOTE', 'RECEIVED', { number: 'CN-SC-1', date: '2026-11-04', amount: credit.returnValue }, credit.returnValue,
+    ]);
   });
 });

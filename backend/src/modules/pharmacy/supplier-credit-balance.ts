@@ -1,3 +1,4 @@
+import { MONEY_TOLERANCE } from './purchase-payment-balance';
 import { money } from './register-utils';
 
 type Instant = Date | string;
@@ -24,6 +25,8 @@ const by = (instant: Instant | null, asOf: Date) =>
 const inEffect = (allocation: CreditAllocationRecord, asOf: Date) =>
   by(allocation.createdAt, asOf) && !by(allocation.reversedAt, asOf);
 
+export const EVERY_ALLOCATION = new Date(8.64e15);
+
 export function creditBalance(credit: SupplierCreditRecord, asOf: Date) {
   const amount = money(Number(credit.amount));
   const applied = money(
@@ -31,7 +34,8 @@ export function creditBalance(credit: SupplierCreditRecord, asOf: Date) {
       .filter((allocation) => inEffect(allocation, asOf))
       .reduce((sum, allocation) => sum + Number(allocation.amount), 0),
   );
-  const available = by(credit.reversedAt, asOf) ? 0 : money(Math.max(amount - applied, 0));
+  const left = amount - applied;
+  const available = by(credit.reversedAt, asOf) || left <= MONEY_TOLERANCE ? 0 : money(left);
   return { amount, applied, available };
 }
 
