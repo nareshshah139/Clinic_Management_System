@@ -200,6 +200,33 @@ describe('/auth access control', () => {
       },
     );
 
+    it.each([
+      '..%2F..%2Fsecret',
+      '..%2Fsecret',
+      'backup-2026-01-01T00-00-00-admin%2F..%2F..%2F..%2Fsecret',
+      'backup-2026-01-01T00-00-00-admin..',
+    ])(
+      'never reads a file outside the jobs folder for jobId %s',
+      async (jobId) => {
+        fs.writeFileSync(
+          path.join(root, 'secret.json'),
+          JSON.stringify({ secret: 'outside-jobs' }),
+        );
+        fs.mkdirSync(path.join(root, 'backups'), { recursive: true });
+        fs.writeFileSync(
+          path.join(root, 'backups', 'secret.json'),
+          JSON.stringify({ secret: 'outside-jobs' }),
+        );
+        const res = await request(app.getHttpServer())
+          .get(`/auth/backup/${jobId}`)
+          .set(as('owner'));
+        expect({
+          status: res.status,
+          leaked: JSON.stringify(res.body).includes('outside-jobs'),
+        }).toEqual({ status: 404, leaked: false });
+      },
+    );
+
     it('requires a token', async () => {
       await request(app.getHttpServer()).post('/auth/backup').expect(401);
       await request(app.getHttpServer())

@@ -15,6 +15,9 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 export const Public = () => SetMetadata('isPublic', true);
 
+/** The shape createBackup gives every job id: backup-<UTC timestamp>-<user id>. */
+const BACKUP_JOB_ID = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-[A-Za-z0-9_-]+$/;
+
 interface AuthenticatedRequest {
   user: {
     id: string;
@@ -215,7 +218,11 @@ export class AuthController {
     }
   }
 
-  // Check backup job status
+  /**
+   * @cc [owner:nareshshah139,label:security] backup-status-stays-in-jobs-dir
+   * Backup status MUST read only a job file inside backups/.jobs. A jobId that does not have the
+   * shape createBackup issues, including any with a slash or dots, MUST get 404 and no file content.
+   */
   @ApiBearerAuth()
   @Get('backup/:jobId')
   async getBackupStatus(@Param('jobId') jobId: string, @Request() req: AuthenticatedRequest) {
@@ -223,6 +230,7 @@ export class AuthController {
     if (!role || !['ADMIN', 'OWNER'].includes(role)) {
       throw new HttpException('Insufficient permissions. Admin access required.', HttpStatus.FORBIDDEN);
     }
+    if (!BACKUP_JOB_ID.test(jobId)) throw new HttpException('Job not found', HttpStatus.NOT_FOUND);
     const jobsDir = path.join(process.cwd(), '..', 'backups', '.jobs');
     try {
       const raw = await fs.readFile(path.join(jobsDir, `${jobId}.json`), 'utf8');
