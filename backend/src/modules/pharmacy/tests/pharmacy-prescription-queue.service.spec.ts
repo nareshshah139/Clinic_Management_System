@@ -157,8 +157,8 @@ describe('PharmacyPrescriptionQueueService', () => {
       prescription({
         items: JSON.stringify([
           {
-            drugName: 'Clindamycin Gel',
-            frequency: 'Apply at night',
+            drugName: 'Doxycycline 100',
+            frequency: 'As directed',
           },
         ]),
         pharmacyInvoices: [
@@ -170,7 +170,7 @@ describe('PharmacyPrescriptionQueueService', () => {
                 quantity: 1,
                 drug: {
                   id: 'drug-1',
-                  name: 'Clindamycin Gel',
+                  name: 'Doxycycline 100',
                 },
               },
             ],

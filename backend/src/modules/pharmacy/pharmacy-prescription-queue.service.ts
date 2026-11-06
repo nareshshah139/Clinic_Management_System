@@ -1,6 +1,6 @@
 import { lineMetadata, matchPrescriptionLines, prescriptionLineKeys } from './pharmacy-prescription-line-identity';
 import { queueStatusPage, prescriptionQueueLifecycle, PrescriptionQueueLifecycle } from './pharmacy-prescription-queue-query';
-import { billingQuantity, normalizeToken, prescribedSchedule } from './pharmacy-billing-quantity';
+import { BillingInventory, billingQuantity, normalizeToken, prescribedNeed, sellingUnitValue, snapQuantity } from './pharmacy-billing-quantity';
 import { availableStock, inventoryIdentityInclude, prescriptionSourceKey, resolvePrescriptionInventory, searchClinicInventory } from './pharmacy-stock-identity';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
@@ -117,6 +117,7 @@ type LoadedInvoiceItem = {
   id?: string;
   quantity: number;
   drug?: { id: string; name: string } | null;
+  inventory?: BillingInventory | null;
 };
 
 type DrugMatch = {
@@ -250,10 +251,10 @@ export class PharmacyPrescriptionQueueService {
       const [selection] = await tx.$queryRaw<{ ids: string[]; total: number; lifecycle: Record<string, PrescriptionQueueLifecycle> }[]>(
         queueStatusPage(branchId, query.status, page, limit, now),
       );
-      const prescriptions = await tx.prescription.findMany({
+      const prescriptions = await this.withInvoiceInventory(tx, await tx.prescription.findMany({
         where: { id: { in: selection.ids } },
         include: this.prescriptionInclude(branchId),
-      });
+      }) as LoadedPrescription[]);
       const tasks = await tx.pharmacyDispenseTask.findMany({
         where: { branchId, prescriptionId: { in: selection.ids } },
         include: { lines: true },
@@ -292,11 +293,31 @@ export class PharmacyPrescriptionQueueService {
     if (!prescription || (prescription as LoadedPrescription & { status?: string }).status === 'CANCELLED') {
       throw new NotFoundException('Prescription not found in this branch');
     }
+    const [loaded] = await this.withInvoiceInventory(this.prisma, [prescription]);
 
     const task = await this.taskDelegate()?.findFirst({
       where: { branchId, prescriptionId }, include: { lines: true },
     });
-    return this.mergeTask(this.toQueueEntry({ ...prescription, lifecycle }), task);
+    return this.mergeTask(this.toQueueEntry({ ...loaded, lifecycle }), task);
+  }
+
+  private async withInvoiceInventory(
+    db: Pick<PrismaService, 'inventoryItem'>,
+    prescriptions: LoadedPrescription[],
+  ): Promise<LoadedPrescription[]> {
+    const ids = [...new Set(prescriptions.flatMap(prescription => prescription.pharmacyInvoices
+      .flatMap(invoice => invoice.items.map(item => item.inventoryItemId).filter((id): id is string => !!id))))];
+    if (!ids.length) return prescriptions;
+    const inventory = new Map((await db.inventoryItem.findMany({
+      where: { id: { in: ids } }, select: { id: true, unit: true, packSize: true, packUnit: true },
+    })).map(item => [item.id, { unit: item.unit, packSize: item.packSize, packUnit: item.packUnit }]));
+    return prescriptions.map(prescription => ({
+      ...prescription,
+      pharmacyInvoices: prescription.pharmacyInvoices.map(invoice => ({
+        ...invoice,
+        items: invoice.items.map(item => ({ ...item, inventory: item.inventoryItemId ? inventory.get(item.inventoryItemId) ?? null : null })),
+      })),
+    }));
   }
 
   /**
@@ -1151,20 +1172,22 @@ export class PharmacyPrescriptionQueueService {
     invoiceItems: Array<LoadedInvoiceItem & { remaining: number }>,
   ): QueueMedication {
     const drugName = this.itemDrugName(item);
-    const prescribedQuantity = prescribedSchedule(item).doses;
-    let remaining = prescribedQuantity ?? Number.POSITIVE_INFINITY;
-    let dispensedQuantity = 0;
+    const need = prescribedNeed(item, drugName);
+    const goal = need?.amount ?? Number.POSITIVE_INFINITY;
+    let supplied = 0;
     for (const invoiceItem of invoiceItems) {
       const matches = item.inventoryItemId && invoiceItem.inventoryItemId
         ? item.inventoryItemId === invoiceItem.inventoryItemId
         : item.drugId ? item.drugId === invoiceItem.drug?.id
           : this.namesMatch(drugName, invoiceItem.drug?.name || '');
       if (!matches) continue;
-      const quantity = Math.min(remaining, invoiceItem.remaining);
-      dispensedQuantity += quantity;
-      remaining -= quantity;
-      invoiceItem.remaining -= quantity;
+      const perUnit = need ? sellingUnitValue(need, item, invoiceItem.inventory ?? null, drugName) : 1;
+      const value = snapQuantity(Math.max(0, invoiceItem.remaining) * perUnit);
+      invoiceItem.remaining -= Math.min(value, Math.max(0, goal - supplied)) / perUnit;
+      supplied += value;
     }
+    const prescribedQuantity = need?.amount ?? null;
+    const dispensedQuantity = Math.min(goal, supplied);
 
     let coverageStatus: QueueMedication['coverageStatus'] = 'unknown';
     if (prescribedQuantity !== null) {
