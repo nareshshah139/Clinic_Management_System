@@ -99,7 +99,7 @@ export type ReturnDocumentRecord = {
   credit: ReturnCreditRecord | null;
 };
 
-const DRAFT_STATUSES = ['DRAFT', 'AWAITING_APPROVAL', 'APPROVED'];
+export const DRAFT_STATUSES = ['DRAFT', 'AWAITING_APPROVAL', 'APPROVED'];
 const CLOSED_STATUSES = ['CANCELLED', 'REVERSED', 'REJECTED'];
 
 export function returnCreditState(
@@ -198,8 +198,6 @@ export function purchaseReturnRows(entries: PurchaseReturnEntry[], query: Purcha
     .sort((a, b) => direction * (compareValues(value(a), value(b)) || a.srNo - b.srNo));
 }
 
-const sum = (values: number[]) => money(values.reduce((total, value) => total + value, 0));
-
 function options(rows: PurchaseReturnEntry[]) {
   const people = new Map(rows.flatMap((row) => (row.entryBy ? [[row.entryBy.id, row.entryBy] as const] : [])));
   const distributors = new Map(rows.map((row) => [row.distributor.gstin, row.distributor] as const));
@@ -212,12 +210,6 @@ function options(rows: PurchaseReturnEntry[]) {
 }
 
 export type StandingCredit = { held: number; awaited: { amount: number; count: number } };
-
-export function awaitedTotals(entries: PurchaseReturnEntry[], distributorGstin?: string) {
-  const gstin = distributorGstin?.trim().toUpperCase();
-  const awaited = entries.filter((row) => row.state === 'AWAITED' && (!gstin || row.distributor.gstin === gstin));
-  return { amount: sum(awaited.map((row) => row.returnValue)), count: awaited.length };
-}
 
 export function purchaseReturnsPage(
   entries: PurchaseReturnEntry[],

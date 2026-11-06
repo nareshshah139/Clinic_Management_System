@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
   DEFAULT_INVENTORY_SETTINGS,
@@ -27,6 +28,7 @@ import {
   writeStockMovement,
 } from './inventory-stock';
 import { clinicDay, clinicDayOf, isCalendarDay } from '../pharmacy/register-utils';
+import { EVERY_ALLOCATION, creditBalance } from '../pharmacy/supplier-credit-balance';
 import {
   CREDIT_NOTE_NUMBER_MAX,
   creditNoteNumberOf,
@@ -839,19 +841,26 @@ export class InventoryWorkflowService {
     dto: TransitionWorkflowDto,
   ): Promise<any> {
     const settings = await this.settings(actor);
-    return this.transaction(async (tx) => {
-      const doc = await tx.inventoryWorkflowDocument.findFirst({
-        where: { id, branchId: actor.branchId },
+    let creditNoteNumber = '';
+    try {
+      return await this.transaction(async (tx) => {
+        const doc = await tx.inventoryWorkflowDocument.findFirst({
+          where: { id, branchId: actor.branchId },
+        });
+        if (!doc) throw new NotFoundException('Document not found');
+        await this.authorize(actor, doc.kind, true);
+        if (doc.version !== dto.version)
+          throw new ConflictException(
+            'This document changed. Reload to confirm its current status.',
+          );
+        if (dto.action === 'RECOUNT') return this.restartCount(tx, actor, doc);
+        creditNoteNumber = creditNoteNumberOf(doc.payload?.creditNoteNumber);
+        return this.move(tx, actor, doc, dto, settings);
       });
-      if (!doc) throw new NotFoundException('Document not found');
-      await this.authorize(actor, doc.kind, true);
-      if (doc.version !== dto.version)
-        throw new ConflictException(
-          'This document changed. Reload to confirm its current status.',
-        );
-      if (dto.action === 'RECOUNT') return this.restartCount(tx, actor, doc);
-      return this.move(tx, actor, doc, dto, settings);
-    });
+    } catch (error) {
+      if (isCreditNoteNumberClash(error)) throw this.duplicateCreditNote(creditNoteNumber);
+      throw error;
+    }
   }
   private async move(
     tx: any,
@@ -1101,6 +1110,9 @@ export class InventoryWorkflowService {
       throw new BadRequestException(`The credit note number can have at most ${CREDIT_NOTE_NUMBER_MAX} characters`);
     if (!isCalendarDay(date)) throw new BadRequestException('Enter the credit note date as a calendar day');
     if (date > clinicDay(new Date())) throw new BadRequestException('The credit note date cannot be after today');
+    const creditDay = clinicDayOf(doc.payload.date) ?? clinicDay(doc.createdAt);
+    if (date < creditDay)
+      throw new BadRequestException(`The credit note date cannot be before the supplier credit date, ${displayDay(creditDay)}`);
     const taken = await tx.inventorySupplierCredit.findFirst({
       where: { branchId: actor.branchId, supplierGstin: doc.supplierGstin, creditNoteNumber: number, reversedAt: null },
       select: { reference: true },
@@ -1115,6 +1127,11 @@ export class InventoryWorkflowService {
       receivedById: actor.id,
     };
   }
+  private creditNotePayload(doc: any, note: CreditNoteInput) {
+    return doc.kind === 'CREDIT_NOTE'
+      ? { payload: { ...doc.payload, creditNoteNumber: note.number, creditNoteDate: note.date } }
+      : {};
+  }
   private creditNoteDetail(note: CreditNoteInput) {
     return { number: note.number, date: note.date, amount: note.amount };
   }
@@ -1124,22 +1141,25 @@ export class InventoryWorkflowService {
       message: `Credit note ${number} is already recorded for this distributor${reference ? ` on return ${reference}` : ''}. Check the number on the distributor's credit note.`,
     });
   }
+  private async creditWithBalance(tx: any, documentId: string) {
+    const credit = await tx.inventorySupplierCredit.findUnique({
+      where: { documentId },
+      include: { allocations: { select: { amount: true, createdAt: true, reversedAt: true } } },
+    });
+    return credit ? { ...credit, balance: creditBalance(credit, EVERY_ALLOCATION) } : null;
+  }
   private async creditNoteOutcome(tx: any, documentId: string) {
     const [document, credit] = await Promise.all([
       tx.inventoryWorkflowDocument.findUnique({ where: { id: documentId } }),
-      tx.inventorySupplierCredit.findUnique({ where: { documentId } }),
+      this.creditWithBalance(tx, documentId),
     ]);
-    const amount = Number(credit.amount);
-    const applied = Number(credit.applied);
     return {
       document: this.plain(document),
       credit: {
-        id: credit.id,
-        number: credit.creditNoteNumber,
-        date: credit.creditNoteDate ? credit.creditNoteDate.toISOString().slice(0, 10) : null,
-        amount,
-        applied,
-        available: money(Math.max(amount - applied, 0)),
+        id: credit!.id,
+        number: credit!.creditNoteNumber,
+        date: credit!.creditNoteDate ? credit!.creditNoteDate.toISOString().slice(0, 10) : null,
+        ...credit!.balance,
       },
     };
   }
@@ -1166,7 +1186,18 @@ export class InventoryWorkflowService {
             detail: { path: ['requestKey'], equals: note.requestKey },
           },
         });
-        if (replay) return this.creditNoteOutcome(tx, doc.id);
+        if (replay) {
+          const same =
+            replay.action === (correction ? 'CREDIT_NOTE_CORRECTED' : 'CREDIT_NOTE') &&
+            isDeepStrictEqual(replay.detail?.after, this.creditNoteDetail(note)) &&
+            (replay.detail?.reason ?? null) === correction;
+          if (!same)
+            throw new ConflictException({
+              code: 'REQUEST_KEY_REUSED',
+              message: 'This request was already used for a different credit note. Close the dialog and start again.',
+            });
+          return this.creditNoteOutcome(tx, doc.id);
+        }
         if (doc.version !== note.version)
           throw new ConflictException(`This ${doc.kind === 'CREDIT_NOTE' ? 'supplier credit' : 'return'} changed. Reload to see its latest status.`);
         const taken = await tx.inventorySupplierCredit.findFirst({
@@ -1204,7 +1235,7 @@ export class InventoryWorkflowService {
     }
   }
   private async receiveCreditNote(tx: any, actor: WorkflowActor, doc: any, fromStatus: string, note: CreditNoteInput) {
-    const credit = await tx.inventorySupplierCredit.findUnique({ where: { documentId: doc.id } });
+    const credit = await this.creditWithBalance(tx, doc.id);
     if (credit?.reversedAt) throw new BadRequestException('This return has no open supplier credit');
     if (credit?.creditNoteNumber)
       throw new ConflictException({
@@ -1212,7 +1243,7 @@ export class InventoryWorkflowService {
         message: `Credit note ${credit.creditNoteNumber} is already recorded for this ${doc.kind === 'CREDIT_NOTE' ? 'supplier credit' : 'return'}.`,
       });
     const before = credit ? money(Number(credit.amount)) : null;
-    if (credit && Number(credit.applied) > 0 && before !== note.amount)
+    if (credit && credit.balance.applied > 0 && before !== note.amount)
       throw new BadRequestException(
         `Part of this credit is already set off against bills, so its amount stays ${rupees(before!)}. Enter the number and date only.`,
       );
@@ -1234,7 +1265,7 @@ export class InventoryWorkflowService {
       });
     const updated = await tx.inventoryWorkflowDocument.update({
       where: { id: doc.id, version: doc.version },
-      data: { version: { increment: 1 } },
+      data: { version: { increment: 1 }, ...this.creditNotePayload(doc, note) },
     });
     await this.event(tx, updated, actor, 'CREDIT_NOTE', fromStatus, {
       requestKey: note.requestKey,
@@ -1245,7 +1276,7 @@ export class InventoryWorkflowService {
     return this.creditNoteOutcome(tx, doc.id);
   }
   private async correctCreditNote(tx: any, actor: WorkflowActor, doc: any, note: CreditNoteInput, reason: string) {
-    const credit = doc.status === 'POSTED' ? await tx.inventorySupplierCredit.findUnique({ where: { documentId: doc.id } }) : null;
+    const credit = doc.status === 'POSTED' ? await this.creditWithBalance(tx, doc.id) : null;
     if (!credit || credit.reversedAt || !credit.creditNoteNumber)
       throw new BadRequestException('Record the credit note before correcting it');
     const before = {
@@ -1253,7 +1284,7 @@ export class InventoryWorkflowService {
       date: credit.creditNoteDate ? credit.creditNoteDate.toISOString().slice(0, 10) : null,
       amount: money(Number(credit.amount)),
     };
-    const applied = money(Number(credit.applied));
+    const applied = credit.balance.applied;
     if (applied > 0 && before.amount !== note.amount)
       throw new BadRequestException(
         `${rupees(applied)} of this credit is already set off against bills, so its amount stays ${rupees(before.amount)}. Correct the number and date only.`,
@@ -1262,7 +1293,7 @@ export class InventoryWorkflowService {
       throw new BadRequestException('The credit note already reads this way. Change the number, date or amount to correct it.');
     const updated = await tx.inventoryWorkflowDocument.update({
       where: { id: doc.id, version: doc.version },
-      data: { version: { increment: 1 } },
+      data: { version: { increment: 1 }, ...this.creditNotePayload(doc, note) },
     });
     await tx.inventorySupplierCredit.update({
       where: { id: credit.id, applied: credit.applied },
@@ -2067,12 +2098,10 @@ export class InventoryWorkflowService {
           'Reverse linked customer returns before reversing this sale',
         );
     }
-    const credit = await tx.inventorySupplierCredit.findUnique({
-      where: { documentId: doc.id },
-    });
-    if (credit && Number(credit.applied) > 0)
+    const credit = await this.creditWithBalance(tx, doc.id);
+    if (credit && credit.balance.applied > 0)
       throw new BadRequestException(
-        'Reverse credit allocations before reversing this return',
+        `${rupees(credit.balance.applied)} of this credit is set off against bills. Undo the set-off before reversing this return.`,
       );
     const previous = await tx.inventoryWorkflowEffect.findMany({
       where: { documentId: doc.id },

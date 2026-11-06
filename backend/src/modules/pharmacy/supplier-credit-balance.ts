@@ -12,6 +12,7 @@ export type CreditAllocationRecord = {
 export type SupplierCreditRecord = {
   supplierGstin: string;
   amount: unknown;
+  applied: unknown;
   createdAt: Instant;
   reversedAt: Instant | null;
   creditNoteNumber: string | null;
@@ -27,12 +28,19 @@ const inEffect = (allocation: CreditAllocationRecord, asOf: Date) =>
 
 export const EVERY_ALLOCATION = new Date(8.64e15);
 
+const total = (allocations: CreditAllocationRecord[]) =>
+  allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0);
+
+/**
+ * The stored `applied` column moves with every allocation and its reversal, so it equals the open
+ * allocations except on credits set off before allocations were kept. That unexplained part is real
+ * money already used, so it counts as applied from the day the credit was raised.
+ */
 export function creditBalance(credit: SupplierCreditRecord, asOf: Date) {
   const amount = money(Number(credit.amount));
+  const unexplained = Math.max(money(Number(credit.applied) - total(credit.allocations.filter((allocation) => !allocation.reversedAt))), 0);
   const applied = money(
-    credit.allocations
-      .filter((allocation) => inEffect(allocation, asOf))
-      .reduce((sum, allocation) => sum + Number(allocation.amount), 0),
+    total(credit.allocations.filter((allocation) => inEffect(allocation, asOf))) + (by(credit.createdAt, asOf) ? unexplained : 0),
   );
   const left = amount - applied;
   const available = by(credit.reversedAt, asOf) || left <= MONEY_TOLERANCE ? 0 : money(left);
@@ -55,6 +63,7 @@ export function creditHeldByDistributor(credits: SupplierCreditRecord[], asOf: D
 export const SUPPLIER_CREDIT_BALANCE_SELECT = {
   supplierGstin: true,
   amount: true,
+  applied: true,
   createdAt: true,
   reversedAt: true,
   creditNoteNumber: true,

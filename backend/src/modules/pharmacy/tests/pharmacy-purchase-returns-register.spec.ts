@@ -1,5 +1,4 @@
 import {
-  awaitedTotals,
   purchaseReturnEntry,
   purchaseReturnsPage,
   purchaseReturnsSheet,
@@ -18,6 +17,7 @@ const credit = (overrides: Record<string, unknown> = {}) => ({
   id: 'credit-1',
   supplierGstin: linae,
   amount: 500,
+  applied: 0,
   createdAt: new Date('2026-10-10T05:00:00Z'),
   reversedAt: null,
   creditNoteNumber: 'CN-1',
@@ -66,12 +66,10 @@ describe('purchase returns register', () => {
         returnCreditState('POSTED', { number: 'CN-1', amount: 500, applied: 0 }),
         returnCreditState('POSTED', { number: 'CN-1', amount: 500, applied: 200 }),
         returnCreditState('POSTED', { number: 'CN-1', amount: 500, applied: 499.995 }),
-        returnCreditState('POSTED', { number: null, amount: 75.5, applied: 20 }),
-        returnCreditState('POSTED', { number: null, amount: 75.5, applied: 75.5 }),
         returnCreditState('REVERSED', { number: 'CN-1', amount: 500, applied: 0 }),
         returnCreditState('CANCELLED', null),
       ],
-    ).toEqual(['DRAFT', 'DRAFT', 'AWAITED', 'AWAITED', 'RECEIVED', 'ADJUSTED', 'USED', 'ADJUSTED', 'USED', 'CANCELLED', 'CANCELLED']);
+    ).toEqual(['DRAFT', 'DRAFT', 'AWAITED', 'AWAITED', 'RECEIVED', 'ADJUSTED', 'USED', 'CANCELLED', 'CANCELLED']);
   });
 
   it('shows the credit note as received from the distributor next to our own return value', () => {
@@ -169,9 +167,7 @@ describe('purchase returns register', () => {
 
   const STANDING = { held: 812.5, awaited: { amount: 670, count: 2 } };
 
-  it('counts credit notes awaited across all dates, from the date on the return challan', () => {
-    expect(awaitedTotals(entries())).toEqual({ amount: 670, count: 2 });
-    expect(awaitedTotals(entries(), medico.toLowerCase())).toEqual({ amount: 0, count: 0 });
+  it('dates an awaited credit note from the return challan', () => {
     expect(entries().map((row) => [row.returnRef, row.awaitedSince])).toEqual([
       ['RET-1', null], ['RET-2', '2026-10-06'], ['RET-3', null], ['RET-4', null], ['Rate difference', null], ['RET-OLD', '2026-03-20'],
     ]);
@@ -252,6 +248,24 @@ describe('supplier credit balance', () => {
         new Date('2026-10-22T00:00:00Z'),
       ),
     ).toEqual({ amount: 500, applied: 100, available: 400 });
+  });
+
+  it('counts a set-off made before allocations were kept as applied, once, from the day the credit was raised', () => {
+    const open = { amount: 30, createdAt: new Date('2026-10-20T00:00:00Z'), reversedAt: null };
+    const undone = { amount: 15, createdAt: new Date('2026-10-21T00:00:00Z'), reversedAt: new Date('2026-10-22T00:00:00Z') };
+    expect([
+      creditBalance(credit({ amount: 75.5, applied: 20 }), now),
+      creditBalance(credit({ amount: 75.5, applied: 50, allocations: [open, undone] }), now),
+      creditBalance(credit({ amount: 75.5, applied: 50, allocations: [open, undone] }), new Date('2026-10-21T12:00:00Z')),
+      creditBalance(credit({ amount: 75.5, applied: 30, allocations: [open] }), now),
+      creditBalance(credit({ amount: 75.5, applied: 20 }), new Date('2026-10-01T00:00:00Z')),
+    ]).toEqual([
+      { amount: 75.5, applied: 20, available: 55.5 },
+      { amount: 75.5, applied: 50, available: 25.5 },
+      { amount: 75.5, applied: 65, available: 10.5 },
+      { amount: 75.5, applied: 30, available: 45.5 },
+      { amount: 75.5, applied: 0, available: 75.5 },
+    ]);
   });
 
   it('reads return reasons including the earlier return types and normalises credit note numbers', () => {

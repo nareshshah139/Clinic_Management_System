@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { Prisma } from '@prisma/client';
 import {
+  DRAFT_STATUSES,
   RETURN_KINDS,
-  awaitedTotals,
   purchaseReturnEntry,
   purchaseReturnRows,
   purchaseReturnsPage,
@@ -12,9 +13,16 @@ import {
   type PurchaseReturnsPage,
   type PurchaseReturnsQuery,
   type StandingCredit,
+  returnCreditState,
 } from './pharmacy-purchase-returns-register';
-import { clinicDayStart, peopleById } from './register-utils';
-import { SUPPLIER_CREDIT_BALANCE_SELECT, creditHeldByDistributor } from './supplier-credit-balance';
+import { clinicDayStart, money, peopleById } from './register-utils';
+import {
+  EVERY_ALLOCATION,
+  SUPPLIER_CREDIT_BALANCE_SELECT,
+  creditBalance,
+  creditHeldByDistributor,
+  type SupplierCreditRecord,
+} from './supplier-credit-balance';
 
 export type PurchaseReturnsActor = { branchId: string };
 
@@ -35,7 +43,16 @@ const DOC_SELECT = {
 
 // Posting refuses a return dated more than a day ahead, and posting touches updatedAt, so a
 // return dated inside the range was last updated no earlier than two days before it starts.
+// Drafts and cancelled drafts never passed that check, so they are read whatever their date.
 const RETURN_DATE_LEAD_DAYS = 2;
+
+type CreditTotalsRow = Omit<SupplierCreditRecord, 'allocations'> & { allocated: unknown };
+type OpenReturnRow = { status: string; totalAmount: Prisma.Decimal; credit: CreditTotalsRow | null };
+
+const withOpenAllocations = (row: CreditTotalsRow) => ({
+  ...row,
+  allocations: [{ amount: row.allocated, createdAt: row.createdAt, reversedAt: null }],
+});
 
 @Injectable()
 export class PharmacyPurchaseReturnsRegisterService {
@@ -62,26 +79,50 @@ export class PharmacyPurchaseReturnsRegisterService {
   }
 
   private async standing(actor: PurchaseReturnsActor, now: Date, distributorGstin?: string): Promise<StandingCredit> {
-    const gstin = distributorGstin?.trim().toUpperCase() || undefined;
+    const gstin = distributorGstin?.trim().toUpperCase() || null;
     const [credits, open] = await Promise.all([
-      this.prisma.inventorySupplierCredit.findMany({
-        where: { branchId: actor.branchId, creditNoteNumber: { not: null }, reversedAt: null, ...(gstin ? { supplierGstin: gstin } : {}) },
-        select: SUPPLIER_CREDIT_BALANCE_SELECT,
-      }),
-      this.build(actor, now, {
-        branchId: actor.branchId,
-        kind: 'SUPPLIER_RETURN',
-        status: { in: ['CHALLAN', 'POSTED'] },
-        ...(gstin ? { supplierGstin: gstin } : {}),
-      }),
+      this.prisma.$queryRaw<CreditTotalsRow[]>`
+        SELECT c."supplierGstin", c."amount", c."applied", c."createdAt", c."reversedAt", c."creditNoteNumber", c."receivedAt",
+               COALESCE(SUM(a."amount") FILTER (WHERE a."reversedAt" IS NULL), 0) AS "allocated"
+        FROM "inventory_supplier_credits" c
+        LEFT JOIN "inventory_credit_allocations" a ON a."creditId" = c."id"
+        WHERE c."branchId" = ${actor.branchId} AND c."creditNoteNumber" IS NOT NULL AND c."reversedAt" IS NULL
+          AND (${gstin}::text IS NULL OR c."supplierGstin" = ${gstin})
+        GROUP BY c."id"`,
+      this.prisma.$queryRaw<OpenReturnRow[]>`
+        SELECT d."status", d."totalAmount",
+               CASE WHEN c."id" IS NULL THEN NULL ELSE json_build_object(
+                 'supplierGstin', c."supplierGstin", 'amount', c."amount", 'applied', c."applied", 'createdAt', c."createdAt",
+                 'reversedAt', c."reversedAt", 'creditNoteNumber', c."creditNoteNumber", 'receivedAt', c."receivedAt",
+                 'allocated', COALESCE(SUM(a."amount") FILTER (WHERE a."reversedAt" IS NULL), 0)) END AS "credit"
+        FROM "inventory_workflow_documents" d
+        LEFT JOIN "inventory_supplier_credits" c ON c."documentId" = d."id"
+        LEFT JOIN "inventory_credit_allocations" a ON a."creditId" = c."id"
+        WHERE d."branchId" = ${actor.branchId} AND d."kind" IN ('SUPPLIER_RETURN', 'CREDIT_NOTE') AND d."status" IN ('CHALLAN', 'POSTED')
+          AND c."creditNoteNumber" IS NULL AND (${gstin}::text IS NULL OR d."supplierGstin" = ${gstin})
+        GROUP BY d."id", c."id"`,
     ]);
-    const held = [...creditHeldByDistributor(credits, now).values()].reduce((total, amount) => total + amount, 0);
-    return { held: Math.round(held * 100) / 100, awaited: awaitedTotals(open) };
+    const held = [...creditHeldByDistributor(credits.map(withOpenAllocations), now).values()].reduce((total, amount) => total + amount, 0);
+    const awaited = open.filter(
+      (row) =>
+        returnCreditState(
+          row.status,
+          row.credit ? { number: null, ...creditBalance(withOpenAllocations(row.credit), EVERY_ALLOCATION) } : null,
+        ) === 'AWAITED',
+    );
+    return {
+      held: money(held),
+      awaited: { amount: money(awaited.reduce((total, row) => total + Number(row.totalAmount), 0)), count: awaited.length },
+    };
   }
 
   private entries(actor: PurchaseReturnsActor, now: Date, from: string) {
     const earliest = new Date(clinicDayStart(from).getTime() - RETURN_DATE_LEAD_DAYS * 86400000);
-    return this.build(actor, now, { branchId: actor.branchId, kind: { in: [...RETURN_KINDS] }, updatedAt: { gte: earliest } });
+    return this.build(actor, now, {
+      branchId: actor.branchId,
+      kind: { in: [...RETURN_KINDS] },
+      OR: [{ updatedAt: { gte: earliest } }, { status: { in: [...DRAFT_STATUSES, 'CANCELLED'] } }],
+    });
   }
 
   private async build(actor: PurchaseReturnsActor, now: Date, where: Record<string, unknown>): Promise<PurchaseReturnEntry[]> {

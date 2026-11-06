@@ -148,6 +148,10 @@ export class PharmacySupplierCreditService {
           throw new ConflictException({ code: 'SET_OFF_UNDONE', message: 'This set-off was undone. Start a new set-off if you still need it.' });
         return this.outcome(tx, actor, earlier.id, earlier.allocations, now);
       }
+      const beforeSetOffs = await tx.inventoryCreditAllocation.findUnique({
+        where: { branchId_requestKey: { branchId: actor.branchId, requestKey } },
+      });
+      if (beforeSetOffs) return this.replayAllocation(tx, actor, beforeSetOffs, scope, wanted, now);
       const credits = await this.heldCredits(tx, actor.branchId, scope);
       const gstin = credits[0]?.credit.supplierGstin ?? scope.gstin;
       const bills = await this.openBills(tx, actor.branchId, gstin, now, wanted.map((allocation) => allocation.purchaseInvoiceId));
@@ -213,6 +217,24 @@ export class PharmacySupplierCreditService {
     });
   }
 
+  // An allocation made through credits/allocate before set-offs were stored carries the
+  // client's request key itself, so a retry of that request after the deploy finds it here.
+  private replayAllocation(tx: any, actor: SupplierCreditActor, allocation: any, scope: Scope, wanted: Wanted[], now: Date) {
+    const same =
+      wanted.length === 1 &&
+      wanted[0].purchaseInvoiceId === allocation.purchaseInvoiceId &&
+      Math.abs(wanted[0].amount - Number(allocation.amount)) <= TOLERANCE &&
+      (!scope.creditId || scope.creditId === allocation.creditId);
+    if (!same)
+      throw new ConflictException({
+        code: 'REQUEST_KEY_REUSED',
+        message: 'This request was already used for a different set-off. Close the dialog and start again.',
+      });
+    if (allocation.reversedAt)
+      throw new ConflictException({ code: 'SET_OFF_UNDONE', message: 'This set-off was undone. Start a new set-off if you still need it.' });
+    return this.outcome(tx, actor, null, [allocation], now);
+  }
+
   allocate(actor: SupplierCreditActor, input: Record<string, any>) {
     return this.setOff(actor, {
       requestKey: input?.requestKey,
@@ -259,7 +281,7 @@ export class PharmacySupplierCreditService {
     });
   }
 
-  private async outcome(tx: any, actor: SupplierCreditActor, setOffId: string, allocations: any[], now: Date) {
+  private async outcome(tx: any, actor: SupplierCreditActor, setOffId: string | null, allocations: any[], now: Date) {
     const billIds = [...new Set(allocations.map((allocation) => allocation.purchaseInvoiceId))];
     const creditIds = [...new Set(allocations.map((allocation) => allocation.creditId))];
     const [invoices, credits] = await Promise.all([
