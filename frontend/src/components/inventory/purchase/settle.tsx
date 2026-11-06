@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api';
+import { formatDisplayDay } from '@/lib/date-ranges';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -17,7 +18,11 @@ import {
   UNDO_WINDOW_MS,
   canMarkPaid,
   daysText,
+  isScheduledOnly,
   paymentText,
+  scheduledNote,
+  shortDay,
+  PurchaseRegisterRow as _Row,
   type PurchaseRegisterResponse,
   type PurchaseRegisterRow,
   type RecordedPayment,
@@ -36,7 +41,29 @@ function OverdueDays({ days }: { days: number }) {
   );
 }
 
+function ScheduledBadge({ day }: { day: string }) {
+  return (
+    <Badge variant="info" className={badgeText}>
+      <span aria-hidden="true">Scheduled {shortDay(day)}</span>
+      <span className="sr-only">Payment scheduled for {formatDisplayDay(day)}</span>
+    </Badge>
+  );
+}
+
 export function PaymentBadge({ row }: { row: PurchaseRegisterRow }) {
+  if (isScheduledOnly(row) && row.payment.scheduledOn) return <ScheduledBadge day={row.payment.scheduledOn} />;
+  const scheduled = scheduledNote(row);
+  const badge = <OwedBadge row={row} />;
+  if (!scheduled || !['DUE', 'OVERDUE', 'PARTIAL'].includes(row.payment.state)) return badge;
+  return (
+    <span className="flex flex-col items-start gap-0.5">
+      {badge}
+      <span className="whitespace-nowrap text-xs leading-tight font-medium text-foreground">{scheduled}</span>
+    </span>
+  );
+}
+
+function OwedBadge({ row }: { row: PurchaseRegisterRow }) {
   const { state, outstanding, overdueDays, partlyPaid } = row.payment;
   const settled = row.payment.paid + row.payment.credit;
   const note = (text: string) => <span className="whitespace-nowrap text-xs leading-tight font-medium text-foreground">{text}</span>;

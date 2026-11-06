@@ -34,9 +34,13 @@ describe('PharmacyPurchaseRegisterService', () => {
     prisma = {
       pharmacyPurchaseInvoice: {
         findMany: jest.fn().mockResolvedValue([
-          bill({ id: 'a', invoiceNumber: 'LIN-1', createdAt: new Date('2026-10-01T05:00:00Z'), createdBy: 'user-asha', netPayable: 1000, paymentAllocations: [{ amount: 400 }] }),
+          bill({ id: 'a', invoiceNumber: 'LIN-1', createdAt: new Date('2026-10-01T05:00:00Z'), createdBy: 'user-asha', netPayable: 1000, paymentAllocations: [
+            { amount: 400, payment: { paymentDate: new Date('2026-10-05T18:30:00.000Z') } },
+            { amount: 250, payment: { paymentDate: new Date('2026-11-06T18:30:00.000Z') } },
+          ],
+          documents: [{ id: 'doc-1', fileName: 'lin-1.pdf', mimeType: 'application/pdf' }] }),
           bill({ id: 'b', invoiceNumber: 'LIN-2', createdAt: new Date('2026-10-02T05:00:00Z'), createdBy: 'gmail-intake', netPayable: 250 }),
-          bill({ id: 'c', invoiceNumber: 'LIN-3', createdAt: new Date('2026-10-03T05:00:00Z'), createdBy: 'user-asha', netPayable: 300, paymentAllocations: [{ amount: 300 }] }),
+          bill({ id: 'c', invoiceNumber: 'LIN-3', createdAt: new Date('2026-10-03T05:00:00Z'), createdBy: 'user-asha', netPayable: 300, paymentAllocations: [{ amount: 300, payment: { paymentDate: new Date('2026-10-05T18:30:00.000Z') } }] }),
           bill({ id: 'd', invoiceNumber: 'LIN-4', createdAt: new Date('2026-10-04T05:00:00Z'), createdBy: 'user-asha', netPayable: 700, status: 'REVIEWED' }),
         ]),
       },
@@ -59,8 +63,8 @@ describe('PharmacyPurchaseRegisterService', () => {
       },
     });
     expect(prisma.pharmacyPurchaseInvoice.findMany.mock.calls[0][0].select.paymentAllocations).toEqual({
-      where: { payment: { reversedAt: null, paymentDate: { lte: now } } },
-      select: { amount: true },
+      where: { payment: { reversedAt: null } },
+      select: { amount: true, payment: { select: { paymentDate: true } } },
     });
   });
 
@@ -81,6 +85,16 @@ describe('PharmacyPurchaseRegisterService', () => {
       excluded: { notPosted: 1, cancelled: 0 },
     });
     expect(Object.keys(page)).not.toContain('canSettle');
+  });
+
+  it('keeps a payment dated tomorrow out of the balance but off the amount that can be paid now', async () => {
+    const [first] = (await service.list(query(), branch, now)).rows;
+    expect(first.payment).toMatchObject({
+      outstanding: 600, scheduled: 250, scheduledOn: '2026-11-07', payable: 350, paid: 400,
+    });
+    expect(first.documents).toEqual([{ id: 'doc-1', fileName: 'lin-1.pdf', mimeType: 'application/pdf' }]);
+    const arrived = (await service.list(query(), branch, new Date('2026-11-06T18:30:00.000Z'))).rows[0];
+    expect(arrived.payment).toMatchObject({ outstanding: 350, scheduled: 0, scheduledOn: null, payable: 350, paid: 650 });
   });
 
   it('exports every filtered bill, not just the page, as a spreadsheet named for the range', async () => {

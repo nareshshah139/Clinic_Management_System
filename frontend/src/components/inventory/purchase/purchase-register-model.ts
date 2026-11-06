@@ -27,6 +27,8 @@ export type Person = { id: string; name: string };
 export type Distributor = { name: string; gstin: string };
 export type PurchaseQuery = RegisterQuery<FilterKey, SortKey>;
 
+export type PurchaseDocument = { id: string; fileName: string; mimeType: string };
+
 export type PurchaseRegisterRow = {
   id: string;
   srNo: number;
@@ -38,11 +40,15 @@ export type PurchaseRegisterRow = {
   distributor: Distributor;
   amount: number;
   invoiceState: InvoiceState;
+  documents: PurchaseDocument[];
   payment: {
     state: PaymentState;
     paid: number;
     credit: number;
     outstanding: number;
+    scheduled: number;
+    scheduledOn: string | null;
+    payable: number;
     partlyPaid: boolean;
     dueDate: string | null;
     overdueDays: number;
@@ -123,8 +129,19 @@ export const SETTLE_MODE_LABELS: Record<SettleMode, string> = { CASH: 'Cash', CH
 
 const SETTLEABLE: readonly PaymentState[] = ['DUE', 'OVERDUE', 'PARTIAL'];
 
+const MONEY_TOLERANCE = 0.01;
+
+const owed = ({ payment }: PurchaseRegisterRow) => SETTLEABLE.includes(payment.state) && payment.outstanding > MONEY_TOLERANCE;
+
 export const canMarkPaid = (row: PurchaseRegisterRow, canSettle: boolean) =>
-  canSettle && SETTLEABLE.includes(row.payment.state) && row.payment.outstanding > 0;
+  canSettle && owed(row) && row.payment.payable > MONEY_TOLERANCE;
+
+export const isScheduledOnly = (row: PurchaseRegisterRow) =>
+  owed(row) && row.payment.payable <= MONEY_TOLERANCE && row.payment.scheduled > MONEY_TOLERANCE;
+
+export const shortDay = (day: string) => formatDisplayDay(day).slice(0, 5);
+
+export const documentHref = (documentId: string) => `/api/pharmacy/purchase-invoices/documents/${encodeURIComponent(documentId)}`;
 
 export function requestParams(query: PurchaseQuery) {
   const q = query.q.trim();
@@ -162,8 +179,22 @@ export function excludedNote({ notPosted, cancelled }: { notPosted: number; canc
 
 export const daysText = (days: number) => plural(days, 'day', 'days');
 
-export function paymentText({ payment }: PurchaseRegisterRow) {
+export function scheduledNote({ payment }: PurchaseRegisterRow) {
+  return payment.scheduled > MONEY_TOLERANCE && payment.scheduledOn
+    ? `${formatRupees(payment.scheduled)} scheduled ${shortDay(payment.scheduledOn)}`
+    : null;
+}
+
+export function paymentText(row: PurchaseRegisterRow) {
+  const { payment } = row;
   const due = formatRupees(payment.outstanding);
+  if (isScheduledOnly(row)) return `Payment scheduled for ${formatDisplayDay(payment.scheduledOn!)}`;
+  const scheduled = scheduledNote(row);
+  const text = baseText(row, due);
+  return scheduled && owed(row) ? `${text}, ${scheduled}` : text;
+}
+
+function baseText({ payment }: PurchaseRegisterRow, due: string) {
   switch (payment.state) {
     case 'PAID':
       return 'Paid';

@@ -151,6 +151,37 @@ describe('PharmacyPurchaseLedgerService', () => {
     expect(prisma.pharmacyPurchasePayment.create).not.toHaveBeenCalled();
   });
 
+  it('caps a new payment at the balance not already covered by a future-dated payment', async () => {
+    prisma.pharmacyPurchaseInvoice.findMany.mockResolvedValue([
+      invoice({
+        netPayable: 1000,
+        paymentAllocations: [
+          { amount: 400, payment: { paymentDate: '2099-01-14T18:30:00.000Z' } },
+        ],
+      }),
+    ]);
+    const pay = (amount: number) =>
+      service.createPayment(
+        {
+          requestKey: `payment-${amount}`,
+          distributorGstin: gstin,
+          distributorName: 'Linae Distributors',
+          paymentDate: '2026-05-06',
+          mode: PharmacyPurchasePaymentModeDto.UPI,
+          amount,
+          allocations: [{ purchaseInvoiceId: 'purchase-1', amount }],
+        },
+        branchId,
+        userId,
+      );
+    await expect(pay(600.01)).rejects.toThrow('Allocation exceeds outstanding balance for invoice');
+    expect(prisma.pharmacyPurchasePayment.create).not.toHaveBeenCalled();
+    prisma.pharmacyPurchasePayment.create.mockImplementation(({ data }: any) =>
+      Promise.resolve({ id: 'payment-1', ...data, allocations: data.allocations.create.map((a: any) => ({ ...a, purchaseInvoice: invoice({ netPayable: 1000 }) })) }),
+    );
+    await expect(pay(600)).resolves.toMatchObject({ id: 'payment-1' });
+  });
+
   it('rejects invoice allocations for a different distributor GSTIN', async () => {
     prisma.pharmacyPurchaseInvoice.findMany.mockResolvedValue([
       invoice({ distributorGstin: '36ABCDE1234F1Z6' }),

@@ -49,7 +49,7 @@ export function MarkPaidDialog({
   onPaid: (payment: RecordedPayment, amount: number) => void;
   onStale: (failure: Extract<SettleFailure, { kind: 'stale' }>) => void;
 }) {
-  const amount = row.payment.outstanding;
+  const amount = row.payment.payable;
   const [today] = useState(getISTDateString);
   const [key] = useState(requestKey);
   const [mode, setMode] = useState<SettleMode>(readSettleMode);

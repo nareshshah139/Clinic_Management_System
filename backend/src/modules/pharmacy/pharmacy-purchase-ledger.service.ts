@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../shared/database/prisma.service';
 import { createHash } from 'node:crypto';
 import { CreatePharmacyPurchasePaymentDto, ReversePharmacyPurchasePaymentDto, ReallocatePharmacyPurchasePaymentDto } from './dto/pharmacy-purchase-ledger.dto';
-import { MONEY_TOLERANCE, daysPastDue, invoiceOutstanding, invoiceSettled, paymentStatus } from './purchase-payment-balance';
+import { MONEY_TOLERANCE, daysPastDue, invoiceOutstanding, invoiceSettled, paymentStatus, payableBalance, scheduledPayments, splitByEffectiveDate } from './purchase-payment-balance';
 import { clinicDay, clinicDayStart, isCalendarDay } from './register-utils';
 
 type LedgerInvoice = {
@@ -97,7 +97,7 @@ export class PharmacyPurchaseLedgerService {
             id: { in: invoiceIds },
           },
           include: {
-            paymentAllocations: { where: { payment: { reversedAt: null } } },
+            paymentAllocations: { where: { payment: { reversedAt: null } }, include: { payment: { select: { paymentDate: true } } } },
           },
         });
 
@@ -106,6 +106,7 @@ export class PharmacyPurchaseLedgerService {
         distributorGstin,
         invoices,
         allocations,
+        now: new Date(),
       });
       const invoiceById = new Map(
         invoices.map((invoice) => [invoice.id, invoice]),
@@ -225,9 +226,9 @@ export class PharmacyPurchaseLedgerService {
       if (allocations) {
         const invoices = await tx.pharmacyPurchaseInvoice.findMany({
           where: { branchId, id: { in: allocations.map(row => row.purchaseInvoiceId) } },
-          include: { paymentAllocations: { where: { payment: { reversedAt: null } } } },
+          include: { paymentAllocations: { where: { payment: { reversedAt: null } }, include: { payment: { select: { paymentDate: true } } } } },
         });
-        this.validateAllocationInvoices({ branchId, distributorGstin: original.distributorGstin, invoices, allocations });
+        this.validateAllocationInvoices({ branchId, distributorGstin: original.distributorGstin, invoices, allocations, now: new Date() });
         replacement = await tx.pharmacyPurchasePayment.create({
           data: {
             branchId, distributorGstin: original.distributorGstin, distributorName: original.distributorName,
@@ -555,6 +556,7 @@ export class PharmacyPurchaseLedgerService {
     distributorGstin: string;
     invoices: LedgerInvoice[];
     allocations: { purchaseInvoiceId: string; amount: number }[];
+    now: Date;
   }) {
     const invoiceById = new Map(
       params.invoices.map((invoice) => [invoice.id, invoice]),
@@ -588,8 +590,10 @@ export class PharmacyPurchaseLedgerService {
         );
       }
 
-      const outstanding = invoiceOutstanding(invoice, invoiceSettled(invoice));
-      if (Math.round(allocation.amount * 100) > Math.round(outstanding * 100)) {
+      const { inEffect, scheduled } = splitByEffectiveDate(invoice.paymentAllocations || [], params.now);
+      const outstanding = invoiceOutstanding(invoice, invoiceSettled({ ...invoice, paymentAllocations: inEffect }));
+      const payable = payableBalance(outstanding, scheduledPayments(scheduled).scheduled);
+      if (Math.round(allocation.amount * 100) > Math.round(payable * 100)) {
         throw new BadRequestException(
           `Allocation exceeds outstanding balance for invoice ${invoice.invoiceNumber}`,
         );

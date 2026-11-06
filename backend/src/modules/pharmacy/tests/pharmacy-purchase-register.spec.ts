@@ -67,11 +67,15 @@ describe('purchase register rows', () => {
       distributor: { name: 'Linae Distributors', gstin: '36ABCDE1234F1Z5' },
       amount: 1234.57,
       invoiceState: 'POSTED',
+      documents: [],
       payment: {
         state: 'DUE',
         paid: 0,
         credit: 0,
         outstanding: 1234.57,
+        scheduled: 0,
+        scheduledOn: null,
+        payable: 1234.57,
         dueDate: '2026-12-01',
         overdueDays: 0,
         partlyPaid: false,
@@ -102,20 +106,20 @@ describe('purchase register rows', () => {
 
   it('derives each payment state from payments, credits, status and the due date', () => {
     expect(payment({ status: 'CANCELLED', paymentAllocations: [{ amount: 200 }] })).toEqual({
-      state: 'CANCELLED', paid: 200, credit: 0, outstanding: 0, dueDate: null, overdueDays: 0, partlyPaid: false,
+      state: 'CANCELLED', paid: 200, credit: 0, outstanding: 0, scheduled: 0, scheduledOn: null, payable: 0, dueDate: null, overdueDays: 0, partlyPaid: false,
     });
     expect(payment({ status: 'REVIEWED' })).toEqual({
-      state: 'NOT_POSTED', paid: 0, credit: 0, outstanding: 0, dueDate: null, overdueDays: 0, partlyPaid: false,
+      state: 'NOT_POSTED', paid: 0, credit: 0, outstanding: 0, scheduled: 0, scheduledOn: null, payable: 0, dueDate: null, overdueDays: 0, partlyPaid: false,
     });
     expect(payment({ paymentAllocations: [{ amount: 600 }], creditApplied: 400 })).toEqual({
-      state: 'PAID', paid: 600, credit: 400, outstanding: 0, dueDate: null, overdueDays: 0, partlyPaid: false,
+      state: 'PAID', paid: 600, credit: 400, outstanding: 0, scheduled: 0, scheduledOn: null, payable: 0, dueDate: null, overdueDays: 0, partlyPaid: false,
     });
     expect(payment({ paymentAllocations: [{ amount: 999.995 }] }).state).toBe('PAID');
     expect(payment({ creditApplied: 250 })).toEqual({
-      state: 'PARTIAL', paid: 0, credit: 250, outstanding: 750, dueDate: null, overdueDays: 0, partlyPaid: true,
+      state: 'PARTIAL', paid: 0, credit: 250, outstanding: 750, scheduled: 0, scheduledOn: null, payable: 750, dueDate: null, overdueDays: 0, partlyPaid: true,
     });
     expect(payment({ creditApplied: 250, dueDate: new Date('2026-11-10T18:30:00.000Z') })).toEqual({
-      state: 'PARTIAL', paid: 0, credit: 250, outstanding: 750, dueDate: '2026-11-11', overdueDays: 0, partlyPaid: true,
+      state: 'PARTIAL', paid: 0, credit: 250, outstanding: 750, scheduled: 0, scheduledOn: null, payable: 750, dueDate: '2026-11-11', overdueDays: 0, partlyPaid: true,
     });
   });
 
@@ -123,8 +127,34 @@ describe('purchase register rows', () => {
     expect(
       payment({ paymentAllocations: [{ amount: 100 }], dueDate: new Date('2026-10-26T18:30:00.000Z') }),
     ).toEqual({
-      state: 'OVERDUE', paid: 100, credit: 0, outstanding: 900, dueDate: '2026-10-27', overdueDays: 10, partlyPaid: true,
+      state: 'OVERDUE', paid: 100, credit: 0, outstanding: 900, scheduled: 0, scheduledOn: null, payable: 900, dueDate: '2026-10-27', overdueDays: 10, partlyPaid: true,
     });
+  });
+
+  it('splits future-dated payments off the balance a bill can be paid now', () => {
+    const entry = purchaseEntry(
+      invoice({
+        paymentAllocations: [{ amount: 100 }],
+        scheduledAllocations: [
+          { amount: 400, payment: { paymentDate: new Date('2099-01-14T18:30:00.000Z') } },
+          { amount: 50, payment: { paymentDate: new Date('2098-06-01T18:30:00.000Z') } },
+        ],
+      }),
+      null,
+      TODAY,
+    );
+    expect(entry.payment).toMatchObject({
+      state: 'PARTIAL', paid: 100, outstanding: 900, scheduled: 450, scheduledOn: '2098-06-02', payable: 450,
+    });
+    const covered = payment({
+      scheduledAllocations: [{ amount: 1000, payment: { paymentDate: new Date('2099-01-14T18:30:00.000Z') } }],
+    });
+    expect(covered).toMatchObject({ state: 'DUE', outstanding: 1000, scheduled: 1000, scheduledOn: '2099-01-15', payable: 0 });
+  });
+
+  it('carries the original uploaded documents on the row', () => {
+    const documents = [{ id: 'doc-1', fileName: 'bill.pdf', mimeType: 'application/pdf' }];
+    expect(purchaseEntry(invoice({ documents }), null, TODAY).documents).toEqual(documents);
   });
 
   it('turns a bill overdue only after its due day has passed in clinic time', () => {

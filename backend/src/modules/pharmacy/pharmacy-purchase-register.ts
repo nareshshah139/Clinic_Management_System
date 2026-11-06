@@ -12,6 +12,8 @@ import {
   invoiceOutstanding,
   invoiceSettled,
   paymentStatus,
+  payableBalance,
+  scheduledPayments,
 } from './purchase-payment-balance';
 
 export const PURCHASE_SOURCES = ['MANUAL', 'OCR', 'CSV', 'GMAIL'] as const;
@@ -61,12 +63,16 @@ export type PaymentState =
 
 export type Person = { id: string; name: string };
 export type Distributor = { name: string; gstin: string };
+export type PurchaseDocument = { id: string; fileName: string; mimeType: string };
 
 export type PurchasePayment = {
   state: PaymentState;
   paid: number;
   credit: number;
   outstanding: number;
+  scheduled: number;
+  scheduledOn: string | null;
+  payable: number;
   dueDate: string | null;
   overdueDays: number;
   partlyPaid: boolean;
@@ -83,6 +89,7 @@ export type PurchaseRegisterRow = {
   distributor: Distributor;
   amount: number;
   invoiceState: InvoiceState;
+  documents: PurchaseDocument[];
   payment: PurchasePayment;
 };
 
@@ -132,6 +139,8 @@ export type PurchaseInvoiceRecord = {
   netPayable: number;
   creditApplied: number;
   paymentAllocations: { amount: number }[];
+  scheduledAllocations?: { amount: number; payment: { paymentDate: Date | string } }[];
+  documents?: PurchaseDocument[];
 };
 
 const INVOICE_STATE_OF: Record<PharmacyPurchaseInvoiceStatus, InvoiceState> = {
@@ -168,6 +177,9 @@ export function purchasePayment(
     paid,
     credit,
     outstanding: 0,
+    scheduled: 0,
+    scheduledOn: null,
+    payable: 0,
     dueDate,
     overdueDays: 0,
     partlyPaid: false,
@@ -184,11 +196,17 @@ export function purchasePayment(
     paymentStatus(invoice.netPayable, settled) === 'PARTIALLY_PAID';
   const state: PaymentState =
     overdueDays > 0 ? 'OVERDUE' : partlyPaid ? 'PARTIAL' : 'DUE';
+  const { scheduled, scheduledOn } = scheduledPayments(
+    invoice.scheduledAllocations ?? [],
+  );
   return {
     state,
     paid,
     credit,
     outstanding: balance,
+    scheduled,
+    scheduledOn,
+    payable: payableBalance(balance, scheduled),
     dueDate,
     overdueDays,
     partlyPaid,
@@ -213,6 +231,7 @@ export function purchaseEntry(
     },
     amount: money(invoice.netPayable),
     invoiceState: INVOICE_STATE_OF[invoice.status],
+    documents: invoice.documents ?? [],
     payment: purchasePayment(invoice, today),
   };
 }

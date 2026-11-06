@@ -250,6 +250,34 @@ databaseTests('Purchase register on PostgreSQL', () => {
     ]);
   });
 
+  it('offers Mark paid only what a future-dated payment has not already covered, and accepts exactly that', async () => {
+    await pay(bills['MED-1'], medico, 400, randomUUID(), '2099-01-15');
+    const [before] = (await register.list(query({ distributorGstin: medico }), actor())).rows;
+    expect(before.payment).toMatchObject({ state: 'DUE', outstanding: 900, scheduled: 400, scheduledOn: '2099-01-15', payable: 500 });
+
+    await expect(pay(bills['MED-1'], medico, 500.01)).rejects.toThrow('Allocation exceeds outstanding balance');
+    await pay(bills['MED-1'], medico, before.payment.payable);
+
+    const [after] = (await register.list(query({ distributorGstin: medico }), actor())).rows;
+    expect(after.payment).toMatchObject({ state: 'PARTIAL', outstanding: 400, scheduled: 400, scheduledOn: '2099-01-15', payable: 0 });
+    await expect(pay(bills['MED-1'], medico, 0.5)).rejects.toThrow('Allocation exceeds outstanding balance');
+
+    const later = new Date('2099-01-14T18:30:00.000Z');
+    const [arrived] = (await register.list(query({ distributorGstin: medico }), actor(), later)).rows;
+    expect(arrived.payment).toMatchObject({ state: 'PAID', outstanding: 0, scheduled: 0, scheduledOn: null, payable: 0 });
+  });
+
+  it('lists the original uploaded documents on the bill row', async () => {
+    await db.pharmacyPurchaseInvoiceDocument.create({
+      data: {
+        branchId, purchaseInvoiceId: bills['MED-1'], fileName: 'med-1.pdf', mimeType: 'application/pdf',
+        sizeBytes: 3, sha256: randomUUID(), data: Buffer.from('pdf'),
+      },
+    });
+    const [row] = (await register.list(query({ distributorGstin: medico }), actor())).rows;
+    expect(row.documents).toEqual([{ id: expect.any(String), fileName: 'med-1.pdf', mimeType: 'application/pdf' }]);
+  });
+
   it('keeps the bills export, the register spreadsheet and the screen on the same clinic days', async () => {
     const october = { from: '2026-10-01', to: '2026-10-31', distributorGstin: zenith };
     expect(Object.keys(await rows(october))).toEqual(['ZEN-2']);

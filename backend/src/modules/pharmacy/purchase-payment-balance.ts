@@ -33,3 +33,29 @@ export function paymentStatus(total: number, paid: number): PurchasePaymentStatu
   if (Number(total || 0) - paid <= MONEY_TOLERANCE) return 'PAID';
   return 'PARTIALLY_PAID';
 }
+
+export type DatedAllocation = { amount: number; payment?: { paymentDate: Date | string } | null };
+
+export function splitByEffectiveDate<T extends DatedAllocation>(allocations: T[], now: Date) {
+  const inEffect: T[] = [];
+  const scheduled: T[] = [];
+  for (const allocation of allocations) {
+    const date = allocation.payment?.paymentDate;
+    (date && new Date(date).getTime() > now.getTime() ? scheduled : inEffect).push(allocation);
+  }
+  return { inEffect, scheduled };
+}
+
+export function scheduledPayments(allocations: DatedAllocation[]) {
+  const dates = allocations.flatMap((allocation) =>
+    allocation.payment ? [new Date(allocation.payment.paymentDate).getTime()] : [],
+  );
+  return {
+    scheduled: invoiceSettled({ paymentAllocations: allocations }),
+    scheduledOn: dates.length ? clinicDay(new Date(Math.min(...dates))) : null,
+  };
+}
+
+export function payableBalance(outstanding: number, scheduled: number) {
+  return money(Math.max(outstanding - scheduled, 0));
+}

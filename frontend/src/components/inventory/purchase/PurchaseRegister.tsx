@@ -14,6 +14,7 @@ import { useRegisterQuery } from '@/components/register/useRegisterQuery';
 import { RegisterDenied, RegisterGrid, shortName, type RegisterColumn } from '@/components/register/RegisterGrid';
 import { ClearFilters, DateRangeFilter, FilterBar, FilterSelect, MoreFilters, RegisterSearch } from '@/components/register/RegisterFilters';
 import { RegisterFooter } from '@/components/register/RegisterFooter';
+import { BillDocuments } from './BillDocuments';
 import { MarkPaidDialog } from './MarkPaidDialog';
 import { PaymentCell, useSettleBill } from './settle';
 import {
@@ -107,9 +108,12 @@ export function PurchaseRegister({
       interactive: true,
       className: 'w-[1%]',
       cell: (row) => (
-        <button id={settle.openId(row.id)} type="button" onClick={() => onOpen(row.id)} aria-label={`Open bill ${row.billNo}`} className={linkClass}>
-          {row.billNo}
-        </button>
+        <span className="flex items-center gap-1">
+          <button id={settle.openId(row.id)} type="button" onClick={() => onOpen(row.id)} aria-label={`Open bill ${row.billNo}`} className={linkClass}>
+            {row.billNo}
+          </button>
+          <BillDocuments billNo={row.billNo} documents={row.documents} />
+        </span>
       ),
     },
     { key: 'entryAt', label: 'Entry Date', sort: 'entryAt', className: 'w-[1%] whitespace-nowrap', cell: (row) => displayClinicDateTimeCompact(row.entryAt, today) },

@@ -10,6 +10,7 @@ import {
   purchaseRegisterRows,
   purchaseRegisterSheet,
 } from './pharmacy-purchase-register';
+import { splitByEffectiveDate } from './purchase-payment-balance';
 import { clinicDay, clinicDayRange, peopleById } from './register-utils';
 
 export type PurchaseRegisterActor = { branchId: string };
@@ -76,19 +77,28 @@ export class PharmacyPurchaseRegisterService {
         netPayable: true,
         creditApplied: true,
         paymentAllocations: {
-          where: { payment: { reversedAt: null, paymentDate: { lte: now } } },
-          select: { amount: true },
+          where: { payment: { reversedAt: null } },
+          select: { amount: true, payment: { select: { paymentDate: true } } },
+        },
+        documents: {
+          select: { id: true, fileName: true, mimeType: true },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         },
       },
     });
     const people = await peopleById(this.prisma, invoices.map((invoice) => invoice.createdBy));
     const today = clinicDay(now);
-    return invoices.map((invoice) =>
-      purchaseEntry(
-        invoice,
+    return invoices.map(({ paymentAllocations, ...invoice }) => {
+      const { inEffect, scheduled } = splitByEffectiveDate(paymentAllocations, now);
+      return purchaseEntry(
+        {
+          ...invoice,
+          paymentAllocations: inEffect,
+          scheduledAllocations: scheduled,
+        },
         invoice.createdBy ? (people.get(invoice.createdBy) ?? null) : null,
         today,
-      ),
-    );
+      );
+    });
   }
 }

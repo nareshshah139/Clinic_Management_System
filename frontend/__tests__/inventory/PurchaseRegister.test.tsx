@@ -18,8 +18,12 @@ const row = (overrides: RowOverrides): PurchaseRegisterRow => ({
   distributor: { name: 'Linae Distributors', gstin: '36ABCDE1234F1Z5' },
   amount: 1000,
   invoiceState: 'POSTED',
+  documents: [],
   ...overrides,
-  payment: { state: 'DUE', paid: 0, credit: 0, outstanding: 1000, partlyPaid: false, dueDate: null, overdueDays: 0, ...overrides.payment },
+  payment: {
+    state: 'DUE', paid: 0, credit: 0, outstanding: 1000, scheduled: 0, scheduledOn: null, payable: overrides.payment?.outstanding ?? 1000,
+    partlyPaid: false, dueDate: null, overdueDays: 0, ...overrides.payment,
+  },
 });
 
 const ROWS = [
@@ -434,4 +438,67 @@ it('tells someone without register access so, instead of a Forbidden error', asy
   expect(screen.queryByText(/Forbidden resource/)).not.toBeInTheDocument();
   expect(screen.queryByRole('table')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Scan or enter a bill' })).toBeInTheDocument();
+});
+
+describe('payments dated in the future', () => {
+  const scheduled = (payment: Partial<PurchaseRegisterRow['payment']>) =>
+    response({ rows: [row({ payment: { outstanding: 1000, scheduled: 400, scheduledOn: '2099-01-15', payable: 600, ...payment } })], total: 1 });
+
+  it('keeps the Due badge, says what is scheduled, and offers Mark paid for what can be paid now', async () => {
+    get.mockResolvedValue(scheduled({}));
+    renderRegister();
+    await screen.findByText('LIN-101');
+    expect(paymentCell('LIN-101')).toHaveTextContent('Due₹400.00 scheduled 15/01Mark paid');
+    fireEvent.click(screen.getByRole('button', { name: 'Mark bill LIN-101 paid' }));
+    const dialog = screen.getByRole('dialog', { name: 'Pay ₹600.00 to Linae Distributors' });
+    await armed();
+    post.mockResolvedValueOnce(recorded('payment-1'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record payment ₹600.00' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post.mock.calls[0][1]).toMatchObject({ amount: 600, allocations: [{ purchaseInvoiceId: 'bill-a', amount: 600 }] });
+  });
+
+  it('shows a neutral Scheduled badge and no Mark paid when the payments already cover the balance', async () => {
+    get.mockResolvedValue(scheduled({ outstanding: 400, scheduled: 400, payable: 0 }));
+    renderRegister();
+    await screen.findByText('LIN-101');
+    expect(markPaidButtons()).toEqual([]);
+    expect(paymentCell('LIN-101')).toHaveTextContent('Scheduled 15/01Payment scheduled for 15/01/2099');
+    expect(within(paymentCell('LIN-101')).getByText('Payment scheduled for 15/01/2099')).toHaveClass('sr-only');
+  });
+});
+
+describe('original bill documents', () => {
+  const pdf = (id: string, fileName: string) => ({ id, fileName, mimeType: 'application/pdf' });
+  const withDocuments = (documents: ReturnType<typeof pdf>[]) => response({ rows: [row({ documents })], total: 1 });
+
+  it('links one document in a new tab without opening the bill', async () => {
+    get.mockResolvedValue(withDocuments([pdf('doc-1', 'lin-101.pdf')]));
+    renderRegister();
+    const link = await screen.findByRole('link', { name: 'Open original bill LIN-101' });
+    expect(link).toHaveAttribute('href', '/api/pharmacy/purchase-invoices/documents/doc-1');
+    expect(link).toHaveAttribute('target', '_blank');
+    fireEvent.click(link);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('lists every document in a menu when a bill has several', async () => {
+    get.mockResolvedValue(withDocuments([pdf('doc-1', 'page-1.pdf'), pdf('doc-2', 'page-2.pdf')]));
+    renderRegister();
+    const trigger = await screen.findByRole('button', { name: 'Open original bill LIN-101' });
+    expect(trigger).toHaveTextContent('2');
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    const items = await screen.findAllByRole('menuitem');
+    expect(items.map((item) => [item.textContent, item.getAttribute('href')])).toEqual([
+      ['page-1.pdf', '/api/pharmacy/purchase-invoices/documents/doc-1'],
+      ['page-2.pdf', '/api/pharmacy/purchase-invoices/documents/doc-2'],
+    ]);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('shows no attachment control when the bill has no stored original', async () => {
+    renderRegister();
+    await screen.findByText('MED-7');
+    expect(screen.queryByRole('link', { name: /Open original bill/ })).not.toBeInTheDocument();
+  });
 });

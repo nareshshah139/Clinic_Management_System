@@ -92,8 +92,8 @@ it.each([1, 2, 3, 4])('keeps the deep-linked period on load %i, under StrictMode
 
 const dueBill = {
   id: 'bill-1', srNo: 1, billNo: 'LIN-101', entryAt: '2026-10-01T05:00:00.000Z', billDate: '2026-10-01', entryBy: null, source: 'MANUAL',
-  distributor: { name: 'Linae Distributors', gstin: '36ABCDE1234F1Z5' }, amount: 1000, invoiceState: 'POSTED',
-  payment: { state: 'DUE', paid: 0, credit: 0, outstanding: 1000, partlyPaid: false, dueDate: null, overdueDays: 0 },
+  distributor: { name: 'Linae Distributors', gstin: '36ABCDE1234F1Z5' }, amount: 1000, invoiceState: 'POSTED', documents: [],
+  payment: { state: 'DUE', paid: 0, credit: 0, outstanding: 1000, scheduled: 0, scheduledOn: null, payable: 1000, partlyPaid: false, dueDate: null, overdueDays: 0 },
 };
 
 it('opens the bills still to post from the Today card', async () => {
