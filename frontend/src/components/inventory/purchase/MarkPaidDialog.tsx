@@ -110,13 +110,8 @@ export function MarkPaidDialog({
       initialFocus={covers ? setOffRef : modeRef}
       onClose={onClose}
       onSubmit={submit}
-      footer={(handOff) => (
+      footer={() => (
         <>
-          {covers && onSetOff && (
-            <Button ref={setOffRef} type="button" className="h-10 sm:order-last" disabled={saving} onClick={() => handOff(onSetOff)}>
-              Set off {formatRupees(amount)} credit
-            </Button>
-          )}
           <DialogClose asChild>
             <Button type="button" variant="ghost" className="h-10" disabled={saving}>Cancel</Button>
           </DialogClose>
@@ -128,11 +123,16 @@ export function MarkPaidDialog({
     >
       {(handOff) => (
         <>
-          {covers ? (
-            <p className="rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm text-foreground">
-              <span className="font-semibold">{formatRupees(creditHeld)}</span> credit from {row.distributor.name} covers this bill. Set it off,
-              or record a payment below.
-            </p>
+          {covers && onSetOff ? (
+            <div className="flex flex-col items-start gap-2 rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm text-foreground">
+              <p>
+                <span className="font-semibold">{formatRupees(creditHeld)}</span> credit from {row.distributor.name} covers this bill. Set it off,
+                or record a payment below.
+              </p>
+              <Button ref={setOffRef} type="button" className="h-10" disabled={saving} onClick={() => handOff(onSetOff)}>
+                Set off {formatRupees(amount)} credit
+              </Button>
+            </div>
           ) : (
             creditHeld > 0 &&
             onSetOff && (
