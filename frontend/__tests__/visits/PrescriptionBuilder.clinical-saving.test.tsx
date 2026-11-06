@@ -45,6 +45,17 @@ it('sends restored history, examination, medications, procedures, custom section
   })));
 });
 
+it('does not persist the screen-only regimen state in the saved medication plan', async () => {
+  const item = { drugName: 'Synthetic medicine', dosage: 10, dosageUnit: 'MG', frequency: 'ONCE_DAILY', regimenState: { touched: ['timing'], suggested: [], source: 'doctor' } };
+  localStorage.setItem('rxDraft:synthetic:standalone', JSON.stringify({ items: [item] }));
+  const onClinicalDataChange = jest.fn();
+  render(<PrescriptionBuilder patientId="synthetic" visitId={null} doctorId="doctor" onClinicalDataChange={onClinicalDataChange} />);
+  await waitFor(() => {
+    const plan = onClinicalDataChange.mock.calls.at(-1)?.[0].treatmentPlan.dermatology.medicationPlan;
+    expect(plan.map((medicine: { drugName: string }) => medicine.drugName)).toEqual(['Synthetic medicine']);
+    expect(plan[0]).not.toHaveProperty('regimenState');
+  });
+});
 it('does not duplicate shortcut diagnoses when reopening a saved combined diagnosis', async () => {
   localStorage.setItem('rxDraft:synthetic:standalone', JSON.stringify({ diagnosis: 'Acne vulgaris, Psoriasis', exDermDx: ['Psoriasis'] }));
   const onClinicalDataChange = jest.fn();
