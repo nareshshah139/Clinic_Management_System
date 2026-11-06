@@ -15,7 +15,7 @@ Inventory > Purchases now opens on **Purchase bills**, an eVitalRx-style list of
   - **Not posted**, naming its review state
   - **Cancelled**
 - Filters: bill number or distributor search, a financial-year date range, payment status (Outstanding, Due, Overdue, Part paid, Paid, Not posted) and More filters (distributor, bill status, source, entry by).
-- Footer: "Bills ₹X · Outstanding ₹Y · N bills". It counts posted bills only and says how many not-posted and cancelled bills it leaves out. Outstanding links to Payments & dues for the filtered distributor.
+- Footer: "Bills ₹X · Outstanding in these N bills ₹Y" (CR-27 renamed it so it cannot be read as the all-bills Due on the distributor strip). It counts posted bills only and says how many not-posted and cancelled bills it leaves out. Outstanding links to Payments & dues for the filtered distributor.
 
 ## Settling a bill
 

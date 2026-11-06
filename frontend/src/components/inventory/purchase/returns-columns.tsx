@@ -18,9 +18,9 @@ import {
   type ReturnSortKey,
 } from './purchase-returns-model';
 
-const badgeText = 'whitespace-nowrap px-1.5 py-0 text-xs font-semibold leading-[1.125rem]';
+const badgeText = 'whitespace-nowrap px-1 py-0 text-xs font-semibold leading-[1.125rem]';
 const noteClass = 'whitespace-nowrap text-xs font-medium leading-tight';
-const actionClass = 'h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm lg:min-h-8!';
+const actionClass = 'h-8 max-w-none! whitespace-nowrap! px-2 text-sm lg:min-h-8!';
 const primaryLinkClass =
   '-my-0.5 whitespace-nowrap rounded-sm py-0.5 text-left font-semibold leading-[1.125rem] text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 const refClass =
@@ -114,7 +114,7 @@ export function returnView({ today, canWrite, actionId, openId, undo, onOpen, on
   };
 
   const reference = (row: PurchaseReturnRow): ReactNode => (
-    <span className="flex min-w-0 items-baseline gap-1 text-xs font-medium leading-tight">
+    <span className="flex min-w-0 items-baseline gap-0.5 text-xs font-medium leading-tight tracking-[-0.04em]">
       {draft(row) ? (
         <span className="whitespace-nowrap">{row.returnRef}</span>
       ) : (
@@ -139,7 +139,7 @@ export function returnView({ today, canWrite, actionId, openId, undo, onOpen, on
         type="button"
         variant="ghost"
         size="icon"
-        className="size-8 shrink-0 lg:min-h-8!"
+        className="-my-1.5 size-7 shrink-0 lg:min-h-7!"
         aria-label={`Correct credit note ${row.creditNote!.number}`}
         aria-haspopup="dialog"
         title="Correct the number, date or amount"
@@ -205,12 +205,12 @@ export function returnView({ today, canWrite, actionId, openId, undo, onOpen, on
       interactive: true,
       className: 'w-[1%]',
       cell: (row) => (
-        <span className="flex items-start gap-0.5">
-          <span className="flex flex-col items-start">
+        <span className="flex flex-col items-start">
+          <span className="flex items-center gap-0.5">
             {lead(row)}
-            {reference(row)}
+            {correct(row)}
           </span>
-          {correct(row)}
+          {reference(row)}
         </span>
       ),
     },
@@ -233,7 +233,7 @@ export function returnView({ today, canWrite, actionId, openId, undo, onOpen, on
       key: 'creditNoteDate',
       label: 'Credit Note Date',
       sort: 'creditNoteDate',
-      className: 'w-[1%] min-w-[6.5rem] whitespace-nowrap',
+      className: 'w-[1%] min-w-[6.25rem] whitespace-nowrap',
       cell: (row) => (row.creditNote?.date ? compactDay(displayCalendarDate(row.creditNote.date), today) : '—'),
     },
     {
@@ -246,14 +246,14 @@ export function returnView({ today, canWrite, actionId, openId, undo, onOpen, on
       key: 'distributor',
       label: 'Distributor',
       sort: 'distributor',
-      className: 'w-full max-w-0 min-w-[8rem]',
+      className: 'w-full max-w-0 min-w-[9rem]',
       cell: (row) => (
         <span className="flex min-w-0 flex-col items-start">
           <span title={`${row.distributor.name} · GSTIN ${row.distributor.gstin}`} className="block max-w-full truncate font-medium leading-[1.125rem]">
             {row.distributor.name}
           </span>
           {row.reason && (
-            <Badge variant="neutral" className="whitespace-nowrap px-1.5 py-0 text-xs font-medium leading-4">
+            <Badge variant="neutral" className="shrink-0 whitespace-nowrap px-1 py-0 text-xs font-medium leading-4">
               {RETURN_REASON_LABELS[row.reason]}
             </Badge>
           )}
@@ -280,7 +280,7 @@ export function returnView({ today, canWrite, actionId, openId, undo, onOpen, on
       interactive: true,
       className: 'w-[1%] whitespace-nowrap py-0.5!',
       cell: (row) => (
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-1">
           <ReturnStateBadge row={row} today={today} />
           {actions(row)}
         </div>

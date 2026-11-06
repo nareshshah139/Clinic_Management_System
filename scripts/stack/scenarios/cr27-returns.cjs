@@ -73,7 +73,9 @@ const watch = (page) => {
     browser = await chromium.launch();
     const sessions = new Map();
     async function open(role, size = { width: 1440, height: 900 }) {
-      const context = await browser.newContext({ viewport: size, acceptDownloads: true, ...(sessions.has(role) && { storageState: sessions.get(role) }) });
+      const context = await browser.newContext({
+        viewport: size, acceptDownloads: true, ...(process.env.STACK_LOCALE && { locale: process.env.STACK_LOCALE }), ...(sessions.has(role) && { storageState: sessions.get(role) }),
+      });
       context.on("page", watch);
       const page = await context.newPage();
       page.setDefaultTimeout(60000);
@@ -116,10 +118,14 @@ const watch = (page) => {
             return norm(c.textContent);
           };
           const badge = tds[7].querySelector('[data-slot="badge"]');
+          const [lead, line] = tds[1].querySelector(".flex-col").children;
+          const [refEl, billEl] = line.children;
           return {
             srNo: Number(norm(tds[0].innerText)),
-            cn: visible(tds[1].querySelector("button")).replace(/\s*RET-.*$|\s*SC-.*$/, ""),
-            ref: norm(tds[1].querySelector("button .ref:last-child")?.textContent ?? "").replace(/^Open (Return|Credit) /, ""),
+            cn: visible(lead),
+            ref: visible(refEl),
+            bill: billEl ? visible(billEl).replace(/^· /, "") : null,
+            refLine: visible(line),
             cnDate: norm(tds[3].innerText),
             distributor: norm(tds[5].innerText.split("\n")[0]),
             detail: norm(tds[5].innerText.split("\n").slice(1).join(" ")),
@@ -134,7 +140,12 @@ const watch = (page) => {
       const lines = (await vis(page).locator('[role="status"][aria-live="polite"]').first().innerText()).split("\n").map(clean).filter(Boolean);
       return { summary: lines[0], note: lines[1] ?? null };
     };
-    const rowOf = (page, ref) => vis(page).locator("tbody tr").filter({ has: page.getByRole("button", { name: new RegExp(`Open (Return|Credit) ${ref}$`) }) });
+    const rowOf = (page, ref) => vis(page).locator("tbody tr").filter({ has: page.getByRole("button", { name: new RegExp(`^Open (draft )?(return|credit) ${ref}$`, "i") }) });
+    const typeNote = async (dialog, number, day = today) => {
+      await dialog.getByLabel("Credit note no.").fill(number);
+      await dialog.getByLabel("Credit note date").fill(ddmmyyyy(day));
+      await dialog.getByRole("button", { name: "Same as return value" }).click();
+    };
     const armed = (page) => page.waitForTimeout(350);
     const toastText = (page) => page.locator("[data-radix-collection-item], li[role='status']").allInnerTexts().then((all) => all.map(clean));
 
@@ -211,7 +222,12 @@ const watch = (page) => {
       ]);
       s.check("left on received and adjusted credits", [byRef["RET-SLV-03"].status, byRef["RET-SLV-04"].status], ["Received₹336.00 leftSet off", "Adjusted₹124.00 leftSet off"]);
       s.check("awaited amount shows our return value", [byRef["RET-SLV-01"].amount, byRef["RET-SLV-02"].amount], [fmt(r("RET-SLV-01").value), fmt(r("RET-SLV-02").value)]);
-      s.check("reason chip next to the source bill", byRef["RET-SLV-02"].detail, "Bill SLV/2026/41 Breakage");
+      s.check("source bill sits under the return, the reason chip under the distributor", [byRef["RET-SLV-02"].ref, byRef["RET-SLV-02"].bill, byRef["RET-SLV-02"].detail], ["RET-SLV-02", "SLV/2026/41", "Breakage"]);
+      s.check("a draft offers Open draft, a cancelled return strikes only its amount", [
+        byRef["RET-SLV-06"].cn,
+        await rowOf(page, "RET-SLV-07").locator("td").nth(7).locator('[data-slot="badge"]').evaluate((el) => getComputedStyle(el).textDecorationLine),
+        await rowOf(page, "RET-SLV-07").locator("td").nth(6).locator(".line-through").count(),
+      ], ["Open draft", "none", 1]);
       const f = await footer(page);
       const held = 336 + 124 + 224 + 3360 + 2240 + 1250;
       s.check("footer", f.summary, `Credit held (all dates) ${fmt(held)} · Awaited ${fmt(r("RET-SLV-01").value + r("RET-SLV-02").value)} (2 returns)`);
@@ -247,7 +263,8 @@ const watch = (page) => {
       const stockBefore = (await stack.db.inventoryItem.findUnique({ where: { id: data.batches["slv-b"].id } })).currentStock;
       await rowOf(page, "RET-SLV-02").getByRole("button", { name: /^Record credit note/ }).click();
       const dialog = page.getByRole("dialog", { name: `Record credit note from ${DISTRIBUTORS.SLV.name}` });
-      s.check("defaults: today and the return value", [await dialog.getByLabel("Credit note date").inputValue(), await dialog.getByLabel("Amount (₹)").inputValue()], [ddmmyyyy(today), String(r("RET-SLV-02").value)]);
+      s.check("date and amount start empty, to be typed from the note", [await dialog.getByLabel("Credit note date").inputValue(), await dialog.getByLabel("Amount (₹)").inputValue()], ["", ""]);
+      s.check("the return value is one tap away", clean(await dialog.locator("p").filter({ hasText: "Same as return value" }).innerText()), `Return value ${fmt(r("RET-SLV-02").value)} Same as return value`);
       s.ok("number field has focus", await dialog.getByLabel("Credit note no.").evaluate((el) => el === document.activeElement));
       await dialog.getByLabel("Credit note no.").fill("slv-cn-310");
       await dialog.getByLabel("Credit note date").fill(ddmmyyyy(addDays(today, -1)));
@@ -267,7 +284,10 @@ const watch = (page) => {
       await toast.click();
       const setOff = page.getByRole("dialog", { name: `Set off credit from ${DISTRIBUTORS.SLV.name}` });
       await setOff.getByRole("table").waitFor();
-      s.check("set-off names the credit note", clean(await setOff.locator("[id]").filter({ hasText: "available from" }).first().innerText()), "₹400.00 available from credit note SLV-CN-310. Bills due first are filled first.");
+      s.check("set-off names the credit note", clean(await setOff.locator("[id]").filter({ hasText: "available from" }).first().innerText()), "₹400.00 available from credit note SLV-CN-310. Filled from the oldest due date.");
+      s.check("set-off columns", await setOff.locator("thead th").allInnerTexts(), ["Bill", "Due date", "To pay", "Set off ₹"]);
+      const dues = await setOff.locator("tbody tr").evaluateAll((trs) => trs.map((tr) => { const d = tr.querySelectorAll("td")[0].querySelector("span"); return [d.textContent, d.classList.contains("text-destructive-text")]; }));
+      s.ok("overdue due dates are red, the rest are not", dues.length > 0 && dues.every(([text, red]) => red === /overdue/.test(text)) && dues.some(([, red]) => red), dues);
       await s.shot(page, "03-set-off-dialog-1440");
       await page.keyboard.press("Escape");
       await setOff.waitFor({ state: "detached" });
@@ -279,8 +299,7 @@ const watch = (page) => {
       await goto(page);
       await rowOf(page, "RET-SLV-01").getByRole("button", { name: /^Record credit note/ }).click();
       const dialog = page.getByRole("dialog");
-      await dialog.getByLabel("Credit note no.").fill("SLV-CN-301");
-      await dialog.getByLabel("Amount (₹)").focus();
+      await typeNote(dialog, "SLV-CN-301");
       await armed(page);
       await dialog.getByRole("button", { name: "Record credit note" }).click();
       await dialog.getByRole("alert").waitFor();
@@ -305,12 +324,28 @@ const watch = (page) => {
       await dialog.getByRole("button", { name: "Record credit note" }).click();
       s.check("a note dated before the return is refused on the date field", clean(await dialog.getByRole("alert").innerText()), `The credit note date cannot be before the return date, ${ddmmyyyy(addDays(today, -23))}.`);
       await dialog.getByLabel("Credit note date").fill(ddmmyyyy(today));
+      await dialog.getByRole("button", { name: "Same as return value" }).click();
       await dialog.getByRole("button", { name: "Record credit note" }).click();
       await dialog.waitFor({ state: "detached" });
       await page.getByText("Credit note SLV-CN-320 recorded").waitFor();
-      s.ok("the document says what to do next", await page.getByText(`Credit note SLV-CN-320 recorded: ${fmt(r("RET-SLV-01").value)}. Set it off against bills from Purchase bills › Returns.`).isVisible());
+      s.ok("the document says what to do next", await page.getByText(`Credit note SLV-CN-320 recorded: ${fmt(r("RET-SLV-01").value)}. Set it off against the distributor’s bills now, or later from Purchase bills › Returns.`).isVisible());
       s.check("the return is posted", (await register()).rows.find((x) => x.returnRef === "RET-SLV-01").state, "RECEIVED");
+      s.check("the posted return's date reads dd/mm/yyyy", await page.getByLabel("Date", { exact: true }).inputValue(), ddmmyyyy(addDays(today, -23)));
       await s.shot(page, "05-document-recorded");
+      await page.getByRole("button", { name: `Set off ${fmt(r("RET-SLV-01").value)} now` }).click();
+      const setOff = page.getByRole("dialog", { name: `Set off credit from ${DISTRIBUTORS.SLV.name}` });
+      await setOff.getByRole("table").waitFor();
+      await armed(page);
+      await setOff.getByRole("button", { name: /^Set off ₹/ }).click();
+      await setOff.waitFor({ state: "detached" });
+      const notice = page.getByRole("status").filter({ hasText: /^Set off / });
+      await notice.waitFor();
+      s.ok("the notice says which bill took the credit", /^Set off ₹[\d,.]+ against bill SLV\/2026\/\d+\./.test(clean(await notice.innerText())), clean(await notice.innerText()));
+      s.check("the credit is used", (await register()).rows.find((x) => x.returnRef === "RET-SLV-01").state, "USED");
+      await s.shot(page, "05-document-set-off");
+      await notice.getByRole("button", { name: "Undo" }).click();
+      await page.getByText("Set-off undone. The credit is back with the distributor.").waitFor();
+      s.check("Undo from the document gives the credit back", (await register()).rows.find((x) => x.returnRef === "RET-SLV-01").state, "RECEIVED");
     });
 
     await scenario("06", "reversed-return-frees-its-number", async (s) => {
@@ -320,7 +355,7 @@ const watch = (page) => {
       await goto(page);
       await rowOf(page, "RET-SLV-08").getByRole("button", { name: /^Record credit note/ }).click();
       const dialog = page.getByRole("dialog");
-      await dialog.getByLabel("Credit note no.").fill("SLV-CN-301");
+      await typeNote(dialog, "SLV-CN-301");
       await armed(page);
       await dialog.getByRole("button", { name: "Record credit note" }).click();
       await dialog.waitFor({ state: "detached" });
@@ -378,21 +413,20 @@ const watch = (page) => {
       const { page } = s.track(await open("pharmacist"));
       await goto(page, `${PURCHASES}&gstin=${DISTRIBUTORS.APX.gstin}`);
       await page.getByRole("button", { name: "Mark bill APX/2026/12 paid" }).click();
-      const pay = page.getByRole("dialog", { name: `Pay ₹3,000.00 to ${DISTRIBUTORS.APX.name}` });
+      const pay = page.getByRole("dialog", { name: "Settle bill APX/2026/12 · ₹3,000.00" });
       s.check("credit covers the bill", clean(await pay.locator("p").filter({ hasText: "covers this bill" }).innerText()), `₹3,360.00 credit from ${DISTRIBUTORS.APX.name} covers this bill. Set it off, or record a payment below.`);
       s.ok("Set off is the first choice and has focus", await pay.getByRole("button", { name: "Set off ₹3,000.00 credit" }).evaluate((el) => el === document.activeElement));
       await s.shot(page, "09-mark-paid-covers");
-      await page.keyboard.press("Enter");
-      const dialog = page.getByRole("dialog", { name: `Set off credit from ${DISTRIBUTORS.APX.name}` });
-      const input = dialog.getByLabel(/Set off against bill APX\/2026\/12/);
-      await input.waitFor();
-      s.ok("the bill being paid is focused", await input.evaluate((el) => el === document.activeElement));
       await armed(page);
       await page.keyboard.press("Enter");
-      await dialog.waitFor({ state: "detached" });
+      await pay.waitFor({ state: "detached" });
+      s.check("no second dialog", await page.getByRole("dialog").count(), 0);
       await settle(page);
       const cell = vis(page).locator("tbody tr").filter({ hasText: "APX/2026/12" });
-      s.ok("bill shows Paid with an inline Undo", /Paid/.test(await cell.innerText()) && (await cell.getByRole("button", { name: "Undo credit set-off for bill APX/2026/12" }).count()) === 1, await cell.innerText());
+      await cell.getByRole("button", { name: "Undo credit set-off for bill APX/2026/12" }).waitFor();
+      s.ok("bill shows Paid with an inline Undo", /Paid/.test(await cell.innerText()), await cell.innerText());
+      s.ok("toast says where Undo is and offers it", (await toastText(page)).some((t) => t.includes("Undo is in the Payment column for 30 seconds.")), await toastText(page));
+      await s.shot(page, "09-mark-paid-set-off-done");
       await cell.getByRole("button", { name: "Undo credit set-off for bill APX/2026/12" }).click();
       await page.getByText("Set-off undone").first().waitFor();
       await settle(page);
@@ -421,7 +455,9 @@ const watch = (page) => {
       const row = (await readRows(page)).find((x) => x.ref === "RET-NVJ-01");
       s.check("credit fully used", row.badge, "Fully used");
       s.note(`set off ${label}`);
-      await rowOf(page, "RET-NVJ-01").getByRole("button", { name: /^Undo set-off/ }).click();
+      s.ok("the row offers Undo too", (await rowOf(page, "RET-NVJ-01").getByRole("button", { name: /^Undo set-off/ }).count()) === 1);
+      s.ok("toast says Undo is in the Status column", (await toastText(page)).some((t) => t.includes("Undo is in the Status column for 30 seconds.")), await toastText(page));
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
       await page.getByText("Set-off undone").first().waitFor();
       await settle(page);
       const back = (await readRows(page)).find((x) => x.ref === "RET-NVJ-01");
@@ -438,7 +474,8 @@ const watch = (page) => {
       const values = await strip.locator("dd").allInnerTexts();
       s.check("strip Due, Credit held and Net match Payments & dues", values.map(clean), [fmt(slv.outstanding), fmt(slv.creditHeld), fmt(Math.abs(slv.netPayable))]);
       const summary = clean(await vis(page).locator('[role="status"][aria-live="polite"]').first().innerText());
-      s.ok("footer outstanding for the year equals the strip's Due (the older bill is paid)", summary.includes(`Outstanding ${fmt(slv.outstanding)}`), summary);
+      s.ok("footer names its scope: outstanding in these bills, which equals the strip's Due (the older bill is paid)", /Outstanding in these \d+ bills /.test(summary) && summary.endsWith(fmt(slv.outstanding)), summary);
+      s.check("strip offers Set off all", await strip.getByRole("button").allInnerTexts(), [`Set off all ${fmt(Math.min(slv.creditHeld, slv.outstanding))}`]);
       await page.getByRole("searchbox").fill("NVJ/2026/0");
       await settle(page);
       await page.waitForTimeout(800);
@@ -526,15 +563,21 @@ const watch = (page) => {
           const head = panel.querySelector("thead").getBoundingClientRect().bottom;
           const foot = panel.querySelector('[role="status"][aria-live="polite"]').parentElement.getBoundingClientRect().top;
           const fully = rows.filter((tr) => { const b = tr.getBoundingClientRect(); return b.top >= head - 1 && b.bottom <= Math.min(foot, window.innerHeight) + 1; }).length;
-          const chips = [...panel.querySelectorAll("tbody td:nth-child(6) [data-slot=badge]")].map((c) => c.scrollWidth <= c.clientWidth + 1);
+          const chips = [...panel.querySelectorAll("tbody td:nth-child(6) [data-slot=badge]")].map((c) => c.scrollWidth <= c.clientWidth + 1 || c.scrollWidth - c.clientWidth);
+          const widths = [...panel.querySelectorAll("thead th")].map((th) => Math.round(th.getBoundingClientRect().width));
+          const bills = rows.map((tr) => tr.querySelector("td:nth-child(2) .flex-col > span:last-child")).filter(Boolean).map((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= el.closest("td").getBoundingClientRect().right + 1);
+          const names = rows.map((tr) => tr.querySelector("td:nth-child(6) [title]")).filter(Boolean).map((el) => ({ full: el.title.split(" · GSTIN")[0] === el.textContent, cut: el.scrollWidth > el.clientWidth + 1 }));
           const scroller = panel.querySelector("table").parentElement;
           return {
-            fully, head: Math.round(head), foot: Math.round(foot), rowHeights: rows.slice(0, 6).map((tr) => Math.round(tr.getBoundingClientRect().height)), chips,
+            fully, head: Math.round(head), foot: Math.round(foot), rowHeights: rows.slice(0, 6).map((tr) => Math.round(tr.getBoundingClientRect().height)), chips, widths, bills, names,
             overflow: scroller.scrollWidth - scroller.clientWidth, docOverflow: document.documentElement.scrollWidth - window.innerWidth,
           };
         });
         s.ok(`${w}: at least 5 rows fully visible, with an awaited return at the top`, m.fully >= 5 && (await readRows(page))[0].badge?.startsWith("Credit note awaited"), m);
-        s.ok(`${w}: reason chips are not cut`, m.chips.every(Boolean), m.chips);
+        s.ok(`${w}: reason chips are not cut`, m.chips.every((c) => c === true), m.chips);
+        s.ok(`${w}: return and source bill numbers are never cut`, m.bills.length > 5 && m.bills.every(Boolean), m.bills);
+        s.ok(`${w}: distributor names carry their full name on hover`, m.names.every((n) => n.full), m.names);
+        if (w === 1280) s.ok("1280: the long distributor name is what truncates", m.names.some((n) => n.cut), m.names);
         s.check(`${w}: table fits without sideways scroll`, [m.overflow <= 1, m.docOverflow <= 0], [true, true]);
         s.note(`${w}: ${JSON.stringify(m)}`);
         await s.shot(page, `16-returns-${w}`);
@@ -553,35 +596,63 @@ const watch = (page) => {
 
     await scenario("17", "phone-390", async (s) => {
       const { page } = s.track(await open("pharmacist", { width: 390, height: 844 }));
-      await goto(page);
+      await page.goto(`${stack.base}${RETURNS}`, { waitUntil: "domcontentloaded", timeout: 240000 });
+      const list = vis(page).getByRole("list", { name: "Purchase returns" });
+      await list.waitFor({ timeout: 240000 });
+      await settle(page);
+      s.check("a card list, not a table", await vis(page).locator('table[aria-label="Purchase returns"]').count(), 0);
       const m = await page.evaluate(() => {
         const panel = [...document.querySelectorAll('[role="tabpanel"]')].find((p) => !p.hidden && p.getClientRects().length);
+        const cards = [...panel.querySelectorAll('ul[aria-label="Purchase returns"] > li')];
+        const inside = (el) => { const r = el.getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth; };
         const more = [...document.querySelectorAll("button")].find((b) => b.textContent.trim().startsWith("More") && b.getClientRects().length);
-        const action = panel.querySelector('tbody button[aria-label^="Set off"], tbody button[aria-label^="Record credit note"]');
         const status = panel.querySelector('[role="status"][aria-live="polite"]');
-        const r = (el) => el && el.getBoundingClientRect();
+        const shown = (el) => { const c = el.cloneNode(true); c.querySelectorAll(".sr-only").forEach((n) => n.remove()); return c.textContent.replace(/\s+/g, " ").trim(); };
+        const lines = cards.slice(0, 6).map((li) => [...li.firstElementChild.children].map(shown));
+        const money = [...panel.querySelectorAll("li .whitespace-nowrap.font-semibold")].map((el) => el.getClientRects().length === 1);
         return {
           docOverflow: document.documentElement.scrollWidth - window.innerWidth,
-          more: r(more) && r(more).right <= window.innerWidth,
-          action: r(action) && r(action).right <= window.innerWidth && r(action).left >= 0,
+          more: more && inside(more),
+          everythingInside: cards.every((li) => [...li.querySelectorAll("button, [data-slot=badge]")].every(inside)),
+          lineCounts: cards.map((li) => li.firstElementChild.children.length),
+          lines,
+          money: money.every(Boolean),
           footer: status && status.scrollWidth <= status.clientWidth + 1,
         };
       });
-      s.check("no page overflow, More inside the screen, an action reachable without scrolling sideways, footer not cut", [m.docOverflow <= 0, m.more, m.action, m.footer], [true, true, true, true]);
+      s.check("no page overflow, More and every card control inside the screen, three lines a card, money on one line, footer not cut", [m.docOverflow <= 0, m.more, m.everythingInside, m.lineCounts.every((n) => n === 3), m.money, m.footer], [true, true, true, true, true, true]);
+      s.note(`first cards: ${JSON.stringify(m.lines.slice(0, 3))}`);
+      const awaitedCard = m.lines.find((l) => /^Record credit note/.test(l[1]));
+      s.ok("an awaited card: distributor and amount, Record credit note with the return and bill, then the badge", awaitedCard && /₹/.test(awaitedCard[0]) && /RET-SLV-\d+ ?· SLV\/2026\/\d+/.test(awaitedCard[1]) && /^Credit note awaited/.test(awaitedCard[2]), m.lines);
       await s.shot(page, "17-returns-390");
-      await vis(page).locator('tbody button[aria-label^="Set off"]').first().click();
+      await list.getByRole("button", { name: /^Set off credit note/ }).first().click();
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("table").waitFor();
-      const box = await dialog.boundingBox();
+      const sheet = await dialog.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const heads = [...el.querySelectorAll("thead th")].filter((th) => th.getClientRects().length);
+        const inputs = [...el.querySelectorAll("tbody input")].map((i) => i.getBoundingClientRect().right);
+        return {
+          heads: heads.map((th) => th.textContent),
+          clipped: heads.filter((th) => th.scrollWidth > th.clientWidth + 1 || th.getBoundingClientRect().right > box.right).map((th) => th.textContent),
+          gutter: Math.round(box.right - Math.max(...inputs)),
+          dueUnderBill: [...el.querySelectorAll("tbody th")].every((th) => /Due /.test(th.innerText)),
+          box: { x: box.x, w: box.width },
+        };
+      });
+      s.check("390 sheet: no Due date column, due date under the bill, nothing clipped, a gutter after the inputs", [sheet.heads, sheet.dueUnderBill, sheet.clipped, sheet.gutter >= 12], [["Bill", "To pay", "Set off ₹"], true, [], true]);
       const submit = await dialog.getByRole("button", { name: /^Set off ₹/ }).boundingBox();
-      s.ok("390: set-off sheet fits and its submit is on screen", box.x >= 0 && box.x + box.width <= 391 && submit.y + submit.height <= 844, { box, submit });
+      s.ok("390: set-off sheet fits and its submit is on screen", sheet.box.x >= 0 && sheet.box.x + sheet.box.w <= 391 && submit.y + submit.height <= 844, sheet);
       await s.shot(page, "17-set-off-390");
       await page.keyboard.press("Escape");
       const doc = await raiseExtra("RET-SLV-09", 1);
       returns["RET-SLV-09"] = { id: doc.id, key: "RET-SLV-09", value: Number(doc.totalAmount) };
-      await goto(page);
-      await rowOf(page, "RET-SLV-09").getByRole("button", { name: /^Record credit note/ }).click();
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await list.waitFor();
+      await settle(page);
+      await list.getByRole("button", { name: "Record credit note for return RET-SLV-09" }).click();
       const record = page.getByRole("dialog");
+      await record.getByLabel("Credit note no.").waitFor();
       const rbox = await record.boundingBox();
       s.ok("390: record sheet fits", rbox.x >= 0 && rbox.x + rbox.width <= 391 && rbox.y + rbox.height <= 845, rbox);
       await s.shot(page, "17-record-390");
@@ -589,9 +660,19 @@ const watch = (page) => {
       await goto(page, `${PURCHASES}&gstin=${DISTRIBUTORS.SLV.gstin}`);
       const strip = page.getByRole("region", { name: `${DISTRIBUTORS.SLV.name} position across all bills` });
       await strip.waitFor();
-      const lines = await strip.locator("dt").evaluateAll((dts) => dts.map((d) => Math.round(d.getBoundingClientRect().top)));
-      s.ok("390: strip stacks Due, Credit held and Net on separate lines", new Set(lines).size === 3, lines);
+      const st = await strip.evaluate((el) => ({
+        lines: new Set([...el.querySelectorAll("dt")].map((d) => Math.round(d.getBoundingClientRect().top))).size,
+        money: [...el.querySelectorAll("dd")].every((d) => d.getClientRects().length === 1 && d.getBoundingClientRect().height < 30),
+        button: (() => { const b = el.querySelector("button"); return b ? Math.round(el.getBoundingClientRect().width - b.getBoundingClientRect().width) : null; })(),
+      }));
+      s.check("390: strip stacks Due, Credit held and Net, money on one line, Set off all full width", [st.lines, st.money, st.button !== null && st.button <= 26], [3, true, true]);
+      const foot = await vis(page).locator('[role="status"][aria-live="polite"]').first().evaluate((el) => ({ text: el.firstElementChild.innerText.replace(/\s+/g, " ").trim(), cut: el.firstElementChild.scrollHeight > el.firstElementChild.clientHeight + 1 }));
+      s.ok("390: purchase footer wraps in full, no ellipsis", !foot.cut && /Outstanding in these \d+ bills ₹[\d,]+\.\d\d$/.test(foot.text), foot);
       await s.shot(page, "17-strip-390");
+      await vis(page).getByRole("button", { name: /^Mark bill .* paid$/ }).first().click();
+      await page.getByRole("dialog").waitFor();
+      await s.shot(page, "17-mark-paid-390");
+      await page.keyboard.press("Escape");
     });
 
     await scenario("18", "keyboard-only-record-and-set-off", async (s) => {
@@ -604,7 +685,11 @@ const watch = (page) => {
       await dialog.waitFor();
       await page.keyboard.type("SLV-CN-330");
       await page.keyboard.press("Tab");
+      await page.keyboard.type(ddmmyyyy(today));
       await page.keyboard.press("Tab");
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Enter");
+      s.check("Same as return value fills the amount and returns focus to it", await page.evaluate(() => [document.activeElement?.getAttribute("inputmode"), document.activeElement?.value]), ["decimal", String(r("RET-SLV-09").value)]);
       await page.waitForTimeout(350);
       await page.keyboard.press("Enter");
       await dialog.waitFor({ state: "detached" });
@@ -628,7 +713,7 @@ const watch = (page) => {
       await goto(page);
       await rowOf(page, "RET-SLV-10").getByRole("button", { name: /^Record credit note/ }).click();
       const dialog = page.getByRole("dialog");
-      await dialog.getByLabel("Credit note no.").fill("SLV-CN-340");
+      await typeNote(dialog, "SLV-CN-340");
       await armed(page);
       await dialog.getByRole("button", { name: "Record credit note" }).dblclick();
       await dialog.waitFor({ state: "detached" });
@@ -667,7 +752,7 @@ const watch = (page) => {
         await goto(page);
         await rowOf(page, key).getByRole("button", { name: /^Record credit note/ }).click();
         const dialog = page.getByRole("dialog");
-        await dialog.getByLabel("Credit note no.").fill(`CN-${who.toUpperCase()}`);
+        await typeNote(dialog, `CN-${who.toUpperCase()}`);
         await armed(page);
         await dialog.getByRole("button", { name: "Record credit note" }).click();
         await dialog.waitFor({ state: "detached" });
@@ -702,6 +787,89 @@ const watch = (page) => {
       await settle(page);
       s.check("typing on Purchase sends no Returns request", calls.returns - before, 0);
       s.ok("Purchase did fetch", calls.purchases > 0, calls);
+    });
+
+    await scenario("23", "returns-strip-sets-off-all-of-a-distributors-credit", async (s) => {
+      const { page } = s.track(await open("pharmacist", { width: 1280, height: 800 }));
+      await goto(page, `${RETURNS}&gstin=${DISTRIBUTORS.APX.gstin}`);
+      const strip = page.getByRole("region", { name: `${DISTRIBUTORS.APX.name} position across all bills` });
+      await strip.waitFor();
+      const before = (await call("pharmacist", "GET", "/pharmacy/purchase-ledger/distributors")).distributors.find((d) => d.distributorGstin === DISTRIBUTORS.APX.gstin);
+      const button = strip.getByRole("button", { name: /^Set off all / });
+      s.check("strip on Returns offers Set off all", await button.innerText(), `Set off all ${fmt(Math.min(before.creditHeld, before.outstanding))}`);
+      await s.shot(page, "23-returns-strip-1280");
+      await button.click();
+      const dialog = page.getByRole("dialog", { name: `Set off credit from ${DISTRIBUTORS.APX.name}` });
+      await dialog.getByRole("table").waitFor();
+      await armed(page);
+      await dialog.getByRole("button", { name: /^Set off ₹/ }).click();
+      await dialog.waitFor({ state: "detached" });
+      await settle(page);
+      const after = (await call("pharmacist", "GET", "/pharmacy/purchase-ledger/distributors")).distributors.find((d) => d.distributorGstin === DISTRIBUTORS.APX.gstin);
+      s.check("the distributor's due and credit both fall by the set-off", [before.outstanding - after.outstanding, before.creditHeld - after.creditHeld], [Math.min(before.creditHeld, before.outstanding), Math.min(before.creditHeld, before.outstanding)]);
+      s.check("strip updates without a reload", clean(await strip.locator("dd").first().innerText()), fmt(after.outstanding));
+      s.ok("the credit's row offers Undo", (await rowOf(page, "RET-APX-01").getByRole("button", { name: /^Undo set-off/ }).count()) === 1);
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      await page.getByText("Set-off undone").first().waitFor();
+      await settle(page);
+      const undone = (await call("pharmacist", "GET", "/pharmacy/purchase-ledger/distributors")).distributors.find((d) => d.distributorGstin === DISTRIBUTORS.APX.gstin);
+      s.check("Undo from the toast restores the position", [undone.outstanding, undone.creditHeld], [before.outstanding, before.creditHeld]);
+    });
+
+    await scenario("24", "awaited-empty-state-drafts-and-a-stale-entry-kept", async (s) => {
+      const { page } = s.track(await open("pharmacist"));
+      await goto(page, `${RETURNS}&gstin=${DISTRIBUTORS.NVJ.gstin}&state=AWAITED`);
+      s.ok("no awaited notes for this distributor says so", await vis(page).getByText("No credit notes awaited").isVisible());
+      await goto(page);
+      await rowOf(page, "RET-SLV-06").getByRole("button", { name: "Open draft return RET-SLV-06" }).click();
+      await page.waitForFunction(() => location.search.includes("document="), null, { timeout: 120000 });
+      await page.getByRole("heading", { name: "RET-SLV-06" }).waitFor({ timeout: 120000 });
+      s.check("Open draft opens that draft", new URL(page.url()).searchParams.get("document"), r("RET-SLV-06").id);
+      const doc = await raiseExtra("RET-SLV-13", 1);
+      await goto(page);
+      await rowOf(page, "RET-SLV-13").getByRole("button", { name: /^Record credit note/ }).click();
+      const dialog = page.getByRole("dialog");
+      await typeNote(dialog, "slv-cn-399");
+      const fresh = await call("pharmacist", "GET", `/inventory/workspace/documents/${doc.id}`);
+      await call("pharmacist", "POST", `/inventory/workspace/documents/${doc.id}/transition`, { action: "CANCEL", version: fresh.version });
+      await armed(page);
+      await dialog.getByRole("button", { name: "Record credit note" }).click();
+      await dialog.waitFor({ state: "detached" });
+      const toast = page.locator("li").filter({ hasText: "This return changed" });
+      await toast.waitFor();
+      const said = clean(await toast.innerText());
+      s.ok("the conflict toast keeps what was typed", said.includes(`The list now shows its latest status. Your entry was not saved: credit note SLV-CN-399, ${ddmmyyyy(today)}, ${fmt(Number(doc.totalAmount))}.`), said);
+      await settle(page);
+      s.check("and the row now reads Cancelled", (await readRows(page)).find((x) => x.ref === "RET-SLV-13")?.badge, "Cancelled");
+    });
+
+    await scenario("25", "dates-read-dd-mm-yyyy-in-an-en-US-browser", async (s) => {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: "en-US", timezoneId: "America/New_York", storageState: sessions.get("pharmacist") });
+      context.on("page", watch);
+      const page = await context.newPage();
+      s.track({ page, context });
+      s.check("the browser really is en-US", await page.evaluate(() => new Date(Date.UTC(2026, 9, 15, 12)).toLocaleDateString()), "10/15/2026");
+      await page.goto(`${stack.base}${RETURNS}`, { waitUntil: "domcontentloaded", timeout: 240000 });
+      await vis(page).locator("table").first().waitFor({ timeout: 240000 });
+      await settle(page);
+      const posted = r("RET-APX-01");
+      await page.getByRole("button", { name: "Open Return RET-APX-01" }).click();
+      await page.waitForFunction(() => location.search.includes("document="), null, { timeout: 120000 });
+      const date = page.getByLabel("Date", { exact: true });
+      await date.waitFor();
+      const shown = await date.inputValue();
+      s.ok("the posted return document shows its date as dd/mm/yyyy", /^\d{2}\/\d{2}\/\d{4}$/.test(shown) && shown === ddmmyyyy((await call("pharmacist", "GET", `/inventory/workspace/documents/${posted.id}`)).payload.date), shown);
+      await s.shot(page, "25-document-en-US");
+      await page.goto(`${stack.base}${RETURNS}`, { waitUntil: "domcontentloaded" });
+      await settle(page);
+      const rows = await readRows(page);
+      s.ok("register dates read as day then month", rows.every((x) => x.cnDate === "—" || /^\d{2} [A-Z][a-z]{2}( \d{4})?$/.test(x.cnDate)), rows.map((x) => x.cnDate));
+      await rowOf(page, "RET-SLV-04").getByRole("button", { name: /^Set off/ }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("table").waitFor();
+      const dues = await dialog.locator("tbody td:nth-child(2)").evaluateAll((tds) => tds.map((td) => { const c = td.cloneNode(true); c.querySelectorAll(".sr-only").forEach((n) => n.remove()); return c.textContent; }));
+      s.ok("set-off due dates read as day then month", dues.every((d) => /^(\d{2} [A-Z][a-z]{2}( \d{4})?|—)$/.test(clean(d))), dues);
+      await page.keyboard.press("Escape");
     });
 
     const awaitedAfter = (await register()).totals;

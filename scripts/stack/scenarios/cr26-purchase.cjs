@@ -87,7 +87,8 @@ function makeCheck(t) {
     const parts = [t.notPosted > 0 && `${t.notPosted} not posted`, t.cancelled > 0 && `${t.cancelled} cancelled`].filter(Boolean);
     return parts.length ? `${parts.join(" and ")} not included` : null;
   };
-  const summaryOf = (t) => `Bills ${fmt(t.amount)} · Outstanding ${fmt(t.outstanding)} · ${t.count} ${t.count === 1 ? "bill" : "bills"}`;
+  const outstandingLabel = (count) => `Outstanding in ${count === 1 ? "this bill" : `these ${count} bills`}`;
+  const summaryOf = (t) => `Bills ${fmt(t.amount)} · ${outstandingLabel(t.count)} ${fmt(t.outstanding)}`;
   const fyBills = () => all.filter(inFy);
   const stateOf = (b) => st(b).state;
   const countByState = (list) => list.reduce((m, b) => ((m[stateOf(b)] = (m[stateOf(b)] || 0) + 1), m), {});
@@ -135,7 +136,7 @@ function makeCheck(t) {
       () => {
         const panel = [...document.querySelectorAll('[role="tabpanel"]')].find((p) => !p.hidden && p.getClientRects().length);
         const busy = panel?.querySelector("[aria-busy]");
-        return busy && busy.getAttribute("aria-busy") === "false" && (document.body.innerText.includes("Outstanding ₹") || document.body.innerText.includes("No purchase bills") || document.querySelector('[role="alert"]'));
+        return busy && busy.getAttribute("aria-busy") === "false" && (/Outstanding in th(ese \d+ bills|is bill) ₹/.test(document.body.innerText) || document.body.innerText.includes("No purchase bills") || document.querySelector('[role="alert"]'));
       },
       null,
       { timeout: 120000 },
@@ -174,11 +175,11 @@ function makeCheck(t) {
     );
 
   async function footer(page) {
-    const raw = (await vis(page).locator('[role="status"]', { hasText: "Outstanding ₹" }).first().innerText()).replace(/ /g, " ");
+    const raw = (await vis(page).locator('[role="status"]', { hasText: /Outstanding in th(ese \d+ bills|is bill) ₹/ }).first().innerText()).replace(/ /g, " ");
     const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
-    const m = lines[0].match(/^Bills (₹[\d,]+\.\d{2}) · Outstanding (₹[\d,]+\.\d{2}) · (\d+) bills?$/);
+    const m = lines[0].match(/^Bills (₹[\d,]+\.\d{2}) · Outstanding in (?:these (\d+) bills|this bill) (₹[\d,]+\.\d{2})$/);
     const pager = await vis(page).locator('nav[aria-label="Purchase bills pages"] span').first().innerText().catch(() => null);
-    return { summary: lines[0], amount: m?.[1], outstanding: m?.[2], count: m && Number(m[3]), note: lines[1] ?? null, pager };
+    return { summary: lines[0], amount: m?.[1], outstanding: m?.[3], count: m && (m[2] ? Number(m[2]) : 1), note: lines[1] ?? null, pager };
   }
 
   async function readAll(page) {
@@ -370,7 +371,7 @@ function makeCheck(t) {
     s.check("pager says rows", foot.pager, `1–${PAGE_SIZE} of ${fy.length} rows`);
     s.note(`footer counts ${foot.count} posted bills; pager counts ${fy.length} rows (posted + ${tot.notPosted} not posted + ${tot.cancelled} cancelled) - distinct units now, explained by the note`);
     const ledgerLink = page.getByRole("button", { name: /open Payments & dues/ });
-    s.check("footer Outstanding links to Payments & dues", [await ledgerLink.count(), (await ledgerLink.getAttribute("aria-label").catch(() => null)) || null], [1, `Outstanding ${fmt(tot.outstanding)}, open Payments & dues`]);
+    s.check("footer Outstanding links to Payments & dues", [await ledgerLink.count(), (await ledgerLink.getAttribute("aria-label").catch(() => null)) || null], [1, `${outstandingLabel(tot.count)} ${fmt(tot.outstanding)}, open Payments & dues`]);
     await s.shot(page, "01-default-1440");
   });
 
@@ -1363,7 +1364,7 @@ function makeCheck(t) {
       const { page } = s.track(await open("pharmacist", { width: w, height: h }));
       await goto(page);
       const m = await page.evaluate(() => {
-        const bar = [...document.querySelectorAll('[role="status"]')].find((e) => e.innerText.includes("Outstanding ₹"))?.parentElement;
+        const bar = [...document.querySelectorAll('[role="status"]')].find((e) => /Outstanding in th(ese \d+ bills|is bill) ₹/.test(e.innerText))?.parentElement;
         const footerTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
         const headBottom = document.querySelector("thead").getBoundingClientRect().bottom;
         const rows = [...document.querySelectorAll("tbody tr")].map((r) => r.getBoundingClientRect());
