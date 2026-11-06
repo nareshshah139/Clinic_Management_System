@@ -836,7 +836,16 @@ function makeCheck(t) {
         const r = el.getBoundingClientRect();
         return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), w: Math.round(r.width), h: Math.round(r.height) };
       };
-      const heads = [...document.querySelectorAll("thead th")].map((th) => ({ name: th.innerText.replace(/\s+/g, " ").trim() || "Settle", ...box(th) }));
+      const heads = [...document.querySelectorAll("thead th")].map((th) => {
+        const c = th.cloneNode(true);
+        c.querySelectorAll(".sr-only").forEach((n) => n.remove());
+        return { name: c.textContent.replace(/\s+/g, " ").trim(), ...box(th) };
+      });
+      const payCells = [...document.querySelectorAll("tbody tr")].map((tr) => {
+        const td = tr.querySelector("td:nth-child(8)");
+        const flex = td.firstElementChild;
+        return { bill: tr.querySelector("td:nth-child(2) button")?.textContent.trim(), right: Math.round(td.getBoundingClientRect().right), content: Math.round(flex.scrollWidth), text: flex.firstElementChild?.innerText.replace(/\s+/g, " ").trim() };
+      });
       const buttons = [...document.querySelectorAll('button[aria-label^="Mark bill"]')].map(box);
       const container = document.querySelector("table").parentElement; // ADAPT: RegisterGrid's scroller is overflow-auto, not .overflow-x-auto
       const badgeSizes = [...document.querySelectorAll("tbody tr td:nth-child(8) *")]
@@ -844,7 +853,7 @@ function makeCheck(t) {
         .map((el) => parseFloat(getComputedStyle(el).fontSize));
       const gstin = [...document.querySelectorAll("tbody tr td:nth-child(6) *")].find((el) => /GSTIN|\d{2}[A-Z]{5}\d{4}/.test(el.innerText));
       return {
-        vw, scrollWidth: document.documentElement.scrollWidth, heads, buttons, containerOverflow: container ? container.scrollWidth - container.clientWidth : null,
+        vw, scrollWidth: document.documentElement.scrollWidth, heads, buttons, widestPay: payCells.sort((a, b) => b.right - a.right).slice(0, 3), containerOverflow: container ? container.scrollWidth - container.clientWidth : null,
         badgeMin: Math.min(...badgeSizes), badgeSet: [...new Set(badgeSizes)].sort(), gstinSize: gstin ? parseFloat(getComputedStyle(gstin).fontSize) : null,
         markPaidHeight: buttons.length ? Math.min(...buttons.map((b) => b.h)) : null,
       };
@@ -863,12 +872,24 @@ function makeCheck(t) {
       s.check(`${w}: table container does not scroll sideways`, m.containerOverflow <= 1, true);
       s.ok(`${w}: payment badge font-size >= 14px`, m.badgeMin >= 14, { min: m.badgeMin, sizes: m.badgeSet });
       s.check(`${w}: GSTIN is not printed in the Distributor cell (kept in the tooltip)`, m.gstinSize, null);
-      s.note(`${w}: Mark paid height ${m.markPaidHeight}px, rightmost header edge ${Math.max(...m.heads.map((h) => h.right))}`);
+      s.note(`${w}: Mark paid height ${m.markPaidHeight}px, rightmost header edge ${Math.max(...m.heads.map((h) => h.right))}; header edges ${JSON.stringify(m.heads.map((h) => [h.name, h.left, h.right]))}; widest Payment cells ${JSON.stringify(m.widestPay)}`);
       if (w === 1280) {
         await s.shot(page, "11-layout-1280");
+        const clipped = await page.evaluate(() => {
+          const main = document.querySelector("main") || document.body;
+          const scrollers = [];
+          for (let el = document.querySelector("table"); el; el = el.parentElement) {
+            const cs = getComputedStyle(el);
+            if (el.scrollWidth > el.clientWidth + 1) scrollers.push({ tag: el.tagName, cls: String(el.className).slice(0, 60), overflowX: cs.overflowX, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth });
+          }
+          return scrollers;
+        });
+        s.note(`${w}: ancestors whose content is wider than they are: ${JSON.stringify(clipped)}`);
         await page.evaluate(() => window.scrollTo(0, 0));
         await selectByLabel(page, "Payment status").selectOption({ label: "Part paid" });
         await settle(page);
+        const partial = await layoutMetrics(page);
+        s.check("1280 with Payment status = Part paid (no scheduled note in the table): Mark paid buttons all inside the viewport", partial.buttons.filter((b) => b.right > w).length, 0);
         await s.shot(page, "11-layout-1280-partial");
         await clearAll(page);
       } else await s.shot(page, "11-layout-1440");
@@ -952,10 +973,12 @@ function makeCheck(t) {
       await panel.getByLabel("From").press("Enter");
     };
     await setFrom("01/01/2025");
-    const limitAlert = page.getByRole("alert").filter({ hasText: "Could not load purchase bills" });
-    await limitAlert.waitFor({ timeout: 60000 });
-    s.note(`range wider than the server limit shows: ${(await limitAlert.innerText()).replace(/\s+/g, " ").trim()}`);
-    s.ok("register explains ranges over 400 days", /at most 400 days/.test(await limitAlert.innerText()));
+    // ADAPT: ranges over 400 days are now refused inside the date popover ("Pick at most 400 days at a time.") before any request is sent,
+    // instead of the register showing a "Could not load purchase bills ... at most 400 days" alert from the server.
+    const limitMessage = page.getByText(/Pick at most 400 days at a time/);
+    await limitMessage.waitFor({ timeout: 60000 });
+    s.note(`range wider than the limit shows in the popover: ${(await limitMessage.innerText()).replace(/\s+/g, " ").trim()}`);
+    s.check("register explains ranges over 400 days without a load-error alert", [await limitMessage.count(), await page.getByRole("alert").filter({ hasText: "Could not load" }).count()], [1, 0]);
     await s.shot(page, "12-range-limit");
     await page.getByLabel("From").fill("01/03/2026");
     await page.getByLabel("From").press("Enter");
@@ -1088,9 +1111,12 @@ function makeCheck(t) {
     const warning = page.getByText(`Recorded ${fmt(payable)}; ${fmt(remaining)} still due`, { exact: true });
     const outcome = await Promise.race([warning.waitFor({ timeout: 30000 }).then(() => "warning"), dialogOf(page).getByRole("alert").waitFor({ timeout: 30000 }).then(() => "inline-error")]).catch((e) => `timeout`);
     s.check("under-pay warning toast names recorded amount and what is still due", outcome, "warning");
+    await page.waitForTimeout(800);
     await s.shot(page, "14-warning");
     await settle(page);
     await resync();
+    const undoBox = await undoButton(page, bill.billNo).boundingBox();
+    s.ok("inline Undo stays on one line (not wrapped letter by letter)", undoBox && undoBox.height <= 40 && undoBox.width >= 40, undoBox);
     const row = (await readRows(page)).find((r) => r.billNo === bill.billNo);
     s.check("row shows the remaining due", row.payment, badgeLines(bill));
     s.ok("remaining due is ₹Y from the warning", row.paymentSr.includes(fmt(remaining)) || row.payment.some((l) => l.includes(`Overdue`)) , row.paymentSr);
@@ -1111,6 +1137,7 @@ function makeCheck(t) {
     await page.waitForTimeout(400);
     await dialogOf(page).getByRole("button", { name: /^Record payment/ }).click();
     await dialogOf(page).waitFor({ state: "hidden", timeout: 30000 });
+    await page.waitForTimeout(800);
     s.ok("dialog closed", true);
     const toast = page.locator('[role="status"], li[role="status"], [data-radix-collection-item]').filter({ hasText: /balance changed|already recorded/ }).first();
     await toast.waitFor({ timeout: 15000 }).catch(() => {});
@@ -1140,6 +1167,12 @@ function makeCheck(t) {
     s.check("fully covered bill still owes the balance in the footer basis (state is Due)", [stateOf(full), st(full).outstanding], ["DUE", full.net]);
     s.check("part-scheduled bill: badge lines", by[part.billNo].payment, badgeLines(part));
     s.check("part-scheduled bill: Mark paid offered", by[part.billNo].markPaid, `Mark bill ${part.billNo} paid`);
+    const reach = await page.evaluate((n) => {
+      const btn = document.querySelector(`button[aria-label="Mark bill ${n} paid"]`);
+      const r = btn.getBoundingClientRect();
+      return { left: Math.round(r.left), right: Math.round(r.right), vw: window.innerWidth };
+    }, part.billNo);
+    s.ok("1280: the part-scheduled row's Mark paid button is inside the viewport", reach.right <= reach.vw && reach.left >= 0, reach);
     await rowFor(page, full.billNo).scrollIntoViewIfNeeded();
     await s.shot(page, "16-scheduled-1280");
     const payable = st(part).payable;
@@ -1182,6 +1215,7 @@ function makeCheck(t) {
     await page.getByRole("button", { name: "More", exact: true }).click();
     const item = page.getByRole("menuitem", { name: /Export to Excel/ });
     s.ok("export item has no 'Without the … filter' caveat", !/Without the/.test(await item.innerText()), await item.innerText());
+    await page.waitForTimeout(500);
     await s.shot(page, "17-export-menu");
     const downloaded = new Promise((resolve) => {
       page.on("download", resolve);
@@ -1222,6 +1256,8 @@ function makeCheck(t) {
     await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => /Purchase invoices to review/.test(b.innerText) && /^\d+/.test(b.innerText.trim())), null, { timeout: 60000 });
     const cardText = (await card.innerText()).replace(/\s+/g, " ").trim();
     await s.shot(page, "18-today");
+    const overdueCard = await page.getByRole("button", { name: /Overdue supplier bills/ }).innerText().catch(() => "");
+    s.note(`Today 'Overdue supplier bills' card: ${overdueCard.replace(/\s+/g, " ")}; register OVERDUE bills (all dates, model): ${all.filter((b) => stateOf(b) === "OVERDUE").length}; in FY: ${fyBills().filter((b) => stateOf(b) === "OVERDUE").length}`);
     const expectedNotPosted = all.filter((b) => !["STOCK_COMMITTED", "CANCELLED"].includes(b.status));
     s.check("Today card count = unposted bills", Number(cardText.match(/^\d+/)?.[0]), expectedNotPosted.length);
     await card.click();
@@ -1251,7 +1287,8 @@ function makeCheck(t) {
       const statuses = (await rec.page.locator('[role="status"]').allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
       s.ok(`reception ${route}: access message shown`, statuses.some((t) => /You don.t have access to purchase bills\./.test(t)), { statuses, body: body.slice(0, 200) });
       s.check(`reception ${route}: no "Forbidden resource"`, /Forbidden resource/.test(body), false);
-      s.check(`reception ${route}: no error alert, no table`, [await rec.page.locator('[role="alert"]').count(), await rec.page.locator("table").count()], [0, 0]);
+      const alerts = (await rec.page.locator('[role="alert"]').allInnerTexts()).map((t) => t.trim()).filter(Boolean); // ignore Next's empty route announcer
+      s.check(`reception ${route}: no error alert, no table`, [alerts, await rec.page.locator("table").count()], [[], 0]);
     }
     await s.shot(rec.page, "18-reception");
   });
@@ -1270,12 +1307,12 @@ function makeCheck(t) {
     const docTwoB = await make(two, "scan-two-b.pdf", "application/pdf", pdf(`${two.billNo}-b`));
     const { page, context } = s.track(await open("pharmacist", { width: 1280, height: 800 }, { stubOpen: false }));
     await goto(page);
-    const before = page.url();
     const requests = [];
     const downloads = [];
     context.on("response", (r) => /purchase-invoices\/documents\//.test(r.url()) && requests.push({ url: new URL(r.url()).pathname, status: r.status() }));
     context.on("page", (p) => p.on("download", (d) => downloads.push(d)));
     await showBill(page, one.billNo);
+    const before = page.url();
     const link = rowFor(page, one.billNo).getByRole("link", { name: `Open original bill ${one.billNo}` });
     s.check("single document: link goes to the document endpoint in a new tab", [await link.getAttribute("href"), await link.getAttribute("target")], [`/api/pharmacy/purchase-invoices/documents/${docOne.id}`, "_blank"]);
     const popupOpened = context.waitForEvent("page", { timeout: 20000 }).then(() => true, () => false);
@@ -1291,15 +1328,16 @@ function makeCheck(t) {
     } else s.note("no download event surfaced for the new tab (document served inline or tab closed too early)");
     const served = await page.evaluate(async (id) => {
       const r = await fetch(`/api/pharmacy/purchase-invoices/documents/${id}`, { credentials: "include" });
-      return { status: r.status, type: r.headers.get("content-type"), disposition: r.headers.get("content-disposition"), head: new TextDecoder().decode((await r.arrayBuffer()).slice(0, 8)) };
+      return { status: r.status, type: r.headers.get("content-type"), disposition: r.headers.get("content-disposition"), body: new TextDecoder().decode(await r.arrayBuffer()) };
     }, docOne.id);
-    s.check("endpoint serves the original", [served.status, served.type, /attachment/.test(served.disposition || ""), served.head.startsWith("%PDF")], [200, "application/pdf", true, true]);
+    s.check("endpoint serves the stored original byte for byte", [served.status, served.type, /attachment/.test(served.disposition || ""), served.body === pdf(one.billNo).toString()], [200, "application/pdf", true, true]);
     await s.shot(page, "19-paperclip");
 
     await showBill(page, two.billNo);
     const menuTrigger = rowFor(page, two.billNo).getByRole("button", { name: `Open original bill ${two.billNo}` });
     s.check("two documents: one paperclip button showing the count", (await menuTrigger.innerText()).trim(), "2");
     await menuTrigger.click();
+    await page.waitForTimeout(500);
     const items = await page.getByRole("menuitem").evaluateAll((els) => els.map((e) => ({ text: e.textContent.trim(), href: e.getAttribute("href") })));
     s.check("menu lists both originals", items, [
       { text: "scan-two-a.pdf", href: `/api/pharmacy/purchase-invoices/documents/${docTwoA.id}` },
