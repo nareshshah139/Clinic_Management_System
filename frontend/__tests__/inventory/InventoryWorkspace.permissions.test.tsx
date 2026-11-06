@@ -105,8 +105,8 @@ it('shows purchase bills from the purchase register with their payment state', a
   (apiClient.get as jest.Mock).mockImplementation(async (path: string) => path.includes('capabilities') ? {kinds:{}} : {
     rows:[{id:'bill-1',srNo:1,billNo:'LIN-101',entryAt:'2026-10-01T05:00:00.000Z',billDate:'2026-10-01',entryBy:null,source:'MANUAL',
       distributor:{name:'Linae Distributors',gstin:'36ABCDE1234F1Z5'},amount:1000,invoiceState:'POSTED',
-      payment:{state:'DUE',paid:0,credit:0,outstanding:1000,dueDate:null,overdueDays:0}}],
-    total:1,page:1,limit:50,totals:{amount:1000,outstanding:1000,count:1,excluded:{cancelled:0}},entryByOptions:[],distributorOptions:[],canSettle:false,
+      payment:{state:'DUE',paid:0,credit:0,outstanding:1000,partlyPaid:false,dueDate:null,overdueDays:0}}],
+    total:1,page:1,limit:50,totals:{amount:1000,outstanding:1000,count:1,excluded:{notPosted:0,cancelled:0}},entryByOptions:[],distributorOptions:[],
   });
   render(<InventoryWorkspace/>);
   const table = await screen.findByRole('table', {name: 'Purchase bills'});

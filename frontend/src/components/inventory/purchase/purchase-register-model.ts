@@ -1,3 +1,4 @@
+import { UserRole } from '@cms/shared-types';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { formatDisplayDay, parseDisplayDay } from '@/lib/date-ranges';
 import { errorMessage, type RegisterQuery, type RegisterQueryConfig } from '@/components/register/register-query';
@@ -73,7 +74,7 @@ export const PURCHASE_REGISTER_COPY: Record<PurchaseRegisterKind, { tab: string;
   purchases: { tab: 'Purchase', noun: 'purchase bills', table: 'Purchase bills', endpoint: '/pharmacy/purchase-register' },
 };
 
-const LEDGER_WRITER_ROLES: readonly string[] = ['OWNER', 'ADMIN', 'DOCTOR', 'PHARMACIST', 'ACCOUNTANT'];
+const LEDGER_WRITER_ROLES: readonly string[] = [UserRole.OWNER, UserRole.ADMIN, UserRole.DOCTOR, UserRole.PHARMACIST, UserRole.ACCOUNTANT];
 
 export const canRecordSupplierPayments = (caps: { creditWrite?: boolean } | null | undefined, role: string | undefined) =>
   caps?.creditWrite === true && LEDGER_WRITER_ROLES.includes(role ?? '');
@@ -201,9 +202,9 @@ export function settleFailure(error: unknown): SettleFailure {
   return { kind: 'inline', message };
 }
 
-function withStorage<T>(use: (storage: Storage) => T, fallback: T): T {
+function withStorage<T>(run: (storage: Storage) => T, fallback: T): T {
   try {
-    return use(window.localStorage);
+    return run(window.localStorage);
   } catch {
     return fallback;
   }

@@ -145,8 +145,8 @@
           ]
         }
       ],
-      "contractLine": 81,
-      "declarationLine": 88
+      "contractLine": 94,
+      "declarationLine": 112
     },
     {
       "id": "INV-02",
@@ -280,8 +280,8 @@
           ]
         }
       ],
-      "contractLine": 488,
-      "declarationLine": 494
+      "contractLine": 531,
+      "declarationLine": 537
     },
     {
       "id": "INV-03",
@@ -2321,7 +2321,7 @@
           "evidenceRefs": [
             {
               "kind": "SOURCE_TRACE",
-              "path": "frontend/src/components/inventory/InventoryWorkspace.tsx",
+              "path": "frontend/src/components/inventory/purchase/PurchaseRegister.tsx",
               "anchor": "function PurchaseRegister("
             },
             {
@@ -2348,7 +2348,7 @@
           "evidenceRefs": [
             {
               "kind": "SOURCE_TRACE",
-              "path": "frontend/src/components/inventory/InventoryWorkspace.tsx",
+              "path": "frontend/src/components/inventory/purchase/PurchaseRegister.tsx",
               "anchor": "function PurchaseRegister("
             },
             {
@@ -2375,7 +2375,7 @@
           "evidenceRefs": [
             {
               "kind": "SOURCE_TRACE",
-              "path": "frontend/src/components/inventory/InventoryWorkspace.tsx",
+              "path": "frontend/src/components/inventory/purchase/PurchaseRegister.tsx",
               "anchor": "function PurchaseRegister("
             },
             {
@@ -2402,7 +2402,7 @@
           "evidenceRefs": [
             {
               "kind": "SOURCE_TRACE",
-              "path": "frontend/src/components/inventory/InventoryWorkspace.tsx",
+              "path": "frontend/src/components/inventory/purchase/PurchaseRegister.tsx",
               "anchor": "function PurchaseRegister("
             },
             {
@@ -2429,7 +2429,7 @@
           "evidenceRefs": [
             {
               "kind": "SOURCE_TRACE",
-              "path": "frontend/src/components/inventory/InventoryWorkspace.tsx",
+              "path": "frontend/src/components/inventory/purchase/PurchaseRegister.tsx",
               "anchor": "function PurchaseRegister("
             },
             {
@@ -2444,8 +2444,8 @@
           ]
         }
       ],
-      "contractLine": 109,
-      "declarationLine": 115
+      "contractLine": 47,
+      "declarationLine": 53
     },
     {
       "id": "INV-19",

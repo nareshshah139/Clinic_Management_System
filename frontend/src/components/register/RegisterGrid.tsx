@@ -27,7 +27,7 @@ export type RegisterColumn<Row, Sort extends string = string> = {
 const headClass =
   'sticky top-0 xl:-top-6 z-20 h-12 whitespace-normal bg-muted px-1! py-1! text-sm leading-tight font-semibold text-foreground first:rounded-tl-lg first:pl-1.5! last:rounded-tr-lg last:pr-1!';
 const pinnedHeadClass = 'left-0 z-30 max-xl:border-r max-xl:border-border';
-const cellClass = 'px-1! py-2! text-sm first:pl-1.5! last:pr-1!';
+const cellClass = 'px-1! text-sm first:pl-1.5! last:pr-1!';
 const pinnedCellClass = 'sticky left-0 z-10 bg-background group-hover:bg-[var(--accent-soft)] max-xl:border-r max-xl:border-border';
 
 const stopRowClick = (event: MouseEvent) => event.stopPropagation();
@@ -46,7 +46,7 @@ function SortButton({ column, active, direction, onSort }: { column: RegisterCol
       type="button"
       onClick={onSort}
       className={cn(
-        'min-h-10 rounded-sm py-1 hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'min-h-10 rounded-sm py-0.5 hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
         column.align === 'right' ? 'text-right' : 'text-left',
       )}
     >
@@ -71,7 +71,7 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
   onRetry,
   empty,
   containerRef,
-  rowClassName = 'h-[52px]',
+  compact = false,
 }: {
   label: string;
   noun: string;
@@ -84,8 +84,10 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
   onRetry: () => void;
   empty: ReactNode;
   containerRef?: Ref<HTMLDivElement>;
-  rowClassName?: string;
+  compact?: boolean;
 }) {
+  const rowClass = compact ? undefined : 'h-[52px]';
+  const padClass = compact ? 'py-1.5!' : 'py-2!';
   const loaded = load.data !== null;
   const firstLoad = !loaded && load.status === 'loading';
   const failed = load.status === 'error';
@@ -129,9 +131,9 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
               <TableBody>
                 {firstLoad &&
                   Array.from({ length: 6 }, (_, i) => (
-                    <TableRow key={i} className={rowClassName}>
+                    <TableRow key={i} className={rowClass}>
                       {columns.map((column) => (
-                        <TableCell key={column.key} className={cellClass}><Skeleton className="h-5 w-full min-w-12" /></TableCell>
+                        <TableCell key={column.key} className={cn(cellClass, padClass)}><Skeleton className="h-5 w-full min-w-12" /></TableCell>
                       ))}
                     </TableRow>
                   ))}
@@ -141,12 +143,12 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
                   </TableRow>
                 )}
                 {rows.map((row) => (
-                  <TableRow key={row.id} className={cn('group cursor-pointer', rowClassName)} onClick={() => onRowClick(row)}>
+                  <TableRow key={row.id} className={cn('group cursor-pointer', rowClass)} onClick={() => onRowClick(row)}>
                     {columns.map((column) => (
                       <TableCell
                         key={column.key}
                         onClick={column.interactive ? stopRowClick : undefined}
-                        className={cn(cellClass, column.pinned && pinnedCellClass, column.align === 'right' && 'text-right', column.className)}
+                        className={cn(cellClass, padClass, column.pinned && pinnedCellClass, column.align === 'right' && 'text-right', column.className)}
                       >
                         {column.cell(row)}
                       </TableCell>

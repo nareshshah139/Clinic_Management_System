@@ -39,7 +39,7 @@ function OverdueDays({ days }: { days: number }) {
 export function PaymentBadge({ row }: { row: PurchaseRegisterRow }) {
   const { state, outstanding, overdueDays, partlyPaid } = row.payment;
   const settled = row.payment.paid + row.payment.credit;
-  const paidNote = partlyPaid && <span className="whitespace-nowrap text-xs font-medium text-foreground">{formatRupees(settled)} paid</span>;
+  const note = (text: string) => <span className="whitespace-nowrap text-xs leading-tight font-medium text-foreground">{text}</span>;
   switch (state) {
     case 'PAID':
       return <Badge variant="success" className={badgeText}>Paid</Badge>;
@@ -49,16 +49,16 @@ export function PaymentBadge({ row }: { row: PurchaseRegisterRow }) {
       return (
         <span className="flex flex-col items-start gap-0.5">
           <Badge variant="destructive" className={cn(badgeText, 'bg-destructive-text text-white dark:bg-destructive')}>
-            {partlyPaid ? `${formatRupees(outstanding)} overdue` : 'Overdue'} · <OverdueDays days={overdueDays} />
+            Overdue · <OverdueDays days={overdueDays} />
           </Badge>
-          {paidNote}
+          {partlyPaid && note(`${formatRupees(settled)} paid`)}
         </span>
       );
     case 'PARTIAL':
       return (
         <span className="flex flex-col items-start gap-0.5">
           <Badge variant="warning" className={badgeText}>{formatRupees(outstanding)} due</Badge>
-          {paidNote}
+          {note(`${formatRupees(settled)} paid`)}
         </span>
       );
     case 'NOT_POSTED':
@@ -117,7 +117,7 @@ export function useSettleBill({
   const forget = (rowId: string) => {
     clearTimeout(timers.current.get(rowId));
     timers.current.delete(rowId);
-    setRecent(({ [rowId]: _gone, ...rest }) => rest);
+    setRecent((current) => Object.fromEntries(Object.entries(current).filter(([id]) => id !== rowId)));
   };
   const remember = (rowId: string, payment: RecordedPayment) => {
     clearTimeout(timers.current.get(rowId));
@@ -236,7 +236,7 @@ export function PaymentCell({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8 px-2 text-sm font-semibold underline underline-offset-4"
+          className="h-8 px-2 text-sm font-semibold underline underline-offset-4 lg:min-h-8!"
           aria-label={`Undo payment for bill ${row.billNo}`}
           disabled={recent.undoing}
           onClick={() => void settle.undo(row)}
@@ -250,7 +250,7 @@ export function PaymentCell({
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm"
+            className="h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm lg:min-h-8!"
             aria-label={`Mark bill ${row.billNo} paid`}
             aria-haspopup="dialog"
             onClick={(event) => settle.open(row, event.currentTarget)}

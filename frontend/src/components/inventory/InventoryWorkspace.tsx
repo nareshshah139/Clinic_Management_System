@@ -23,7 +23,8 @@ import { ReplenishmentCenter } from "./ReplenishmentCenter";
 import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
 import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
 import { WorkspaceStock } from "./WorkspaceStock";
-import { PurchaseRegister } from "./purchase/PurchaseRegister";
+import { PurchaseBills } from "./purchase/PurchaseBills";
+import { canRecordSupplierPayments } from "./purchase/purchase-register-model";
 import { InventoryUpdates } from "./InventoryUpdates";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
@@ -46,8 +47,8 @@ const areas = [
 const menus: Record<string, string[][]> = {
   today: [],
   purchases: [
-    ["intake", "Scan or enter bill"],
     ["register", "Purchase bills"],
+    ["intake", "Scan or enter bill"],
     ["csv", "Import CSV"],
     ["gmail", "Gmail intake"],
     ["suppliers", "Suppliers"],
@@ -228,7 +229,7 @@ export function InventoryWorkspace() {
   const availableTasks = (menus[area] || []).filter(([id]) => id !== "approvals" || canReadEdits);
   const primaryTasks = availableTasks.slice(0, 3);
   const moreTasks = availableTasks.slice(3);
-  const switchTask = (id: string) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1" });
+  const switchTask = (id: string, extra: Record<string, string> = {}) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1", ...extra });
   const purchaseRegisterParams = (next: URLSearchParams) => {
     const merged = new URLSearchParams({ area: "purchases", view: "register" });
     next.forEach((value, key) => merged.set(key, value));
@@ -390,12 +391,13 @@ export function InventoryWorkspace() {
             />
           )}
           {area === "purchases" && view === "register" && (
-            <PurchaseRegister
+            <PurchaseBills
               searchParams={params}
               onParamsChange={purchaseRegisterParams}
+              canSettle={canRecordSupplierPayments(caps, user?.role)}
               onOpen={invoice}
               onNew={() => navigate({ return: origin(), view: "intake", new: requestKey(), invoice: "", receipt: "", intake: "", document: "", item: "" })}
-              onLedger={() => switchTask("ledger")}
+              onLedger={caps.ledger ? (gstin?: string) => switchTask("ledger", { gstin: gstin ?? "" }) : null}
               onSuppliers={() => switchTask("suppliers")}
             />
           )}
@@ -601,7 +603,7 @@ function WorkspaceToday({ navigate, open }: any) {
           .reduce((n: number, p: any) => n + p._count, 0) || 0,
       detail:
         "Open the invoice, resolve highlighted checks and confirm stock status.",
-      target: { area: "purchases", view: "register", status: "UNPOSTED" },
+      target: { area: "purchases", view: "register", pay: "NOT_POSTED" },
     },
     {
       label: "Original files awaiting intake",

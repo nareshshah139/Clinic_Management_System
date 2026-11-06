@@ -1,109 +1,47 @@
 'use client';
 
-import { useCallback, useRef, useState, type MouseEvent, type ReactNode } from 'react';
-import { ChevronDown, FileDown, Plus, Receipt, Truck, Wallet } from 'lucide-react';
+import { useCallback } from 'react';
+import { Plus, Receipt } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { displayCalendarDate } from '@/lib/date-display';
+import { displayCalendarDate, displayClinicDateTimeCompact } from '@/lib/date-display';
 import { formatDisplayDay } from '@/lib/date-ranges';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { cn } from '@/lib/utils';
-import { toast } from '@/hooks/use-toast';
-import { requestKey } from '@/components/inventory/workspace-model';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
-import { ToastAction } from '@/components/ui/toast';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { countFilters, errorMessage, isRangeDefault, shortName } from '@/components/register/register-query';
 import { useRegisterQuery } from '@/components/register/useRegisterQuery';
-import {
-  RegisterDateTime,
-  RegisterHead,
-  RegisterTable,
-  SortableHead,
-  registerCellClass,
-  registerStickyCellClass,
-} from '@/components/register/RegisterTable';
+import { RegisterDenied, RegisterGrid, shortName, type RegisterColumn } from '@/components/register/RegisterGrid';
 import { ClearFilters, DateRangeFilter, FilterBar, FilterSelect, MoreFilters, RegisterSearch } from '@/components/register/RegisterFilters';
 import { RegisterFooter } from '@/components/register/RegisterFooter';
 import { MarkPaidDialog } from './MarkPaidDialog';
+import { PaymentCell, useSettleBill } from './settle';
 import {
-  FILTER_KEYS,
-  INVOICE_STATES,
+  INVOICE_STATE_FILTERS,
   INVOICE_STATE_LABELS,
   MORE_FILTERS,
   PAYMENT_FILTERS,
   PAYMENT_FILTER_LABELS,
   PURCHASE_QUERY,
+  PURCHASE_REGISTER_COPY,
   PURCHASE_SOURCES,
   SEARCH_FIELD_OPTIONS,
   SOURCE_LABELS,
-  UNDO_REASON,
-  canMarkPaid,
+  billCount,
   excludedNote,
-  exportRequest,
-  footerSummary,
   requestParams,
   type FilterKey,
   type PurchaseQuery,
+  type PurchaseRegisterKind,
   type PurchaseRegisterResponse,
   type PurchaseRegisterRow,
-  type RecordedPayment,
   type SortKey,
 } from './purchase-register-model';
 
-const badgeText = 'whitespace-nowrap px-1.5 py-0.5 text-xs font-semibold';
+const compactDay = (day: string, today: string) => (day.endsWith(` ${today.slice(0, 4)}`) ? day.slice(0, -5) : day);
 
-type Column = { key: string; label: string; hideLabel?: boolean; sort?: SortKey; align?: 'right'; className?: string; cell: (row: PurchaseRegisterRow) => ReactNode };
-
-function PaymentBadge({ row }: { row: PurchaseRegisterRow }) {
-  const { state, outstanding, overdueDays } = row.payment;
-  switch (state) {
-    case 'PAID':
-      return <Badge variant="success" className={badgeText}>Paid</Badge>;
-    case 'DUE':
-      return <Badge variant="danger" className={badgeText}>Due</Badge>;
-    case 'OVERDUE':
-      return (
-        <Badge variant="destructive" className={cn(badgeText, 'bg-destructive-text text-white dark:bg-destructive')}>
-          Overdue · {overdueDays}d
-        </Badge>
-      );
-    case 'PARTIAL':
-      return (
-        <span className="flex flex-col items-start gap-0.5">
-          <Badge variant="warning" className={badgeText}>{formatRupees(outstanding)} due</Badge>
-          <span className="whitespace-nowrap text-xs text-muted-foreground">
-            part paid{overdueDays > 0 ? ` · ${overdueDays}d late` : ''}
-          </span>
-        </span>
-      );
-    case 'NOT_POSTED':
-      return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span tabIndex={0} className="rounded-full focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
-              <Badge variant="neutral" className={badgeText}>
-                Not posted<span className="sr-only">. {INVOICE_STATE_LABELS[row.invoiceState]}. Post stock before paying</span>
-              </Badge>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{INVOICE_STATE_LABELS[row.invoiceState]} · Post stock before paying</TooltipContent>
-        </Tooltip>
-      );
-    case 'CANCELLED':
-      return <Badge variant="neutral" className={cn(badgeText, 'line-through')}>Cancelled</Badge>;
-  }
-}
+const linkClass =
+  'whitespace-nowrap rounded-sm text-left font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 /**
  * @cc [owner:nareshshah139,label:product;target] purchase-register-complete
@@ -113,151 +51,79 @@ function PaymentBadge({ row }: { row: PurchaseRegisterRow }) {
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
 export function PurchaseRegister({
+  register,
+  active,
   searchParams,
   onParamsChange,
+  canSettle,
   onOpen,
   onNew,
   onLedger,
-  onSuppliers,
 }: {
-  searchParams: Pick<URLSearchParams, 'get'>;
+  register: PurchaseRegisterKind;
+  active: boolean;
+  searchParams: Pick<URLSearchParams, 'get' | 'toString'>;
   onParamsChange: (params: URLSearchParams) => void;
+  canSettle: boolean;
   onOpen: (invoiceId: string) => void;
   onNew: () => void;
-  onLedger: () => void;
-  onSuppliers: () => void;
+  onLedger: ((gstin?: string) => void) | null;
 }) {
-  const searchRef = useRef<HTMLInputElement>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
-  const settleAnchor = useRef<HTMLButtonElement | null>(null);
-  const [settling, setSettling] = useState<PurchaseRegisterRow | null>(null);
+  const copy = PURCHASE_REGISTER_COPY[register];
   const fetchPage = useCallback(
-    (query: PurchaseQuery) => apiClient.get<PurchaseRegisterResponse>('/pharmacy/purchase-register', requestParams(query)),
-    [],
+    (query: PurchaseQuery) => apiClient.get<PurchaseRegisterResponse>(copy.endpoint, requestParams(query)),
+    [copy.endpoint],
   );
-  const { today, query, dispatch, draft, setDraft, clear, load, retry } = useRegisterQuery({
+  const { today, query, dispatch, draft, setDraft, load, reload, view, searchRef, tableRef, clearAll, goToPage } = useRegisterQuery({
     config: PURCHASE_QUERY,
+    more: MORE_FILTERS,
     searchParams,
     onParamsChange,
     fetchPage,
+    enabled: active,
   });
 
   const data = load.data;
   const rows = data?.rows ?? [];
-  const canSettle = data?.canSettle ?? false;
-  const firstLoad = !data && load.status === 'loading';
   const failed = load.status === 'error';
-  const searching = query.q.trim() !== '' || draft.trim() !== '' || countFilters(query, FILTER_KEYS) > 0;
-  const rangeChanged = !isRangeDefault(query, today);
-  const filtered = searching || rangeChanged;
-  const exported = exportRequest(query);
-
-  const clearAll = () => {
-    clear();
-    searchRef.current?.focus();
-  };
-  const goToPage = (page: number) => {
-    dispatch({ type: 'page', page });
-    tableRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-  };
+  const settle = useSettleBill({ rows, canSettle, reload });
   const setFilter = (key: FilterKey) => (value: string) => dispatch({ type: 'filter', key, value });
-
-  const undo = async (payment: RecordedPayment, row: PurchaseRegisterRow, key = requestKey()) => {
-    try {
-      await apiClient.post(
-        `/pharmacy/purchase-ledger/payments/${encodeURIComponent(payment.id)}/reverse`,
-        { requestKey: key, expectedUpdatedAt: payment.updatedAt, reason: UNDO_REASON },
-        { idempotencyKey: key },
-      );
-      toast({ title: 'Payment undone', description: `Bill ${row.billNo} is due again.` });
-      retry();
-    } catch (failure) {
-      toast({
-        variant: 'destructive',
-        title: 'Could not undo the payment',
-        description: `${errorMessage(failure)} You can reverse it from Payments & dues.`,
-        action: (
-          <ToastAction altText="Try undo again" onClick={() => void undo(payment, row, key)}>
-            Try again
-          </ToastAction>
-        ),
-      });
-    }
-  };
-
-  const paid = (payment: RecordedPayment, row: PurchaseRegisterRow) => {
-    setSettling(null);
-    retry();
-    toast({
-      title: 'Payment recorded',
-      description: `${formatRupees(row.payment.outstanding)} to ${row.distributor.name} for bill ${row.billNo}.`,
-      duration: 10000,
-      action: (
-        <ToastAction altText="Undo payment" onClick={() => void undo(payment, row)}>
-          Undo
-        </ToastAction>
-      ),
-    });
-  };
 
   const entryByOptions = (data?.entryByOptions ?? []).map((person) => ({ value: person.id, label: person.name }));
   if (query.filters.entryById && !entryByOptions.some((option) => option.value === query.filters.entryById)) {
     entryByOptions.push({ value: query.filters.entryById, label: 'Selected person' });
   }
   const distributorOptions = (data?.distributorOptions ?? []).map((d) => ({ value: d.gstin, label: d.name }));
-  if (query.filters.distributorGstin && !distributorOptions.some((option) => option.value === query.filters.distributorGstin)) {
-    distributorOptions.push({ value: query.filters.distributorGstin, label: query.filters.distributorGstin });
-  }
+  const gstin = query.filters.distributorGstin;
+  if (gstin && !distributorOptions.some((option) => option.value === gstin)) distributorOptions.push({ value: gstin, label: gstin });
 
-  const stop = (event: MouseEvent) => event.stopPropagation();
-  const linkClass =
-    'whitespace-nowrap rounded-sm text-left font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
-
-  const settleCell = (row: PurchaseRegisterRow) =>
-    canMarkPaid(row, canSettle) && (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm"
-        aria-label={`Mark bill ${row.billNo} paid`}
-        aria-haspopup="dialog"
-        onClick={(event) => {
-          stop(event);
-          settleAnchor.current = event.currentTarget;
-          setSettling(row);
-        }}
-      >
-        Mark paid
-      </Button>
-    );
-
-  const columns: Column[] = [
-    { key: 'srNo', label: 'Sr No', sort: 'srNo', className: cn('w-[1%] tabular-nums', registerStickyCellClass), cell: (row) => row.srNo },
+  const columns: RegisterColumn<PurchaseRegisterRow, SortKey>[] = [
+    { key: 'srNo', label: 'Sr No', sort: 'srNo', className: 'w-[1%] tabular-nums', cell: (row) => row.srNo },
     {
       key: 'billNo',
       label: 'Bill No',
       sort: 'billNo',
+      pinned: true,
+      interactive: true,
       className: 'w-[1%]',
       cell: (row) => (
-        <button type="button" onClick={(event) => { stop(event); onOpen(row.id); }} aria-label={`Open bill ${row.billNo}`} className={linkClass}>
+        <button id={settle.openId(row.id)} type="button" onClick={() => onOpen(row.id)} aria-label={`Open bill ${row.billNo}`} className={linkClass}>
           {row.billNo}
         </button>
       ),
     },
-    { key: 'entryAt', label: 'Entry Date', sort: 'entryAt', className: 'w-[1%]', cell: (row) => <RegisterDateTime value={row.entryAt} today={today} /> },
-    { key: 'billDate', label: 'Bill Date', sort: 'billDate', className: 'w-[1%] whitespace-normal @min-[68rem]:whitespace-nowrap', cell: (row) => displayCalendarDate(row.billDate) },
+    { key: 'entryAt', label: 'Entry Date', sort: 'entryAt', className: 'w-[1%] whitespace-nowrap', cell: (row) => displayClinicDateTimeCompact(row.entryAt, today) },
+    { key: 'billDate', label: 'Bill Date', sort: 'billDate', className: 'w-[1%] whitespace-nowrap', cell: (row) => compactDay(displayCalendarDate(row.billDate), today) },
     { key: 'entryBy', label: 'Entry By', className: 'w-[1%] whitespace-nowrap', cell: (row) => (row.entryBy ? <span title={row.entryBy.name}>{shortName(row.entryBy.name)}</span> : '—') },
     {
       key: 'distributor',
       label: 'Distributor',
       sort: 'distributor',
-      className: 'min-w-[9rem] whitespace-normal leading-snug',
+      className: 'w-full max-w-0 min-w-[7rem]',
       cell: (row) => (
-        <div title={row.distributor.gstin}>
-          <div className="font-medium [overflow-wrap:anywhere]">{row.distributor.name}</div>
-          <div className="truncate font-mono text-xs text-muted-foreground">{row.distributor.gstin}</div>
-        </div>
+        <span title={`${row.distributor.name} · GSTIN ${row.distributor.gstin}`} className="block truncate font-medium">
+          {row.distributor.name}
+        </span>
       ),
     },
     {
@@ -268,48 +134,54 @@ export function PurchaseRegister({
       className: 'w-[1%] whitespace-nowrap',
       cell: (row) => <span className={cn('font-semibold', row.invoiceState === 'CANCELLED' && 'line-through')}>{formatRupees(row.amount)}</span>,
     },
-    { key: 'payment', label: 'Payment', sort: 'outstanding', className: 'w-[1%] whitespace-nowrap', cell: (row) => <PaymentBadge row={row} /> },
-    ...(canSettle ? [{ key: 'settle', label: 'Settle', hideLabel: true, className: 'w-[1%] whitespace-nowrap py-1! text-right', cell: settleCell }] : []),
+    {
+      key: 'payment',
+      label: 'Payment',
+      srNote: '(by amount outstanding)',
+      sort: 'outstanding',
+      interactive: true,
+      className: 'w-[1%] whitespace-nowrap py-0.5!',
+      cell: (row) => <PaymentCell row={row} settle={settle} canSettle={canSettle} />,
+    },
   ];
 
-  const footerSummaryText = failed ? 'Total not available' : data ? footerSummary(data.totals) : <Skeleton className="h-6 w-72" />;
-  const footerNote = failed ? 'Could not load purchase bills. Retry to see the latest totals.' : data ? excludedNote(data.totals.excluded) : '';
+  if (load.status === 'denied') {
+    return (
+      <RegisterDenied noun={copy.noun}>
+        <Button variant="outline" onClick={onNew}><Plus aria-hidden="true" /> Scan or enter a bill</Button>
+      </RegisterDenied>
+    );
+  }
+
+  const outstanding = data && formatRupees(data.totals.outstanding);
+  const summary = failed ? (
+    'Total not available'
+  ) : data ? (
+    <>
+      Bills {formatRupees(data.totals.amount)} ·{' '}
+      {onLedger ? (
+        <button
+          type="button"
+          onClick={() => onLedger(gstin || undefined)}
+          aria-label={`Outstanding ${outstanding}, open Payments & dues`}
+          className="inline rounded-sm text-left underline underline-offset-4 hover:decoration-2 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          Outstanding {outstanding}
+        </button>
+      ) : (
+        <>Outstanding {outstanding}</>
+      )}{' '}
+      · {billCount(data.totals.count)}
+    </>
+  ) : (
+    <Skeleton className="h-6 w-72" />
+  );
+  const note = failed ? `Could not load ${copy.noun}. Retry to see the latest totals.` : data ? excludedNote(data.totals.excluded) : '';
 
   return (
-    <section aria-labelledby="purchase-register-title" className="flex min-w-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="purchase-register-title" className="text-xl font-semibold">Purchase bills</h2>
-        <div className="flex items-center gap-2">
-          <Button className="h-10 text-sm" onClick={onNew}>
-            <Plus aria-hidden="true" /> New purchase
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-10 text-sm">
-                More <ChevronDown aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuItem onSelect={() => window.open(exported.href, '_blank')} className="flex-col items-start gap-0.5">
-                <span className="flex items-center gap-2"><FileDown aria-hidden="true" /> Export to Excel</span>
-                {exported.ignored.length > 0 && (
-                  <span className="text-xs text-muted-foreground">Without the {exported.ignored.join(' and ')} filter</span>
-                )}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={onLedger}>
-                <Wallet aria-hidden="true" /> Payments &amp; dues
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={onSuppliers}>
-                <Truck aria-hidden="true" /> Suppliers
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
+    <div className="flex min-w-0 flex-col gap-3">
       <FilterBar
-        count={countFilters(query, FILTER_KEYS) + (rangeChanged ? 1 : 0)}
+        count={view.barCount}
         search={
           <RegisterSearch
             fields={SEARCH_FIELD_OPTIONS}
@@ -329,13 +201,13 @@ export function PurchaseRegister({
           options={PAYMENT_FILTERS.map((value) => ({ value, label: PAYMENT_FILTER_LABELS[value] }))}
           onChange={setFilter('paymentState')}
         />
-        <MoreFilters count={countFilters(query, MORE_FILTERS)}>
-          <FilterSelect label="Distributor" allLabel="All" value={query.filters.distributorGstin} options={distributorOptions} onChange={setFilter('distributorGstin')} />
+        <MoreFilters count={view.moreCount}>
+          <FilterSelect label="Distributor" allLabel="All" value={gstin} options={distributorOptions} onChange={setFilter('distributorGstin')} />
           <FilterSelect
             label="Bill status"
             allLabel="All"
             value={query.filters.invoiceState}
-            options={INVOICE_STATES.map((value) => ({ value, label: INVOICE_STATE_LABELS[value] }))}
+            options={INVOICE_STATE_FILTERS.map((value) => ({ value, label: INVOICE_STATE_LABELS[value] }))}
             onChange={setFilter('invoiceState')}
           />
           <FilterSelect
@@ -347,97 +219,59 @@ export function PurchaseRegister({
           />
           <FilterSelect label="Entry by" allLabel="Anyone" value={query.filters.entryById} options={entryByOptions} onChange={setFilter('entryById')} />
         </MoreFilters>
-        {filtered && <ClearFilters onClear={clearAll} />}
+        {view.filtered && <ClearFilters onClear={clearAll} />}
       </FilterBar>
 
-      {failed && (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive-border bg-destructive-soft px-4 py-3 text-base text-destructive-text">
-          <span>Could not load purchase bills. {load.error}</span>
-          <Button variant="outline" onClick={retry}>Retry</Button>
-        </div>
-      )}
-
-      <div
-        aria-busy={load.status === 'loading'}
-        inert={failed || undefined}
-        className={cn('transition-opacity', load.status === 'loading' && data && 'opacity-60', failed && data && 'opacity-30')}
-      >
-        {firstLoad && <span role="status" className="sr-only">Loading purchase bills…</span>}
-        <RegisterTable label="Purchase bills" containerRef={tableRef}>
-          <TableHeader className="static! z-auto! bg-transparent!">
-            <TableRow className="hover:bg-transparent">
-              {columns.map((column) =>
-                column.sort ? (
-                  <SortableHead
-                    key={column.key}
-                    label={column.label}
-                    align={column.align}
-                    active={query.sortBy === column.sort}
-                    direction={query.sortDir}
-                    onSort={() => dispatch({ type: 'sort', key: column.sort! })}
-                  />
-                ) : (
-                  <RegisterHead key={column.key} align={column.align}>
-                    {column.hideLabel ? <span className="sr-only">{column.label}</span> : column.label}
-                  </RegisterHead>
-                ),
-              )}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {firstLoad &&
-              Array.from({ length: 6 }, (_, i) => (
-                <TableRow key={i} className="h-[52px]">
-                  {columns.map((column) => (
-                    <TableCell key={column.key} className={registerCellClass}><Skeleton className="h-5 w-full min-w-12" /></TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            {data && rows.length === 0 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={columns.length} className="whitespace-normal">
-                  <EmptyState
-                    icon={Receipt}
-                    title={`No purchase bills ${searching ? 'match your search' : 'in this period'}`}
-                    description={`Nothing entered with a bill date between ${formatDisplayDay(query.from)} and ${formatDisplayDay(query.to)}${searching ? ' with these filters' : ''}.`}
-                    action={
-                      filtered ? (
-                        <Button variant="outline" onClick={clearAll}>Clear filters</Button>
-                      ) : (
-                        <Button onClick={onNew}><Plus aria-hidden="true" /> New purchase</Button>
-                      )
-                    }
-                  />
-                </TableCell>
-              </TableRow>
-            )}
-            {rows.map((row) => (
-              <TableRow key={row.id} className="group h-[52px] cursor-pointer" onClick={() => onOpen(row.id)}>
-                {columns.map((column) => (
-                  <TableCell key={column.key} className={cn(registerCellClass, column.align === 'right' && 'text-right', column.className)}>
-                    {column.cell(row)}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </RegisterTable>
-      </div>
+      <RegisterGrid
+        label={copy.table}
+        noun={copy.noun}
+        columns={columns}
+        rows={rows}
+        load={load}
+        sort={{ by: query.sortBy, dir: query.sortDir }}
+        onSort={(key) => dispatch({ type: 'sort', key })}
+        onRowClick={(row) => onOpen(row.id)}
+        onRetry={() => void reload()}
+        containerRef={tableRef}
+        compact
+        empty={
+          <EmptyState
+            icon={Receipt}
+            title={`No ${copy.noun} ${view.searching ? 'match your search' : 'in this period'}`}
+            description={`Nothing entered with a bill date between ${formatDisplayDay(query.from)} and ${formatDisplayDay(query.to)}${view.searching ? ' with these filters' : ''}.`}
+            action={
+              view.filtered ? (
+                <Button variant="outline" onClick={clearAll}>Clear filters</Button>
+              ) : (
+                <Button onClick={onNew}><Plus aria-hidden="true" /> New purchase</Button>
+              )
+            }
+          />
+        }
+      />
 
       <RegisterFooter
-        summary={footerSummaryText}
-        note={footerNote}
+        summary={summary}
+        note={note}
         page={query.page}
         limit={data?.limit ?? 50}
         total={failed ? 0 : data?.total ?? 0}
-        unit="bills"
-        label="Purchase bill pages"
+        label={`${copy.table} pages`}
+        busy={load.status === 'loading' && !!data}
         onPage={goToPage}
       />
 
-      {settling && (
-        <MarkPaidDialog row={settling} today={today} anchorRef={settleAnchor} onClose={() => setSettling(null)} onPaid={paid} />
+      <p role="status" className="sr-only">{settle.announcement}</p>
+
+      {settle.settling && (
+        <MarkPaidDialog
+          row={settle.settling.row}
+          anchor={settle.settling.anchor}
+          onClose={settle.close}
+          onPaid={(payment, amount) => void settle.paid(payment, amount)}
+          onStale={(failure) => void settle.stale(failure)}
+        />
       )}
-    </section>
+    </div>
   );
 }

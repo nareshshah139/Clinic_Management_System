@@ -1,5 +1,5 @@
 import { StrictMode, useSyncExternalStore } from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { InventoryWorkspace } from '@/components/inventory/InventoryWorkspace';
 import { apiClient } from '@/lib/api';
 
@@ -34,7 +34,8 @@ jest.mock('next/navigation', () => ({
     return new URLSearchParams(search);
   },
 }));
-jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: { id: 'operator', branchId: 'branch', role: 'PHARMACIST' } }) }));
+let mockRole = 'PHARMACIST';
+jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: { id: 'operator', branchId: 'branch', role: mockRole } }) }));
 
 const get = jest.mocked(apiClient.get);
 const registerRequests = () =>
@@ -67,6 +68,7 @@ beforeAll(() => {
 afterAll(() => jest.useRealTimers());
 beforeEach(() => {
   jest.clearAllMocks();
+  mockRole = 'PHARMACIST';
 });
 
 const DEEP_LINK = '/dashboard/inventory?area=purchases&view=register&from=2026-03-01&to=2027-03-31&gstin=36ABCDE1234F1Z5';
@@ -86,4 +88,54 @@ it.each([1, 2, 3, 4])('keeps the deep-linked period on load %i, under StrictMode
   );
   expect(new URLSearchParams(window.location.search).get('from')).toBe('2026-03-01');
   unmount();
+});
+
+const dueBill = {
+  id: 'bill-1', srNo: 1, billNo: 'LIN-101', entryAt: '2026-10-01T05:00:00.000Z', billDate: '2026-10-01', entryBy: null, source: 'MANUAL',
+  distributor: { name: 'Linae Distributors', gstin: '36ABCDE1234F1Z5' }, amount: 1000, invoiceState: 'POSTED',
+  payment: { state: 'DUE', paid: 0, credit: 0, outstanding: 1000, partlyPaid: false, dueDate: null, overdueDays: 0 },
+};
+
+it('opens the bills still to post from the Today card', async () => {
+  mockUrl.set('/dashboard/inventory?area=today');
+  serve({ ledger: true, creditWrite: true });
+  render(<InventoryWorkspace />);
+  fireEvent.click(await screen.findByRole('button', { name: /Purchase invoices to review/ }));
+  await waitFor(() => expect(registerRequests()).toHaveLength(1));
+  expect(registerRequests()[0]).toMatchObject({ paymentState: 'NOT_POSTED', from: '2026-04-01', to: '2027-03-31' });
+  expect(screen.getByLabelText('Payment status')).toHaveValue('NOT_POSTED');
+});
+
+it('opens Purchases on the bills register', async () => {
+  mockUrl.set('/dashboard/inventory?area=today');
+  serve({ ledger: true, creditWrite: true });
+  render(<InventoryWorkspace />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Purchases' }));
+  expect(await screen.findByRole('tab', { name: 'Purchase' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('button', { name: 'Purchase bills' })).toHaveAttribute('aria-current', 'page');
+  await waitFor(() => expect(registerRequests()).toHaveLength(1));
+});
+
+it('tells reception without register access so, instead of showing Forbidden resource', async () => {
+  mockRole = 'RECEPTION';
+  mockUrl.set('/dashboard/inventory?area=purchases');
+  serve({ ledger: false, creditWrite: false }, async () => {
+    throw Object.assign(new Error('Forbidden resource'), { status: 403, body: { message: 'Forbidden resource' } });
+  });
+  render(<InventoryWorkspace />);
+  expect(await screen.findByText('You don’t have access to purchase bills.')).toBeInTheDocument();
+  expect(screen.queryByText(/Forbidden resource/)).not.toBeInTheDocument();
+});
+
+it.each([
+  ['PHARMACIST', true, ['Mark bill LIN-101 paid']],
+  ['RECEPTION', true, []],
+  ['PHARMACIST', false, []],
+])('offers Mark paid to %s with ledger write %s only when the ledger would accept it', async (role, creditWrite, buttons) => {
+  mockRole = role;
+  mockUrl.set('/dashboard/inventory?area=purchases&view=register');
+  serve({ ledger: true, creditWrite }, async () => ({ ...emptyRegister, rows: [dueBill], total: 1 }));
+  render(<InventoryWorkspace />);
+  await screen.findByText('LIN-101');
+  expect(screen.queryAllByRole('button', { name: /^Mark bill/ }).map((button) => button.getAttribute('aria-label'))).toEqual(buttons);
 });
