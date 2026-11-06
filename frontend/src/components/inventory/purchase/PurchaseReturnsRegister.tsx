@@ -217,7 +217,7 @@ export function PurchaseReturnsRegister({
       </span>
       <span className="max-sm:sr-only">
         Credit held (all dates) {formatRupees(data.totals.held)} · Awaited {formatRupees(data.totals.awaited.amount)} (
-        {returnCount(data.totals.awaited.count)}) · {returnCount(data.totals.count)}
+        {returnCount(data.totals.awaited.count)})
       </span>
       <TooltipProvider delayDuration={200}>
       <Tooltip>

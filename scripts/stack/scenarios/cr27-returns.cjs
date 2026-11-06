@@ -214,7 +214,7 @@ const watch = (page) => {
       s.check("reason chip next to the source bill", byRef["RET-SLV-02"].detail, "Bill SLV/2026/41 Breakage");
       const f = await footer(page);
       const held = 336 + 124 + 224 + 3360 + 2240 + 1250;
-      s.check("footer", f.summary, `Credit held (all dates) ${fmt(held)} · Awaited ${fmt(r("RET-SLV-01").value + r("RET-SLV-02").value)} (2 returns) · 7 returns`);
+      s.check("footer", f.summary, `Credit held (all dates) ${fmt(held)} · Awaited ${fmt(r("RET-SLV-01").value + r("RET-SLV-02").value)} (2 returns)`);
       s.check("footer note sits behind an info tooltip, one line high", f.note, "1 draft and 1 cancelled not included. Credit held and Awaited cover all dates; Awaited counts our return value until the note arrives.");
       await vis(page).getByRole("button", { name: "About these totals" }).hover();
       s.check("tooltip explains the totals", clean(await page.getByRole("tooltip").innerText()), "1 draft and 1 cancelled not included. Credit held and Awaited cover all dates; Awaited counts our return value until the note arrives.");
@@ -516,6 +516,7 @@ const watch = (page) => {
     });
 
     await scenario("16", "density-1280-and-1440", async (s) => {
+      await raiseExtra("RET-SLV-12", 1);
       for (const [w, h] of [[1280, 800], [1440, 900]]) {
         const { page } = s.track(await open("pharmacist", { width: w, height: h }));
         await goto(page);
@@ -532,7 +533,7 @@ const watch = (page) => {
             overflow: scroller.scrollWidth - scroller.clientWidth, docOverflow: document.documentElement.scrollWidth - window.innerWidth,
           };
         });
-        s.ok(`${w}: at least 5 rows fully visible`, m.fully >= 5, m);
+        s.ok(`${w}: at least 5 rows fully visible, with an awaited return at the top`, m.fully >= 5 && (await readRows(page))[0].badge?.startsWith("Credit note awaited"), m);
         s.ok(`${w}: reason chips are not cut`, m.chips.every(Boolean), m.chips);
         s.check(`${w}: table fits without sideways scroll`, [m.overflow <= 1, m.docOverflow <= 0], [true, true]);
         s.note(`${w}: ${JSON.stringify(m)}`);

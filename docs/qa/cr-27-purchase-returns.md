@@ -16,7 +16,7 @@ Purchase bills now has two tabs, Purchase and Returns. A return goes back to the
 - After recording, focus moves to that row's **Set off** and the toast offers **Set off ₹X now**.
 - A pencil next to a recorded number corrects it. The number and date can always change. The amount can change only while none of it is set off. A correction needs a reason, and the return's history keeps the before and after values.
 - **Set off** lists the distributor's open bills, due first, filled in up to what each bill has left to pay. The dialog keeps its button on screen with 12 or more bills. After a set-off the row offers **Undo** for 30 seconds.
-- The footer reads "Credit held (all dates) ₹X · Awaited ₹Y (N returns) · M returns". Credit held and Awaited cover all dates for the distributor filter, so they match Payments & dues whatever period the list shows. An info button explains this and lists the drafts and cancelled returns left out.
+- The footer reads "Credit held (all dates) ₹X · Awaited ₹Y (N returns)". Credit held and Awaited cover all dates for the distributor filter, so they match Payments & dues whatever period the list shows. An info button explains this and lists the drafts and cancelled returns left out.
 - More, Export to Excel downloads the credit note register with the filters on screen.
 - Switching between Purchase and Returns keeps the distributor and the period.
 

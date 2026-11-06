@@ -170,7 +170,7 @@ it('lists returns for this financial year with the credit note columns, states a
   expect(amountCell('RET-1')).toHaveTextContent('₹224.00return value');
   expect(amountCell('RET-2')).toHaveTextContent('₹100.00Return ₹112.00');
   expect(amountCell('RET-3')).toHaveTextContent(/^₹200\.00$/);
-  expect(screen.getByText(/^Credit held/).textContent).toBe('Credit held (all dates) ₹180.00 · Awaited ₹374.00 (2 returns) · 5 returns');
+  expect(screen.getByText(/^Credit held/).textContent).toBe('Credit held (all dates) ₹180.00 · Awaited ₹374.00 (2 returns)');
   expect(screen.getByText(/^Held/).textContent).toBe('Held ₹180.00 · Awaited ₹374.00');
   expect(screen.getByText('1 draft and 1 cancelled not included. Credit held and Awaited cover all dates; Awaited counts our return value until the note arrives.')).toHaveClass('sr-only');
   expect(screen.getByRole('button', { name: 'About these totals' })).toBeInTheDocument();

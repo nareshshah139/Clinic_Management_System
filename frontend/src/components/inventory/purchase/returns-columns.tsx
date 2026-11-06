@@ -90,19 +90,17 @@ export function returnColumns({
       cell: (row) => (
         <span className="flex items-start gap-0.5">
           {canRecordCreditNote(row, canWrite) ? (
-            <span className="flex flex-col items-start gap-0.5">
-              <Button
+            <span className="flex flex-col items-start">
+              <button
                 id={actionId(row.id)}
                 type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 max-w-none! whitespace-nowrap! px-2 text-sm lg:min-h-7!"
+                className="-my-0.5 whitespace-nowrap rounded-sm py-0.5 text-left font-semibold leading-[1.125rem] text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 aria-label={`Record credit note for ${noun(row)} ${row.returnRef}`}
                 aria-haspopup="dialog"
                 onClick={(event) => onAct('record', row, event.currentTarget)}
               >
                 Record credit note
-              </Button>
+              </button>
               <button id={openId(row.id)} type="button" onClick={() => onOpen(row)} className={linkClass}>
                 <span className="ref whitespace-nowrap text-xs font-medium leading-tight underline-offset-4">
                   <span className="sr-only">Open {row.kind === 'CREDIT_NOTE' ? 'Credit' : 'Return'} </span>
