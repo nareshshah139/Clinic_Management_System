@@ -103,7 +103,7 @@ const watch = (page) => {
     }
     const goto = async (page, route = RETURNS) => {
       await page.goto(`${stack.base}${route}`, { waitUntil: "domcontentloaded", timeout: 240000 });
-      await vis(page).locator("table").first().waitFor({ timeout: 240000 });
+      await vis(page).locator('table, ul[aria-label="Purchase returns"]').first().waitFor({ timeout: 240000 });
       await settle(page);
     };
     const readRows = (page) =>
@@ -870,6 +870,29 @@ const watch = (page) => {
       const dues = await dialog.locator("tbody td:nth-child(2)").evaluateAll((tds) => tds.map((td) => { const c = td.cloneNode(true); c.querySelectorAll(".sr-only").forEach((n) => n.remove()); return c.textContent; }));
       s.ok("set-off due dates read as day then month", dues.every((d) => /^(\d{2} [A-Z][a-z]{2}( \d{4})?|—)$/.test(clean(d))), dues);
       await page.keyboard.press("Escape");
+    });
+
+    await scenario("26", "mark-paid-and-return-document-at-1280-and-390", async (s) => {
+      for (const [w, h] of [[1280, 800], [390, 844]]) {
+        const { page } = s.track(await open("pharmacist", { width: w, height: h }));
+        await goto(page, `${PURCHASES}&gstin=${DISTRIBUTORS.APX.gstin}`);
+        await vis(page).getByRole("button", { name: "Mark bill APX/2026/12 paid" }).click();
+        const pay = page.getByRole("dialog", { name: "Settle bill APX/2026/12 · ₹3,000.00" });
+        await pay.waitFor();
+        const box = await pay.boundingBox();
+        const setOff = await pay.getByRole("button", { name: "Set off ₹3,000.00 credit" }).boundingBox();
+        s.ok(`${w}: Settle bill fits with Set off on screen`, box.x >= 0 && box.x + box.width <= w + 1 && setOff.y + setOff.height <= h, { box, setOff });
+        await s.shot(page, `26-mark-paid-covers-${w}`);
+        await page.keyboard.press("Escape");
+        await goto(page);
+        await vis(page).getByRole("button", { name: "Open Return RET-APX-01" }).click();
+        await page.getByRole("heading", { name: "RET-APX-01" }).waitFor({ timeout: 120000 });
+        await page.waitForTimeout(800);
+        s.check(`${w}: document date reads dd/mm/yyyy, no sideways scroll`, [/^\d{2}\/\d{2}\/\d{4}$/.test(await page.getByLabel("Date", { exact: true }).inputValue()), await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth <= 0)], [true, true]);
+        await page.getByRole("heading", { name: "RET-APX-01" }).scrollIntoViewIfNeeded();
+        await page.evaluate(() => window.scrollBy(0, -16));
+        await s.shot(page, `26-return-document-${w}`);
+      }
     });
 
     const awaitedAfter = (await register()).totals;

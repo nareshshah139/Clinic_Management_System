@@ -20,7 +20,7 @@ import {
 
 const badgeText = 'whitespace-nowrap px-1 py-0 text-xs font-semibold leading-[1.125rem]';
 const noteClass = 'whitespace-nowrap text-xs font-medium leading-tight';
-const actionClass = 'h-8 max-w-none! whitespace-nowrap! px-2 text-sm lg:min-h-8!';
+const actionClass = 'h-8 max-w-none! whitespace-nowrap! px-1.5 text-sm lg:min-h-8!';
 const primaryLinkClass =
   '-my-0.5 whitespace-nowrap rounded-sm py-0.5 text-left font-semibold leading-[1.125rem] text-primary underline decoration-2 underline-offset-4 hover:decoration-[3px] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 const refClass =
@@ -222,9 +222,9 @@ export function returnView({ today, canWrite, actionId, openId, undo, onOpen, on
       cell: (row) => {
         const [day, time] = displayClinicDateTimeCompact(row.entryAt, today).split(', ');
         return (
-          <span className="flex flex-col">
+          <span className="flex flex-col" title={time ? `${day}, ${time}` : undefined}>
             <span className="leading-[1.125rem]">{day}</span>
-            {time && <span className="text-xs font-medium leading-tight">{time}</span>}
+            {time && <span className="text-xs font-medium leading-tight @max-[64rem]:sr-only">{time}</span>}
           </span>
         );
       },
@@ -253,7 +253,7 @@ export function returnView({ today, canWrite, actionId, openId, undo, onOpen, on
             {row.distributor.name}
           </span>
           {row.reason && (
-            <Badge variant="neutral" className="shrink-0 whitespace-nowrap px-1 py-0 text-xs font-medium leading-4">
+            <Badge variant="neutral" className="shrink-0 whitespace-nowrap px-0.5 py-0 text-xs font-medium leading-4 tracking-[-0.03em]">
               {RETURN_REASON_LABELS[row.reason]}
             </Badge>
           )}
