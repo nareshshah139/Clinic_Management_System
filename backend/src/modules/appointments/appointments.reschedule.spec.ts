@@ -13,6 +13,8 @@ describe('AppointmentsService.reschedule', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    $executeRaw: jest.fn(),
+    $transaction: jest.fn(async (cb: any) => cb(prismaMock)),
   };
 
   beforeEach(async () => {
