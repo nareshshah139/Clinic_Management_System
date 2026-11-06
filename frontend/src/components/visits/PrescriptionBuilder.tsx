@@ -548,19 +548,19 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (!savedToClinic) setCustomInvestigationOptions((prev) => (hasInvestigation(prev, name) ? prev : [...prev, name]));
     setInvestigations((prev) => (hasInvestigation(prev, name) ? prev : [...prev, name]));
   };
+  const keepTickedAsOneOff = (name: string) => {
+    if (hasInvestigation(investigations, name)) {
+      setCustomInvestigationOptions((prev) => (hasInvestigation(prev, name) ? prev : [...prev, name]));
+    }
+  };
   const renameClinicInvestigation = async (entry: ClinicInvestigation, name: string) => {
     const renamed = await clinicInvestigations.rename(entry, name);
-    if (!renamed) return null;
-    const swap = (list: string[]) => list.map((value) => (sameInvestigation(value, entry.name) ? renamed.name : value));
-    setInvestigations(swap);
-    setCustomInvestigationOptions(swap);
+    if (renamed) keepTickedAsOneOff(entry.name);
     return renamed;
   };
   const removeClinicInvestigation = async (entry: ClinicInvestigation) => {
     const removed = await clinicInvestigations.remove(entry);
-    if (removed && hasInvestigation(investigations, entry.name)) {
-      setCustomInvestigationOptions((prev) => (hasInvestigation(prev, entry.name) ? prev : [...prev, entry.name]));
-    }
+    if (removed) keepTickedAsOneOff(entry.name);
     return removed;
   };
   const [patientHistoryForLearning, setPatientHistoryForLearning] = useState<any[]>([]);
