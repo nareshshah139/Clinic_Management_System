@@ -45,6 +45,7 @@ export async function renderPrescriptionPages(wrapper: HTMLElement, paperPreset?
   const pages = Array.from(wrapper.querySelectorAll<HTMLElement>('.pagedjs_page'));
   if (!pages.length) throw new Error('No rendered prescription pages are available');
   wrapper.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
+  wrapper.classList.add('prescription-pdf-export');
   Object.assign(wrapper.style, { position: 'fixed', left: '-100000px', top: '0', width: paperPreset === 'LETTER' ? '8.5in' : '210mm', background: '#fff' });
   document.body.appendChild(wrapper);
   try {

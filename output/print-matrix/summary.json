@@ -1,0 +1,1765 @@
+{
+  "typical": {
+    "normal/normal": {
+      "pageCount": 2,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 200.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 206.921875
+        }
+      ],
+      "height": 1321,
+      "rxRows": 9,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": 384.421875,
+          "labelRight": 909.859375,
+          "valueTop": 409.421875,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Diagnosis": {
+          "labelTop": 481.421875,
+          "labelRight": 271.3125,
+          "valueTop": 481.421875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Chief Complaints": {
+          "labelTop": 529.421875,
+          "labelRight": 909.859375,
+          "valueTop": 554.421875,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "History": {
+          "labelTop": 598.421875,
+          "labelRight": 255.59375,
+          "valueTop": 598.421875,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Personal history": {
+          "labelTop": 642.421875,
+          "labelRight": 909.859375,
+          "valueTop": 666.421875,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Investigations": {
+          "labelTop": 1499.9375,
+          "labelRight": 299.546875,
+          "valueTop": 1499.9375,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Procedures": {
+          "labelTop": 1543.9375,
+          "labelRight": 280.96875,
+          "valueTop": 1543.9375,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Procedure Planned": {
+          "labelTop": 1587.9375,
+          "labelRight": 329.90625,
+          "valueTop": 1587.9375,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Allergies": {
+          "labelTop": 1631.9375,
+          "labelRight": 909.859375,
+          "valueTop": 1656.9375,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Review Date": {
+          "labelTop": 1700.9375,
+          "labelRight": 909.859375,
+          "valueTop": 1725.9375,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 20
+        }
+      }
+    },
+    "normal/compact": {
+      "pageCount": 2,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 199.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 211.921875
+        }
+      ],
+      "height": 1248,
+      "rxRows": 9,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": -855.015625,
+          "labelRight": 909.859375,
+          "valueTop": -832.828125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Diagnosis": {
+          "labelTop": -764.453125,
+          "labelRight": 271.3125,
+          "valueTop": -764.453125,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Chief Complaints": {
+          "labelTop": -718.265625,
+          "labelRight": 909.859375,
+          "valueTop": -696.078125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "History": {
+          "labelTop": -653.890625,
+          "labelRight": 255.59375,
+          "valueTop": -653.890625,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Personal history": {
+          "labelTop": -611.703125,
+          "labelRight": 909.859375,
+          "valueTop": -589.515625,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Investigations": {
+          "labelTop": 200.9375,
+          "labelRight": 299.546875,
+          "valueTop": 200.9375,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Procedures": {
+          "labelTop": 243.125,
+          "labelRight": 280.96875,
+          "valueTop": 243.125,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Procedure Planned": {
+          "labelTop": 285.3125,
+          "labelRight": 329.90625,
+          "valueTop": 285.3125,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Allergies": {
+          "labelTop": 327.5,
+          "labelRight": 909.859375,
+          "valueTop": 349.6875,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Review Date": {
+          "labelTop": 391.875,
+          "labelRight": 909.859375,
+          "valueTop": 414.0625,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        }
+      }
+    },
+    "normal/tight": {
+      "pageCount": 2,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 198.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 210.921875
+        }
+      ],
+      "height": 1196,
+      "rxRows": 9,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": -859.1875,
+          "labelRight": 909.859375,
+          "valueTop": -838.390625,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Diagnosis": {
+          "labelTop": -772.796875,
+          "labelRight": 271.3125,
+          "valueTop": -772.796875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Chief Complaints": {
+          "labelTop": -728,
+          "labelRight": 909.859375,
+          "valueTop": -707.203125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "History": {
+          "labelTop": -666.40625,
+          "labelRight": 255.59375,
+          "valueTop": -666.40625,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Personal history": {
+          "labelTop": -625.609375,
+          "labelRight": 909.859375,
+          "valueTop": -604.8125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Investigations": {
+          "labelTop": -166.859375,
+          "labelRight": 299.546875,
+          "valueTop": -166.859375,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Procedures": {
+          "labelTop": 200.9375,
+          "labelRight": 280.96875,
+          "valueTop": 200.9375,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Procedure Planned": {
+          "labelTop": 241.734375,
+          "labelRight": 329.90625,
+          "valueTop": 241.734375,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Allergies": {
+          "labelTop": 282.53125,
+          "labelRight": 909.859375,
+          "valueTop": 303.328125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Review Date": {
+          "labelTop": 344.125,
+          "labelRight": 909.859375,
+          "valueTop": 364.921875,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        }
+      }
+    },
+    "optimized/normal": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 204.921875
+        }
+      ],
+      "height": 622,
+      "rxRows": 9,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": 187.421875,
+          "labelRight": 244.90625,
+          "valueTop": 187.421875,
+          "valueLeft": 252.90625,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Diagnosis": {
+          "labelTop": 211.421875,
+          "labelRight": 271.3125,
+          "valueTop": 211.421875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Chief Complaints": {
+          "labelTop": 235.421875,
+          "labelRight": 317.359375,
+          "valueTop": 235.421875,
+          "valueLeft": 325.359375,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "History": {
+          "labelTop": 259.421875,
+          "labelRight": 255.59375,
+          "valueTop": 259.421875,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Personal history": {
+          "labelTop": 283.421875,
+          "labelRight": 313.40625,
+          "valueTop": 283.421875,
+          "valueLeft": 321.40625,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Investigations": {
+          "labelTop": 584.421875,
+          "labelRight": 299.546875,
+          "valueTop": 584.421875,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Procedures": {
+          "labelTop": 608.421875,
+          "labelRight": 280.96875,
+          "valueTop": 608.421875,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Procedure Planned": {
+          "labelTop": 632.421875,
+          "labelRight": 329.90625,
+          "valueTop": 632.421875,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Allergies": {
+          "labelTop": 656.421875,
+          "labelRight": 264.984375,
+          "valueTop": 656.421875,
+          "valueLeft": 272.984375,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Review Date": {
+          "labelTop": 680.421875,
+          "labelRight": 287.46875,
+          "valueTop": 680.421875,
+          "valueLeft": 295.46875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Follow-up": {
+          "labelTop": 680.421875,
+          "labelRight": 461.796875,
+          "valueTop": 680.421875,
+          "valueLeft": 469.796875,
+          "fontSize": 14,
+          "lineHeight": 20
+        }
+      }
+    },
+    "optimized/compact": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 203.921875
+        }
+      ],
+      "height": 579,
+      "rxRows": 9,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": 205.609375,
+          "labelRight": 244.90625,
+          "valueTop": 205.609375,
+          "valueLeft": 252.90625,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Diagnosis": {
+          "labelTop": 227.796875,
+          "labelRight": 271.3125,
+          "valueTop": 227.796875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Chief Complaints": {
+          "labelTop": 249.984375,
+          "labelRight": 317.359375,
+          "valueTop": 249.984375,
+          "valueLeft": 325.359375,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "History": {
+          "labelTop": 272.171875,
+          "labelRight": 255.59375,
+          "valueTop": 272.171875,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Personal history": {
+          "labelTop": 294.359375,
+          "labelRight": 313.40625,
+          "valueTop": 294.359375,
+          "valueLeft": 321.40625,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Investigations": {
+          "labelTop": 572.609375,
+          "labelRight": 299.546875,
+          "valueTop": 572.609375,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Procedures": {
+          "labelTop": 594.796875,
+          "labelRight": 280.96875,
+          "valueTop": 594.796875,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Procedure Planned": {
+          "labelTop": 616.984375,
+          "labelRight": 329.90625,
+          "valueTop": 616.984375,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Allergies": {
+          "labelTop": 639.171875,
+          "labelRight": 264.984375,
+          "valueTop": 639.171875,
+          "valueLeft": 272.984375,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Review Date": {
+          "labelTop": 661.359375,
+          "labelRight": 287.46875,
+          "valueTop": 661.359375,
+          "valueLeft": 295.46875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Follow-up": {
+          "labelTop": 661.359375,
+          "labelRight": 461.796875,
+          "valueTop": 661.359375,
+          "valueLeft": 469.796875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        }
+      }
+    },
+    "optimized/tight": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 202.921875
+        }
+      ],
+      "height": 547,
+      "rxRows": 9,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": 204.21875,
+          "labelRight": 244.90625,
+          "valueTop": 204.21875,
+          "valueLeft": 252.90625,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Diagnosis": {
+          "labelTop": 225.015625,
+          "labelRight": 271.3125,
+          "valueTop": 225.015625,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Chief Complaints": {
+          "labelTop": 245.8125,
+          "labelRight": 317.359375,
+          "valueTop": 245.8125,
+          "valueLeft": 325.359375,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "History": {
+          "labelTop": 266.609375,
+          "labelRight": 255.59375,
+          "valueTop": 266.609375,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Personal history": {
+          "labelTop": 287.40625,
+          "labelRight": 313.40625,
+          "valueTop": 287.40625,
+          "valueLeft": 321.40625,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Investigations": {
+          "labelTop": 548.96875,
+          "labelRight": 299.546875,
+          "valueTop": 548.96875,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Procedures": {
+          "labelTop": 569.765625,
+          "labelRight": 280.96875,
+          "valueTop": 569.765625,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Procedure Planned": {
+          "labelTop": 590.5625,
+          "labelRight": 329.90625,
+          "valueTop": 590.5625,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Allergies": {
+          "labelTop": 611.359375,
+          "labelRight": 264.984375,
+          "valueTop": 611.359375,
+          "valueLeft": 272.984375,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Review Date": {
+          "labelTop": 632.15625,
+          "labelRight": 287.46875,
+          "valueTop": 632.15625,
+          "valueLeft": 295.46875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Follow-up": {
+          "labelTop": 632.15625,
+          "labelRight": 461.796875,
+          "valueTop": 632.15625,
+          "valueLeft": 469.796875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        }
+      },
+      "pdfDiff": [
+        0.027675276752767528
+      ]
+    }
+  },
+  "minimal": {
+    "normal/normal": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 200.921875
+        }
+      ],
+      "height": 380,
+      "rxRows": 1,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 384.421875,
+          "labelRight": 271.3125,
+          "valueTop": 384.421875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 20
+        }
+      }
+    },
+    "normal/compact": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 199.921875
+        }
+      ],
+      "height": 363,
+      "rxRows": 1,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 297.984375,
+          "labelRight": 271.3125,
+          "valueTop": 297.984375,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        }
+      }
+    },
+    "normal/tight": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 198.921875
+        }
+      ],
+      "height": 350,
+      "rxRows": 1,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 293.8125,
+          "labelRight": 271.3125,
+          "valueTop": 293.8125,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        }
+      }
+    },
+    "optimized/normal": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 204.921875
+        }
+      ],
+      "height": 206,
+      "rxRows": 1,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 229.421875,
+          "labelRight": 271.3125,
+          "valueTop": 229.421875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 20
+        }
+      }
+    },
+    "optimized/compact": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 203.921875
+        }
+      ],
+      "height": 194,
+      "rxRows": 1,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 227.609375,
+          "labelRight": 271.3125,
+          "valueTop": 227.609375,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        }
+      }
+    },
+    "optimized/tight": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 202.921875
+        }
+      ],
+      "height": 186,
+      "rxRows": 1,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 226.21875,
+          "labelRight": 271.3125,
+          "valueTop": 226.21875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        }
+      }
+    }
+  },
+  "long-text": {
+    "normal/normal": {
+      "pageCount": 2,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 200.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 281.921875
+        }
+      ],
+      "height": 927,
+      "rxRows": 5,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 384.421875,
+          "labelRight": 271.3125,
+          "valueTop": 384.421875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Chief Complaints": {
+          "labelTop": 432.421875,
+          "labelRight": 909.859375,
+          "valueTop": 457.421875,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Investigations": {
+          "labelTop": 832.421875,
+          "labelRight": 299.546875,
+          "valueTop": 832.421875,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Review Date": {
+          "labelTop": 896.421875,
+          "labelRight": 909.859375,
+          "valueTop": 921.421875,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 20
+        }
+      }
+    },
+    "normal/compact": {
+      "pageCount": 2,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 199.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 280.921875
+        }
+      ],
+      "height": 870,
+      "rxRows": 5,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": -855.015625,
+          "labelRight": 271.3125,
+          "valueTop": -855.015625,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Chief Complaints": {
+          "labelTop": -808.828125,
+          "labelRight": 909.859375,
+          "valueTop": -786.640625,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Investigations": {
+          "labelTop": -434.390625,
+          "labelRight": 299.546875,
+          "valueTop": -434.390625,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Review Date": {
+          "labelTop": -374.015625,
+          "labelRight": 909.859375,
+          "valueTop": -351.828125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        }
+      }
+    },
+    "normal/tight": {
+      "pageCount": 2,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 198.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 279.921875
+        }
+      ],
+      "height": 830,
+      "rxRows": 5,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": -859.1875,
+          "labelRight": 271.3125,
+          "valueTop": -859.1875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Chief Complaints": {
+          "labelTop": -814.390625,
+          "labelRight": 909.859375,
+          "valueTop": -793.59375,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Investigations": {
+          "labelTop": -458.03125,
+          "labelRight": 299.546875,
+          "valueTop": -458.03125,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Review Date": {
+          "labelTop": -400.4375,
+          "labelRight": 909.859375,
+          "valueTop": -379.640625,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        }
+      }
+    },
+    "optimized/normal": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 204.921875
+        }
+      ],
+      "height": 618,
+      "rxRows": 5,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 187.421875,
+          "labelRight": 271.3125,
+          "valueTop": 187.421875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Chief Complaints": {
+          "labelTop": 211.421875,
+          "labelRight": 317.359375,
+          "valueTop": 211.421875,
+          "valueLeft": 325.359375,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Investigations": {
+          "labelTop": 492.421875,
+          "labelRight": 299.546875,
+          "valueTop": 492.421875,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Review Date": {
+          "labelTop": 536.421875,
+          "labelRight": 287.46875,
+          "valueTop": 536.421875,
+          "valueLeft": 295.46875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Follow-up": {
+          "labelTop": 536.421875,
+          "labelRight": 460.75,
+          "valueTop": 536.421875,
+          "valueLeft": 468.75,
+          "fontSize": 14,
+          "lineHeight": 20
+        }
+      },
+      "pdfDiff": [
+        0.027675276752767528
+      ]
+    },
+    "optimized/compact": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 203.921875
+        }
+      ],
+      "height": 572,
+      "rxRows": 5,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 205.609375,
+          "labelRight": 271.3125,
+          "valueTop": 205.609375,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Chief Complaints": {
+          "labelTop": 227.796875,
+          "labelRight": 317.359375,
+          "valueTop": 227.796875,
+          "valueLeft": 325.359375,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Investigations": {
+          "labelTop": 486.046875,
+          "labelRight": 299.546875,
+          "valueTop": 486.046875,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Review Date": {
+          "labelTop": 526.421875,
+          "labelRight": 287.46875,
+          "valueTop": 526.421875,
+          "valueLeft": 295.46875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Follow-up": {
+          "labelTop": 526.421875,
+          "labelRight": 460.75,
+          "valueTop": 526.421875,
+          "valueLeft": 468.75,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        }
+      }
+    },
+    "optimized/tight": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 202.921875
+        }
+      ],
+      "height": 537,
+      "rxRows": 5,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 204.21875,
+          "labelRight": 271.3125,
+          "valueTop": 204.21875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Chief Complaints": {
+          "labelTop": 225.015625,
+          "labelRight": 317.359375,
+          "valueTop": 225.015625,
+          "valueLeft": 325.359375,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Investigations": {
+          "labelTop": 466.578125,
+          "labelRight": 299.546875,
+          "valueTop": 466.578125,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Review Date": {
+          "labelTop": 504.171875,
+          "labelRight": 287.46875,
+          "valueTop": 504.171875,
+          "valueLeft": 295.46875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Follow-up": {
+          "labelTop": 504.171875,
+          "labelRight": 460.75,
+          "valueTop": 504.171875,
+          "valueLeft": 468.75,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        }
+      }
+    }
+  },
+  "heavy": {
+    "normal/normal": {
+      "pageCount": 4,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 200.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 206.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 206.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 200.921875
+        }
+      ],
+      "height": 2482,
+      "rxRows": 23,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": 384.421875,
+          "labelRight": 909.859375,
+          "valueTop": 409.421875,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Diagnosis": {
+          "labelTop": 481.421875,
+          "labelRight": 271.3125,
+          "valueTop": 481.421875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Chief Complaints": {
+          "labelTop": 529.421875,
+          "labelRight": 909.859375,
+          "valueTop": 554.421875,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "History": {
+          "labelTop": 598.421875,
+          "labelRight": 255.59375,
+          "valueTop": 598.421875,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Investigations": {
+          "labelTop": 3147.453125,
+          "labelRight": 299.546875,
+          "valueTop": 3147.453125,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Procedures": {
+          "labelTop": 3191.453125,
+          "labelRight": 280.96875,
+          "valueTop": 3191.453125,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Procedure Planned": {
+          "labelTop": 3235.453125,
+          "labelRight": 329.90625,
+          "valueTop": 3235.453125,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Review Date": {
+          "labelTop": 3279.453125,
+          "labelRight": 909.859375,
+          "valueTop": 3304.453125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 20
+        }
+      },
+      "pdfDiff": [
+        0.02952029520295203,
+        0.012939001848428836,
+        0.03505535055350553,
+        0.009242144177449169
+      ]
+    },
+    "normal/compact": {
+      "pageCount": 3,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 199.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 205.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 205.921875
+        }
+      ],
+      "height": 2320,
+      "rxRows": 23,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": -2029.015625,
+          "labelRight": 909.859375,
+          "valueTop": -2006.828125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Diagnosis": {
+          "labelTop": -1938.453125,
+          "labelRight": 271.3125,
+          "valueTop": -1938.453125,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Chief Complaints": {
+          "labelTop": -1892.265625,
+          "labelRight": 909.859375,
+          "valueTop": -1870.078125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "History": {
+          "labelTop": -1827.890625,
+          "labelRight": 255.59375,
+          "valueTop": -1827.890625,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Investigations": {
+          "labelTop": 524.453125,
+          "labelRight": 299.546875,
+          "valueTop": 524.453125,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Procedures": {
+          "labelTop": 566.640625,
+          "labelRight": 280.96875,
+          "valueTop": 566.640625,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Procedure Planned": {
+          "labelTop": 608.828125,
+          "labelRight": 329.90625,
+          "valueTop": 608.828125,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Review Date": {
+          "labelTop": 651.015625,
+          "labelRight": 909.859375,
+          "valueTop": 673.203125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        }
+      }
+    },
+    "normal/tight": {
+      "pageCount": 3,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 198.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 204.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 204.921875
+        }
+      ],
+      "height": 2196,
+      "rxRows": 23,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": -2002.1875,
+          "labelRight": 909.859375,
+          "valueTop": -1981.390625,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Diagnosis": {
+          "labelTop": -1915.796875,
+          "labelRight": 271.3125,
+          "valueTop": -1915.796875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Chief Complaints": {
+          "labelTop": -1871,
+          "labelRight": 909.859375,
+          "valueTop": -1850.203125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "History": {
+          "labelTop": -1809.40625,
+          "labelRight": 255.59375,
+          "valueTop": -1809.40625,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Investigations": {
+          "labelTop": 453.015625,
+          "labelRight": 299.546875,
+          "valueTop": 453.015625,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Procedures": {
+          "labelTop": 493.8125,
+          "labelRight": 280.96875,
+          "valueTop": 493.8125,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Procedure Planned": {
+          "labelTop": 534.609375,
+          "labelRight": 329.90625,
+          "valueTop": 534.609375,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Review Date": {
+          "labelTop": 575.40625,
+          "labelRight": 909.859375,
+          "valueTop": 596.203125,
+          "valueLeft": 206.125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        }
+      },
+      "pdfDiff": [
+        0.03136531365313653,
+        0.02033271719038817,
+        0.02214022140221402
+      ]
+    },
+    "optimized/normal": {
+      "pageCount": 2,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 204.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 202.921875
+        }
+      ],
+      "height": 1204,
+      "rxRows": 23,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": -955.578125,
+          "labelRight": 244.90625,
+          "valueTop": -955.578125,
+          "valueLeft": 252.90625,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Diagnosis": {
+          "labelTop": -931.578125,
+          "labelRight": 271.3125,
+          "valueTop": -931.578125,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Chief Complaints": {
+          "labelTop": -907.578125,
+          "labelRight": 317.359375,
+          "valueTop": -907.578125,
+          "valueLeft": 325.359375,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "History": {
+          "labelTop": -883.578125,
+          "labelRight": 255.59375,
+          "valueTop": -883.578125,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Investigations": {
+          "labelTop": 385.9375,
+          "labelRight": 299.546875,
+          "valueTop": 385.9375,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Procedures": {
+          "labelTop": 409.9375,
+          "labelRight": 280.96875,
+          "valueTop": 409.9375,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Procedure Planned": {
+          "labelTop": 433.9375,
+          "labelRight": 329.90625,
+          "valueTop": 433.9375,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Review Date": {
+          "labelTop": 457.9375,
+          "labelRight": 287.46875,
+          "valueTop": 457.9375,
+          "valueLeft": 295.46875,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Follow-up": {
+          "labelTop": 457.9375,
+          "labelRight": 461.890625,
+          "valueTop": 457.9375,
+          "valueLeft": 469.890625,
+          "fontSize": 14,
+          "lineHeight": 20
+        }
+      }
+    },
+    "optimized/compact": {
+      "pageCount": 2,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 203.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 201.921875
+        }
+      ],
+      "height": 1114,
+      "rxRows": 23,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": -925.390625,
+          "labelRight": 244.90625,
+          "valueTop": -925.390625,
+          "valueLeft": 252.90625,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Diagnosis": {
+          "labelTop": -903.203125,
+          "labelRight": 271.3125,
+          "valueTop": -903.203125,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Chief Complaints": {
+          "labelTop": -881.015625,
+          "labelRight": 317.359375,
+          "valueTop": -881.015625,
+          "valueLeft": 325.359375,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "History": {
+          "labelTop": -858.828125,
+          "labelRight": 255.59375,
+          "valueTop": -858.828125,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Investigations": {
+          "labelTop": 317.0625,
+          "labelRight": 299.546875,
+          "valueTop": 317.0625,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Procedures": {
+          "labelTop": 339.25,
+          "labelRight": 280.96875,
+          "valueTop": 339.25,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Procedure Planned": {
+          "labelTop": 361.4375,
+          "labelRight": 329.90625,
+          "valueTop": 361.4375,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Review Date": {
+          "labelTop": 383.625,
+          "labelRight": 287.46875,
+          "valueTop": 383.625,
+          "valueLeft": 295.46875,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Follow-up": {
+          "labelTop": 383.625,
+          "labelRight": 461.890625,
+          "valueTop": 383.625,
+          "valueLeft": 469.890625,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        }
+      },
+      "pdfDiff": [
+        0.02952029520295203,
+        0.012939001848428836
+      ]
+    },
+    "optimized/tight": {
+      "pageCount": 2,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 202.921875
+        },
+        {
+          "height": 1122.515625,
+          "firstTextTop": 200.921875
+        }
+      ],
+      "height": 1046,
+      "rxRows": 23,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Vitals": {
+          "labelTop": -926.78125,
+          "labelRight": 244.90625,
+          "valueTop": -926.78125,
+          "valueLeft": 252.90625,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Diagnosis": {
+          "labelTop": -905.984375,
+          "labelRight": 271.3125,
+          "valueTop": -905.984375,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Chief Complaints": {
+          "labelTop": -885.1875,
+          "labelRight": 317.359375,
+          "valueTop": -885.1875,
+          "valueLeft": 325.359375,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "History": {
+          "labelTop": -864.390625,
+          "labelRight": 255.59375,
+          "valueTop": -864.390625,
+          "valueLeft": 263.59375,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Investigations": {
+          "labelTop": 270.125,
+          "labelRight": 299.546875,
+          "valueTop": 270.125,
+          "valueLeft": 307.546875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Procedures": {
+          "labelTop": 290.921875,
+          "labelRight": 280.96875,
+          "valueTop": 290.921875,
+          "valueLeft": 288.96875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Procedure Planned": {
+          "labelTop": 311.71875,
+          "labelRight": 329.90625,
+          "valueTop": 311.71875,
+          "valueLeft": 337.90625,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Review Date": {
+          "labelTop": 332.515625,
+          "labelRight": 287.46875,
+          "valueTop": 332.515625,
+          "valueLeft": 295.46875,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Follow-up": {
+          "labelTop": 332.515625,
+          "labelRight": 461.890625,
+          "valueTop": 332.515625,
+          "valueLeft": 469.890625,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        }
+      }
+    }
+  },
+  "follow-up-only": {
+    "normal/normal": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 200.921875
+        }
+      ],
+      "height": 515,
+      "rxRows": 3,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 384.421875,
+          "labelRight": 271.3125,
+          "valueTop": 384.421875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 20
+        }
+      }
+    },
+    "normal/compact": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 199.921875
+        }
+      ],
+      "height": 489,
+      "rxRows": 3,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 297.984375,
+          "labelRight": 271.3125,
+          "valueTop": 297.984375,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        }
+      }
+    },
+    "normal/tight": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 198.921875
+        }
+      ],
+      "height": 471,
+      "rxRows": 3,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 293.8125,
+          "labelRight": 271.3125,
+          "valueTop": 293.8125,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        }
+      }
+    },
+    "optimized/normal": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 204.921875
+        }
+      ],
+      "height": 280,
+      "rxRows": 3,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 229.421875,
+          "labelRight": 271.3125,
+          "valueTop": 229.421875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 20
+        },
+        "Follow-up": {
+          "labelTop": 380.421875,
+          "labelRight": 272.84375,
+          "valueTop": 380.421875,
+          "valueLeft": 280.84375,
+          "fontSize": 14,
+          "lineHeight": 20
+        }
+      }
+    },
+    "optimized/compact": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 203.921875
+        }
+      ],
+      "height": 263,
+      "rxRows": 3,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 227.609375,
+          "labelRight": 271.3125,
+          "valueTop": 227.609375,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        },
+        "Follow-up": {
+          "labelTop": 366.734375,
+          "labelRight": 272.84375,
+          "valueTop": 366.734375,
+          "valueLeft": 280.84375,
+          "fontSize": 14,
+          "lineHeight": 18.2
+        }
+      }
+    },
+    "optimized/tight": {
+      "pageCount": 1,
+      "pages": [
+        {
+          "height": 1122.515625,
+          "firstTextTop": 202.921875
+        }
+      ],
+      "height": 250,
+      "rxRows": 3,
+      "signatureOnLastPage": true,
+      "fields": {
+        "Diagnosis": {
+          "labelTop": 226.21875,
+          "labelRight": 271.3125,
+          "valueTop": 226.21875,
+          "valueLeft": 279.3125,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        },
+        "Follow-up": {
+          "labelTop": 357,
+          "labelRight": 272.84375,
+          "valueTop": 357,
+          "valueLeft": 280.84375,
+          "fontSize": 14,
+          "lineHeight": 16.8
+        }
+      }
+    }
+  }
+}
