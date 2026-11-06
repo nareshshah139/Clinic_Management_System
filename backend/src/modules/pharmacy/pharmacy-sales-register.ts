@@ -1,3 +1,14 @@
+import { Logger } from '@nestjs/common';
+import {
+  clinicDay,
+  clinicDayOf,
+  collator,
+  compareValues,
+  mobileDigits,
+  money,
+  pageOf,
+} from './register-utils';
+
 export const SALES_REGISTERS = ['sales', 'returns'] as const;
 export const SALE_SOURCES = [
   'PHARMACY_BILL',
@@ -42,6 +53,7 @@ export type SalesRegisterRow = {
   source: SaleSource;
   recordId: string;
   billNo: string | null;
+  reservedNo: string | null;
   state: SaleState;
   entryAt: string;
   billDate: string;
@@ -50,7 +62,13 @@ export type SalesRegisterRow = {
   mobile: string | null;
   amount: number;
   paymentModes: PaymentMode[];
-  linkedBillNo: string | null;
+  due: number;
+  linkedBillNos: string[];
+};
+
+export type SaleEntry = {
+  row: SalesRegisterRow;
+  collected: Partial<Record<PaymentMode, number>>;
 };
 
 export type SalesRegisterQuery = {
@@ -77,9 +95,29 @@ export type SalesRegisterPage = {
   totals: {
     amount: number;
     count: number;
+    collected: number | null;
     excluded: { drafts: number; cancelled: number };
   };
   entryByOptions: Person[];
+};
+
+export type ClinicIdentity = {
+  name: string;
+  address?: string;
+  phone?: string;
+  gstin?: string;
+  drugLicence?: string;
+};
+
+export type BranchRecord = {
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  phone: string | null;
+  gstNumber: string | null;
+  licenseNumber: string | null;
 };
 
 export type PharmacyBillRecord = {
@@ -89,11 +127,10 @@ export type PharmacyBillRecord = {
   invoiceDate: Date;
   createdAt: Date;
   totalAmount: number;
-  paymentMethod: string;
   billingName: string | null;
   billingPhone: string | null;
   patient: { name: string | null; phone: string | null } | null;
-  payments: { method: string }[];
+  payments: { method: string; amount: number }[];
 };
 
 export type WorkflowSaleRecord = {
@@ -126,23 +163,22 @@ const DOCUMENT_STATES: Record<string, SaleState> = {
   REJECTED: 'CANCELLED',
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const clinicDayFormat = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Kolkata',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
+const logger = new Logger('PharmacySalesRegister');
+const unmappedStatuses = new Set<string>();
 
-export const clinicDay = (instant: Date) => clinicDayFormat.format(instant);
-
-const clinicDayStart = (day: string) => new Date(`${day}T00:00:00+05:30`);
-
-export function clinicDayRange(from: string, to: string) {
-  return {
-    gte: clinicDayStart(from),
-    lt: new Date(clinicDayStart(to).getTime() + DAY_MS),
-  };
+function saleState(
+  states: Record<string, SaleState>,
+  source: SaleSource,
+  status: string,
+): SaleState {
+  const state = states[status];
+  if (state) return state;
+  const key = `${source}:${status}`;
+  if (!unmappedStatuses.has(key)) {
+    unmappedStatuses.add(key);
+    logger.warn(`Listing ${source} status ${status} as a draft`);
+  }
+  return 'DRAFT';
 }
 
 const text = (value: unknown) =>
@@ -155,77 +191,135 @@ export const paymentMode = (value: unknown): PaymentMode => {
     : 'OTHER';
 };
 
-const money = (value: number) => Math.round(value * 100) / 100;
-
-export function billRow(
-  bill: PharmacyBillRecord,
-  entryBy: Person | null,
-): SalesRegisterRow {
-  const state = BILL_STATES[bill.status] ?? 'DRAFT';
-  const methods = bill.payments.length
-    ? bill.payments.map((p) => p.method)
-    : [bill.paymentMethod];
+export function clinicIdentity(branch: BranchRecord): ClinicIdentity {
+  const address = [branch.address, branch.city, branch.state, branch.pincode]
+    .map(text)
+    .filter(Boolean)
+    .join(', ');
+  const fields: [keyof ClinicIdentity, string | null][] = [
+    ['address', address || null],
+    ['phone', text(branch.phone)],
+    ['gstin', text(branch.gstNumber)],
+    ['drugLicence', text(branch.licenseNumber)],
+  ];
   return {
-    id: `PHARMACY_BILL:${bill.id}`,
-    source: 'PHARMACY_BILL',
-    recordId: bill.id,
-    billNo: state === 'DRAFT' ? null : bill.invoiceNumber,
-    state,
-    entryAt: bill.createdAt.toISOString(),
-    billDate: clinicDay(bill.invoiceDate),
-    entryBy,
-    patientName: text(bill.billingName) ?? text(bill.patient?.name),
-    mobile: text(bill.billingPhone) ?? text(bill.patient?.phone),
-    amount: money(bill.totalAmount),
-    paymentModes: [...new Set(methods.map(paymentMode))],
-    linkedBillNo: null,
+    name: branch.name,
+    ...Object.fromEntries(fields.filter(([, value]) => value)),
   };
 }
 
-export function workflowRow(
+export function billEntry(
+  bill: PharmacyBillRecord,
+  entryBy: Person | null,
+): SaleEntry {
+  const state = saleState(BILL_STATES, 'PHARMACY_BILL', bill.status);
+  const collected: Partial<Record<PaymentMode, number>> = {};
+  for (const payment of bill.payments) {
+    const mode = paymentMode(payment.method);
+    collected[mode] = money((collected[mode] ?? 0) + payment.amount);
+  }
+  const amount = money(bill.totalAmount);
+  const paid = money(bill.payments.reduce((sum, p) => sum + p.amount, 0));
+  return {
+    row: {
+      id: `PHARMACY_BILL:${bill.id}`,
+      source: 'PHARMACY_BILL',
+      recordId: bill.id,
+      billNo: state === 'DRAFT' ? null : bill.invoiceNumber,
+      reservedNo: state === 'DRAFT' ? bill.invoiceNumber : null,
+      state,
+      entryAt: bill.createdAt.toISOString(),
+      billDate: clinicDay(bill.invoiceDate),
+      entryBy,
+      patientName: text(bill.billingName) ?? text(bill.patient?.name),
+      mobile: text(bill.billingPhone) ?? text(bill.patient?.phone),
+      amount,
+      paymentModes: Object.keys(collected) as PaymentMode[],
+      due: state === 'FINAL' ? Math.max(0, money(amount - paid)) : 0,
+      linkedBillNos: [],
+    },
+    collected,
+  };
+}
+
+export function workflowEntry(
   document: WorkflowSaleRecord,
   entryBy: Person | null,
-  linkedBillNo: string | null,
-): SalesRegisterRow {
+  linkedBillNos: string[],
+): SaleEntry {
   const payload = (document.payload ?? {}) as Record<string, unknown>;
   const source: SaleSource =
     document.kind === 'SALES_RETURN' ? 'SALES_RETURN' : 'COUNTER_SALE';
-  const state = DOCUMENT_STATES[document.status] ?? 'DRAFT';
-  const billDate = text(payload.date);
+  const state = saleState(DOCUMENT_STATES, source, document.status);
+  const amount = money(Number(document.totalAmount.toString()));
+  const mode = paymentMode(
+    source === 'SALES_RETURN' ? payload.refundMode : payload.paymentMode,
+  );
   return {
-    id: `${source}:${document.id}`,
-    source,
-    recordId: document.id,
-    billNo: state === 'DRAFT' ? null : document.reference,
-    state,
-    entryAt: document.createdAt.toISOString(),
-    billDate:
-      billDate && /^\d{4}-\d{2}-\d{2}$/.test(billDate)
-        ? billDate
-        : clinicDay(document.createdAt),
-    entryBy,
-    patientName: text(payload.customerName),
-    mobile: text(payload.customerPhone),
-    amount: money(Number(document.totalAmount.toString())),
-    paymentModes: [
-      paymentMode(
-        source === 'SALES_RETURN' ? payload.refundMode : payload.paymentMode,
-      ),
-    ],
-    linkedBillNo,
+    row: {
+      id: `${source}:${document.id}`,
+      source,
+      recordId: document.id,
+      billNo: state === 'DRAFT' ? null : document.reference,
+      reservedNo: null,
+      state,
+      entryAt: document.createdAt.toISOString(),
+      billDate: clinicDayOf(payload.date) ?? clinicDay(document.createdAt),
+      entryBy,
+      patientName: text(payload.customerName),
+      mobile: text(payload.customerPhone),
+      amount,
+      paymentModes: [mode],
+      due: 0,
+      linkedBillNos: source === 'SALES_RETURN' ? linkedBillNos : [],
+    },
+    collected: { [mode]: amount },
   };
 }
 
-const digits = (value: string) => value.replace(/\D/g, '');
+export function returnSourceLineIds(payload: unknown): string[] {
+  const lines = (payload as { lines?: unknown } | null)?.lines;
+  return Array.isArray(lines)
+    ? lines.flatMap(
+        (line: { sourceLineId?: unknown } | null) =>
+          text(line?.sourceLineId) ?? [],
+      )
+    : [];
+}
+
+export function billNoOfSaleReference(reference: string | null) {
+  const match = /^(?:INV|WF)-(.+)$/.exec(reference ?? '');
+  return match ? match[1] : null;
+}
+
+export function linkedBillNos(
+  invoiceNumber: string | null,
+  saleReferences: (string | null)[],
+) {
+  return [
+    ...new Set(
+      [invoiceNumber, ...saleReferences.map(billNoOfSaleReference)].filter(
+        (billNo): billNo is string => Boolean(billNo),
+      ),
+    ),
+  ];
+}
 
 function matchesSearch(row: SalesRegisterRow, field: SearchField, q: string) {
   if (field === 'mobile') {
-    const wanted = digits(q);
-    return Boolean(wanted) && digits(row.mobile ?? '').includes(wanted);
+    const wanted = mobileDigits(q);
+    return Boolean(wanted) && mobileDigits(row.mobile ?? '').includes(wanted);
   }
-  const haystack = field === 'billNo' ? row.billNo : row.patientName;
+  const haystack =
+    field === 'billNo' ? (row.billNo ?? row.reservedNo) : row.patientName;
   return (haystack ?? '').toLowerCase().includes(q.toLowerCase());
 }
+
+const paidIn = (row: SalesRegisterRow, mode: PaymentMode) =>
+  row.paymentModes.includes(mode) || (mode === 'CREDIT' && row.due > 0);
+
+const collectedIn = (entry: SaleEntry, mode: PaymentMode) =>
+  (entry.collected[mode] ?? 0) + (mode === 'CREDIT' ? entry.row.due : 0);
 
 function matches(row: SalesRegisterRow, query: SalesRegisterQuery) {
   const q = query.q?.trim();
@@ -233,17 +327,12 @@ function matches(row: SalesRegisterRow, query: SalesRegisterQuery) {
     row.billDate >= query.from &&
     row.billDate <= query.to &&
     (!q || matchesSearch(row, query.field ?? 'billNo', q)) &&
-    (!query.paymentMode || row.paymentModes.includes(query.paymentMode)) &&
+    (!query.paymentMode || paidIn(row, query.paymentMode)) &&
     (!query.state || row.state === query.state) &&
     (!query.source || row.source === query.source) &&
     (!query.entryById || row.entryBy?.id === query.entryById)
   );
 }
-
-const collator = new Intl.Collator('en-IN', {
-  numeric: true,
-  sensitivity: 'base',
-});
 
 const SORT_VALUES: Record<
   SortKey,
@@ -257,12 +346,6 @@ const SORT_VALUES: Record<
   mobile: (row) => row.mobile,
   amount: (row) => row.amount,
 };
-
-function compareValues(a: string | number, b: string | number) {
-  return typeof a === 'number' && typeof b === 'number'
-    ? a - b
-    : collator.compare(String(a), String(b));
-}
 
 export function sortRows(
   rows: SalesRegisterRow[],
@@ -280,7 +363,10 @@ export function sortRows(
       const order = compareValues(left, right);
       if (order) return direction * order;
     }
-    return b.entryAt.localeCompare(a.entryAt) || a.id.localeCompare(b.id);
+    return (
+      direction *
+      (a.entryAt.localeCompare(b.entryAt) || a.id.localeCompare(b.id))
+    );
   });
 }
 
@@ -294,32 +380,41 @@ export function entryByOptions(rows: SalesRegisterRow[]): Person[] {
 }
 
 export function salesRegisterPage(
-  rows: SalesRegisterRow[],
+  entries: SaleEntry[],
   query: SalesRegisterQuery,
 ): SalesRegisterPage {
-  const filtered = rows.filter((row) => matches(row, query));
-  const final = filtered.filter((row) => row.state === 'FINAL');
-  const start = (query.page - 1) * query.limit;
+  const filtered = entries.filter((entry) => matches(entry.row, query));
+  const final = filtered.filter((entry) => entry.row.state === 'FINAL');
+  const counted = (state: SaleState) =>
+    filtered.filter((entry) => entry.row.state === state).length;
+  const mode = query.paymentMode;
   return {
-    rows: sortRows(filtered, query.sortBy, query.sortDir).slice(
-      start,
-      start + query.limit,
+    rows: pageOf(
+      sortRows(
+        filtered.map((entry) => entry.row),
+        query.sortBy,
+        query.sortDir,
+      ),
+      query.page,
+      query.limit,
     ),
     total: filtered.length,
     page: query.page,
     limit: query.limit,
     totals: {
-      amount: money(final.reduce((sum, row) => sum + row.amount, 0)),
+      amount: money(final.reduce((sum, entry) => sum + entry.row.amount, 0)),
       count: final.length,
-      excluded: {
-        drafts: filtered.filter((row) => row.state === 'DRAFT').length,
-        cancelled: filtered.filter((row) => row.state === 'CANCELLED').length,
-      },
+      collected: mode
+        ? money(final.reduce((sum, entry) => sum + collectedIn(entry, mode), 0))
+        : null,
+      excluded: { drafts: counted('DRAFT'), cancelled: counted('CANCELLED') },
     },
     entryByOptions: entryByOptions(
-      rows.filter(
-        (row) => row.billDate >= query.from && row.billDate <= query.to,
-      ),
+      entries
+        .map((entry) => entry.row)
+        .filter(
+          (row) => row.billDate >= query.from && row.billDate <= query.to,
+        ),
     ),
   };
 }

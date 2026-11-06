@@ -4,6 +4,7 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus } from './inventory-stock';
+import { clinicDay } from '../pharmacy/register-utils';
 
 const MODEL = 'observed-demand-cover-v2';
 const DAY = 86400000;
@@ -207,7 +208,7 @@ export class InventoryReplenishmentService {
           unitPrice: item.costPrice, gstRate: item.gstRate || 0, total: money((item.maxStockLevel - available) * item.costPrice * (1 + (item.gstRate || 0) / 100)), minStockLevel: item.minStockLevel, currentStock: available };
         const doc = await tx.inventoryWorkflowDocument.create({ data: { branchId: actor.branchId, kind: 'SHORTBOOK', reference: `NEED-${new Date().toISOString().slice(0, 10)}-${item.name.slice(0, 40)}`,
           supplierId: supplier?.id || null, supplierGstin: supplier?.gstNumber?.trim().toUpperCase() || null, createdBy: actor.id, requestKey: `shortage:${input.requestKey || randomUUID()}:${item.id}`,
-          totalAmount: line.total, payload: { lines: [line], source: 'LOW_STOCK', requester: actor.id, date: new Date().toISOString().slice(0, 10), priority: available <= 0 ? 'URGENT' : 'NORMAL',
+          totalAmount: line.total, payload: { lines: [line], source: 'LOW_STOCK', requester: actor.id, date: clinicDay(new Date()), priority: available <= 0 ? 'URGENT' : 'NORMAL',
             reason: 'Below configured minimum; replenish available stock to maximum', supplierChoice: supplier ? { source: choice ? 'SAVED_CHOICE' : 'ITEM_SUPPLIER', supplierId: supplier.id } : null } } });
         await this.event(tx, actor, doc, 'CREATE', null, { source: 'LOW_STOCK', available, min: item.minStockLevel, max: item.maxStockLevel }); created.push(doc);
       }

@@ -1348,6 +1348,7 @@ model PharmacyInvoice {
   @@index([paymentStatus])
   @@index([invoiceDate])
   @@index([createdAt])
+  @@index([createdById])
   @@index([prescriptionId, branchId], map: "pharmacy_invoices_prescription_branch_read_idx")
   @@map("pharmacy_invoices")
 }

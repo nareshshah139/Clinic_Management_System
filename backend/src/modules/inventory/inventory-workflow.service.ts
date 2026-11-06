@@ -23,6 +23,7 @@ import {
   stockStatus,
   writeStockMovement,
 } from './inventory-stock';
+import { clinicDay, clinicDayOf } from '../pharmacy/register-utils';
 
 const FINAL = new Set([
   'POSTED',
@@ -601,6 +602,7 @@ export class InventoryWorkflowService {
         return JSON.parse(JSON.stringify(l));
       },
     );
+    const date = clean(source.date);
     const payload: Record<string, any> = {
       lines,
       reason: clean(source.reason),
@@ -612,7 +614,7 @@ export class InventoryWorkflowService {
       returnBase: clean(source.returnBase || source.valuationBasis) || 'PTR',
       returnType: clean(source.returnType) || 'OTHER',
       paymentMode: clean(source.paymentMode) || 'CASH',
-      date: clean(source.date) || new Date().toISOString().slice(0, 10),
+      date: date ? clinicDayOf(date) : clinicDay(new Date()),
       expectedDate: clean(source.expectedDate),
       priority: ['NORMAL', 'HIGH', 'URGENT'].includes(source.priority)
         ? source.priority
@@ -632,8 +634,10 @@ export class InventoryWorkflowService {
       throw new BadRequestException(
         'Choose pickup, delivery or in-clinic order type',
       );
-    if (!Number.isFinite(new Date(payload.date).getTime()))
-      throw new BadRequestException('Invalid document date');
+    if (!payload.date)
+      throw new BadRequestException(
+        'Document date must be a calendar day such as 2026-04-01',
+      );
     if (source.evidence)
       payload.evidence = clean(source.evidence).slice(0, 4000);
     return payload;

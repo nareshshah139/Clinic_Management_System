@@ -21,6 +21,7 @@ databaseTests('Sales register on PostgreSQL', () => {
   let created = false;
   let invoices: PharmacyInvoiceService;
   let register: PharmacySalesRegisterService;
+  let creatorColumnsBeforeMigration: number;
 
   const query = (
     overrides: Partial<SalesRegisterQuery> = {},
@@ -56,7 +57,11 @@ databaseTests('Sales register on PostgreSQL', () => {
       .replace(/model PharmacyInvoice \{[\s\S]*?\n\}/, (model) =>
         model
           .split('\n')
-          .filter((line) => !/^\s*createdBy(Id)?\s/.test(line))
+          .filter(
+            (line) =>
+              !/^\s*createdBy(Id)?\s/.test(line) &&
+              !/@@index\(\[createdById\]\)/.test(line),
+          )
           .join('\n'),
       )
       .replace(/^\s*createdPharmacyInvoices\s.*\n/m, '');
@@ -81,20 +86,16 @@ databaseTests('Sales register on PostgreSQL', () => {
       '--schema',
       path.join(fixtures, 'legacy.prisma'),
     );
-    prisma(
-      'db',
-      'execute',
-      '--url',
-      url.toString(),
-      '--file',
-      path.resolve(
-        'prisma/migrations/20261106150000_pharmacy_invoice_creator/migration.sql',
-      ),
-    );
     db = new PrismaClient({ datasourceUrl: url.toString() });
 
     await db.branch.create({
-      data: { id: 'branch', name: 'Skin Care Clinic', address: 'Synthetic' },
+      data: {
+        id: 'branch',
+        name: 'Skin Care Clinic',
+        address: 'Synthetic',
+        city: 'Pune',
+        gstNumber: '27ABCDE1234F1Z5',
+      },
     });
     await db.branch.create({
       data: { id: 'other-branch', name: 'Other Clinic', address: 'Synthetic' },
@@ -148,6 +149,52 @@ databaseTests('Sales register on PostgreSQL', () => {
         drugs: { connect: { id: 'drug' } },
       },
     });
+
+    creatorColumnsBeforeMigration = Number(
+      (
+        await db.$queryRawUnsafe<{ count: bigint }[]>(
+          `SELECT count(*) AS count FROM information_schema.columns
+           WHERE table_schema = $1 AND table_name = 'pharmacy_invoices' AND column_name = 'createdById'`,
+          schema,
+        )
+      )[0].count,
+    );
+    for (const invoiceNumber of ['LEGACY-1', 'LEGACY-UNSOLD'])
+      await db.$executeRawUnsafe(
+        `INSERT INTO "pharmacy_invoices" ("id", "invoiceNumber", "patientId", "branchId", "subtotal", "totalAmount",
+           "paymentMethod", "billingName", "billingPhone", "status", "invoiceDate", "updatedAt")
+         VALUES ($1, $1, 'patient', 'branch', 100, 100, 'CASH', 'Meera Shah', '9876543210', 'CONFIRMED',
+           '2026-05-01T06:00:00Z', now())`,
+        invoiceNumber,
+      );
+    for (const [id, branchId, userId, createdAt] of [
+      ['sale-later', 'branch', 'ravi', '2026-05-01T06:05:00Z'],
+      ['sale-first', 'branch', 'asha', '2026-05-01T06:01:00Z'],
+      ['sale-elsewhere', 'other-branch', 'ravi', '2026-05-01T06:00:00Z'],
+    ])
+      await db.$executeRawUnsafe(
+        `INSERT INTO "stock_transactions" ("id", "branchId", "itemId", "userId", "type", "quantity", "unitPrice",
+           "totalAmount", "reference", "createdAt", "updatedAt")
+         VALUES ($1, $2, 'batch', $3, 'SALE', 1, 50, 50, 'INV-LEGACY-1', $4::timestamptz, now())`,
+        id,
+        branchId,
+        userId,
+        createdAt,
+      );
+    for (let run = 0; run < 2; run++)
+      for (const migration of [
+        '20261106150000_pharmacy_invoice_creator',
+        '20261106150100_pharmacy_invoice_creator_index',
+      ])
+        prisma(
+          'db',
+          'execute',
+          '--url',
+          url.toString(),
+          '--file',
+          path.resolve(`prisma/migrations/${migration}/migration.sql`),
+        );
+
     const numbers = new InvoiceNumbersService(db as any);
     invoices = new PharmacyInvoiceService(db as any, numbers);
     register = new PharmacySalesRegisterService(db as any);
@@ -161,22 +208,38 @@ databaseTests('Sales register on PostgreSQL', () => {
     if (fixtures) rmSync(fixtures, { recursive: true, force: true });
   });
 
-  it('names who entered each bill, falls back to the first seller for legacy bills and totals only posted sales', async () => {
+  it('adds the creator column to an existing table, backfills legacy bills from their first sale in the branch and indexes it', async () => {
+    const creators = await db.pharmacyInvoice.findMany({
+      where: { invoiceNumber: { in: ['LEGACY-1', 'LEGACY-UNSOLD'] } },
+      select: { invoiceNumber: true, createdById: true },
+      orderBy: { invoiceNumber: 'asc' },
+    });
+    const indexes = await db.$queryRawUnsafe<{ indexname: string }[]>(
+      `SELECT indexname FROM pg_indexes WHERE schemaname = $1 AND indexname = 'pharmacy_invoices_createdById_idx'`,
+      schema,
+    );
+    expect([creatorColumnsBeforeMigration, creators, indexes]).toEqual([
+      0,
+      [
+        { invoiceNumber: 'LEGACY-1', createdById: 'asha' },
+        { invoiceNumber: 'LEGACY-UNSOLD', createdById: null },
+      ],
+      [{ indexname: 'pharmacy_invoices_createdById_idx' }],
+    ]);
+  });
+
+  it('names who entered each bill, shows what was paid and owed, links returns to their bills and totals only posted sales', async () => {
     const draft = await invoices.create(bill, 'branch', 'asha');
     const sold = await invoices.checkout(
       { ...bill, requestKey: 'sales-register-1' },
       'branch',
       'ravi',
     );
-    const legacy = await invoices.checkout(
-      { ...bill, requestKey: 'sales-register-2' },
+    await invoices.addPayment(
+      sold.id,
+      { requestKey: 'sales-register-pay-1', amount: 60, method: 'UPI' },
       'branch',
-      'asha',
     );
-    await db.pharmacyInvoice.update({
-      where: { id: legacy.id },
-      data: { createdById: null },
-    });
     const document = (id: string, data: Record<string, unknown>) =>
       db.inventoryWorkflowDocument.create({
         data: {
@@ -210,31 +273,79 @@ databaseTests('Sales register on PostgreSQL', () => {
       branchId: 'other-branch',
       payload: { date: '2026-05-02' },
     });
+    const soldLine = await db.stockTransaction.findFirstOrThrow({
+      where: { branchId: 'branch', reference: `INV-${sold.invoiceNumber}` },
+    });
+    await document('sr-1', {
+      kind: 'SALES_RETURN',
+      createdBy: 'asha',
+      totalAmount: 50,
+      payload: {
+        date: '2026-05-04',
+        refundMode: 'CASH',
+        lines: [{ sourceLineId: soldLine.id }],
+      },
+    });
 
-    const result = await register.list(
+    const sales = await register.list(
       query({ from: '2026-04-01', to: '2099-03-31' }),
+      'branch',
+    );
+    const upi = await register.list(
+      query({ from: '2026-04-01', to: '2099-03-31', paymentMode: 'UPI' }),
+      'branch',
+    );
+    const draftByNumber = await register.list(
+      query({
+        from: '2026-04-01',
+        to: '2099-03-31',
+        field: 'billNo',
+        q: draft.invoiceNumber,
+      }),
+      'branch',
+    );
+    const returns = await register.list(
+      query({ register: 'returns', from: '2026-04-01', to: '2099-03-31' }),
       'branch',
     );
 
     expect(
-      result.rows.map((r) => [
-        r.recordId,
-        r.billNo === null,
-        r.entryBy?.name ?? null,
-        r.paymentModes,
-      ]),
-    ).toEqual([
-      ['cs-entered-early', false, 'Ravi Synthetic', ['CARD']],
-      ['cs-in-range', false, 'Ravi Synthetic', ['UPI']],
-      [sold.id, false, 'Ravi Synthetic', ['CASH']],
-      [legacy.id, false, 'Asha Synthetic', ['CASH']],
-      [draft.id, true, 'Asha Synthetic', ['CASH']],
-    ]);
-    expect(result.totals).toEqual({
-      amount: 250,
-      count: 4,
-      excluded: { drafts: 1, cancelled: 0 },
+      Object.fromEntries(
+        sales.rows.map((r) => [
+          r.billNo ?? `draft ${r.reservedNo === draft.invoiceNumber}`,
+          [r.entryBy?.name ?? null, r.paymentModes, r.due],
+        ]),
+      ),
+    ).toEqual({
+      'CS-ENTERED-EARLY': ['Ravi Synthetic', ['CARD'], 0],
+      'CS-IN-RANGE': ['Ravi Synthetic', ['UPI'], 0],
+      [sold.invoiceNumber]: ['Ravi Synthetic', ['UPI'], 40],
+      'LEGACY-1': ['Asha Synthetic', [], 100],
+      'LEGACY-UNSOLD': [null, [], 100],
+      'draft true': ['Asha Synthetic', [], 0],
     });
+    expect([
+      sales.totals,
+      sales.clinic,
+      upi.totals.collected,
+      draftByNumber.rows.map((r) => r.recordId),
+      returns.rows.map((r) => [r.billNo, r.linkedBillNos, r.paymentModes]),
+    ]).toEqual([
+      {
+        amount: 350,
+        count: 5,
+        collected: null,
+        excluded: { drafts: 1, cancelled: 0 },
+      },
+      {
+        name: 'Skin Care Clinic',
+        address: 'Synthetic, Pune',
+        gstin: '27ABCDE1234F1Z5',
+      },
+      85,
+      [draft.id],
+      [['SR-1', [sold.invoiceNumber], ['CASH']]],
+    ]);
     expect(
       await db.pharmacyInvoice.findUnique({
         where: { id: sold.id },

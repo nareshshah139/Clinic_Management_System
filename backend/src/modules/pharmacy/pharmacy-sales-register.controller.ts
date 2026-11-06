@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  Controller,
-  Get,
-  Query,
-  Request,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -18,6 +11,7 @@ import { Permissions } from '../../shared/decorators/permissions.decorator';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { QuerySalesRegisterDto } from './dto/pharmacy-sales-register.dto';
 import { PharmacySalesRegisterService } from './pharmacy-sales-register.service';
+import { MAX_REGISTER_RANGE_DAYS } from './register-utils';
 
 @ApiTags('Pharmacy Sales Register')
 @ApiBearerAuth()
@@ -38,13 +32,9 @@ export class PharmacySalesRegisterController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid filters or a date range that ends before it starts',
+    description: `Invalid filters, or a date range that ends before it starts or spans more than ${MAX_REGISTER_RANGE_DAYS} days`,
   })
   async list(@Query() query: QuerySalesRegisterDto, @Request() req: any) {
-    if (query.from > query.to)
-      throw new BadRequestException(
-        'The start date must be on or before the end date',
-      );
     return this.salesRegister.list(query, req.user.branchId);
   }
 }

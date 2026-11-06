@@ -20,6 +20,7 @@ import {
   SORT_DIRECTIONS,
   SORT_KEYS,
 } from '../pharmacy-sales-register';
+import { IsRegisterRange, MAX_REGISTER_RANGE_DAYS } from '../register-utils';
 import type {
   PaymentMode,
   SaleSource,
@@ -47,11 +48,12 @@ export class QuerySalesRegisterDto implements SalesRegisterQuery {
   from: string;
 
   @ApiProperty({
-    description: 'Last bill date, inclusive, in clinic time',
+    description: `Last bill date, inclusive, in clinic time; on or after from and at most ${MAX_REGISTER_RANGE_DAYS} days after it`,
     example: '2027-03-31',
   })
   @Matches(CALENDAR_DAY)
   @IsISO8601({ strict: true })
+  @IsRegisterRange('from')
   to: string;
 
   @ApiPropertyOptional({ enum: SEARCH_FIELDS })
