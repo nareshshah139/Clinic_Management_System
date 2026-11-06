@@ -179,7 +179,7 @@ async function seed(db, stack) {
         },
       });
     const modes = b.paymentRows.length ? b.paymentRows : [b.paymentMethod];
-    const entryByKey = b.creator ?? (b.legacyStock ? (b.n === 12 ? "doctor" : "doctor") : null);
+    const entryByKey = b.creator ?? (b.legacyStock ? "doctor" : null);
     expected.push({
       key: `${b.invoiceNumber}`,
       register: "sales",
