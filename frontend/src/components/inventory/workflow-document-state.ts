@@ -72,7 +72,7 @@ export function workflowDocumentPresentation(kind: string, knowledge: DocumentKn
   }
   const result: DocumentPresentation = { ...base, heading: doc ? statusNames[status] : 'Unsaved draft', happened: '', stockEffect: 'recorded', stockExplanation: '', recovery: '', canMutate: authority.write, canEdit: authority.write && ['DRAFT', 'CHALLAN'].includes(status), checkLabel: null };
   if (authority.write && !['CORRECTION', 'TARGET_REVIEW'].includes(kind)) {
-    result.primaryAction = status === 'DRAFT' ? ({ SUPPLIER_RETURN: 'CHALLAN', PURCHASE_ORDER: 'SUBMIT', SHORTBOOK: 'CREATE_PO', QUOTATION: 'CONVERT_SALE' } as Record<string, string>)[kind] || 'POST' : status === 'CHALLAN' ? 'POST' : status === 'AWAITING_APPROVAL' && authority.approve ? 'APPROVE' : status === 'APPROVED' && kind !== 'PURCHASE_ORDER' ? ({ SHORTBOOK: 'CREATE_PO', QUOTATION: 'CONVERT_SALE' } as Record<string, string>)[kind] || 'POST' : null;
+    result.primaryAction = status === 'DRAFT' ? ({ SUPPLIER_RETURN: 'CHALLAN', PURCHASE_ORDER: 'SUBMIT', SHORTBOOK: 'CREATE_PO', QUOTATION: 'CONVERT_SALE' } as Record<string, string>)[kind] || 'POST' : status === 'AWAITING_APPROVAL' && authority.approve ? 'APPROVE' : status === 'APPROVED' && kind !== 'PURCHASE_ORDER' ? ({ SHORTBOOK: 'CREATE_PO', QUOTATION: 'CONVERT_SALE' } as Record<string, string>)[kind] || 'POST' : null;
   }
   const unchanged = (text: string) => { result.stockEffect = 'unchanged'; result.stockExplanation = text; };
   const countRecovery = 'Start fresh count retains this record and its history, clears earlier observations, and uses current balances. Physically recount before submitting.';
@@ -117,7 +117,7 @@ export function workflowDocumentPresentation(kind: string, knowledge: DocumentKn
   } else if (status === 'CHALLAN') {
     result.happened = 'Stock has already been sent back to the supplier on this return challan.';
     result.stockEffect = 'changed'; result.stockExplanation = 'Finalising the supplier credit does not return the same stock a second time.';
-    result.primaryLabel = 'Finalise supplier credit'; result.recovery = 'Choose Finalise supplier credit to record the credit, or Cancel document if the recorded return must be compensated.';
+    result.recovery = 'When the distributor’s credit note arrives, record its number, date and amount from Purchase bills › Returns. Cancel document only if the goods did not go back.';
   } else if (status === 'RELEASED') {
     result.happened = 'Held units were released for use. Release changed availability while physical quantity stayed unchanged by the release.';
     result.stockEffect = 'changed'; result.stockExplanation = 'The original receipt or hold remains in history; review current available and held quantities.';

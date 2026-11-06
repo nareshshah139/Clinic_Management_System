@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Plus, Receipt } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { displayCalendarDate, displayClinicDateTimeCompact } from '@/lib/date-display';
 import { formatDisplayDay } from '@/lib/date-ranges';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { cn } from '@/lib/utils';
+import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,7 +16,9 @@ import { RegisterDenied, RegisterGrid, shortName, type RegisterColumn } from '@/
 import { ClearFilters, DateRangeFilter, FilterBar, FilterSelect, MoreFilters, RegisterSearch } from '@/components/register/RegisterFilters';
 import { RegisterFooter } from '@/components/register/RegisterFooter';
 import { BillDocuments } from './BillDocuments';
+import { DistributorPositionStrip } from './DistributorPositionStrip';
 import { MarkPaidDialog } from './MarkPaidDialog';
+import { SetOffCreditDialog } from './SetOffCreditDialog';
 import { PaymentCell, useSettleBill } from './settle';
 import {
   INVOICE_STATE_FILTERS,
@@ -33,7 +36,6 @@ import {
   requestParams,
   type FilterKey,
   type PurchaseQuery,
-  type PurchaseRegisterKind,
   type PurchaseRegisterResponse,
   type PurchaseRegisterRow,
   type SortKey,
@@ -51,8 +53,9 @@ const linkClass =
  * Acceptance: INV-18. Validation and open gaps:
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
+type SettingOff = { gstin: string; name: string; anchor: HTMLElement; billId?: string };
+
 export function PurchaseRegister({
-  register,
   active,
   searchParams,
   onParamsChange,
@@ -61,7 +64,6 @@ export function PurchaseRegister({
   onNew,
   onLedger,
 }: {
-  register: PurchaseRegisterKind;
   active: boolean;
   searchParams: Pick<URLSearchParams, 'get' | 'toString'>;
   onParamsChange: (params: URLSearchParams) => void;
@@ -70,7 +72,8 @@ export function PurchaseRegister({
   onNew: () => void;
   onLedger: ((gstin?: string) => void) | null;
 }) {
-  const copy = PURCHASE_REGISTER_COPY[register];
+  const copy = PURCHASE_REGISTER_COPY.purchases;
+  const [settingOff, setSettingOff] = useState<SettingOff | null>(null);
   const fetchPage = useCallback(
     (query: PurchaseQuery) => apiClient.get<PurchaseRegisterResponse>(copy.endpoint, requestParams(query)),
     [copy.endpoint],
@@ -88,6 +91,14 @@ export function PurchaseRegister({
   const rows = data?.rows ?? [];
   const failed = load.status === 'error';
   const settle = useSettleBill({ rows, canSettle, reload });
+  const creditHeldBy = (gstinOf: string) => data?.creditHeld?.[gstinOf.toUpperCase()] ?? 0;
+  const position = data?.distributorPosition ?? null;
+  const setOffDone = async (message: string, anchor: HTMLElement) => {
+    setSettingOff(null);
+    toast({ title: message });
+    await reload();
+    if (anchor.isConnected) anchor.focus();
+  };
   const setFilter = (key: FilterKey) => (value: string) => dispatch({ type: 'filter', key, value });
 
   const entryByOptions = (data?.entryByOptions ?? []).map((person) => ({ value: person.id, label: person.name }));
@@ -226,6 +237,15 @@ export function PurchaseRegister({
         {view.filtered && <ClearFilters onClear={clearAll} />}
       </FilterBar>
 
+      {position && !failed && (
+        <DistributorPositionStrip
+          position={position}
+          name={position.name ?? distributorOptions.find((option) => option.value === position.gstin)?.label ?? position.gstin}
+          canSetOff={canSettle}
+          onSetOff={(anchor) => setSettingOff({ gstin: position.gstin, name: position.name ?? position.gstin, anchor })}
+        />
+      )}
+
       <RegisterGrid
         label={copy.table}
         noun={copy.noun}
@@ -271,9 +291,36 @@ export function PurchaseRegister({
         <MarkPaidDialog
           row={settle.settling.row}
           anchor={settle.settling.anchor}
+          creditHeld={creditHeldBy(settle.settling.row.distributor.gstin)}
+          onSetOff={() => {
+            const { row, anchor } = settle.settling!;
+            settle.close();
+            setSettingOff({ gstin: row.distributor.gstin, name: row.distributor.name, anchor, billId: row.id });
+          }}
           onClose={settle.close}
           onPaid={(payment, amount) => void settle.paid(payment, amount)}
           onStale={(failure) => void settle.stale(failure)}
+        />
+      )}
+
+      {settingOff && (
+        <SetOffCreditDialog
+          scope={{ distributorGstin: settingOff.gstin }}
+          distributorName={settingOff.name}
+          anchor={settingOff.anchor}
+          billId={settingOff.billId}
+          onClose={() => setSettingOff(null)}
+          onDone={(result, total) =>
+            void setOffDone(
+              `Set off ${formatRupees(total)} of ${settingOff.name}’s credit against ${[...new Set(result.bills.map((bill) => bill.billNo))].join(', ')}.`,
+              settingOff.anchor,
+            )
+          }
+          onStale={(failure) => {
+            setSettingOff(null);
+            toast({ variant: 'destructive', title: failure.title, description: failure.description });
+            void reload();
+          }}
         />
       )}
     </div>

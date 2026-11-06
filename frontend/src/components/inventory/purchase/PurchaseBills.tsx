@@ -13,6 +13,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { parseQuery } from '@/components/register/register-query';
 import { PurchaseRegister } from './PurchaseRegister';
+import { PurchaseReturnsRegister } from './PurchaseReturnsRegister';
+import type { ReturnKind } from './purchase-returns-model';
 import { PURCHASE_QUERY, PURCHASE_REGISTERS, PURCHASE_REGISTER_COPY, exportHref, type PurchaseRegisterKind } from './purchase-register-model';
 
 const NO_PARAMS = new URLSearchParams();
@@ -23,17 +25,23 @@ const tabOf = (params: Pick<URLSearchParams, 'get'>): PurchaseRegisterKind =>
 export function PurchaseBills({
   searchParams,
   onParamsChange,
+  onTabChange = onParamsChange,
   canSettle,
   onOpen,
   onNew,
+  onOpenReturn,
+  onNewReturn,
   onLedger,
   onSuppliers,
 }: {
   searchParams: Pick<URLSearchParams, 'get' | 'toString'>;
   onParamsChange: (params: URLSearchParams) => void;
+  onTabChange?: (params: URLSearchParams) => void;
   canSettle: boolean;
   onOpen: (invoiceId: string) => void;
   onNew: () => void;
+  onOpenReturn: (kind: ReturnKind, documentId: string) => void;
+  onNewReturn: () => void;
   onLedger: ((gstin?: string) => void) | null;
   onSuppliers: () => void;
 }) {
@@ -46,7 +54,7 @@ export function PurchaseBills({
   const exportUrl = () => exportHref(PURCHASE_REGISTER_COPY[tab].endpoint, parseQuery(PURCHASE_QUERY, searchParams, getISTDateString()));
 
   return (
-    <Tabs value={tab} onValueChange={(value: string) => onParamsChange(withTab(value as PurchaseRegisterKind, NO_PARAMS))}>
+    <Tabs value={tab} onValueChange={(value: string) => onTabChange(withTab(value as PurchaseRegisterKind, NO_PARAMS))}>
       <section aria-label="Purchase bills" className="flex min-w-0 flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
           <TabsList aria-label="Purchase registers">
@@ -55,9 +63,15 @@ export function PurchaseBills({
             ))}
           </TabsList>
           <div className="flex items-center gap-2">
-            <Button className="h-10 text-sm" aria-label="New purchase" onClick={onNew}>
-              <Plus aria-hidden="true" /> New<span className="max-sm:hidden"> purchase</span>
-            </Button>
+            {tab === 'returns' ? (
+              <Button className="h-10 text-sm" aria-label="New return" onClick={onNewReturn}>
+                <Plus aria-hidden="true" /> New<span className="max-sm:hidden"> return</span>
+              </Button>
+            ) : (
+              <Button className="h-10 text-sm" aria-label="New purchase" onClick={onNew}>
+                <Plus aria-hidden="true" /> New<span className="max-sm:hidden"> purchase</span>
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="h-10 text-sm">
@@ -65,10 +79,14 @@ export function PurchaseBills({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onSelect={() => window.open(exportUrl(), '_blank')}>
-                  <FileDown aria-hidden="true" /> Export to Excel
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
+                {PURCHASE_REGISTER_COPY[tab].exportable && (
+                  <>
+                    <DropdownMenuItem onSelect={() => window.open(exportUrl(), '_blank')}>
+                      <FileDown aria-hidden="true" /> Export to Excel
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {onLedger && (
                   <DropdownMenuItem onSelect={() => onLedger(searchParams.get('gstin') || undefined)}>
                     <Wallet aria-hidden="true" /> Payments &amp; dues
@@ -83,16 +101,26 @@ export function PurchaseBills({
         </div>
         {PURCHASE_REGISTERS.map((register) => (
           <TabsContent key={register} value={register} forceMount hidden={register !== tab} className="min-w-0">
-            <PurchaseRegister
-              register={register}
-              active={register === tab}
-              searchParams={register === tab ? searchParams : NO_PARAMS}
-              onParamsChange={(params) => register === tab && onParamsChange(withTab(register, params))}
-              canSettle={canSettle}
-              onOpen={onOpen}
-              onNew={onNew}
-              onLedger={onLedger}
-            />
+            {register === 'returns' ? (
+              <PurchaseReturnsRegister
+                active={register === tab}
+                searchParams={register === tab ? searchParams : NO_PARAMS}
+                onParamsChange={(params) => register === tab && onParamsChange(withTab(register, params))}
+                canWrite={canSettle}
+                onOpen={onOpenReturn}
+                onNew={onNewReturn}
+              />
+            ) : (
+              <PurchaseRegister
+                active={register === tab}
+                searchParams={register === tab ? searchParams : NO_PARAMS}
+                onParamsChange={(params) => register === tab && onParamsChange(withTab(register, params))}
+                canSettle={canSettle}
+                onOpen={onOpen}
+                onNew={onNew}
+                onLedger={onLedger}
+              />
+            )}
           </TabsContent>
         ))}
       </section>

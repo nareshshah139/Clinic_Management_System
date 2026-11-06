@@ -14,6 +14,7 @@ import {
 import { apiClient } from "@/lib/api";
 import { InventoryAction } from "./InventoryPresentation";
 import { workflowDocumentPresentation, type DocumentKnowledge, type DocumentReference } from "./workflow-document-state";
+import { RETURN_REASONS, RETURN_REASON_LABELS, returnReasonValue } from "./purchase/purchase-returns-model";
 import { Button } from "@/components/ui/button";
 import {
   workflowKinds,
@@ -888,16 +889,15 @@ export function WorkflowDocumentEditor({
         {kind === "SUPPLIER_RETURN" && (
           <>
             <label className="text-sm">
-              Return type
+              Reason for return
               <select
                 className={inputClass}
-                value={form.payload.returnType || "OTHER"}
+                value={returnReasonValue(form.payload.returnType)}
                 onChange={(e) => payload("returnType", e.target.value)}
               >
-                <option value="EXPIRY">Expired / near expiry</option>
-                <option value="DAMAGE">Damage</option>
-                <option value="EXCESS">Excess stock</option>
-                <option value="OTHER">Other agreed return</option>
+                {RETURN_REASONS.map((reason) => (
+                  <option key={reason} value={reason}>{RETURN_REASON_LABELS[reason]}</option>
+                ))}
               </select>
             </label>
             <label className="text-sm">
