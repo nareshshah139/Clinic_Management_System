@@ -15,9 +15,11 @@ const PATIENTS = [
   ["Harish Chandra Mishra", "9415566778"], ["Fatima Shaikh", "9867300112"], ["Gurpreet Kaur", "9876500321"],
   ["Manoj Tiwari", "9919188776"], ["Rekha Banerjee", "9830456789"], ["Prakash Jadhav", "9923345566"],
   ["Aditi Chavan", "9850612345"], ["Nitin Kamble", "9822233445"], ["Shalini Menon", "9895123456"],
-  ["Kavya Rao", ""],
+  ["Kavya Rao", ""], ["<img src=x onerror=window.__xss=1>", "9811100099"],
 ];
 const NO_PHONE_PATIENT = 24;
+const HTML_PATIENT = 25;
+const XSS_NAME = "<img src=x onerror=window.__xss=1>";
 
 const BILL_COUNT = 70;
 const OCT15_BILLS = [55, 56, 57, 58, 59, 61];
@@ -68,7 +70,7 @@ function buildBills() {
       createdAt: n === BACKDATED_BILL ? new Date(invoiceDate.getTime() + 2 * DAY_MS + 3600000) : new Date(invoiceDate.getTime() + 180000 + n * 1000),
       cents: centsFor(n),
       paymentMethod: SPLIT_CASH_UPI(n) || SPLIT_UPI_CARD(n) ? "CASH" : ["CASH", "UPI", "CARD", "CASH"][n % 4],
-      paymentRows: ["DRAFT", "PENDING", "CANCELLED"].includes(status) ? [] : SPLIT_CASH_UPI(n) ? ["CASH", "UPI"] : SPLIT_UPI_CARD(n) ? ["UPI", "CARD"] : n % 5 === 0 ? [["CASH", "UPI", "CARD", "CASH"][n % 4]] : [],
+      paymentRows: SPLIT_CASH_UPI(n) ? ["CASH", "UPI"] : SPLIT_UPI_CARD(n) ? ["UPI", "CARD"] : [],
       legacyStock: LEGACY_WITH_STOCK.includes(n),
     });
   }
@@ -80,6 +82,21 @@ function buildBills() {
   make({
     n: 72, invoiceNumber: "PHI-2026-072", status: "COMPLETED", patientIndex: 9, creator: "pharmacist",
     invoiceDate: new Date("2026-11-06T04:45:00Z"), createdAt: new Date("2026-11-06T04:50:00Z"), cents: 156025,
+    paymentMethod: "CARD", paymentRows: [], legacyStock: false,
+  });
+  make({
+    n: 73, invoiceNumber: "PHI-2026-073", status: "COMPLETED", patientIndex: 1, creator: "pharmacist",
+    invoiceDate: istInstant("2026-11-04", "10:30"), createdAt: istInstant("2026-11-04", "10:34"), cents: 285000,
+    paymentMethod: "UPI", paymentRows: [], explicitPayments: [{ method: "UPI", cents: 100000 }], legacyStock: false,
+  });
+  make({
+    n: 74, invoiceNumber: "PHI-2026-074", status: "COMPLETED", patientIndex: 2, creator: "pharmacist",
+    invoiceDate: istInstant("2026-11-05", "15:10"), createdAt: istInstant("2026-11-05", "15:14"), cents: 96000,
+    paymentMethod: "CASH", paymentRows: [], explicitPayments: [], legacyStock: false,
+  });
+  make({
+    n: 75, invoiceNumber: "PHI-2026-075", status: "COMPLETED", patientIndex: HTML_PATIENT, creator: "pharmacist",
+    invoiceDate: istInstant("2026-11-05", "11:00"), createdAt: istInstant("2026-11-05", "11:06"), cents: 13523440,
     paymentMethod: "CARD", paymentRows: [], legacyStock: false,
   });
   const previous = [
@@ -114,11 +131,27 @@ const SALES_RETURNS = [
   { ref: "SR-2026-003", status: "POSTED", day: "2026-09-09", time: "10:45", name: "Fatima Shaikh", phone: "9867300112", mode: "CARD", cents: 23400, bill: 30, by: "reception" },
   { ref: "SR-2026-004", status: "DRAFT", day: "2026-10-28", time: "18:00", name: "Kavya Rao", phone: null, mode: "CASH", cents: 5200, bill: 44, by: "pharmacist" },
   { ref: "SR-2026-005", status: "POSTED", day: "2026-11-02", time: "09:35", name: "Walk-in customer", phone: "9899900011", mode: "UPI", cents: 31050, bill: null, by: "doctor" },
+  { ref: "SR-2026-006", status: "POSTED", day: "2026-11-03", time: "14:20", name: "Neha Agarwal", phone: "9810099887", mode: "CASH", cents: 25000, bill: null, stockBill: 50, by: "pharmacist" },
 ];
 
 const BILL_FINAL = new Set(["CONFIRMED", "DISPENSED", "COMPLETED"]);
 const billState = (status) => (BILL_FINAL.has(status) ? "FINAL" : status === "CANCELLED" ? "CANCELLED" : "DRAFT");
 const documentState = (status) => (status === "POSTED" ? "FINAL" : status === "DRAFT" ? "DRAFT" : "CANCELLED");
+
+const paymentsOf = (b) => {
+  if (billState(b.status) !== "FINAL") return [];
+  if (b.explicitPayments) return b.explicitPayments;
+  if (b.paymentRows.length > 1) {
+    const first = Math.round(b.cents * 0.6);
+    return b.paymentRows.map((method, i) => ({ method, cents: i === 0 ? first : b.cents - first }));
+  }
+  return [{ method: b.paymentRows[0] ?? b.paymentMethod, cents: b.cents }];
+};
+
+const COUNTER_LINES = (cents) => [
+  { name: "Paracetamol 650mg Tab", batchNumber: "B-2201", quantity: 10, unitPrice: 2.5, total: 25 },
+  { name: "Cough Syrup 100ml", batchNumber: "CS-77", quantity: 1, unitPrice: (cents - 2500) / 100, total: (cents - 2500) / 100 },
+];
 
 async function seed(db, stack) {
   const branchId = stack.branch.id;
@@ -135,73 +168,68 @@ async function seed(db, stack) {
 
   const bills = buildBills();
   const expected = [];
+  const saleTransactions = {};
   for (const b of bills) {
     const patient = patients[b.patientIndex];
     const total = b.cents / 100;
-    const final = billState(b.status) === "FINAL";
+    const state = billState(b.status);
+    const payments = paymentsOf(b);
+    const paidCents = payments.reduce((sum, p) => sum + p.cents, 0);
+    const dueCents = state === "FINAL" ? Math.max(0, b.cents - paidCents) : 0;
     const invoice = await db.pharmacyInvoice.create({
       data: {
         invoiceNumber: b.invoiceNumber, patientId: patient.id, branchId, subtotal: total, totalAmount: total,
-        paymentMethod: b.paymentMethod, paymentStatus: final ? "COMPLETED" : "PENDING", paidAmount: final ? total : 0, balanceAmount: final ? 0 : total,
+        paymentMethod: b.paymentMethod,
+        paymentStatus: state !== "FINAL" ? "PENDING" : dueCents === 0 ? "COMPLETED" : paidCents > 0 ? "PARTIALLY_PAID" : "PENDING",
+        paidAmount: paidCents / 100, balanceAmount: state === "FINAL" ? dueCents / 100 : total,
         billingName: patient.name, billingPhone: patient.phone, status: b.status, invoiceDate: b.invoiceDate, createdAt: b.createdAt,
         createdById: b.creator ? userId(b.creator) : null,
       },
     });
-    if (b.paymentRows.length) {
-      const first = Math.round(b.cents * 0.6);
-      for (const [i, method] of b.paymentRows.entries()) {
-        const share = b.paymentRows.length === 1 ? b.cents : i === 0 ? first : b.cents - first;
-        await db.pharmacyPayment.create({
-          data: { invoiceId: invoice.id, amount: share / 100, method, status: "COMPLETED", paymentDate: b.invoiceDate, createdAt: new Date(b.invoiceDate.getTime() + (i + 1) * 60000) },
-        });
-      }
-    }
+    for (const [i, payment] of payments.entries())
+      await db.pharmacyPayment.create({
+        data: { invoiceId: invoice.id, amount: payment.cents / 100, method: payment.method, status: "COMPLETED", paymentDate: b.invoiceDate, createdAt: new Date(b.invoiceDate.getTime() + (i + 1) * 60000) },
+      });
+    const sale = (userKey, quantity, offset) =>
+      db.stockTransaction.create({
+        data: {
+          branchId, itemId: item.id, userId: userId(userKey), type: "SALE", quantity, unitPrice: 2.5, totalAmount: quantity * 2.5,
+          reference: `INV-${b.invoiceNumber}`, createdAt: new Date(b.invoiceDate.getTime() + offset),
+        },
+      });
     if (b.legacyStock) {
-      await db.stockTransaction.create({
-        data: {
-          branchId, itemId: item.id, userId: userId("doctor"), type: "SALE", quantity: 2, unitPrice: 2.5, totalAmount: 5,
-          reference: `INV-${b.invoiceNumber}`, createdAt: new Date(b.invoiceDate.getTime() + 60000),
-        },
-      });
-      if (b.n === 12)
-        await db.stockTransaction.create({
-          data: {
-            branchId, itemId: item.id, userId: userId("pharmacist"), type: "SALE", quantity: 1, unitPrice: 2.5, totalAmount: 2.5,
-            reference: `INV-${b.invoiceNumber}`, createdAt: new Date(b.invoiceDate.getTime() + 600000),
-          },
-        });
+      await sale("doctor", 2, 60000);
+      if (b.n === 12) await sale("pharmacist", 1, 600000);
     }
-    if (b.n === 8)
-      await db.stockTransaction.create({
-        data: {
-          branchId, itemId: item.id, userId: userId("doctor"), type: "SALE", quantity: 1, unitPrice: 2.5, totalAmount: 2.5,
-          reference: `INV-${b.invoiceNumber}`, createdAt: new Date(b.invoiceDate.getTime() + 60000),
-        },
-      });
-    const modes = b.paymentRows.length ? b.paymentRows : [b.paymentMethod];
-    const entryByKey = b.creator ?? (b.legacyStock ? "doctor" : null);
+    if (b.n === 8) await sale("doctor", 1, 60000);
+    if (b.n === 50) saleTransactions[b.invoiceNumber] = await sale("pharmacist", 100, 60000);
+    const entryByKey = b.creator;
     expected.push({
       key: `${b.invoiceNumber}`,
       register: "sales",
       source: "bill",
       recordId: invoice.id,
-      billNo: billState(b.status) === "DRAFT" ? null : b.invoiceNumber,
+      billNo: state === "DRAFT" ? null : b.invoiceNumber,
+      reserved: state === "DRAFT" ? b.invoiceNumber : null,
       invoiceNumber: b.invoiceNumber,
-      state: billState(b.status),
+      state,
       entryAt: b.createdAt.getTime(),
       billDay: istDay(b.invoiceDate),
       entryBy: entryByKey ? names[entryByKey] : null,
+      legacyCreator: !b.creator,
       patient: patient.name,
       mobile: patient.phone || null,
       cents: b.cents,
-      modes: [...new Set(modes)],
-      linked: null,
+      payments: payments.map((p) => ({ mode: p.method, cents: p.cents })),
+      modes: [...new Set(payments.map((p) => p.method))],
+      due: dueCents,
+      linked: [],
     });
   }
 
-  const workflow = async (kind, spec, extra) => {
+  const workflow = async (kind, spec, extra, lines) => {
     const at = istInstant(spec.day, spec.time);
-    const payload = { date: spec.day, ...(spec.name && { customerName: spec.name }), ...(spec.phone && { customerPhone: spec.phone }) };
+    const payload = { date: spec.day, ...(spec.name && { customerName: spec.name }), ...(spec.phone && { customerPhone: spec.phone }), ...(lines && { lines }) };
     payload[kind === "SALES_RETURN" ? "refundMode" : "paymentMode"] = spec.mode;
     const doc = await db.inventoryWorkflowDocument.create({
       data: {
@@ -213,25 +241,31 @@ async function seed(db, stack) {
   };
 
   for (const spec of COUNTER_SALES) {
-    const { doc, at } = await workflow("COUNTER_SALE", spec, {});
+    const { doc, at } = await workflow("COUNTER_SALE", spec, {}, COUNTER_LINES(spec.cents));
+    const mode = spec.mode.toUpperCase();
     expected.push({
-      key: spec.ref, register: "sales", source: "counter", recordId: doc.id, billNo: documentState(spec.status) === "DRAFT" ? null : spec.ref, invoiceNumber: spec.ref,
+      key: spec.ref, register: "sales", source: "counter", recordId: doc.id, billNo: documentState(spec.status) === "DRAFT" ? null : spec.ref, reserved: null, invoiceNumber: spec.ref,
       state: documentState(spec.status), entryAt: at.getTime(), billDay: spec.day, entryBy: names[spec.by], patient: spec.name, mobile: spec.phone,
-      cents: spec.cents, modes: [spec.mode.toUpperCase()], linked: null,
+      cents: spec.cents, payments: [{ mode, cents: spec.cents }], modes: [mode], due: 0, linked: [],
     });
   }
 
   const idByNumber = Object.fromEntries(expected.map((e) => [e.invoiceNumber, e.recordId]));
   for (const spec of SALES_RETURNS) {
     const linkedNumber = spec.bill ? `PHI-2026-${pad3(spec.bill)}` : null;
-    const { doc, at } = await workflow("SALES_RETURN", spec, linkedNumber ? { salesInvoiceId: idByNumber[linkedNumber] } : {});
+    const stockNumber = spec.stockBill ? `PHI-2026-${pad3(spec.stockBill)}` : null;
+    const lines = stockNumber
+      ? [{ name: "Paracetamol 650mg Tab", batchNumber: "B-2201", itemId: item.id, quantity: 100, unitPrice: 2.5, total: 250, sourceLineId: saleTransactions[stockNumber].id }]
+      : undefined;
+    const { doc, at } = await workflow("SALES_RETURN", spec, linkedNumber ? { salesInvoiceId: idByNumber[linkedNumber] } : {}, lines);
+    const mode = spec.mode.toUpperCase();
     expected.push({
-      key: spec.ref, register: "returns", source: "return", recordId: doc.id, billNo: documentState(spec.status) === "DRAFT" ? null : spec.ref, invoiceNumber: spec.ref,
+      key: spec.ref, register: "returns", source: "return", recordId: doc.id, billNo: documentState(spec.status) === "DRAFT" ? null : spec.ref, reserved: null, invoiceNumber: spec.ref,
       state: documentState(spec.status), entryAt: at.getTime(), billDay: spec.day, entryBy: names[spec.by], patient: spec.name, mobile: spec.phone,
-      cents: spec.cents, modes: [spec.mode.toUpperCase()], linked: linkedNumber,
+      cents: spec.cents, payments: [{ mode, cents: spec.cents }], modes: [mode], due: 0, linked: [linkedNumber ?? stockNumber].filter(Boolean), stockLinked: Boolean(stockNumber),
     });
   }
-  return { expected, names, clinicName: stack.branch.name, today: istDay(new Date()) };
+  return { expected, names, clinic: { name: stack.branch.name, address: stack.branch.address }, today: istDay(new Date()), xssName: XSS_NAME };
 }
 
 module.exports = { seed, istDay, addDays };
