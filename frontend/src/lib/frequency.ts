@@ -174,7 +174,7 @@ export function getAllDurationUnitOptions(): string[] {
 }
 
 /**
- * @cc [owner:nareshshah139,label:calculation] dose-pattern-presets-infer-daily-count
+ * @cc [owner:nareshshah139,label:safety] dose-pattern-presets-infer-daily-count
  * Every preset offered in the prescription dose-pattern picker MUST infer the frequency whose
  * daily count equals its meaning (n non-zero slots is n doses a day, qNh is every N hours,
  * prn is as needed), so picking a preset never writes a different dosing frequency.

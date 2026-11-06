@@ -374,7 +374,7 @@ export class BillingService {
   }
 
   /**
-   * @cc [owner:nareshshah139,label:calculation] payment-balance-application
+   * @cc [owner:nareshshah139,label:calculation;security] payment-balance-application
    * A payment MUST add its amount to the invoice received and set balance to total minus received,
    * never below 0, so partial payments leave the remainder and full payment settles at 0. The
    * invoice MUST belong to the authenticated branch, otherwise nothing is written.
@@ -430,11 +430,17 @@ export class BillingService {
   }
 
   /**
-   * @cc [owner:nareshshah139,label:integrity] refund-bounds
+   * @cc [owner:nareshshah139,label:calculation;security] refund-bounds
    * A refund MUST target a COMPLETED, non-refund payment in the authenticated branch and MUST be
    * above 0, at most the payment amount, and at most what the invoice still holds as received.
    * Any other request MUST fail with nothing written. A valid refund MUST add a negative payment
    * and lower received and raise balance by that amount.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:calculation;target] refund-total-per-payment
+   * The refunds of one payment MUST NOT add up to more than that payment, and two concurrent refunds
+   * MUST NOT both pass the received cap. Today refund rows carry no link to their payment and the
+   * cap is read outside a transaction, so neither holds. This is a target obligation, not a pass claim.
    */
   async processRefund(refundDto: RefundDto, branchId: string) {
     const { paymentId, amount, reason, notes, gatewayResponse } = refundDto as any;

@@ -141,9 +141,15 @@ async function prove(prisma: PrismaClient, file: string) {
   );
   console.log(
     'second run left roles, users, permissions and counts identical:',
-    !rerunChanged,
+    check(`${file}: second run changed nothing`, !rerunChanged),
   );
   return { before, first, second, rerunChanged };
+}
+
+const failures: string[] = [];
+function check(label: string, ok: boolean) {
+  if (!ok) failures.push(label);
+  return ok;
 }
 
 async function main() {
@@ -217,12 +223,19 @@ async function main() {
       );
       console.log(
         'role DOCTOR untouched:',
-        r.first.roles.DOCTOR.permissions === r.before.roles.DOCTOR.permissions,
+        check(
+          `${file}: DOCTOR role untouched`,
+          r.first.roles.DOCTOR.permissions ===
+            r.before.roles.DOCTOR.permissions,
+        ),
       );
       for (const email of ['owner', 'admin', 'doctor', 'pharmacist-custom']) {
         console.log(
           `user ${email} untouched:`,
-          r.first.users[email] === r.before.users[email],
+          check(
+            `${file}: ${email} untouched`,
+            r.first.users[email] === r.before.users[email],
+          ),
         );
       }
       for (const email of [
@@ -232,6 +245,17 @@ async function main() {
         'reception-revoked-delete',
       ]) {
         const after = JSON.parse(r.first.users[email]!) as string[];
+        let previous: string[] = [];
+        try {
+          const parsed: unknown = JSON.parse(r.before.users[email] ?? '[]');
+          if (Array.isArray(parsed)) previous = parsed as string[];
+        } catch {
+          previous = [];
+        }
+        check(
+          `${file}: ${email} kept every earlier permission`,
+          previous.every((permission) => after.includes(permission)),
+        );
         console.log(
           `user ${email}: ${r.before.users[email]?.slice(0, 40)} -> ${after.length} permissions, kept old=${
             (r.before.users[email] &&
@@ -261,7 +285,12 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    for (const failure of failures) console.error(`FAILED: ${failure}`);
+    process.exit(failures.length ? 1 : 0);
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

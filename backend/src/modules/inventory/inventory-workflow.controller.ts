@@ -28,7 +28,8 @@ import {
  * @cc [owner:nareshshah139,label:security] inventory-workspace-access
  * The workspace controller has no role list, so every /inventory/workspace route MUST require a
  * signed-in user whose token role and branch match the stored user. OWNER, ADMIN and DOCTOR hold
- * every workspace permission; any other role MUST hold the permission the service names for the
+ * every workspace permission, but approving documents and correcting posted movements also need
+ * OWNER, ADMIN or MANAGER, so DOCTOR is refused those two actions today. Any other role MUST hold the permission the service names for the
  * action, so reading stock never allows a change and a user with no grants MUST get 403. The
  * controller MUST NOT expose a delete route.
  */
