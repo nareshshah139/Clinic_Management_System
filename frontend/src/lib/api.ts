@@ -70,6 +70,14 @@ export class ApiClient {
   }
 
   // Auth
+  async forgotPassword(email: string) {
+    return this.post<{ message: string }>('/auth/forgot-password', { email });
+  }
+
+  async resetPassword(token: string, password: string, confirmPassword: string) {
+    return this.post<{ message: string }>('/auth/reset-password', { token, password, confirmPassword });
+  }
+
   async login(identifier: string, password: string) {
     // Server sets HttpOnly cookie via Set-Cookie. Do not persist token client-side.
     return this.post<{ access_token?: string; user: any }>(`/auth/login`, { identifier, password });

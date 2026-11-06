@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { Spinner } from '@/components/ui/spinner';
 import { useState, Suspense } from 'react';
 import { Switch } from '@/components/ui/switch';
@@ -102,6 +103,7 @@ function LoginPageInner() {
               {loading ? 'Signing in…' : 'Sign in'}
             </Button>
             <p className="text-xs text-gray-500 text-center">Use your registered phone number or email with your password.</p>
+            <p className="text-sm text-center"><Link href="/forgot-password" className="text-blue-700 underline underline-offset-2">Forgot password?</Link></p>
           </form>
         </CardContent>
       </Card>

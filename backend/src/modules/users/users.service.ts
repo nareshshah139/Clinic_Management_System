@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
-import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto, ChangePasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
 import { Prisma, UserRole, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -308,48 +308,6 @@ export class UsersService {
     });
 
     return { message: 'Password changed successfully' };
-  }
-
-  async resetPassword(resetPasswordDto: ResetPasswordDto) {
-    const user = await this.prisma.user.findFirst({
-      where: { email: resetPasswordDto.email },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    // Implementation pending: generate reset token and send email
-    return { message: 'Password reset link sent if email exists' };
-  }
-
-  async setPassword(setPasswordDto: SetPasswordDto) {
-    // Find user by reset token and ensure not expired
-    const user = await this.prisma.user.findFirst({
-      where: {
-        resetToken: setPasswordDto.resetToken,
-      },
-    });
-
-    if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
-      throw new UnauthorizedException('Invalid or expired token');
-    }
-
-    // Verify password confirmation
-    if (setPasswordDto.password !== setPasswordDto.confirmPassword) {
-      throw new BadRequestException('Password and confirmation do not match');
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(setPasswordDto.password, 10);
-
-    // Update user password and clear token
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashedPassword, resetToken: null, resetTokenExpiry: null },
-    });
-
-    return { message: 'Password set successfully' };
   }
 
   // Profile Management Methods
