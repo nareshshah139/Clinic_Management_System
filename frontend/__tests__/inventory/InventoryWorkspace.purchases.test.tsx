@@ -139,3 +139,51 @@ it.each([
   await screen.findByText('LIN-101');
   expect(screen.queryAllByRole('button', { name: /^Mark bill/ }).map((button) => button.getAttribute('aria-label'))).toEqual(buttons);
 });
+
+const returnBase = {
+  kind: 'SUPPLIER_RETURN', version: 2, entryAt: '2026-11-02T05:00:00.000Z', returnDate: '2026-11-02', entryBy: null,
+  distributor: { name: 'Linae Distributors', gstin: '36ABCDE1234F1Z5' }, sourceBillNo: 'LIN-1', returnValue: 224, reason: 'EXPIRY',
+};
+const returnsPage = {
+  rows: [
+    { ...returnBase, id: 'ret-1', srNo: 1, returnRef: 'RET-1', creditNote: null, credit: null, state: 'AWAITED' },
+    {
+      ...returnBase, id: 'ret-2', srNo: 2, returnRef: 'RET-2', state: 'RECEIVED',
+      creditNote: { number: 'CN-9', date: '2026-11-04', amount: 224 }, credit: { id: 'credit-2', amount: 224, applied: 0, available: 224 },
+    },
+  ],
+  total: 2, page: 1, limit: 50,
+  totals: { held: 224, awaited: { amount: 224, count: 1 }, count: 2, excluded: { drafts: 0, cancelled: 0 } },
+  entryByOptions: [], distributorOptions: [],
+};
+
+it.each(['PHARMACIST', 'DOCTOR', 'ADMIN'])('lets %s open the Returns tab with Record credit note and Set off offered', async (role) => {
+  mockRole = role;
+  mockUrl.set('/dashboard/inventory?area=purchases&view=register&tab=returns');
+  get.mockImplementation(async (path: string) => {
+    if (path === '/inventory/workspace/capabilities') return { kinds: {}, ledger: true, creditWrite: true };
+    if (path === '/pharmacy/purchase-returns-register') return returnsPage;
+    if (path === '/pharmacy/purchase-register') return { ...emptyRegister, creditHeld: {}, distributorPosition: null };
+    throw new Error(`Unexpected ${path}`);
+  });
+  render(<InventoryWorkspace />);
+  expect(await screen.findByRole('button', { name: 'Record credit note for return RET-1' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Set off credit note CN-9 against bills' })).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: 'Returns' })).toHaveAttribute('aria-selected', 'true');
+});
+
+it('opens the supplier returns in progress from Today on the Returns tab', async () => {
+  mockUrl.set('/dashboard/inventory?area=today');
+  serve({ ledger: true, creditWrite: true });
+  get.mockImplementation(async (path: string) => {
+    if (path === '/inventory/workspace/capabilities') return { kinds: {}, ledger: true, creditWrite: true };
+    if (path === '/inventory/workspace/overview')
+      return { asOf: '2026-11-06T06:00:00.000Z', purchases: [], queues: [{ kind: 'SUPPLIER_RETURN', _count: 2 }], recent: [], lowStock: 0, expiring: 0, unlinked: 0 };
+    if (path === '/pharmacy/purchase-returns-register') return returnsPage;
+    return { ...emptyRegister, creditHeld: {}, distributorPosition: null };
+  });
+  render(<InventoryWorkspace />);
+  fireEvent.click(await screen.findByRole('button', { name: /Supplier returns in progress/ }));
+  expect(await screen.findByRole('button', { name: 'Record credit note for return RET-1' })).toBeInTheDocument();
+  expect(new URLSearchParams(window.location.search).get('tab')).toBe('returns');
+});

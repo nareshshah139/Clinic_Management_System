@@ -11,6 +11,7 @@ import { PharmacyPurchaseRegisterService } from '../pharmacy-purchase-register.s
 import { PharmacyPurchaseReturnsRegisterService } from '../pharmacy-purchase-returns-register.service';
 import { PharmacyPurchasePaymentModeDto } from '../dto/pharmacy-purchase-ledger.dto';
 import type { PurchaseReturnsQuery } from '../pharmacy-purchase-returns-register';
+import { pharmacistDefaultPermissions } from './pharmacist-permissions';
 
 const databaseTests = process.env.PURCHASE_RETURNS_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -46,8 +47,8 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     );
   const position = async () => (await ledger.getDistributorSummaries(branchId)).distributors.find((summary) => summary.distributorGstin === linae)!;
 
-  async function raiseReturn(reference: string, quantity: number, post: 'CHALLAN' | 'POST' = 'CHALLAN') {
-    const draft = await workflow.saveDocument(actor, {
+  async function raiseReturn(reference: string, quantity: number, post: 'CHALLAN' | 'POST' = 'CHALLAN', by = actor) {
+    const draft = await workflow.saveDocument(by, {
       kind: 'SUPPLIER_RETURN',
       reference,
       requestKey: randomUUID(),
@@ -59,7 +60,7 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
         lines: [{ inventoryId: 'batch', quantity, unitPrice: 10, sourceLineId: purchaseLineId }],
       },
     });
-    return workflow.transition(actor, draft.id, { action: post, version: draft.version });
+    return workflow.transition(by, draft.id, { action: post, version: draft.version });
   }
 
   beforeAll(async () => {
@@ -140,7 +141,7 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
       await db.pharmacyPurchaseInvoiceItem.create({
         data: {
           purchaseInvoiceId: bills['LIN-1'], lineNumber: 1, productName: 'Synthetic Cream', manufacturer: 'Synthetic', packSize: '1',
-          packUnitType: 'TUBE', hsnCode: '3004', batchNumber: 'B-1', expiryMonth: 1, expiryYear: 2027, quantityPurchased: 100,
+          packUnitType: 'TUBE', hsnCode: '3004', batchNumber: 'B-1', expiryMonth: 1, expiryYear: 2027, quantityPurchased: 200,
           mrp: 20, discountPercent: 0, purchaseRate: 10, taxableAmount: 1000, gstAmount: 120, lineTotal: 1120, inventoryItemId: 'batch',
         },
       })
@@ -297,6 +298,25 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     expect((await row('RET-3')).credit!.available).toBe(results[1].status === 'fulfilled' ? 0 : 600);
   });
 
+  it.each([
+    ['PHARMACIST', 'kiran', () => pharmacistDefaultPermissions()],
+    ['DOCTOR', 'priya', () => []],
+    ['ADMIN', 'ravi', () => []],
+  ])('lets a %s raise a return, record its credit note and set it off', async (role, id, permissions) => {
+    await db.user.create({
+      data: { id, firstName: id, lastName: 'Synthetic', email: `${id}@example.test`, password: 'x', role: role as any, branchId, permissions: JSON.stringify(permissions()) },
+    });
+    const who = { id, branchId, role };
+    expect((await workflow.capabilities(who)).creditWrite).toBe(true);
+    await raiseReturn(`RET-${role}`, 1, 'CHALLAN', who);
+    const ret = await row(`RET-${role}`);
+    await workflow.recordCreditNote(who, ret.id, { requestKey: `cn-${role}`, version: ret.version, number: `CN-${role}`, date: '2026-11-05', amount: 11.2 });
+    const credit = (await row(`RET-${role}`)).credit!;
+    expect((await workspace.setOffOptions(who, { creditId: credit.id })).available).toBe(11.2);
+    await workspace.setOff(who, { requestKey: `set-off-${role}`, creditId: credit.id, allocations: [{ purchaseInvoiceId: bills['LIN-1'], amount: 11.2 }] });
+    expect((await row(`RET-${role}`)).state).toBe('USED');
+  });
+
   it('totals credit held and awaited returns, and filters and sorts the returns register', async () => {
     const page = await returnsPage({ sortBy: 'amount', sortDir: 'desc' });
     expect(page.rows.map((ret) => [ret.returnRef, ret.creditNote?.amount ?? ret.returnValue])).toEqual([
@@ -304,6 +324,9 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
       ['RET-1', 200],
       ['RET-OLD', 112],
       ['RET-2', 56],
+      ['RET-ADMIN', 11.2],
+      ['RET-DOCTOR', 11.2],
+      ['RET-PHARMACIST', 11.2],
     ]);
     expect(page.totals.held).toBe(712 - (await row('RET-3')).credit!.applied);
     expect(page.totals.awaited).toEqual({ amount: 56, count: 1 });

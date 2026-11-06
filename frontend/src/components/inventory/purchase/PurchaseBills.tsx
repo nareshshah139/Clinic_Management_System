@@ -57,24 +57,24 @@ export function PurchaseBills({
     <Tabs value={tab} onValueChange={(value: string) => onTabChange(withTab(value as PurchaseRegisterKind, NO_PARAMS))}>
       <section aria-label="Purchase bills" className="flex min-w-0 flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <TabsList aria-label="Purchase registers">
+          <TabsList aria-label="Purchase registers" className="shrink-0 flex-nowrap">
             {PURCHASE_REGISTERS.map((register) => (
-              <TabsTrigger key={register} value={register} className="min-h-10 px-4 text-sm">{PURCHASE_REGISTER_COPY[register].tab}</TabsTrigger>
+              <TabsTrigger key={register} value={register} className="min-h-10 px-3 text-sm sm:px-4">{PURCHASE_REGISTER_COPY[register].tab}</TabsTrigger>
             ))}
           </TabsList>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {tab === 'returns' ? (
-              <Button className="h-10 text-sm" aria-label="New return" onClick={onNewReturn}>
+              <Button className="h-10 max-w-none! whitespace-nowrap! text-sm" aria-label="New return" onClick={onNewReturn}>
                 <Plus aria-hidden="true" /> New<span className="max-sm:hidden"> return</span>
               </Button>
             ) : (
-              <Button className="h-10 text-sm" aria-label="New purchase" onClick={onNew}>
+              <Button className="h-10 max-w-none! whitespace-nowrap! text-sm" aria-label="New purchase" onClick={onNew}>
                 <Plus aria-hidden="true" /> New<span className="max-sm:hidden"> purchase</span>
               </Button>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="h-10 text-sm">
+                <Button variant="outline" className="h-10 max-w-none! whitespace-nowrap! text-sm">
                   More <ChevronDown aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>

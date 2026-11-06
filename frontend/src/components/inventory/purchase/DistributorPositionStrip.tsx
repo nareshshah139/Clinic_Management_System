@@ -21,9 +21,9 @@ export function DistributorPositionStrip({
       aria-label={`${name} position`}
       className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-border bg-muted px-3 py-2"
     >
-      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base tabular-nums">
+      <p className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-sm tabular-nums">
         <span className="font-semibold">{name}</span>
-        <span className="text-sm">all posted bills:</span>
+        <span>· all posted bills:</span>
         <span>
           Due <span className="font-semibold">{formatRupees(position.outstanding)}</span>
         </span>
@@ -34,12 +34,12 @@ export function DistributorPositionStrip({
         </span>
         <span aria-hidden="true">=</span>
         <span className="sr-only">equals</span>
-        <span className="font-semibold">
+        <span className="text-base font-semibold">
           {inFavour ? `${formatRupees(-position.net)} in your favour` : `Net payable ${formatRupees(position.net)}`}
         </span>
       </p>
       {canSetOff && position.creditHeld > 0 && position.outstanding > 0 && (
-        <Button type="button" variant="outline" className="h-9 text-sm" aria-haspopup="dialog" onClick={(event) => onSetOff(event.currentTarget)}>
+        <Button type="button" variant="outline" className="h-9 shrink-0 text-sm" aria-haspopup="dialog" onClick={(event) => onSetOff(event.currentTarget)}>
           Set off credit
         </Button>
       )}

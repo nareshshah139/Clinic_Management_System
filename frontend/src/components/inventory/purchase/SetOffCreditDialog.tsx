@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api';
 import { displayCalendarDate } from '@/lib/date-display';
+import { getISTDateString } from '@/lib/utils';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { cn } from '@/lib/utils';
 import { requestKey } from '@/components/inventory/workspace-model';
@@ -13,6 +14,11 @@ import { errorMessage } from '@/components/register/register-query';
 import { ActionDialog, DialogClose } from './ActionDialog';
 import { setOffFailure, type WriteFailure } from './purchase-returns-model';
 import { prefillSetOff, setOffProblem, type SetOffOptions, type SetOffResult } from './set-off-model';
+
+const shortDay = (day: string) => {
+  const text = displayCalendarDate(day);
+  return day.slice(0, 4) === getISTDateString().slice(0, 4) ? text.slice(0, -5) : text;
+};
 
 export type SetOffScope = { creditId: string } | { distributorGstin: string };
 
@@ -156,8 +162,8 @@ export function SetOffCreditDialog({
           <tbody>
             {options.bills.map((bill, index) => (
               <tr key={bill.id}>
-                <th scope="row" className="border-t border-border py-1.5 pr-2 text-left font-medium">{bill.billNo}</th>
-                <td className="whitespace-nowrap border-t border-border py-1.5 pr-2">{displayCalendarDate(bill.dueDate ?? bill.billDate)}</td>
+                <th scope="row" className="whitespace-nowrap border-t border-border py-1.5 pr-2 text-left font-medium">{bill.billNo}</th>
+                <td className="whitespace-nowrap border-t border-border py-1.5 pr-2">{bill.dueDate ? shortDay(bill.dueDate) : <span title={`No due date; billed ${displayCalendarDate(bill.billDate)}`}>—</span>}</td>
                 <td className="whitespace-nowrap border-t border-border py-1.5 text-right">{formatRupees(bill.payable)}</td>
                 <td className="border-t border-border py-1.5 pl-2">
                   <Input
@@ -170,7 +176,7 @@ export function SetOffCreditDialog({
                     onChange={(event) => setAmounts((current) => ({ ...current, [bill.id]: event.target.value }))}
                     aria-invalid={check?.invalidBill === bill.id || undefined}
                     aria-describedby={check?.invalidBill === bill.id && error ? errorId : undefined}
-                    className="ml-auto h-9 w-28 text-right text-sm tabular-nums md:text-sm"
+                    className="ml-auto h-9 w-24 text-right text-sm tabular-nums md:text-sm"
                   />
                 </td>
               </tr>

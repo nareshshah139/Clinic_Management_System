@@ -118,7 +118,8 @@ function renderBills(query = 'tab=returns', { canSettle = true } = {}) {
 }
 
 const table = () => screen.getByRole('table', { name: 'Purchase returns' });
-const rowOf = (ref: string) => within(table()).getByText(new RegExp(`(Return|Credit) ${ref}$`)).closest('tr')!;
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+const rowOf = (ref: string) => within(table()).getByRole('button', { name: new RegExp(`Open (Return|Credit) ${escape(ref)}$`) }).closest('tr')!;
 const statusCell = (ref: string) => rowOf(ref).cells[7];
 const amountCell = (ref: string) => rowOf(ref).cells[6];
 
@@ -159,11 +160,11 @@ it('lists returns for this financial year with the credit note columns, states a
     'Draft',
     'Cancelled',
   ]);
-  expect(rowOf('RET-1').cells[1]).toHaveTextContent('AwaitedOpen Return RET-1');
+  expect(rowOf('RET-1').cells[1]).toHaveTextContent('—No credit note yetOpen Return RET-1');
   expect(rowOf('RET-2').cells[1]).toHaveTextContent('CN-80Open Return RET-2');
   expect(rowOf('RET-2').cells[3]).toHaveTextContent('04 Nov');
   expect(rowOf('RET-3').cells[5]).toHaveTextContent('Linae DistributorsBill LIN-1 · Breakage');
-  expect(amountCell('RET-1')).toHaveTextContent('₹224.00est.');
+  expect(amountCell('RET-1')).toHaveTextContent('₹224.00return value');
   expect(amountCell('RET-2')).toHaveTextContent('₹100.00Return ₹112.00');
   expect(amountCell('RET-3')).toHaveTextContent(/^₹200\.00$/);
   expect(screen.getByText(/^Credit held/).textContent).toBe('Credit held ₹180.00 · Awaited ₹374.00 (2 returns) · 5 returns');
@@ -310,7 +311,7 @@ it('shows the distributor position on the Purchase tab: due less credit held is 
   );
   const { unmount } = renderBills(`gstin=${linae.gstin}`);
   const strip = await screen.findByRole('region', { name: 'Linae Distributors position' });
-  expect(strip).toHaveTextContent('Linae Distributorsall posted bills:Due ₹4,400.00−minusCredit held ₹180.00=equalsNet payable ₹4,220.00');
+  expect(strip).toHaveTextContent('Linae Distributors· all posted bills:Due ₹4,400.00−minusCredit held ₹180.00=equalsNet payable ₹4,220.00');
   fireEvent.click(within(strip).getByRole('button', { name: 'Set off credit' }));
   await screen.findByLabelText(/bill LIN-2,/);
   expect(get.mock.calls.find(([url]) => url === '/inventory/workspace/credits/set-off')![1]).toEqual({ distributorGstin: linae.gstin });

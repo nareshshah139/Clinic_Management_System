@@ -166,14 +166,15 @@ export function PurchaseReturnsRegister({
         <button id={openId(row.id)} type="button" onClick={() => onOpen(row.kind, row.id)} className={linkClass}>
           {row.creditNote ? (
             <span className="ref whitespace-nowrap font-semibold underline-offset-4">{row.creditNote.number}</span>
-          ) : row.state === 'AWAITED' ? (
-            <Badge variant="warning" className={badgeText}>Awaited</Badge>
           ) : (
-            <span aria-hidden="true">—</span>
+            <span>
+              <span aria-hidden="true">—</span>
+              <span className="sr-only">No credit note yet</span>
+            </span>
           )}
           <span className="ref whitespace-nowrap text-xs font-medium leading-tight underline-offset-4">
-            <span className="sr-only">Open </span>
-            {row.kind === 'CREDIT_NOTE' ? 'Credit' : 'Return'} {row.returnRef}
+            <span className="sr-only">Open {row.kind === 'CREDIT_NOTE' ? 'Credit' : 'Return'} </span>
+            {row.returnRef}
           </span>
         </button>
       ),
@@ -214,10 +215,8 @@ export function PurchaseReturnsRegister({
         const differs = row.creditNote && Math.abs(row.creditNote.amount - row.returnValue) > 0.01;
         return (
           <span className="flex flex-col items-end">
-            <span className={cn('font-semibold', row.state === 'CANCELLED' && 'line-through')}>
-              {formatRupees(amount)}
-              {!row.creditNote && <span className="ml-1 text-xs font-medium">est.</span>}
-            </span>
+            <span className={cn('font-semibold', row.state === 'CANCELLED' && 'line-through')}>{formatRupees(amount)}</span>
+            {!row.creditNote && <span className="text-xs font-medium leading-tight">return value</span>}
             {differs && <span className="text-xs font-medium leading-tight">Return {formatRupees(row.returnValue)}</span>}
           </span>
         );
