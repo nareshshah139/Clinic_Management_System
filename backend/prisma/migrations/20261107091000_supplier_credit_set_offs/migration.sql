@@ -17,7 +17,7 @@ CREATE INDEX IF NOT EXISTS "inventory_credit_allocations_setOffId_idx" ON "inven
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_credit_allocations_setOffId_fkey') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_credit_allocations_setOffId_fkey' AND conrelid = '"inventory_credit_allocations"'::regclass) THEN
     ALTER TABLE "inventory_credit_allocations" ADD CONSTRAINT "inventory_credit_allocations_setOffId_fkey"
       FOREIGN KEY ("setOffId") REFERENCES "inventory_credit_set_offs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
   END IF;
