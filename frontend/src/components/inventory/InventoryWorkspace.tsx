@@ -23,7 +23,9 @@ import { ReplenishmentCenter } from "./ReplenishmentCenter";
 import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
 import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
 import { WorkspaceStock } from "./WorkspaceStock";
-import { InventoryUpdates } from "./InventoryUpdates";
+import { InventoryApprovals } from "./InventoryApprovals";
+import { usePendingItemRequestCount } from "./use-pending-item-requests";
+import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
   fmtMoney,
@@ -109,6 +111,9 @@ const menus: Record<string, string[][]> = {
 export function InventoryWorkspace() {
   const { user } = useDashboardUser();
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
+  const canSeeApprovals = canReadEdits || user?.role === "RECEPTION";
+  const pendingItems = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""));
+  const taskLabel = (id: string, label: string) => (id === "approvals" && pendingItems > 0 ? `${label} (${pendingItems})` : label);
   const params = useSearchParams(),
     router = useRouter(),
     path = usePathname(),
@@ -222,7 +227,7 @@ export function InventoryWorkspace() {
     void loadPermissions();
     return () => { permissionRequest.current += 1; };
   }, [loadPermissions]);
-  const availableTasks = (menus[area] || []).filter(([id]) => id !== "approvals" || canReadEdits);
+  const availableTasks = (menus[area] || []).filter(([id]) => id !== "approvals" || canSeeApprovals);
   const primaryTasks = availableTasks.slice(0, 3);
   const moreTasks = availableTasks.slice(3);
   const switchTask = (id: string) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1" });
@@ -282,9 +287,9 @@ export function InventoryWorkspace() {
               })
             }
           >
-            {menus[area].filter(([id]) => id !== "approvals" || canReadEdits).map(([id, label]) => (
+            {menus[area].filter(([id]) => id !== "approvals" || canSeeApprovals).map(([id, label]) => (
               <option key={id} value={id}>
-                {label}
+                {taskLabel(id, label)}
               </option>
             ))}
           </select>
@@ -297,12 +302,12 @@ export function InventoryWorkspace() {
         >
           {primaryTasks.map(([id, label]) => (
             <Button key={id} size="sm" variant={view === id ? "secondary" : "ghost"}
-              aria-current={view === id ? "page" : undefined} onClick={() => switchTask(id)}>{label}</Button>
+              aria-current={view === id ? "page" : undefined} onClick={() => switchTask(id)}>{taskLabel(id, label)}</Button>
           ))}
           {moreTasks.length > 0 && <select aria-label="More inventory tasks" className="max-w-64 rounded-md border bg-background px-3 py-2 text-sm"
             value={moreTasks.some(([id]) => id === view) ? view : ""} onChange={event => switchTask(event.target.value)}>
             <option value="" disabled>More tasks…</option>
-            {moreTasks.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            {moreTasks.map(([id, label]) => <option key={id} value={id}>{taskLabel(id, label)}</option>)}
           </select>}
         </nav>
       )}
@@ -334,7 +339,7 @@ export function InventoryWorkspace() {
             />
           )}
           {area === "stock" && view === "approvals" && (
-            canReadEdits ? <InventoryUpdates /> : <p role="alert">You do not have access to price/stock approvals.</p>
+            canSeeApprovals ? <InventoryApprovals canReadEdits={canReadEdits} pendingItems={pendingItems} /> : <p role="alert">You do not have access to price/stock approvals.</p>
           )}
           {area === "stock" && view === "opening" && (
             <>

@@ -24,6 +24,7 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'pharmacy:drug:dosageForms',
     'pharmacy:drug:inventory-change:read',
     'pharmacy:drug:inventory-change:approve',
+    'inventory:item:approve',
     'pharmacy:invoice:read',
     'visits:*',
   ],

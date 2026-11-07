@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { InventoryController } from '../inventory.controller';
 import { InventoryService } from '../inventory.service';
 import { InventoryImportService } from '../inventory-import.service';
+import { InventoryItemRequestService } from '../inventory-item-request.service';
 import { InventoryItemType, TransactionType, UnitType } from '../dto/inventory.dto';
 
 describe('InventoryController', () => {
@@ -50,6 +51,8 @@ describe('InventoryController', () => {
     importStarterExcel: jest.fn(),
   };
 
+  const mockItemRequestService = { createOrRequest: jest.fn() };
+
   const mockUser = {
     id: 'user-123',
     branchId: 'branch-123',
@@ -67,6 +70,10 @@ describe('InventoryController', () => {
         {
           provide: InventoryImportService,
           useValue: mockInventoryImportService,
+        },
+        {
+          provide: InventoryItemRequestService,
+          useValue: mockItemRequestService,
         },
       ],
     }).compile();
@@ -96,15 +103,25 @@ describe('InventoryController', () => {
         currentStock: 0,
       };
 
-      mockInventoryService.createInventoryItem.mockResolvedValue(mockItem);
+      mockItemRequestService.createOrRequest.mockResolvedValue({ created: true, item: mockItem });
+      const res = { status: jest.fn() };
 
-      const result = await controller.createInventoryItem(createItemDto, { user: mockUser });
+      const result = await controller.createInventoryItem(createItemDto, { user: mockUser }, res);
 
       expect(result).toEqual(mockItem);
-      expect(mockInventoryService.createInventoryItem).toHaveBeenCalledWith(
-        createItemDto,
-        'branch-123',
-      );
+      expect(res.status).not.toHaveBeenCalled();
+      expect(mockItemRequestService.createOrRequest).toHaveBeenCalledWith(createItemDto, mockUser);
+    });
+
+    it('answers 202 with a pending-approval envelope when the request is queued', async () => {
+      const request = { id: 'req-1', status: 'PENDING' };
+      mockItemRequestService.createOrRequest.mockResolvedValue({ created: false, request });
+      const res = { status: jest.fn() };
+
+      const result = await controller.createInventoryItem({ name: 'X' } as any, { user: mockUser }, res);
+
+      expect(res.status).toHaveBeenCalledWith(202);
+      expect(result).toEqual({ status: 'PENDING_APPROVAL', request });
     });
   });
 
