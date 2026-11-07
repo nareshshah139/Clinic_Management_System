@@ -6,7 +6,9 @@ import { InventoryWorkflowService, observationOutdated } from '../inventory-work
 import { COUNT_APPROVERS, WorkflowActor, WorkflowLine } from '../inventory-workflow.types';
 import { jsonObject } from '../inventory-stock';
 import { displayDay } from '../supplier-return';
-import { cycleOn, cycleRequestKey, forecast, planDay, readReconciliation, type PlanBatch } from './reconciliation-cycle';
+import { randomUUID } from 'node:crypto';
+import { logInventoryAutomation } from '../inventory-observability';
+import { cycleOn, cycleRequestKey, forecast, planDay, readReconciliation, type PlanBatch, type ReconciliationSettings } from './reconciliation-cycle';
 
 export const COUNT_STATES = ['ASSIGNED', 'AWAITING_APPROVAL', 'APPROVED', 'REJECTED', 'POSTED_NO_DIFF', 'CANCELLED'] as const;
 export type CountState = (typeof COUNT_STATES)[number];
@@ -51,6 +53,11 @@ export class InventoryReconciliationService {
     private readonly workflow: InventoryWorkflowService,
   ) {}
 
+  /** The forecast plans with the people who can still count; someone deactivated or without access counts nothing. */
+  private counting(settings: ReconciliationSettings, staff: { id: string }[]) {
+    return { ...settings, assigneeIds: settings.assigneeIds.filter((id) => staff.some((person) => person.id === id)) };
+  }
+
   private async storedSettings(branchId: string) {
     const row = await this.prisma.inventoryWorkflowSettings.findUnique({ where: { branchId } });
     return readReconciliation(jsonObject(row?.settings), clinicDay(row?.updatedAt ?? new Date()));
@@ -79,26 +86,59 @@ export class InventoryReconciliationService {
     ]);
     const covered = new Set<string>();
     const reserved = new Set<string>();
+    const backlog = new Map<string, number>();
     for (const doc of docs as CountDoc[]) {
       const ids = (doc.payload?.lines || []).map((l: WorkflowLine) => l.inventoryId);
       if (doc.status !== 'DRAFT' && (signedDay(doc) ?? '') >= cycleStart) ids.forEach((id: string) => covered.add(id));
       else if (doc.status === 'DRAFT' || doc.status === 'AWAITING_APPROVAL') ids.forEach((id: string) => reserved.add(id));
+      if (doc.status === 'DRAFT' && doc.payload?.origin === 'CYCLE') backlog.set(doc.payload.assigneeId, (backlog.get(doc.payload.assigneeId) ?? 0) + ids.length);
     }
-    return { batches: items.map((b) => ({ ...b, lastCountedAt: b.lastCountedAt ?? null })), covered, reserved };
+    return { batches: items.map((b) => ({ ...b, lastCountedAt: b.lastCountedAt ?? null })), covered, reserved, backlog };
   }
 
   /**
    * @cc [owner:nareshshah139,label:product] reconciliation-daily-plan
    * Each IST clinic day a branch with reconciliation on MUST give every active assignee holding the
-   * reconciliation permission at most items-per-day uncounted in-stock batches, disjoint from other
-   * assignees and from open cycle counts. Repeated or concurrent runs on the same day create nothing more.
+   * reconciliation permission at most items-per-day uncounted in-stock batches, less the cycle lines
+   * they still have open, disjoint from other assignees and from every undecided count. Repeated or
+   * concurrent runs on the same day create nothing more. Unsigned counts held by someone who can no
+   * longer count go back to the pool.
    */
   async ensureToday(branchId: string, plannedBy: string) {
-    const settings = await this.storedSettings(branchId);
-    if (!settings.enabled) return 0;
+    const row = await this.prisma.inventoryWorkflowSettings.findUnique({ where: { branchId } });
     const today = clinicDay(new Date());
-    const cycle = cycleOn(settings, today);
+    const marker = `${today}|${row?.version ?? 0}`;
+    if (this.plannedFor.get(branchId) === marker) return 0;
+    const settings = readReconciliation(jsonObject(row?.settings), clinicDay(row?.updatedAt ?? new Date()));
     const staff = new Map((await this.workflow.countStaff(branchId)).map((person) => [person.id, person]));
+    await this.releaseFromFormerCounters(branchId, staff, plannedBy);
+    const created = settings.enabled ? await this.dealToday(branchId, settings, staff, today, plannedBy) : 0;
+    if (created !== null) this.plannedFor.set(branchId, marker);
+    return created ?? 0;
+  }
+
+  private readonly plannedFor = new Map<string, string>();
+
+  private async releaseFromFormerCounters(branchId: string, staff: Map<string, { id: string; name: string }>, plannedBy: string) {
+    const drafts = await this.openCounts(branchId, { status: 'DRAFT' });
+    const orphaned = drafts.filter((doc) => !staff.has(doc.payload?.assigneeId ?? doc.createdBy));
+    if (!orphaned.length) return;
+    const people = await peopleById(this.prisma, orphaned.map((doc) => doc.payload?.assigneeId ?? doc.createdBy));
+    await this.workflow.transaction(async (tx) => {
+      for (const doc of orphaned) {
+        const released = await tx.inventoryWorkflowDocument.updateMany({ where: { id: doc.id, branchId, status: 'DRAFT', version: doc.version }, data: { status: 'CANCELLED', version: { increment: 1 } } });
+        if (!released.count) continue;
+        const name = people.get(doc.payload?.assigneeId ?? doc.createdBy)?.name ?? 'The person it was assigned to';
+        await this.workflow.event(tx, { id: doc.id, status: 'CANCELLED', version: doc.version + 1 }, { id: plannedBy, branchId, role: 'SYSTEM' }, 'CANCEL', 'DRAFT', {
+          reason: `${name} can no longer count stock, so these batches went back to the cycle.`,
+          released: true,
+        });
+      }
+    });
+  }
+
+  private async dealToday(branchId: string, settings: ReconciliationSettings, staff: Map<string, { id: string; name: string; role: string }>, today: string, plannedBy: string) {
+    const cycle = cycleOn(settings, today);
     const assigneeIds = settings.assigneeIds.filter((id) => staff.has(id));
     const planned = await this.prisma.inventoryWorkflowDocument.findMany({
       where: { branchId, requestKey: { in: assigneeIds.map((id) => cycleRequestKey(cycle, today, id)) } },
@@ -108,8 +148,8 @@ export class InventoryReconciliationService {
     const plannedToday = new Set(assigneeIds.filter((id) => planned.some((doc) => doc.requestKey === cycleRequestKey(cycle, today, id))));
     try {
       return await this.workflow.transaction(async (tx) => {
-        const { batches, covered, reserved } = await this.coverage(tx, branchId, cycle.start);
-        const plan = planDay({ settings: { ...settings, assigneeIds }, today, batches, covered, reserved, plannedToday });
+        const { batches, covered, reserved, backlog } = await this.coverage(tx, branchId, cycle.start);
+        const plan = planDay({ settings: { ...settings, assigneeIds }, today, batches, covered, reserved, plannedToday, backlog });
         let created = 0;
         for (const assignment of plan.assignments) {
           const person = staff.get(assignment.assigneeId)!;
@@ -126,8 +166,18 @@ export class InventoryReconciliationService {
         return created;
       });
     } catch (error) {
-      if ((error as { code?: string })?.code === 'P2002') return 0;
+      if ((error as { code?: string })?.code === 'P2002') return null;
       throw error;
+    }
+  }
+
+  /** A reminder never breaks the page it sits on: a planning failure is logged and the page loads without today's new list. */
+  private async planQuietly(branchId: string, plannedBy: string) {
+    const started = Date.now();
+    try {
+      await this.ensureToday(branchId, plannedBy);
+    } catch (error) {
+      logInventoryAutomation({ runId: randomUUID(), scheduled: false, operation: 'stock_count', outcome: 'failed', error, durationMs: Date.now() - started });
     }
   }
 
@@ -169,26 +219,27 @@ export class InventoryReconciliationService {
 
   async summary(actor: WorkflowActor) {
     await this.workflow.authorize(actor, 'COUNT');
-    await this.ensureToday(actor.branchId, actor.id);
+    await this.planQuietly(actor.branchId, actor.id);
     const [settingsRow, caps] = await Promise.all([this.workflow.settings(actor), this.workflow.capabilities(actor)]);
     const settings = settingsRow.reconciliation;
     const today = clinicDay(new Date());
     const cycle = cycleOn(settings, today);
     const { batches, covered } = await this.coverage(this.prisma, actor.branchId, cycle.start);
     const coveredInStock = batches.filter((b) => covered.has(b.id)).length;
+    const staff = await this.workflow.countStaff(actor.branchId);
     const mine = await this.assigned(actor.branchId, await this.openCounts(actor.branchId, { status: 'DRAFT', payload: { path: ['assigneeId'], equals: actor.id } }));
     return {
       today,
       settings,
       settingsVersion: settingsRow.version,
       cycle,
-      forecast: forecast(settings, cycle, batches.length, coveredInStock),
+      forecast: forecast(this.counting(settings, staff), cycle, batches.length, coveredInStock),
       mine,
       approvals: COUNT_APPROVERS.has(actor.role) ? await this.approvalQueue(actor) : null,
       canCount: !!caps.kinds.COUNT?.write,
       canApprove: COUNT_APPROVERS.has(actor.role),
       canConfigure: caps.settings,
-      staff: caps.settings ? await this.workflow.countStaff(actor.branchId) : null,
+      staff: caps.settings ? staff : null,
     };
   }
 
@@ -201,10 +252,10 @@ export class InventoryReconciliationService {
   async todayCards(actor: WorkflowActor) {
     const caps = await this.workflow.capabilities(actor);
     if (!caps.kinds.COUNT?.read) return null;
-    await this.ensureToday(actor.branchId, actor.id);
+    await this.planQuietly(actor.branchId, actor.id);
     const mine = await this.openCounts(actor.branchId, { status: 'DRAFT', payload: { path: ['assigneeId'], equals: actor.id } });
     const due = mine.length
-      ? { counts: mine.length, items: mine.reduce((n, doc) => n + countFigures(doc.payload?.lines || []).items - countFigures(doc.payload?.lines || []).counted, 0) }
+      ? { counts: mine.length, items: mine.reduce((n, doc) => n + countFigures(doc.payload?.lines || []).items - countFigures(doc.payload?.lines || []).counted, 0), documentId: mine.length === 1 ? mine[0].id : null }
       : null;
     let behind = null;
     if (caps.settings) {
@@ -212,7 +263,7 @@ export class InventoryReconciliationService {
       if (settings.enabled) {
         const cycle = cycleOn(settings, clinicDay(new Date()));
         const { batches, covered } = await this.coverage(this.prisma, actor.branchId, cycle.start);
-        const outlook = forecast(settings, cycle, batches.length, batches.filter((b) => covered.has(b.id)).length);
+        const outlook = forecast(this.counting(settings, await this.workflow.countStaff(actor.branchId)), cycle, batches.length, batches.filter((b) => covered.has(b.id)).length);
         if (outlook.short || outlook.behind) behind = { remaining: outlook.remaining, message: outlook.message };
       }
     }

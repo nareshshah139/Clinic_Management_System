@@ -136,8 +136,8 @@ databaseTests('Stock reconciliation on PostgreSQL', () => {
   it('signs a count with no difference straight to posted, and one with a difference to the approval queue', async () => {
     at('2026-11-02T05:00:00Z');
     await reconciliation.ensureToday(branchId, 'scheduler');
-    expect(await reconciliation.todayCards(anil)).toEqual({ due: { counts: 1, items: 2 }, approvals: null, behind: null });
     const [count] = await openCounts('anil');
+    expect(await reconciliation.todayCards(anil)).toEqual({ due: { counts: 1, items: 2, documentId: count.id }, approvals: null, behind: null });
     const signed = await signAll(anil, count, (line) => (line.inventoryId === 'item-c' ? 7 : 10), 'Three strips of Clobetasol missing');
     expect(signed.status).toBe('AWAITING_APPROVAL');
     expect(await reconciliation.todayCards(anil)).toEqual({ due: null, approvals: null, behind: null });
@@ -277,7 +277,7 @@ databaseTests('Stock reconciliation on PostgreSQL', () => {
       await workflow.saveSettings(admin, { version: settings.version, reconciliation: { cycleDays: 7 } });
       await reconciliation.ensureToday(branchId, 'scheduler');
       const dealt = (await db.inventoryWorkflowDocument.findMany({ where: { branchId, kind: 'COUNT', status: 'DRAFT' } })).flatMap(batchesOf).sort();
-      expect(dealt).toEqual(['item-a', 'item-b', 'item-c', 'item-d', 'item-e', 'item-f']);
+      expect(dealt).toEqual(['item-a', 'item-b', 'item-c', 'item-d']);
     });
 
     it('refuses an on-demand count of a batch already on an open count, naming that count', async () => {
@@ -343,6 +343,84 @@ databaseTests('Stock reconciliation on PostgreSQL', () => {
       expect((await reconciliation.summary(meera)).mine.filter((count) => count.id === twin.id).map((count) => [count.items, count.counted, count.retype])).toEqual([[1, 0, 1]]);
       await enter(meera, twin.id, () => 10);
       expect((await signSaved(meera, twin.id, '')).status).toBe('POSTED');
+    });
+  });
+
+  describe('planning', () => {
+    it('plans once per IST day and settings revision, and a planning failure still returns the overview', async () => {
+      at('2026-11-02T05:00:00Z');
+      const staffLookups = jest.spyOn(workflow, 'countStaff');
+      await reconciliation.todayCards(anil);
+      expect(staffLookups).toHaveBeenCalledTimes(1);
+      await reconciliation.todayCards(anil);
+      await reconciliation.todayCards(meera);
+      expect(staffLookups).toHaveBeenCalledTimes(1);
+      const settings = await workflow.settings(admin);
+      await workflow.saveSettings(admin, { version: settings.version, reconciliation: { itemsPerPersonPerDay: 3 } });
+      staffLookups.mockClear();
+      await reconciliation.todayCards(anil);
+      expect(staffLookups).toHaveBeenCalledTimes(1);
+      expect((await openCounts('anil')).flatMap(batchesOf)).toEqual(['item-a', 'item-c']);
+      staffLookups.mockRestore();
+      const [count] = await openCounts('anil');
+      const failing = jest.spyOn(reconciliation, 'ensureToday').mockRejectedValueOnce(Object.assign(new Error('planner down'), { code: 'P1001' }));
+      const write = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      try {
+        expect(await reconciliation.todayCards(anil)).toEqual({ due: { counts: 1, items: 2, documentId: count.id }, approvals: null, behind: null });
+        const logged = write.mock.calls.map(([line]) => JSON.parse(String(line)));
+        expect(logged.map((line) => [line.event, line.operation, line.outcome, line.databaseCode])).toEqual([['inventory.automation', 'stock_count', 'failed', 'P1001']]);
+      } finally {
+        write.mockRestore();
+        failing.mockRestore();
+      }
+    });
+
+    it("counts each person's unsigned cycle lines against today's limit", async () => {
+      at('2026-11-02T05:00:00Z');
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      for (const doc of await openCounts('meera')) await signAll(meera, doc, (line) => line.systemStock);
+      at('2026-11-03T05:00:00Z');
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      expect([(await openCounts('anil')).map(batchesOf), (await openCounts('meera')).map(batchesOf)]).toEqual([[['item-a', 'item-c']], [['item-e', 'item-f']]]);
+      await configure({ enabled: true, cycleDays: 10, itemsPerPersonPerDay: 3, assigneeIds: ['anil', 'meera'], cycleStart: '2026-11-01' });
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      expect((await openCounts('anil')).map(batchesOf)).toEqual([['item-a', 'item-c']]);
+    });
+
+    it('releases unsigned counts held by someone who can no longer count, and forecasts without them', async () => {
+      at('2026-11-02T05:00:00Z');
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      for (const doc of await openCounts('anil')) await signAll(anil, doc, (line) => line.systemStock);
+      const [hers] = await openCounts('meera');
+      await db.user.update({ where: { id: 'meera' }, data: { isActive: false } });
+      try {
+        at('2026-11-03T05:00:00Z');
+        await reconciliation.ensureToday(branchId, 'scheduler');
+        const released = await db.inventoryWorkflowDocument.findUniqueOrThrow({ where: { id: hers.id }, include: { events: { orderBy: { version: 'asc' } } } });
+        expect([released.status, released.events.at(-1)?.action, (released.events.at(-1)?.detail as any).reason]).toEqual([
+          'CANCELLED', 'CANCEL', 'Meera Kulkarni can no longer count stock, so these batches went back to the cycle.',
+        ]);
+        expect((await openCounts('anil')).map(batchesOf)).toEqual([['item-b', 'item-d']]);
+        const summary = await reconciliation.summary(admin);
+        expect(summary.forecast.message).toBe('At 2 per person per day with 1 person, a 10-day cycle covers all 6 batches in stock.');
+      } finally {
+        await db.user.update({ where: { id: 'meera' }, data: { isActive: true } });
+      }
+    });
+
+    it('deals the batch whose last accepted count was signed longest ago first', async () => {
+      at('2026-11-02T05:00:00Z');
+      await configure({ enabled: true, cycleDays: 10, itemsPerPersonPerDay: 3, assigneeIds: ['anil', 'meera'], cycleStart: '2026-11-01' });
+      await db.inventoryItem.update({ where: { id: 'item-a' }, data: { metadata: JSON.stringify({ lastCountAt: '2026-10-30T10:00:00.000Z', lastSignedCountAt: '2026-10-20T10:00:00.000Z', ledgerCheckpoint: { coveredMovementIds: ['m1'] } }) } });
+      await db.inventoryItem.update({ where: { id: 'item-b' }, data: { metadata: JSON.stringify({ lastCountAt: '2026-10-25T10:00:00.000Z' }) } });
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      expect([(await openCounts('anil')).map(batchesOf), (await openCounts('meera')).map(batchesOf)]).toEqual([[['item-c', 'item-e', 'item-a']], [['item-d', 'item-f', 'item-b']]]);
+    });
+
+    it('keeps "cycle:" request keys for planned counts', async () => {
+      await expect(
+        workflow.saveDocument(anil, { kind: 'COUNT', reference: 'Mine', requestKey: 'cycle:2026-11-01:2026-11-02:anil', payload: { reason: 'On-demand stock count', lines: [{ inventoryId: 'item-a', quantity: 0 }] } }),
+      ).rejects.toThrow('Request keys starting with "cycle:" are reserved for planned stock counts');
     });
   });
 

@@ -234,11 +234,12 @@ export class InventoryWorkflowService {
       select: { id: true, firstName: true, lastName: true, role: true, permissions: true },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
-    const eligible = [];
-    for (const user of users)
-      if ((await this.grantsOf(user)).has(this.permissionFor('COUNT', true)))
-        eligible.push({ id: user.id, name: `${user.firstName} ${user.lastName}`.trim(), role: user.role });
-    return eligible;
+    const roles = new Map(
+      (await this.prisma.role.findMany({ where: { name: { in: [...new Set(users.map((user) => user.role))] as any } }, select: { name: true, permissions: true } })).map((role) => [role.name as string, role.permissions]),
+    );
+    return users
+      .filter((user) => permissionGrants(grantsForRole(user.role, [...parsePermissionList(user.permissions), ...parsePermissionList(roles.get(user.role))])).has(this.permissionFor('COUNT', true)))
+      .map((user) => ({ id: user.id, name: `${user.firstName} ${user.lastName}`.trim(), role: user.role }));
   }
   async saveSettings(actor: WorkflowActor, input: Record<string, any>) {
     if (!INVENTORY_APPROVERS.has(actor.role))
