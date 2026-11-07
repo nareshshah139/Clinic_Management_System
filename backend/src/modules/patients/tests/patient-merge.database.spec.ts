@@ -395,38 +395,39 @@ databaseTests('Patient merge with PostgreSQL', () => {
     },
   );
 
-  // Target merge-lock-released-after-run. Whether the unlock lands on the locking pooled connection is
-  // up to pool scheduling, so this probe fails only some runs and cannot pin the gap in CI.
-  it.skip(
-    'releases the merge lock after a run that merged a group, so another process can run next',
-    async () => {
-      const other = new PrismaClient({
-        datasourceUrl: process.env.PATIENT_MERGE_TEST_DATABASE_URL,
-      });
-      try {
-        await Promise.all(
-          Array.from(
-            { length: 8 },
-            () => prisma.$executeRaw`SELECT pg_sleep(0.05)`,
-          ),
+  it('releases the merge lock after every run, so the next run in any process merges again', async () => {
+    const other = new PrismaClient({
+      datasourceUrl: process.env.PATIENT_MERGE_TEST_DATABASE_URL,
+    });
+    try {
+      await Promise.all(
+        Array.from({ length: 8 }, () => prisma.$executeRaw`SELECT pg_sleep(0.05)`),
+      );
+      const runs: { skipped: boolean; merged: number; lockFree: boolean }[] = [];
+      for (let run = 0; run < 10; run++) {
+        await seedDuplicatePair();
+        let requestsInFlight = true;
+        const otherRequests = Promise.all(
+          Array.from({ length: 16 }, async () => {
+            while (requestsInFlight) await prisma.$executeRaw`SELECT pg_sleep(0.01)`;
+          }),
         );
-        const lockFreeAfterRun: boolean[] = [];
-        for (let run = 0; run < 3; run++) {
-          await seedDuplicatePair();
-          await new PatientDeduplicationService(
-            prisma as any,
-          ).runDuplicatePatientMergeJob();
-          const [row] = await other.$queryRaw<
-            { locked: boolean }[]
-          >`SELECT pg_try_advisory_lock(8042601) AS locked`;
-          lockFreeAfterRun.push(row.locked);
-          if (row.locked)
-            await other.$queryRaw`SELECT pg_advisory_unlock(8042601)`;
-        }
-        expect(lockFreeAfterRun).toEqual([true, true, true]);
-      } finally {
-        await other.$disconnect();
+        const summary = await new PatientDeduplicationService(
+          prisma as any,
+        ).runDuplicatePatientMergeJob();
+        requestsInFlight = false;
+        await otherRequests;
+        const [row] = await other.$queryRaw<
+          { locked: boolean }[]
+        >`SELECT pg_try_advisory_lock(8042601) AS locked`;
+        if (row.locked) await other.$queryRaw`SELECT pg_advisory_unlock(8042601)`;
+        runs.push({ skipped: summary.skipped, merged: summary.duplicateGroupsMerged, lockFree: row.locked });
       }
-    },
-  );
+      expect(runs).toEqual(
+        Array.from({ length: 10 }, () => ({ skipped: false, merged: 1, lockFree: true })),
+      );
+    } finally {
+      await other.$disconnect();
+    }
+  });
 });
