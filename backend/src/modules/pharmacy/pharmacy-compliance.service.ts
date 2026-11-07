@@ -11,9 +11,14 @@ import {
   ApplyPharmacyAuditAdjustmentsDto,
   CreatePharmacyAuditDto,
   ExpiryReturnWindowDto,
+  PharmacyDayWiseQueryDto,
   PharmacyGstSummaryQueryDto,
+  PharmacyItemMarginQueryDto,
   PharmacyMonthlyReportQueryDto,
 } from './dto/pharmacy-compliance.dto';
+import { CLINIC_TIME_ZONE, clinicDay, clinicPeriod } from './clinic-day';
+import { DayDocument, buildDayWiseReport, highestSequence } from './pharmacy-day-wise';
+import { buildItemMarginReport, marginLinesFrom, productCatalog } from './pharmacy-item-margin';
 import {
   money,
   purchaseLineSlab,
@@ -22,6 +27,9 @@ import {
   sortedSlabs,
   sumSlabs,
 } from './gst-slabs';
+
+const SALE_STATUSES = ['CONFIRMED', 'DISPENSED', 'COMPLETED'];
+const DAY_WISE_MAX_DAYS = 366;
 
 @Injectable()
 export class PharmacyComplianceService {
@@ -91,6 +99,156 @@ export class PharmacyComplianceService {
         ...sumSlabs(salesSlabs),
         slabs: sortedSlabs(salesSlabs),
       },
+    };
+  }
+
+  async getDayWiseSummary(query: PharmacyDayWiseQueryDto, branchId: string) {
+    const period = clinicPeriod(query.startDate, query.endDate, DAY_WISE_MAX_DAYS);
+    const db = this.prisma as any;
+    const range = { gte: period.start, lte: period.end };
+    const workflow = await this.workflowReportRows(branchId, period.start, period.end);
+    const workflowDocuments = (records: any[]): DayDocument[] =>
+      records.map((record) => ({
+        day: clinicDay(record.invoiceDate),
+        kind: record.kind,
+        reference: record.invoiceNumber,
+        numbering: 'REFERENCE',
+        lines: record.items.map((item: any) => (query.type === 'PURCHASE' ? purchaseLineSlab(item) : saleLineSlab(item))),
+      }));
+
+    let documents: DayDocument[];
+    let priorSequence = new Map<string, number>();
+    if (query.type === 'PURCHASE') {
+      const invoices = await db.pharmacyPurchaseInvoice.findMany({
+        where: { branchId, invoiceDate: range, status: 'STOCK_COMMITTED' },
+        include: { items: true },
+        orderBy: [{ invoiceDate: 'asc' }, { invoiceNumber: 'asc' }],
+      });
+      documents = [
+        ...invoices.map((invoice: any): DayDocument => ({
+          day: clinicDay(invoice.invoiceDate),
+          kind: 'PURCHASE_INVOICE',
+          reference: invoice.invoiceNumber,
+          numbering: 'SUPPLIER',
+          lines: (invoice.items || []).map(purchaseLineSlab),
+        })),
+        ...workflowDocuments(workflow.purchases),
+      ];
+    } else {
+      const [invoices, earlier] = await Promise.all([
+        db.pharmacyInvoice.findMany({
+          where: { branchId, invoiceDate: range, status: { in: SALE_STATUSES } },
+          include: { items: true },
+          orderBy: [{ invoiceDate: 'asc' }, { invoiceNumber: 'asc' }],
+        }),
+        db.pharmacyInvoice.findMany({
+          where: { branchId, invoiceDate: { lt: period.start }, status: { in: SALE_STATUSES } },
+          select: { invoiceNumber: true },
+          orderBy: { invoiceDate: 'desc' },
+          take: 50,
+        }),
+      ]);
+      documents = [
+        ...invoices.map((invoice: any): DayDocument => ({
+          day: clinicDay(invoice.invoiceDate),
+          kind: 'PHARMACY_INVOICE',
+          reference: invoice.invoiceNumber,
+          numbering: 'SEQUENCE',
+          lines: (invoice.items || []).map(saleLineSlab),
+        })),
+        ...workflowDocuments(workflow.sales),
+      ];
+      priorSequence = highestSequence(earlier.map((invoice: any) => invoice.invoiceNumber));
+    }
+
+    const draft = buildDayWiseReport({ days: period.days, documents, priorSequence, unissuedStatus: new Map() });
+    const missingNumbers = draft.rows.flatMap((row) => row.bills.missing.map((bill) => bill.invoiceNumber));
+    const unissued = missingNumbers.length
+      ? await db.pharmacyInvoice.findMany({
+          where: { branchId, invoiceNumber: { in: missingNumbers } },
+          select: { invoiceNumber: true, status: true },
+        })
+      : [];
+    const report = unissued.length
+      ? buildDayWiseReport({
+          days: period.days,
+          documents,
+          priorSequence,
+          unissuedStatus: new Map(unissued.map((invoice: any) => [invoice.invoiceNumber, invoice.status])),
+        })
+      : draft;
+
+    return {
+      type: query.type,
+      period: { startDate: period.startDate, endDate: period.endDate, timeZone: CLINIC_TIME_ZONE },
+      scope: {
+        branchId,
+        statuses: query.type === 'PURCHASE' ? ['STOCK_COMMITTED', 'POSTED', 'RELEASED'] : [...SALE_STATUSES, 'POSTED', 'RELEASED'],
+        draftsExcluded: true,
+        dateBasis: `Saved document date, grouped by ${CLINIC_TIME_ZONE} calendar day`,
+      },
+      ...report,
+    };
+  }
+
+  /**
+   * Item-wise margin for posted sales in the period. Purchase is the recorded cost of the units sold
+   * including the GST paid on them; Net GST is output GST less that input GST; so
+   * Profit = Sales Amt - Purchase - Net GST = taxable sale value - taxable cost.
+   */
+  async getItemMargin(query: PharmacyItemMarginQueryDto, branchId: string) {
+    const period = clinicPeriod(query.startDate, query.endDate);
+    const db = this.prisma as any;
+    const [invoices, batches, workflowDocuments] = await Promise.all([
+      db.pharmacyInvoice.findMany({
+        where: { branchId, invoiceDate: { gte: period.start, lte: period.end }, status: { in: SALE_STATUSES } },
+        include: { items: { include: { drug: true, package: true } } },
+      }),
+      db.inventoryItem.findMany({
+        where: { branchId },
+        select: {
+          id: true, name: true, category: true, manufacturer: true, unit: true, packSize: true, packUnit: true,
+          mrp: true, currentStock: true, gstRate: true, createdAt: true,
+          drugs: { select: { id: true, name: true, manufacturerName: true, packSizeLabel: true, category: true } },
+        },
+      }),
+      db.inventoryWorkflowDocument
+        ? db.inventoryWorkflowDocument.findMany({
+            where: { branchId, status: { in: ['POSTED', 'RELEASED'] }, kind: { in: ['COUNTER_SALE', 'SALES_RETURN'] } },
+          })
+        : [],
+    ]);
+    const documents = workflowDocuments.filter((doc: any) => {
+      const date = new Date(doc.payload?.date);
+      return date >= period.start && date <= period.end;
+    });
+    const sourceSaleIds = documents
+      .filter((doc: any) => doc.kind === 'SALES_RETURN')
+      .flatMap((doc: any) => doc.payload.lines.map((line: any) => line.sourceLineId).filter(Boolean));
+    const movements = await db.stockTransaction.findMany({
+      where: {
+        branchId,
+        OR: [
+          { type: 'SALE', reference: { in: invoices.map((invoice: any) => `INV-${invoice.invoiceNumber}`) } },
+          { reference: { in: documents.filter((doc: any) => doc.kind === 'COUNTER_SALE').map((doc: any) => `WF-${doc.reference}`) } },
+          { id: { in: sourceSaleIds } },
+        ],
+      },
+      select: { id: true, itemId: true, type: true, quantity: true, reference: true, notes: true },
+    });
+
+    const { lines, fallbackProducts } = marginLinesFrom({ invoices, documents, movements, batches });
+    return {
+      period: { startDate: period.startDate, endDate: period.endDate, timeZone: CLINIC_TIME_ZONE },
+      scope: {
+        branchId,
+        statuses: [...SALE_STATUSES, 'POSTED', 'RELEASED'],
+        draftsExcluded: true,
+        dateBasis: `Saved document date, ${CLINIC_TIME_ZONE} calendar days`,
+        costBasis: 'Cost per stock unit recorded on the sale movement (purchase rate before GST); a missing or zero cost is reported as unknown',
+      },
+      search: query.search?.trim() || null,
+      ...buildItemMarginReport({ lines, catalog: productCatalog(batches), fallbackProducts, search: query.search }),
     };
   }
 
