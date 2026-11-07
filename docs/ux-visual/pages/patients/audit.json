@@ -468,7 +468,7 @@
    ],
    "ths": [
     {
-     "text": "Patient ▲",
+     "text": "Patient \u25b2",
      "w": 197
     },
     {
@@ -682,7 +682,7 @@
    ],
    "ths": [
     {
-     "text": "Patient ▲",
+     "text": "Patient \u25b2",
      "w": 197
     },
     {
@@ -804,6 +804,11 @@
    "WhatsApp",
    "Start Visit",
    "ID: ztf5oa6l"
+  ],
+  "auditCaveats": [
+   "geometry-audit wrappedControls=0 is a miss: it skips buttons containing svg, which is every action button that wraps per-character",
+   "layout-audit overlaps in dialog states are dialog-vs-background pairs (false positives)",
+   "lowContrast entries on oklch colours are false positives"
   ]
  },
  "audits": {
@@ -832,7 +837,7 @@
       "scrollH": 1533
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 566,
       "scrollH": 8662
      }
@@ -860,7 +865,7 @@
       "pctOfViewport": 289
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -1107,7 +1112,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -1135,7 +1140,7 @@
       "ratio": 2.47
      },
      {
-      "el": "th.text-foreground.h-11 \"Patient ▲\"",
+      "el": "th.text-foreground.h-11 \"Patient \u25b2\"",
       "ratio": 1.09
      },
      {
@@ -1198,7 +1203,7 @@
     "overlaps": [],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 42,
       "y": 980,
       "w": 1124,
@@ -1418,7 +1423,7 @@
       "scrollH": 1533
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 566,
       "scrollH": 8662
      }
@@ -1446,7 +1451,7 @@
       "pctOfViewport": 289
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -1698,7 +1703,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -1726,7 +1731,7 @@
       "ratio": 2.47
      },
      {
-      "el": "th.text-foreground.h-11 \"Patient ▲\"",
+      "el": "th.text-foreground.h-11 \"Patient \u25b2\"",
       "ratio": 1.09
      },
      {
@@ -1838,7 +1843,7 @@
     ],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 42,
       "y": 980,
       "w": 1124,
@@ -2011,7 +2016,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -2319,7 +2324,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-gray-600 \"—\"",
+      "el": "div.text-gray-600 \"\u2014\"",
       "ratio": 2.46
      },
      {
@@ -2460,7 +2465,7 @@
       "scrollH": 1475
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 715,
       "scrollH": 8662
      }
@@ -2488,7 +2493,7 @@
       "pctOfViewport": 112
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -2802,7 +2807,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -2829,7 +2834,7 @@
     "overlaps": [],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 306,
       "y": 774,
       "w": 1124,
@@ -3115,7 +3120,7 @@
       "scrollH": 1475
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 715,
       "scrollH": 8662
      }
@@ -3143,7 +3148,7 @@
       "pctOfViewport": 112
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -3462,7 +3467,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -3580,7 +3585,7 @@
     ],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 306,
       "y": 774,
       "w": 1124,
@@ -3825,7 +3830,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -4181,7 +4186,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-gray-600 \"—\"",
+      "el": "div.text-gray-600 \"\u2014\"",
       "ratio": 2.46
      },
      {
@@ -4258,7 +4263,7 @@
       "scrollH": 1168
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 628,
       "scrollH": 8662
      }
@@ -4286,7 +4291,7 @@
       "pctOfViewport": 68
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -4605,7 +4610,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -4632,7 +4637,7 @@
     "overlaps": [],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 306,
       "y": 554,
       "w": 1124,
@@ -4938,7 +4943,7 @@
       "scrollH": 1372
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 628,
       "scrollH": 8662
      }
@@ -4966,7 +4971,7 @@
       "pctOfViewport": 68
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -5312,7 +5317,7 @@
     "overlaps": [],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 306,
       "y": 758,
       "w": 1124,
@@ -5368,7 +5373,7 @@
       "scrollH": 1168
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 628,
       "scrollH": 8662
      }
@@ -5403,7 +5408,7 @@
       "pctOfViewport": 68
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -5720,7 +5725,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -5784,7 +5789,7 @@
     ],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 306,
       "y": 554,
       "w": 1124,
@@ -6034,7 +6039,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -6316,7 +6321,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -6597,7 +6602,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -6887,7 +6892,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-gray-600 \"—\"",
+      "el": "div.text-gray-600 \"\u2014\"",
       "ratio": 2.46
      },
      {
@@ -7181,7 +7186,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-gray-600 \"—\"",
+      "el": "div.text-gray-600 \"\u2014\"",
       "ratio": 2.46
      },
      {
@@ -7477,7 +7482,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-gray-600 \"—\"",
+      "el": "div.text-gray-600 \"\u2014\"",
       "ratio": 2.46
      },
      {
@@ -7592,7 +7597,7 @@
       "scrollH": 1168
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 628,
       "scrollH": 8662
      }
@@ -7620,7 +7625,7 @@
       "pctOfViewport": 68
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -7939,7 +7944,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -7966,7 +7971,7 @@
     "overlaps": [],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 266,
       "y": 554,
       "w": 1124,
@@ -8019,7 +8024,7 @@
       "scrollH": 1168
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 628,
       "scrollH": 8662
      }
@@ -8047,7 +8052,7 @@
       "pctOfViewport": 68
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -8366,7 +8371,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -8393,7 +8398,7 @@
     "overlaps": [],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 306,
       "y": 554,
       "w": 1124,
@@ -8446,7 +8451,7 @@
       "scrollH": 1533
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 566,
       "scrollH": 8662
      }
@@ -8474,7 +8479,7 @@
       "pctOfViewport": 289
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -8721,7 +8726,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -8749,7 +8754,7 @@
       "ratio": 2.47
      },
      {
-      "el": "th.text-foreground.h-11 \"Patient ▲\"",
+      "el": "th.text-foreground.h-11 \"Patient \u25b2\"",
       "ratio": 1.09
      },
      {
@@ -8812,7 +8817,7 @@
     "overlaps": [],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 42,
       "y": 980,
       "w": 1124,
@@ -8865,7 +8870,7 @@
       "scrollH": 1475
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 715,
       "scrollH": 8662
      }
@@ -8893,7 +8898,7 @@
       "pctOfViewport": 112
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -9207,7 +9212,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -9234,7 +9239,7 @@
     "overlaps": [],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 306,
       "y": 774,
       "w": 1124,
@@ -9287,7 +9292,7 @@
       "scrollH": 1168
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 628,
       "scrollH": 8662
      }
@@ -9315,7 +9320,7 @@
       "pctOfViewport": 68
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -9634,7 +9639,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -9661,7 +9666,7 @@
     "overlaps": [],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 306,
       "y": 554,
       "w": 1124,
@@ -9885,7 +9890,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-gray-600 \"—\"",
+      "el": "div.text-gray-600 \"\u2014\"",
       "ratio": 2.46
      },
      {
@@ -9992,7 +9997,7 @@
       "scrollH": 1168
      },
      {
-      "el": "div.relative.max-h-[70vh] \"Patient ▲Patient CodeAge Gende\"",
+      "el": "div.relative.max-h-[70vh] \"Patient \u25b2Patient CodeAge Gende\"",
       "clientH": 628,
       "scrollH": 8662
      }
@@ -10020,7 +10025,7 @@
       "pctOfViewport": 68
      },
      {
-      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1—36 yrsM\"",
+      "el": "tr.data-[state=selected]:bg-muted.border-b \"JDJohn DoeID: t-seed-1\u201436 yrsM\"",
       "w": 1124,
       "h": 783,
       "fillPct": 7,
@@ -10343,7 +10348,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-xs.text-gray-400 \"Try: 9xxx… (phone), abha…, @em\"",
+      "el": "div.text-xs.text-gray-400 \"Try: 9xxx\u2026 (phone), abha\u2026, @em\"",
       "ratio": 2.52
      },
      {
@@ -10366,7 +10371,7 @@
     "overlaps": [],
     "fixedOverlays": [
      {
-      "el": "thead.sticky.top-0 \"Patient ▲Patient CodeAge Gende\"",
+      "el": "thead.sticky.top-0 \"Patient \u25b2Patient CodeAge Gende\"",
       "x": 306,
       "y": 554,
       "w": 1124,
@@ -10594,7 +10599,7 @@
       "ratio": 2.57
      },
      {
-      "el": "div.text-gray-600 \"—\"",
+      "el": "div.text-gray-600 \"\u2014\"",
       "ratio": 2.46
      },
      {
