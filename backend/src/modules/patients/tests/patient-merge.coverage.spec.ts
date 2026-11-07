@@ -49,6 +49,7 @@ async function modelsRepointedByMerge(): Promise<Set<string>> {
   const repointed = new Set<string>();
   const tx = new Proxy({} as Record<string, unknown>, {
     get(_, delegate: string) {
+      if (delegate === '$queryRaw') return prisma.$queryRaw;
       if (delegate === 'patient')
         return {
           findMany: async () => [kept, duplicate],

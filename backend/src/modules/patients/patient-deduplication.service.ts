@@ -19,6 +19,9 @@ type MergeSummary = {
   visitsRenumbered: number;
 };
 
+/** Well under the 6-hour schedule; Prisma's 5-second default would end the lock mid-run. */
+const MERGE_RUN_TIMEOUT_MS = 60 * 60 * 1000;
+
 @Injectable()
 export class PatientDeduplicationService {
   private readonly logger = new Logger(PatientDeduplicationService.name);
@@ -39,19 +42,34 @@ export class PatientDeduplicationService {
    * A run MUST skip, reading and writing no patient rows, while another process holds the merge
    * advisory lock.
    */
+  /**
+   * @cc [owner:nareshshah139,label:reliability] merge-lock-released-after-run
+   * The merge lock MUST be held only by one transaction that spans the run, so Postgres releases it
+   * when the run ends, fails or loses its connection, and the next run in any process can proceed.
+   */
   async runDuplicatePatientMergeJob(): Promise<MergeSummary> {
-    const locked = await this.acquireAdvisoryLock();
-    if (!locked) {
-      this.logger.debug('Skipping duplicate patient merge job because another instance holds the advisory lock.');
-      return {
-        skipped: true,
-        duplicateGroupsFound: 0,
-        duplicateGroupsMerged: 0,
-        patientsArchived: 0,
-        visitsRenumbered: 0,
-      };
-    }
+    return this.prisma.$transaction(
+      async (lockTx) => {
+        const rows = await lockTx.$queryRaw<Array<{ locked: boolean }>>`
+          SELECT pg_try_advisory_xact_lock(${this.advisoryLockKey}) AS locked
+        `;
+        if (!rows[0]?.locked) {
+          this.logger.debug('Skipping duplicate patient merge job because another instance holds the advisory lock.');
+          return {
+            skipped: true,
+            duplicateGroupsFound: 0,
+            duplicateGroupsMerged: 0,
+            patientsArchived: 0,
+            visitsRenumbered: 0,
+          };
+        }
+        return this.mergeAllDuplicateGroups();
+      },
+      { timeout: MERGE_RUN_TIMEOUT_MS },
+    );
+  }
 
+  private async mergeAllDuplicateGroups(): Promise<MergeSummary> {
     try {
       const candidates = await this.prisma.patient.findMany({
         where: { isArchived: false },
@@ -103,8 +121,6 @@ export class PatientDeduplicationService {
     } catch (error) {
       this.logger.error('Automatic duplicate patient merge job failed.', error instanceof Error ? error.stack : undefined);
       throw error;
-    } finally {
-      await this.releaseAdvisoryLock();
     }
   }
 
@@ -377,28 +393,5 @@ export class PatientDeduplicationService {
       // ignore malformed legacy JSON; we replace it with a safe object
     }
     return {};
-  }
-
-  private async acquireAdvisoryLock(): Promise<boolean> {
-    const rows = await this.prisma.$queryRaw<Array<{ locked: boolean }>>`
-      SELECT pg_try_advisory_lock(${this.advisoryLockKey}) AS locked
-    `;
-    return Boolean(rows[0]?.locked);
-  }
-
-  /**
-   * @cc [owner:nareshshah139,label:reliability;target] merge-lock-released-after-run
-   * Every run MUST release the merge lock when it ends, so the next scheduled run in any process can
-   * proceed. Today the unlock may run on another pooled connection and leak the lock.
-   * This is a target obligation, not a pass claim.
-   */
-  private async releaseAdvisoryLock(): Promise<void> {
-    try {
-      await this.prisma.$queryRaw`
-        SELECT pg_advisory_unlock(${this.advisoryLockKey})
-      `;
-    } catch (error) {
-      this.logger.warn('Failed to release advisory lock for duplicate patient merge job.');
-    }
   }
 }

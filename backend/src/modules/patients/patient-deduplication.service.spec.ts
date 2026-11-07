@@ -80,6 +80,7 @@ describe('PatientDeduplicationService', () => {
   it('skips the merge run when another instance holds the advisory lock', async () => {
     const prisma = {
       $queryRaw: jest.fn().mockResolvedValueOnce([{ locked: false }]),
+      $transaction: jest.fn(async (fn: any) => fn(prisma)),
       patient: { findMany: jest.fn() },
     } as any;
 
@@ -132,11 +133,8 @@ describe('PatientDeduplicationService', () => {
     ]);
 
     const prisma = {
-      $queryRaw: jest
-        .fn()
-        .mockResolvedValueOnce([{ locked: true }])
-        .mockResolvedValueOnce([{ unlocked: true }]),
-      $transaction: jest.fn(async (fn: any) => fn(tx)),
+      $queryRaw: jest.fn().mockResolvedValueOnce([{ locked: true }]),
+      $transaction: jest.fn(async (fn: any) => fn({ ...tx, $queryRaw: prisma.$queryRaw })),
       patient: {
         findMany: jest.fn().mockResolvedValue([
           {
