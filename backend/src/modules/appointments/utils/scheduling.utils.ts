@@ -34,22 +34,30 @@ export class SchedulingUtils {
   }
 
   /**
+   * Minutes since midnight for a slot, also reading single-digit hours so slots stored before
+   * isValidTimeSlot was strict still compare; null when the slot cannot be read.
+   */
+  static slotMinutes(slot: string): { start: number; end: number } | null {
+    const match = /^(\d{1,2}):([0-5]\d)-(\d{1,2}):([0-5]\d)$/.exec(slot);
+    if (!match) return null;
+    const [startHour, startMinute, endHour, endMinute] = match.slice(1).map(Number);
+    if (startHour > 23 || endHour > 23) return null;
+    return { start: startHour * 60 + startMinute, end: endHour * 60 + endMinute };
+  }
+
+  /**
    * @cc [owner:nareshshah139,label:integrity] slot-overlap-is-half-open-and-symmetric
-   * Two well-formed same-day slots (zero-padded HH:MM-HH:MM, end after start) overlap only when each
-   * starts before the other ends: a slot ending exactly when the next starts MUST NOT overlap, and
-   * containment, identity and partial overlap MUST overlap, in either argument order. Booking and
-   * rescheduling rely on this to refuse double-booking without refusing back-to-back visits.
+   * Two same-day slots overlap only when each starts before the other ends, compared in minutes, so
+   * a stored single-digit hour ("9:00-10:00") compares like its zero-padded form: a slot ending
+   * exactly when the next starts MUST NOT overlap, and containment, identity and partial overlap
+   * MUST overlap, in either argument order. Booking and rescheduling rely on this to refuse
+   * double-booking without refusing back-to-back visits.
    */
   static doTimeSlotsOverlap(slot1: string, slot2: string): boolean {
-    const time1 = this.parseTimeSlot(slot1);
-    const time2 = this.parseTimeSlot(slot2);
-
-    const start1 = new Date(`2000-01-01T${time1.start}:00`);
-    const end1 = new Date(`2000-01-01T${time1.end}:00`);
-    const start2 = new Date(`2000-01-01T${time2.start}:00`);
-    const end2 = new Date(`2000-01-01T${time2.end}:00`);
-
-    return start1 < end2 && start2 < end1;
+    const a = this.slotMinutes(slot1);
+    const b = this.slotMinutes(slot2);
+    if (!a || !b) return false;
+    return a.start < b.end && b.start < a.end;
   }
 
   /**
@@ -120,16 +128,15 @@ export class SchedulingUtils {
   }
 
   /**
-   * @cc [owner:nareshshah139,label:integrity;target] bookable-slot-is-comparable
-   * A slot accepted for booking MUST be zero-padded HH:MM-HH:MM with an end after its start, because
-   * overlap checks only work on that shape. This is a target obligation, not a pass claim: unpadded
-   * hours ("9:00-10:00") and reversed or overnight slots ("10:30-10:00", "23:30-00:30") are
-   * accepted today and then never overlap anything, so they bypass the double-booking check.
+   * @cc [owner:nareshshah139,label:validation] bookable-slot-is-comparable
+   * A slot accepted for booking or rescheduling MUST be zero-padded HH:MM-HH:MM within one day with
+   * its end after its start. Unpadded hours ("9:00-10:00"), empty, reversed and overnight slots
+   * ("10:30-10:00", "23:30-00:30") MUST be refused, so every stored new slot compares for overlap.
    */
   static isValidTimeSlot(slot: string): boolean {
-    const timeSlotRegex =
-      /^([01]?[0-9]|2[0-3]):[0-5][0-9]-([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    return timeSlotRegex.test(slot);
+    if (!/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(slot)) return false;
+    const minutes = this.slotMinutes(slot);
+    return minutes !== null && minutes.end > minutes.start;
   }
 
   /**

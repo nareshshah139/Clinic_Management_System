@@ -457,6 +457,9 @@ export class AppointmentsService {
     branchId: string,
     callerUserId?: string,
   ) {
+    if (!SchedulingUtils.isValidTimeSlot(rescheduleDto.slot)) {
+      throw new BadRequestException('Invalid time slot format. Use HH:MM-HH:MM');
+    }
     const appointment = await this.findOne(id, branchId);
 
     // Check if appointment can be rescheduled
@@ -618,9 +621,7 @@ export class AppointmentsService {
       .map((apt) => apt.slot)
       .filter(
         (s) =>
-          typeof s === 'string' &&
-          s.length > 0 &&
-          SchedulingUtils.isValidTimeSlot(s),
+          typeof s === 'string' && SchedulingUtils.slotMinutes(s) !== null,
       );
 
     // If room is specified, also check room availability
@@ -646,9 +647,7 @@ export class AppointmentsService {
         .map((apt) => apt.slot)
         .filter(
           (s) =>
-            typeof s === 'string' &&
-            s.length > 0 &&
-            SchedulingUtils.isValidTimeSlot(s),
+            typeof s === 'string' && SchedulingUtils.slotMinutes(s) !== null,
         );
       bookedSlots.push(...roomBookedSlots);
     }

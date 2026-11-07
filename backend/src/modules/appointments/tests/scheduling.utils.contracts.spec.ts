@@ -111,19 +111,21 @@ describe('bookable-slot-is-comparable', () => {
     expect(SchedulingUtils.isValidTimeSlot(slot)).toBe(false);
   });
 
-  it.failing.each(['9:00-10:00', '10:30-10:00', '23:30-00:30', '10:00-10:00'])(
-    'target: rejects %s because it cannot be compared for overlap',
+  it.each(['9:00-10:00', '10:30-10:00', '23:30-00:30', '10:00-10:00'])(
+    'rejects %s, which could not be compared for overlap',
     (slot) => {
       expect(SchedulingUtils.isValidTimeSlot(slot)).toBe(false);
     },
   );
 
   it.each([
-    ['9:00-10:00', '09:30-10:30'],
-    ['10:30-10:00', '10:10-10:20'],
-  ])('pins the gap: accepted %s does not overlap %s today', (bad, other) => {
-    expect(SchedulingUtils.isValidTimeSlot(bad)).toBe(true);
-    expect(SchedulingUtils.doTimeSlotsOverlap(bad, other)).toBe(false);
+    ['9:00-10:00', '09:30-10:30', true],
+    ['9:00-9:30', '09:30-10:00', false],
+    ['9:15-9:45', '09:00-10:00', true],
+    ['garbage', '09:00-10:00', false],
+  ])('compares a stored %s with %s in minutes (overlap %s)', (stored, other, expected) => {
+    expect(SchedulingUtils.doTimeSlotsOverlap(stored, other)).toBe(expected);
+    expect(SchedulingUtils.doTimeSlotsOverlap(other, stored)).toBe(expected);
   });
 });
 

@@ -97,7 +97,7 @@ databaseTests('Per-doctor token queue on PostgreSQL', () => {
     await expect(service.reschedule(other.id, { date, slot: '9:15-9:45' } as any, 'branch'))
       .rejects.toMatchObject({ status: 400 });
     const moved = await db.appointment.findUnique({ where: { id: other.id } });
-    expect(moved.slot).toBe('11:00-11:30');
+    expect(moved?.slot).toBe('11:00-11:30');
   });
 
   it('treats a stored unpadded slot as taking its time', async () => {
