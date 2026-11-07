@@ -20,6 +20,7 @@ import { ItemMarginReport } from "@/components/pharmacy/ItemMarginReport";
 import { DistributorAnalytics } from "@/components/pharmacy/DistributorAnalytics";
 import { PharmacyInventoryStarterImport } from "@/components/pharmacy/PharmacyInventoryStarterImport";
 import { PharmacyInvoiceList } from "@/components/pharmacy/PharmacyInvoiceList";
+import { TradeTermsWorkspace } from "@/components/pharmacy/TradeTermsWorkspace";
 import { SupplierCreditPanel } from "./SupplierCreditPanel";
 import { ReplenishmentCenter } from "./ReplenishmentCenter";
 import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
@@ -53,6 +54,7 @@ const menus: Record<string, string[][]> = {
     ["csv", "Import CSV"],
     ["gmail", "Gmail intake"],
     ["suppliers", "Suppliers"],
+    ["terms", "Terms of Trade"],
     ["ledger", "Payments & dues"],
     ["credits", "Credits & vouchers"],
     ["INWARD_CHALLAN", "Inward challans"],
@@ -405,6 +407,7 @@ export function InventoryWorkspace() {
               onBills={(gstin: string) => navigate({ view: "register", gstin })}
             />
           )}
+          {area === "purchases" && view === "terms" && <TradeTermsWorkspace />}
           {area === "purchases" &&
             view === "ledger" &&
             (caps.ledger ? (
