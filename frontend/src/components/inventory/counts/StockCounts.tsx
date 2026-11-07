@@ -140,7 +140,7 @@ function MyCounts({ summary, onOpen, onSettings }: { summary: ReconciliationSumm
       {mine.length ? (
         <ul aria-label="Counts assigned to you" className="flex flex-col gap-2">
           {mine.map((count, index) => {
-            const left = count.items - count.counted;
+            const left = count.items - count.counted - count.retype;
             const label = count.counted ? 'Continue counting' : 'Start counting';
             return (
               <li key={count.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
@@ -160,7 +160,8 @@ function MyCounts({ summary, onOpen, onSettings }: { summary: ReconciliationSumm
                   </span>
                   <span className="text-sm tabular-nums">
                     {itemCount(count.items)} · {count.counted} counted
-                    {left ? ` · ${left} left` : ' · ready to sign off'}
+                    {count.retype > 0 && <span className="font-medium text-warning-text"> · {count.retype} to type again</span>}
+                    {left > 0 ? ` · ${left} left` : count.retype ? '' : ' · ready to sign off'}
                   </span>
                 </div>
                 <Button variant={index === 0 ? 'default' : 'outline'} onClick={() => onOpen(count.id)} aria-label={`${label}: ${count.reference}`}>

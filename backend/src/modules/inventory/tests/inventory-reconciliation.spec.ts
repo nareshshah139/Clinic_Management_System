@@ -119,7 +119,16 @@ describe('Inventory reconciliation recovery', () => {
     expect(state.documents.find((d: any) => d.id === 'hold').status).toBe('POSTED');
   });
 
-  it.each(['DRAFT', 'AWAITING_APPROVAL', 'APPROVED', 'REJECTED', 'CANCELLED', 'POSTED', 'REVERSED'])('starts a fresh uncounted attempt from %s without reusing stale measurements', async (status) => {
+  it.each(['DRAFT', 'AWAITING_APPROVAL'])('refuses to recount a %s count, which is still open on its batch', async (status) => {
+    const { state, service, add } = fixture();
+    add('old-count', 'COUNT', 0, { assigneeId: 'operator', lines: [{ id: 'old-line', inventoryId: 'batch', name: 'Product', batchNumber: 'B-7', quantity: 0, systemStock: 5, physicalStock: 4 }] }).status = status;
+    await expect(service.transition(actor, 'old-count', { version: 1, action: 'RECOUNT' })).rejects.toMatchObject({
+      response: { code: 'COUNT_BATCH_OPEN', message: `Product, batch B-7, is already on your count of 24/10/2026, ${status === 'DRAFT' ? 'not signed yet. Count it there.' : 'signed and waiting for approval. Approve or reject that count first.'}` },
+    });
+    expect(state.documents.map((d: any) => d.id)).toEqual(['old-count']);
+  });
+
+  it.each(['APPROVED', 'REJECTED', 'CANCELLED', 'POSTED', 'REVERSED'])('starts a fresh uncounted attempt from %s without reusing stale measurements', async (status) => {
     const { state, service, add } = fixture();
     add('old-count', 'COUNT', 0, { lines: [{ id: 'old-line', inventoryId: 'batch', quantity: 0, systemStock: 5, physicalStock: 4, countRevision: 'old' }] }).status = status;
     const result = await service.transition(actor, 'old-count', { version: 1, action: 'RECOUNT' });
@@ -403,6 +412,36 @@ describe('Stock count sign-off', () => {
     const recounted = await service.saveCountProgress(anil, 'count', { version: 3, lines: [{ id: 'line', physicalStock: 7 }] });
     expect([recounted.payload.lines[0].systemStock, recounted.payload.lines[0].physicalStock]).toEqual([8, 7]);
     expect(state.movements).toEqual([]);
+  });
+
+  it('stamps when each quantity was entered and clears the stamp when the quantity is cleared', async () => {
+    const { service } = counting();
+    jest.useFakeTimers({ now: new Date('2026-11-07T04:30:00.000Z') });
+    try {
+      const typed = await service.saveCountProgress(anil, 'count', { version: 1, lines: [{ id: 'line', physicalStock: 9 }] });
+      expect(typed.payload.lines[0].capturedAt).toBe('2026-11-07T04:30:00.000Z');
+      jest.setSystemTime(new Date('2026-11-07T05:00:00.000Z'));
+      const noted = await service.saveCountProgress(anil, 'count', { version: 2, lines: [{ id: 'line', physicalStock: 9, note: 'Top shelf' }] });
+      expect(noted.payload.lines[0].capturedAt).toBe('2026-11-07T04:30:00.000Z');
+      const cleared = await service.saveCountProgress(anil, 'count', { version: 3, lines: [{ id: 'line', physicalStock: '' }] });
+      expect(cleared.payload.lines[0].capturedAt).toBeUndefined();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('refuses to sign a count typed before capture times were kept, and a retyped count signs', async () => {
+    const { state, service } = counting();
+    state.documents[0].payload.lines[0].physicalStock = 9;
+    const refused = await failure(service.signOffCount(anil, 'count', { version: 1, requestKey: 'sign-legacy', note: 'One short', lines: [{ id: 'line', physicalStock: 9 }] }));
+    expect(refused).toEqual({
+      status: 400,
+      body: { code: 'COUNT_RETYPE', message: 'Type these counts again before signing off: Isotroin 10. The system quantity they were compared with is out of date.', lineIds: ['line'] },
+    });
+    const retyped = await service.saveCountProgress(anil, 'count', { version: 1, lines: [{ id: 'line', physicalStock: 9 }] });
+    expect(retyped.payload.lines[0].capturedAt).toEqual(expect.any(String));
+    const signed = await service.signOffCount(anil, 'count', { version: 2, requestKey: 'sign-legacy', note: 'One short', lines: [{ id: 'line', physicalStock: 9 }] });
+    expect(signed.status).toBe('AWAITING_APPROVAL');
   });
 
   it('refuses the old submit, approve and post actions on a count', async () => {

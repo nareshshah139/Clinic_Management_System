@@ -18,13 +18,13 @@ type SaveState = 'saved' | 'saving' | 'failed';
 
 const SAVE_DELAY_MS = 600;
 
-const entryOf = (line: CountLine): Entry => ({ count: line.physicalStock === null ? '' : String(line.physicalStock), note: line.note });
+const entryOf = (line: CountLine): Entry => ({ count: line.physicalStock === null || line.retype ? '' : String(line.physicalStock), note: line.note });
 
 export function sheetLine(line: CountLine, entry: Entry): CountLine {
   const parsed = parseCount(entry.count);
   const counted = typeof parsed === 'number' ? parsed : null;
-  const system = line.physicalStock !== null && counted === line.physicalStock ? line.systemStock : (line.currentStock ?? line.systemStock);
-  return { ...line, systemStock: system, physicalStock: counted, note: entry.note };
+  const system = !line.retype && line.physicalStock !== null && counted === line.physicalStock ? line.systemStock : (line.currentStock ?? line.systemStock);
+  return { ...line, systemStock: system, physicalStock: counted, note: entry.note, retype: line.retype && counted === null };
 }
 
 /**
@@ -162,6 +162,8 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
           const bad = invalid.includes(line.id);
           const flagged = missing.includes(line.id);
           const errorId = `count-error-${line.id}`;
+          const diffId = `count-diff-${line.id}`;
+          const hint = bad ? 'Whole number, 0 or more' : line.retype ? `Type it again (was ${server.lines[index].physicalStock})` : flagged ? 'Not counted yet' : null;
           return (
             <div
               key={line.id}
@@ -200,21 +202,23 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
                   enterKeyHint={index === lines.length - 1 ? 'done' : 'next'}
                   value={raw.count}
                   aria-invalid={bad || flagged || undefined}
-                  aria-describedby={bad || flagged ? errorId : undefined}
+                  aria-describedby={hint ? `${errorId} ${diffId}` : diffId}
                   onChange={(event) => change(line, { count: event.target.value })}
                   onKeyDown={onCountKey(index)}
                   onBlur={() => void flush()}
                   className="h-10 w-full max-w-28 px-2 text-right text-base tabular-nums md:text-base"
                 />
-                {(bad || flagged) && (
-                  <span id={errorId} className="mt-0.5 block text-xs text-destructive-text">
-                    {bad ? 'Whole number, 0 or more' : 'Not counted yet'}
+                {hint && (
+                  <span id={errorId} className={cn('mt-0.5 block text-xs', bad || flagged ? 'text-destructive-text' : 'text-warning-text')}>
+                    {hint}
                   </span>
                 )}
               </div>
               <div className="text-sm">
                 <span className="block text-xs sm:hidden">Difference</span>
-                <Difference line={line} />
+                <span id={diffId}>
+                  <Difference line={line} />
+                </span>
               </div>
               <div className="col-span-3 sm:col-span-1">
                 <label htmlFor={`note-${line.id}`} className="sr-only">
@@ -275,8 +279,12 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
           lines={lines}
           signer={user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() : ''}
           onClose={() => setSigning(false)}
-          onIncomplete={(ids, message) => {
+          onIncomplete={(ids, message, retype) => {
             setSigning(false);
+            if (retype) {
+              setServer((current) => ({ ...current, lines: current.lines.map((line) => (ids.includes(line.id) ? { ...line, retype: true } : line)) }));
+              setEntries((current) => Object.fromEntries(Object.entries(current).map(([id, entry]) => [id, ids.includes(id) ? { ...entry, count: '' } : entry])));
+            }
             setMissing(ids);
             setPrompt(message);
             inputs.current[server.lines.findIndex((line) => ids.includes(line.id))]?.focus();

@@ -248,13 +248,28 @@ export class InventoryWorkspaceService {
     await this.require(actor, 'pharmacy:purchase-ledger:write');
     return this.supplierCredits.reverseAllocation(actor, id, reason);
   }
+  /**
+   * @cc [owner:nareshshah139,label:product] on-demand-count-scope
+   * Picked batches are counted as picked, zero stock included, and a picked batch already on an
+   * undecided count is refused by name. Counting everything matching a filter leaves batches on
+   * undecided counts out, and is refused only when nothing else is left.
+   */
   async createCount(actor:WorkflowActor,input:Record<string,any>) {
     await this.workflow.authorize(actor,'COUNT',true);
-    const query=await this.stock(actor,{...input.filters,limit:100,page:1});let items=[...query.rows];
-    for(let page=2;page<=query.totalPages;page++)items.push(...(await this.stock(actor,{...input.filters,limit:100,page})).rows);
-    if(input.itemIds?.length)items=items.filter(i=>input.itemIds.includes(i.id));
-    if(!items.length)throw new BadRequestException('No matching batches to count');
-    return this.workflow.saveDocument(actor,{kind:'COUNT',reference:`Stock count ${displayDay(clinicDay(new Date()))} · on demand`,requestKey:input.requestKey||randomUUID(),payload:{reason:'On-demand stock count',lines:items.map(i=>({inventoryId:i.id,quantity:0}))}});
+    const picked:string[]=Array.isArray(input.itemIds)?[...new Set<string>(input.itemIds.filter((id:unknown):id is string=>typeof id==='string'&&id!==''))]:[];
+    let ids:string[];
+    if(picked.length){
+      const found=new Set((await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,id:{in:picked}},select:{id:true}})).map(i=>i.id));
+      ids=picked.filter(id=>found.has(id));
+    }else{
+      const query=await this.stock(actor,{...input.filters,limit:100,page:1});const rows=[...query.rows];
+      for(let page=2;page<=query.totalPages;page++)rows.push(...(await this.stock(actor,{...input.filters,limit:100,page})).rows);
+      const holders=await this.workflow.openCountHolders(this.prisma,actor.branchId);
+      const free=rows.filter(i=>!holders.has(i.id));
+      ids=(free.length?free:rows).map(i=>i.id);
+    }
+    if(!ids.length)throw new BadRequestException('No matching batches to count');
+    return this.workflow.saveDocument(actor,{kind:'COUNT',reference:`Stock count ${displayDay(clinicDay(new Date()))} · on demand`,requestKey:input.requestKey||randomUUID(),payload:{reason:'On-demand stock count',lines:ids.map(inventoryId=>({inventoryId,quantity:0}))}});
   }
   async recommendTargets(actor:WorkflowActor,input:Record<string,any>={}) {
     await this.workflow.authorize(actor,'TARGET_REVIEW',true);const settings=await this.workflow.settings(actor);

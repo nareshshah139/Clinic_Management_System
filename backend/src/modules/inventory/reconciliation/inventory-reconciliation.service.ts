@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { clinicDay, clinicDayRange, clinicDayStart, compareValues, financialYear, isCalendarDay, money, pageOf, peopleById, registerRangeError } from '../../pharmacy/register-utils';
-import { InventoryWorkflowService } from '../inventory-workflow.service';
+import { InventoryWorkflowService, observationOutdated } from '../inventory-workflow.service';
 import { INVENTORY_APPROVERS, WorkflowActor, WorkflowLine } from '../inventory-workflow.types';
 import { jsonObject } from '../inventory-stock';
 import { displayDay } from '../supplier-return';
@@ -55,30 +56,35 @@ export class InventoryReconciliationService {
     return readReconciliation(jsonObject(row?.settings), clinicDay(row?.updatedAt ?? new Date()));
   }
 
+  /**
+   * A batch is covered once a count of it signed in this cycle is waiting or accepted, and reserved
+   * while any count of it is undecided, whatever its cycle or origin, so it is never dealt twice.
+   * The pool is ordered by the last accepted sign-off; the metadata is matched in SQL so the large
+   * ledger checkpoint it also holds is never read.
+   */
   private async coverage(db: any, branchId: string, cycleStart: string) {
     const [items, docs] = await Promise.all([
-      db.inventoryItem.findMany({ where: { branchId, currentStock: { gt: 0 } }, select: { id: true, name: true, metadata: true } }),
+      db.$queryRaw(Prisma.sql`
+        SELECT id, name,
+          coalesce(substring(metadata from '"lastSignedCountAt":"([^"]*)"'), substring(metadata from '"lastCountAt":"([^"]*)"')) AS "lastCountedAt"
+        FROM inventory_items WHERE "branchId" = ${branchId} AND "currentStock" > 0`) as Promise<PlanBatch[]>,
       db.inventoryWorkflowDocument.findMany({
         where: {
           branchId,
           kind: 'COUNT',
-          OR: [
-            { status: 'DRAFT', payload: { path: ['cycle', 'start'], equals: cycleStart } },
-            { status: { in: ['AWAITING_APPROVAL', 'APPROVED', 'POSTED'] }, updatedAt: { gte: clinicDayStart(cycleStart) } },
-          ],
+          OR: [{ status: { in: ['DRAFT', 'AWAITING_APPROVAL'] } }, { status: { in: ['APPROVED', 'POSTED'] }, updatedAt: { gte: clinicDayStart(cycleStart) } }],
         },
         select: { id: true, status: true, payload: true, postedAt: true },
       }),
     ]);
-    const batches: PlanBatch[] = items.map((item: any) => ({ id: item.id, name: item.name, lastCountedAt: jsonObject(item.metadata).lastCountAt ?? null }));
     const covered = new Set<string>();
     const reserved = new Set<string>();
     for (const doc of docs as CountDoc[]) {
       const ids = (doc.payload?.lines || []).map((l: WorkflowLine) => l.inventoryId);
-      if (doc.status === 'DRAFT') ids.forEach((id: string) => reserved.add(id));
-      else if ((signedDay(doc) ?? '') >= cycleStart) ids.forEach((id: string) => covered.add(id));
+      if (doc.status !== 'DRAFT' && (signedDay(doc) ?? '') >= cycleStart) ids.forEach((id: string) => covered.add(id));
+      else if (doc.status === 'DRAFT' || doc.status === 'AWAITING_APPROVAL') ids.forEach((id: string) => reserved.add(id));
     }
-    return { batches, covered, reserved };
+    return { batches: items.map((b) => ({ ...b, lastCountedAt: b.lastCountedAt ?? null })), covered, reserved };
   }
 
   /**
@@ -148,9 +154,17 @@ export class InventoryReconciliationService {
     });
   }
 
-  private assignedSummary(doc: CountDoc) {
-    const figures = countFigures(doc.payload?.lines || []);
-    return { id: doc.id, reference: doc.reference, day: doc.payload?.date ?? clinicDay(doc.createdAt), origin: doc.payload?.origin ?? 'ON_DEMAND', version: doc.version, items: figures.items, counted: figures.counted };
+  private async assigned(branchId: string, docs: CountDoc[]) {
+    const ids = [...new Set(docs.flatMap((doc) => (doc.payload?.lines || []).map((l: WorkflowLine) => l.inventoryId)))];
+    const marks = new Map(
+      (await this.prisma.inventoryItem.findMany({ where: { branchId, id: { in: ids } }, select: { id: true, metadata: true } })).map((item) => [item.id, jsonObject(item.metadata)]),
+    );
+    return docs.map((doc) => {
+      const lines: WorkflowLine[] = doc.payload?.lines || [];
+      const retype = lines.filter((l) => observationOutdated(l, marks.get(l.inventoryId) ?? {}, doc.id)).length;
+      const figures = countFigures(lines);
+      return { id: doc.id, reference: doc.reference, day: doc.payload?.date ?? clinicDay(doc.createdAt), origin: doc.payload?.origin ?? 'ON_DEMAND', version: doc.version, items: figures.items, counted: figures.counted - retype, retype };
+    });
   }
 
   async summary(actor: WorkflowActor) {
@@ -162,7 +176,7 @@ export class InventoryReconciliationService {
     const cycle = cycleOn(settings, today);
     const { batches, covered } = await this.coverage(this.prisma, actor.branchId, cycle.start);
     const coveredInStock = batches.filter((b) => covered.has(b.id)).length;
-    const mine = (await this.openCounts(actor.branchId, { status: 'DRAFT', payload: { path: ['assigneeId'], equals: actor.id } })).map((doc) => this.assignedSummary(doc));
+    const mine = await this.assigned(actor.branchId, await this.openCounts(actor.branchId, { status: 'DRAFT', payload: { path: ['assigneeId'], equals: actor.id } }));
     return {
       today,
       settings,
@@ -267,7 +281,7 @@ export class InventoryReconciliationService {
     const lines: WorkflowLine[] = doc.payload.lines || [];
     const ids = lines.map((l) => l.inventoryId);
     const [items, audits, caps, others] = await Promise.all([
-      this.prisma.inventoryItem.findMany({ where: { branchId: actor.branchId, id: { in: ids } }, select: { id: true, currentStock: true, storageLocation: true, name: true } }),
+      this.prisma.inventoryItem.findMany({ where: { branchId: actor.branchId, id: { in: ids } }, select: { id: true, currentStock: true, storageLocation: true, name: true, metadata: true } }),
       this.prisma.inventoryAudit.findMany({ where: { branchId: actor.branchId, itemId: { in: ids } }, orderBy: { createdAt: 'desc' }, select: { itemId: true, variance: true, notes: true } }),
       this.workflow.capabilities(actor),
       this.otherApprovers(actor),
@@ -306,6 +320,7 @@ export class InventoryReconciliationService {
           unitCost: l.unitPrice ?? 0,
           value: diff === null ? null : money(diff * (l.unitPrice ?? 0)),
           note: l.note ?? '',
+          retype: doc.status === 'DRAFT' && observationOutdated(l, jsonObject(item?.metadata), doc.id),
           history: history(l.inventoryId),
         };
       }),

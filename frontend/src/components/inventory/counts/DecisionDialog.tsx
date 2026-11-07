@@ -73,7 +73,7 @@ export function DecisionDialog({
       return 'done' as const;
     } catch (failure) {
       const { status, body } = failureOf(failure);
-      if (status === 409 && body?.code !== 'COUNT_DELTA_BELOW_STOCK' && body?.code !== 'COUNT_REQUEST_KEY_REUSED') onStale(failureMessage(failure));
+      if (status === 409 && !['COUNT_DELTA_BELOW_STOCK', 'COUNT_REQUEST_KEY_REUSED', 'COUNT_SUPERSEDED'].includes(body?.code ?? '')) onStale(failureMessage(failure));
       else setError(failureMessage(failure));
       return 'stay' as const;
     } finally {

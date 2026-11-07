@@ -15,6 +15,7 @@ export type WorkflowLine = {
   minStockLevel?: number; maxStockLevel?: number; beforeMin?: number | null; beforeMax?: number | null;
   originalTerms?: Record<string,any>; fefoOverrideReason?:string;
   manual?: boolean; location?: string; taxable?: number; tax?: number; total?: number; note?: string;
+  capturedAt?: string;
 };
 export const LEGACY_COUNT_SETTINGS = ['auditEnabled', 'auditDailyCount', 'auditAdjustmentMode', 'approvalValue', 'negativeCountNeedsApproval'] as const;
 export class SaveWorkflowDocumentDto {

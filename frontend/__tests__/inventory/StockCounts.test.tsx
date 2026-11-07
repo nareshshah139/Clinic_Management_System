@@ -15,7 +15,7 @@ jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUse
 
 const line = (id: string, name: string, extra: Partial<CountDetail['lines'][number]> = {}) => ({
   id, inventoryId: `item-${id}`, name, batchNumber: `B-${id}`, expiryDate: '2027-06-30T00:00:00.000Z', unit: 'STRIPS', location: 'Rack A2',
-  currentStock: 10, systemStock: 10, physicalStock: null, difference: null, unitCost: 12.5, value: null, note: '', history: null, ...extra,
+  currentStock: 10, systemStock: 10, physicalStock: null, difference: null, unitCost: 12.5, value: null, note: '', retype: false, history: null, ...extra,
 });
 const detail = (overrides: Partial<CountDetail> = {}): CountDetail => ({
   id: 'count-1', reference: 'Stock count 06/11/2026 · Anil Deshmukh', day: '2026-11-06', origin: 'CYCLE', assignedTo: { id: 'anil', name: 'Anil Deshmukh' },
@@ -129,6 +129,30 @@ describe('counting sheet', () => {
   });
 });
 
+describe('counts to type again', () => {
+  it('empties a count saved before capture times were kept, says what it was and sends the retyped figure', async () => {
+    (apiClient.patch as jest.Mock).mockImplementation(async (_url: string, body: any) => ({ ...detail(), version: body.version + 1 }));
+    render(
+      <CountSheet
+        detail={detail({ lines: [line('a', 'Isotroin 10', { physicalStock: 8, difference: -2, currentStock: 9, retype: true }), line('b', 'Adapalene Gel 15g', { physicalStock: 10, difference: 0 })] })}
+        onSigned={jest.fn()}
+        onStale={jest.fn()}
+      />,
+    );
+    const [first, second] = screen.getAllByRole('textbox', { name: /^Counted quantity of/ }) as HTMLInputElement[];
+    expect([first.value, second.value]).toEqual(['', '10']);
+    expect(document.activeElement).toBe(first);
+    expect(screen.getByText('Type it again (was 8)')).toBeInTheDocument();
+    expect(first.getAttribute('aria-describedby')).toBe('count-error-a count-diff-a');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign off count' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Count every item before signing off. 1 item still to count.');
+    fireEvent.change(first, { target: { value: '8' } });
+    expect(screen.queryByText('Type it again (was 8)')).toBeNull();
+    expect(within(screen.getAllByRole('listitem')[0]).getByText('−1')).toBeInTheDocument();
+    await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/inventory/workspace/reconciliation/counts/count-1', { version: 1, lines: [{ id: 'a', physicalStock: 8, note: '' }] }));
+  });
+});
+
 describe('signed record and decision', () => {
   const awaiting = (can: CountDetail['can'], approvers: string[] = []) =>
     detail({
@@ -190,7 +214,7 @@ const summary = (overrides: Partial<ReconciliationSummary> = {}): Reconciliation
   settingsVersion: 4,
   cycle: { start: '2026-11-01', end: '2026-11-10', day: 6, days: 10, daysLeft: 5 },
   forecast: { batches: 340, covered: 120, remaining: 220, people: 2, perDay: 10, capacity: 200, short: true, behind: true, message: '' },
-  mine: [{ id: 'count-1', reference: 'Stock count 06/11/2026 · Anil Deshmukh', day: '2026-11-06', origin: 'CYCLE', version: 2, items: 10, counted: 4 }],
+  mine: [{ id: 'count-1', reference: 'Stock count 06/11/2026 · Anil Deshmukh', day: '2026-11-06', origin: 'CYCLE', version: 2, items: 10, counted: 4, retype: 0 }],
   approvals: null,
   canCount: true,
   canApprove: false,

@@ -219,6 +219,133 @@ databaseTests('Stock reconciliation on PostgreSQL', () => {
     );
   });
 
+  describe('one open count per batch', () => {
+    const onDemand = (who: typeof anil, ids: string[]) =>
+      workflow.saveDocument(who, { kind: 'COUNT', reference: 'On-demand count', requestKey: randomUUID(), payload: { reason: 'On-demand stock count', lines: ids.map((inventoryId) => ({ inventoryId, quantity: 0 })) } });
+    const fresh = (id: string) => db.inventoryWorkflowDocument.findUniqueOrThrow({ where: { id } });
+    const enter = async (who: typeof anil, id: string, counted: (line: any) => number) => {
+      const doc = await fresh(id);
+      return workflow.saveCountProgress(who, id, { version: doc.version, lines: doc.payload.lines.map((line: any) => ({ id: line.id, physicalStock: counted(line) })) });
+    };
+    const signSaved = async (who: typeof anil, id: string, note: string) => signAll(who, await fresh(id), (line) => line.physicalStock, note);
+
+    it('applies only the first of two signed counts of one batch: stock 100, shelf 90, stays 90', async () => {
+      at('2026-11-02T05:00:00Z');
+      await db.inventoryItem.update({ where: { id: 'item-a' }, data: { currentStock: 100 } });
+      const first = await onDemand(anil, ['item-a']);
+      await enter(anil, first.id, () => 90);
+      await signSaved(anil, first.id, 'Ten strips missing');
+      const signed = await fresh(first.id);
+      const { id: _id, createdAt: _c, updatedAt: _u, ...copy } = signed as any;
+      const twin = await db.inventoryWorkflowDocument.create({
+        data: {
+          ...copy,
+          requestKey: 'left-by-the-old-code',
+          reference: 'Stock count 02/11/2026 · Meera Kulkarni',
+          createdBy: 'meera',
+          payload: { ...copy.payload, assigneeId: 'meera', lines: copy.payload.lines.map((line: any) => ({ ...line, id: `${line.id}-twin` })), signOff: { ...copy.payload.signOff, by: 'meera', requestKey: 'twin-sign' } },
+        },
+      });
+      at('2026-11-02T07:00:00Z');
+      await reconciliation.decide(doctor, first.id, 'APPROVE', { version: signed.version, requestKey: 'approve-first', reason: 'Physical count signed by Anil Deshmukh on 02/11/2026' });
+      expect(await stock('item-a')).toBe(90);
+      await expect(reconciliation.decide(admin, twin.id, 'APPROVE', { version: twin.version, requestKey: 'approve-twin', reason: 'Physical count signed by Meera Kulkarni on 02/11/2026' })).rejects.toMatchObject({
+        status: 409,
+        response: {
+          code: 'COUNT_SUPERSEDED',
+          message: 'Adapalene Gel 15g, batch B-1, was counted again after this count and that count is already in the stock. Approving this one would apply the difference twice. Reject it instead.',
+        },
+      });
+      expect([await stock('item-a'), (await fresh(twin.id)).status]).toEqual([90, 'AWAITING_APPROVAL']);
+    });
+
+    it('does not deal a batch again at the cycle boundary while a count of it is signed or still open', async () => {
+      at('2026-11-10T05:00:00Z');
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      const [mine] = await openCounts('anil');
+      await signAll(anil, mine, () => 9, 'One short each');
+      at('2026-11-11T05:00:00Z');
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      const dealt = (await db.inventoryWorkflowDocument.findMany({ where: { branchId, kind: 'COUNT', requestKey: { startsWith: 'cycle:2026-11-11:' } } })).flatMap(batchesOf).sort();
+      expect(dealt).toEqual(['item-e', 'item-f']);
+    });
+
+    it('does not deal open batches again after a settings change restarts the cycle mid-day', async () => {
+      at('2026-11-02T05:00:00Z');
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      const settings = await workflow.settings(admin);
+      await workflow.saveSettings(admin, { version: settings.version, reconciliation: { cycleDays: 7 } });
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      const dealt = (await db.inventoryWorkflowDocument.findMany({ where: { branchId, kind: 'COUNT', status: 'DRAFT' } })).flatMap(batchesOf).sort();
+      expect(dealt).toEqual(['item-a', 'item-b', 'item-c', 'item-d', 'item-e', 'item-f']);
+    });
+
+    it('refuses an on-demand count of a batch already on an open count, naming that count', async () => {
+      at('2026-11-02T05:00:00Z');
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      await expect(onDemand(meera, ['item-e', 'item-a'])).rejects.toMatchObject({
+        status: 409,
+        response: {
+          code: 'COUNT_BATCH_OPEN',
+          message: "Adapalene Gel 15g, batch B-1, is already on Anil Deshmukh's count of 02/11/2026, not signed yet. Count it there, or ask Anil Deshmukh to sign it off first.",
+        },
+      });
+      await expect(onDemand(anil, ['item-a'])).rejects.toMatchObject({
+        response: { message: 'Adapalene Gel 15g, batch B-1, is already on your count of 02/11/2026, not signed yet. Count it there.' },
+      });
+      const [mine] = await openCounts('anil');
+      await signAll(anil, mine, () => 9, 'One short each');
+      await expect(onDemand(meera, ['item-a', 'item-c'])).rejects.toMatchObject({
+        response: { message: "Adapalene Gel 15g, batch B-1, and 1 more batch are already on Anil Deshmukh's count of 02/11/2026, signed and waiting for approval. Approve or reject that count first." },
+      });
+      expect((await onDemand(meera, ['item-e'])).status).toBe('DRAFT');
+    });
+
+    it('refuses to recount a signed count that is still waiting for approval', async () => {
+      at('2026-11-02T05:00:00Z');
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      const [mine] = await openCounts('anil');
+      const signed = await signAll(anil, mine, () => 9, 'One short each');
+      await expect(workflow.transition(doctor, mine.id, { action: 'RECOUNT', version: signed.version })).rejects.toMatchObject({ response: { code: 'COUNT_BATCH_OPEN' } });
+      expect(await db.inventoryWorkflowDocument.count({ where: { branchId, kind: 'COUNT' } })).toBe(2);
+    });
+
+    it('refuses the second sign-off when an older duplicate draft of the batch was signed first', async () => {
+      at('2026-11-02T05:00:00Z');
+      const first = await onDemand(anil, ['item-a']);
+      const { id: _id, createdAt: _c, updatedAt: _u, ...copy } = (await fresh(first.id)) as any;
+      const twin = await db.inventoryWorkflowDocument.create({
+        data: { ...copy, requestKey: 'old-duplicate', createdBy: 'meera', payload: { ...copy.payload, assigneeId: 'meera', lines: copy.payload.lines.map((line: any) => ({ ...line, id: `${line.id}-twin` })) } },
+      });
+      await enter(anil, first.id, () => 8);
+      await enter(meera, twin.id, () => 8);
+      await signSaved(anil, first.id, 'Two short');
+      await expect(signSaved(meera, twin.id, 'Two short')).rejects.toMatchObject({ status: 409, response: { code: 'COUNT_BATCH_OPEN' } });
+    });
+
+    it('asks to type a count again when the batch was counted and posted after it was entered', async () => {
+      at('2026-11-02T05:00:00Z');
+      const first = await onDemand(anil, ['item-a']);
+      const { id: _id, createdAt: _c, updatedAt: _u, ...copy } = (await fresh(first.id)) as any;
+      const twin = await db.inventoryWorkflowDocument.create({
+        data: { ...copy, requestKey: 'old-duplicate', createdBy: 'meera', payload: { ...copy.payload, assigneeId: 'meera', lines: copy.payload.lines.map((line: any) => ({ ...line, id: `${line.id}-twin` })) } },
+      });
+      await enter(meera, twin.id, () => 10);
+      at('2026-11-02T06:00:00Z');
+      await enter(anil, first.id, () => 10);
+      await signSaved(anil, first.id, '');
+      at('2026-11-02T07:00:00Z');
+      await expect(signSaved(meera, twin.id, '')).rejects.toMatchObject({
+        response: { code: 'COUNT_RETYPE', message: 'Type these counts again before signing off: Adapalene Gel 15g. The system quantity they were compared with is out of date.' },
+      });
+      const detail = await reconciliation.detail(meera, twin.id);
+      expect(detail.lines.map((line) => [line.name, line.retype])).toEqual([['Adapalene Gel 15g', true]]);
+      expect((await reconciliation.summary(meera)).mine.filter((count) => count.id === twin.id).map((count) => [count.items, count.counted, count.retype])).toEqual([[1, 0, 1]]);
+      await enter(meera, twin.id, () => 10);
+      expect((await signSaved(meera, twin.id, '')).status).toBe('POSTED');
+    });
+  });
+
   it('forecasts a short cycle in plain words for whoever configures it', async () => {
     at('2026-11-02T05:00:00Z');
     await configure({ enabled: true, cycleDays: 2, itemsPerPersonPerDay: 1, assigneeIds: ['anil'], cycleStart: '2026-11-02' });

@@ -66,6 +66,7 @@ export type CountLine = {
   unitCost: number;
   value: number | null;
   note: string;
+  retype: boolean;
   history: string | null;
 };
 
@@ -103,7 +104,7 @@ export type Forecast = {
   message: string;
 };
 
-export type AssignedCount = { id: string; reference: string; day: string; origin: 'CYCLE' | 'ON_DEMAND'; version: number; items: number; counted: number };
+export type AssignedCount = { id: string; reference: string; day: string; origin: 'CYCLE' | 'ON_DEMAND'; version: number; items: number; counted: number; retype: number };
 
 export type ReconciliationSummary = {
   today: string;
