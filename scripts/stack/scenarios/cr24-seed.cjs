@@ -79,9 +79,10 @@ function buildBills() {
     invoiceDate: new Date("2026-03-31T19:00:00Z"), createdAt: new Date("2026-03-31T19:05:00Z"), cents: 98750,
     paymentMethod: "UPI", paymentRows: [], legacyStock: false,
   });
+  // The legacy invoices page opens on "Today", so this bill must fall on the clinic day the suite runs.
   make({
     n: 72, invoiceNumber: "PHI-2026-072", status: "COMPLETED", patientIndex: 9, creator: "pharmacist",
-    invoiceDate: new Date("2026-11-06T04:45:00Z"), createdAt: new Date("2026-11-06T04:50:00Z"), cents: 156025,
+    invoiceDate: istInstant(istDay(new Date()), "00:01"), createdAt: istInstant(istDay(new Date()), "00:02"), cents: 156025,
     paymentMethod: "CARD", paymentRows: [], legacyStock: false,
   });
   make({
