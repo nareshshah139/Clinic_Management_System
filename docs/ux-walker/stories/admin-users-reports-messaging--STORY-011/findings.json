@@ -1,0 +1,72 @@
+[
+  {
+    "id": "F-STORY-011-01",
+    "story_id": "STORY-011",
+    "severity": "high",
+    "category": "disclosure",
+    "criterion": "Secondary features only when usable; no misleading controls",
+    "score": "fail",
+    "description": "MANAGER is shown New User, Clinic Holidays, Edit, Delete, Reset password and Role & Permissions on every row. Every write returns 403: PATCH /users/:id, POST /auth/users/:id/reset-code, GET and POST doctor-availability holidays/time-off, and PATCH /users/:id/role. Mapped auth defect 17, confirmed. NURSE, ACCOUNTANT and LAB_TECH also see all these controls by URL.",
+    "expected": "Controls hidden or disabled with a reason ('Admins only') for roles that cannot use them.",
+    "actual": "Five failed actions in a row for a MANAGER.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/admin-users-reports-messaging--STORY-011/step-02-users-list.png",
+    "suggested_fix": "Gate the action buttons on the current role (OWNER/ADMIN), or give MANAGER the backend permission its seeded users:update implies.",
+    "files_likely_involved": ["frontend/src/components/users/UsersManagement.tsx", "frontend/src/components/users/ResetCodeButton.tsx", "backend/src/modules/users/users.controller.ts"]
+  },
+  {
+    "id": "F-STORY-011-02",
+    "story_id": "STORY-011",
+    "severity": "high",
+    "category": "error-handling",
+    "criterion": "Feedback after action",
+    "score": "fail",
+    "description": "Edit User → Save as MANAGER: PATCH returns 403, and the dialog stays open with the edited phone and no message. The only trace is an unhandled rejection (Next dev 'Issues' badge). Mapped defect 15, confirmed.",
+    "expected": "An inline error: 'You don't have permission to edit users'.",
+    "actual": "A silent failure.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/admin-users-reports-messaging--STORY-011/step-03-edit-save-403.png",
+    "suggested_fix": "Add a catch in submit() that shows the error.",
+    "files_likely_involved": ["frontend/src/components/users/UsersManagement.tsx"]
+  },
+  {
+    "id": "F-STORY-011-03",
+    "story_id": "STORY-011",
+    "severity": "high",
+    "category": "happy-path",
+    "criterion": "Feature works / empty containers",
+    "score": "fail",
+    "description": "The Role & Permissions dialog is empty for every role, ADMIN included. GET /users/roles and GET /users/permissions return 404 'User not found' because @Get(':id') shadows them. The dialog shows only 'Selected: 0'. As ADMIN, Apply Role succeeds, then the follow-up roles fetch 404s and alert('Failed to update role. Please try again.') fires, a false failure. Save Permissions would persist []. Mapped defect 3, confirmed.",
+    "expected": "A permission grid loads; Apply Role reports its real outcome.",
+    "actual": "An empty grid and a misleading failure alert.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/admin-users-reports-messaging--STORY-011/admin-06a-role-perms-grid.png",
+    "suggested_fix": "Declare @Get('roles') and @Get('permissions') before @Get(':id'); separate the role-update success from the follow-up fetch.",
+    "files_likely_involved": ["backend/src/modules/users/users.controller.ts", "frontend/src/components/users/UsersManagement.tsx"]
+  },
+  {
+    "id": "F-STORY-011-04",
+    "story_id": "STORY-011",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "Error messages specific, actionable, non-technical",
+    "score": "fail",
+    "description": "Reset password and Clinic Holidays show raw 'Forbidden resource (Reference: <uuid>)'. In Clinic Holidays the 403 on load shows the error under 'No upcoming holidays.' (contradictory), and a failed Add stacks a second identical red error. The story's expected copy 'Only an admin can manage clinic holidays' does not appear.",
+    "expected": "One plain message: 'Only Owner/Admin can issue reset codes or manage holidays'.",
+    "actual": "Technical errors, duplicated.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/admin-users-reports-messaging--STORY-011/step-05b-add-holiday.png",
+    "suggested_fix": "Map 403 to friendly copy in getErrorMessage; clear the load error before showing the action error.",
+    "files_likely_involved": ["frontend/src/components/users/DoctorAvailabilitySettings.tsx", "frontend/src/components/users/ResetCodeButton.tsx", "frontend/src/lib/api.ts"]
+  },
+  {
+    "id": "F-STORY-011-05",
+    "story_id": "STORY-011",
+    "severity": "low",
+    "category": "layout",
+    "criterion": "Control labels stay on one line / one primary action",
+    "score": "warn",
+    "description": "In the Role & Permissions dialog, 'Apply Role' and 'Clear All' wrap onto two lines inside narrow buttons. 'Save Permissions' (primary style) sits top right beside the Role select, competing with 'Apply Role' (also primary). There are two primaries.",
+    "expected": "One-line buttons; one primary action, near the content it saves.",
+    "actual": "Wrapped labels; two dark primary buttons.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/admin-users-reports-messaging--STORY-011/admin-06a-role-perms-grid.png",
+    "suggested_fix": null,
+    "files_likely_involved": ["frontend/src/components/users/UsersManagement.tsx"]
+  }
+]

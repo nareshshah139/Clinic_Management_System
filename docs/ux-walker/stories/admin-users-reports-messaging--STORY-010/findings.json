@@ -1,0 +1,44 @@
+[
+  {
+    "id": "F-STORY-010-01",
+    "story_id": "STORY-010",
+    "severity": "high",
+    "category": "happy-path",
+    "criterion": "User can complete primary goal",
+    "score": "fail",
+    "description": "Every report export fails. POST /reports/export returns 400 'Unsupported report type: undefined' for JSON, CSV, PDF and Excel on Patient Analytics and on Revenue. Direct POSTs with the backend's singular names (PATIENT, REVENUE) also return 400, so the whitelist pipe strips the undecorated ExportReportDto fields. The page additionally sends plural names (PATIENTS). Mapped defect 7, confirmed.",
+    "expected": "The file downloads.",
+    "actual": "No file in any format.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/admin-users-reports-messaging--STORY-010/step-02b-after-csv-no-feedback.png",
+    "suggested_fix": "Add @IsEnum decorators to ExportReportDto.reportType/exportFormat; map page ids to the backend enum names (PATIENT, DOCTOR, APPOINTMENT, PAYMENT).",
+    "files_likely_involved": ["backend/src/modules/reports/dto/reports.dto.ts", "frontend/src/app/dashboard/reports/page.tsx", "backend/src/modules/reports/reports.service.ts"]
+  },
+  {
+    "id": "F-STORY-010-02",
+    "story_id": "STORY-010",
+    "severity": "high",
+    "category": "error-handling",
+    "criterion": "Feedback: clear success/error indication",
+    "score": "fail",
+    "description": "Export failures are silent. The 400 is caught and only console.error'd; the Export select then displays the chosen format ('CSV'), which reads as success.",
+    "expected": "A destructive toast, 'Export failed: …', and the select reset to 'Export'.",
+    "actual": "Nothing visible changes except the select label.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/admin-users-reports-messaging--STORY-010/step-02b-after-csv-no-feedback.png",
+    "suggested_fix": "Toast the error in exportReport's catch.",
+    "files_likely_involved": ["frontend/src/app/dashboard/reports/page.tsx"]
+  },
+  {
+    "id": "F-STORY-010-03",
+    "story_id": "STORY-010",
+    "severity": "medium",
+    "category": "flow",
+    "criterion": "Retry / interaction pattern",
+    "score": "fail",
+    "description": "Re-picking the same format sends no request: the uncontrolled Select already holds that value, so onValueChange doesn't fire. A user who retries CSV gets nothing at all.",
+    "expected": "Each pick triggers an export; use a DropdownMenu or button rather than a Select.",
+    "actual": "0 requests on the second CSV pick.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/admin-users-reports-messaging--STORY-010/step-03-csv-again.png",
+    "suggested_fix": "Replace the Select with a DropdownMenu of export actions.",
+    "files_likely_involved": ["frontend/src/app/dashboard/reports/page.tsx"]
+  }
+]
