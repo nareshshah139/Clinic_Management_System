@@ -1,0 +1,99 @@
+[
+  {
+    "id": "F-201-01",
+    "story_id": "STORY-201",
+    "severity": "high",
+    "category": "layout",
+    "criterion": "Text fit & wrap / long content",
+    "score": "fail",
+    "description": "At the default 1280x800 viewport the Patient Records Actions column is squeezed to 96px. Six action buttons (View, Edit, Archive, Link Portal, WhatsApp, Start Visit) stack vertically, and their labels break letter by letter (\"A rc hi v e\", \"Li n k P o rt al\", \"W h at s…\"). Every row is 783px tall (measured: all 11 rows = 783px). The first screen after a search shows only the header and blank space, and each patient needs a full screen of scrolling. Gender badges break mid-word (\"MAL E\", \"FEM ALE\"). The geometry script's wrappedControls heuristic missed this; it was measured directly.",
+    "expected": "Rows of about 56px with a compact action set (View + overflow menu), visible without horizontal scroll.",
+    "actual": "Rows of 783px, mid-word breaks, Actions only reachable by scrolling the table horizontally.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/patients-records--STORY-201/finding-actions-column.png",
+    "suggested_fix": "Collapse the row actions into a single \"⋯\" DropdownMenu (keep View/Start Visit as icon buttons), add whitespace-nowrap to buttons and badges, and give the column a fixed min width.",
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientsManagement.tsx"
+    ]
+  },
+  {
+    "id": "F-201-02",
+    "story_id": "STORY-201",
+    "severity": "medium",
+    "category": "layout",
+    "criterion": "Primary control sizing",
+    "score": "fail",
+    "description": "The search box, the page's primary control, is 158px wide on desktop. Its placeholder is truncated to \"Search by nar\", while each of the four Select filters gets about 190px.",
+    "expected": "Search takes the flexible remaining width (e.g. flex-1, min 320px).",
+    "actual": "Smallest control on the bar; hint text wraps beneath it.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/patients-records--STORY-201/step-1-patients-list.png",
+    "suggested_fix": "Give the search wrapper flex-1/min-w-[320px] and fixed widths to the selects.",
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientsManagement.tsx"
+    ]
+  },
+  {
+    "id": "F-201-03",
+    "story_id": "STORY-201",
+    "severity": "medium",
+    "category": "disclosure",
+    "criterion": "Progressive disclosure / layout stability",
+    "score": "warn",
+    "description": "Typing one character opens a \"Did you mean\" box inline in the filter card: 8 full phone numbers stacked vertically (about 350px), which pushes the whole table down. Suggestions come only from the current page.",
+    "expected": "A floating suggestion popover anchored to the input, or no suggestions until 2 characters.",
+    "actual": "The filter card grows from 170px to about 520px on the first keystroke.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/patients-records--STORY-201/step-2-typed-9.png",
+    "suggested_fix": "Render suggestions in a Popover/Command list anchored to the input.",
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientsManagement.tsx"
+    ]
+  },
+  {
+    "id": "F-201-04",
+    "story_id": "STORY-201",
+    "severity": "low",
+    "category": "hierarchy",
+    "criterion": "Heading structure / primary action placement",
+    "score": "warn",
+    "description": "Three stacked headings with subtitles (\"Patients Management\" / \"Manage patient records…\", \"Patients\" / \"Search, add…\", \"Patient Records\" / \"Manage and view…\"). \"New Patient\" floats mid-row, not aligned with Clear Filters / Export CSV.",
+    "expected": "One page title, one primary action aligned in the header row.",
+    "actual": "Redundant headings consume about 150px; primary CTA misaligned.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/patients-records--STORY-201/step-1-patients-list.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientsManagement.tsx",
+      "frontend/src/app/dashboard/patients/page.tsx"
+    ]
+  },
+  {
+    "id": "F-201-05",
+    "story_id": "STORY-201",
+    "severity": "low",
+    "category": "flow",
+    "criterion": "Data re-entry / defaults",
+    "score": "warn",
+    "description": "The list is sorted alphabetically client-side (\"Patient ▲\": Ananya, Arjun, Deepika, John…), not newest registrations first as the catalog says. Returning from a patient with browser Back clears the search box, so the receptionist retypes the query.",
+    "expected": "Search text persisted in the URL (?search=) and restored on Back.",
+    "actual": "Search lost on Back.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/patients-records--STORY-201/var-back-to-list.png",
+    "suggested_fix": "Sync search to the query string with router.replace.",
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientsManagement.tsx"
+    ]
+  },
+  {
+    "id": "F-201-06",
+    "story_id": "STORY-201",
+    "severity": "low",
+    "category": "consistency",
+    "criterion": "Broken elements / empty columns",
+    "score": "warn",
+    "description": "There is no Last Visit column even though Arjun has history, and the Consultation column is \"—\" on every row (consistent with mapped patients defects #4/#5; no ONLINE patient was available to fully prove #4).",
+    "expected": "Last visit and consultation type shown when the API returns them.",
+    "actual": "Columns missing or always \"—\".",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/patients-records--STORY-201/step-3-prefix-results.png",
+    "suggested_fix": "Map lastVisitAt and consultationType in the row mapper.",
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientsManagement.tsx"
+    ]
+  }
+]

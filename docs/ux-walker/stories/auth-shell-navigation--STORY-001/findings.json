@@ -1,0 +1,150 @@
+[
+  {
+    "id": "F-001-01",
+    "story_id": "STORY-001",
+    "severity": "high",
+    "category": "error-handling",
+    "criterion": "Error messages: specific, actionable",
+    "score": "fail",
+    "description": "Signing in with the Indian international format \"+91 90000 00003\" fails with \"Account not found\" for an ACTIVE account (mapped defect auth #13, confirmed live: POST /api/auth/login -> 404).",
+    "expected": "The +91 / 91 country code is stripped (or matched against the stored 10-digit number), so the receptionist signs in.",
+    "actual": "Red alert \"Account not found (Reference: 7df4b31e-…)\". The user is told her account does not exist.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-001/var-plus91.png",
+    "suggested_fix": "Normalise identifiers: strip non-digits, then if 12 digits starting with 91 also try the last 10 digits (or store E.164 consistently).",
+    "files_likely_involved": [
+      "backend/src/modules/auth/auth.service.ts"
+    ]
+  },
+  {
+    "id": "F-001-02",
+    "story_id": "STORY-001",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "Error messages: non-technical",
+    "score": "fail",
+    "description": "Login errors are raw backend strings plus a request UUID: \"ThrottlerException: Too Many Requests (Reference: d6c8ecfe-…)\", \"Invalid password (Reference: 24b42305-…)\". The UUID wraps the alert onto two lines.",
+    "expected": "Plain copy, e.g. \"Too many sign-in attempts. Wait a minute and try again.\" Reference IDs hidden or shown small on a separate line.",
+    "actual": "Exception class name and a 36-char UUID shown verbatim in the red alert.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-001/edge-throttled-429.png",
+    "suggested_fix": "Map known status codes (401/403/404/429) to friendly copy on the login page; render the reference in a muted <small>.",
+    "files_likely_involved": [
+      "frontend/src/app/login/page.tsx",
+      "frontend/src/lib/api.ts"
+    ]
+  },
+  {
+    "id": "F-001-03",
+    "story_id": "STORY-001",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "Security: account enumeration",
+    "score": "fail",
+    "description": "Unknown identifier returns \"Account not found\" (404) while a known one returns \"Invalid password\" (401), so anyone can probe which phones/emails are staff accounts (mapped defect auth #14, confirmed).",
+    "expected": "One message for both cases, e.g. \"Phone/email or password is incorrect\".",
+    "actual": "riya@clinic.test -> \"Account not found\"; 9000000003 + wrong password -> \"Invalid password\".",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-001/edge-unknown-email.png",
+    "suggested_fix": "Return a single 401 with a generic message for both cases.",
+    "files_likely_involved": [
+      "backend/src/modules/auth/auth.service.ts"
+    ]
+  },
+  {
+    "id": "F-001-04",
+    "story_id": "STORY-001",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "Rate limit scope",
+    "score": "warn",
+    "description": "The login throttle (5/min) is keyed per client IP, not per account. While walking, other sessions from the same machine used up the budget and Riya got \"ThrottlerException: Too Many Requests\" on her very first attempt. A clinic behind one NAT shares one budget across the whole front desk at opening time.",
+    "expected": "Throttle per identifier (plus a looser per-IP cap), and say how long to wait.",
+    "actual": "First attempt of the session rejected with 429.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-001/edge-throttled-429.png",
+    "suggested_fix": "Use a ThrottlerGuard tracker keyed on the identifier, or raise the per-IP limit and add a per-account limit.",
+    "files_likely_involved": [
+      "backend/src/modules/auth/auth.controller.ts",
+      "backend/src/modules/auth/auth.module.ts"
+    ]
+  },
+  {
+    "id": "F-001-05",
+    "story_id": "STORY-001",
+    "severity": "medium",
+    "category": "hierarchy",
+    "criterion": "Importance encoding / information stated once",
+    "score": "fail",
+    "description": "The RECEPTION dashboard leads with admin stat cards: Total Users 10, Active Users 10 (always equal), Total Branches 1, System Status \"operational\", and a System Alerts panel whose only entry is a hard-coded \"System Status — All systems operational / LOW\". None of it helps the front desk (mapped defects auth #8 and #9, confirmed).",
+    "expected": "Front-desk tiles: today's appointments, walk-ins waiting, check-ins; no admin metrics for non-admin roles.",
+    "actual": "Four admin cards and a fake alert take the top half of the screen.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-001/step-5-dashboard.png",
+    "suggested_fix": "Gate the admin cards behind showAdminControls, drop the synthetic System Status alert, and show the empty state when there are no alerts.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/page.tsx"
+    ]
+  },
+  {
+    "id": "F-001-06",
+    "story_id": "STORY-001",
+    "severity": "low",
+    "category": "layout",
+    "criterion": "Overflow/clipping",
+    "score": "warn",
+    "description": "The \"System Status\" value \"operational\" spills 14px past its text column and touches the trend icon (geometry audit overflowSpills: div.flex.items-center \"System Statusoperational\" 14px).",
+    "expected": "Value fits beside the icon, or uses a smaller size or a badge.",
+    "actual": "\"operational\" runs into the icon tile.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-001/step-5-dashboard.png",
+    "suggested_fix": "Allow the text column to shrink (min-w-0) and truncate, or render status as a badge.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/page.tsx"
+    ]
+  },
+  {
+    "id": "F-001-07",
+    "story_id": "STORY-001",
+    "severity": "medium",
+    "category": "layout",
+    "criterion": "Responsive behavior",
+    "score": "fail",
+    "description": "At 390px the whole header is hidden: no global search, notifications bell, Branded switch or \"Start Tour\" (mapped defect auth #15, confirmed). The admin stat cards stack at about 155px each for one number, so Today's Appointments is several screens down.",
+    "expected": "A compact mobile header with search and bell; compact stat tiles.",
+    "actual": "Only a hamburger and \"ClinicMS\" on top; four tall cards before any useful content.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-001/mobile-check.png",
+    "suggested_fix": "Render a mobile header row (search icon opening a sheet, bell) and use a 2-column compact stat grid on small screens.",
+    "files_likely_involved": [
+      "frontend/src/components/layout/dashboard-layout.tsx",
+      "frontend/src/app/dashboard/page.tsx"
+    ]
+  },
+  {
+    "id": "F-001-08",
+    "story_id": "STORY-001",
+    "severity": "low",
+    "category": "visual",
+    "criterion": "Labels/copy",
+    "score": "warn",
+    "description": "The Password placeholder is \"••••••••\" in medium grey, so an empty field looks pre-filled with a saved password (step 1 shows dots while Sign in is disabled).",
+    "expected": "An empty-looking field or a text placeholder such as \"Password\".",
+    "actual": "Dots visible before typing.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-001/step-1-login.png",
+    "suggested_fix": "Remove the placeholder or use text.",
+    "files_likely_involved": [
+      "frontend/src/app/login/page.tsx"
+    ]
+  },
+  {
+    "id": "F-001-09",
+    "story_id": "STORY-001",
+    "severity": "low",
+    "category": "flow",
+    "criterion": "Dead ends",
+    "score": "warn",
+    "description": "An already signed-in user who opens /login sees the login form again. There is no redirect to /dashboard and no \"You are signed in as Riya\" hint.",
+    "expected": "Redirect authenticated users to /dashboard (or ?next).",
+    "actual": "Login form shown with a valid auth_token cookie present.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-001/edge-login-while-signed-in.png",
+    "suggested_fix": "In middleware, redirect /login to /dashboard when the auth_token cookie is present (validate on the client).",
+    "files_likely_involved": [
+      "frontend/src/middleware.ts",
+      "frontend/src/app/login/page.tsx"
+    ]
+  }
+]

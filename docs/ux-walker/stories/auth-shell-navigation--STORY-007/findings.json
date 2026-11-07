@@ -1,0 +1,85 @@
+[
+  {
+    "id": "F-007-01",
+    "story_id": "STORY-007",
+    "severity": "high",
+    "category": "happy-path",
+    "criterion": "Navigation: result opens the target",
+    "score": "fail",
+    "description": "Clicking the \"Arjun Reddy\" patient result in header search goes to /dashboard/patients?search=cmw6dbbe2000a7dc1bw0xhc61. The list search box is seeded with the internal id and shows \"No patients found\" (mapped auth defect #1 / patients #8, confirmed). Pressing Enter does the same, since the first result is the patient.",
+    "expected": "The result opens /dashboard/patients/<id> directly.",
+    "actual": "Empty list with a cuid in the search box; the receptionist has to clear it and search by phone.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-007/step-6-patients-empty.png",
+    "suggested_fix": "Change href to /dashboard/patients/${patient.id}.",
+    "files_likely_involved": [
+      "frontend/src/components/layout/header.tsx"
+    ]
+  },
+  {
+    "id": "F-007-02",
+    "story_id": "STORY-007",
+    "severity": "high",
+    "category": "disclosure",
+    "criterion": "Role boundary",
+    "score": "fail",
+    "description": "Searching \"shravya\" and clicking the staff result takes RECEPTION to /dashboard/users?search=<id>, a page that is not in her sidebar. It ignores the search param and lists every user, including a PATIENT portal account, with \"New User\", \"Clinic Holidays\", \"Edit\", \"Delete\", \"Reset password\" and \"Role & Permissions\" buttons (mapped auth defect #2, confirmed; GET /users has no @Roles).",
+    "expected": "Staff results are hidden for roles without Users access, or open a read-only profile; the page filters by the param.",
+    "actual": "The full staff directory and admin controls are exposed to the receptionist.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-007/var-staff-users-page.png",
+    "suggested_fix": "Hide user results for non-admin roles in header.tsx; add @Roles to GET /users; add a route guard on /dashboard/users.",
+    "files_likely_involved": [
+      "frontend/src/components/layout/header.tsx",
+      "backend/src/modules/users/users.controller.ts",
+      "frontend/src/app/dashboard/users/page.tsx"
+    ]
+  },
+  {
+    "id": "F-007-03",
+    "story_id": "STORY-007",
+    "severity": "medium",
+    "category": "flow",
+    "criterion": "Navigation: result opens the target",
+    "score": "fail",
+    "description": "The appointment result \"Arjun Reddy - 10:00-10:30 · 21 Nov 2026\" opens bare /dashboard/appointments with Doctor = Praneeta Jain and Date = 11/07/2026 (today), not 21 Nov (mapped auth defect #3 / appointments #19, confirmed).",
+    "expected": "The link carries doctorId and date (and highlights the appointment).",
+    "actual": "Riya has to change the date by hand to find the slot.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-007/step-8-appointments.png",
+    "suggested_fix": "href: /dashboard/appointments?doctorId=…&date=…&appointmentId=…, and read those params on the page.",
+    "files_likely_involved": [
+      "frontend/src/components/layout/header.tsx",
+      "frontend/src/app/dashboard/appointments/page.tsx"
+    ]
+  },
+  {
+    "id": "F-007-04",
+    "story_id": "STORY-007",
+    "severity": "medium",
+    "category": "consistency",
+    "criterion": "One way per task / predictable search",
+    "score": "warn",
+    "description": "The phone fragment \"543212\" finds Arjun's two appointments but not Arjun the patient: patient search is startsWith while appointment search is contains (catalog edge case, confirmed).",
+    "expected": "The same matching rule for phones everywhere (contains on digits).",
+    "actual": "Patient missing from results for a phone fragment.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-007/edge-phone-suffix.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "backend/src/modules/patients/patients.service.ts"
+    ]
+  },
+  {
+    "id": "F-007-05",
+    "story_id": "STORY-007",
+    "severity": "low",
+    "category": "visual",
+    "criterion": "Spacing consistency",
+    "score": "warn",
+    "description": "The results dropdown has about 30px of empty padding above the first result (visible in every dropdown state), and the footer \"Press Enter to go to first result\" promises a destination that dead-ends (F-007-01). Search is absent on mobile (see F-001-07).",
+    "expected": "Even padding.",
+    "actual": "Uneven top gap.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-007/step-3-results.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/src/components/layout/header.tsx"
+    ]
+  }
+]

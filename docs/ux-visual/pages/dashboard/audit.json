@@ -1,0 +1,5988 @@
+{
+ "page": "dashboard",
+ "generatedAt": "2026-11-07T12:42:12.777Z",
+ "screenshotsDir": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-visual/shots/dashboard",
+ "notes": {
+  "reception-tab": [
+   {
+    "el": "a",
+    "label": "Dashboard",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 107,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Patients",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 197,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Appointments",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 241,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Rooms",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 285,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Pharmacy Desk",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 376,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Pharmacy Counter",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 420,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Pharmacy Billing",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 464,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Inventory",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 508,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "button",
+    "label": "Log out",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 215,
+    "y": 851,
+    "w": 24,
+    "h": 24
+   },
+   {
+    "el": "input",
+    "label": "Search patients, appointments, doctors..",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 280,
+    "y": 14,
+    "w": 448,
+    "h": 36
+   },
+   {
+    "el": "button",
+    "label": "Start Tour",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 893,
+    "y": 16,
+    "w": 122,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Toggle branded mode",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1119,
+    "y": 20,
+    "w": 40,
+    "h": 24
+   },
+   {
+    "el": "button",
+    "label": "3",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1176,
+    "y": 16,
+    "w": 36,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Open settings",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1228,
+    "y": 16,
+    "w": 36,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Quick Guide",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1273,
+    "y": 88,
+    "w": 143,
+    "h": 41
+   },
+   {
+    "el": "button",
+    "label": "View All Appointments",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 885,
+    "y": 859,
+    "w": 506,
+    "h": 41
+   },
+   {
+    "el": "nextjs-portal",
+    "label": "",
+    "ring": false,
+    "outline": "none 3px",
+    "shadow": "none",
+    "x": 0,
+    "y": 900,
+    "w": 0,
+    "h": 0
+   },
+   {
+    "el": "body"
+   },
+   {
+    "el": "a",
+    "label": "Dashboard",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 107,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Patients",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 197,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Appointments",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 241,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Rooms",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 285,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Pharmacy Desk",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 376,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Pharmacy Counter",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 420,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Pharmacy Billing",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 464,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Inventory",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 508,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "button",
+    "label": "Log out",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 215,
+    "y": 851,
+    "w": 24,
+    "h": 24
+   },
+   {
+    "el": "input",
+    "label": "Search patients, appointments, doctors..",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 280,
+    "y": 14,
+    "w": 448,
+    "h": 36
+   },
+   {
+    "el": "button",
+    "label": "Start Tour",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 893,
+    "y": 16,
+    "w": 122,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Toggle branded mode",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1119,
+    "y": 20,
+    "w": 40,
+    "h": 24
+   },
+   {
+    "el": "button",
+    "label": "3",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1176,
+    "y": 16,
+    "w": 36,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Open settings",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1228,
+    "y": 16,
+    "w": 36,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Quick Guide",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1273,
+    "y": 79,
+    "w": 143,
+    "h": 41
+   },
+   {
+    "el": "button",
+    "label": "View All Appointments",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 885,
+    "y": 859,
+    "w": 506,
+    "h": 41
+   },
+   {
+    "el": "nextjs-portal",
+    "label": "",
+    "ring": false,
+    "outline": "none 3px",
+    "shadow": "none",
+    "x": 0,
+    "y": 900,
+    "w": 0,
+    "h": 0
+   }
+  ],
+  "reception-afterEsc": {
+   "dialogOpen": false,
+   "focus": "ClinicMSOverviewDashboardClini"
+  },
+  "shravya-tab": [
+   {
+    "el": "a",
+    "label": "Dashboard",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 107,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Patients",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 197,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Appointments",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 241,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Visits",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 285,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Procedures",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 329,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Rooms",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 373,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Inventory",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 464,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Test Transcribe",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 555,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "button",
+    "label": "Log out",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 215,
+    "y": 840,
+    "w": 24,
+    "h": 24
+   },
+   {
+    "el": "input",
+    "label": "Search patients, appointments, doctors..",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 280,
+    "y": 14,
+    "w": 448,
+    "h": 36
+   },
+   {
+    "el": "button",
+    "label": "Toggle branded mode",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1041,
+    "y": 20,
+    "w": 40,
+    "h": 24
+   },
+   {
+    "el": "button",
+    "label": "3",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1098,
+    "y": 16,
+    "w": 36,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Open settings",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1150,
+    "y": 16,
+    "w": 36,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Quick Guide",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1273,
+    "y": 88,
+    "w": 143,
+    "h": 41
+   },
+   {
+    "el": "a",
+    "label": "Ananya GuptaNo diagnosis recorded07 Nov ",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 305,
+    "y": 285,
+    "w": 506,
+    "h": 66
+   },
+   {
+    "el": "a",
+    "label": "John DoeRoutine skin examination - Norma",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 305,
+    "y": 359,
+    "w": 506,
+    "h": 66
+   },
+   {
+    "el": "a",
+    "label": "John DoeAcne Vulgaris - Moderate07 Nov 2",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 305,
+    "y": 432,
+    "w": 506,
+    "h": 66
+   },
+   {
+    "el": "a",
+    "label": "John DoeBenign nevus07 Nov 2026, 05:45 p",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 305,
+    "y": 506,
+    "w": 506,
+    "h": 66
+   },
+   {
+    "el": "a",
+    "label": "John DoeAcne Vulgaris - Improving07 Nov ",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 305,
+    "y": 579,
+    "w": 506,
+    "h": 66
+   },
+   {
+    "el": "a",
+    "label": "John DoeEczema - Atopic Dermatitis07 Nov",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 305,
+    "y": 653,
+    "w": 506,
+    "h": 66
+   },
+   {
+    "el": "input",
+    "label": "Search my patients",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 885,
+    "y": 285,
+    "w": 506,
+    "h": 36
+   },
+   {
+    "el": "a",
+    "label": "Ananya Gupta7MWED · 9876543215Last visit",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 885,
+    "y": 333,
+    "w": 506,
+    "h": 66
+   },
+   {
+    "el": "button",
+    "label": "View All Appointments",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 885,
+    "y": 810,
+    "w": 506,
+    "h": 41
+   },
+   {
+    "el": "nextjs-portal",
+    "label": "",
+    "ring": false,
+    "outline": "none 3px",
+    "shadow": "none",
+    "x": 0,
+    "y": 900,
+    "w": 0,
+    "h": 0
+   },
+   {
+    "el": "body"
+   },
+   {
+    "el": "a",
+    "label": "Dashboard",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 107,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Patients",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 197,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Appointments",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 241,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Visits",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 285,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Procedures",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 329,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Rooms",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 373,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Inventory",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 464,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Test Transcribe",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 555,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "button",
+    "label": "Log out",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 215,
+    "y": 840,
+    "w": 24,
+    "h": 24
+   },
+   {
+    "el": "input",
+    "label": "Search patients, appointments, doctors..",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 280,
+    "y": 14,
+    "w": 448,
+    "h": 36
+   }
+  ],
+  "shravya-afterEsc": {
+   "dialogOpen": false,
+   "focus": "ClinicMSOverviewDashboardClini"
+  },
+  "manager-tab": [
+   {
+    "el": "a",
+    "label": "Dashboard",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 107,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Patients",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 197,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Appointments",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 241,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Visits",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 285,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Procedures",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 329,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Rooms",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 373,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Inventory",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 464,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Reports",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 555,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Users",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 599,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "button",
+    "label": "Log out",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 215,
+    "y": 851,
+    "w": 24,
+    "h": 24
+   },
+   {
+    "el": "input",
+    "label": "Search patients, appointments, doctors..",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 280,
+    "y": 14,
+    "w": 448,
+    "h": 36
+   },
+   {
+    "el": "button",
+    "label": "Toggle branded mode",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1096,
+    "y": 20,
+    "w": 40,
+    "h": 24
+   },
+   {
+    "el": "button",
+    "label": "1",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1153,
+    "y": 16,
+    "w": 36,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Open settings",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1205,
+    "y": 16,
+    "w": 36,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Quick Guide",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1273,
+    "y": 88,
+    "w": 143,
+    "h": 41
+   },
+   {
+    "el": "nextjs-portal",
+    "label": "",
+    "ring": false,
+    "outline": "none 3px",
+    "shadow": "none",
+    "x": 0,
+    "y": 900,
+    "w": 0,
+    "h": 0
+   },
+   {
+    "el": "nextjs-portal",
+    "label": "",
+    "ring": false,
+    "outline": "none 3px",
+    "shadow": "none",
+    "x": 0,
+    "y": 900,
+    "w": 0,
+    "h": 0
+   },
+   {
+    "el": "nextjs-portal",
+    "label": "",
+    "ring": false,
+    "outline": "none 3px",
+    "shadow": "none",
+    "x": 0,
+    "y": 900,
+    "w": 0,
+    "h": 0
+   },
+   {
+    "el": "body"
+   },
+   {
+    "el": "a",
+    "label": "Dashboard",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 107,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Patients",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 197,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Appointments",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 241,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Visits",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 285,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Procedures",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 329,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Rooms",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 373,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Inventory",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 464,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Reports",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 555,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "a",
+    "label": "Users",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 12,
+    "y": 599,
+    "w": 231,
+    "h": 40
+   },
+   {
+    "el": "button",
+    "label": "Log out",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "none",
+    "x": 215,
+    "y": 851,
+    "w": 24,
+    "h": 24
+   },
+   {
+    "el": "input",
+    "label": "Search patients, appointments, doctors..",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 280,
+    "y": 14,
+    "w": 448,
+    "h": 36
+   },
+   {
+    "el": "button",
+    "label": "Toggle branded mode",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1096,
+    "y": 20,
+    "w": 40,
+    "h": 24
+   },
+   {
+    "el": "button",
+    "label": "1",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1153,
+    "y": 16,
+    "w": 36,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Open settings",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1205,
+    "y": 16,
+    "w": 36,
+    "h": 32
+   },
+   {
+    "el": "button",
+    "label": "Quick Guide",
+    "ring": true,
+    "outline": "solid 3px",
+    "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0",
+    "x": 1273,
+    "y": 88,
+    "w": 143,
+    "h": 41
+   },
+   {
+    "el": "nextjs-portal",
+    "label": "",
+    "ring": false,
+    "outline": "none 3px",
+    "shadow": "none",
+    "x": 0,
+    "y": 900,
+    "w": 0,
+    "h": 0
+   }
+  ],
+  "manager-afterEsc": {
+   "dialogOpen": false,
+   "focus": "ClinicMSOverviewDashboardClini"
+  }
+ },
+ "audits": {
+  "reception-375-populated": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 1736,
+    "clientHeight": 756,
+    "overflowY": 980,
+    "scrollWidth": 375,
+    "clientWidth": 375,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 375,
+     "height": 812,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 756,
+      "scrollH": 1736
+     }
+    ],
+    "deadSpace": [
+     {
+      "el": "div.bg-card.text-card-foreground \"Total Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 11,
+      "pctOfViewport": 18
+     },
+     {
+      "el": "div.bg-card.text-card-foreground \"Active Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 12,
+      "pctOfViewport": 18
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      12,
+      16,
+      24
+     ],
+     "offScale": [
+      6
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "18px",
+      "26px",
+      "16px",
+      "20px",
+      "14px"
+     ],
+     "sizes": {
+      "18px/600": 1,
+      "26px/600": 5,
+      "16px/400": 3,
+      "16px/500": 12,
+      "20px/600": 2,
+      "14px/400": 6,
+      "14px/500": 6
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"All systems operational\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "div.text-lg.leading-tight \"Today's Appointments\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Upcoming appointments for toda\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"Rajesh Kumar\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"18:30-18:45\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Priya Sharma\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"18:30-18:45\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Arjun Reddy\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"19:00-19:15\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Kavya Patel\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"19:00-19:15\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Ananya Gupta\"",
+      "ratio": 1.09
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 0,
+      "y": 0,
+      "w": 375,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "reception-375-dialog-nav": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 1736,
+    "clientHeight": 756,
+    "overflowY": 980,
+    "scrollWidth": 375,
+    "clientWidth": 375,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 375,
+     "height": 812,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 756,
+      "scrollH": 1736
+     }
+    ],
+    "deadSpace": [
+     {
+      "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+      "w": 375,
+      "h": 812,
+      "fillPct": 0,
+      "pctOfViewport": 100
+     },
+     {
+      "el": "div.bg-card.text-card-foreground \"Total Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 11,
+      "pctOfViewport": 18
+     },
+     {
+      "el": "div.bg-card.text-card-foreground \"Active Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 12,
+      "pctOfViewport": 18
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      12,
+      16,
+      20,
+      24
+     ],
+     "offScale": [
+      6
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "18px",
+      "26px",
+      "16px",
+      "20px",
+      "14px",
+      "22px"
+     ],
+     "sizes": {
+      "18px/600": 1,
+      "26px/600": 5,
+      "16px/400": 3,
+      "16px/500": 21,
+      "20px/600": 3,
+      "14px/400": 7,
+      "14px/500": 9,
+      "22px/600": 1,
+      "16px/600": 1,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": [
+      [
+       13,
+       16
+      ]
+     ]
+    },
+    "smallTargets": [
+     {
+      "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+      "w": 16,
+      "h": 16
+     }
+    ],
+    "lowContrast": [
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"All systems operational\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "div.text-lg.leading-tight \"Today's Appointments\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Upcoming appointments for toda\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"Rajesh Kumar\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"18:30-18:45\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Priya Sharma\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"18:30-18:45\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Arjun Reddy\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"19:00-19:15\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Kavya Patel\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"19:00-19:15\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Ananya Gupta\"",
+      "ratio": 1.09
+     }
+    ],
+    "overlaps": [
+     {
+      "a": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "b": "a.group.relative \"Patients\"",
+      "w": 143,
+      "h": 23
+     }
+    ],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 0,
+      "y": 0,
+      "w": 375,
+      "h": 32
+     },
+     {
+      "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+      "x": 0,
+      "y": 0,
+      "w": 375,
+      "h": 812
+     },
+     {
+      "el": "div#radix-_R_qkndlb_ \"Clinic navigationClinicMSOverv\"",
+      "x": 0,
+      "y": 0,
+      "w": 288,
+      "h": 812
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "reception-375-dialog-quickguide": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 1736,
+    "clientHeight": 756,
+    "overflowY": 980,
+    "scrollWidth": 375,
+    "clientWidth": 375,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 375,
+     "height": 812,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 756,
+      "scrollH": 1736
+     }
+    ],
+    "deadSpace": [
+     {
+      "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+      "w": 375,
+      "h": 812,
+      "fillPct": 0,
+      "pctOfViewport": 100
+     },
+     {
+      "el": "div.bg-card.text-card-foreground \"Total Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 11,
+      "pctOfViewport": 18
+     },
+     {
+      "el": "div.bg-card.text-card-foreground \"Active Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 12,
+      "pctOfViewport": 18
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      12,
+      16,
+      20,
+      24
+     ],
+     "offScale": [
+      6
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "18px",
+      "26px",
+      "16px",
+      "20px",
+      "14px"
+     ],
+     "sizes": {
+      "18px/600": 1,
+      "26px/600": 5,
+      "16px/400": 9,
+      "16px/500": 12,
+      "20px/600": 3,
+      "14px/400": 6,
+      "14px/500": 6,
+      "18px/500": 2,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [
+     {
+      "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+      "w": 16,
+      "h": 16
+     }
+    ],
+    "lowContrast": [
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"All systems operational\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "div.text-lg.leading-tight \"Today's Appointments\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Upcoming appointments for toda\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"Rajesh Kumar\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"18:30-18:45\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Priya Sharma\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"18:30-18:45\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Arjun Reddy\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"19:00-19:15\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Kavya Patel\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"19:00-19:15\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.inline-flex.items-center \"SCHEDULED\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-sm.font-medium \"Ananya Gupta\"",
+      "ratio": 1.09
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 0,
+      "y": 0,
+      "w": 375,
+      "h": 32
+     },
+     {
+      "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+      "x": 0,
+      "y": 0,
+      "w": 375,
+      "h": 812
+     },
+     {
+      "el": "div#radix-_r_0_ \"Dashboard GuideOverviewView ke\"",
+      "x": 0,
+      "y": 178,
+      "w": 375,
+      "h": 455
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "reception-768-populated": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 1348,
+    "clientHeight": 960,
+    "overflowY": 388,
+    "scrollWidth": 512,
+    "clientWidth": 512,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 768,
+     "height": 1024,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 960,
+      "scrollH": 1348
+     }
+    ],
+    "deadSpace": [],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "26px",
+      "20px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 10,
+      "16px/500": 23,
+      "16px/600": 1,
+      "14px/400": 8,
+      "32px/600": 1,
+      "16px/400": 3,
+      "26px/600": 4,
+      "20px/600": 2
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Desk\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Counter\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Billing\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Riya Sharma\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.hidden.sm:inline \"Start Tour\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "span.border.font-medium \"3\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 1.09
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 736,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [
+     {
+      "el": "div.flex.items-center \"System Statusoperational\"",
+      "spillPx": 20
+     }
+    ],
+    "wrappedControls": []
+   }
+  },
+  "reception-1440-populated": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 894,
+    "clientHeight": 836,
+    "overflowY": 58,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 836,
+      "scrollH": 894
+     }
+    ],
+    "deadSpace": [
+     {
+      "el": "div.bg-card.text-card-foreground \"System AlertsImportant notific\"",
+      "w": 556,
+      "h": 572,
+      "fillPct": 9,
+      "pctOfViewport": 25
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "26px",
+      "20px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 10,
+      "16px/500": 23,
+      "16px/600": 1,
+      "14px/400": 8,
+      "32px/600": 1,
+      "16px/400": 3,
+      "26px/600": 4,
+      "20px/600": 2
+     }
+    },
+    "alignment": {
+     "nearMissEdges": [
+      [
+       1175,
+       1176
+      ]
+     ]
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Desk\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Counter\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Billing\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Riya Sharma\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.hidden.sm:inline \"Start Tour\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "span.border.font-medium \"3\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 1.09
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "reception-1440-dialog-quickguide": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 894,
+    "clientHeight": 836,
+    "overflowY": 58,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 836,
+      "scrollH": 894
+     }
+    ],
+    "deadSpace": [
+     {
+      "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+      "w": 1440,
+      "h": 900,
+      "fillPct": 0,
+      "pctOfViewport": 100
+     },
+     {
+      "el": "div.bg-card.text-card-foreground \"System AlertsImportant notific\"",
+      "w": 556,
+      "h": 572,
+      "fillPct": 9,
+      "pctOfViewport": 25
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "26px",
+      "20px",
+      "18px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 10,
+      "16px/500": 23,
+      "16px/600": 1,
+      "14px/400": 8,
+      "32px/600": 1,
+      "16px/400": 9,
+      "26px/600": 4,
+      "20px/600": 3,
+      "18px/500": 2,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": [
+      [
+       1175,
+       1176
+      ]
+     ]
+    },
+    "smallTargets": [
+     {
+      "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+      "w": 16,
+      "h": 16
+     }
+    ],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Desk\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Counter\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Billing\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Riya Sharma\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.hidden.sm:inline \"Start Tour\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "span.border.font-medium \"3\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 1.09
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     },
+     {
+      "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+     },
+     {
+      "el": "div#radix-_r_0_ \"Dashboard GuideOverviewView ke\"",
+      "x": 464,
+      "y": 257,
+      "w": 512,
+      "h": 387
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "reception-1440-menu-notifications": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 894,
+    "clientHeight": 836,
+    "overflowY": 58,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 836,
+      "scrollH": 894
+     }
+    ],
+    "deadSpace": [
+     {
+      "el": "div.bg-card.text-card-foreground \"System AlertsImportant notific\"",
+      "w": 556,
+      "h": 572,
+      "fillPct": 9,
+      "pctOfViewport": 25
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "26px",
+      "20px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 10,
+      "16px/500": 27,
+      "16px/600": 1,
+      "14px/400": 11,
+      "32px/600": 1,
+      "16px/400": 4,
+      "26px/600": 4,
+      "20px/600": 2
+     }
+    },
+    "alignment": {
+     "nearMissEdges": [
+      [
+       1175,
+       1176
+      ]
+     ]
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Desk\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Counter\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Billing\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Riya Sharma\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.hidden.sm:inline \"Start Tour\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "span.border.font-medium \"3\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 1.09
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     },
+     {
+      "el": "div \"Notifications Upcoming: Deepik\"",
+      "x": 892,
+      "y": 52,
+      "w": 320,
+      "h": 327
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "shravya-375-populated": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 2473,
+    "clientHeight": 756,
+    "overflowY": 1717,
+    "scrollWidth": 375,
+    "clientWidth": 375,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 375,
+     "height": 812,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 756,
+      "scrollH": 2473
+     }
+    ],
+    "deadSpace": [
+     {
+      "el": "div.bg-card.text-card-foreground \"Total Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 11,
+      "pctOfViewport": 18
+     },
+     {
+      "el": "div.bg-card.text-card-foreground \"Active Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 12,
+      "pctOfViewport": 18
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      12,
+      16,
+      24
+     ],
+     "offScale": [
+      6
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "18px",
+      "26px",
+      "16px",
+      "20px",
+      "14px"
+     ],
+     "sizes": {
+      "18px/600": 1,
+      "26px/600": 5,
+      "16px/400": 5,
+      "16px/500": 17,
+      "20px/600": 4,
+      "14px/400": 18,
+      "14px/500": 4
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"Recent Visits\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Your latest consultations\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "span.block.text-sm \"Ananya Gupta\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"No diagnosis recorded\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 06:08 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Routine skin examination - Nor\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Acne Vulgaris - Moderate\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Benign nevus\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Acne Vulgaris - Improving\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Eczema - Atopic Dermatitis\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "div.text-lg.leading-tight \"My Patients\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Patients with you as their pri\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "span.block.text-sm \"Ananya Gupta\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"7MWED · 9876543215\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"Last visit 07 Nov 2026\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 0,
+      "y": 0,
+      "w": 375,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "shravya-768-populated": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 2043,
+    "clientHeight": 960,
+    "overflowY": 1083,
+    "scrollWidth": 512,
+    "clientWidth": 512,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 768,
+     "height": 1024,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 960,
+      "scrollH": 2043
+     }
+    ],
+    "deadSpace": [],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "20px",
+      "26px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 9,
+      "16px/500": 27,
+      "16px/600": 1,
+      "14px/400": 20,
+      "32px/600": 1,
+      "16px/400": 5,
+      "20px/600": 4,
+      "26px/600": 4
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Visits\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Procedures\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Admin\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Test Transcribe\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.border.font-medium \"3\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"Recent Visits\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Your latest consultations\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "span.block.text-sm \"Ananya Gupta\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"No diagnosis recorded\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 06:08 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Routine skin examination - Nor\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Acne Vulgaris - Moderate\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 736,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [
+     {
+      "el": "div.flex.items-center \"System Statusoperational\"",
+      "spillPx": 20
+     }
+    ],
+    "wrappedControls": []
+   }
+  },
+  "shravya-1440-populated": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 1324,
+    "clientHeight": 836,
+    "overflowY": 488,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 836,
+      "scrollH": 1324
+     }
+    ],
+    "deadSpace": [],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "20px",
+      "26px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 9,
+      "16px/500": 27,
+      "16px/600": 1,
+      "14px/400": 20,
+      "32px/600": 1,
+      "16px/400": 5,
+      "20px/600": 4,
+      "26px/600": 4
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Visits\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Procedures\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Admin\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Test Transcribe\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.border.font-medium \"3\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"Recent Visits\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Your latest consultations\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "span.block.text-sm \"Ananya Gupta\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"No diagnosis recorded\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 06:08 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Routine skin examination - Nor\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Acne Vulgaris - Moderate\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "shravya-1440-dialog-quickguide": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 1324,
+    "clientHeight": 836,
+    "overflowY": 488,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 836,
+      "scrollH": 1324
+     }
+    ],
+    "deadSpace": [
+     {
+      "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+      "w": 1440,
+      "h": 900,
+      "fillPct": 0,
+      "pctOfViewport": 100
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "20px",
+      "26px",
+      "18px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 9,
+      "16px/500": 27,
+      "16px/600": 1,
+      "14px/400": 20,
+      "32px/600": 1,
+      "16px/400": 11,
+      "20px/600": 5,
+      "26px/600": 4,
+      "18px/500": 2,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [
+     {
+      "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+      "w": 16,
+      "h": 16
+     }
+    ],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Visits\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Procedures\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Admin\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Test Transcribe\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.border.font-medium \"3\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"Recent Visits\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Your latest consultations\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "span.block.text-sm \"Ananya Gupta\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"No diagnosis recorded\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 06:08 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Routine skin examination - Nor\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Acne Vulgaris - Moderate\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     }
+    ],
+    "overlaps": [
+     {
+      "a": "input.file:text-foreground.placeholder:text-muted-foreground \"Search my patients\"",
+      "b": "button.ring-offset-background.focus:ring-ring \"Close\"",
+      "w": 16,
+      "h": 4
+     }
+    ],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     },
+     {
+      "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+     },
+     {
+      "el": "div#radix-_r_0_ \"Dashboard GuideOverviewView ke\"",
+      "x": 464,
+      "y": 257,
+      "w": 512,
+      "h": 387
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "shravya-1440-menu-notifications": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 1324,
+    "clientHeight": 836,
+    "overflowY": 488,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 836,
+      "scrollH": 1324
+     }
+    ],
+    "deadSpace": [],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "20px",
+      "26px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 9,
+      "16px/500": 31,
+      "16px/600": 1,
+      "14px/400": 23,
+      "32px/600": 1,
+      "16px/400": 6,
+      "20px/600": 4,
+      "26px/600": 4
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Visits\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Procedures\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Admin\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Test Transcribe\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.border.font-medium \"3\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"Recent Visits\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Your latest consultations\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "span.block.text-sm \"Ananya Gupta\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"No diagnosis recorded\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 06:08 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Routine skin examination - Nor\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.block.text-sm \"John Doe\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "span.block.text-xs \"Acne Vulgaris - Moderate\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.shrink-0.text-xs \"07 Nov 2026, 05:45 pm\"",
+      "ratio": 1.05
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     },
+     {
+      "el": "div \"Notifications Deepika Nair on \"",
+      "x": 814,
+      "y": 52,
+      "w": 320,
+      "h": 258
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "manager-375-populated": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 1378,
+    "clientHeight": 756,
+    "overflowY": 622,
+    "scrollWidth": 375,
+    "clientWidth": 375,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 375,
+     "height": 812,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 756,
+      "scrollH": 1378
+     }
+    ],
+    "deadSpace": [
+     {
+      "el": "div.bg-card.text-card-foreground \"Total Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 11,
+      "pctOfViewport": 18
+     },
+     {
+      "el": "div.bg-card.text-card-foreground \"Active Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 12,
+      "pctOfViewport": 18
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      12,
+      16,
+      24
+     ],
+     "offScale": [
+      6
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "18px",
+      "26px",
+      "16px",
+      "20px",
+      "14px"
+     ],
+     "sizes": {
+      "18px/600": 1,
+      "26px/600": 5,
+      "16px/400": 3,
+      "16px/500": 6,
+      "20px/600": 2,
+      "14px/400": 1,
+      "14px/500": 1,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"All systems operational\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "div.text-lg.leading-tight \"Today's Appointments\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Upcoming appointments for toda\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-gray-500.text-center \"No appointments scheduled for \"",
+      "ratio": 2.57
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 0,
+      "y": 0,
+      "w": 375,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "manager-768-populated": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 962,
+    "clientHeight": 960,
+    "overflowY": 2,
+    "scrollWidth": 512,
+    "clientWidth": 512,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 768,
+     "height": 1024,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 960,
+      "scrollH": 962
+     }
+    ],
+    "deadSpace": [],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "26px",
+      "20px",
+      "18px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 6,
+      "16px/500": 17,
+      "16px/600": 1,
+      "14px/400": 3,
+      "32px/600": 1,
+      "16px/400": 3,
+      "26px/600": 4,
+      "20px/600": 2,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Visits\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Procedures\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Admin\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Reports\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Users\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Manoj Manager\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"MANAGER\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.border.font-medium \"1\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 736,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [
+     {
+      "el": "div.flex.items-center \"System Statusoperational\"",
+      "spillPx": 20
+     }
+    ],
+    "wrappedControls": []
+   }
+  },
+  "manager-1440-populated": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 836,
+    "clientHeight": 836,
+    "overflowY": 0,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [],
+    "deadSpace": [],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "26px",
+      "20px",
+      "18px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 6,
+      "16px/500": 17,
+      "16px/600": 1,
+      "14px/400": 3,
+      "32px/600": 1,
+      "16px/400": 3,
+      "26px/600": 4,
+      "20px/600": 2,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Visits\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Procedures\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Admin\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Reports\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Users\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Manoj Manager\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"MANAGER\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.border.font-medium \"1\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "manager-1440-dialog-quickguide": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 836,
+    "clientHeight": 836,
+    "overflowY": 0,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [],
+    "deadSpace": [
+     {
+      "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+      "w": 1440,
+      "h": 900,
+      "fillPct": 0,
+      "pctOfViewport": 100
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "26px",
+      "20px",
+      "18px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 6,
+      "16px/500": 17,
+      "16px/600": 1,
+      "14px/400": 3,
+      "32px/600": 1,
+      "16px/400": 9,
+      "26px/600": 4,
+      "20px/600": 3,
+      "18px/400": 2,
+      "18px/500": 2
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [
+     {
+      "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+      "w": 16,
+      "h": 16
+     }
+    ],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Visits\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Procedures\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Admin\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Reports\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Users\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Manoj Manager\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"MANAGER\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.border.font-medium \"1\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     },
+     {
+      "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+     },
+     {
+      "el": "div#radix-_r_0_ \"Dashboard GuideOverviewView ke\"",
+      "x": 464,
+      "y": 257,
+      "w": 512,
+      "h": 387
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "manager-1440-menu-notifications": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 836,
+    "clientHeight": 836,
+    "overflowY": 0,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [],
+    "deadSpace": [],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "26px",
+      "20px",
+      "18px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 6,
+      "16px/500": 19,
+      "16px/600": 1,
+      "14px/400": 4,
+      "32px/600": 1,
+      "16px/400": 4,
+      "26px/600": 4,
+      "20px/600": 2,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Visits\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Procedures\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Admin\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Reports\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Users\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Manoj Manager\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"MANAGER\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.border.font-medium \"1\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     },
+     {
+      "el": "div \"Notifications 3 upcoming appoi\"",
+      "x": 869,
+      "y": 52,
+      "w": 320,
+      "h": 151
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "reception-1440-empty": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 836,
+    "clientHeight": 836,
+    "overflowY": 0,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [],
+    "deadSpace": [],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "26px",
+      "20px",
+      "18px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 4,
+      "16px/500": 17,
+      "16px/600": 1,
+      "14px/400": 3,
+      "32px/600": 1,
+      "16px/400": 3,
+      "26px/600": 4,
+      "20px/600": 2,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": [
+      [
+       1175,
+       1176
+      ]
+     ]
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Desk\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Counter\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Billing\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Riya Sharma\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.hidden.sm:inline \"Start Tour\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"All systems operational\"",
+      "ratio": 1.05
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "reception-375-empty": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 1378,
+    "clientHeight": 756,
+    "overflowY": 622,
+    "scrollWidth": 375,
+    "clientWidth": 375,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 375,
+     "height": 812,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "clientH": 756,
+      "scrollH": 1378
+     }
+    ],
+    "deadSpace": [
+     {
+      "el": "div.bg-card.text-card-foreground \"Total Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 11,
+      "pctOfViewport": 18
+     },
+     {
+      "el": "div.bg-card.text-card-foreground \"Active Users11\"",
+      "w": 343,
+      "h": 156,
+      "fillPct": 12,
+      "pctOfViewport": 18
+     }
+    ],
+    "spacing": {
+     "observed": [
+      2,
+      4,
+      6,
+      8,
+      12,
+      16,
+      24
+     ],
+     "offScale": [
+      6
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "18px",
+      "26px",
+      "16px",
+      "20px",
+      "14px"
+     ],
+     "sizes": {
+      "18px/600": 1,
+      "26px/600": 5,
+      "16px/400": 3,
+      "16px/500": 6,
+      "20px/600": 2,
+      "14px/400": 1,
+      "14px/500": 1,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Active Users\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"11\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"Total Branches\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"1\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 2.46
+     },
+     {
+      "el": "p.text-2xl.font-semibold \"operational\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-lg.leading-tight \"System Alerts\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Important notifications requir\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-sm.font-medium \"System Status\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-gray-600 \"All systems operational\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "div.text-lg.leading-tight \"Today's Appointments\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "div.text-muted-foreground.text-sm \"Upcoming appointments for toda\"",
+      "ratio": 2.47
+     },
+     {
+      "el": "p.text-gray-500.text-center \"No appointments scheduled for \"",
+      "ratio": 2.57
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 0,
+      "y": 0,
+      "w": 375,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "reception-1440-error": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 836,
+    "clientHeight": 836,
+    "overflowY": 0,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [],
+    "deadSpace": [
+     {
+      "el": "div.min-w-0.flex-1 \"Start TourBrandedRiya SharmaCl\"",
+      "w": 1184,
+      "h": 900,
+      "fillPct": 8,
+      "pctOfViewport": 82
+     },
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "w": 1184,
+      "h": 836,
+      "fillPct": 6,
+      "pctOfViewport": 76
+     }
+    ],
+    "spacing": {
+     "observed": [
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "18px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 3,
+      "16px/500": 11,
+      "16px/600": 1,
+      "14px/400": 2,
+      "32px/600": 1,
+      "16px/400": 1,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Desk\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Counter\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Billing\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Riya Sharma\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.hidden.sm:inline \"Start Tour\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.sr-only \"Loading dashboard…\"",
+      "ratio": 1.09
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  },
+  "reception-1440-loading": {
+   "url": "http://localhost:3000/dashboard",
+   "mainScroller": {
+    "scrollHeight": 836,
+    "clientHeight": 836,
+    "overflowY": 0,
+    "scrollWidth": 1184,
+    "clientWidth": 1184,
+    "overflowX": 0
+   },
+   "layout": {
+    "viewport": {
+     "width": 1440,
+     "height": 900,
+     "pageScrollY": 0,
+     "pageScrollX": 0
+    },
+    "offscreenPrimary": [],
+    "scrollers": [],
+    "deadSpace": [
+     {
+      "el": "div.min-w-0.flex-1 \"Start TourBranded3Riya SharmaC\"",
+      "w": 1184,
+      "h": 900,
+      "fillPct": 8,
+      "pctOfViewport": 82
+     },
+     {
+      "el": "main.min-w-0.flex-1 \"DashboardWelcome back! Here’s \"",
+      "w": 1184,
+      "h": 836,
+      "fillPct": 6,
+      "pctOfViewport": 76
+     }
+    ],
+    "spacing": {
+     "observed": [
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20,
+      24,
+      40
+     ],
+     "offScale": [
+      6,
+      10
+     ],
+     "nearDupes": [
+      [
+       4,
+       6
+      ],
+      [
+       6,
+       8
+      ],
+      [
+       8,
+       10
+      ],
+      [
+       10,
+       12
+      ]
+     ]
+    },
+    "type": {
+     "distinctFontSizes": [
+      "22px",
+      "14px",
+      "16px",
+      "32px",
+      "18px"
+     ],
+     "sizes": {
+      "22px/600": 1,
+      "14px/500": 4,
+      "16px/500": 11,
+      "16px/600": 1,
+      "14px/400": 2,
+      "32px/600": 1,
+      "16px/400": 1,
+      "18px/400": 1
+     }
+    },
+    "alignment": {
+     "nearMissEdges": []
+    },
+    "smallTargets": [],
+    "lowContrast": [
+     {
+      "el": "span.ml-2.text-xl \"ClinicMS\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.px-3.pb-1 \"Overview\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Dashboard\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "p.px-3.pb-1 \"Clinical\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Patients\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Appointments\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Rooms\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.px-3.pb-1 \"Pharmacy\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Desk\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Counter\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Pharmacy Billing\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "a.group.relative \"Inventory\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "p.break-words.text-sm \"Riya Sharma\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.hidden.sm:inline \"Start Tour\"",
+      "ratio": 2.57
+     },
+     {
+      "el": "span.border.font-medium \"3\"",
+      "ratio": 1.1
+     },
+     {
+      "el": "h1.text-2xl.font-semibold \"Dashboard\"",
+      "ratio": 1.09
+     },
+     {
+      "el": "p.max-w-3xl.text-sm \"Welcome back! Here’s what’s ha\"",
+      "ratio": 1.05
+     },
+     {
+      "el": "span.sr-only \"Loading dashboard…\"",
+      "ratio": 1.09
+     }
+    ],
+    "overlaps": [],
+    "fixedOverlays": [
+     {
+      "el": "ol.fixed.top-0",
+      "x": 1408,
+      "y": 0,
+      "w": 32,
+      "h": 32
+     }
+    ]
+   },
+   "geometry": {
+    "pageOverflowX": 0,
+    "unevenRows": [],
+    "overflowSpills": [],
+    "wrappedControls": []
+   }
+  }
+ }
+}

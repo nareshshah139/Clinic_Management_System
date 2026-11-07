@@ -1,0 +1,103 @@
+[
+  {
+    "id": "F-004-01",
+    "story_id": "STORY-004",
+    "severity": "high",
+    "category": "happy-path",
+    "criterion": "Primary task completable",
+    "score": "fail",
+    "description": "Booking from the patient chart cannot be completed (mapped appointments defect #1, confirmed). /dashboard/appointments?patientId=<Arjun> shows an empty Patient box with no \"Selected:\" badge. Clicking the free 10:00 tile on 21 Nov opens \"Book Appointment\" with \"Patient: Unknown Patient / Phone: N/A\", and Confirm Booking gives toast \"Validation Error — Patient information is missing\" plus an inline red list.",
+    "expected": "The patient from ?patientId is resolved and shown as \"Selected: Arjun Reddy — 9876543212\", and the booking goes through in 4 steps.",
+    "actual": "The booking is blocked. Workaround: Cancel, type \"arjun\", pick him, click the slot again, confirm. That succeeded (POST /api/appointments 201).",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/appointments-scheduling-rooms--STORY-004/step-4-confirm-result.png",
+    "suggested_fix": "When patientId is in the URL, fetch the patient and setSelectedPatient (not just selectedPatientId), and pass it to the dialog.",
+    "files_likely_involved": [
+      "frontend/src/components/appointments/AppointmentsCalendar.tsx",
+      "frontend/src/components/appointments/AppointmentScheduler.tsx",
+      "frontend/src/components/appointments/AppointmentBookingDialog.tsx"
+    ]
+  },
+  {
+    "id": "F-004-02",
+    "story_id": "STORY-004",
+    "severity": "medium",
+    "category": "consistency",
+    "criterion": "Information consistent across one screen",
+    "score": "fail",
+    "description": "After booking 21 Nov, Arjun's chart says \"Next appointment: Not scheduled\" in the summary card while the tracker right below says \"Upcoming appt / Start Visit\" (mapped patients defect #6, confirmed). GET /patients/:id/next-appointment returns 200 with an empty body when there is none, which the API client treats as invalid_response and logs as api.request_failed on every chart load.",
+    "expected": "One source of truth for the next appointment, and a JSON null (or 204) for \"none\".",
+    "actual": "The two widgets disagree; console warnings on each load.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/appointments-scheduling-rooms--STORY-004/var-detail-after-booking.png",
+    "suggested_fix": "Return {data:null} or 204 from next-appointment; have the summary card use the same call as the tracker.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/patients/[id]/page.tsx",
+      "backend/src/modules/patients/patients.controller.ts"
+    ]
+  },
+  {
+    "id": "F-004-03",
+    "story_id": "STORY-004",
+    "severity": "medium",
+    "category": "layout",
+    "criterion": "Text fit & wrap",
+    "score": "fail",
+    "description": "In the booking dialog at 1280px the two room cards are too narrow: the \"Available\" pill breaks mid-word into three lines (\"Avai / labl / e\"), room names wrap (\"Consultation / Room 1\"), and \"Available for 10:00-10:30\" wraps. At 390px (single column) the same cards render cleanly.",
+    "expected": "Pills never wrap; cards use one column, or a wider dialog, when they cannot fit.",
+    "actual": "Mid-word breaks in a status pill.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/appointments-scheduling-rooms--STORY-004/step-3-booking-dialog.png",
+    "suggested_fix": "Add whitespace-nowrap to the badge and shrink-0; use grid-cols-1 below the dialog's max width or widen to max-w-2xl.",
+    "files_likely_involved": [
+      "frontend/src/components/appointments/AppointmentBookingDialog.tsx"
+    ]
+  },
+  {
+    "id": "F-004-04",
+    "story_id": "STORY-004",
+    "severity": "low",
+    "category": "hierarchy",
+    "criterion": "Information stated once",
+    "score": "warn",
+    "description": "The validation error appears twice, as a toast and as an inline red list. The dialog scrolls, so the \"Patient: Unknown Patient\" header that explains the error is out of view when the error appears.",
+    "expected": "One inline error next to the patient field, with the dialog scrolled to it.",
+    "actual": "Duplicated messages; cause not visible.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/appointments-scheduling-rooms--STORY-004/step-4-confirm-result.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/src/components/appointments/AppointmentBookingDialog.tsx"
+    ]
+  },
+  {
+    "id": "F-004-05",
+    "story_id": "STORY-004",
+    "severity": "low",
+    "category": "layout",
+    "criterion": "Spacing / control sizing",
+    "score": "warn",
+    "description": "The Appointments filter card has about 60px of empty space above the Doctor/Date row, and \"Quick Guide\" is styled as a full-width form control in the filter grid. The Patient search input in Doctor Calendar is about 175px wide and truncates its placeholder (\"Search patient by na\") and the selected value (\"Arjun Reddy — 987…\").",
+    "expected": "Tight card padding; Quick Guide in the page header like other pages; wider patient search.",
+    "actual": "Uneven card padding; truncated primary field.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/appointments-scheduling-rooms--STORY-004/step-1-appointments.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/appointments/page.tsx",
+      "frontend/src/components/appointments/AppointmentsCalendar.tsx"
+    ]
+  },
+  {
+    "id": "F-004-06",
+    "story_id": "STORY-004",
+    "severity": "low",
+    "category": "hierarchy",
+    "criterion": "One way per task",
+    "score": "warn",
+    "description": "The patient chart has two visit-start buttons (\"Start new visit\" in the header and tracker \"Start Visit\") and two booking buttons (\"Book appointment\" and tracker \"Book\"). Both of the booking buttons hit the same broken ?patientId prefill.",
+    "expected": "One primary action per intent.",
+    "actual": "Duplicate CTAs.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/appointments-scheduling-rooms--STORY-004/var-detail-after-booking.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/patients/[id]/page.tsx",
+      "frontend/src/components/patients/PatientProgressTracker.tsx"
+    ]
+  }
+]

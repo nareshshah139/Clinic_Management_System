@@ -1,0 +1,136 @@
+[
+  {
+    "id": "F-002-01",
+    "story_id": "STORY-002",
+    "severity": "critical",
+    "category": "flow",
+    "criterion": "Security: open redirect after login",
+    "score": "fail",
+    "description": "OPEN REDIRECT CONFIRMED. /login?next=https://example.com and /login?next=//example.com/phish both send the browser off-site right after a successful real login (mapped defect auth #11). Playwright saw the top-level navigation request go to https://example.com/ and http://example.com/phish; the page ended on chrome-error only because this sandbox blocks outbound traffic.",
+    "expected": "next accepts only same-origin relative paths (starting with a single \"/\" and not \"//\"); anything else falls back to /dashboard.",
+    "actual": "router.replace(next) navigates to the attacker URL with the user freshly authenticated, which makes a convincing phishing chain.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-002/open-redirect-https.png",
+    "suggested_fix": "In login/page.tsx: const n = search.get(\"next\"); const safe = n && n.startsWith(\"/\") && !n.startsWith(\"//\") && !n.startsWith(\"/\\\\\") ? n : \"/dashboard\".",
+    "files_likely_involved": [
+      "frontend/src/app/login/page.tsx"
+    ]
+  },
+  {
+    "id": "F-002-02",
+    "story_id": "STORY-002",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "Dead ends / empty states",
+    "score": "fail",
+    "description": "A mistyped dashboard URL (/dashboard/patient/<id>) renders the bare Next.js \"404 | This page could not be found.\" page with no sidebar, header, Log out or link home (mapped defect auth #23, confirmed). Signed out, /dashboard/xyz goes through login and then lands on the same bare 404.",
+    "expected": "A branded not-found inside the dashboard shell with \"Go to Dashboard\" and the nav still visible.",
+    "actual": "White page with \"404 | This page could not be found.\"; only the browser Back button helps.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-002/step-9-404.png",
+    "suggested_fix": "Add app/dashboard/not-found.tsx (inside the layout) and a root app/not-found.tsx with a home link.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/not-found.tsx (new)",
+      "frontend/src/app/not-found.tsx (new)"
+    ]
+  },
+  {
+    "id": "F-002-03",
+    "story_id": "STORY-002",
+    "severity": "medium",
+    "category": "consistency",
+    "criterion": "Information consistent across one screen",
+    "score": "fail",
+    "description": "On the patient Praneeta was sent (Arjun Reddy), the summary card says \"Next appointment: Not scheduled\" and the tracker offers \"Book\", but the History tab lists a Scheduled OPD appointment for today (07 Nov, 19:00) with Dr. Praneeta. GET /patients/:id/next-appointment returned 200 with an empty body (mapped patients defects #6 and #7, confirmed).",
+    "expected": "Today's later appointment counts as upcoming, and the summary card shows it.",
+    "actual": "Summary card and tracker say there is no appointment; History shows one.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-002/step-4b-history-record.png",
+    "suggested_fix": "Compare on date+startTime in IST (not date >= now), and have findOne return nextAppointment (or read it from the tracker call).",
+    "files_likely_involved": [
+      "backend/src/modules/patients/patients.service.ts",
+      "frontend/src/app/dashboard/patients/[id]/page.tsx"
+    ]
+  },
+  {
+    "id": "F-002-04",
+    "story_id": "STORY-002",
+    "severity": "low",
+    "category": "consistency",
+    "criterion": "Component consistency / navigation",
+    "score": "warn",
+    "description": "The old /dashboard/billing bookmark lands a DOCTOR on \"Pharmacy Billing\", but no sidebar item is highlighted and doctors have no Pharmacy links, so there is no nav route back. The page also breaks the shell pattern: the h1 sits inside a tinted panel indented 12px from every other page title, and \"Pharmacy Billing\" appears twice (h1 and card title).",
+    "expected": "Either restrict the redirect to roles that can reach the page, or keep the standard page header and highlight a nav item.",
+    "actual": "No active nav item; duplicated title; offset header.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-002/step-6-bookmark_dashboard_billing.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/next.config.js (redirects)",
+      "frontend/src/app/dashboard/pharmacy/page.tsx"
+    ]
+  },
+  {
+    "id": "F-002-05",
+    "story_id": "STORY-002",
+    "severity": "low",
+    "category": "flow",
+    "criterion": "Redirect target accuracy",
+    "score": "warn",
+    "description": "/dashboard/stock-predictions redirects to inventory?area=reorder&view=targets, which shows \"Manual targets & exclusions\", not \"Target proposals\" as the catalog says. The page also prints the raw branch id (\"Branch branch-seed-1\").",
+    "expected": "Old \"stock predictions\" bookmarks open the proposal (prediction) view; branch shown by name.",
+    "actual": "Manual targets editor; raw id text.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-002/step-7-bookmark_dashboard_stock-predictions.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/next.config.js (redirects)",
+      "frontend/src/components/inventory/InventoryWorkspace.tsx"
+    ]
+  },
+  {
+    "id": "F-002-06",
+    "story_id": "STORY-002",
+    "severity": "medium",
+    "category": "disclosure",
+    "criterion": "Secondary features / auth boundary",
+    "score": "fail",
+    "description": "/test-transcribe (\"Voice Transcription Test — Test the OpenAI Whisper transcription API\") renders for a signed-out visitor and also sits in the DOCTOR sidebar under \"Admin → Test Transcribe\". It is a developer test page exposed in production nav and outside auth.",
+    "expected": "Debug pages are removed, or gated to admins and covered by the middleware matcher.",
+    "actual": "Page loads signed out; doctors see it in their nav.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-002/var-test-transcribe-signedout.png",
+    "suggested_fix": "Delete the page or move it under /dashboard and gate by role; remove it from the sidebar.",
+    "files_likely_involved": [
+      "frontend/src/app/test-transcribe/page.tsx",
+      "frontend/src/middleware.ts",
+      "frontend/src/components/layout/sidebar.tsx"
+    ]
+  },
+  {
+    "id": "F-002-07",
+    "story_id": "STORY-002",
+    "severity": "low",
+    "category": "hierarchy",
+    "criterion": "Information stated once / emphasis",
+    "score": "warn",
+    "description": "The patient header shows the full internal id as a badge (\"ID: cmw6dbbe2000a7dc1bw0xhc61\") next to the human Code, and the Primary contact block prints a stray \"—\" (empty email) under the phone. Name, gender, age and phone repeat in header badges, summary card and Info tab.",
+    "expected": "Show the patient Code; keep the internal id behind a copy affordance; hide empty rows.",
+    "actual": "A 25-char cuid badge dominates the header; orphan dash.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-002/step-3-patient-detail.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/patients/[id]/page.tsx"
+    ]
+  },
+  {
+    "id": "F-002-08",
+    "story_id": "STORY-002",
+    "severity": "low",
+    "category": "layout",
+    "criterion": "Responsive behavior",
+    "score": "warn",
+    "description": "At 390px the patient progress tracker (Start / Document / Complete / Prescribe / Billing / Follow-up) is cut off after \"Complete\". The last three steps are off-screen with no scroll affordance.",
+    "expected": "Steps wrap, shrink to icons, or scroll with a visible affordance.",
+    "actual": "Half the tracker is invisible on a phone.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-002/mobile-check.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientProgressTracker.tsx"
+    ]
+  }
+]

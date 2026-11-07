@@ -1,0 +1,68 @@
+[
+  {
+    "id": "F-206-01",
+    "story_id": "STORY-206",
+    "severity": "high",
+    "category": "happy-path",
+    "criterion": "Primary task completable",
+    "score": "fail",
+    "description": "Link Portal can never succeed (mapped patients defect #1, confirmed). The dialog sends only {\"email\":\"john.doe@patient.test\"} to POST /api/patients/patient-seed-1/link-user, and the backend answers 400 \"email, password, firstName, and lastName are required to create a new user\". The dialog has no fields for those.",
+    "expected": "The dialog collects what the API needs (or the API derives names from the patient and issues an invite), and linking succeeds.",
+    "actual": "Destructive toast with the raw backend message; dialog stays open; no path forward.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/patients-records--STORY-206/step-2-link-result.png",
+    "suggested_fix": "Either add password/first/last fields (prefilled from patient.name) or make the backend create the user with an invite or reset code when only an email is given.",
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientsManagement.tsx",
+      "backend/src/modules/patients/patients.service.ts"
+    ]
+  },
+  {
+    "id": "F-206-02",
+    "story_id": "STORY-206",
+    "severity": "medium",
+    "category": "consistency",
+    "criterion": "Feedback / state visibility",
+    "score": "fail",
+    "description": "The linked state is invisible (mapped patients defect #2, confirmed). After linking Rohit Agarwal through the API, GET /patients omits portalUserId (keys returned have no portalUserId; GET /patients/:id has it). The row still shows \"Link Portal\", and clicking Link gives 409 \"Patient is already linked to a user\". The \"Portal Linked\" badge and Unlink are therefore unreachable.",
+    "expected": "Linked rows show \"Portal Linked\" + Unlink.",
+    "actual": "Every row shows Link Portal; linking an already-linked patient ends in a 409 toast.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/patients-records--STORY-206/var-already-linked-409.png",
+    "suggested_fix": "Add portalUserId to the list select in patients.service.ts.",
+    "files_likely_involved": [
+      "backend/src/modules/patients/patients.service.ts"
+    ]
+  },
+  {
+    "id": "F-206-03",
+    "story_id": "STORY-206",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "Error messages: non-technical",
+    "score": "fail",
+    "description": "The failure toast shows the raw validation sentence with a request UUID (\"…required to create a new user (Reference: c2bf49e0-…)\") and covers the header bell and user menu at top right.",
+    "expected": "Human copy that tells the admin what to do; the toast does not hide header controls.",
+    "actual": "Developer-facing text over the header.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/patients-records--STORY-206/step-2-link-result.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientsManagement.tsx",
+      "frontend/src/components/ui/toaster.tsx"
+    ]
+  },
+  {
+    "id": "F-206-04",
+    "story_id": "STORY-206",
+    "severity": "low",
+    "category": "a11y",
+    "criterion": "Dialog semantics",
+    "score": "warn",
+    "description": "Every dialog open logs \"Missing `Description` or `aria-describedby={undefined}` for {DialogContent}\". Nothing in the dialog explains that a PATIENT login will be created or how the patient gets a password.",
+    "expected": "A DialogDescription explaining what linking does.",
+    "actual": "No description; screen readers get only the title.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/patients-records--STORY-206/step-1-dialog.png",
+    "suggested_fix": "Add <DialogDescription>.",
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientsManagement.tsx"
+    ]
+  }
+]
