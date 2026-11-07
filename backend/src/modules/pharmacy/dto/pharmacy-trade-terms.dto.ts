@@ -15,14 +15,17 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-const trimmed = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+const trimmed = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
 const emptyToNull = ({ value }: { value: unknown }) => {
   if (typeof value === 'string') return value.trim() || null;
   return value === '' ? null : value;
 };
 
 export class TradeTermItemDto {
-  @ApiPropertyOptional({ description: 'Master drug id when the product is in the catalogue' })
+  @ApiPropertyOptional({
+    description: 'Master drug id when the product is in the catalogue',
+  })
   @IsOptional()
   @IsString()
   drugId?: string;

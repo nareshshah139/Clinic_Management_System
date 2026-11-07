@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
@@ -20,9 +32,18 @@ export class PharmacyTradeTermsController {
 
   @Get('distributors')
   @Roles(...TRADE_TERM_READERS)
-  @ApiOperation({ summary: 'Search distributors by name or GSTIN, with a recent shortlist' })
-  distributors(@Query() query: QueryTradeTermDistributorsDto, @Request() req: any) {
-    return this.tradeTerms.distributors(req.user.branchId, req.user.role, query.search);
+  @ApiOperation({
+    summary: 'Search distributors by name or GSTIN, with a recent shortlist',
+  })
+  distributors(
+    @Query() query: QueryTradeTermDistributorsDto,
+    @Request() req: any,
+  ) {
+    return this.tradeTerms.distributors(
+      req.user.branchId,
+      req.user.role,
+      query.search,
+    );
   }
 
   @Get()
@@ -35,14 +56,19 @@ export class PharmacyTradeTermsController {
   @Post('lookup')
   @HttpCode(200)
   @Roles(...TRADE_TERM_READERS)
-  @ApiOperation({ summary: 'Agreed terms for a distributor, matched to invoice products' })
+  @ApiOperation({
+    summary: 'Agreed terms for a distributor, matched to invoice products',
+  })
   lookup(@Body() dto: TradeTermLookupDto, @Request() req: any) {
     return this.tradeTerms.lookup(req.user.branchId, dto);
   }
 
   @Put()
   @Roles(...TRADE_TERM_EDITORS)
-  @ApiOperation({ summary: 'Save terms for one distributor; saving a product again replaces its terms' })
+  @ApiOperation({
+    summary:
+      'Save terms for one distributor; saving a product again replaces its terms',
+  })
   save(@Body() dto: SaveTradeTermsDto, @Request() req: any) {
     return this.tradeTerms.save(req.user.branchId, req.user.id, dto);
   }
