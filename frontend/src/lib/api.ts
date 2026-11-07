@@ -17,6 +17,7 @@ import type {
   InventoryItem,
   RescheduleAppointmentPayload,
 } from './types';
+import type { InventoryItemRequest, InventoryItemRequestStatus, PendingApprovalResponse } from './inventory-item-requests';
 
 export type DoctorLetterhead = { id: string; url: string; source: 'uploaded' | 'bundled' };
 
@@ -717,7 +718,7 @@ export class ApiClient {
   }
 
   async createInventoryItem(data: Record<string, unknown>) {
-    return this.post('/inventory/items', data);
+    return this.post<InventoryItem | PendingApprovalResponse>('/inventory/items', data);
   }
 
   async updateInventoryItem(id: string, data: Record<string, unknown>) {
@@ -805,6 +806,22 @@ export class ApiClient {
       `/drugs/inventory-change-requests/${id}/reject`,
       { reviewNote }
     );
+  }
+
+  async getInventoryItemRequests(status?: InventoryItemRequestStatus) {
+    return this.get<InventoryItemRequest[]>('/inventory/item-requests', { status });
+  }
+
+  async getInventoryItemRequestPendingCount() {
+    return this.get<{ count: number }>('/inventory/item-requests/pending-count');
+  }
+
+  async approveInventoryItemRequest(id: string) {
+    return this.post<InventoryItemRequest>(`/inventory/item-requests/${id}/approve`, {});
+  }
+
+  async rejectInventoryItemRequest(id: string, note: string) {
+    return this.post<InventoryItemRequest>(`/inventory/item-requests/${id}/reject`, { note });
   }
 
   // Reports
