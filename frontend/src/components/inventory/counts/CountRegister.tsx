@@ -96,8 +96,7 @@ function columns(view: 'history' | 'approvals', today: string, onOpen: (row: Cou
     ];
   return [
     open,
-    { key: 'assignedTo', label: 'Assigned to', sort: 'assignedTo', cell: (row) => name(row.assignedTo) },
-    { key: 'signedBy', label: 'Signed by', cell: (row) => name(row.signedBy) },
+    { key: 'assignedTo', label: 'Counted by', sort: 'assignedTo', cell: (row) => name(row.signedBy ?? row.assignedTo) },
     {
       key: 'signedAt',
       label: 'Signed at',
@@ -204,13 +203,11 @@ export function CountRegister({
       'Totals not available'
     ) : data ? (
       <span className="tabular-nums">
-        {data.totals.counts} {data.totals.counts === 1 ? 'count' : 'counts'}
-        <span className="max-sm:sr-only">
-          {' '}
-          · {data.totals.differences} {data.totals.differences === 1 ? 'difference' : 'differences'}
+        <span className="whitespace-nowrap">
+          {data.totals.counts} {data.totals.counts === 1 ? 'count' : 'counts'}
         </span>
         {!approvals && (
-          <span className="whitespace-nowrap">
+          <span className="whitespace-nowrap max-sm:hidden">
             {' '}
             · Approved <Money value={data.totals.approvedValue} />
           </span>
@@ -219,7 +216,6 @@ export function CountRegister({
           {' '}
           · Awaiting <Money value={data.totals.awaitingValue} />
         </span>
-        {!approvals && data.totals.rejected > 0 && <span className="text-sm"> · {data.totals.rejected} rejected, not included</span>}
       </span>
     ) : (
       <Skeleton className="h-6 w-60" />
@@ -312,6 +308,7 @@ export function CountRegister({
       </div>
       <RegisterFooter
         summary={summary}
+        note={!approvals && data?.totals.rejected ? `${data.totals.rejected} rejected ${data.totals.rejected === 1 ? 'count is' : 'counts are'} not included.` : undefined}
         page={query.page}
         limit={data?.limit ?? 50}
         total={load.status === 'error' ? 0 : (data?.total ?? 0)}

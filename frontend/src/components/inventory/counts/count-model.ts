@@ -19,6 +19,7 @@ export const COUNT_STATE_LABELS: Record<CountState, string> = {
 export const COUNT_STATE_SHORT: Record<CountState, string> = {
   ...COUNT_STATE_LABELS,
   AWAITING_APPROVAL: 'Awaiting approval',
+  POSTED_NO_DIFF: 'Confirmed',
 };
 
 export const COUNT_STATE_BADGE: Record<CountState, 'neutral' | 'warning' | 'success' | 'danger' | 'info'> = {

@@ -360,7 +360,7 @@ export class InventoryWorkflowService {
     await this.authorize(actor, dto.kind, true);
     if (!clean(dto.requestKey) || !clean(dto.reference))
       throw new BadRequestException('Reference and request key are required');
-    if (clean(dto.requestKey).startsWith('cycle:'))
+    if (!id && clean(dto.requestKey).startsWith('cycle:'))
       throw new BadRequestException('Request keys starting with "cycle:" are reserved for planned stock counts');
     return this.transaction(async (tx) => {
       const old = id
@@ -1394,7 +1394,6 @@ export class InventoryWorkflowService {
     if (!doc || doc.kind !== 'COUNT') throw new NotFoundException('Stock count not found');
     return doc;
   }
-  /** Every batch on a count that is not yet decided, mapped to that count. */
   async openCountHolders(db: any, branchId: string, exceptId?: string) {
     const open: OpenCount[] = await db.inventoryWorkflowDocument.findMany({
       where: { branchId, kind: 'COUNT', status: { in: OPEN_COUNT } },

@@ -251,7 +251,7 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
         })}
       </div>
       <div className="sticky -bottom-4 z-20 -mx-4 -mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-background px-4 py-3 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] md:-bottom-6 md:-mx-6 md:-mb-6 md:px-6">
-        <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex min-w-0 grow basis-0 flex-col gap-0.5">
           <p className="flex flex-wrap items-baseline gap-x-2 text-base">
             <span className="whitespace-nowrap font-semibold tabular-nums">
               {figures.counted} of {figures.items} counted
