@@ -23,6 +23,7 @@ import { DrugService } from '../pharmacy/drug.service';
 import { PharmacyPurchaseInvoiceService } from '../pharmacy/pharmacy-purchase-invoice.service';
 import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { InventoryItemRequestService } from '../inventory/inventory-item-request.service';
 import { ReportsService } from '../reports/reports.service';
 import {
   CreatePharmacyAgentSessionDto,
@@ -212,6 +213,7 @@ export class PharmacyAgentService implements OnModuleInit {
     private readonly prescriptionQueueService: PharmacyPrescriptionQueueService,
     private readonly inventoryService: InventoryService,
     private readonly reportsService: ReportsService,
+    private readonly itemRequestService: InventoryItemRequestService,
   ) {}
 
   async onModuleInit() {
@@ -1412,8 +1414,16 @@ export class PharmacyAgentService implements OnModuleInit {
         if (!action.targetId)
           throw new BadRequestException('targetId is required');
         return this.drugService.update(action.targetId, input, user.branchId);
-      case 'create_inventory_item':
-        return this.inventoryService.createInventoryItem(input, user.branchId);
+      case 'create_inventory_item': {
+        const outcome = await this.itemRequestService.createOrRequest(input, {
+          id: user.id,
+          branchId: user.branchId,
+          role: String(user.role),
+        });
+        return outcome.created
+          ? outcome.item
+          : { status: 'PENDING_APPROVAL', request: outcome.request };
+      }
       case 'update_inventory_item':
         if (!action.targetId)
           throw new BadRequestException('targetId is required');
