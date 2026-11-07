@@ -1125,7 +1125,7 @@ function VisitsPageInner() {
         </div>
       </div>
 
-      <div className="sticky top-0 z-30 -mx-4 border-b bg-background px-4 py-2 md:-mx-6 md:px-6">
+      <div className="sticky -top-4 z-30 -mx-4 md:-top-6 border-b bg-background px-4 py-2 md:-mx-6 md:px-6">
         <VisitIdentityBar
           patient={selectedPatient}
           doctor={selectedDoctor}
