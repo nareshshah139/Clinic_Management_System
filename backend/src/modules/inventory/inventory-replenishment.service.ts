@@ -275,7 +275,7 @@ export class InventoryReplenishmentService {
     await this.workflow.authorize(actor, 'PURCHASE_ORDER');
     const settings: any = await this.workflow.settings(actor);
     const owner = settings.ownerId ? await this.prisma.user.findFirst({ where: { id: settings.ownerId, branchId: actor.branchId }, select: { id: true, firstName: true, lastName: true, isActive: true } }) : null;
-    const enabled = settings.autoMinMaxEnabled || settings.autoPoEnabled || settings.auditEnabled;
+    const enabled = settings.autoMinMaxEnabled || settings.autoPoEnabled;
     const nextTick = new Date(Math.ceil((Date.now() + 1) / 1800000) * 1800000).toISOString();
     return { settings, owner, model: MODEL, schedule: 'Every 30 minutes; target proposals follow the configured refresh-day cadence',
       nextRunAt: enabled && owner?.isActive ? nextTick : null, lastRunAt: settings.lastRunAt || null,

@@ -9,6 +9,7 @@ import { InventoryReplenishmentService } from '../inventory-replenishment.servic
 import { InventoryWorkflowScheduler } from '../inventory-workflow-scheduler.service';
 import { InventoryIntakeService } from '../inventory-intake.service';
 import { InventoryLabelService } from '../inventory-label.service';
+import { InventoryReconciliationService } from '../reconciliation/inventory-reconciliation.service';
 
 describe('Workflow request recovery lookup', () => {
   let app: INestApplication;
@@ -28,7 +29,7 @@ describe('Workflow request recovery lookup', () => {
       controllers: [InventoryWorkflowController],
       providers: [
         {provide: InventoryWorkflowService, useValue: service},
-        ...[InventoryWorkspaceService, InventoryReplenishmentService, InventoryWorkflowScheduler, InventoryIntakeService, InventoryLabelService].map(provide => ({provide,useValue:{}})),
+        ...[InventoryWorkspaceService, InventoryReplenishmentService, InventoryWorkflowScheduler, InventoryIntakeService, InventoryLabelService, InventoryReconciliationService].map(provide => ({provide,useValue:{}})),
       ],
     }).overrideGuard(JwtAuthGuard).useValue({canActivate:()=>true}).compile();
     app = module.createNestApplication();

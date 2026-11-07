@@ -230,7 +230,7 @@ export function WorkflowDocumentEditor({
           } else apply(saved);
         } else if (recovered?.invalid || (recovered && (!validRecoveryForm(recovered.form) || (recovered.pending?.creation && !validRecoveryForm(recovered.pending.creation))))) {
           setKnowledge({ state: "unconfirmed", ref: { kind: "request", requestKey: "", creation: null }, operation: "create" });
-          setError("The browser recovery record cannot be read. Keep the original evidence and ask an inventory administrator to inspect the saved records and Counts & audit before another stock operation.");
+          setError("The browser recovery record cannot be read. Keep the original evidence and ask an inventory administrator to inspect the saved records and Stock counts before another stock operation.");
         } else if (recovered?.form) {
           setForm(recovered.form);
           if (recovered.pending || recovered.schemaVersion !== 2) {
@@ -456,7 +456,6 @@ export function WorkflowDocumentEditor({
         sourceLineId: source?.id || "",
         location: item.storageLocation || "",
         available: item.available,
-        systemStock: item.currentStock,
       },
     ]);
     setSearch("");
@@ -523,11 +522,6 @@ export function WorkflowDocumentEditor({
       if (generation === routeGeneration.current) setBusy(false);
     }
   };
-  /**
-   * @cc [owner:nareshshah139] fresh-count-navigation
-   * Starting a fresh count MUST use the saved document revision and open the returned attempt
-   * without first saving or copying the old physical measurements.
-   */
   const perform = async (action?: string) => {
     if (lock.current || !presentation.canMutate) return;
     const badDay = editable && DAY_TEXT_KINDS.includes(kind)
@@ -550,7 +544,7 @@ export function WorkflowDocumentEditor({
     let saved = doc;
     let dispatched = false;
     try {
-      if (editable && action !== "CANCEL" && action !== "REVERSE" && action !== "RECOUNT") {
+      if (editable && action !== "CANCEL" && action !== "REVERSE") {
         markPending(doc ? "save" : "create", doc);
         dispatched = true;
         saved = doc
@@ -568,7 +562,7 @@ export function WorkflowDocumentEditor({
           ...(kind === "TARGET_REVIEW" ? { lineIds: selected } : {}),
         });
         if (generation !== routeGeneration.current) return;
-        if (["CREATE_PO", "CONVERT_SALE", "RECOUNT"].includes(action)) {
+        if (["CREATE_PO", "CONVERT_SALE"].includes(action)) {
           pendingRecovery.current = null;
           sessionStorage.removeItem(recoveryKey);
           onOpen(result.kind, result.id);
@@ -696,7 +690,7 @@ export function WorkflowDocumentEditor({
           return correction ? <Button variant="outline" onClick={() => onOpen("CORRECTION", correction)}>Open linked correction</Button> : null;
         })()}
         {doc?.kind === "PURCHASE_ORDER" && ["APPROVED", "PART_RECEIVED", "RECEIVED", "CANCELLED", "SENT"].includes(doc.status) && <a className="block underline" href={`?area=purchases&view=INWARD_CHALLAN&sourceId=${encodeURIComponent(doc.id)}`}>Review linked receipts</a>}
-        {(presentation.stockEffect === "unknown" || presentation.auditRecovery) && <a className="block underline" href="?area=stock&view=COUNT">Open Counts &amp; audit</a>}
+        {(presentation.stockEffect === "unknown" || presentation.auditRecovery) && <a className="block underline" href="?area=stock&view=COUNT">Open Stock counts</a>}
         {kind === "TARGET_REVIEW" && <a className="block underline" href="?area=reorder&view=TARGET_REVIEW">Open Reorder target review</a>}
         {(!canWrite || presentation.stockEffect === "unknown" || error) && (
           <label className="block text-sm">Recovery handoff
@@ -707,7 +701,7 @@ export function WorkflowDocumentEditor({
       {guard?.recovery && (
         <section aria-label="Recovery steps" className="space-y-2 rounded-md border p-4">
           {guard.stockEffect === "NONE" && <p>This rejected attempt made no stock change. Earlier recorded movements remain unchanged.</p>}
-          <p>{guard.recovery.action === "START_FRESH_COUNT" ? "Choose Start fresh count and physically recount using current balances." : guard.recovery.action === "CORRECT_FIELD" ? "Correct the identified count using the actual observed quantity. Do not change a truthful observation to bypass a stock guard." : "Inspect the linked batch and blocking records. Confirm a real release, loss or supplier return before starting a fresh physical count. Do not change a truthful observation to bypass a stock guard."}</p>
+          <p>{guard.recovery.action === "CORRECT_FIELD" ? "Correct the identified quantity. Do not change a truthful observation to bypass a stock guard." : "Inspect the linked batch and blocking records. Confirm a real release, loss or supplier return before starting a fresh physical count. Do not change a truthful observation to bypass a stock guard."}</p>
           {guard.recovery.inventoryId && <a className="underline" href={`?area=stock&view=list&item=${encodeURIComponent(guard.recovery.inventoryId)}`}>Inspect batch balance and holds</a>}
           {guard.recovery.sourceId && <Button variant="link" onClick={() => onOpen(guard.recovery.sourceKind || "HOLD", guard.recovery.sourceId)}>Open blocking source hold</Button>}
           {(guard.recovery.documents || []).map((entry: any) => <Button key={entry.id} variant="link" onClick={() => onOpen(entry.kind, entry.id)}>Open {entry.reference || entry.id}</Button>)}
@@ -1027,7 +1021,7 @@ export function WorkflowDocumentEditor({
             value={form.payload.reason || ""}
             onChange={(e) => payload("reason", e.target.value)}
             placeholder={
-              ["COUNT", "LOSS", "HOLD", "SALES_RETURN"].includes(kind)
+              ["LOSS", "HOLD", "SALES_RETURN"].includes(kind)
                 ? "Required before posting"
                 : "Optional context"
             }
@@ -1036,7 +1030,7 @@ export function WorkflowDocumentEditor({
       </fieldset>
       {editable &&
         canWrite &&
-        !["COUNT", "TARGET_REVIEW", "CORRECTION"].includes(kind) && (
+        !["TARGET_REVIEW", "CORRECTION"].includes(kind) && (
           <section className="space-y-2 print:hidden">
             {kind === "SALES_RETURN" ? (
               <div className="space-y-2">
@@ -1153,13 +1147,7 @@ export function WorkflowDocumentEditor({
             <tr>
               {kind === "TARGET_REVIEW" && <th className="p-3">Accept</th>}
               <th className="p-3">Product & batch</th>
-              {kind === "COUNT" ? (
-                <>
-                  <th className="p-3">System</th>
-                  <th className="p-3">Physical count</th>
-                  <th className="p-3">Difference</th>
-                </>
-              ) : kind === "TARGET_REVIEW" ? (
+              {kind === "TARGET_REVIEW" ? (
                 <>
                   <th className="p-3">Saved min / max</th>
                   <th className="p-3">Proposed min</th>
@@ -1234,37 +1222,7 @@ export function WorkflowDocumentEditor({
                       : ""}
                   </p>
                 </td>
-                {kind === "COUNT" ? (
-                  <>
-                    <td className="p-3">
-                      {l.systemStock} {l.unit}
-                    </td>
-                    <td className="p-3">
-                      <input
-                        aria-label={`Physical count ${index + 1}`}
-                        className={`${inputClass} w-28`}
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="Not counted"
-                        value={l.physicalStock ?? ""}
-                        disabled={!editable || busy}
-                        onChange={(e) =>
-                          updateLine(
-                            index,
-                            "physicalStock",
-                            e.target.value === "" ? "" : Number(e.target.value),
-                          )
-                        }
-                      />
-                    </td>
-                    <td className="p-3">
-                      {l.physicalStock == null || l.physicalStock === ""
-                        ? "Not counted"
-                        : Number(l.physicalStock) - l.systemStock}
-                    </td>
-                  </>
-                ) : kind === "TARGET_REVIEW" ? (
+                {kind === "TARGET_REVIEW" ? (
                   <>
                     <td className="p-3">
                       {l.beforeMin ?? "—"} / {l.beforeMax ?? "—"}
@@ -1441,11 +1399,6 @@ export function WorkflowDocumentEditor({
           >
             <Printer className="h-4 w-4" />
           </InventoryAction>
-          {kind === "COUNT" && canWrite && presentation.canMutate && (
-            <Button variant="outline" onClick={() => perform("RECOUNT")} disabled={busy}>
-              Start fresh count
-            </Button>
-          )}
           {["HOLD", "SALES_RETURN"].includes(kind) &&
             doc.status === "POSTED" &&
             doc.effects?.some((e: any) => e.heldDelta > 0) &&

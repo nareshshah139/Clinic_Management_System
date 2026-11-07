@@ -7,16 +7,16 @@ jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), post: jest.fn(), pa
 jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: { id: 'operator', branchId: 'branch' } }) }));
 
 const payload = { reason: 'Physical verification', date: '2026-10-25', lines: [{ id: 'line', inventoryId: 'batch', name: 'Batch A', unit: 'TABLET', systemStock: 5, physicalStock: 6, quantity: 1 }] };
-const savedDocument = (kind = 'COUNT', status = 'DRAFT') => ({ id: 'saved-document', kind, status, version: 2, reference: 'REF-25', requestKey: 'original-request', payload, events: [], effects: [] });
+const savedDocument = (kind = 'LOSS', status = 'DRAFT') => ({ id: 'saved-document', kind, status, version: 2, reference: 'REF-25', requestKey: 'original-request', payload, events: [], effects: [] });
 const capabilities = (kind: string, write = true) => ({ approve: write, kinds: { [kind]: { read: true, write } } });
-function mount(kind = 'COUNT', props: Record<string, any> = {}) {
+function mount(kind = 'LOSS', props: Record<string, any> = {}) {
   return render(<WorkflowDocumentEditor kind={kind} capabilities={capabilities(kind)} onBack={jest.fn()} onOpen={jest.fn()} onInvoice={jest.fn()} {...props} />);
 }
 function defaultGet(doc = savedDocument()) {
   (apiClient.get as jest.Mock).mockImplementation(async (url: string) => { if (url.includes('/by-request/')) throw Object.assign(new Error('Not found'), { status: 404 }); return url.includes('/documents/') ? doc : url.includes('/hold-sources') ? { rows: [], totalPages: 1 } : []; });
 }
 function expectWritesBlocked() {
-  for (const name of ['Save draft', 'Submit count', 'Post stock loss', 'Start fresh count', 'Cancel document', 'Correct by reversal', 'Reverse posted effects']) {
+  for (const name of ['Save draft', 'Post stock loss', 'Block stock', 'Cancel document', 'Correct by reversal', 'Reverse posted effects']) {
     const button = screen.queryByRole('button', { name });
     if (button) expect(button).toBeDisabled();
   }
@@ -33,17 +33,17 @@ it('keeps a failed existing lookup distinct from a new draft and retries the exa
     if (url.endsWith('/saved-document')) { if (!available) throw new Error('Lookup unavailable'); return savedDocument(); }
     return [];
   });
-  mount('COUNT', { id: 'saved-document' });
+  mount('LOSS', { id: 'saved-document' });
   await screen.findByRole('button', { name: 'Retry loading' });
   expectWritesBlocked();
   expect(screen.getByText(/saved-document/)).toBeInTheDocument();
   available = true;
   fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Submit count' })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Post stock loss' })).toBeEnabled());
   expect(apiClient.post).not.toHaveBeenCalled();
 });
 
-it.each(['COUNT', 'LOSS'])('retains %s identity and uncertainty after a lost transition and remount', async kind => {
+it.each(['LOSS', 'HOLD'])('retains %s identity and uncertainty after a lost transition and remount', async kind => {
   const draft = savedDocument(kind);
   let readable = false;
   (apiClient.get as jest.Mock).mockImplementation(async (url: string) => {
@@ -55,7 +55,7 @@ it.each(['COUNT', 'LOSS'])('retains %s identity and uncertainty after a lost tra
     throw new Error('Response lost');
   });
   const first = mount(kind, { draftKey: 'lost-operation', initial: { requestKey: 'original-request', payload } });
-  fireEvent.click(await screen.findByRole('button', { name: kind === 'COUNT' ? 'Submit count' : 'Post stock loss' }));
+  fireEvent.click(await screen.findByRole('button', { name: kind === 'HOLD' ? 'Block stock' : 'Post stock loss' }));
   await screen.findByRole('button', { name: 'Check saved status' });
   expectWritesBlocked();
   first.unmount();
@@ -64,7 +64,7 @@ it.each(['COUNT', 'LOSS'])('retains %s identity and uncertainty after a lost tra
   expectWritesBlocked();
   readable = true;
   fireEvent.click(screen.getByRole('button', { name: 'Check saved status' }));
-  await screen.findByText(/Saved stock effects|Count applied/i);
+  await screen.findByText(/Saved stock effects/i);
   expect((apiClient.post as jest.Mock).mock.calls.filter(([url]) => url.endsWith('/transition'))).toHaveLength(1);
 });
 
@@ -101,28 +101,12 @@ it('recovers a legacy saved draft by its original request key without asserting 
   expect((apiClient.post as jest.Mock).mock.calls.some(([url]) => url.endsWith('/transition'))).toBe(false);
 });
 
-it.each([
-  ['DRAFT', /Submitting can apply the count|may require approval/i],
-  ['AWAITING_APPROVAL', /waiting for.*approval.*stock has not changed/i],
-  ['APPROVED', /approved.*stock has not changed.*Apply approved count/i],
-  ['POSTED', /Count applied|count.*verified/i],
-  ['REJECTED', /rejected.*did not change stock/i],
-  ['CANCELLED', /cancelled.*did not change stock/i],
-  ['REVERSED', /^A linked reversal compensated/i],
-])('explains COUNT %s with a named recovery path', async (status, explanation) => {
-  defaultGet(savedDocument('COUNT', status as string));
-  mount('COUNT', { id: 'saved-document' });
-  expect(await screen.findByText(explanation as RegExp)).toBeInTheDocument();
-  expect(screen.getByText(/fresh count.*retains.*clears|retains.*fresh count.*clears/i)).toBeInTheDocument();
-  if (status === 'APPROVED') expect(screen.getByRole('button', { name: 'Apply approved count' })).toBeEnabled();
-});
-
-it.each(['DRAFT', 'AWAITING_APPROVAL', 'APPROVED', 'POSTED', 'REJECTED', 'CANCELLED', 'REVERSED'])('gives a readonly COUNT %s an explicit authorized handoff', async status => {
-  defaultGet(savedDocument('COUNT', status));
-  mount('COUNT', { id: 'saved-document', capabilities: capabilities('COUNT', false) });
-  expect(await screen.findByText(/colleague.*stock.count.*permission/i, { selector: 'p' })).toBeInTheDocument();
+it.each(['DRAFT', 'AWAITING_APPROVAL', 'POSTED', 'REJECTED', 'CANCELLED', 'REVERSED'])('gives a readonly LOSS %s an explicit authorized handoff', async status => {
+  defaultGet(savedDocument('LOSS', status));
+  mount('LOSS', { id: 'saved-document', capabilities: capabilities('LOSS', false) });
+  expect(await screen.findByText(/Ask a colleague with this inventory workflow.s write permission/, { selector: 'p' })).toBeInTheDocument();
   expect((screen.getByRole('textbox', { name: 'Recovery handoff' }) as HTMLTextAreaElement).value).toContain('saved-document');
-  expect(screen.queryByRole('button', { name: 'Start fresh count' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Post stock loss' })).not.toBeInTheDocument();
 });
 
 it.each([
@@ -147,7 +131,7 @@ it('keeps a failed save locked until its saved record can be checked', async () 
   });
   (apiClient.patch as jest.Mock).mockImplementation(async () => { readable = false; throw new Error('Save response lost'); });
   (apiClient.post as jest.Mock).mockResolvedValue({ ...doc, version: 3 });
-  mount('COUNT', { id: doc.id });
+  mount('LOSS', { id: doc.id });
   fireEvent.click(await screen.findByRole('button', { name: 'Save draft' }));
   await screen.findByRole('button', { name: 'Check saved status' });
   expectWritesBlocked();
@@ -172,7 +156,7 @@ it('keeps corrupt retained recovery blocked and provides an audit handoff instea
   sessionStorage.setItem('inventory-document:branch:operator:LOSS:corrupt:', '{broken');
   defaultGet(savedDocument('LOSS'));
   mount('LOSS', { draftKey: 'corrupt' });
-  expect(await screen.findByRole('link', { name: 'Open Counts & audit' })).toHaveAttribute('href', '?area=stock&view=COUNT');
+  expect(await screen.findByRole('link', { name: 'Open Stock counts' })).toHaveAttribute('href', '?area=stock&view=COUNT');
   expectWritesBlocked();
   fireEvent.click(screen.getByRole('button', { name: 'Check saved status' }));
   expect(apiClient.post).not.toHaveBeenCalled();
@@ -191,10 +175,10 @@ it('does not repeat an unresolved creation after losing write permission', async
 it('renders a structured held-stock rejection with batch and source navigation after confirmed readback', async () => {
   defaultGet();
   (apiClient.patch as jest.Mock).mockResolvedValue(savedDocument());
-  (apiClient.post as jest.Mock).mockRejectedValue(Object.assign(new Error('Physical count is below held stock'), { status: 400, body: { code: 'INVENTORY_HELD_STOCK', stockEffect: 'NONE', recovery: { action: 'REVIEW_BATCH', inventoryId: 'batch', sourceId: 'source-return', sourceKind: 'SALES_RETURN', documents: [{ id: 'loss', kind: 'LOSS', reference: 'Loss record' }] } } }));
+  (apiClient.post as jest.Mock).mockRejectedValue(Object.assign(new Error('Loss is more than the available stock'), { status: 400, body: { code: 'INVENTORY_HELD_STOCK', stockEffect: 'NONE', recovery: { action: 'REVIEW_BATCH', inventoryId: 'batch', sourceId: 'source-return', sourceKind: 'SALES_RETURN', documents: [{ id: 'loss', kind: 'LOSS', reference: 'Loss record' }] } } }));
   const onOpen = jest.fn();
-  mount('COUNT', { id: 'saved-document', onOpen });
-  fireEvent.click(await screen.findByRole('button', { name: 'Submit count' }));
+  mount('LOSS', { id: 'saved-document', onOpen });
+  fireEvent.click(await screen.findByRole('button', { name: 'Post stock loss' }));
   expect(await screen.findByText(/This rejected attempt made no stock change/)).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Inspect batch balance and holds' })).toHaveAttribute('href', '?area=stock&view=list&item=batch');
   fireEvent.click(screen.getByRole('button', { name: 'Open blocking source hold' }));
@@ -261,7 +245,7 @@ it('does not unlock on an unchanged read while a stock transition may still comm
 
 it('keeps readonly unchanged revisions unresolved and shares the expected revision for an authorized fence', async () => {
   defaultGet(savedDocument());
-  mount('COUNT', { id: 'saved-document', recoveryVersion: 2, recoveryOperation: 'transition', capabilities: capabilities('COUNT', false) });
+  mount('LOSS', { id: 'saved-document', recoveryVersion: 2, recoveryOperation: 'transition', capabilities: capabilities('LOSS', false) });
   fireEvent.click(await screen.findByRole('button', { name: 'Check saved status' }));
   await screen.findByText(/interrupted request may still finish/i);
   expectWritesBlocked();
@@ -284,14 +268,14 @@ it('does not infer no stock or create a new record when a colleague request look
   fireEvent.click(await screen.findByRole('button', { name: 'Check saved status' }));
   await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/inventory/workspace/documents/by-request/missing-request'));
   expectWritesBlocked();
-  expect(screen.getByRole('link', { name: 'Open Counts & audit' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Open Stock counts' })).toBeInTheDocument();
   expect(apiClient.post).not.toHaveBeenCalled();
 });
 
 it.each([['CORRECTION', 'POSTED'], ['HOLD', 'RELEASED']])('does not offer an unsupported reversal for %s %s', async (kind, status) => {
   defaultGet(savedDocument(kind, status));
   mount(kind, { id: 'saved-document' });
-  expect(await screen.findByRole('link', { name: 'Open Counts & audit' })).toBeInTheDocument();
+  expect(await screen.findByRole('link', { name: 'Open Stock counts' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Correct by reversal' })).not.toBeInTheDocument();
   expect(screen.queryByText(/ask a manager.*Correct by reversal/i)).not.toBeInTheDocument();
 });
@@ -310,24 +294,24 @@ it('does not apply a late record response to a different route', async () => {
     if (url.endsWith('/new')) return { ...savedDocument(), id: 'new', reference: 'NEW RECORD' };
     return [];
   });
-  const props = { kind: 'COUNT', capabilities: capabilities('COUNT'), onBack: jest.fn(), onOpen: jest.fn(), onInvoice: jest.fn() };
+  const props = { kind: 'LOSS', capabilities: capabilities('LOSS'), onBack: jest.fn(), onOpen: jest.fn(), onInvoice: jest.fn() };
   const view = render(<WorkflowDocumentEditor {...props} id="old" />);
   view.rerender(<WorkflowDocumentEditor {...props} id="new" />);
   await screen.findByRole('heading', { name: 'NEW RECORD' });
   finishOld({ ...savedDocument(), id: 'old', reference: 'OLD RECORD' });
   await waitFor(() => expect(screen.queryByRole('heading', { name: 'OLD RECORD' })).not.toBeInTheDocument());
   expect(screen.getByRole('heading', { name: 'NEW RECORD' })).toBeInTheDocument();
-  expect(JSON.parse(sessionStorage.getItem('inventory-document:branch:operator:COUNT:new:')!).documentId).toBe('new');
+  expect(JSON.parse(sessionStorage.getItem('inventory-document:branch:operator:LOSS:new:')!).documentId).toBe('new');
 });
 
-it('retains rejected unsaved observations when the saved draft revision is unchanged', async () => {
+it('retains rejected unsaved edits when the saved draft revision is unchanged', async () => {
   defaultGet();
   (apiClient.patch as jest.Mock).mockRejectedValue(Object.assign(new Error('Correct the draft details'), { status: 400 }));
-  mount('COUNT', { id: 'saved-document' });
-  fireEvent.change(await screen.findByRole('spinbutton', { name: 'Physical count 1' }), { target: { value: '7' } });
+  mount('LOSS', { id: 'saved-document' });
+  fireEvent.change(await screen.findByRole('spinbutton', { name: 'quantity 1' }), { target: { value: '7' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
   await screen.findByText(/Your attempted edits remain in the form and have not been saved/);
-  expect(screen.getByRole('spinbutton', { name: 'Physical count 1' })).toHaveValue(7);
+  expect(screen.getByRole('spinbutton', { name: 'quantity 1' })).toHaveValue(7);
   expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
 });
 
@@ -362,8 +346,8 @@ it.each(['SHORTBOOK', 'PURCHASE_ORDER'])('explains retained receipts when a %s r
 });
 
 it('prominently explains the actual recorded rejection reason', async () => {
-  defaultGet({ ...savedDocument('COUNT', 'REJECTED'), events: [{ id: 'reject', action: 'REJECT', toStatus: 'REJECTED', createdAt: '2026-10-25', detail: { reason: 'Recount both shelves before approval' } }] });
-  mount('COUNT', { id: 'saved-document' });
+  defaultGet({ ...savedDocument('LOSS', 'REJECTED'), events: [{ id: 'reject', action: 'REJECT', toStatus: 'REJECTED', createdAt: '2026-10-25', detail: { reason: 'Recount both shelves before approval' } }] });
+  mount('LOSS', { id: 'saved-document' });
   expect(await screen.findByText(/This proposal was rejected.*Reason: Recount both shelves before approval/)).toBeInTheDocument();
 });
 
@@ -388,7 +372,7 @@ it.each([false, true])('keeps malformed retained line objects in recovery instea
   sessionStorage.setItem('inventory-document:branch:operator:LOSS:bad-lines:', JSON.stringify({ schemaVersion: 2, form: pending ? { ...form, payload } : form, ...(pending ? { pending: { operation: 'create', creation: form } } : {}) }));
   defaultGet(savedDocument('LOSS'));
   mount('LOSS', { draftKey: 'bad-lines' });
-  expect(await screen.findByRole('link', { name: 'Open Counts & audit' })).toBeInTheDocument();
+  expect(await screen.findByRole('link', { name: 'Open Stock counts' })).toBeInTheDocument();
   expectWritesBlocked();
   fireEvent.click(screen.getByRole('button', { name: 'Check saved status' }));
   expect(apiClient.post).not.toHaveBeenCalled();
@@ -399,9 +383,9 @@ it.each([
   ['DOCTOR', 'pharmacist-1', ['Approve document']],
   ['ADMIN', 'operator', ['Approve document']],
   ['PHARMACIST', 'doctor-1', []],
-] as const)('offers %s approval of a count created by %s only when another person submitted it or self-approval already existed', async (role, createdBy, offered) => {
-  defaultGet({ ...savedDocument('COUNT', 'AWAITING_APPROVAL'), createdBy } as any);
-  mount('COUNT', { id: 'saved-document', capabilities: roleCapabilities[role] });
+] as const)('offers %s approval of a loss created by %s only when another person submitted it or self-approval already existed', async (role, createdBy, offered) => {
+  defaultGet({ ...savedDocument('LOSS', 'AWAITING_APPROVAL'), createdBy } as any);
+  mount('LOSS', { id: 'saved-document', capabilities: roleCapabilities[role] });
   await screen.findByText(/waiting for manager approval/i);
   expect(screen.queryAllByRole('button', { name: 'Approve document' }).map((button) => button.textContent)).toEqual(offered);
 });

@@ -120,7 +120,7 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
   if (/historical invoice|historical before.*stock|already.*inventory backfill/i.test(body)) {
     return { ...base, category: 'historical', label: 'historical stock',
       message: 'This invoice may already be included in opening stock.',
-      help: 'Open Counts & audit to compare this bill, the opening-stock records and current physical quantities with an inventory administrator. Do not add it as a new receipt. Supplier accounting remains separate.' };
+      help: 'Open Stock counts to compare this bill, the opening-stock records and current physical quantities with an inventory administrator. Do not add it as a new receipt. Supplier accounting remains separate.' };
   }
   if (/Supplier GSTIN does not match the saved supplier/i.test(body)) {
     const savedGstin = /saved supplier\s*\(([^)]+)\)/i.exec(body)?.[1];

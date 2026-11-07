@@ -11,6 +11,8 @@ import { InventoryWorkflowService } from './inventory-workflow.service';
 import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
 import { inventoryProductName } from './inventory-names';
+import { displayDay } from './supplier-return';
+import { clinicDay } from '../pharmacy/register-utils';
 import { PharmacySupplierCreditService } from '../pharmacy/pharmacy-supplier-credit.service';
 import { EVERY_ALLOCATION, creditBalance } from '../pharmacy/supplier-credit-balance';
 
@@ -251,9 +253,8 @@ export class InventoryWorkspaceService {
     const query=await this.stock(actor,{...input.filters,limit:100,page:1});let items=[...query.rows];
     for(let page=2;page<=query.totalPages;page++)items.push(...(await this.stock(actor,{...input.filters,limit:100,page})).rows);
     if(input.itemIds?.length)items=items.filter(i=>input.itemIds.includes(i.id));
-    const settings=await this.workflow.settings(actor);if(input.daily)items=items.filter(i=>!i.metadata.lastCountAt||new Date(i.metadata.lastCountAt).toISOString().slice(0,10)!==new Date().toISOString().slice(0,10)).slice(0,settings.auditDailyCount);
     if(!items.length)throw new BadRequestException('No matching batches to count');
-    return this.workflow.saveDocument(actor,{kind:'COUNT',reference:input.reference||`COUNT-${new Date().toISOString().slice(0,10)}`,requestKey:input.requestKey||randomUUID(),payload:{reason:'Physical stock verification',lines:items.map(i=>({inventoryId:i.id,quantity:0}))}});
+    return this.workflow.saveDocument(actor,{kind:'COUNT',reference:`Stock count ${displayDay(clinicDay(new Date()))} · on demand`,requestKey:input.requestKey||randomUUID(),payload:{reason:'On-demand stock count',lines:items.map(i=>({inventoryId:i.id,quantity:0}))}});
   }
   async recommendTargets(actor:WorkflowActor,input:Record<string,any>={}) {
     await this.workflow.authorize(actor,'TARGET_REVIEW',true);const settings=await this.workflow.settings(actor);

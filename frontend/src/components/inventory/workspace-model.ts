@@ -4,7 +4,7 @@ export const workflowKinds:Record<string,{label:string;area:string;help:string;p
  SALES_RETURN:{label:'Customer returns',area:'sales',help:'Select the original sale and choose restock, quarantine or loss for each returned batch.',primary:'Post return'},
  LOSS:{label:'Loss & breakage',area:'stock',help:'Record a reason and remove damaged or lost units from available stock.',primary:'Post stock loss'},
  HOLD:{label:'Blocked stock',area:'stock',help:'Hold units from sale while keeping them in physical stock. Release from this record.',primary:'Block stock'},
- COUNT:{label:'Stock counts',area:'stock',help:'Enter physical quantities in the displayed stock unit. Leave uncounted batches blank; enter 0 only when counted empty.',primary:'Submit count'},
+ COUNT:{label:'Stock counts',area:'stock',help:'Count the batches assigned to you and sign off.',primary:'Sign off count'},
  CORRECTION:{label:'Corrections',area:'stock',help:'Linked corrections retain the original stock movement and a reason for the change.',primary:'Post correction'},
  SHORTBOOK:{label:'Shortbook',area:'reorder',help:'Collect demand, check the supplier and quantity, then create a purchase order.',primary:'Create purchase order'},
  PURCHASE_ORDER:{label:'Purchase orders',area:'reorder',help:'Save, submit for approval, and receive batches against the approved order.',primary:'Submit for approval'},

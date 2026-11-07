@@ -5,12 +5,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
   DEFAULT_INVENTORY_SETTINGS,
   INVENTORY_APPROVERS,
+  LEGACY_COUNT_SETTINGS,
   mayApproveDocument,
   SaveWorkflowDocumentDto,
   SELF_APPROVERS,
@@ -44,6 +45,10 @@ import {
   permissionGrants,
   PermissionGrants,
 } from '../../shared/access/permission-grants';
+import {
+  parseReconciliationInput,
+  readReconciliation,
+} from './reconciliation/reconciliation-cycle';
 
 const FINAL = new Set([
   'POSTED',
@@ -57,6 +62,7 @@ const FINANCIAL = new Set(['CREDIT_NOTE']);
 const SALES = new Set(['COUNTER_SALE', 'QUOTATION', 'SALES_RETURN']);
 const REORDER = new Set(['SHORTBOOK', 'PURCHASE_ORDER', 'TARGET_REVIEW']);
 const clean = (v: unknown) => String(v ?? '').trim();
+const fingerprintOf = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const RETURN_KINDS = ['SUPPLIER_RETURN', 'CREDIT_NOTE'];
 export type CreditNoteInput = {
   requestKey: string;
@@ -100,16 +106,7 @@ export class InventoryWorkflowService {
       throw new ForbiddenException(
         'User is not in the active branch or role changed',
       );
-    const role = await this.prisma.role.findFirst({
-      where: { name: user.role },
-      select: { permissions: true },
-    });
-    return permissionGrants(
-      grantsForRole(user.role, [
-        ...parsePermissionList(user.permissions),
-        ...parsePermissionList(role?.permissions),
-      ]),
-    );
+    return this.grantsOf(user);
   }
   private permissionFor(kind: string, write: boolean) {
     if (FINANCIAL.has(kind))
@@ -192,11 +189,39 @@ export class InventoryWorkflowService {
     const row = await this.prisma.inventoryWorkflowSettings.findUnique({
       where: { branchId: actor.branchId },
     });
-    return {
+    const stored = jsonObject(row?.settings);
+    const value: Record<string, any> = {
       ...DEFAULT_INVENTORY_SETTINGS,
-      ...jsonObject(row?.settings),
+      ...stored,
+      reconciliation: readReconciliation(stored, clinicDay(row?.updatedAt ?? new Date())),
       version: row?.version || 0,
     };
+    for (const key of LEGACY_COUNT_SETTINGS) delete value[key];
+    return value;
+  }
+  async grantsOf(user: { role: string; permissions: unknown }) {
+    const role = await this.prisma.role.findFirst({
+      where: { name: user.role as any },
+      select: { permissions: true },
+    });
+    return permissionGrants(
+      grantsForRole(user.role, [
+        ...parsePermissionList(user.permissions),
+        ...parsePermissionList(role?.permissions),
+      ]),
+    );
+  }
+  async countStaff(branchId: string) {
+    const users = await this.prisma.user.findMany({
+      where: { branchId, isActive: true },
+      select: { id: true, firstName: true, lastName: true, role: true, permissions: true },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+    const eligible = [];
+    for (const user of users)
+      if ((await this.grantsOf(user)).has(this.permissionFor('COUNT', true)))
+        eligible.push({ id: user.id, name: `${user.firstName} ${user.lastName}`.trim(), role: user.role });
+    return eligible;
   }
   async saveSettings(actor: WorkflowActor, input: Record<string, any>) {
     if (!INVENTORY_APPROVERS.has(actor.role))
@@ -206,16 +231,13 @@ export class InventoryWorkflowService {
     const previous = await this.settings(actor);
     const value: Record<string, any> = { ...previous };
     for (const key of [
-      'auditEnabled',
       'autoMinMaxEnabled',
       'autoPoEnabled',
       'includeBounce',
       'includeRefill',
-      'negativeCountNeedsApproval',
     ])
       if (input[key] !== undefined) value[key] = input[key] === true;
     for (const key of [
-      'auditDailyCount',
       'lookbackDays',
       'minimumOrders',
       'minCoverDays',
@@ -226,26 +248,23 @@ export class InventoryWorkflowService {
     if (
       value.minCoverDays > value.maxCoverDays ||
       value.lookbackDays > 730 ||
-      value.maxCoverDays > 730 ||
-      value.auditDailyCount > 1000
+      value.maxCoverDays > 730
     )
-      throw new BadRequestException(
-        'Review target day ranges and daily count limit',
+      throw new BadRequestException('Review target day ranges');
+    if (input.reconciliation !== undefined) {
+      value.reconciliation = parseReconciliationInput(
+        input.reconciliation,
+        previous.reconciliation,
+        clinicDay(new Date()),
       );
-    if (input.auditAdjustmentMode !== undefined) {
-      if (!['APPROVAL', 'THRESHOLD'].includes(input.auditAdjustmentMode))
+      const staff = new Set((await this.countStaff(actor.branchId)).map((s) => s.id));
+      if (value.reconciliation.assigneeIds.some((id: string) => !staff.has(id)))
         throw new BadRequestException(
-          'Choose approval or threshold count adjustment mode',
+          'Each person who counts must be an active member of this branch with stock reconciliation access',
         );
-      value.auditAdjustmentMode = input.auditAdjustmentMode;
     }
-    if (input.approvalValue !== undefined)
-      value.approvalValue = amount(input.approvalValue, 'Approval value');
     if (input.ownerId !== undefined) value.ownerId = clean(input.ownerId);
-    if (
-      (value.autoMinMaxEnabled || value.autoPoEnabled || value.auditEnabled) &&
-      !value.ownerId
-    )
+    if ((value.autoMinMaxEnabled || value.autoPoEnabled) && !value.ownerId)
       throw new BadRequestException(
         'Select an automation owner before enabling it',
       );
@@ -330,6 +349,8 @@ export class InventoryWorkflowService {
           })
         : null;
       if (id && !old) throw new NotFoundException('Document not found');
+      if (old?.kind === 'COUNT')
+        throw new BadRequestException('Enter counted quantities from Stock counts › My counts');
       if (
         old &&
         (old.kind !== dto.kind || !['DRAFT', 'CHALLAN'].includes(old.status))
@@ -449,7 +470,7 @@ export class InventoryWorkflowService {
       return this.plain(saved);
     });
   }
-  private async normalizePayload(
+  async normalizePayload(
     tx: any,
     actor: WorkflowActor,
     kind: WorkflowKind,
@@ -601,6 +622,8 @@ export class InventoryWorkflowService {
             });
           l.physicalStock = count;
           l.systemStock = oldById.get(id)?.systemStock ?? item?.currentStock;
+          const note = clean(line.note).slice(0, 300);
+          if (note) l.note = note;
         }
         if (kind === 'SALES_RETURN') {
           l.originalTerms = saleTerms || {
@@ -655,6 +678,13 @@ export class InventoryWorkflowService {
       refundMode: clean(source.refundMode) || 'CREDIT',
       sourceHoldId: clean(source.sourceHoldId),
       ...(source.calculation ? { calculation: source.calculation } : {}),
+      ...(kind === 'COUNT'
+        ? {
+            origin: old?.payload?.origin || 'ON_DEMAND',
+            assigneeId: old?.payload?.assigneeId || actor.id,
+            ...(old?.payload?.cycle ? { cycle: old.payload.cycle } : {}),
+          }
+        : {}),
     };
     if (
       ['COUNTER_SALE', 'QUOTATION'].includes(kind) &&
@@ -854,6 +884,14 @@ export class InventoryWorkflowService {
             'This document changed. Reload to confirm its current status.',
           );
         if (dto.action === 'RECOUNT') return this.restartCount(tx, actor, doc);
+        if (
+          doc.kind === 'COUNT' &&
+          (['APPROVE', 'REJECT', 'SUBMIT'].includes(dto.action) ||
+            (dto.action === 'POST' && doc.status !== 'APPROVED'))
+        )
+          throw new BadRequestException(
+            'A stock count is signed off by the person who counted it, then approved or rejected from Stock counts › Approvals',
+          );
         creditNoteNumber = creditNoteNumberOf(doc.payload?.creditNoteNumber);
         return this.move(tx, actor, doc, dto, settings);
       });
@@ -954,26 +992,6 @@ export class InventoryWorkflowService {
           'Use the order/quotation action; this document does not post stock',
         );
       next = 'POSTED';
-      if (
-        doc.kind === 'COUNT' &&
-        doc.status !== 'APPROVED' &&
-        !mayApproveDocument(actor, doc)
-      ) {
-        if (
-          lines.some(
-            (l) =>
-              l.physicalStock !== undefined &&
-              l.physicalStock !== (l.systemStock || 0) &&
-              (settings.auditAdjustmentMode === 'APPROVAL' ||
-                (settings.negativeCountNeedsApproval &&
-                  l.physicalStock < (l.systemStock || 0)) ||
-                Math.abs(l.physicalStock - (l.systemStock || 0)) *
-                  (l.unitPrice || 0) >=
-                  settings.approvalValue),
-          )
-        )
-          next = 'AWAITING_APPROVAL';
-      }
     }
     if (next === doc.status)
       throw new BadRequestException('No valid transition requested');
@@ -986,7 +1004,7 @@ export class InventoryWorkflowService {
       data: {
         status: next,
         version: { increment: 1 },
-        ...(dto.action === 'APPROVE' || (doc.kind === 'COUNT' && next === 'POSTED' && mayApproveDocument(actor, doc)) ? { approvedBy: actor.id } : {}),
+        ...(dto.action === 'APPROVE' ? { approvedBy: actor.id } : {}),
         ...(next === 'POSTED'
           ? { postedAt: new Date(), postedBy: actor.id }
           : {}),
@@ -1033,49 +1051,8 @@ export class InventoryWorkflowService {
     }
     if (next === 'POSTED' && doc.kind === 'INWARD_CHALLAN' && doc.sourceId)
       await this.updateOrderReceipt(tx, actor, doc.sourceId);
-    if (next === 'POSTED' && doc.kind === 'COUNT') {
-      for (const line of lines.filter((l) => l.physicalStock !== undefined)) {
-        const item = await tx.inventoryItem.findFirst({
-          where: { id: line.inventoryId, branchId: actor.branchId },
-        });
-        const ledgerCheckpoint = {
-          documentId: doc.id,
-          quantity: item.currentStock,
-          actorId: actor.id,
-          recordedAt: new Date().toISOString(),
-          coveredMovementIds: (await tx.stockTransaction.findMany({
-            where: { branchId: actor.branchId, itemId: item.id }, select: { id: true },
-          })).map((movement: any) => movement.id),
-        };
-        await tx.inventoryItem.update({
-          where: { id: item.id },
-          data: {
-            metadata: JSON.stringify({
-              ...jsonObject(item.metadata),
-              lastCountAt: new Date().toISOString(),
-              lastCountDocumentId: doc.id,
-              ledgerCheckpoint,
-            }),
-          },
-        });
-        await tx.inventoryAudit.create({
-          data: {
-            branchId: actor.branchId,
-            itemId: item.id,
-            auditorId: actor.id,
-            physicalStock: line.physicalStock,
-            systemStock: line.systemStock,
-            variance: line.physicalStock! - line.systemStock!,
-            status: 'ADJUSTED',
-            notes: JSON.stringify({
-              workflowDocumentId: doc.id,
-              ledgerCheckpoint,
-              reason: p.reason,
-            }),
-          },
-        });
-      }
-    }
+    if (next === 'POSTED' && doc.kind === 'COUNT')
+      await this.recordCount(tx, actor, updated);
     await this.event(tx, updated, actor, dto.action, doc.status, {
       reason: clean(dto.reason) || p.reason,
       stockEffect: ['POSTED', 'CHALLAN'].includes(next),
@@ -1331,6 +1308,335 @@ export class InventoryWorkflowService {
     await this.event(tx, created, actor, 'RECOUNT', null, { sourceId: doc.id, sourceVersion: doc.version, observationsDiscarded: true });
     return this.plain(created);
   }
+  private async recordCount(tx: any, actor: WorkflowActor, doc: any) {
+    const p = doc.payload;
+    const auditorId = p.signOff?.by || actor.id;
+    for (const line of (p.lines as WorkflowLine[]).filter((l) => l.physicalStock !== undefined)) {
+      const item = await tx.inventoryItem.findFirst({
+        where: { id: line.inventoryId, branchId: actor.branchId },
+      });
+      const ledgerCheckpoint = {
+        documentId: doc.id,
+        quantity: item.currentStock,
+        actorId: actor.id,
+        recordedAt: new Date().toISOString(),
+        coveredMovementIds: (await tx.stockTransaction.findMany({
+          where: { branchId: actor.branchId, itemId: item.id }, select: { id: true },
+        })).map((movement: any) => movement.id),
+      };
+      await tx.inventoryItem.update({
+        where: { id: item.id },
+        data: {
+          metadata: JSON.stringify({
+            ...jsonObject(item.metadata),
+            lastCountAt: new Date().toISOString(),
+            lastCountDocumentId: doc.id,
+            ledgerCheckpoint,
+          }),
+        },
+      });
+      await tx.inventoryAudit.create({
+        data: {
+          branchId: actor.branchId,
+          itemId: item.id,
+          auditorId,
+          physicalStock: line.physicalStock,
+          systemStock: line.systemStock,
+          variance: line.physicalStock! - line.systemStock!,
+          status: 'ADJUSTED',
+          notes: JSON.stringify({
+            workflowDocumentId: doc.id,
+            ledgerCheckpoint,
+            reason: p.decision?.reason || p.reason,
+            ...(p.decision ? { approvedBy: p.decision.by } : {}),
+            ...(line.note ? { note: line.note } : {}),
+          }),
+        },
+      });
+    }
+  }
+  private async openCount(tx: any, actor: WorkflowActor, id: string) {
+    const doc = await tx.inventoryWorkflowDocument.findFirst({
+      where: { id, branchId: actor.branchId },
+    });
+    if (!doc || doc.kind !== 'COUNT') throw new NotFoundException('Stock count not found');
+    return doc;
+  }
+  private async countAssigneeOnly(tx: any, actor: WorkflowActor, doc: any) {
+    const assigneeId = doc.payload.assigneeId;
+    if (!assigneeId || assigneeId === actor.id) return;
+    const person = await tx.user.findFirst({ where: { id: assigneeId }, select: { firstName: true, lastName: true } });
+    throw new ForbiddenException(
+      `This count is assigned to ${person ? `${person.firstName} ${person.lastName}`.trim() : 'another person'}. Only they can enter and sign it off.`,
+    );
+  }
+  private async countLines(
+    tx: any,
+    actor: WorkflowActor,
+    doc: any,
+    input: unknown,
+  ): Promise<WorkflowLine[]> {
+    const lines: WorkflowLine[] = doc.payload.lines || [];
+    if (input === undefined) return lines;
+    if (!Array.isArray(input)) throw new BadRequestException('Send the counted lines as a list');
+    const byId = new Map<string, any>();
+    for (const entry of input) {
+      const id = clean(entry?.id);
+      if (!lines.some((l) => l.id === id))
+        throw new BadRequestException('A counted line is not part of this count. Reload the count.');
+      byId.set(id, entry);
+    }
+    const items = await tx.inventoryItem.findMany({
+      where: { branchId: actor.branchId, id: { in: lines.map((l) => l.inventoryId) } },
+      select: { id: true, currentStock: true },
+    });
+    const stock = new Map<string, number>(items.map((i: any) => [i.id, i.currentStock]));
+    return lines.map((line) => {
+      const entry = byId.get(line.id);
+      if (!entry) return line;
+      const next: WorkflowLine = { ...line };
+      if ('physicalStock' in entry) {
+        const raw = entry.physicalStock;
+        const count = raw === '' || raw === null || raw === undefined ? undefined : Number(raw);
+        if (count !== undefined && (!Number.isSafeInteger(count) || count < 0))
+          throw new BadRequestException({
+            code: 'INVENTORY_INVALID_COUNT',
+            message: `${line.name || 'Selected batch'}: the counted quantity must be a whole number of at least 0.`,
+            stockEffect: 'NONE',
+            recovery: { action: 'CORRECT_FIELD', inventoryId: line.inventoryId, field: 'physicalStock' },
+          });
+        if (count !== line.physicalStock)
+          next.systemStock = stock.get(line.inventoryId) ?? line.systemStock;
+        next.physicalStock = count;
+      }
+      if ('note' in entry) next.note = clean(entry.note).slice(0, 300) || undefined;
+      return JSON.parse(JSON.stringify(next));
+    });
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] count-progress-capture
+   * Saving counted quantities MUST capture the batch's stock at the moment each quantity is entered,
+   * change no stock, and accept only the assignee of an unsigned count.
+   */
+  async saveCountProgress(actor: WorkflowActor, id: string, input: Record<string, any>) {
+    await this.authorize(actor, 'COUNT', true);
+    return this.transaction(async (tx) => {
+      const doc = await this.openCount(tx, actor, id);
+      if (doc.status !== 'DRAFT')
+        throw new ConflictException('This count is already signed off. Reload to see the signed record.');
+      await this.countAssigneeOnly(tx, actor, doc);
+      if (doc.version !== Number(input?.version))
+        throw new ConflictException('This count changed in another window. Reload to see the latest counts.');
+      const lines = await this.countLines(tx, actor, doc, input.lines);
+      return this.plain(
+        await tx.inventoryWorkflowDocument.update({
+          where: { id: doc.id, branchId: actor.branchId, version: doc.version },
+          data: { payload: { ...doc.payload, lines }, version: { increment: 1 } },
+        }),
+      );
+    });
+  }
+  private async requestKeyFree(tx: any, actor: WorkflowActor, documentId: string, key: string) {
+    const elsewhere = await tx.inventoryWorkflowEvent.findFirst({
+      where: { branchId: actor.branchId, documentId: { not: documentId }, action: { in: ['SIGN_OFF', 'APPROVE', 'REJECT'] }, detail: { path: ['requestKey'], equals: key } },
+      select: { id: true },
+    });
+    if (elsewhere)
+      throw new ConflictException({ code: 'COUNT_REQUEST_KEY_REUSED', message: 'This request was already used for another stock count. Reload and try again.' });
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] count-sign-off-locks
+   * Sign-off MUST record who, when, every batch's system and counted quantity, the variance and any
+   * note, and lock the count. Every line must be counted and a difference needs a note. With no
+   * difference the count posts without changing stock; any difference waits for an approver.
+   * Replaying the same request key returns the signed record; the same key with other figures gets 409.
+   */
+  async signOffCount(actor: WorkflowActor, id: string, input: Record<string, any>) {
+    await this.authorize(actor, 'COUNT', true);
+    const key = clean(input?.requestKey);
+    if (!key || key.length > 150) throw new BadRequestException('A request key is required');
+    const note = clean(input?.note).slice(0, 1000);
+    const print = fingerprintOf({
+      note,
+      lines: (Array.isArray(input?.lines) ? input.lines : [])
+        .map((l: any) => [clean(l?.id), l?.physicalStock === '' || l?.physicalStock == null ? null : Number(l.physicalStock), clean(l?.note)])
+        .sort((a: any[], b: any[]) => String(a[0]).localeCompare(String(b[0]))),
+    });
+    return this.transaction(async (tx) => {
+      const doc = await this.openCount(tx, actor, id);
+      if (doc.payload.signOff?.requestKey === key) {
+        if (doc.payload.signOff.fingerprint !== print)
+          throw new ConflictException({ code: 'COUNT_REQUEST_KEY_REUSED', message: 'This sign-off was already recorded with different figures. Reload to see the signed record.' });
+        return this.plain(doc);
+      }
+      if (doc.status !== 'DRAFT')
+        throw new ConflictException('This count was already signed off. Reload to see the signed record.');
+      await this.countAssigneeOnly(tx, actor, doc);
+      await this.requestKeyFree(tx, actor, doc.id, key);
+      if (doc.version !== Number(input?.version))
+        throw new ConflictException('This count changed in another window. Reload to see the latest counts.');
+      const lines = await this.countLines(tx, actor, doc, input.lines);
+      const missing = lines.filter((l) => l.physicalStock === undefined);
+      if (missing.length)
+        throw new BadRequestException({
+          code: 'COUNT_INCOMPLETE',
+          message: `Count every item before signing off. Not counted yet: ${missing.slice(0, 3).map((l) => l.name).join(', ')}${missing.length > 3 ? ` and ${missing.length - 3} more` : ''}.`,
+          lineIds: missing.map((l) => l.id),
+        });
+      const differing = lines.filter((l) => l.physicalStock !== l.systemStock);
+      if (differing.length && !note)
+        throw new BadRequestException({ code: 'COUNT_NOTE_REQUIRED', message: 'Add a note explaining the differences before signing off.' });
+      const at = new Date();
+      const next = differing.length ? 'AWAITING_APPROVAL' : 'POSTED';
+      const payload = { ...doc.payload, lines, signOff: { by: actor.id, at: at.toISOString(), note, requestKey: key, fingerprint: print } };
+      const updated = await tx.inventoryWorkflowDocument.update({
+        where: { id: doc.id, branchId: actor.branchId, version: doc.version },
+        data: {
+          payload,
+          status: next,
+          version: { increment: 1 },
+          ...(next === 'POSTED' ? { postedAt: at, postedBy: actor.id } : {}),
+        },
+      });
+      if (next === 'POSTED') await this.recordCount(tx, actor, updated);
+      await this.event(tx, updated, actor, 'SIGN_OFF', doc.status, {
+        requestKey: key,
+        note,
+        counted: lines.length,
+        differences: differing.map((l) => ({ lineId: l.id, inventoryId: l.inventoryId, systemStock: l.systemStock, physicalStock: l.physicalStock, note: l.note })),
+        stockEffect: false,
+      });
+      return this.plain(updated);
+    });
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] count-variance-approval
+   * Only an inventory approver decides a signed count's differences, never the person who signed it
+   * unless nobody else can, and then only after confirming. Approval applies each line's
+   * counted-minus-system difference to the batch's current stock, so sales after the count do not
+   * block it, and logs the reason and approver on the movement. Rejection changes no stock and leaves
+   * the batches uncounted for the cycle. Replaying the same request key returns the decision; the
+   * same key with another answer gets 409. A decrease larger than the stock left now is refused.
+   */
+  async decideCount(actor: WorkflowActor, id: string, decision: 'APPROVE' | 'REJECT', input: Record<string, any>) {
+    await this.authorize(actor, 'COUNT');
+    if (!INVENTORY_APPROVERS.has(actor.role))
+      throw new ForbiddenException('A doctor or an administrator decides stock count differences');
+    const key = clean(input?.requestKey);
+    if (!key || key.length > 150) throw new BadRequestException('A request key is required');
+    const reason = clean(input?.reason).slice(0, 500);
+    if (!reason)
+      throw new BadRequestException(decision === 'APPROVE' ? 'Give a reason for approving the stock change' : 'Give a reason for rejecting this count');
+    const print = fingerprintOf({ decision, reason, selfApproval: input?.selfApproval === true });
+    const settings = await this.settings(actor);
+    return this.transaction(async (tx) => {
+      const doc = await this.openCount(tx, actor, id);
+      if (doc.payload.decision?.requestKey === key) {
+        if (doc.payload.decision.fingerprint !== print)
+          throw new ConflictException({ code: 'COUNT_REQUEST_KEY_REUSED', message: 'This count was already decided with a different answer. Reload to see its current status.' });
+        return this.plain(doc);
+      }
+      if (doc.status !== 'AWAITING_APPROVAL')
+        throw new ConflictException('This count is no longer waiting for approval. Reload to see its current status.');
+      await this.requestKeyFree(tx, actor, doc.id, key);
+      if (doc.version !== Number(input?.version))
+        throw new ConflictException('This count changed in another window. Reload to see its current status.');
+      const signer = doc.payload.signOff?.by || doc.createdBy;
+      const self = signer === actor.id;
+      if (self) {
+        const others = await tx.user.findMany({
+          where: { branchId: actor.branchId, isActive: true, role: { in: [...INVENTORY_APPROVERS] }, id: { not: actor.id } },
+          select: { firstName: true, lastName: true },
+          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        });
+        if (others.length)
+          throw new ForbiddenException({
+            code: 'COUNT_SEPARATION_OF_DUTIES',
+            message: `You signed this count, so someone else decides it. Ask ${others.map((o: any) => `${o.firstName} ${o.lastName}`.trim()).join(' or ')}.`,
+          });
+        if (input?.selfApproval !== true)
+          throw new BadRequestException({
+            code: 'COUNT_SELF_APPROVAL_CONFIRM',
+            message: 'You are the only approver in this branch. Confirm that you are deciding your own count.',
+          });
+      }
+      const lines: WorkflowLine[] = doc.payload.lines || [];
+      if (decision === 'APPROVE') {
+        const items = await tx.inventoryItem.findMany({
+          where: { branchId: actor.branchId, id: { in: lines.map((l) => l.inventoryId) } },
+          select: { id: true, name: true, unit: true, currentStock: true },
+        });
+        const byId = new Map<string, any>(items.map((i: any) => [i.id, i]));
+        for (const line of lines) {
+          const item = byId.get(line.inventoryId);
+          const delta = (line.physicalStock ?? 0) - (line.systemStock ?? 0);
+          if (!item || item.currentStock + delta >= 0) continue;
+          throw new ConflictException({
+            code: 'COUNT_DELTA_BELOW_STOCK',
+            message: `${item.name}: the count found ${-delta} fewer than the system had, but only ${item.currentStock} ${String(item.unit || 'units').toLowerCase()} are left now. The count cannot be right. Reject it and ask for a fresh count.`,
+            stockEffect: 'NONE',
+          });
+        }
+      }
+      const at = new Date();
+      const payload = { ...doc.payload, decision: { decision, by: actor.id, at: at.toISOString(), reason, requestKey: key, fingerprint: print, selfApproval: self } };
+      const status = decision === 'APPROVE' ? 'POSTED' : 'REJECTED';
+      const updated = await tx.inventoryWorkflowDocument.update({
+        where: { id: doc.id, branchId: actor.branchId, version: doc.version },
+        data: {
+          payload,
+          status,
+          version: { increment: 1 },
+          approvedBy: actor.id,
+          ...(status === 'POSTED' ? { postedAt: at, postedBy: actor.id } : {}),
+        },
+      });
+      if (status === 'POSTED') {
+        await this.validatePosting(tx, actor, updated, settings);
+        await this.applyStockDocument(tx, actor, updated, doc.status);
+        await this.recordCount(tx, actor, updated);
+      }
+      await this.event(tx, updated, actor, decision, doc.status, {
+        requestKey: key,
+        reason,
+        selfApproval: self,
+        stockEffect: status === 'POSTED',
+        ...(status === 'POSTED'
+          ? { adjustments: lines.filter((l) => l.physicalStock !== l.systemStock).map((l) => ({ inventoryId: l.inventoryId, delta: l.physicalStock! - l.systemStock! })) }
+          : {}),
+      });
+      return this.plain(updated);
+    });
+  }
+  async createCycleCount(
+    tx: any,
+    assignee: WorkflowActor,
+    input: { requestKey: string; reference: string; cycleStart: string; day: string; inventoryIds: string[]; plannedBy: string },
+  ) {
+    const existing = await tx.inventoryWorkflowDocument.findUnique({
+      where: { branchId_requestKey: { branchId: assignee.branchId, requestKey: input.requestKey } },
+    });
+    if (existing) return null;
+    const payload = await this.normalizePayload(tx, assignee, 'COUNT', {
+      reason: 'Stock reconciliation cycle',
+      date: input.day,
+      lines: input.inventoryIds.map((inventoryId) => ({ inventoryId, quantity: 0 })),
+    });
+    const created = await tx.inventoryWorkflowDocument.create({
+      data: {
+        branchId: assignee.branchId,
+        kind: 'COUNT',
+        status: 'DRAFT',
+        reference: input.reference,
+        requestKey: input.requestKey,
+        createdBy: assignee.id,
+        payload: { ...payload, origin: 'CYCLE', assigneeId: assignee.id, cycle: { start: input.cycleStart, day: input.day } },
+        totalAmount: 0,
+      },
+    });
+    await this.event(tx, created, assignee, 'CREATE', null, { plannedBy: input.plannedBy, cycleStart: input.cycleStart });
+    return created;
+  }
   /**
    * @cc [owner:nareshshah139,label:product;target] sales-return-original-batch
    * A customer return MUST reference its original sale line and batch, limit quantity to the
@@ -1411,6 +1717,7 @@ export class InventoryWorkflowService {
       if (
         item &&
         doc.kind === 'COUNT' &&
+        !p.signOff &&
         line.physicalStock !== undefined &&
         line.systemStock !== item.currentStock
       )
@@ -1584,7 +1891,12 @@ export class InventoryWorkflowService {
         type: options.type || (delta > 0 ? 'RETURN' : 'DAMAGED'),
         unitPrice: line.unitPrice,
         reference: `WF-${doc.reference}`,
-        reason: doc.kind === 'SUPPLIER_RETURN' ? returnMovementReason(doc.payload) : doc.payload.reason,
+        reason:
+          doc.kind === 'SUPPLIER_RETURN'
+            ? returnMovementReason(doc.payload)
+            : doc.kind === 'COUNT' && doc.payload.decision
+              ? `Stock count approved: ${doc.payload.decision.reason}`
+              : doc.payload.reason,
         metadata: {
           workflowDocumentId: doc.id,
           workflowLineId: line.id,
