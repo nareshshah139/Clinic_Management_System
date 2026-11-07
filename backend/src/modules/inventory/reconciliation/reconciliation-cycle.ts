@@ -86,8 +86,9 @@ const byNeed = (a: PlanBatch, b: PlanBatch) =>
 
 /**
  * Deals the batches nobody has counted this cycle, least recently counted first, one at a time to each
- * assignee who has no count for today yet, until each holds itemsPerPersonPerDay. Batches already signed
- * this cycle or waiting on an open cycle count are skipped, so reruns on the same day add nothing.
+ * assignee who has no count for today yet, until each holds itemsPerPersonPerDay less the cycle lines
+ * they still have open from earlier days. Batches already signed this cycle or on any undecided count
+ * are skipped, so reruns on the same day add nothing.
  */
 export function planDay(input: {
   settings: ReconciliationSettings;
@@ -96,17 +97,20 @@ export function planDay(input: {
   covered: ReadonlySet<string>;
   reserved: ReadonlySet<string>;
   plannedToday: ReadonlySet<string>;
+  backlog?: ReadonlyMap<string, number>;
 }): { cycle: Cycle; assignments: Assignment[] } {
   const { settings, today } = input;
   const cycle = cycleOn(settings, today);
   if (!settings.enabled) return { cycle, assignments: [] };
   const pool = input.batches.filter((b) => !input.covered.has(b.id) && !input.reserved.has(b.id)).sort(byNeed);
-  const assignments = settings.assigneeIds
+  const dealing = settings.assigneeIds
     .filter((id) => !input.plannedToday.has(id))
-    .map((assigneeId) => ({ assigneeId, requestKey: cycleRequestKey(cycle, today, assigneeId), batchIds: [] as string[] }));
-  const capacity = assignments.length * settings.itemsPerPersonPerDay;
-  pool.slice(0, capacity).forEach((batch, index) => assignments[index % assignments.length].batchIds.push(batch.id));
-  return { cycle, assignments: assignments.filter((a) => a.batchIds.length) };
+    .map((assigneeId) => ({ assigneeId, requestKey: cycleRequestKey(cycle, today, assigneeId), batchIds: [] as string[], room: Math.max(0, settings.itemsPerPersonPerDay - (input.backlog?.get(assigneeId) ?? 0)) }));
+  let next = 0;
+  while (next < pool.length && dealing.some((a) => a.batchIds.length < a.room))
+    for (const assignment of dealing)
+      if (assignment.batchIds.length < assignment.room && next < pool.length) assignment.batchIds.push(pool[next++].id);
+  return { cycle, assignments: dealing.filter((a) => a.batchIds.length).map(({ room: _room, ...a }) => a) };
 }
 
 export type Forecast = {

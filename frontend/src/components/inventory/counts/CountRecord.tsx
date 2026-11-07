@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Lock } from 'lucide-react';
+import { ArrowRight, Lock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { Button } from '@/components/ui/button';
-import { BatchLine, CountStateBadge, Difference, SummaryLine } from './count-parts';
+import { BatchLine, CountStateBadge, Difference, Split, SummaryLine } from './count-parts';
 import { DecisionDialog, type Decision } from './DecisionDialog';
 import { clinicStamp, countSummary, type CountDetail } from './count-model';
 
@@ -17,7 +16,19 @@ const join = (names: string[]) => (names.length <= 1 ? (names[0] ?? '') : `${nam
  * quantity, the difference and notes, and the decision with its reason. An approver sees the
  * differing batches first and decides from here; the signer is told who can decide instead.
  */
-export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetail; onDecided: (detail: CountDetail) => void; onStale: (message: string) => void }) {
+export function CountRecord({
+  detail,
+  next,
+  onNext,
+  onDecided,
+  onStale,
+}: {
+  detail: CountDetail;
+  next?: { id: string; reference: string } | null;
+  onNext?: (id: string) => void;
+  onDecided: (detail: CountDetail) => void;
+  onStale: (message: string) => void;
+}) {
   const [acting, setActing] = useState<{ decision: Decision; anchor: HTMLElement } | null>(null);
   const awaiting = detail.state === 'AWAITING_APPROVAL';
   const differing = detail.lines.filter((line) => line.difference);
@@ -33,7 +44,12 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
             {detail.reference}
           </h2>
           <CountStateBadge state={detail.state} />
-          <span className="text-sm">{detail.origin === 'CYCLE' ? 'Cycle count' : 'On-demand count'}</span>
+          {detail.origin === 'CYCLE' && <span className="text-sm">Cycle count</span>}
+          {next && onNext && (
+            <Button variant="outline" className="ml-auto h-10" onClick={() => onNext(next.id)} aria-label={`Next count: ${next.reference}`}>
+              Next count <ArrowRight aria-hidden="true" />
+            </Button>
+          )}
         </div>
         {detail.signedBy && detail.signedAt ? (
           <p className="flex items-center gap-2 text-base">
@@ -66,21 +82,6 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
         </p>
       </header>
 
-      {awaiting && detail.can.decide && (
-        <div className="flex flex-col gap-2 rounded-lg border border-warning-border bg-warning-soft p-3">
-          <p className="text-base">
-            {detail.can.decideOwn
-              ? 'You signed this count and no other approver is active, so you decide it. Your decision is recorded as your own.'
-              : 'Stock changes only when you approve. Check the differing batches below.'}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={(event) => setActing({ decision: 'approve', anchor: event.currentTarget })}>Approve and adjust stock</Button>
-            <Button variant="outline" onClick={(event) => setActing({ decision: 'reject', anchor: event.currentTarget })}>
-              Reject
-            </Button>
-          </div>
-        </div>
-      )}
       {awaiting && !detail.can.decide && detail.approvers.length > 0 && (
         <p className="rounded-lg border border-border bg-muted p-3 text-base">You signed this count, so someone else decides it. Ask {join(detail.approvers)}.</p>
       )}
@@ -107,15 +108,15 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
               {line.history && <span className="block text-sm font-medium text-warning-text">{line.history}</span>}
             </div>
             <div className="text-sm sm:text-right">
-              <span className="block text-xs sm:hidden">System</span>
+              <span className="block text-xs sm:sr-only">System</span>
               <span className="tabular-nums">{line.systemStock ?? '—'}</span>
             </div>
             <div className="text-sm sm:text-right">
-              <span className="block text-xs sm:hidden">Counted</span>
+              <span className="block text-xs sm:sr-only">Counted</span>
               <span className="font-semibold tabular-nums">{line.physicalStock ?? '—'}</span>
             </div>
             <div className="text-sm">
-              <span className="block text-xs sm:hidden">Difference</span>
+              <span className="block text-xs sm:sr-only">Difference</span>
               <Difference line={line} />
             </div>
             <div className="col-span-3 text-sm [overflow-wrap:anywhere] sm:col-span-1">{line.note}</div>
@@ -127,7 +128,24 @@ export function CountRecord({ detail, onDecided, onStale }: { detail: CountDetai
           Show all {detail.lines.length} batches
         </Button>
       )}
-      {figures.differences > 0 && <p className="whitespace-nowrap text-sm tabular-nums">Net value of the differences {formatRupees(figures.netValue)}</p>}
+      {awaiting && detail.can.decide && (
+        <div className="sticky -bottom-4 z-20 -mx-4 -mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border bg-background px-4 py-3 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] md:-bottom-6 md:-mx-6 md:-mb-6 md:px-6">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <Split figures={figures} className="text-base font-semibold" />
+            <p className="text-sm">
+              {detail.can.decideOwn ? 'You signed this count and no other approver is active, so you decide it. This is recorded.' : 'Stock changes only when you approve.'}
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2 max-sm:w-full">
+            <Button variant="outline" className="h-11 max-sm:flex-1" onClick={(event) => setActing({ decision: 'reject', anchor: event.currentTarget })}>
+              Reject
+            </Button>
+            <Button className="h-11 max-sm:flex-[2]" onClick={(event) => setActing({ decision: 'approve', anchor: event.currentTarget })}>
+              Approve and adjust stock
+            </Button>
+          </div>
+        </div>
+      )}
 
       {acting && (
         <DecisionDialog

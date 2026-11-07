@@ -119,7 +119,16 @@ describe('Inventory reconciliation recovery', () => {
     expect(state.documents.find((d: any) => d.id === 'hold').status).toBe('POSTED');
   });
 
-  it.each(['DRAFT', 'AWAITING_APPROVAL', 'APPROVED', 'REJECTED', 'CANCELLED', 'POSTED', 'REVERSED'])('starts a fresh uncounted attempt from %s without reusing stale measurements', async (status) => {
+  it.each(['DRAFT', 'AWAITING_APPROVAL'])('refuses to recount a %s count, which is still open on its batch', async (status) => {
+    const { state, service, add } = fixture();
+    add('old-count', 'COUNT', 0, { assigneeId: 'operator', lines: [{ id: 'old-line', inventoryId: 'batch', name: 'Product', batchNumber: 'B-7', quantity: 0, systemStock: 5, physicalStock: 4 }] }).status = status;
+    await expect(service.transition(actor, 'old-count', { version: 1, action: 'RECOUNT' })).rejects.toMatchObject({
+      response: { code: 'COUNT_BATCH_OPEN', message: `Product, batch B-7, is already on your count of 24/10/2026, ${status === 'DRAFT' ? 'not signed yet. Count it there.' : 'signed and waiting for approval. Approve or reject that count first.'}` },
+    });
+    expect(state.documents.map((d: any) => d.id)).toEqual(['old-count']);
+  });
+
+  it.each(['APPROVED', 'REJECTED', 'CANCELLED', 'POSTED', 'REVERSED'])('starts a fresh uncounted attempt from %s without reusing stale measurements', async (status) => {
     const { state, service, add } = fixture();
     add('old-count', 'COUNT', 0, { lines: [{ id: 'old-line', inventoryId: 'batch', quantity: 0, systemStock: 5, physicalStock: 4, countRevision: 'old' }] }).status = status;
     const result = await service.transition(actor, 'old-count', { version: 1, action: 'RECOUNT' });
@@ -405,6 +414,36 @@ describe('Stock count sign-off', () => {
     expect(state.movements).toEqual([]);
   });
 
+  it('stamps when each quantity was entered and clears the stamp when the quantity is cleared', async () => {
+    const { service } = counting();
+    jest.useFakeTimers({ now: new Date('2026-11-07T04:30:00.000Z') });
+    try {
+      const typed = await service.saveCountProgress(anil, 'count', { version: 1, lines: [{ id: 'line', physicalStock: 9 }] });
+      expect(typed.payload.lines[0].capturedAt).toBe('2026-11-07T04:30:00.000Z');
+      jest.setSystemTime(new Date('2026-11-07T05:00:00.000Z'));
+      const noted = await service.saveCountProgress(anil, 'count', { version: 2, lines: [{ id: 'line', physicalStock: 9, note: 'Top shelf' }] });
+      expect(noted.payload.lines[0].capturedAt).toBe('2026-11-07T04:30:00.000Z');
+      const cleared = await service.saveCountProgress(anil, 'count', { version: 3, lines: [{ id: 'line', physicalStock: '' }] });
+      expect(cleared.payload.lines[0].capturedAt).toBeUndefined();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('refuses to sign a count typed before capture times were kept, and a retyped count signs', async () => {
+    const { state, service } = counting();
+    state.documents[0].payload.lines[0].physicalStock = 9;
+    const refused = await failure(service.signOffCount(anil, 'count', { version: 1, requestKey: 'sign-legacy', note: 'One short', lines: [{ id: 'line', physicalStock: 9 }] }));
+    expect(refused).toEqual({
+      status: 400,
+      body: { code: 'COUNT_RETYPE', message: 'Type these counts again before signing off: Isotroin 10. The system quantity they were compared with is out of date.', lineIds: ['line'] },
+    });
+    const retyped = await service.saveCountProgress(anil, 'count', { version: 1, lines: [{ id: 'line', physicalStock: 9 }] });
+    expect(retyped.payload.lines[0].capturedAt).toEqual(expect.any(String));
+    const signed = await service.signOffCount(anil, 'count', { version: 2, requestKey: 'sign-legacy', note: 'One short', lines: [{ id: 'line', physicalStock: 9 }] });
+    expect(signed.status).toBe('AWAITING_APPROVAL');
+  });
+
   it('refuses the old submit, approve and post actions on a count', async () => {
     const { service } = counting();
     for (const action of ['SUBMIT', 'POST', 'APPROVE'])
@@ -494,6 +533,35 @@ describe('Stock count approval', () => {
     expect(await failure(service.decideCount(anil, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine' }))).toMatchObject({ status: 403, body: { message: 'A doctor or an administrator decides stock count differences' } });
     await service.decideCount(actor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine' });
     expect([state.documents[0].status, state.documents[0].approvedBy, state.item.currentStock]).toEqual(['POSTED', 'operator', 7]);
+  });
+
+  it('keeps managers off count decisions and out of the people to ask', async () => {
+    const { state, service } = await signed(7, doctor);
+    state.users.push({ id: 'ravi', branchId: 'branch', firstName: 'Ravi', lastName: 'Kumar', role: 'MANAGER', isActive: true });
+    expect(await failure(service.decideCount({ id: 'ravi', branchId: 'branch', role: 'MANAGER' }, 'count', 'APPROVE', { version: 2, requestKey: 'manager', reason: 'Fine' }))).toMatchObject({
+      status: 403, body: { message: 'A doctor or an administrator decides stock count differences' },
+    });
+    expect(await failure(service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine' }))).toMatchObject({
+      body: { message: 'You signed this count, so someone else decides it. Ask Rajesh Iyer.' },
+    });
+    state.users.find((u: any) => u.id === 'operator').isActive = false;
+    expect(await failure(service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine' }))).toMatchObject({ body: { code: 'COUNT_SELF_APPROVAL_CONFIRM' } });
+  });
+
+  it('cancels a count only while unsigned, and only for its assignee or an approver', async () => {
+    const f = fixture();
+    f.state.users.push({ id: 'meera', branchId: 'branch', firstName: 'Meera', lastName: 'Kulkarni', role: 'PHARMACIST', isActive: true });
+    f.add('count', 'COUNT', 0, { assigneeId: 'anil', lines: [{ id: 'line', inventoryId: 'batch', name: 'Isotroin 10', quantity: 0, systemStock: 10 }] });
+    expect(await failure(f.service.transition({ id: 'meera', branchId: 'branch', role: 'PHARMACIST' }, 'count', { version: 1, action: 'CANCEL' }))).toEqual({
+      status: 403, body: expect.objectContaining({ message: 'Only the person this count is assigned to, or a doctor or administrator, can cancel it.' }),
+    });
+    expect((await f.service.transition(anil, 'count', { version: 1, action: 'CANCEL' })).status).toBe('CANCELLED');
+    f.add('other', 'COUNT', 0, { assigneeId: 'anil', lines: [{ id: 'other-line', inventoryId: 'batch', name: 'Isotroin 10', quantity: 0, systemStock: 10 }] });
+    expect((await f.service.transition(doctor, 'other', { version: 1, action: 'CANCEL' })).status).toBe('CANCELLED');
+    const { service } = await signed(7);
+    expect(await failure(service.transition(doctor, 'count', { version: 2, action: 'CANCEL' }))).toEqual({
+      status: 400, body: expect.objectContaining({ message: 'A signed count cannot be cancelled. A doctor or administrator rejects it from Stock counts › Approvals.' }),
+    });
   });
 
   it('lets the only approver decide their own count once they confirm it', async () => {

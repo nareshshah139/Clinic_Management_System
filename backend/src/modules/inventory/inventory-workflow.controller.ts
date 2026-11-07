@@ -277,6 +277,9 @@ export class InventoryWorkflowController {
   @Get('reconciliation') reconciliationSummary(@Request() r: any) {
     return this.reconciliation.summary(r.user);
   }
+  @Get('reconciliation/batches') countPicker(@Request() r: any, @Query() q: any) {
+    return this.workspace.countPicker(r.user, q);
+  }
   @Get('reconciliation/counts') reconciliationRegister(@Request() r: any, @Query() q: any) {
     return this.reconciliation.register(r.user, q);
   }

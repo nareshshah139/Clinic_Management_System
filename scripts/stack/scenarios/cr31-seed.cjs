@@ -125,4 +125,4 @@ async function seed(stack) {
   return { today, batches, names: PRODUCTS.map(([name]) => name) };
 }
 
-module.exports = { seed, api, tokenFor, browserLogin, istDay, ddmmyyyy, PRODUCTS };
+module.exports = { seed, api, tokenFor, browserLogin, addUser, istDay, ddmmyyyy, PRODUCTS };

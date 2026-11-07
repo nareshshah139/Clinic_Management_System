@@ -1,12 +1,11 @@
 'use client';
 
 import { useCallback, useId } from 'react';
-import { ClipboardCheck } from 'lucide-react';
+import { ChevronRight, ClipboardCheck } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatDisplayDay } from '@/lib/date-ranges';
-import { displayClinicDateTimeCompact, displayClinicTime } from '@/lib/date-display';
+import { displayCalendarDate, displayClinicDateTimeCompact, displayClinicTime } from '@/lib/date-display';
 import { getISTDateString } from '@/lib/utils';
-import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -15,16 +14,15 @@ import { useRegisterQuery } from '@/components/register/useRegisterQuery';
 import { RegisterDenied, RegisterGrid, shortName, type RegisterColumn } from '@/components/register/RegisterGrid';
 import { ClearFilters, DateRangeFilter, FilterBar, FilterSelect, MoreFilters, filterLabelClass } from '@/components/register/RegisterFilters';
 import { RegisterFooter } from '@/components/register/RegisterFooter';
-import { CountStateBadge } from './count-parts';
+import { CountStateBadge, Money, Split } from './count-parts';
 import {
   COUNT_QUERY,
   COUNT_STATES,
   COUNT_STATE_SHORT,
   RECONCILIATION,
+  differ,
   itemCount,
   countRequestParams,
-  signedRupees,
-  signedUnits,
   type CountPage,
   type CountQuery,
   type CountRow,
@@ -33,17 +31,7 @@ import {
 
 const MORE = ['person'] as const;
 const name = (person: CountRow['assignedTo']) => (person ? <span title={person.name}>{shortName(person.name)}</span> : <span className="text-muted-foreground">—</span>);
-const units = (n: number) => `${signedUnits(n)} ${n === 1 || n === -1 ? 'unit' : 'units'}`;
-
-function Net({ row }: { row: CountRow }) {
-  if (!row.differences) return <span className="text-muted-foreground">None</span>;
-  return (
-    <span className="whitespace-nowrap tabular-nums">
-      <span className="font-semibold">{signedUnits(row.netUnits)}</span>
-      <span className="sr-only"> {Math.abs(row.netUnits) === 1 ? 'unit' : 'units'}</span> · {signedRupees(row.netValue)}
-    </span>
-  );
-}
+const none = <span className="text-muted-foreground">—</span>;
 
 function SignedAt({ row, today }: { row: CountRow; today: string }) {
   const at = row.signedAt!;
@@ -51,7 +39,10 @@ function SignedAt({ row, today }: { row: CountRow; today: string }) {
   return <span className="whitespace-nowrap">{sameDay ? displayClinicTime(at) : displayClinicDateTimeCompact(at, today)}</span>;
 }
 
-const shortDay = (day: string, today: string) => (day.slice(0, 4) === today.slice(0, 4) ? formatDisplayDay(day).slice(0, 5) : formatDisplayDay(day));
+const shortDay = (day: string, today: string) => {
+  const text = displayCalendarDate(day);
+  return text.endsWith(` ${today.slice(0, 4)}`) ? text.slice(0, -5) : text;
+};
 
 function columns(view: 'history' | 'approvals', today: string, onOpen: (row: CountRow) => void): RegisterColumn<CountRow, CountSortKey>[] {
   const open: RegisterColumn<CountRow, CountSortKey> = {
@@ -75,6 +66,15 @@ function columns(view: 'history' | 'approvals', today: string, onOpen: (row: Cou
   const counts: RegisterColumn<CountRow, CountSortKey>[] = [
     { key: 'items', label: 'Items', sort: 'items', align: 'right', cell: (row) => <span className="tabular-nums">{row.items}</span> },
     { key: 'differences', label: 'Differ­ences', sort: 'differences', align: 'right', cell: (row) => <span className="tabular-nums">{row.differences}</span> },
+    {
+      key: 'shortValue',
+      label: 'Short ₹',
+      srNote: '(value of the batches found short)',
+      sort: 'shortValue',
+      align: 'right',
+      cell: (row) => (row.shortValue ? <Money value={row.shortValue} /> : none),
+    },
+    { key: 'netValue', label: 'Net ₹', srNote: '(shortages and surpluses together)', sort: 'netValue', align: 'right', cell: (row) => (row.differences ? <Money value={row.netValue} /> : none) },
   ];
   if (view === 'approvals')
     return [
@@ -82,12 +82,21 @@ function columns(view: 'history' | 'approvals', today: string, onOpen: (row: Cou
       { key: 'signedBy', label: 'Counted by', sort: 'assignedTo', cell: (row) => name(row.signedBy) },
       { key: 'signedAt', label: 'Signed at', sort: 'signedAt', cell: (row) => (row.signedAt ? <SignedAt row={row} today={today} /> : '—') },
       ...counts,
-      { key: 'netValue', label: 'Net variance', srNote: '(units and rupees)', sort: 'netValue', align: 'right', cell: (row) => <Net row={row} /> },
+      {
+        key: 'review',
+        label: 'Action',
+        hideLabel: true,
+        interactive: true,
+        cell: (row) => (
+          <Button size="sm" variant="outline" className="h-8" onClick={() => onOpen(row)} aria-label={`Review ${row.reference}`}>
+            Review
+          </Button>
+        ),
+      },
     ];
   return [
     open,
-    { key: 'assignedTo', label: 'Assigned to', sort: 'assignedTo', cell: (row) => name(row.assignedTo) },
-    { key: 'signedBy', label: 'Signed by', cell: (row) => name(row.signedBy) },
+    { key: 'assignedTo', label: 'Counted by', sort: 'assignedTo', cell: (row) => name(row.signedBy ?? row.assignedTo) },
     {
       key: 'signedAt',
       label: 'Signed at',
@@ -95,9 +104,12 @@ function columns(view: 'history' | 'approvals', today: string, onOpen: (row: Cou
       cell: (row) => (row.signedAt ? <SignedAt row={row} today={today} /> : <span className="text-muted-foreground">—</span>),
     },
     ...counts,
-    { key: 'netValue', label: 'Net variance', srNote: '(units and rupees)', sort: 'netValue', align: 'right', cell: (row) => <Net row={row} /> },
     { key: 'state', label: 'Status', cell: (row) => <CountStateBadge state={row.state} short /> },
-    { key: 'decidedBy', label: 'Decided by', cell: (row) => name(row.decidedBy) },
+    {
+      key: 'decidedBy',
+      label: 'Decided by',
+      cell: (row) => (row.selfApproval && row.decidedBy ? <span title={`${row.decidedBy.name}, who signed it`}>Own count</span> : name(row.decidedBy)),
+    },
   ];
 }
 
@@ -109,30 +121,30 @@ function CountCards({ rows, onOpen }: { rows: readonly CountRow[]; onOpen: (row:
           <button
             type="button"
             onClick={() => onOpen(row)}
-            className="flex w-full flex-col gap-1 rounded-lg border border-border bg-background p-3 text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="flex w-full items-center gap-2 rounded-lg border border-border bg-background p-3 text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            <span className="flex items-start justify-between gap-2">
-              <span className="font-semibold">
-                {formatDisplayDay(row.day)}
-                {row.origin === 'ON_DEMAND' && ' · on demand'}
+            <span className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="flex items-start justify-between gap-2">
+                <span className="font-semibold">
+                  {formatDisplayDay(row.day)}
+                  {row.origin === 'ON_DEMAND' && ' · on demand'}
+                </span>
+                <span className="shrink-0">
+                  <CountStateBadge state={row.state} short />
+                </span>
               </span>
-              <span className="shrink-0">
-                <CountStateBadge state={row.state} short />
-              </span>
-            </span>
-            <span className="text-sm">
-              {(row.signedBy ?? row.assignedTo)?.name ?? 'Former staff member'} · {itemCount(row.items)} · {row.differences ? `${row.differences} differ` : 'no differences'}
-            </span>
-            {row.differences > 0 && (
-              <span className="whitespace-nowrap text-sm font-semibold tabular-nums">
-                Net {units(row.netUnits)} · {signedRupees(row.netValue)}
-              </span>
-            )}
-            {row.decidedBy && (
               <span className="text-sm">
-                {row.state === 'REJECTED' ? 'Rejected' : 'Approved'} by {row.decidedBy.name}
+                {(row.signedBy ?? row.assignedTo)?.name ?? 'Former staff member'} · {itemCount(row.items)} · {row.differences ? differ(row.differences) : 'no differences'}
               </span>
-            )}
+              {row.differences > 0 && <Split figures={row} className="text-sm font-semibold" />}
+              {row.decidedBy && (
+                <span className="text-sm">
+                  {row.state === 'REJECTED' ? 'Rejected' : 'Approved'} by {row.decidedBy.name}
+                  {row.selfApproval && ', their own count'}
+                </span>
+              )}
+            </span>
+            <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
           </button>
         </li>
       ))}
@@ -191,12 +203,19 @@ export function CountRegister({
       'Totals not available'
     ) : data ? (
       <span className="tabular-nums">
-        {data.totals.counts} {data.totals.counts === 1 ? 'count' : 'counts'}
-        <span className="max-sm:sr-only">
-          {' '}
-          · {data.totals.differences} {data.totals.differences === 1 ? 'difference' : 'differences'}
+        <span className="whitespace-nowrap">
+          {data.totals.counts} {data.totals.counts === 1 ? 'count' : 'counts'}
         </span>
-        <span className="whitespace-nowrap"> · Net {formatRupees(data.totals.netValue)}</span>
+        {!approvals && (
+          <span className="whitespace-nowrap max-sm:hidden">
+            {' '}
+            · Approved <Money value={data.totals.approvedValue} />
+          </span>
+        )}
+        <span className="whitespace-nowrap">
+          {' '}
+          · Awaiting <Money value={data.totals.awaitingValue} />
+        </span>
       </span>
     ) : (
       <Skeleton className="h-6 w-60" />
@@ -289,6 +308,7 @@ export function CountRegister({
       </div>
       <RegisterFooter
         summary={summary}
+        note={!approvals && data?.totals.rejected ? `${data.totals.rejected} rejected ${data.totals.rejected === 1 ? 'count is' : 'counts are'} not included.` : undefined}
         page={query.page}
         limit={data?.limit ?? 50}
         total={load.status === 'error' ? 0 : (data?.total ?? 0)}

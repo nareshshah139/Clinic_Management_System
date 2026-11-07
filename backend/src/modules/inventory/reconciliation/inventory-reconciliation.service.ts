@@ -1,15 +1,18 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { clinicDay, clinicDayRange, clinicDayStart, compareValues, financialYear, isCalendarDay, money, pageOf, peopleById, registerRangeError } from '../../pharmacy/register-utils';
-import { InventoryWorkflowService } from '../inventory-workflow.service';
-import { INVENTORY_APPROVERS, WorkflowActor, WorkflowLine } from '../inventory-workflow.types';
+import { InventoryWorkflowService, observationOutdated } from '../inventory-workflow.service';
+import { COUNT_APPROVERS, WorkflowActor, WorkflowLine } from '../inventory-workflow.types';
 import { jsonObject } from '../inventory-stock';
 import { displayDay } from '../supplier-return';
-import { cycleOn, cycleRequestKey, forecast, planDay, readReconciliation, type PlanBatch } from './reconciliation-cycle';
+import { randomUUID } from 'node:crypto';
+import { logInventoryAutomation } from '../inventory-observability';
+import { cycleOn, cycleRequestKey, forecast, planDay, readReconciliation, type PlanBatch, type ReconciliationSettings } from './reconciliation-cycle';
 
 export const COUNT_STATES = ['ASSIGNED', 'AWAITING_APPROVAL', 'APPROVED', 'REJECTED', 'POSTED_NO_DIFF', 'CANCELLED'] as const;
 export type CountState = (typeof COUNT_STATES)[number];
-const COUNT_SORTS = ['date', 'assignedTo', 'signedAt', 'items', 'differences', 'netValue'] as const;
+const COUNT_SORTS = ['date', 'assignedTo', 'signedAt', 'items', 'differences', 'shortValue', 'netValue'] as const;
 type CountSort = (typeof COUNT_SORTS)[number];
 
 type Person = { id: string; name: string } | null;
@@ -17,15 +20,24 @@ type CountDoc = { id: string; status: string; reference: string; createdBy: stri
 
 const lineDiff = (l: WorkflowLine) => (l.physicalStock === undefined || l.systemStock === undefined ? 0 : l.physicalStock - l.systemStock);
 
+/** Shortages and surpluses are kept apart because a net figure lets one hide the other. */
 export function countFigures(lines: readonly WorkflowLine[]) {
   const counted = lines.filter((l) => l.physicalStock !== undefined);
   const differing = counted.filter((l) => lineDiff(l) !== 0);
+  const units = (part: WorkflowLine[]) => part.reduce((n, l) => n + lineDiff(l), 0);
+  const value = (part: WorkflowLine[]) => money(part.reduce((n, l) => n + lineDiff(l) * (l.unitPrice || 0), 0));
+  const short = differing.filter((l) => lineDiff(l) < 0);
+  const extra = differing.filter((l) => lineDiff(l) > 0);
   return {
     items: lines.length,
     counted: counted.length,
     differences: differing.length,
-    netUnits: differing.reduce((n, l) => n + lineDiff(l), 0),
-    netValue: money(differing.reduce((n, l) => n + lineDiff(l) * (l.unitPrice || 0), 0)),
+    netUnits: units(differing),
+    netValue: value(differing),
+    shortUnits: units(short),
+    shortValue: value(short),
+    extraUnits: units(extra),
+    extraValue: value(extra),
   };
 }
 
@@ -50,49 +62,92 @@ export class InventoryReconciliationService {
     private readonly workflow: InventoryWorkflowService,
   ) {}
 
+  /** The forecast plans with the people who can still count; someone deactivated or without access counts nothing. */
+  private counting(settings: ReconciliationSettings, staff: { id: string }[]) {
+    return { ...settings, assigneeIds: settings.assigneeIds.filter((id) => staff.some((person) => person.id === id)) };
+  }
+
   private async storedSettings(branchId: string) {
     const row = await this.prisma.inventoryWorkflowSettings.findUnique({ where: { branchId } });
     return readReconciliation(jsonObject(row?.settings), clinicDay(row?.updatedAt ?? new Date()));
   }
 
+  /**
+   * A batch is covered once a count of it signed in this cycle is waiting or accepted, and reserved
+   * while any count of it is undecided, whatever its cycle or origin, so it is never dealt twice.
+   * The pool is ordered by the last accepted sign-off; the metadata is matched in SQL so the large
+   * ledger checkpoint it also holds is never read.
+   */
   private async coverage(db: any, branchId: string, cycleStart: string) {
     const [items, docs] = await Promise.all([
-      db.inventoryItem.findMany({ where: { branchId, currentStock: { gt: 0 } }, select: { id: true, name: true, metadata: true } }),
+      db.$queryRaw(Prisma.sql`
+        SELECT id, name,
+          coalesce(substring(metadata from '"lastSignedCountAt":"([^"]*)"'), substring(metadata from '"lastCountAt":"([^"]*)"')) AS "lastCountedAt"
+        FROM inventory_items WHERE "branchId" = ${branchId} AND "currentStock" > 0`) as Promise<PlanBatch[]>,
       db.inventoryWorkflowDocument.findMany({
         where: {
           branchId,
           kind: 'COUNT',
-          OR: [
-            { status: 'DRAFT', payload: { path: ['cycle', 'start'], equals: cycleStart } },
-            { status: { in: ['AWAITING_APPROVAL', 'APPROVED', 'POSTED'] }, updatedAt: { gte: clinicDayStart(cycleStart) } },
-          ],
+          OR: [{ status: { in: ['DRAFT', 'AWAITING_APPROVAL'] } }, { status: { in: ['APPROVED', 'POSTED'] }, updatedAt: { gte: clinicDayStart(cycleStart) } }],
         },
         select: { id: true, status: true, payload: true, postedAt: true },
       }),
     ]);
-    const batches: PlanBatch[] = items.map((item: any) => ({ id: item.id, name: item.name, lastCountedAt: jsonObject(item.metadata).lastCountAt ?? null }));
     const covered = new Set<string>();
     const reserved = new Set<string>();
+    const backlog = new Map<string, number>();
     for (const doc of docs as CountDoc[]) {
       const ids = (doc.payload?.lines || []).map((l: WorkflowLine) => l.inventoryId);
-      if (doc.status === 'DRAFT') ids.forEach((id: string) => reserved.add(id));
-      else if ((signedDay(doc) ?? '') >= cycleStart) ids.forEach((id: string) => covered.add(id));
+      if (doc.status !== 'DRAFT' && (signedDay(doc) ?? '') >= cycleStart) ids.forEach((id: string) => covered.add(id));
+      else if (doc.status === 'DRAFT' || doc.status === 'AWAITING_APPROVAL') ids.forEach((id: string) => reserved.add(id));
+      if (doc.status === 'DRAFT' && doc.payload?.origin === 'CYCLE') backlog.set(doc.payload.assigneeId, (backlog.get(doc.payload.assigneeId) ?? 0) + ids.length);
     }
-    return { batches, covered, reserved };
+    return { batches: items.map((b) => ({ ...b, lastCountedAt: b.lastCountedAt ?? null })), covered, reserved, backlog };
   }
 
   /**
    * @cc [owner:nareshshah139,label:product] reconciliation-daily-plan
    * Each IST clinic day a branch with reconciliation on MUST give every active assignee holding the
-   * reconciliation permission at most items-per-day uncounted in-stock batches, disjoint from other
-   * assignees and from open cycle counts. Repeated or concurrent runs on the same day create nothing more.
+   * reconciliation permission at most items-per-day uncounted in-stock batches, less the cycle lines
+   * they still have open, disjoint from other assignees and from every undecided count. Repeated or
+   * concurrent runs on the same day create nothing more. Unsigned counts held by someone who can no
+   * longer count go back to the pool.
    */
   async ensureToday(branchId: string, plannedBy: string) {
-    const settings = await this.storedSettings(branchId);
-    if (!settings.enabled) return 0;
+    const row = await this.prisma.inventoryWorkflowSettings.findUnique({ where: { branchId } });
     const today = clinicDay(new Date());
-    const cycle = cycleOn(settings, today);
+    const marker = `${today}|${row?.version ?? 0}`;
+    if (this.plannedFor.get(branchId) === marker) return 0;
+    const settings = readReconciliation(jsonObject(row?.settings), clinicDay(row?.updatedAt ?? new Date()));
     const staff = new Map((await this.workflow.countStaff(branchId)).map((person) => [person.id, person]));
+    await this.releaseFromFormerCounters(branchId, staff, plannedBy);
+    const created = settings.enabled ? await this.dealToday(branchId, settings, staff, today, plannedBy) : 0;
+    if (created !== null) this.plannedFor.set(branchId, marker);
+    return created ?? 0;
+  }
+
+  private readonly plannedFor = new Map<string, string>();
+
+  private async releaseFromFormerCounters(branchId: string, staff: Map<string, { id: string; name: string }>, plannedBy: string) {
+    const drafts = await this.openCounts(branchId, { status: 'DRAFT' });
+    const orphaned = drafts.filter((doc) => !staff.has(doc.payload?.assigneeId ?? doc.createdBy));
+    if (!orphaned.length) return;
+    const people = await peopleById(this.prisma, orphaned.map((doc) => doc.payload?.assigneeId ?? doc.createdBy));
+    await this.workflow.transaction(async (tx) => {
+      for (const doc of orphaned) {
+        const released = await tx.inventoryWorkflowDocument.updateMany({ where: { id: doc.id, branchId, status: 'DRAFT', version: doc.version }, data: { status: 'CANCELLED', version: { increment: 1 } } });
+        if (!released.count) continue;
+        const name = people.get(doc.payload?.assigneeId ?? doc.createdBy)?.name ?? 'The person it was assigned to';
+        await this.workflow.event(tx, { id: doc.id, status: 'CANCELLED', version: doc.version + 1 }, { id: plannedBy, branchId, role: 'SYSTEM' }, 'CANCEL', 'DRAFT', {
+          reason: `${name} can no longer count stock, so these batches went back to the cycle.`,
+          released: true,
+        });
+      }
+    });
+  }
+
+  private async dealToday(branchId: string, settings: ReconciliationSettings, staff: Map<string, { id: string; name: string; role: string }>, today: string, plannedBy: string) {
+    const cycle = cycleOn(settings, today);
     const assigneeIds = settings.assigneeIds.filter((id) => staff.has(id));
     const planned = await this.prisma.inventoryWorkflowDocument.findMany({
       where: { branchId, requestKey: { in: assigneeIds.map((id) => cycleRequestKey(cycle, today, id)) } },
@@ -102,8 +157,8 @@ export class InventoryReconciliationService {
     const plannedToday = new Set(assigneeIds.filter((id) => planned.some((doc) => doc.requestKey === cycleRequestKey(cycle, today, id))));
     try {
       return await this.workflow.transaction(async (tx) => {
-        const { batches, covered, reserved } = await this.coverage(tx, branchId, cycle.start);
-        const plan = planDay({ settings: { ...settings, assigneeIds }, today, batches, covered, reserved, plannedToday });
+        const { batches, covered, reserved, backlog } = await this.coverage(tx, branchId, cycle.start);
+        const plan = planDay({ settings: { ...settings, assigneeIds }, today, batches, covered, reserved, plannedToday, backlog });
         let created = 0;
         for (const assignment of plan.assignments) {
           const person = staff.get(assignment.assigneeId)!;
@@ -120,8 +175,18 @@ export class InventoryReconciliationService {
         return created;
       });
     } catch (error) {
-      if ((error as { code?: string })?.code === 'P2002') return 0;
+      if ((error as { code?: string })?.code === 'P2002') return null;
       throw error;
+    }
+  }
+
+  /** A reminder never breaks the page it sits on: a planning failure is logged and the page loads without today's new list. */
+  private async planQuietly(branchId: string, plannedBy: string) {
+    const started = Date.now();
+    try {
+      await this.ensureToday(branchId, plannedBy);
+    } catch (error) {
+      logInventoryAutomation({ runId: randomUUID(), scheduled: false, operation: 'stock_count', outcome: 'failed', error, durationMs: Date.now() - started });
     }
   }
 
@@ -137,44 +202,55 @@ export class InventoryReconciliationService {
     const waiting = await this.openCounts(actor.branchId, { status: 'AWAITING_APPROVAL' });
     const sole = !(await this.otherApprovers(actor)).length;
     const mine = waiting.filter((doc) => sole || (doc.payload?.signOff?.by || doc.createdBy) !== actor.id);
-    return { count: mine.length, netValue: money(mine.reduce((n, doc) => n + countFigures(doc.payload?.lines || []).netValue, 0)) };
+    const figures = mine.map((doc) => countFigures(doc.payload?.lines || []));
+    const total = (key: 'netValue' | 'shortValue' | 'extraValue') => money(figures.reduce((n, f) => n + f[key], 0));
+    return { count: mine.length, netValue: total('netValue'), shortValue: total('shortValue'), extraValue: total('extraValue') };
   }
 
   private otherApprovers(actor: WorkflowActor) {
     return this.prisma.user.findMany({
-      where: { branchId: actor.branchId, isActive: true, role: { in: [...INVENTORY_APPROVERS] as any }, id: { not: actor.id } },
+      where: { branchId: actor.branchId, isActive: true, role: { in: [...COUNT_APPROVERS] as any }, id: { not: actor.id } },
       select: { id: true, firstName: true, lastName: true },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
   }
 
-  private assignedSummary(doc: CountDoc) {
-    const figures = countFigures(doc.payload?.lines || []);
-    return { id: doc.id, reference: doc.reference, day: doc.payload?.date ?? clinicDay(doc.createdAt), origin: doc.payload?.origin ?? 'ON_DEMAND', version: doc.version, items: figures.items, counted: figures.counted };
+  private async assigned(branchId: string, docs: CountDoc[]) {
+    const ids = [...new Set(docs.flatMap((doc) => (doc.payload?.lines || []).map((l: WorkflowLine) => l.inventoryId)))];
+    const marks = new Map(
+      (await this.prisma.inventoryItem.findMany({ where: { branchId, id: { in: ids } }, select: { id: true, metadata: true } })).map((item) => [item.id, jsonObject(item.metadata)]),
+    );
+    return docs.map((doc) => {
+      const lines: WorkflowLine[] = doc.payload?.lines || [];
+      const retype = lines.filter((l) => observationOutdated(l, marks.get(l.inventoryId) ?? {}, doc.id)).length;
+      const figures = countFigures(lines);
+      return { id: doc.id, reference: doc.reference, day: doc.payload?.date ?? clinicDay(doc.createdAt), origin: doc.payload?.origin ?? 'ON_DEMAND', version: doc.version, items: figures.items, counted: figures.counted - retype, retype };
+    });
   }
 
   async summary(actor: WorkflowActor) {
     await this.workflow.authorize(actor, 'COUNT');
-    await this.ensureToday(actor.branchId, actor.id);
+    await this.planQuietly(actor.branchId, actor.id);
     const [settingsRow, caps] = await Promise.all([this.workflow.settings(actor), this.workflow.capabilities(actor)]);
     const settings = settingsRow.reconciliation;
     const today = clinicDay(new Date());
     const cycle = cycleOn(settings, today);
     const { batches, covered } = await this.coverage(this.prisma, actor.branchId, cycle.start);
     const coveredInStock = batches.filter((b) => covered.has(b.id)).length;
-    const mine = (await this.openCounts(actor.branchId, { status: 'DRAFT', payload: { path: ['assigneeId'], equals: actor.id } })).map((doc) => this.assignedSummary(doc));
+    const staff = await this.workflow.countStaff(actor.branchId);
+    const mine = await this.assigned(actor.branchId, await this.openCounts(actor.branchId, { status: 'DRAFT', payload: { path: ['assigneeId'], equals: actor.id } }));
     return {
       today,
       settings,
       settingsVersion: settingsRow.version,
       cycle,
-      forecast: forecast(settings, cycle, batches.length, coveredInStock),
+      forecast: forecast(this.counting(settings, staff), cycle, batches.length, coveredInStock),
       mine,
-      approvals: caps.approve ? await this.approvalQueue(actor) : null,
+      approvals: COUNT_APPROVERS.has(actor.role) ? await this.approvalQueue(actor) : null,
       canCount: !!caps.kinds.COUNT?.write,
-      canApprove: caps.approve,
+      canApprove: COUNT_APPROVERS.has(actor.role),
       canConfigure: caps.settings,
-      staff: caps.settings ? await this.workflow.countStaff(actor.branchId) : null,
+      staff: caps.settings ? staff : null,
     };
   }
 
@@ -187,10 +263,10 @@ export class InventoryReconciliationService {
   async todayCards(actor: WorkflowActor) {
     const caps = await this.workflow.capabilities(actor);
     if (!caps.kinds.COUNT?.read) return null;
-    await this.ensureToday(actor.branchId, actor.id);
+    await this.planQuietly(actor.branchId, actor.id);
     const mine = await this.openCounts(actor.branchId, { status: 'DRAFT', payload: { path: ['assigneeId'], equals: actor.id } });
     const due = mine.length
-      ? { counts: mine.length, items: mine.reduce((n, doc) => n + countFigures(doc.payload?.lines || []).items - countFigures(doc.payload?.lines || []).counted, 0) }
+      ? { counts: mine.length, items: mine.reduce((n, doc) => n + countFigures(doc.payload?.lines || []).items - countFigures(doc.payload?.lines || []).counted, 0), documentId: mine.length === 1 ? mine[0].id : null }
       : null;
     let behind = null;
     if (caps.settings) {
@@ -198,11 +274,11 @@ export class InventoryReconciliationService {
       if (settings.enabled) {
         const cycle = cycleOn(settings, clinicDay(new Date()));
         const { batches, covered } = await this.coverage(this.prisma, actor.branchId, cycle.start);
-        const outlook = forecast(settings, cycle, batches.length, batches.filter((b) => covered.has(b.id)).length);
+        const outlook = forecast(this.counting(settings, await this.workflow.countStaff(actor.branchId)), cycle, batches.length, batches.filter((b) => covered.has(b.id)).length);
         if (outlook.short || outlook.behind) behind = { remaining: outlook.remaining, message: outlook.message };
       }
     }
-    return { due, approvals: caps.approve ? await this.approvalQueue(actor) : null, behind };
+    return { due, approvals: COUNT_APPROVERS.has(actor.role) ? await this.approvalQueue(actor) : null, behind };
   }
 
   private row(doc: CountDoc, people: Map<string, { id: string; name: string }>) {
@@ -219,6 +295,7 @@ export class InventoryReconciliationService {
       signedAt: doc.payload?.signOff?.at ?? null,
       decidedBy: person(decision?.by),
       decidedAt: decision?.at ?? null,
+      selfApproval: decision?.selfApproval === true,
       ...figures,
       state: countState(doc),
     };
@@ -257,7 +334,13 @@ export class InventoryReconciliationService {
       from,
       to,
       personOptions,
-      totals: { counts: filtered.length, differences: filtered.reduce((n, r) => n + r.differences, 0), netValue: money(filtered.reduce((n, r) => n + r.netValue, 0)) },
+      totals: {
+        counts: filtered.length,
+        differences: filtered.reduce((n, r) => n + r.differences, 0),
+        approvedValue: money(filtered.filter((r) => r.state === 'APPROVED').reduce((n, r) => n + r.netValue, 0)),
+        awaitingValue: money(filtered.filter((r) => r.state === 'AWAITING_APPROVAL').reduce((n, r) => n + r.netValue, 0)),
+        rejected: filtered.filter((r) => r.state === 'REJECTED').length,
+      },
     };
   }
 
@@ -267,7 +350,7 @@ export class InventoryReconciliationService {
     const lines: WorkflowLine[] = doc.payload.lines || [];
     const ids = lines.map((l) => l.inventoryId);
     const [items, audits, caps, others] = await Promise.all([
-      this.prisma.inventoryItem.findMany({ where: { branchId: actor.branchId, id: { in: ids } }, select: { id: true, currentStock: true, storageLocation: true, name: true } }),
+      this.prisma.inventoryItem.findMany({ where: { branchId: actor.branchId, id: { in: ids } }, select: { id: true, currentStock: true, storageLocation: true, name: true, metadata: true } }),
       this.prisma.inventoryAudit.findMany({ where: { branchId: actor.branchId, itemId: { in: ids } }, orderBy: { createdAt: 'desc' }, select: { itemId: true, variance: true, notes: true } }),
       this.workflow.capabilities(actor),
       this.otherApprovers(actor),
@@ -306,14 +389,15 @@ export class InventoryReconciliationService {
           unitCost: l.unitPrice ?? 0,
           value: diff === null ? null : money(diff * (l.unitPrice ?? 0)),
           note: l.note ?? '',
+          retype: doc.status === 'DRAFT' && observationOutdated(l, jsonObject(item?.metadata), doc.id),
           history: history(l.inventoryId),
         };
       }),
       events: doc.events.map((e: any) => ({ action: e.action, at: e.createdAt, by: people.get(e.actorId)?.name ?? 'Former staff member', detail: { reason: e.detail?.reason, note: e.detail?.note, selfApproval: e.detail?.selfApproval } })),
       can: {
         count: doc.status === 'DRAFT' && !!caps.kinds.COUNT?.write && (doc.payload.assigneeId ?? doc.createdBy) === actor.id,
-        decide: doc.status === 'AWAITING_APPROVAL' && caps.approve && (signer !== actor.id || !others.length),
-        decideOwn: doc.status === 'AWAITING_APPROVAL' && caps.approve && signer === actor.id && !others.length,
+        decide: doc.status === 'AWAITING_APPROVAL' && COUNT_APPROVERS.has(actor.role) && (signer !== actor.id || !others.length),
+        decideOwn: doc.status === 'AWAITING_APPROVAL' && COUNT_APPROVERS.has(actor.role) && signer === actor.id && !others.length,
       },
       approvers: doc.status === 'AWAITING_APPROVAL' && signer === actor.id ? others.map((o) => `${o.firstName} ${o.lastName}`.trim()) : [],
     };

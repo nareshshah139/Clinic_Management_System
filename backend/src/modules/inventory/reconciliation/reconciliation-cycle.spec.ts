@@ -100,6 +100,11 @@ describe('daily plan', () => {
     ]);
   });
 
+  it('counts lines still open from earlier days against today\'s limit', () => {
+    const plan = planDay({ settings: settings({ itemsPerPersonPerDay: 3 }), today: '2026-11-02', batches: sixty, covered: new Set(), reserved: new Set(), plannedToday: new Set(), backlog: new Map([['anil', 2], ['meera', 5]]) });
+    expect(plan.assignments.map((a) => [a.assigneeId, a.batchIds])).toEqual([['anil', ['b01']]]);
+  });
+
   it('never deals more than the daily setting and nothing while switched off', () => {
     expect(run('2026-11-01', [], [], [], { itemsPerPersonPerDay: 3 }).assignments.map((a) => a.batchIds)).toEqual([['b01', 'b03', 'b05'], ['b02', 'b04', 'b06']]);
     expect(run('2026-11-01', [], [], [], { enabled: false }).assignments).toEqual([]);

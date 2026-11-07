@@ -32,7 +32,7 @@ export function SignOffDialog({
   signer: string;
   onClose: () => void;
   onSigned: (detail: CountDetail) => void;
-  onIncomplete: (lineIds: string[], message: string) => void;
+  onIncomplete: (lineIds: string[], message: string, retype: boolean) => void;
   onStale: (message: string) => void;
 }) {
   const [key] = useState(requestKey);
@@ -64,8 +64,8 @@ export function SignOffDialog({
       return 'done' as const;
     } catch (failure) {
       const { status, body } = failureOf(failure);
-      if (body?.code === 'COUNT_INCOMPLETE') onIncomplete(body.lineIds ?? [], failureMessage(failure));
-      else if (status === 409) onStale(failureMessage(failure));
+      if (body?.code === 'COUNT_INCOMPLETE' || body?.code === 'COUNT_RETYPE') onIncomplete(body.lineIds ?? [], failureMessage(failure), body.code === 'COUNT_RETYPE');
+      else if (status === 409 && body?.code !== 'COUNT_BATCH_OPEN') onStale(failureMessage(failure));
       else {
         setError(failureMessage(failure));
         noteRef.current?.focus();

@@ -12,7 +12,7 @@ import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
 import { inventoryProductName } from './inventory-names';
 import { displayDay } from './supplier-return';
-import { clinicDay } from '../pharmacy/register-utils';
+import { clinicDay, peopleById } from '../pharmacy/register-utils';
 import { PharmacySupplierCreditService } from '../pharmacy/pharmacy-supplier-credit.service';
 import { EVERY_ALLOCATION, creditBalance } from '../pharmacy/supplier-credit-balance';
 
@@ -248,13 +248,59 @@ export class InventoryWorkspaceService {
     await this.require(actor, 'pharmacy:purchase-ledger:write');
     return this.supplierCredits.reverseAllocation(actor, id, reason);
   }
+  /**
+   * @cc [owner:nareshshah139,label:product] on-demand-count-picker
+   * The on-demand picker MUST find any batch by item name, batch or rack, zero stock included so a
+   * found box can be counted, saying how many matched when it shows fewer. A shelf lists every batch
+   * in stock there. Each batch on an undecided count says whose count it is on.
+   */
+  async countPicker(actor:WorkflowActor,q:Record<string,any>) {
+    await this.workflow.authorize(actor,'COUNT',true);
+    const text=String(q.q??'').trim(),location=String(q.location??'').trim();
+    const [shelves,holders]=await Promise.all([
+      this.prisma.inventoryItem.groupBy({by:['storageLocation'],where:{branchId:actor.branchId,currentStock:{gt:0}},_count:{_all:true}}),
+      this.workflow.openCountHolders(this.prisma,actor.branchId),
+    ]);
+    const places=new Map<string,{name:string;batches:number;top:number}>();
+    for(const shelf of shelves){const name=shelf.storageLocation?.trim();if(!name)continue;const key=name.toLowerCase(),seen=places.get(key),n=shelf._count._all;
+      places.set(key,{name:seen&&seen.top>=n?seen.name:name,top:Math.max(seen?.top??0,n),batches:(seen?.batches??0)+n});}
+    const locations=[...places.values()].map(({name,batches})=>({name,batches})).sort((a,b)=>a.name.localeCompare(b.name,'en',{numeric:true,sensitivity:'base'}));
+    const select={id:true,name:true,batchNumber:true,expiryDate:true,storageLocation:true,currentStock:true,unit:true};
+    let rows:any[]=[],total=0;
+    if(location){rows=await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,currentStock:{gt:0},storageLocation:{equals:location,mode:'insensitive'}},select,orderBy:[{name:'asc'},{batchNumber:'asc'}]});total=rows.length;}
+    else if(text.length>=2){const page=await this.stock(actor,{search:text,limit:20,page:1});rows=page.rows;total=page.total;}
+    const holding=rows.map(r=>holders.get(r.id)).filter(Boolean) as any[];
+    const people=await peopleById(this.prisma,holding.map(doc=>doc.payload?.assigneeId??doc.createdBy));
+    return {
+      batches:rows.map(r=>{const doc=holders.get(r.id);const by=doc?(doc.payload?.assigneeId??doc.createdBy):null;
+        return {id:r.id,name:r.name,batchNumber:r.batchNumber??'',expiryDate:r.expiryDate??null,storageLocation:r.storageLocation??null,currentStock:r.currentStock,unit:r.unit,
+          openCount:doc?{id:doc.id,day:doc.payload?.date??null,person:by===actor.id?null:(people.get(by)?.name??'a former staff member'),signed:doc.status==='AWAITING_APPROVAL'}:null};}),
+      total,
+      locations:text&&!location?locations.filter(l=>l.name.toLowerCase().includes(text.toLowerCase())):locations,
+    };
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] on-demand-count-scope
+   * Picked batches are counted as picked, zero stock included, and a picked batch already on an
+   * undecided count is refused by name. Counting everything matching a filter leaves batches on
+   * undecided counts out, and is refused only when nothing else is left.
+   */
   async createCount(actor:WorkflowActor,input:Record<string,any>) {
     await this.workflow.authorize(actor,'COUNT',true);
-    const query=await this.stock(actor,{...input.filters,limit:100,page:1});let items=[...query.rows];
-    for(let page=2;page<=query.totalPages;page++)items.push(...(await this.stock(actor,{...input.filters,limit:100,page})).rows);
-    if(input.itemIds?.length)items=items.filter(i=>input.itemIds.includes(i.id));
-    if(!items.length)throw new BadRequestException('No matching batches to count');
-    return this.workflow.saveDocument(actor,{kind:'COUNT',reference:`Stock count ${displayDay(clinicDay(new Date()))} · on demand`,requestKey:input.requestKey||randomUUID(),payload:{reason:'On-demand stock count',lines:items.map(i=>({inventoryId:i.id,quantity:0}))}});
+    const picked:string[]=Array.isArray(input.itemIds)?[...new Set<string>(input.itemIds.filter((id:unknown):id is string=>typeof id==='string'&&id!==''))]:[];
+    let ids:string[];
+    if(picked.length){
+      const found=new Set((await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,id:{in:picked}},select:{id:true}})).map(i=>i.id));
+      ids=picked.filter(id=>found.has(id));
+    }else{
+      const query=await this.stock(actor,{...input.filters,limit:100,page:1});const rows=[...query.rows];
+      for(let page=2;page<=query.totalPages;page++)rows.push(...(await this.stock(actor,{...input.filters,limit:100,page})).rows);
+      const holders=await this.workflow.openCountHolders(this.prisma,actor.branchId);
+      const free=rows.filter(i=>!holders.has(i.id));
+      ids=(free.length?free:rows).map(i=>i.id);
+    }
+    if(!ids.length)throw new BadRequestException('No matching batches to count');
+    return this.workflow.saveDocument(actor,{kind:'COUNT',reference:`Stock count ${displayDay(clinicDay(new Date()))} · on demand`,requestKey:input.requestKey||randomUUID(),payload:{reason:'On-demand stock count',lines:ids.map(inventoryId=>({inventoryId,quantity:0}))}});
   }
   async recommendTargets(actor:WorkflowActor,input:Record<string,any>={}) {
     await this.workflow.authorize(actor,'TARGET_REVIEW',true);const settings=await this.workflow.settings(actor);

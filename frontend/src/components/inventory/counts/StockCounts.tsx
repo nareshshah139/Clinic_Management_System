@@ -67,7 +67,19 @@ function Failed({ error, onRetry }: { error: string; onRetry: () => void }) {
   );
 }
 
-function CountDocument({ id, onBack, onChanged }: { id: string; onBack: () => void; onChanged: () => void }) {
+function CountDocument({
+  id,
+  next,
+  onBack,
+  onNext,
+  onChanged,
+}: {
+  id: string;
+  next: { id: string; reference: string } | null;
+  onBack: () => void;
+  onNext: (id: string) => void;
+  onChanged: () => void;
+}) {
   const { load, reload, set } = useLoad<CountDetail>(countPath(id));
   const focusHeading = () => requestAnimationFrame(() => document.getElementById('count-record-title')?.focus());
   const stale = (message: string) => {
@@ -102,6 +114,8 @@ function CountDocument({ id, onBack, onChanged }: { id: string; onBack: () => vo
           <CountRecord
             key={`${load.data.id}:${load.data.version}`}
             detail={load.data}
+            next={next}
+            onNext={onNext}
             onStale={stale}
             onDecided={(decided) => {
               set(decided);
@@ -140,7 +154,7 @@ function MyCounts({ summary, onOpen, onSettings }: { summary: ReconciliationSumm
       {mine.length ? (
         <ul aria-label="Counts assigned to you" className="flex flex-col gap-2">
           {mine.map((count, index) => {
-            const left = count.items - count.counted;
+            const left = count.items - count.counted - count.retype;
             const label = count.counted ? 'Continue counting' : 'Start counting';
             return (
               <li key={count.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
@@ -160,7 +174,8 @@ function MyCounts({ summary, onOpen, onSettings }: { summary: ReconciliationSumm
                   </span>
                   <span className="text-sm tabular-nums">
                     {itemCount(count.items)} · {count.counted} counted
-                    {left ? ` · ${left} left` : ' · ready to sign off'}
+                    {count.retype > 0 && <span className="font-medium text-warning-text"> · {count.retype} to type again</span>}
+                    {left > 0 ? ` · ${left} left` : count.retype ? '' : ' · ready to sign off'}
                   </span>
                 </div>
                 <Button variant={index === 0 ? 'default' : 'outline'} onClick={() => onOpen(count.id)} aria-label={`${label}: ${count.reference}`}>
@@ -206,17 +221,30 @@ export function StockCounts({
   const documentId = searchParams.get('document');
   const requested = searchParams.get('tab') as Tab | null;
 
-  if (documentId) return <CountDocument key={documentId} id={documentId} onBack={() => navigate({ document: '' })} onChanged={() => void reload()} />;
+  if (documentId) {
+    const waiting = load.status === 'ready' ? load.data.mine.find((count) => count.id !== documentId) : undefined;
+    return (
+      <CountDocument
+        key={documentId}
+        id={documentId}
+        next={waiting ? { id: waiting.id, reference: waiting.reference } : null}
+        onBack={() => navigate({ document: '' })}
+        onNext={(id) => navigate({ document: id })}
+        onChanged={() => void reload()}
+      />
+    );
+  }
   if (load.status === 'denied') return <RegisterDenied noun="stock counts" />;
   if (load.status === 'error') return <Failed error={load.error} onRetry={() => void reload()} />;
   if (load.status === 'loading') return <LoadingSkeleton variant="cards" label="Loading stock counts…" />;
 
   const summary = load.data;
   const visible = TABS.filter((tab) => (tab !== 'approvals' || summary.canApprove) && (tab !== 'settings' || summary.canConfigure));
-  const tab: Tab = requested && visible.includes(requested) ? requested : 'mine';
+  const fallback: Tab = !summary.mine.length && summary.approvals?.count && visible.includes('approvals') ? 'approvals' : 'mine';
+  const tab: Tab = requested && visible.includes(requested) ? requested : fallback;
   const switchTab = (next: string) =>
     navigate({
-      tab: next === 'mine' ? '' : next,
+      tab: next === fallback ? '' : next,
       document: '',
       from: '',
       to: '',
@@ -236,9 +264,9 @@ export function StockCounts({
       </h2>
       <Tabs value={tab} onValueChange={switchTab}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <TabsList aria-label="Stock count views" className="w-full flex-nowrap justify-start overflow-x-auto sm:w-fit">
+          <TabsList aria-label="Stock count views" className="grid h-auto w-full grid-cols-2 gap-1 sm:flex sm:w-fit sm:flex-nowrap">
             {visible.map((value) => (
-              <TabsTrigger key={value} value={value} className="min-h-10 flex-none whitespace-nowrap px-2 text-sm [overflow-wrap:normal] sm:px-4">
+              <TabsTrigger key={value} value={value} className="min-h-10 whitespace-nowrap px-2 text-sm [overflow-wrap:normal] sm:flex-none sm:px-4">
                 {TAB_LABELS[value]}
                 {value === 'mine' && summary.mine.length > 0 && (
                   <Badge variant="brand" className="ml-1.5 min-w-6 text-xs">

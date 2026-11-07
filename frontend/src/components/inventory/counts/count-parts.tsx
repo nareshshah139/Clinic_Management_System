@@ -4,7 +4,9 @@ import { Check } from 'lucide-react';
 import { displayUtcDate } from '@/lib/date-display';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { COUNT_STATE_BADGE, COUNT_STATE_LABELS, COUNT_STATE_SHORT, itemCount, signedRupees, signedUnits, type CountLine, type CountState, type countSummary } from './count-model';
+import { COUNT_STATE_BADGE, COUNT_STATE_LABELS, COUNT_STATE_SHORT, differ, itemCount, signedRupees, signedUnits, splitParts, type CountLine, type CountState, type SplitFigures } from './count-model';
+
+const tone = (n: number) => (n < 0 ? 'text-destructive-text' : n > 0 ? 'text-warning-text' : undefined);
 
 const expiry = (value: string) => (value ? displayUtcDate(value).replace(/^\d{2} /, '') : '');
 
@@ -41,16 +43,31 @@ export function Difference({ line, withValue = true }: { line: Pick<CountLine, '
   );
 }
 
-export function SummaryLine({ figures }: { figures: ReturnType<typeof countSummary> }) {
+/** Rupees with a true minus or a plus, red for a shortage and amber for a surplus, as in Difference. */
+export function Money({ value, className }: { value: number; className?: string }) {
+  return <span className={cn('whitespace-nowrap tabular-nums', tone(value), className)}>{signedRupees(value)}</span>;
+}
+
+export function Split({ figures, className }: { figures: SplitFigures; className?: string }) {
+  const parts = splitParts(figures);
+  if (!parts.length) return <span className={className}>No differences</span>;
+  return (
+    <span className={cn('tabular-nums', className)}>
+      {parts.map((part, index) => (
+        <span key={part.tone}>
+          {index > 0 && ' · '}
+          <span className={cn('whitespace-nowrap', part.tone === 'short' ? 'text-destructive-text' : 'text-warning-text')}>{part.text}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export function SummaryLine({ figures }: { figures: Parameters<typeof Split>[0]['figures'] & { items: number; differences: number } }) {
   if (!figures.differences) return <>{itemCount(figures.items)}, all match the system.</>;
-  const units = Math.abs(figures.netUnits) === 1 ? 'unit' : 'units';
   return (
     <>
-      {itemCount(figures.items)}, {figures.differences} differ: net{' '}
-      <span className="whitespace-nowrap">
-        {signedUnits(figures.netUnits)} {units}
-      </span>
-      , <span className="whitespace-nowrap">{signedRupees(figures.netValue)}</span>.
+      {itemCount(figures.items)}, {differ(figures.differences)} · <Split figures={figures} />
     </>
   );
 }

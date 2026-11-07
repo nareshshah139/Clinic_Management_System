@@ -9,6 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
+  COUNT_APPROVERS,
   DEFAULT_INVENTORY_SETTINGS,
   INVENTORY_APPROVERS,
   LEGACY_COUNT_SETTINGS,
@@ -64,6 +65,22 @@ const REORDER = new Set(['SHORTBOOK', 'PURCHASE_ORDER', 'TARGET_REVIEW']);
 const clean = (v: unknown) => String(v ?? '').trim();
 const fingerprintOf = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const RETURN_KINDS = ['SUPPLIER_RETURN', 'CREDIT_NOTE'];
+const OPEN_COUNT = ['DRAFT', 'AWAITING_APPROVAL'];
+type OpenCount = { id: string; status: string; reference: string; createdBy: string; payload: any };
+const batchLabel = (line: Pick<WorkflowLine, 'name' | 'batchNumber'>) => `${line.name || 'Selected batch'}, batch ${line.batchNumber || 'not recorded'}`;
+const batches = (n: number) => `${n} more ${n === 1 ? 'batch' : 'batches'}`;
+/**
+ * A counted line compares the shelf with the system figure taken when the count was typed. That
+ * comparison is out of date when it has no capture time (saved before capture times were kept) or
+ * when another count of the batch was posted at or after it, because that count already put the
+ * shelf quantity into the stock.
+ */
+export function observationOutdated(line: Pick<WorkflowLine, 'physicalStock' | 'capturedAt'>, metadata: Record<string, any>, documentId: string, fallback?: string) {
+  if (line.physicalStock === undefined || line.physicalStock === null) return false;
+  const at = line.capturedAt ?? fallback;
+  if (!at) return true;
+  return typeof metadata.lastCountAt === 'string' && metadata.lastCountDocumentId !== documentId && metadata.lastCountAt >= at;
+}
 export type CreditNoteInput = {
   requestKey: string;
   version: number;
@@ -217,11 +234,12 @@ export class InventoryWorkflowService {
       select: { id: true, firstName: true, lastName: true, role: true, permissions: true },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
-    const eligible = [];
-    for (const user of users)
-      if ((await this.grantsOf(user)).has(this.permissionFor('COUNT', true)))
-        eligible.push({ id: user.id, name: `${user.firstName} ${user.lastName}`.trim(), role: user.role });
-    return eligible;
+    const roles = new Map(
+      (await this.prisma.role.findMany({ where: { name: { in: [...new Set(users.map((user) => user.role))] as any } }, select: { name: true, permissions: true } })).map((role) => [role.name as string, role.permissions]),
+    );
+    return users
+      .filter((user) => permissionGrants(grantsForRole(user.role, [...parsePermissionList(user.permissions), ...parsePermissionList(roles.get(user.role))])).has(this.permissionFor('COUNT', true)))
+      .map((user) => ({ id: user.id, name: `${user.firstName} ${user.lastName}`.trim(), role: user.role }));
   }
   async saveSettings(actor: WorkflowActor, input: Record<string, any>) {
     if (!INVENTORY_APPROVERS.has(actor.role))
@@ -342,6 +360,8 @@ export class InventoryWorkflowService {
     await this.authorize(actor, dto.kind, true);
     if (!clean(dto.requestKey) || !clean(dto.reference))
       throw new BadRequestException('Reference and request key are required');
+    if (!id && clean(dto.requestKey).startsWith('cycle:'))
+      throw new BadRequestException('Request keys starting with "cycle:" are reserved for planned stock counts');
     return this.transaction(async (tx) => {
       const old = id
         ? await tx.inventoryWorkflowDocument.findFirst({
@@ -413,6 +433,8 @@ export class InventoryWorkflowService {
         dto.payload,
         old,
       );
+      if (!old && dto.kind === 'COUNT')
+        await this.refuseOpenCounts(tx, actor, payload.lines, await this.openCountHolders(tx, actor.branchId));
       if (
         old?.status === 'CHALLAN' &&
         (old.supplierId !== (dto.supplierId || null) ||
@@ -622,6 +644,7 @@ export class InventoryWorkflowService {
             });
           l.physicalStock = count;
           l.systemStock = oldById.get(id)?.systemStock ?? item?.currentStock;
+          if (count !== undefined) l.capturedAt = new Date().toISOString();
           const note = clean(line.note).slice(0, 300);
           if (note) l.note = note;
         }
@@ -884,6 +907,12 @@ export class InventoryWorkflowService {
             'This document changed. Reload to confirm its current status.',
           );
         if (dto.action === 'RECOUNT') return this.restartCount(tx, actor, doc);
+        if (doc.kind === 'COUNT' && dto.action === 'CANCEL') {
+          if (doc.status !== 'DRAFT')
+            throw new BadRequestException('A signed count cannot be cancelled. A doctor or administrator rejects it from Stock counts › Approvals.');
+          if ((doc.payload?.assigneeId ?? doc.createdBy) !== actor.id && !COUNT_APPROVERS.has(actor.role))
+            throw new ForbiddenException('Only the person this count is assigned to, or a doctor or administrator, can cancel it.');
+        }
         if (
           doc.kind === 'COUNT' &&
           (['APPROVE', 'REJECT', 'SUBMIT'].includes(dto.action) ||
@@ -1287,8 +1316,9 @@ export class InventoryWorkflowService {
   }
   /**
    * @cc [owner:nareshshah139,label:product] count-recovery-fresh-observation
-   * Restarting any supported COUNT state MUST create one linked draft per source version,
-   * capture current batch balances, discard all previous physical observations, and change no stock.
+   * Restarting a decided COUNT MUST create one linked draft per source version, capture current
+   * batch balances, discard all previous physical observations, and change no stock. A count still
+   * open on its batches is refused, so a batch is never on two undecided counts.
    */
   private async restartCount(tx: any, actor: WorkflowActor, doc: any) {
     if (doc.kind !== 'COUNT' || !['DRAFT', 'AWAITING_APPROVAL', 'APPROVED', 'POSTED', 'REJECTED', 'CANCELLED', 'REVERSED'].includes(doc.status))
@@ -1296,6 +1326,7 @@ export class InventoryWorkflowService {
     const requestKey = `recount:${doc.id}:${doc.version}`;
     const existing = await tx.inventoryWorkflowDocument.findUnique({ where: { branchId_requestKey: { branchId: actor.branchId, requestKey } } });
     if (existing) return this.plain(existing);
+    await this.refuseOpenCounts(tx, actor, doc.payload.lines, await this.openCountHolders(tx, actor.branchId));
     const payload = await this.normalizePayload(tx, actor, 'COUNT', {
       reason: doc.payload.reason,
       lines: doc.payload.lines.map((line: WorkflowLine) => ({ inventoryId: line.inventoryId, quantity: 0 })),
@@ -1331,6 +1362,7 @@ export class InventoryWorkflowService {
             ...jsonObject(item.metadata),
             lastCountAt: new Date().toISOString(),
             lastCountDocumentId: doc.id,
+            ...(p.signOff?.at ? { lastSignedCountAt: p.signOff.at } : {}),
             ledgerCheckpoint,
           }),
         },
@@ -1362,6 +1394,50 @@ export class InventoryWorkflowService {
     if (!doc || doc.kind !== 'COUNT') throw new NotFoundException('Stock count not found');
     return doc;
   }
+  async openCountHolders(db: any, branchId: string, exceptId?: string) {
+    const open: OpenCount[] = await db.inventoryWorkflowDocument.findMany({
+      where: { branchId, kind: 'COUNT', status: { in: OPEN_COUNT } },
+      select: { id: true, status: true, reference: true, createdBy: true, payload: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const holders = new Map<string, OpenCount>();
+    for (const doc of open)
+      if (doc.id !== exceptId)
+        for (const line of doc.payload?.lines || []) if (!holders.has(line.inventoryId)) holders.set(line.inventoryId, doc);
+    return holders;
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] count-one-open-per-batch
+   * A batch MUST be on at most one undecided count. Starting or recounting a count on a batch that
+   * is on an unsigned or unapproved count is refused, naming that count, so two counts of one
+   * shelf can never both adjust its stock.
+   */
+  private async refuseOpenCounts(tx: any, actor: WorkflowActor, lines: Pick<WorkflowLine, 'inventoryId' | 'name' | 'batchNumber'>[], holders: Map<string, OpenCount>) {
+    const held = lines.filter((line) => holders.has(line.inventoryId));
+    if (!held.length) return;
+    const holder = holders.get(held[0].inventoryId)!;
+    const same = held.filter((line) => holders.get(line.inventoryId)!.id === holder.id).length;
+    const elsewhere = held.length - same;
+    const assigneeId = holder.payload?.assigneeId ?? holder.createdBy;
+    const person = assigneeId === actor.id ? null : await tx.user.findFirst({ where: { id: assigneeId }, select: { firstName: true, lastName: true } });
+    const name = person ? `${person.firstName} ${person.lastName}`.trim() : 'a former staff member';
+    const whose = assigneeId === actor.id ? 'your' : `${name}'s`;
+    const day = holder.payload?.date ? displayDay(holder.payload.date) : 'an earlier day';
+    const signed = holder.status === 'AWAITING_APPROVAL';
+    const subject = same > 1 ? `${batchLabel(held[0])}, and ${batches(same - 1)} are` : `${batchLabel(held[0])}, is`;
+    const others = elsewhere ? ` ${elsewhere} more ${elsewhere === 1 ? 'batch is' : 'batches are'} on other open counts.` : '';
+    const next = signed
+      ? 'Approve or reject that count first.'
+      : assigneeId === actor.id
+        ? `Count ${same > 1 ? 'them' : 'it'} there.`
+        : `Count ${same > 1 ? 'them' : 'it'} there, or ask ${name} to sign it off first.`;
+    throw new ConflictException({
+      code: 'COUNT_BATCH_OPEN',
+      message: `${subject} already on ${whose} count of ${day}, ${signed ? 'signed and waiting for approval' : 'not signed yet'}.${others} ${next}`,
+      openCounts: [...new Set(held.map((line) => holders.get(line.inventoryId)!))].map((doc) => ({ id: doc.id, reference: doc.reference })),
+      stockEffect: 'NONE',
+    });
+  }
   private async countAssigneeOnly(tx: any, actor: WorkflowActor, doc: any) {
     const assigneeId = doc.payload.assigneeId;
     if (!assigneeId || assigneeId === actor.id) return;
@@ -1375,12 +1451,12 @@ export class InventoryWorkflowService {
     actor: WorkflowActor,
     doc: any,
     input: unknown,
-  ): Promise<WorkflowLine[]> {
+    retyping: boolean,
+  ): Promise<{ lines: WorkflowLine[]; outdated: WorkflowLine[] }> {
     const lines: WorkflowLine[] = doc.payload.lines || [];
-    if (input === undefined) return lines;
-    if (!Array.isArray(input)) throw new BadRequestException('Send the counted lines as a list');
+    if (input !== undefined && !Array.isArray(input)) throw new BadRequestException('Send the counted lines as a list');
     const byId = new Map<string, any>();
-    for (const entry of input) {
+    for (const entry of (input as any[]) ?? []) {
       const id = clean(entry?.id);
       if (!lines.some((l) => l.id === id))
         throw new BadRequestException('A counted line is not part of this count. Reload the count.');
@@ -1388,10 +1464,13 @@ export class InventoryWorkflowService {
     }
     const items = await tx.inventoryItem.findMany({
       where: { branchId: actor.branchId, id: { in: lines.map((l) => l.inventoryId) } },
-      select: { id: true, currentStock: true },
+      select: { id: true, currentStock: true, metadata: true },
     });
     const stock = new Map<string, number>(items.map((i: any) => [i.id, i.currentStock]));
-    return lines.map((line) => {
+    const marks = new Map<string, Record<string, any>>(items.map((i: any) => [i.id, jsonObject(i.metadata)]));
+    const outdated = (line: WorkflowLine) => observationOutdated(line, marks.get(line.inventoryId) ?? {}, doc.id);
+    const now = new Date().toISOString();
+    const next = lines.map((line) => {
       const entry = byId.get(line.id);
       if (!entry) return line;
       const next: WorkflowLine = { ...line };
@@ -1405,13 +1484,16 @@ export class InventoryWorkflowService {
             stockEffect: 'NONE',
             recovery: { action: 'CORRECT_FIELD', inventoryId: line.inventoryId, field: 'physicalStock' },
           });
-        if (count !== line.physicalStock)
+        if (count !== line.physicalStock || (retyping && outdated(line))) {
           next.systemStock = stock.get(line.inventoryId) ?? line.systemStock;
+          next.capturedAt = count === undefined ? undefined : now;
+        }
         next.physicalStock = count;
       }
       if ('note' in entry) next.note = clean(entry.note).slice(0, 300) || undefined;
       return JSON.parse(JSON.stringify(next));
     });
+    return { lines: next, outdated: next.filter(outdated) };
   }
   /**
    * @cc [owner:nareshshah139,label:product] count-progress-capture
@@ -1427,7 +1509,7 @@ export class InventoryWorkflowService {
       await this.countAssigneeOnly(tx, actor, doc);
       if (doc.version !== Number(input?.version))
         throw new ConflictException('This count changed in another window. Reload to see the latest counts.');
-      const lines = await this.countLines(tx, actor, doc, input.lines);
+      const { lines } = await this.countLines(tx, actor, doc, input.lines, true);
       return this.plain(
         await tx.inventoryWorkflowDocument.update({
           where: { id: doc.id, branchId: actor.branchId, version: doc.version },
@@ -1475,7 +1557,7 @@ export class InventoryWorkflowService {
       await this.requestKeyFree(tx, actor, doc.id, key);
       if (doc.version !== Number(input?.version))
         throw new ConflictException('This count changed in another window. Reload to see the latest counts.');
-      const lines = await this.countLines(tx, actor, doc, input.lines);
+      const { lines, outdated } = await this.countLines(tx, actor, doc, input.lines, false);
       const missing = lines.filter((l) => l.physicalStock === undefined);
       if (missing.length)
         throw new BadRequestException({
@@ -1483,6 +1565,14 @@ export class InventoryWorkflowService {
           message: `Count every item before signing off. Not counted yet: ${missing.slice(0, 3).map((l) => l.name).join(', ')}${missing.length > 3 ? ` and ${missing.length - 3} more` : ''}.`,
           lineIds: missing.map((l) => l.id),
         });
+      if (outdated.length)
+        throw new BadRequestException({
+          code: 'COUNT_RETYPE',
+          message: `Type these counts again before signing off: ${outdated.slice(0, 3).map((l) => l.name).join(', ')}${outdated.length > 3 ? ` and ${outdated.length - 3} more` : ''}. The system quantity they were compared with is out of date.`,
+          lineIds: outdated.map((l) => l.id),
+        });
+      const signedElsewhere = new Map([...(await this.openCountHolders(tx, actor.branchId, doc.id))].filter(([, holder]) => holder.status === 'AWAITING_APPROVAL'));
+      await this.refuseOpenCounts(tx, actor, lines, signedElsewhere);
       const differing = lines.filter((l) => l.physicalStock !== l.systemStock);
       if (differing.length && !note)
         throw new BadRequestException({ code: 'COUNT_NOTE_REQUIRED', message: 'Add a note explaining the differences before signing off.' });
@@ -1520,7 +1610,7 @@ export class InventoryWorkflowService {
    */
   async decideCount(actor: WorkflowActor, id: string, decision: 'APPROVE' | 'REJECT', input: Record<string, any>) {
     await this.authorize(actor, 'COUNT');
-    if (!INVENTORY_APPROVERS.has(actor.role))
+    if (!COUNT_APPROVERS.has(actor.role))
       throw new ForbiddenException('A doctor or an administrator decides stock count differences');
     const key = clean(input?.requestKey);
     if (!key || key.length > 150) throw new BadRequestException('A request key is required');
@@ -1545,7 +1635,7 @@ export class InventoryWorkflowService {
       const self = signer === actor.id;
       if (self) {
         const others = await tx.user.findMany({
-          where: { branchId: actor.branchId, isActive: true, role: { in: [...INVENTORY_APPROVERS] }, id: { not: actor.id } },
+          where: { branchId: actor.branchId, isActive: true, role: { in: [...COUNT_APPROVERS] }, id: { not: actor.id } },
           select: { firstName: true, lastName: true },
           orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
         });
@@ -1564,9 +1654,16 @@ export class InventoryWorkflowService {
       if (decision === 'APPROVE') {
         const items = await tx.inventoryItem.findMany({
           where: { branchId: actor.branchId, id: { in: lines.map((l) => l.inventoryId) } },
-          select: { id: true, name: true, unit: true, currentStock: true },
+          select: { id: true, name: true, unit: true, currentStock: true, metadata: true },
         });
         const byId = new Map<string, any>(items.map((i: any) => [i.id, i]));
+        const superseded = lines.find((line) => byId.has(line.inventoryId) && observationOutdated(line, jsonObject(byId.get(line.inventoryId).metadata), doc.id, doc.payload.signOff?.at));
+        if (superseded)
+          throw new ConflictException({
+            code: 'COUNT_SUPERSEDED',
+            message: `${batchLabel(superseded)}, was counted again after this count and that count is already in the stock. Approving this one would apply the difference twice. Reject it instead.`,
+            stockEffect: 'NONE',
+          });
         for (const line of lines) {
           const item = byId.get(line.inventoryId);
           const delta = (line.physicalStock ?? 0) - (line.systemStock ?? 0);

@@ -44,6 +44,10 @@ export function ReconciliationSettingsPanel({ summary, onSaved }: { summary: Rec
     assignees.length !== saved.assigneeIds.length ||
     assignees.some((person) => !saved.assigneeIds.includes(person));
   const restarts = (enabled && !saved.enabled) || (values.cycleDays !== null && values.cycleDays !== saved.cycleDays && enabled);
+  const recount = restarts && saved.enabled ? summary.forecast.covered : 0;
+  const restartNote = recount
+    ? `Saving starts a new cycle today. The ${batchCount(recount)} counted in this cycle will be counted again. Counts not yet signed or approved stay with the people counting them.`
+    : 'Saving starts a new cycle today.';
   const { cycle, forecast } = summary;
   const progress = forecast.batches ? Math.round((100 * forecast.covered) / forecast.batches) : 0;
 
@@ -63,7 +67,7 @@ export function ReconciliationSettingsPanel({ summary, onSaved }: { summary: Rec
         version: summary.settingsVersion,
         reconciliation: { enabled, cycleDays: values.cycleDays, itemsPerPersonPerDay: values.itemsPerPersonPerDay, assigneeIds: assignees },
       });
-      toast({ title: 'Stock count settings saved', description: restarts ? 'A new cycle starts today.' : undefined });
+      toast({ title: 'Stock count settings saved', description: restarts ? (recount ? `A new cycle starts today. ${batchCount(recount)} will be counted again.` : 'A new cycle starts today.') : undefined });
       onSaved();
     } catch (failure) {
       if (failureOf(failure).status === 409) {
@@ -115,7 +119,7 @@ export function ReconciliationSettingsPanel({ summary, onSaved }: { summary: Rec
       </div>
       <div className="flex flex-wrap gap-6">
         {numberField('cycleDays', 'Cycle length (days)', 'Every batch in stock is counted once per cycle.')}
-        {numberField('itemsPerPersonPerDay', 'Items per person per day', 'Each counter gets at most this many a day.')}
+        {numberField('itemsPerPersonPerDay', 'Items per person per day', 'Each person counts at most this many a day.')}
       </div>
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium">People who count</legend>
@@ -125,11 +129,14 @@ export function ReconciliationSettingsPanel({ summary, onSaved }: { summary: Rec
               <label key={person.id} className="flex min-h-10 items-center gap-2 text-base">
                 <input
                   type="checkbox"
-                  className="size-4"
+                  className="size-4 shrink-0"
                   checked={assignees.includes(person.id)}
                   onChange={(event) => setAssignees((current) => (event.target.checked ? [...current, person.id] : current.filter((value) => value !== person.id)))}
                 />
-                {person.name} <span className="text-sm">· {ROLE_LABELS[person.role] ?? person.role}</span>
+                <span className="flex flex-wrap items-baseline gap-x-1.5">
+                  <span>{person.name}</span>
+                  <span className="text-sm">· {ROLE_LABELS[person.role] ?? person.role}</span>
+                </span>
               </label>
             ))}
           </div>
@@ -143,7 +150,11 @@ export function ReconciliationSettingsPanel({ summary, onSaved }: { summary: Rec
           {preview.message}
         </p>
       )}
-      {restarts && <p className="text-sm">Saving starts a new cycle today.</p>}
+      {restarts && (
+        <p role="status" className={cn('rounded-lg border p-3 text-base', recount ? 'border-warning-border bg-warning-soft text-warning-text' : 'border-border bg-muted')}>
+          {restartNote}
+        </p>
+      )}
       <section aria-label="Current cycle" className="flex flex-col gap-1.5 rounded-lg border border-border p-3">
         {saved.enabled ? (
           <>

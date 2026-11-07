@@ -4,6 +4,8 @@ export const WORKFLOW_KINDS = ['OPENING_STOCK', 'SUPPLIER_RETURN', 'SALES_RETURN
 export type WorkflowKind = typeof WORKFLOW_KINDS[number];
 export type WorkflowActor = { id: string; branchId: string; role: string; permissions?: string | string[] };
 export const INVENTORY_APPROVERS: ReadonlySet<string> = new Set(['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR']);
+/** Stock count differences need a doctor's approval (CR-31); owners and admins may also decide. Managers approve other documents only. */
+export const COUNT_APPROVERS: ReadonlySet<string> = new Set(['OWNER', 'ADMIN', 'DOCTOR']);
 export const SELF_APPROVERS: ReadonlySet<string> = new Set(['OWNER', 'ADMIN', 'MANAGER']);
 export const mayApproveDocument = (actor: WorkflowActor, doc: { createdBy: string }) =>
   INVENTORY_APPROVERS.has(actor.role) && (SELF_APPROVERS.has(actor.role) || doc.createdBy !== actor.id);
@@ -15,6 +17,7 @@ export type WorkflowLine = {
   minStockLevel?: number; maxStockLevel?: number; beforeMin?: number | null; beforeMax?: number | null;
   originalTerms?: Record<string,any>; fefoOverrideReason?:string;
   manual?: boolean; location?: string; taxable?: number; tax?: number; total?: number; note?: string;
+  capturedAt?: string;
 };
 export const LEGACY_COUNT_SETTINGS = ['auditEnabled', 'auditDailyCount', 'auditAdjustmentMode', 'approvalValue', 'negativeCountNeedsApproval'] as const;
 export class SaveWorkflowDocumentDto {
