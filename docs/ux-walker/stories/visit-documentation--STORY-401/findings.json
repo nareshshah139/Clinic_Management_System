@@ -1,0 +1,314 @@
+[
+  {
+    "id": "F-401-01",
+    "story_id": "STORY-401",
+    "severity": "high",
+    "category": "happy-path",
+    "criterion": "Navigation / primary CTA reachable",
+    "score": "fail",
+    "description": "The doctor day calendar (and Slots tab) has a hard-coded 09:00-18:00 range; appointments after 18:00 are not rendered at all, so today's 18:30/19:00/19:30 OPD tiles (and their Start Visit action) do not exist in the UI.",
+    "expected": "Every booked appointment for the selected day is visible and startable; the grid extends to the clinic's/doctor's actual hours or at least to the latest appointment.",
+    "actual": "Grid ends at 18:00; Ananya Gupta 19:30, Kavya Patel 19:00, Priya Sharma 18:30 are absent; story steps 2 and 22 impossible.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-02b-calendar-shravya.png",
+    "suggested_fix": "Derive startHour/endHour from doctor availability/branch hours, or expand to min/max of the day's appointments; never clamp an appointment out of view.",
+    "files_likely_involved": [
+      "frontend/src/components/appointments/DoctorDayCalendar.tsx",
+      "frontend/src/components/appointments/AppointmentScheduler.tsx"
+    ]
+  },
+  {
+    "id": "F-401-02",
+    "story_id": "STORY-401",
+    "severity": "high",
+    "category": "visual",
+    "criterion": "Correct data for selected filter",
+    "score": "fail",
+    "description": "After switching Calendar/Slots tabs and changing the date, the calendar for \"Shravya Dermatologist\" on 8 Nov showed Dr. Praneeta's appointment (Sanjay Mehta 12:00) and hid Dr. Shravya's own two appointments (Deepika Nair 11:30, Meera Krishnan 12:00). A reload fixed it.",
+    "expected": "Tiles always match the doctor shown in the Doctor selector.",
+    "actual": "Selector says Shravya; tiles belong to Praneeta (stale doctor filter / race between doctor and date fetch).",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/finding-wrong-doctor-tiles.png",
+    "suggested_fix": "Key the appointments fetch on (doctorId, date) and discard stale responses; keep doctor state in one place shared by Calendar and Slots tabs.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/appointments/page.tsx",
+      "frontend/src/components/appointments/DoctorDayCalendar.tsx"
+    ]
+  },
+  {
+    "id": "F-401-03",
+    "story_id": "STORY-401",
+    "severity": "medium",
+    "category": "flow",
+    "criterion": "Decision load - defaults carry the user",
+    "score": "warn",
+    "description": "Signed in as Dr. Shravya, the Appointments page Doctor selector defaults to \"Praneeta Jain\".",
+    "expected": "A DOCTOR lands on her own calendar.",
+    "actual": "Defaults to another doctor; the doctor must notice and switch every time.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-02-appointments-calendar.png",
+    "suggested_fix": "Default doctorId to the signed-in user when role is DOCTOR.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/appointments/page.tsx"
+    ]
+  },
+  {
+    "id": "F-401-04",
+    "story_id": "STORY-401",
+    "severity": "medium",
+    "category": "disclosure",
+    "criterion": "Primary action discoverable",
+    "score": "warn",
+    "description": "Calendar tile actions (INFO / RESCHED / START) are invisible until mouse hover, on a ~18px-tall tile; \"RESCHED\" is an abbreviation; touch users have no hover.",
+    "expected": "Start Visit visible (or the whole tile clickable) without hover; tap target >= 32px.",
+    "actual": "Actions appear only on hover at the far right of the row.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-02f-tile-deepika.png",
+    "suggested_fix": "Make the tile itself open the appointment/visit, show START persistently for today's scheduled tiles, spell out \"Reschedule\".",
+    "files_likely_involved": [
+      "frontend/src/components/appointments/DoctorDayCalendar.tsx"
+    ]
+  },
+  {
+    "id": "F-401-05",
+    "story_id": "STORY-401",
+    "severity": "high",
+    "category": "visual",
+    "criterion": "Text fit & wrap - control labels / badges",
+    "score": "fail",
+    "description": "At 1280x800 the visit form header card is crushed: DRAFT/COMPLETED badge 37x81px with one letter per line, \"Linked to Appointment\" 87x81, \"0 Photos\" 42x81, \"Visit Workflow Tour\" 46x91, Shortcuts button 64x185 stacked letter-by-letter; patient-ID chip text spills outside its pill.",
+    "expected": "Badges and buttons stay on one line; header wraps as a row of chips below the title if space is short.",
+    "actual": "Badges/buttons are squeezed by flex siblings and break mid-word (overflow-wrap:anywhere).",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-04-form-header-ananya.png",
+    "suggested_fix": "Give badges whitespace-nowrap/shrink-0 and let the badge row flex-wrap; move Tour/Shortcuts into an overflow menu; truncate the ID with title tooltip.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx",
+      "frontend/src/app/dashboard/visits/page.tsx"
+    ]
+  },
+  {
+    "id": "F-401-06",
+    "story_id": "STORY-401",
+    "severity": "high",
+    "category": "layout",
+    "criterion": "Viewport usage / primary CTA visible",
+    "score": "fail",
+    "description": "Opening the Prescription tab makes <main> overflow horizontally (scrollWidth 1407 vs clientWidth 1024). The builder (1182px wide) is clipped on the right: Pulse field, template buttons, Create Prescription, and the form footer Save Draft / Complete Visit (x=1373-1638) are off-screen at 1280px.",
+    "expected": "Prescription builder fits the content column; footer actions always visible.",
+    "actual": "User must discover horizontal scrolling inside main to reach Create Prescription / Complete Visit; sidebar overlays scrolled content.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/finding-prescription-tab-hoverflow.png",
+    "suggested_fix": "Remove fixed min-widths in PrescriptionBuilder (table/min-w), let the medication table scroll inside its own container, and collapse the Patient Context column while on the Prescription tab.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx",
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-401-07",
+    "story_id": "STORY-401",
+    "severity": "high",
+    "category": "happy-path",
+    "criterion": "Feedback / error messages accurate",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #2. With vitals, photos, complaints, diagnosis, exam and a created prescription (60%), Complete Visit is disabled with no tooltip; Ctrl+Shift+S toasts \"Fill vitals, complaints, diagnosis, and prescription to reach at least 80%\". Only pressing \"Save Labs\" on the Lab Tests tab (labs are optional clinically) reaches 80%.",
+    "expected": "A visit with vitals + complaints + diagnosis + Rx can be completed; or the message names exactly what is missing.",
+    "actual": "Hidden requirement: >=1 photo AND Save Labs; message lists things already done.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-17-complete-blocked.png",
+    "suggested_fix": "Base the completion gate on required clinical fields, not on 4-of-5 tab checkmarks; list missing items in the disabled-button tooltip and toast.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-401-08",
+    "story_id": "STORY-401",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "Feedback matches state",
+    "score": "fail",
+    "description": "The first \"Mark Vitals Complete\" (which creates the visit) toasts \"Visit saved\" but does not mark Vitals complete; progress stays \"0% - 0 of 5\". A second click is required to get the green dot and 20%.",
+    "expected": "One click saves and marks the Vitals section complete.",
+    "actual": "Section completion lost when the visit is first created (state reset when visitId appears).",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-08-vitals-saved.png",
+    "suggested_fix": "Preserve completedSections across the create->visitId transition (or mark after the reload of server state).",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-401-09",
+    "story_id": "STORY-401",
+    "severity": "medium",
+    "category": "happy-path",
+    "criterion": "Labels/copy accurate",
+    "score": "fail",
+    "description": "Visit page sub-heading reads \"Patient: Unknown • Doctor: Dr. • 19:30-19:45 • OPD\" even when opened from an appointment for a known patient and doctor (same root cause as mapped defect #1: the page only holds the first patient/doctor).",
+    "expected": "Shows the appointment's patient and doctor names.",
+    "actual": "\"Unknown\" and an empty \"Dr.\" beside the correct Patient Context card.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-04-form-header-ananya.png",
+    "suggested_fix": "Resolve names from the appointment/patient fetch instead of the limit=1 lists.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/visits/page.tsx"
+    ]
+  },
+  {
+    "id": "F-401-10",
+    "story_id": "STORY-401",
+    "severity": "low",
+    "category": "consistency",
+    "criterion": "Information stated once and correctly",
+    "score": "warn",
+    "description": "CONFIRMED mapped defect #9: Overview \"Photos Captured: 0\" while header badge says \"3 Photos\" and Photos is Complete.",
+    "expected": "Same count everywhere.",
+    "actual": "0 vs 3.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-12-overview-photos-captured-0.png",
+    "suggested_fix": "Bind to the live photo count or remove the row.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-401-11",
+    "story_id": "STORY-401",
+    "severity": "medium",
+    "category": "happy-path",
+    "criterion": "Data shown is truthful",
+    "score": "fail",
+    "description": "With \"Compare with previous visit\" ticked for a patient who has no previous labs, every row shows \"Δ +0\", and after typing values \"Δ +18\" (Vitamin D) / \"Δ +12.1\" (Hb) - deltas against an implied previous value of 0.",
+    "expected": "Show \"—\" / \"No previous value\" when there is no baseline.",
+    "actual": "Fake deltas computed against 0.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-20-labs-saved.png",
+    "suggested_fix": "Only render a delta when a previous numeric value exists.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-401-12",
+    "story_id": "STORY-401",
+    "severity": "medium",
+    "category": "visual",
+    "criterion": "Text fit & wrap",
+    "score": "fail",
+    "description": "Lab Tests tab: \"Save Labs\" button rendered one letter per line (S/a/v/e/L/a/b/s), footer \"Save Draft\" and \"Complete Visit\" wrap onto two lines, result inputs clip values (\"12.1\", unit \"g/d\"), and the photo-autofill file input is the unstyled native \"Choose File No file chosen\".",
+    "expected": "Buttons single-line; inputs wide enough for values and units; styled file picker.",
+    "actual": "Crushed flex children in the lab footer row and result grid.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-20-labs-saved.png",
+    "suggested_fix": "Use whitespace-nowrap/shrink-0 on buttons, stack the footer row, widen value/unit inputs.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-401-13",
+    "story_id": "STORY-401",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "Feedback after action",
+    "score": "warn",
+    "description": "After \"Visit completed\" the header still shows \"Unsaved changes\", the local draft key (clinic:visit-draft:...:visit-<id>) remains in localStorage, and the PatientProgressTracker CTA reads \"Continue\".",
+    "expected": "Completed visit shows Saved/Completed state and the draft is cleared (as the story describes).",
+    "actual": "Contradictory status text; draft persists.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-21-completed.png",
+    "suggested_fix": "Reset dirty state and clear the draft key after complete; make tracker CTAs reflect COMPLETED.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx",
+      "frontend/src/components/patients/PatientProgressTracker.tsx"
+    ]
+  },
+  {
+    "id": "F-401-14",
+    "story_id": "STORY-401",
+    "severity": "low",
+    "category": "consistency",
+    "criterion": "Information consistent across one screen",
+    "score": "warn",
+    "description": "Patient Context \"Recent Visits\" lists the current visit itself with \"No diagnosis\" even after the diagnosis was saved and the visit completed; the History tab on the same screen shows \"Acne vulgaris\".",
+    "expected": "Context card refreshes and excludes the current visit.",
+    "actual": "Stale \"No diagnosis\".",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-23-history.png",
+    "suggested_fix": "Refetch recent visits after save/complete and exclude the open visit.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/visits/page.tsx"
+    ]
+  },
+  {
+    "id": "F-401-15",
+    "story_id": "STORY-401",
+    "severity": "medium",
+    "category": "a11y",
+    "criterion": "Labels / clinical units",
+    "score": "warn",
+    "description": "Vitals inputs have no units (Temperature °F or °C? Weight kg? Height cm?) and their <label>s are not associated with inputs (no for/id), so screen readers announce unlabeled fields.",
+    "expected": "Units shown in label or adornment; labels programmatically tied to inputs.",
+    "actual": "\"Temperature 98.4\" with no unit; label.for = null.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-07c-vitals-filled.png",
+    "suggested_fix": "Add unit adornments and htmlFor/id pairs.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-401-16",
+    "story_id": "STORY-401",
+    "severity": "low",
+    "category": "layout",
+    "criterion": "Primary action visible in dialog",
+    "score": "warn",
+    "description": "In the \"Tag photo positions\" dialog (Single mode) the Upload button sits at y=988 in a 720px-high modal; the position Select and Upload are hidden below a full-height preview until the user scrolls inside the dialog.",
+    "expected": "Upload/Cancel in a sticky dialog footer.",
+    "actual": "Must scroll inside the dialog to find Upload.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-10-tag-dialog.png",
+    "suggested_fix": "Cap preview height (e.g. 50vh) and make the footer sticky.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/VisitPhotos.tsx"
+    ]
+  },
+  {
+    "id": "F-401-17",
+    "story_id": "STORY-401",
+    "severity": "high",
+    "category": "layout",
+    "criterion": "Responsive behavior",
+    "score": "fail",
+    "description": "At 390x844 the visit form keeps two columns side-by-side: Patient Context and the form card overflow by up to 414px, the patient ID and COMPLETED badge stack one letter per line, and Save Draft / Complete Visit / Back to Setup wrap.",
+    "expected": "Single-column stack on phones.",
+    "actual": "Unusable layout on mobile.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/mobile-check.png",
+    "suggested_fix": "Stack columns below md; hide/collapse Patient Context into a drawer.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/visits/page.tsx",
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-401-18",
+    "story_id": "STORY-401",
+    "severity": "low",
+    "category": "hierarchy",
+    "criterion": "One primary action / emphasis budget",
+    "score": "warn",
+    "description": "Destructive red buttons (\"Delete\" in the Photos header, \"Reset to default\" in the Prescription template bar) are the most saturated elements on screen; Photos also duplicates Upload/Camera in the header with Choose Files/Take Photo in the empty state.",
+    "expected": "Destructive actions de-emphasized (outline/ghost); one upload entry point.",
+    "actual": "Red solid buttons compete with the primary action.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-11b-photos-uploaded.png",
+    "suggested_fix": "Use outline-destructive styling; drop the duplicate header buttons when the empty state is shown.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/VisitPhotos.tsx",
+      "frontend/src/components/visits/PrescriptionBuilder.tsx"
+    ]
+  },
+  {
+    "id": "F-401-19",
+    "story_id": "STORY-401",
+    "severity": "low",
+    "category": "flow",
+    "criterion": "Navigation - CTAs match state",
+    "score": "warn",
+    "description": "The PatientProgressTracker under the heading offers \"Start Visit\" while the visit form is already open, \"Book\" for an appointment that is already booked, and \"Continue/View/Bill\" after completion; \"From Appointment\" and \"Linked to Appointment\" badge the same fact twice.",
+    "expected": "Tracker CTAs reflect the current state; appointment linkage shown once.",
+    "actual": "Contradictory CTAs.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-401/step-07-vitals-empty.png",
+    "suggested_fix": "Hide the tracker CTA row inside the form, or compute it from visit status; keep a single linkage badge.",
+    "files_likely_involved": [
+      "frontend/src/components/patients/PatientProgressTracker.tsx",
+      "frontend/src/app/dashboard/visits/page.tsx"
+    ]
+  }
+]

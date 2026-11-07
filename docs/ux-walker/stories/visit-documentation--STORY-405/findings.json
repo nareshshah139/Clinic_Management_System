@@ -1,0 +1,134 @@
+[
+  {
+    "id": "F-405-01",
+    "story_id": "STORY-405",
+    "severity": "critical",
+    "category": "error-handling",
+    "criterion": "Recovery / destructive action works",
+    "score": "fail",
+    "description": "Deleting any photo of a saved visit always fails. Both the header \"Delete\" and the thumbnail trash send DELETE /api/api/visits/<id>/photos/<attachmentId> (double \"/api\"), the backend returns 404 \"Cannot DELETE /api/visits/...\", and the user sees \"Delete failed / Failed to delete photo.\" Item URLs are already absolutised to \"/api/visits/...\" by toAbsolute(), then deleteActive() prefixes baseUrl again.",
+    "expected": "The selected photo is deleted and the strip refreshes.",
+    "actual": "No saved-visit photo can be removed (blurry or wrong-patient photos stay in the record).",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-405/step-09-header-delete-fails.png",
+    "suggested_fix": "In deleteActive use active.url as-is when it already starts with baseUrl (or store the raw API path separately from the display URL).",
+    "files_likely_involved": [
+      "frontend/src/components/visits/VisitPhotos.tsx"
+    ]
+  },
+  {
+    "id": "F-405-02",
+    "story_id": "STORY-405",
+    "severity": "high",
+    "category": "error-handling",
+    "criterion": "Destructive action targets what the user chose",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #4 at request level: with Front active, clicking the trash on the Close-up thumbnail switches the viewer to Close-up and shows \"Delete this photo? This cannot be undone.\" but the DELETE request carries the FRONT attachment id (cmw6ek31n00887dc1xii9qzao = FRONT per GET /visits/visit-seed-5/photos). Only F-405-01 (the 404) currently prevents permanent loss of the wrong photo; the confirm text never names which photo.",
+    "expected": "Trash on a thumbnail deletes that thumbnail; confirm names position/time.",
+    "actual": "Stale `active` is deleted.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-405/step-08-wrong-photo-deleted.png",
+    "suggested_fix": "Pass the item to delete explicitly (deletePhoto(item)) instead of setActiveIndex + deleteActive; include position in the confirm.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/VisitPhotos.tsx"
+    ]
+  },
+  {
+    "id": "F-405-03",
+    "story_id": "STORY-405",
+    "severity": "high",
+    "category": "error-handling",
+    "criterion": "Network failure / data preserved",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #3: on a walk-in (no visit id yet) two photos uploaded fine (\"Before / After Photos (2)\", Photos complete, 20%). After the first Save Draft (POST /visits) the visit shows \"(0)\", \"0 Photos\", progress back to 0%, and the photos appear only under \"Other saved photos → Unattached uploads — 07 Nov 2026 (2)\" with no action to attach them.",
+    "expected": "Draft uploads are claimed by the visit on create (or the visit is created before upload).",
+    "actual": "Photos silently detached; Photos section un-marked; no recovery action.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-405/step-a2-after-first-save-photos-gone.png",
+    "suggested_fix": "On first save call claim-draft-attachments (backend create) or invoke onVisitNeeded before uploading; offer \"Attach to this visit\" on unattached uploads.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/VisitPhotos.tsx",
+      "frontend/src/components/visits/MedicalVisitForm.tsx",
+      "backend/src/modules/visits/visits.service.ts"
+    ]
+  },
+  {
+    "id": "F-405-04",
+    "story_id": "STORY-405",
+    "severity": "medium",
+    "category": "flow",
+    "criterion": "Defaults carry the user",
+    "score": "warn",
+    "description": "Compare: On defaults \"Compare against\" to the immediately previous visit (Visit 4) even though it has no photos, so the left pane shows \"No photo\" for every position; the doctor must open the Select and hunt for a visit that has photos.",
+    "expected": "Default to the most recent earlier visit that has photos; mark visits without photos in the list.",
+    "actual": "\"No photo\" by default.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-405/step-03-compare-on.png",
+    "suggested_fix": "Filter/annotate the visit list by photo count and default to the latest with photos.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/VisitPhotos.tsx"
+    ]
+  },
+  {
+    "id": "F-405-05",
+    "story_id": "STORY-405",
+    "severity": "low",
+    "category": "simplicity",
+    "criterion": "Same control duplicated on one screen",
+    "score": "warn",
+    "description": "In compare mode two Prev/Next pairs are stacked (pair navigator and viewer navigator) and the screen carries three kinds of delete control (header Delete, viewer Delete, a red trash on every thumbnail). Compare panes are only ~145px tall at 1280px, too small for a clinical side-by-side.",
+    "expected": "One navigator; one delete affordance; larger compare panes.",
+    "actual": "Duplicated navigators and deletes; tiny compare images.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-405/step-04-compare-visit2.png",
+    "suggested_fix": "Hide the viewer navigator while comparing; keep one Delete; give compare panes most of the card height.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/VisitPhotos.tsx"
+    ]
+  },
+  {
+    "id": "F-405-06",
+    "story_id": "STORY-405",
+    "severity": "low",
+    "category": "happy-path",
+    "criterion": "Labels/copy",
+    "score": "warn",
+    "description": "\"Other saved photos\" groups are labelled only by date (\"Visit — 07 Nov 2026 (3)\"); when several visits share a date the doctor cannot tell which visit a group belongs to.",
+    "expected": "Group label includes visit number/diagnosis.",
+    "actual": "Date only.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-405/step-10-other-saved-photos.png",
+    "suggested_fix": "Label groups \"Visit #2 — 07 Nov 2026\".",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PatientPhotoArchive.tsx"
+    ]
+  },
+  {
+    "id": "F-405-07",
+    "story_id": "STORY-405",
+    "severity": "medium",
+    "category": "layout",
+    "criterion": "Responsive behavior",
+    "score": "fail",
+    "description": "At 390x844 the Photos card is wider than the viewport: header buttons (Camera, Delete) and the Next button are cut off at the right edge; the form still renders in two columns (see F-401-17).",
+    "expected": "Photos card fits the phone width; controls wrap.",
+    "actual": "Clipped controls.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-405/mobile-check.png",
+    "suggested_fix": "Stack columns below md; wrap the photo header toolbar.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/VisitPhotos.tsx",
+      "frontend/src/app/dashboard/visits/page.tsx"
+    ]
+  },
+  {
+    "id": "F-405-08",
+    "story_id": "STORY-405",
+    "severity": "low",
+    "category": "error-handling",
+    "criterion": "Console/network clean",
+    "score": "warn",
+    "description": "Every visit page load for the seeded patient \"patient-seed-1\" fires GET /api/billing/invoices?patientId=patient-seed-1 three times, each 400 \"patientId must be a UUID or CUID\" (seed id format rejected by billing DTO).",
+    "expected": "No failing background requests.",
+    "actual": "3x 400 per load.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-405/step-01-recent-visit-open.png",
+    "suggested_fix": "Relax the DTO to accept the seed id format or reseed with cuid ids.",
+    "files_likely_involved": [
+      "backend/scripts/seed.ts",
+      "backend/src/modules/billing"
+    ]
+  }
+]

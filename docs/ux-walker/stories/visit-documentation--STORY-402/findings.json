@@ -1,0 +1,117 @@
+[
+  {
+    "id": "F-402-01",
+    "story_id": "STORY-402",
+    "severity": "high",
+    "category": "happy-path",
+    "criterion": "Decision load / correct options",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #1. Visits setup requests /api/patients?page=1&limit=1 and /api/users?role=DOCTOR&limit=1. \"Select Doctor\" lists only \"Dr. Praneeta Jain\" (newest doctor) - for Dr. Praneeta it happens to be right, but signed in as Dr. Shravya she cannot select herself.",
+    "expected": "All active doctors listed, defaulting to the signed-in doctor.",
+    "actual": "One doctor; Dr. Shravya cannot start a visit under her own name from setup.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-402/finding-shravya-cannot-pick-self.png",
+    "suggested_fix": "Fetch all doctors (or search), default to current user when DOCTOR.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/visits/page.tsx",
+      "backend/src/modules/users/users.service.ts"
+    ]
+  },
+  {
+    "id": "F-402-02",
+    "story_id": "STORY-402",
+    "severity": "high",
+    "category": "error-handling",
+    "criterion": "Data integrity",
+    "score": "fail",
+    "description": "Deep link /dashboard/visits?patientId=<Rohit>&autoStart=true (the Patients-row \"Start Visit\" path) opened by Dr. Shravya shows \"Doctor: Dr. Praneeta Jain\" and the first save POSTed doctorId=Praneeta; visit cmw6emf3f00917dc1n2bk0h9e is now recorded under Dr. Praneeta. (Existing visits opened by visitId also PATCH doctorId=Praneeta; the backend ignored it there.)",
+    "expected": "Visits started by a doctor are attributed to that doctor.",
+    "actual": "Silent misattribution of clinical documentation to another doctor.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-402/finding-deeplink-wrong-doctor-head.png",
+    "suggested_fix": "Default doctorId to the authenticated DOCTOR (or the appointment doctor); never fall back to the first fetched doctor; reject mismatches server-side.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/visits/page.tsx",
+      "frontend/src/components/visits/MedicalVisitForm.tsx",
+      "backend/src/modules/visits/visits.service.ts"
+    ]
+  },
+  {
+    "id": "F-402-03",
+    "story_id": "STORY-402",
+    "severity": "medium",
+    "category": "happy-path",
+    "criterion": "Labels/copy accurate",
+    "score": "fail",
+    "description": "After picking \"Sanjay Mehta\" the Ready-to-start line directly under the field reads \"Patient: Unknown • Doctor: Dr. Praneeta Jain\"; the form sub-heading repeats \"Patient: Unknown\".",
+    "expected": "Shows the selected patient name.",
+    "actual": "\"Unknown\" right below the filled field.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-402/step-04-patient-picked.png",
+    "suggested_fix": "Keep the selected patient object from the search result instead of looking it up in the limit=1 list.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/visits/page.tsx"
+    ]
+  },
+  {
+    "id": "F-402-04",
+    "story_id": "STORY-402",
+    "severity": "high",
+    "category": "happy-path",
+    "criterion": "Primary goal achievable",
+    "score": "fail",
+    "description": "CONFIRMED \"No photos\" variation of mapped defect #2: on the walk-in with vitals, labs (Save Labs with nothing selected) and a created prescription, progress caps at 60% - Complete Visit stays disabled. A walk-in without photos can never be completed.",
+    "expected": "Photos optional for completion.",
+    "actual": "60% max without a photo.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-402/step-x2-all-but-photos-60pct.png",
+    "suggested_fix": "Drop photos/labs from the completion gate or make sections N/A-able.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-402-05",
+    "story_id": "STORY-402",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "Form validation inline and helpful",
+    "score": "fail",
+    "description": "Create Prescription with a medicine whose Duration is blank returns 400 and toasts the raw DTO message \"items.0.duration must not be less than 1 (Reference: …)\"; the row is not highlighted.",
+    "expected": "Inline \"Enter a duration for Adapalene\" on the row before submit.",
+    "actual": "Technical message with array index and reference id.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-402/finding-rx-duration-400.png",
+    "suggested_fix": "Validate rows client-side and map server field errors to row/field.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx"
+    ]
+  },
+  {
+    "id": "F-402-06",
+    "story_id": "STORY-402",
+    "severity": "low",
+    "category": "error-handling",
+    "criterion": "Feedback matches state",
+    "score": "warn",
+    "description": "The form shows \"Unsaved changes\" immediately after Start Visit Documentation, before any edit.",
+    "expected": "No dirty indicator until the user edits.",
+    "actual": "\"Unsaved changes\" on a pristine form.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-402/step-08-form-open.png",
+    "suggested_fix": "Initialise the dirty baseline after the form hydrates.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-402-07",
+    "story_id": "STORY-402",
+    "severity": "low",
+    "category": "simplicity",
+    "criterion": "\"Take away\" test",
+    "score": "warn",
+    "description": "The setup page leads with a \"Your Role & Permissions\" card and ends with an \"Available Features\" marketing card (\"Full SOAP notes\", \"Complete care plans\"); the role \"Doctor\" is stated four times. On mobile the role badge breaks mid-word (\"Doct/or\") and the primary Start New Visit card is pushed below the fold.",
+    "expected": "Start New Visit is the first thing on the page.",
+    "actual": "Two non-actionable cards around the only task.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-402/mobile-check.png",
+    "suggested_fix": "Remove or collapse the role/features cards.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/visits/page.tsx"
+    ]
+  }
+]

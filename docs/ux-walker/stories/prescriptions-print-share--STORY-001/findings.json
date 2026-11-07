@@ -1,0 +1,212 @@
+[
+  {
+    "id": "F-1-01",
+    "story_id": "STORY-1",
+    "severity": "high",
+    "category": "flow",
+    "criterion": "Data preserved on handoff",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #4: after adding a 4th medicine (Salicylic Acid 12% Ointment, 1-0-1, 4 weeks) without re-saving, footer \"Go to Pharmacy\" fired no save request, triggered the browser \"leave site\" prompt, and navigated to /dashboard/pharmacy?patientId&doctorId&visitId; Pharmacy Billing loaded \"Items from prescription: 3\" - the new medicine is missing from the bill.",
+    "expected": "Go to Pharmacy saves the prescription first (like Print does) and hands off the up-to-date Rx.",
+    "actual": "Unsaved Rx changes silently not billed.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/step-17-pharmacy-handoff.png",
+    "suggested_fix": "Call saveBeforeExport() before navigating and pass prescriptionId; use router navigation.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx",
+      "frontend/src/components/pharmacy/PharmacyInvoiceBuilderFixed.tsx"
+    ]
+  },
+  {
+    "id": "F-1-02",
+    "story_id": "STORY-1",
+    "severity": "medium",
+    "category": "happy-path",
+    "criterion": "Printed output truthful",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #11: ticking \"Refill stamp\" prints \"Refill eligible\" on preview and PDF although the prescription has maxRefills = 0 and refills = [] (API). In the downloaded PDF the stamp is also clipped at the top-right page edge.",
+    "expected": "Stamp only when refills are allowed (or show \"No refills\").",
+    "actual": "\"Refill eligible\" on a non-refillable Rx.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/step-14-refill-stamp.png",
+    "suggested_fix": "Gate the stamp on maxRefills > 0; keep it inside the printable margin.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx"
+    ]
+  },
+  {
+    "id": "F-1-03",
+    "story_id": "STORY-1",
+    "severity": "medium",
+    "category": "happy-path",
+    "criterion": "No dead UI",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #10: the preview \"Printer profile\" select opens with zero options and there is no way to create a profile.",
+    "expected": "Hidden until profiles exist, or a \"Create profile\" action.",
+    "actual": "Empty dropdown.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/step-14-refill-stamp.png",
+    "suggested_fix": "Hide the control or wire upsertPrinterProfile.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx"
+    ]
+  },
+  {
+    "id": "F-1-04",
+    "story_id": "STORY-1",
+    "severity": "medium",
+    "category": "visual",
+    "criterion": "Theme consistency / state leak",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #12: \"High contrast\" in the preview adds body.high-contrast; after Close the whole app (sidebar, buttons, Branded toggle) stays high-contrast. The button exposes no pressed state (aria-pressed null).",
+    "expected": "High contrast scoped to the preview and removed on close; toggle shows its state.",
+    "actual": "App-wide leak.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/finding-high-contrast-leak.png",
+    "suggested_fix": "Scope the class to the preview container; clean up on unmount; add aria-pressed.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx"
+    ]
+  },
+  {
+    "id": "F-1-05",
+    "story_id": "STORY-1",
+    "severity": "medium",
+    "category": "consistency",
+    "criterion": "Same entity linked everywhere",
+    "score": "fail",
+    "description": "Default template medicines (\"Adapalene Gel 0.1%\", \"Benzoyl Peroxide Gel 2.5%\") are free text not linked to the drug master: the builder shows \"Stock: —\", Pharmacy Billing shows \"Not linked – link inventory before billing\" for both and prices them as \"Dosage: 1 TABLET\" and 0/84 units, while the searched drug \"Adapalene 0.1% Gel 15g\" (stock 60) exists.",
+    "expected": "Templates reference drug-master items so stock and billing work.",
+    "actual": "Every template use needs manual linking at the counter.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/step-08-doxy-regimen.png",
+    "suggested_fix": "Store drugId in default templates (or resolve by name on apply).",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx",
+      "frontend/src/components/pharmacy/PharmacyInvoiceBuilderFixed.tsx"
+    ]
+  },
+  {
+    "id": "F-1-06",
+    "story_id": "STORY-1",
+    "severity": "medium",
+    "category": "flow",
+    "criterion": "Progress persists",
+    "score": "fail",
+    "description": "After the pharmacy handoff, browser Back reopens the visit with the unsaved row restored from the local draft, but progress is \"0% • 0 of 5\" and the Prescription section is no longer marked though the Rx is saved on the server - Complete Visit (story step 18) cannot be reached without re-creating the prescription (plus vitals, photo, Save Labs).",
+    "expected": "Section completion derived from server state (Rx exists → Prescription complete).",
+    "actual": "Completion state lost on reload/navigation.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/step-18-back-to-visit.png",
+    "suggested_fix": "Compute completed sections from saved data, or persist them in visit metadata and rehydrate.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/MedicalVisitForm.tsx"
+    ]
+  },
+  {
+    "id": "F-1-07",
+    "story_id": "STORY-1",
+    "severity": "medium",
+    "category": "visual",
+    "criterion": "Text fit & wrap",
+    "score": "fail",
+    "description": "Medication table columns are crushed at 1280px: \"When\" values break letter-by-letter (\"Be/dti/me\", \"Aft/er/Lu/nc/h\"), duration unit \"WEEK/S\", raw enum \"ONCE_/DAILY\", and \"Rem/ove\" buttons; the table also extends past the right edge (see F-401-06).",
+    "expected": "Readable single-line cells; human labels (\"Once daily\").",
+    "actual": "Broken wrapping and enum values.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/step-08-doxy-regimen.png",
+    "suggested_fix": "Give the table a min-width inside its own scroll container; map enums to labels.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx"
+    ]
+  },
+  {
+    "id": "F-1-08",
+    "story_id": "STORY-1",
+    "severity": "low",
+    "category": "happy-path",
+    "criterion": "Feedback accurate",
+    "score": "warn",
+    "description": "Footer \"Total items: 3 • Total qty: 0\" even with Doxycycline 0-1-0 x 4 weeks (28 tablets) - quantity is never computed; the create toast says \"1 medications\" for a single item.",
+    "expected": "Total qty reflects course quantity; correct pluralisation.",
+    "actual": "qty 0; \"1 medications\".",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/step-11-create-dialog.png",
+    "suggested_fix": "Compute qty from frequency x duration for unit-dosed forms; pluralise.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx"
+    ]
+  },
+  {
+    "id": "F-1-09",
+    "story_id": "STORY-1",
+    "severity": "low",
+    "category": "flow",
+    "criterion": "Dead ends",
+    "score": "warn",
+    "description": "Dashboard \"Today's Appointments\" rows (Priya Sharma 18:30 etc.) are not clickable and offer no Start Visit; status shows raw enum \"IN_PROGRESS\". Combined with F-401-01 (evening tiles not on the calendar) the doctor has no UI route from her day list to the visit.",
+    "expected": "Rows open the appointment / Start Visit.",
+    "actual": "Static list.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/step-02a-dashboard-today.png",
+    "suggested_fix": "Link rows to the visit deep link; humanise status.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/page.tsx"
+    ]
+  },
+  {
+    "id": "F-1-10",
+    "story_id": "STORY-1",
+    "severity": "low",
+    "category": "visual",
+    "criterion": "Printed output quality",
+    "score": "warn",
+    "description": "Printout mixes frequency formats (\"once daily\" for template rows vs \"0-1-0\" for added rows), prints pack size in the drug name (\"Doxycycline 100 mg Tablets (Strip of 10)\"), prints a \"Signature\" caption with no signature, and silently includes a template chief complaint (\"Acne lesions on face\") the doctor never typed.",
+    "expected": "Consistent dosing notation; clean drug names; no empty signature caption; template text visible in the form before print.",
+    "actual": "Inconsistent printout.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/pdfpage-1.png",
+    "suggested_fix": "Normalise frequency rendering; strip pack info; hide caption without signature.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx"
+    ]
+  },
+  {
+    "id": "F-1-11",
+    "story_id": "STORY-1",
+    "severity": "low",
+    "category": "hierarchy",
+    "criterion": "One primary action",
+    "score": "warn",
+    "description": "Preview sidebar has three equally heavy primaries (green \"Save Prescription\", dark \"Print\", dark \"Download PDF\"), two \"Close\" buttons plus a dialog X, an Email button styled differently from its neighbours, and \"PDF via WhatsApp\" wrapping to two lines.",
+    "expected": "Print as the single primary; one close.",
+    "actual": "Competing primaries, duplicate Close.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/step-14-refill-stamp.png",
+    "suggested_fix": "Demote Save/PDF to secondary, drop the extra Close.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx"
+    ]
+  },
+  {
+    "id": "F-1-12",
+    "story_id": "STORY-1",
+    "severity": "medium",
+    "category": "layout",
+    "criterion": "Responsive behavior",
+    "score": "fail",
+    "description": "At 390px the prescription builder content is 1400px wide inside a 390px main; only the first ~120px of the medicine column is visible.",
+    "expected": "Builder usable on a phone/tablet.",
+    "actual": "Unusable.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/mobile-check.png",
+    "suggested_fix": "Stack the row fields into cards below md.",
+    "files_likely_involved": [
+      "frontend/src/components/visits/PrescriptionBuilder.tsx"
+    ]
+  },
+  {
+    "id": "F-1-13",
+    "story_id": "STORY-1",
+    "severity": "low",
+    "category": "error-handling",
+    "criterion": "Error messages non-technical",
+    "score": "warn",
+    "description": "When the shared login throttle trips, the login form shows \"ThrottlerException: Too Many Requests (Reference: …)\".",
+    "expected": "\"Too many attempts - try again in a minute.\"",
+    "actual": "Framework exception name shown.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/prescriptions-print-share--STORY-001/step-01-login-throttled.png",
+    "suggested_fix": "Map 429 to friendly copy with retry-after.",
+    "files_likely_involved": [
+      "frontend/src/app/login/page.tsx"
+    ]
+  }
+]

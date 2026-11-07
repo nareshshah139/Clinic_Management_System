@@ -1,0 +1,131 @@
+[
+  {
+    "id": "F-411-01",
+    "story_id": "STORY-411",
+    "severity": "critical",
+    "category": "happy-path",
+    "criterion": "Primary goal achievable",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #14: Save Procedure POSTs /api/visits without `complaints`; the backend replies 400 [\"complaints must be an array\"] and the page shows a native alert(\"Failed to save procedure. Please try again.\"). Retrying can never succeed. The same payload with \"complaints\": [] succeeds via the API (verified - visit cmw6ep04m009d7dc16tm7rdp7).",
+    "expected": "Procedure saved and appears in Procedure History.",
+    "actual": "Nothing can ever be saved from the Procedures page; generic native alert.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-411/step-07-save-procedure.png",
+    "suggested_fix": "Send complaints: [] (or make it @IsOptional in CreateVisitDto); replace alert() with an inline/toast error that shows the reason.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/procedures/page.tsx",
+      "backend/src/modules/visits/dto/create-visit.dto.ts"
+    ]
+  },
+  {
+    "id": "F-411-02",
+    "story_id": "STORY-411",
+    "severity": "medium",
+    "category": "flow",
+    "criterion": "Defaults carry the user / wrong-patient risk",
+    "score": "warn",
+    "description": "\"Patient *\" silently preselects the first patient in the list (here a test patient \"UXW MgrToast\") from a plain Select of 14+ names with no search; \"Doctor *\" defaults to Dr. Praneeta Jain although Dr. Shravya is signed in.",
+    "expected": "Patient empty with a searchable picker; doctor defaults to the signed-in doctor.",
+    "actual": "Procedure would be recorded on an arbitrary first patient unless noticed.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-411/step-01-procedures.png",
+    "suggested_fix": "Start with no patient selected, use the patient search combobox, default doctor to current user.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/procedures/page.tsx"
+    ]
+  },
+  {
+    "id": "F-411-03",
+    "story_id": "STORY-411",
+    "severity": "medium",
+    "category": "happy-path",
+    "criterion": "Controls do what they say",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #15: \"View Details\" on a history card does nothing (no dialog, DOM unchanged). \"Load & Edit\" switches to New Procedure but resets Session No. to 1, clears Additional Notes, and keeps the previous unsaved shot counts (15200/16850) and body parts (Chin+Neck) instead of the loaded session's values (13000/15200, Chin); saving would create a new visit, not edit.",
+    "expected": "View Details opens the record; Load & Edit loads exactly that record and updates it.",
+    "actual": "Dead button; Load & Edit mixes stale form state with the loaded record.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-411/step-09-load-edit.png",
+    "suggested_fix": "Render a details dialog; reset the form fully before loading; PATCH when editing.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/procedures/page.tsx"
+    ]
+  },
+  {
+    "id": "F-411-04",
+    "story_id": "STORY-411",
+    "severity": "low",
+    "category": "consistency",
+    "criterion": "Same control behaves independently",
+    "score": "fail",
+    "description": "CONFIRMED mapped defect #16: Fotona Starwalker parameters list \"Area\" twice (rows 1 and 8); typing \"Upper lip\" in the second Area row also fills the first.",
+    "expected": "Each parameter row is distinct.",
+    "actual": "Mirrored rows.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-411/variation-fotona-duplicate-area.png",
+    "suggested_fix": "Remove the duplicate key or give rows unique keys.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/procedures/page.tsx"
+    ]
+  },
+  {
+    "id": "F-411-05",
+    "story_id": "STORY-411",
+    "severity": "low",
+    "category": "error-handling",
+    "criterion": "Stale data",
+    "score": "warn",
+    "description": "CONFIRMED edge case: switching machine from Soprano to Fotona keeps the old per-pass values (Area pass 2-3 still \"Beard line\"), and after Load & Edit the Soprano grid shows \"Upper lip\" typed on Fotona.",
+    "expected": "Switching machine clears or scopes parameters per machine.",
+    "actual": "Values leak across machines.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-411/mobile-check.png",
+    "suggested_fix": "Key machineParameters by machine id.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/procedures/page.tsx"
+    ]
+  },
+  {
+    "id": "F-411-06",
+    "story_id": "STORY-411",
+    "severity": "low",
+    "category": "happy-path",
+    "criterion": "Information shown",
+    "score": "warn",
+    "description": "CONFIRMED mapped defect #17: the Procedure History card shows patient, date, machine and doctor only - no session number and none of the per-pass parameters (Fluence 10 saved in the parameters grid is not displayed).",
+    "expected": "Card shows session no. and key parameters.",
+    "actual": "Parameters never shown.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-411/step-08b-history-with-card.png",
+    "suggested_fix": "Render parameters from treatmentPlan.dermatology.procedures[].parameters.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/procedures/page.tsx"
+    ]
+  },
+  {
+    "id": "F-411-07",
+    "story_id": "STORY-411",
+    "severity": "low",
+    "category": "visual",
+    "criterion": "Text fit / units",
+    "score": "warn",
+    "description": "Per-pass inputs are ~66px wide at 1280 (and ~40px on mobile): entered values are clipped (\"Bearc\" for \"Beard line\") and placeholders truncate (\"fluenc\", \"spot s\"); no units are shown for Fluence (J/cm²) or Spot Size.",
+    "expected": "Inputs fit realistic values; units in the row header.",
+    "actual": "Clipped values, no units.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-411/step-07-save-procedure.png",
+    "suggested_fix": "Fewer visible passes by default (add-pass button), wider inputs, unit labels.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/procedures/page.tsx"
+    ]
+  },
+  {
+    "id": "F-411-08",
+    "story_id": "STORY-411",
+    "severity": "suggestion",
+    "category": "simplicity",
+    "criterion": "\"Take away\" test",
+    "score": "warn",
+    "description": "The Analytics tab is a top-level tab that only says \"Analytics dashboard coming soon\".",
+    "expected": "Hide unfinished tabs.",
+    "actual": "Placeholder tab.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/visit-documentation--STORY-411/step-11-analytics.png",
+    "suggested_fix": "Remove the tab until implemented.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/procedures/page.tsx"
+    ]
+  }
+]
