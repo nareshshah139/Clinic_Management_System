@@ -60,7 +60,7 @@ import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { DoctorTour } from '@/components/tours';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
-import { getErrorMessage } from '@/lib/utils';
+import { calculateAge, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { isUuid } from '@/lib/id';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
@@ -1731,21 +1731,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     <Badge variant="outline" className="text-xs">ID: {patientId}</Badge>
                   </div>
                   <div className="text-sm text-gray-600">
-                    Age: {(() => {
-                      if ((patientDetails as any).age != null) return (patientDetails as any).age;
-                      if (!patientDetails.dob) return 'N/A';
-                      const dob = new Date(patientDetails.dob);
-                      const today = new Date();
-                      const isToday = 
-                        dob.getFullYear() === today.getFullYear() &&
-                        dob.getMonth() === today.getMonth() &&
-                        dob.getDate() === today.getDate();
-                      if (isToday) return 'N/A';
-                      const age = today.getFullYear() - dob.getFullYear();
-                      const monthDiff = today.getMonth() - dob.getMonth();
-                      const adjustedAge = (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) ? age - 1 : age;
-                      return adjustedAge >= 0 ? adjustedAge : 'N/A';
-                    })()} • {patientDetails.gender || 'N/A'}
+                    Age: {calculateAge(patientDetails) ?? 'N/A'} • {patientDetails.gender || 'N/A'}
                   </div>
                   <div className="text-sm text-gray-600">
                     Phone: {patientDetails.phone || 'N/A'}

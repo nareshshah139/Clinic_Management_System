@@ -3,7 +3,7 @@ import VisitsPage from '@/app/dashboard/visits/page';
 import { apiClient } from '@/lib/api';
 let mockQuery = '';
 jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(mockQuery) }));
-jest.mock('@/lib/api', () => ({ apiClient: { getPatients: jest.fn(), get: jest.fn(), getAllPatientVisitHistory: jest.fn().mockResolvedValue([]) } }));
+jest.mock('@/lib/api', () => ({ apiClient: { getPatients: jest.fn(), getPatient: jest.fn().mockResolvedValue({ id: 'patient-123', name: 'Synthetic Patient' }), getUser: jest.fn().mockResolvedValue({ id: 'doctor-123', firstName: 'Synthetic', lastName: 'Doctor' }), get: jest.fn(), getAllPatientVisitHistory: jest.fn().mockResolvedValue([]) } }));
 jest.mock('@/components/visits/MedicalVisitForm', () => function Form() { return <div data-testid="medical-form" />; });
 jest.mock('@/components/patients/PatientProgressTracker', () => function Tracker() { return null; });
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
