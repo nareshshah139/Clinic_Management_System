@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { clinicDay, clinicDayRange, clinicDayStart, compareValues, financialYear, isCalendarDay, money, pageOf, peopleById, registerRangeError } from '../../pharmacy/register-utils';
 import { InventoryWorkflowService, observationOutdated } from '../inventory-workflow.service';
-import { INVENTORY_APPROVERS, WorkflowActor, WorkflowLine } from '../inventory-workflow.types';
+import { COUNT_APPROVERS, WorkflowActor, WorkflowLine } from '../inventory-workflow.types';
 import { jsonObject } from '../inventory-stock';
 import { displayDay } from '../supplier-return';
 import { cycleOn, cycleRequestKey, forecast, planDay, readReconciliation, type PlanBatch } from './reconciliation-cycle';
@@ -148,7 +148,7 @@ export class InventoryReconciliationService {
 
   private otherApprovers(actor: WorkflowActor) {
     return this.prisma.user.findMany({
-      where: { branchId: actor.branchId, isActive: true, role: { in: [...INVENTORY_APPROVERS] as any }, id: { not: actor.id } },
+      where: { branchId: actor.branchId, isActive: true, role: { in: [...COUNT_APPROVERS] as any }, id: { not: actor.id } },
       select: { id: true, firstName: true, lastName: true },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
@@ -184,9 +184,9 @@ export class InventoryReconciliationService {
       cycle,
       forecast: forecast(settings, cycle, batches.length, coveredInStock),
       mine,
-      approvals: caps.approve ? await this.approvalQueue(actor) : null,
+      approvals: COUNT_APPROVERS.has(actor.role) ? await this.approvalQueue(actor) : null,
       canCount: !!caps.kinds.COUNT?.write,
-      canApprove: caps.approve,
+      canApprove: COUNT_APPROVERS.has(actor.role),
       canConfigure: caps.settings,
       staff: caps.settings ? await this.workflow.countStaff(actor.branchId) : null,
     };
@@ -216,7 +216,7 @@ export class InventoryReconciliationService {
         if (outlook.short || outlook.behind) behind = { remaining: outlook.remaining, message: outlook.message };
       }
     }
-    return { due, approvals: caps.approve ? await this.approvalQueue(actor) : null, behind };
+    return { due, approvals: COUNT_APPROVERS.has(actor.role) ? await this.approvalQueue(actor) : null, behind };
   }
 
   private row(doc: CountDoc, people: Map<string, { id: string; name: string }>) {
@@ -327,8 +327,8 @@ export class InventoryReconciliationService {
       events: doc.events.map((e: any) => ({ action: e.action, at: e.createdAt, by: people.get(e.actorId)?.name ?? 'Former staff member', detail: { reason: e.detail?.reason, note: e.detail?.note, selfApproval: e.detail?.selfApproval } })),
       can: {
         count: doc.status === 'DRAFT' && !!caps.kinds.COUNT?.write && (doc.payload.assigneeId ?? doc.createdBy) === actor.id,
-        decide: doc.status === 'AWAITING_APPROVAL' && caps.approve && (signer !== actor.id || !others.length),
-        decideOwn: doc.status === 'AWAITING_APPROVAL' && caps.approve && signer === actor.id && !others.length,
+        decide: doc.status === 'AWAITING_APPROVAL' && COUNT_APPROVERS.has(actor.role) && (signer !== actor.id || !others.length),
+        decideOwn: doc.status === 'AWAITING_APPROVAL' && COUNT_APPROVERS.has(actor.role) && signer === actor.id && !others.length,
       },
       approvers: doc.status === 'AWAITING_APPROVAL' && signer === actor.id ? others.map((o) => `${o.firstName} ${o.lastName}`.trim()) : [],
     };

@@ -9,6 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
+  COUNT_APPROVERS,
   DEFAULT_INVENTORY_SETTINGS,
   INVENTORY_APPROVERS,
   LEGACY_COUNT_SETTINGS,
@@ -905,6 +906,12 @@ export class InventoryWorkflowService {
             'This document changed. Reload to confirm its current status.',
           );
         if (dto.action === 'RECOUNT') return this.restartCount(tx, actor, doc);
+        if (doc.kind === 'COUNT' && dto.action === 'CANCEL') {
+          if (doc.status !== 'DRAFT')
+            throw new BadRequestException('A signed count cannot be cancelled. A doctor or administrator rejects it from Stock counts › Approvals.');
+          if ((doc.payload?.assigneeId ?? doc.createdBy) !== actor.id && !COUNT_APPROVERS.has(actor.role))
+            throw new ForbiddenException('Only the person this count is assigned to, or a doctor or administrator, can cancel it.');
+        }
         if (
           doc.kind === 'COUNT' &&
           (['APPROVE', 'REJECT', 'SUBMIT'].includes(dto.action) ||
@@ -1603,7 +1610,7 @@ export class InventoryWorkflowService {
    */
   async decideCount(actor: WorkflowActor, id: string, decision: 'APPROVE' | 'REJECT', input: Record<string, any>) {
     await this.authorize(actor, 'COUNT');
-    if (!INVENTORY_APPROVERS.has(actor.role))
+    if (!COUNT_APPROVERS.has(actor.role))
       throw new ForbiddenException('A doctor or an administrator decides stock count differences');
     const key = clean(input?.requestKey);
     if (!key || key.length > 150) throw new BadRequestException('A request key is required');
@@ -1628,7 +1635,7 @@ export class InventoryWorkflowService {
       const self = signer === actor.id;
       if (self) {
         const others = await tx.user.findMany({
-          where: { branchId: actor.branchId, isActive: true, role: { in: [...INVENTORY_APPROVERS] }, id: { not: actor.id } },
+          where: { branchId: actor.branchId, isActive: true, role: { in: [...COUNT_APPROVERS] }, id: { not: actor.id } },
           select: { firstName: true, lastName: true },
           orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
         });

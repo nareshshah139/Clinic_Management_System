@@ -535,6 +535,35 @@ describe('Stock count approval', () => {
     expect([state.documents[0].status, state.documents[0].approvedBy, state.item.currentStock]).toEqual(['POSTED', 'operator', 7]);
   });
 
+  it('keeps managers off count decisions and out of the people to ask', async () => {
+    const { state, service } = await signed(7, doctor);
+    state.users.push({ id: 'ravi', branchId: 'branch', firstName: 'Ravi', lastName: 'Kumar', role: 'MANAGER', isActive: true });
+    expect(await failure(service.decideCount({ id: 'ravi', branchId: 'branch', role: 'MANAGER' }, 'count', 'APPROVE', { version: 2, requestKey: 'manager', reason: 'Fine' }))).toMatchObject({
+      status: 403, body: { message: 'A doctor or an administrator decides stock count differences' },
+    });
+    expect(await failure(service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine' }))).toMatchObject({
+      body: { message: 'You signed this count, so someone else decides it. Ask Rajesh Iyer.' },
+    });
+    state.users.find((u: any) => u.id === 'operator').isActive = false;
+    expect(await failure(service.decideCount(doctor, 'count', 'APPROVE', { version: 2, requestKey: 'decide', reason: 'Fine' }))).toMatchObject({ body: { code: 'COUNT_SELF_APPROVAL_CONFIRM' } });
+  });
+
+  it('cancels a count only while unsigned, and only for its assignee or an approver', async () => {
+    const f = fixture();
+    f.state.users.push({ id: 'meera', branchId: 'branch', firstName: 'Meera', lastName: 'Kulkarni', role: 'PHARMACIST', isActive: true });
+    f.add('count', 'COUNT', 0, { assigneeId: 'anil', lines: [{ id: 'line', inventoryId: 'batch', name: 'Isotroin 10', quantity: 0, systemStock: 10 }] });
+    expect(await failure(f.service.transition({ id: 'meera', branchId: 'branch', role: 'PHARMACIST' }, 'count', { version: 1, action: 'CANCEL' }))).toEqual({
+      status: 403, body: expect.objectContaining({ message: 'Only the person this count is assigned to, or a doctor or administrator, can cancel it.' }),
+    });
+    expect((await f.service.transition(anil, 'count', { version: 1, action: 'CANCEL' })).status).toBe('CANCELLED');
+    f.add('other', 'COUNT', 0, { assigneeId: 'anil', lines: [{ id: 'other-line', inventoryId: 'batch', name: 'Isotroin 10', quantity: 0, systemStock: 10 }] });
+    expect((await f.service.transition(doctor, 'other', { version: 1, action: 'CANCEL' })).status).toBe('CANCELLED');
+    const { service } = await signed(7);
+    expect(await failure(service.transition(doctor, 'count', { version: 2, action: 'CANCEL' }))).toEqual({
+      status: 400, body: expect.objectContaining({ message: 'A signed count cannot be cancelled. A doctor or administrator rejects it from Stock counts › Approvals.' }),
+    });
+  });
+
   it('lets the only approver decide their own count once they confirm it', async () => {
     const { state, service } = await signed(7, doctor);
     state.users.find((u: any) => u.id === 'operator').isActive = false;
