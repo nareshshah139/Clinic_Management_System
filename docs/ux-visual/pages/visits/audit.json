@@ -1,0 +1,8603 @@
+{
+ "1440x900-shravya-landing-empty": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 6,
+     "16px/500": 17,
+     "16px/600": 1,
+     "14px/400": 6,
+     "32px/600": 1,
+     "16px/400": 5,
+     "20px/600": 3
+    }
+   },
+   "alignment": {
+    "nearMissEdges": []
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.max-w-3xl.text-sm \"Create and manage patient visi\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Your Role & Permissions\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available based on yo\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "h3.text-sm.font-medium \"Current Role\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "p.text-xs.text-gray-500 \"Full access to all visit docum\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Doctor\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Start New Visit\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select patient and doctor to b\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Dr. Praneeta Jain\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Available Features\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-shravya-landing-patient-selected": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 836,
+     "scrollH": 907
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 6,
+     "16px/500": 21,
+     "16px/600": 1,
+     "14px/400": 7,
+     "32px/600": 1,
+     "16px/400": 5,
+     "20px/600": 3
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      305,
+      308
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.max-w-3xl.text-sm \"Create and manage patient visi\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Your Role & Permissions\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available based on yo\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "h3.text-sm.font-medium \"Current Role\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "p.text-xs.text-gray-500 \"Full access to all visit docum\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Doctor\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Start New Visit\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select patient and doctor to b\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Dr. Praneeta Jain\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_5_-trigger-ready \"Ready to Start\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-reception-landing": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 5,
+     "16px/500": 15,
+     "16px/600": 1,
+     "14px/400": 3,
+     "32px/600": 1,
+     "16px/400": 5,
+     "20px/600": 3
+    }
+   },
+   "alignment": {
+    "nearMissEdges": []
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.max-w-3xl.text-sm \"Create and manage patient visi\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Your Role & Permissions\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available based on yo\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "h3.text-sm.font-medium \"Current Role\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "p.text-xs.text-gray-500 \"Can capture photos and basic p\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Reception\"",
+     "ratio": 1.07
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Start New Visit\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select patient and doctor to b\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Dr. Praneeta Jain\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Available Features\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-shravya-visit-overview": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 836,
+     "scrollH": 1292
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.w-80.space-y-4 \"Patient ContextPriya SharmaID:\"",
+     "w": 320,
+     "h": 1075,
+     "fillPct": 10,
+     "pctOfViewport": 27
+    }
+   ],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 17,
+     "16px/500": 31,
+     "16px/600": 1,
+     "14px/400": 3,
+     "32px/600": 1,
+     "16px/400": 15,
+     "20px/600": 5,
+     "18px/500": 1,
+     "16px/700": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      649,
+      652
+     ],
+     [
+      930,
+      931
+     ],
+     [
+      1241,
+      1242
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.flex.justify-between \"Photos Captured:0\"",
+     "children": 2,
+     "widths": [
+      132,
+      10
+     ]
+    },
+    {
+     "container": "div.flex.justify-between \"Captured By:DOCTOR\"",
+     "children": 2,
+     "widths": [
+      99,
+      68
+     ]
+    },
+    {
+     "container": "div.flex.justify-between \"Overall Progress:0%\"",
+     "children": 2,
+     "widths": [
+      131,
+      27
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"Record VitalsCapture Photos\"",
+     "children": 2,
+     "widths": [
+      159,
+      176
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"Save DraftComplete Visit\"",
+     "children": 2,
+     "widths": [
+      113,
+      143
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-shravya-rx-midentry": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 836,
+     "scrollH": 4568
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.pointer-events-none.absolute",
+     "w": 1078,
+     "h": 284,
+     "fillPct": 0,
+     "pctOfViewport": 24
+    }
+   ],
+   "spacing": {
+    "observed": [
+     1,
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px"
+    ],
+    "sizes": {
+     "22px/600": 2,
+     "14px/500": 22,
+     "16px/500": 102,
+     "16px/600": 1,
+     "14px/400": 44,
+     "32px/600": 1,
+     "16px/400": 49,
+     "20px/600": 6,
+     "18px/500": 1,
+     "18px/600": 9,
+     "14px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      507,
+      510
+     ],
+     [
+      592,
+      594
+     ],
+     [
+      603,
+      606
+     ],
+     [
+      632,
+      633
+     ],
+     [
+      633,
+      636
+     ],
+     [
+      661,
+      664
+     ],
+     [
+      669,
+      671
+     ],
+     [
+      709,
+      710
+     ],
+     [
+      739,
+      741
+     ],
+     [
+      754,
+      755
+     ],
+     [
+      805,
+      806
+     ],
+     [
+      829,
+      831
+     ],
+     [
+      831,
+      832
+     ],
+     [
+      832,
+      835
+     ],
+     [
+      860,
+      862
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "input.file:text-foreground.placeholder:text-muted-foreground",
+     "b": "button#radix-_r_6_-trigger-overview \"Overview\"",
+     "w": 115,
+     "h": 27
+    },
+    {
+     "a": "button.relative.inline-flex \"Toggle branded mode\"",
+     "b": "button#radix-_r_6_-trigger-labs \"Lab Tests\"",
+     "w": 40,
+     "h": 21
+    },
+    {
+     "a": "button#radix-_R_76kndlb_ \"4\"",
+     "b": "button#radix-_r_6_-trigger-customization \"Customization\"",
+     "w": 36,
+     "h": 25
+    },
+    {
+     "a": "button.inline-flex.items-center \"Open settings\"",
+     "b": "button#radix-_r_6_-trigger-customization \"Customization\"",
+     "w": 36,
+     "h": 25
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "thead.bg-gray-50.text-gray-700 \"MedicineFrequency (0-1-0)WhenD\"",
+     "x": 533,
+     "y": 2439,
+     "w": 1080,
+     "h": 47
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.bg-muted.text-muted-foreground \"OverviewVitalsPhotosPrescripti\"",
+     "children": 7,
+     "widths": [
+      115,
+      85,
+      95,
+      134,
+      115,
+      152,
+      97
+     ]
+    },
+    {
+     "container": "div.ml-auto.flex \"Save currentSave fieldsNew tem\"",
+     "children": 3,
+     "widths": [
+      123,
+      110,
+      129
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"AcnePigmentationAgingDrynessSe\"",
+     "children": 7,
+     "widths": [
+      65,
+      127,
+      71,
+      89,
+      106,
+      92,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"MaculePapulePustuleNodulePlaqu\"",
+     "children": 10,
+     "widths": [
+      82,
+      78,
+      83,
+      81,
+      78,
+      81,
+      68,
+      83,
+      67,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"FaceScalpNeckTrunkArmsLegsHand\"",
+     "children": 11,
+     "widths": [
+      63,
+      69,
+      66,
+      70,
+      67,
+      63,
+      75,
+      59,
+      91,
+      102,
+      118
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"+ Add to Drug DatabaseReuse la\"",
+     "children": 3,
+     "widths": [
+      207,
+      151,
+      94
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"7d2w3w30d6w\"",
+     "children": 5,
+     "widths": [
+      32,
+      36,
+      36,
+      42,
+      36
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"Save DraftComplete Visit\"",
+     "children": 2,
+     "widths": [
+      113,
+      143
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 248
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 248
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Add\"",
+    "button.inline-flex.items-center \"Add\""
+   ]
+  }
+ },
+ "1440x900-shravya-rx-treatment-table": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 836,
+     "scrollH": 4568
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.pointer-events-none.absolute",
+     "w": 1078,
+     "h": 284,
+     "fillPct": 0,
+     "pctOfViewport": 24
+    }
+   ],
+   "spacing": {
+    "observed": [
+     1,
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px"
+    ],
+    "sizes": {
+     "22px/600": 2,
+     "14px/500": 22,
+     "16px/500": 102,
+     "16px/600": 1,
+     "14px/400": 44,
+     "32px/600": 1,
+     "16px/400": 49,
+     "20px/600": 6,
+     "18px/500": 1,
+     "18px/600": 9,
+     "14px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      333,
+      336
+     ],
+     [
+      418,
+      420
+     ],
+     [
+      429,
+      432
+     ],
+     [
+      458,
+      459
+     ],
+     [
+      459,
+      462
+     ],
+     [
+      487,
+      490
+     ],
+     [
+      495,
+      497
+     ],
+     [
+      535,
+      536
+     ],
+     [
+      565,
+      567
+     ],
+     [
+      580,
+      581
+     ],
+     [
+      631,
+      632
+     ],
+     [
+      655,
+      657
+     ],
+     [
+      657,
+      658
+     ],
+     [
+      658,
+      661
+     ],
+     [
+      686,
+      688
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "thead.bg-gray-50.text-gray-700 \"MedicineFrequency (0-1-0)WhenD\"",
+     "x": 359,
+     "y": 153,
+     "w": 1080,
+     "h": 47
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.bg-muted.text-muted-foreground \"OverviewVitalsPhotosPrescripti\"",
+     "children": 7,
+     "widths": [
+      115,
+      85,
+      95,
+      134,
+      115,
+      152,
+      97
+     ]
+    },
+    {
+     "container": "div.ml-auto.flex \"Save currentSave fieldsNew tem\"",
+     "children": 3,
+     "widths": [
+      123,
+      110,
+      129
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"AcnePigmentationAgingDrynessSe\"",
+     "children": 7,
+     "widths": [
+      65,
+      127,
+      71,
+      89,
+      106,
+      92,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"MaculePapulePustuleNodulePlaqu\"",
+     "children": 10,
+     "widths": [
+      82,
+      78,
+      83,
+      81,
+      78,
+      81,
+      68,
+      83,
+      67,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"FaceScalpNeckTrunkArmsLegsHand\"",
+     "children": 11,
+     "widths": [
+      63,
+      69,
+      66,
+      70,
+      67,
+      63,
+      75,
+      59,
+      91,
+      102,
+      118
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"+ Add to Drug DatabaseReuse la\"",
+     "children": 3,
+     "widths": [
+      207,
+      151,
+      94
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"7d2w3w30d6w\"",
+     "children": 5,
+     "widths": [
+      32,
+      36,
+      36,
+      42,
+      36
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"Save DraftComplete Visit\"",
+     "children": 2,
+     "widths": [
+      113,
+      143
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 248
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 248
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Add\"",
+    "button.inline-flex.items-center \"Add\""
+   ]
+  }
+ },
+ "1440x900-shravya-print-preview": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 836,
+     "scrollH": 4503
+    },
+    {
+     "el": "div#print-preview-scroll \"Priya Sharma•Doctor cmw6d9Date\"",
+     "clientH": 900,
+     "scrollH": 1223
+    },
+    {
+     "el": "div.print:hidden.w-full \"📋 Print Settings TipTo remove\"",
+     "clientH": 900,
+     "scrollH": 1435
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "w": 1440,
+     "h": 900,
+     "fillPct": 0,
+     "pctOfViewport": 100
+    },
+    {
+     "el": "div \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 1056,
+     "h": 1123,
+     "fillPct": 8,
+     "pctOfViewport": 91
+    },
+    {
+     "el": "div#pagedjs-container \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 1056,
+     "h": 1123,
+     "fillPct": 8,
+     "pctOfViewport": 91
+    },
+    {
+     "el": "div.pagedjs_pages \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 1056,
+     "h": 1123,
+     "fillPct": 8,
+     "pctOfViewport": 91
+    },
+    {
+     "el": "div.pagedjs_pages \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 1056,
+     "h": 1123,
+     "fillPct": 8,
+     "pctOfViewport": 91
+    },
+    {
+     "el": "div#page-1 \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 794,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 69
+    },
+    {
+     "el": "div.pagedjs_sheet \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 794,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 69
+    },
+    {
+     "el": "div.pagedjs_pagebox \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 794,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 69
+    },
+    {
+     "el": "div.pointer-events-none.absolute",
+     "w": 1078,
+     "h": 284,
+     "fillPct": 0,
+     "pctOfViewport": 24
+    },
+    {
+     "el": "div.pagedjs_margin-top",
+     "w": 704,
+     "h": 200,
+     "fillPct": 0,
+     "pctOfViewport": 11
+    }
+   ],
+   "spacing": {
+    "observed": [
+     1,
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px"
+    ],
+    "sizes": {
+     "22px/600": 2,
+     "14px/500": 29,
+     "16px/500": 113,
+     "16px/600": 2,
+     "14px/400": 58,
+     "32px/600": 1,
+     "16px/400": 74,
+     "20px/600": 7,
+     "18px/500": 1,
+     "18px/600": 9,
+     "14px/600": 4,
+     "14px/700": 2,
+     "18px/400": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      304,
+      307
+     ],
+     [
+      384,
+      387
+     ],
+     [
+      412,
+      415
+     ],
+     [
+      423,
+      425
+     ],
+     [
+      425,
+      426
+     ],
+     [
+      466,
+      468
+     ],
+     [
+      551,
+      552
+     ],
+     [
+      587,
+      588
+     ],
+     [
+      602,
+      603
+     ],
+     [
+      603,
+      605
+     ],
+     [
+      614,
+      615
+     ],
+     [
+      615,
+      616
+     ],
+     [
+      640,
+      642
+     ],
+     [
+      642,
+      644
+     ],
+     [
+      751,
+      754
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 1.18
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.99
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 1.18
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 1.18
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "input.file:text-foreground.placeholder:text-muted-foreground",
+     "b": "input",
+     "w": 13,
+     "h": 11
+    },
+    {
+     "a": "input#custom-investigation-name",
+     "b": "button.inline-flex.items-center \"Live Preview: Off\"",
+     "w": 254,
+     "h": 12
+    },
+    {
+     "a": "button.inline-flex.items-center \"Add custom investigation\"",
+     "b": "button.inline-flex.items-center \"Live Preview: Off\"",
+     "w": 77,
+     "h": 12
+    },
+    {
+     "a": "button.border-input.data-[placeholder]:text-muted-foreground \"Table\"",
+     "b": "input",
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "thead.bg-gray-50.text-gray-700 \"MedicineFrequency (0-1-0)WhenD\"",
+     "x": 330,
+     "y": -681,
+     "w": 1080,
+     "h": 47
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "x": 0,
+     "y": 0,
+     "w": 1440,
+     "h": 900
+    },
+    {
+     "el": "div#radix-_r_m_ \"Prescription Preview @import u\"",
+     "x": 0,
+     "y": 0,
+     "w": 1440,
+     "h": 900
+    },
+    {
+     "el": "div.sticky.top-0 \"Priya Sharma•Doctor cmw6d9Date\"",
+     "x": 0,
+     "y": 0,
+     "w": 1056,
+     "h": 61
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.bg-muted.text-muted-foreground \"OverviewVitalsPhotosPrescripti\"",
+     "children": 7,
+     "widths": [
+      109,
+      82,
+      92,
+      131,
+      110,
+      146,
+      94
+     ]
+    },
+    {
+     "container": "div.ml-auto.flex \"Save currentSave fieldsNew tem\"",
+     "children": 3,
+     "widths": [
+      117,
+      104,
+      125
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"AcnePigmentationAgingDrynessSe\"",
+     "children": 7,
+     "widths": [
+      61,
+      124,
+      66,
+      84,
+      102,
+      87,
+      86
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"Diabetes Hypertension Thyroid\"",
+     "children": 3,
+     "widths": [
+      73,
+      102,
+      65
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"IIIIIIIVVVI\"",
+     "children": 6,
+     "widths": [
+      31,
+      35,
+      40,
+      40,
+      35,
+      40
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"MaculePapulePustuleNodulePlaqu\"",
+     "children": 10,
+     "widths": [
+      77,
+      76,
+      81,
+      78,
+      76,
+      77,
+      64,
+      80,
+      64,
+      85
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"FaceScalpNeckTrunkArmsLegsHand\"",
+     "children": 11,
+     "widths": [
+      58,
+      65,
+      62,
+      67,
+      63,
+      59,
+      72,
+      57,
+      86,
+      97,
+      112
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"+ Add to Drug DatabaseReuse la\"",
+     "children": 3,
+     "widths": [
+      194,
+      144,
+      89
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"7d2w3w30d6w\"",
+     "children": 5,
+     "widths": [
+      30,
+      33,
+      33,
+      40,
+      34
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"Save DraftComplete Visit\"",
+     "children": 2,
+     "widths": [
+      109,
+      137
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"Rx: 0Investigations: 0Follow-u\"",
+     "children": 3,
+     "widths": [
+      49,
+      123,
+      99
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 244
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 244
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Add\"",
+    "button.inline-flex.items-center \"Add\""
+   ]
+  }
+ },
+ "768x1024-shravya-landing-empty": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 960,
+     "scrollH": 1008
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 6,
+     "16px/500": 17,
+     "16px/600": 1,
+     "14px/400": 6,
+     "32px/600": 1,
+     "16px/400": 5,
+     "20px/600": 3
+    }
+   },
+   "alignment": {
+    "nearMissEdges": []
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.max-w-3xl.text-sm \"Create and manage patient visi\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Your Role & Permissions\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available based on yo\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "h3.text-sm.font-medium \"Current Role\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "p.text-xs.text-gray-500 \"Full access to all visit docum\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Doctor\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Start New Visit\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select patient and doctor to b\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Dr. Praneeta Jain\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Available Features\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "768x1024-shravya-landing-patient-selected": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 960,
+     "scrollH": 1177
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 6,
+     "16px/500": 21,
+     "16px/600": 1,
+     "14px/400": 7,
+     "32px/600": 1,
+     "16px/400": 5,
+     "20px/600": 3
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      305,
+      308
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.max-w-3xl.text-sm \"Create and manage patient visi\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Your Role & Permissions\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available based on yo\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "h3.text-sm.font-medium \"Current Role\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "p.text-xs.text-gray-500 \"Full access to all visit docum\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Doctor\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Start New Visit\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select patient and doctor to b\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Dr. Praneeta Jain\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_5_-trigger-ready \"Ready to Start\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [],
+   "overflowSpills": [],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Start Visit Documentation\""
+   ]
+  }
+ },
+ "768x1024-reception-landing": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     2,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 5,
+     "16px/500": 15,
+     "16px/600": 1,
+     "14px/400": 3,
+     "32px/600": 1,
+     "16px/400": 5,
+     "20px/600": 3
+    }
+   },
+   "alignment": {
+    "nearMissEdges": []
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.max-w-3xl.text-sm \"Create and manage patient visi\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Your Role & Permissions\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available based on yo\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "h3.text-sm.font-medium \"Current Role\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "p.text-xs.text-gray-500 \"Can capture photos and basic p\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Reception\"",
+     "ratio": 1.07
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Start New Visit\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select patient and doctor to b\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Dr. Praneeta Jain\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Available Features\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "768x1024-shravya-visit-overview": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 960,
+     "scrollH": 2776
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.w-80.space-y-4 \"Patient ContextPriya SharmaID:\"",
+     "w": 218,
+     "h": 2374,
+     "fillPct": 6,
+     "pctOfViewport": 66
+    }
+   ],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 17,
+     "16px/500": 31,
+     "16px/600": 1,
+     "14px/400": 3,
+     "32px/600": 1,
+     "16px/400": 15,
+     "20px/600": 5,
+     "18px/500": 1,
+     "16px/700": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      547,
+      550
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.flex.justify-between \"Photos Captured:0\"",
+     "children": 2,
+     "widths": [
+      75,
+      10
+     ]
+    },
+    {
+     "container": "div.flex.justify-between \"Overall Progress:0%\"",
+     "children": 2,
+     "heights": [
+      46,
+      23
+     ],
+     "widths": [
+      73,
+      27
+     ],
+     "topDriftPx": 11
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 352
+    },
+    {
+     "el": "div.flex.items-center \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 175
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 352
+    },
+    {
+     "el": "div.flex-1.space-y-6 \"Visit #1DRAFTLinked to Appoint\"",
+     "spillPx": 351
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Visit #1DRAFTLinked to Appoint\"",
+     "spillPx": 352
+    },
+    {
+     "el": "div.@container/card-header.grid \"Visit #1DRAFTLinked to Appoint\"",
+     "spillPx": 352
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"OverviewVitalsPhotosPrescripti\"",
+     "spillPx": 63
+    },
+    {
+     "el": "div.p-6 \"OverviewVitalsPhotosPrescripti\"",
+     "spillPx": 63
+    },
+    {
+     "el": "div.flex.min-w-0 \"OverviewVitalsPhotosPrescripti\"",
+     "spillPx": 87
+    },
+    {
+     "el": "div#radix-_r_6_-content-overview \"Visit InformationVisit Number:\"",
+     "spillPx": 87
+    },
+    {
+     "el": "div.grid.grid-cols-1 \"Visit InformationVisit Number:\"",
+     "spillPx": 87
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Visit InformationVisit Number:\"",
+     "spillPx": 86
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Back to Setup\"",
+    "button.inline-flex.items-center \"Save Draft\"",
+    "button.inline-flex.items-center \"Complete Visit\""
+   ],
+   "overflowSpillsTruncated": true
+  }
+ },
+ "768x1024-shravya-rx-midentry": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 960,
+     "scrollH": 4873
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.pointer-events-none.absolute",
+     "w": 1078,
+     "h": 404,
+     "fillPct": 0,
+     "pctOfViewport": 55
+    }
+   ],
+   "spacing": {
+    "observed": [
+     1,
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px"
+    ],
+    "sizes": {
+     "22px/600": 2,
+     "14px/500": 22,
+     "16px/500": 102,
+     "16px/600": 1,
+     "14px/400": 44,
+     "32px/600": 1,
+     "16px/400": 49,
+     "20px/600": 6,
+     "18px/500": 1,
+     "18px/600": 9,
+     "14px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      91,
+      94
+     ],
+     [
+      176,
+      178
+     ],
+     [
+      187,
+      190
+     ],
+     [
+      215,
+      216
+     ],
+     [
+      216,
+      217
+     ],
+     [
+      217,
+      220
+     ],
+     [
+      245,
+      248
+     ],
+     [
+      253,
+      255
+     ],
+     [
+      255,
+      256
+     ],
+     [
+      278,
+      280
+     ],
+     [
+      293,
+      294
+     ],
+     [
+      310,
+      312
+     ],
+     [
+      323,
+      325
+     ],
+     [
+      338,
+      339
+     ],
+     [
+      389,
+      390
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "a.group.relative \"Dashboard\"",
+     "b": "button#radix-_r_6_-trigger-overview \"Overview\"",
+     "w": 115,
+     "h": 34
+    },
+    {
+     "a": "a.group.relative \"Patients\"",
+     "b": "button#radix-_r_1d_ \"No template\"",
+     "w": 152,
+     "h": 32
+    },
+    {
+     "a": "a.group.relative \"Appointments\"",
+     "b": "button#radix-_r_1d_ \"No template\"",
+     "w": 152,
+     "h": 5
+    },
+    {
+     "a": "a.group.relative \"Rooms\"",
+     "b": "input.file:text-foreground.placeholder:text-muted-foreground \"Height\"",
+     "w": 127,
+     "h": 34
+    },
+    {
+     "a": "a.group.relative \"Test Transcribe\"",
+     "b": "textarea.border-input.placeholder:text-muted-foreground \"Itchy red patches on both fore\"",
+     "w": 127,
+     "h": 29
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "thead.bg-gray-50.text-gray-700 \"MedicineFrequency (0-1-0)WhenD\"",
+     "x": 117,
+     "y": 2663,
+     "w": 1080,
+     "h": 47
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.bg-muted.text-muted-foreground \"OverviewVitalsPhotosPrescripti\"",
+     "children": 7,
+     "widths": [
+      115,
+      85,
+      95,
+      134,
+      115,
+      152,
+      97
+     ]
+    },
+    {
+     "container": "div.ml-auto.flex \"Save currentSave fieldsNew tem\"",
+     "children": 3,
+     "widths": [
+      123,
+      110,
+      129
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"AcnePigmentationAgingDrynessSe\"",
+     "children": 7,
+     "widths": [
+      65,
+      127,
+      71,
+      89,
+      106,
+      92,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"MaculePapulePustuleNodulePlaqu\"",
+     "children": 10,
+     "widths": [
+      82,
+      78,
+      83,
+      81,
+      78,
+      81,
+      68,
+      83,
+      67,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"FaceScalpNeckTrunkArmsLegsHand\"",
+     "children": 11,
+     "widths": [
+      63,
+      69,
+      66,
+      70,
+      67,
+      63,
+      75,
+      59,
+      91,
+      102,
+      118
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"+ Add to Drug DatabaseReuse la\"",
+     "children": 3,
+     "widths": [
+      207,
+      151,
+      94
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"7d2w3w30d6w\"",
+     "children": 5,
+     "widths": [
+      32,
+      36,
+      36,
+      42,
+      36
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"Save DraftComplete Visit\"",
+     "children": 2,
+     "widths": [
+      113,
+      143
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 920
+    },
+    {
+     "el": "div.flex.items-center \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 175
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 920
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Back to Setup\"",
+    "button.inline-flex.items-center \"Add\"",
+    "button.inline-flex.items-center \"Add\""
+   ]
+  }
+ },
+ "768x1024-shravya-rx-treatment-table": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 960,
+     "scrollH": 4873
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.pointer-events-none.absolute",
+     "w": 1078,
+     "h": 404,
+     "fillPct": 0,
+     "pctOfViewport": 55
+    }
+   ],
+   "spacing": {
+    "observed": [
+     1,
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px"
+    ],
+    "sizes": {
+     "22px/600": 2,
+     "14px/500": 22,
+     "16px/500": 102,
+     "16px/600": 1,
+     "14px/400": 44,
+     "32px/600": 1,
+     "16px/400": 49,
+     "20px/600": 6,
+     "18px/500": 1,
+     "18px/600": 9,
+     "14px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      -339,
+      -336
+     ],
+     [
+      -254,
+      -252
+     ],
+     [
+      -243,
+      -240
+     ],
+     [
+      -214,
+      -213
+     ],
+     [
+      -213,
+      -210
+     ],
+     [
+      -185,
+      -182
+     ],
+     [
+      -177,
+      -175
+     ],
+     [
+      -137,
+      -136
+     ],
+     [
+      -120,
+      -118
+     ],
+     [
+      -107,
+      -105
+     ],
+     [
+      -92,
+      -91
+     ],
+     [
+      -41,
+      -40
+     ],
+     [
+      -17,
+      -15
+     ],
+     [
+      -15,
+      -14
+     ],
+     [
+      -14,
+      -11
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "a.group.relative \"Dashboard\"",
+     "b": "button.inline-flex.items-center \"5d\"",
+     "w": 44,
+     "h": 32
+    },
+    {
+     "a": "a.group.relative \"Rooms\"",
+     "b": "textarea.border-input.placeholder:text-muted-foreground \"Procedures performed\"",
+     "w": 231,
+     "h": 16
+    },
+    {
+     "a": "a.group.relative \"Inventory\"",
+     "b": "textarea.border-input.placeholder:text-muted-foreground \"Procedures planned\"",
+     "w": 231,
+     "h": 12
+    },
+    {
+     "a": "button.ml-2.p-1 \"Log out\"",
+     "b": "input#custom-investigation-name",
+     "w": 24,
+     "h": 18
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "thead.bg-gray-50.text-gray-700 \"MedicineFrequency (0-1-0)WhenD\"",
+     "x": -313,
+     "y": 153,
+     "w": 1080,
+     "h": 47
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.bg-muted.text-muted-foreground \"OverviewVitalsPhotosPrescripti\"",
+     "children": 7,
+     "widths": [
+      115,
+      85,
+      95,
+      134,
+      115,
+      152,
+      97
+     ]
+    },
+    {
+     "container": "div.ml-auto.flex \"Save currentSave fieldsNew tem\"",
+     "children": 3,
+     "widths": [
+      123,
+      110,
+      129
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"AcnePigmentationAgingDrynessSe\"",
+     "children": 7,
+     "widths": [
+      65,
+      127,
+      71,
+      89,
+      106,
+      92,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"MaculePapulePustuleNodulePlaqu\"",
+     "children": 10,
+     "widths": [
+      82,
+      78,
+      83,
+      81,
+      78,
+      81,
+      68,
+      83,
+      67,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"FaceScalpNeckTrunkArmsLegsHand\"",
+     "children": 11,
+     "widths": [
+      63,
+      69,
+      66,
+      70,
+      67,
+      63,
+      75,
+      59,
+      91,
+      102,
+      118
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"+ Add to Drug DatabaseReuse la\"",
+     "children": 3,
+     "widths": [
+      207,
+      151,
+      94
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"7d2w3w30d6w\"",
+     "children": 5,
+     "widths": [
+      32,
+      36,
+      36,
+      42,
+      36
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"Save DraftComplete Visit\"",
+     "children": 2,
+     "widths": [
+      113,
+      143
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 920
+    },
+    {
+     "el": "div.flex.items-center \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 175
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 920
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Back to Setup\"",
+    "button.inline-flex.items-center \"Add\"",
+    "button.inline-flex.items-center \"Add\""
+   ]
+  }
+ },
+ "768x1024-shravya-print-preview": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 960,
+     "scrollH": 4808
+    },
+    {
+     "el": "div#print-preview-scroll \"Priya Sharma•Doctor cmw6d9Date\"",
+     "clientH": 1024,
+     "scrollH": 1260
+    },
+    {
+     "el": "div.print:hidden.w-full \"📋 Print Settings TipTo remove\"",
+     "clientH": 1024,
+     "scrollH": 1435
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div#page-1 \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 794,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 113
+    },
+    {
+     "el": "div.pagedjs_sheet \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 794,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 113
+    },
+    {
+     "el": "div.pagedjs_pagebox \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 794,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 113
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "w": 768,
+     "h": 1024,
+     "fillPct": 0,
+     "pctOfViewport": 100
+    },
+    {
+     "el": "div.pointer-events-none.absolute",
+     "w": 1078,
+     "h": 404,
+     "fillPct": 0,
+     "pctOfViewport": 55
+    },
+    {
+     "el": "div \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 384,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 55
+    },
+    {
+     "el": "div#pagedjs-container \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 384,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 55
+    },
+    {
+     "el": "div.pagedjs_pages \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 384,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 55
+    },
+    {
+     "el": "div.pagedjs_pages \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 384,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 55
+    },
+    {
+     "el": "div.pagedjs_margin-top",
+     "w": 704,
+     "h": 200,
+     "fillPct": 0,
+     "pctOfViewport": 18
+    }
+   ],
+   "spacing": {
+    "observed": [
+     1,
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px"
+    ],
+    "sizes": {
+     "22px/600": 2,
+     "14px/500": 29,
+     "16px/500": 113,
+     "16px/600": 2,
+     "14px/400": 58,
+     "32px/600": 1,
+     "16px/400": 74,
+     "20px/600": 7,
+     "18px/500": 1,
+     "18px/600": 9,
+     "14px/600": 4,
+     "14px/700": 2,
+     "18px/400": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      -368,
+      -365
+     ],
+     [
+      -288,
+      -285
+     ],
+     [
+      -260,
+      -257
+     ],
+     [
+      -249,
+      -247
+     ],
+     [
+      -247,
+      -246
+     ],
+     [
+      -206,
+      -204
+     ],
+     [
+      -143,
+      -141
+     ],
+     [
+      -121,
+      -120
+     ],
+     [
+      -85,
+      -84
+     ],
+     [
+      -70,
+      -69
+     ],
+     [
+      -69,
+      -67
+     ],
+     [
+      -58,
+      -57
+     ],
+     [
+      -57,
+      -56
+     ],
+     [
+      -32,
+      -30
+     ],
+     [
+      -30,
+      -28
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"4\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 1.18
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.99
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 1.18
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 1.18
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "a.group.relative \"Dashboard\"",
+     "b": "input",
+     "w": 13,
+     "h": 12
+    },
+    {
+     "a": "a.group.relative \"Patients\"",
+     "b": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "a": "a.group.relative \"Appointments\"",
+     "b": "input#custom-investigation-name",
+     "w": 231,
+     "h": 22
+    },
+    {
+     "a": "a.group.relative \"Visits\"",
+     "b": "input#custom-investigation-name",
+     "w": 231,
+     "h": 10
+    },
+    {
+     "a": "button#radix-_R_76kndlb_ \"4\"",
+     "b": "input",
+     "w": 7,
+     "h": 10
+    },
+    {
+     "a": "input",
+     "b": "button.inline-flex.items-center \"Live Preview: Off\"",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "a": "input#custom-investigation-name",
+     "b": "input",
+     "w": 129,
+     "h": 16
+    },
+    {
+     "a": "button.border-input.data-[placeholder]:text-muted-foreground \"Table\"",
+     "b": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "a": "button.inline-flex.items-center \"Save Draft\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"Select profile\"",
+     "w": 109,
+     "h": 41
+    },
+    {
+     "a": "button.inline-flex.items-center \"Complete Visit\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"Select profile\"",
+     "w": 124,
+     "h": 41
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "thead.bg-gray-50.text-gray-700 \"MedicineFrequency (0-1-0)WhenD\"",
+     "x": -342,
+     "y": -557,
+     "w": 1080,
+     "h": 47
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "x": 0,
+     "y": 0,
+     "w": 768,
+     "h": 1024
+    },
+    {
+     "el": "div#radix-_r_m_ \"Prescription Preview @import u\"",
+     "x": 0,
+     "y": 0,
+     "w": 768,
+     "h": 1024
+    },
+    {
+     "el": "div.sticky.top-0 \"Priya Sharma•Doctor cmw6d9Date\"",
+     "x": 0,
+     "y": 0,
+     "w": 384,
+     "h": 97
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.bg-muted.text-muted-foreground \"OverviewVitalsPhotosPrescripti\"",
+     "children": 7,
+     "widths": [
+      109,
+      82,
+      92,
+      131,
+      110,
+      146,
+      94
+     ]
+    },
+    {
+     "container": "div.ml-auto.flex \"Save currentSave fieldsNew tem\"",
+     "children": 3,
+     "widths": [
+      117,
+      104,
+      125
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"AcnePigmentationAgingDrynessSe\"",
+     "children": 7,
+     "widths": [
+      61,
+      124,
+      66,
+      84,
+      102,
+      87,
+      86
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"Diabetes Hypertension Thyroid\"",
+     "children": 3,
+     "widths": [
+      73,
+      102,
+      65
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"IIIIIIIVVVI\"",
+     "children": 6,
+     "widths": [
+      31,
+      35,
+      40,
+      40,
+      35,
+      40
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"MaculePapulePustuleNodulePlaqu\"",
+     "children": 10,
+     "widths": [
+      77,
+      76,
+      81,
+      78,
+      76,
+      77,
+      64,
+      80,
+      64,
+      85
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"FaceScalpNeckTrunkArmsLegsHand\"",
+     "children": 11,
+     "widths": [
+      58,
+      65,
+      62,
+      67,
+      63,
+      59,
+      72,
+      57,
+      86,
+      97,
+      112
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"+ Add to Drug DatabaseReuse la\"",
+     "children": 3,
+     "widths": [
+      194,
+      144,
+      89
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"7d2w3w30d6w\"",
+     "children": 5,
+     "widths": [
+      30,
+      33,
+      33,
+      40,
+      34
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"Save DraftComplete Visit\"",
+     "children": 2,
+     "widths": [
+      109,
+      137
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"Rx: 0Investigations: 0Follow-u\"",
+     "children": 3,
+     "widths": [
+      49,
+      123,
+      99
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 916
+    },
+    {
+     "el": "div.flex.items-center \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 171
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 916
+    },
+    {
+     "el": "div \"07 Nov 2026PatientPriya Sharma\"",
+     "spillPx": 410
+    },
+    {
+     "el": "div#pagedjs-container \"07 Nov 2026PatientPriya Sharma\"",
+     "spillPx": 410
+    },
+    {
+     "el": "div.pagedjs_pages \"07 Nov 2026PatientPriya Sharma\"",
+     "spillPx": 410
+    },
+    {
+     "el": "div.pagedjs_pages \"07 Nov 2026PatientPriya Sharma\"",
+     "spillPx": 410
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Back to Setup\"",
+    "button.inline-flex.items-center \"Add\"",
+    "button.inline-flex.items-center \"Add\""
+   ]
+  }
+ },
+ "375x812-shravya-landing-empty": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 756,
+     "scrollH": 1158
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     2,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "14px"
+    ],
+    "sizes": {
+     "18px/600": 1,
+     "26px/600": 1,
+     "16px/400": 5,
+     "16px/500": 7,
+     "20px/600": 3,
+     "14px/400": 4,
+     "14px/500": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": []
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.max-w-3xl.text-sm \"Create and manage patient visi\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Your Role & Permissions\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available based on yo\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "h3.text-sm.font-medium \"Current Role\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "p.text-xs.text-gray-500 \"Full access to all visit docum\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Doctor\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Start New Visit\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select patient and doctor to b\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Dr. Praneeta Jain\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Available Features\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available for your ro\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "p.text-sm.font-medium \"Complete Documentation\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "p.text-xs.text-purple-600 \"Full SOAP notes\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "p.text-sm.font-medium \"Dermatology Specific\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "p.text-xs.text-purple-600 \"Specialized assessments\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "p.text-sm.font-medium \"Treatment Planning\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "p.text-xs.text-purple-600 \"Complete care plans\"",
+     "ratio": 1.03
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "375x812-shravya-landing-patient-selected": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 756,
+     "scrollH": 1347
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "14px"
+    ],
+    "sizes": {
+     "18px/600": 1,
+     "26px/600": 1,
+     "16px/400": 5,
+     "16px/500": 11,
+     "20px/600": 3,
+     "14px/400": 5,
+     "14px/500": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      41,
+      44
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.max-w-3xl.text-sm \"Create and manage patient visi\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Your Role & Permissions\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available based on yo\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "h3.text-sm.font-medium \"Current Role\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "p.text-xs.text-gray-500 \"Full access to all visit docum\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Doctor\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Start New Visit\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select patient and doctor to b\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Dr. Praneeta Jain\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_5_-trigger-ready \"Ready to Start\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_5_-trigger-history \"Patient History\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "h4.text-sm.font-medium \"Ready to start visit\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "p.text-xs.text-gray-500 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Start Visit Documentation\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Available Features\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available for your ro\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "p.text-sm.font-medium \"Complete Documentation\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "p.text-xs.text-purple-600 \"Full SOAP notes\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "p.text-sm.font-medium \"Dermatology Specific\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "p.text-xs.text-purple-600 \"Specialized assessments\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "p.text-sm.font-medium \"Treatment Planning\"",
+     "ratio": 1.03
+    },
+    {
+     "el": "p.text-xs.text-purple-600 \"Complete care plans\"",
+     "ratio": 1.03
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [],
+   "overflowSpills": [],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Start Visit Documentation\""
+   ]
+  }
+ },
+ "375x812-reception-landing": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 756,
+     "scrollH": 929
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     2,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "14px"
+    ],
+    "sizes": {
+     "18px/600": 1,
+     "26px/600": 1,
+     "16px/400": 5,
+     "16px/500": 4,
+     "20px/600": 3,
+     "14px/400": 1,
+     "14px/500": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": []
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.max-w-3xl.text-sm \"Create and manage patient visi\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Your Role & Permissions\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available based on yo\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "h3.text-sm.font-medium \"Current Role\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "p.text-xs.text-gray-500 \"Can capture photos and basic p\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Reception\"",
+     "ratio": 1.07
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Start New Visit\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select patient and doctor to b\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.font-medium \"Select Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Dr. Praneeta Jain\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Available Features\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Features available for your ro\"",
+     "ratio": 2.47
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "375x812-shravya-visit-overview": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 756,
+     "scrollH": 2832
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "14px",
+     "16px",
+     "20px"
+    ],
+    "sizes": {
+     "18px/600": 1,
+     "26px/600": 1,
+     "14px/500": 12,
+     "16px/400": 15,
+     "16px/500": 21,
+     "20px/600": 5,
+     "18px/500": 1,
+     "14px/400": 1,
+     "16px/700": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      243,
+      246
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"DRAFT\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Linked to Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Medical Visit Documentation • \"",
+     "ratio": 2.47
+    },
+    {
+     "el": "span.inline-flex.items-center \"0 Photos\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-xs.text-gray-500 \"Unsaved changes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.sm:hidden \"Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Shortcuts\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.font-medium \"Consultation type\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-overview \"Overview\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-vitals \"Vitals\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-photos \"Photos\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-prescription \"Prescription\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-labs \"Lab Tests\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-customization \"Customization\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-history \"History\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Visit Information\"",
+     "ratio": 2.57
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.flex.justify-between \"Photos Captured:0\"",
+     "children": 2,
+     "widths": [
+      111,
+      10
+     ]
+    },
+    {
+     "container": "div.flex.justify-between \"Overall Progress:0%\"",
+     "children": 2,
+     "heights": [
+      46,
+      23
+     ],
+     "widths": [
+      95,
+      27
+     ],
+     "topDriftPx": 11
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 427
+    },
+    {
+     "el": "div.flex.items-center \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 296
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 427
+    },
+    {
+     "el": "div.flex-1.space-y-6 \"Visit #1DRAFTLinked to Appoint\"",
+     "spillPx": 346
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Visit #1DRAFTLinked to Appoint\"",
+     "spillPx": 347
+    },
+    {
+     "el": "div.@container/card-header.grid \"Visit #1DRAFTLinked to Appoint\"",
+     "spillPx": 347
+    },
+    {
+     "el": "div.flex.justify-between \"Captured By:DOCTOR\"",
+     "spillPx": 16
+    },
+    {
+     "el": "div.space-y-2 \"Vitals:PendingPhotos:PendingPr\"",
+     "spillPx": 18
+    },
+    {
+     "el": "div.flex.items-center \"Customization:Pending\"",
+     "spillPx": 18
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Back to Setup\"",
+    "button.inline-flex.items-center \"Save Draft\"",
+    "button.inline-flex.items-center \"Complete Visit\""
+   ]
+  }
+ },
+ "375x812-shravya-rx-midentry": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 756,
+     "scrollH": 5498
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.grid.grid-cols-2 \"CBCESRCRPLFTFasting lipid prof\"",
+     "w": 1082,
+     "h": 486,
+     "fillPct": 11,
+     "pctOfViewport": 173
+    },
+    {
+     "el": "div.pointer-events-none.absolute",
+     "w": 1078,
+     "h": 404,
+     "fillPct": 0,
+     "pctOfViewport": 143
+    }
+   ],
+   "spacing": {
+    "observed": [
+     1,
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "14px",
+     "16px",
+     "20px",
+     "22px"
+    ],
+    "sizes": {
+     "18px/600": 10,
+     "26px/600": 1,
+     "14px/500": 17,
+     "16px/400": 46,
+     "16px/500": 92,
+     "20px/600": 6,
+     "18px/500": 1,
+     "14px/400": 42,
+     "18px/400": 1,
+     "14px/600": 1,
+     "22px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      -181,
+      -178
+     ],
+     [
+      -96,
+      -94
+     ],
+     [
+      -85,
+      -82
+     ],
+     [
+      -74,
+      -72
+     ],
+     [
+      -56,
+      -55
+     ],
+     [
+      -55,
+      -52
+     ],
+     [
+      -27,
+      -24
+     ],
+     [
+      21,
+      22
+     ],
+     [
+      38,
+      40
+     ],
+     [
+      40,
+      41
+     ],
+     [
+      51,
+      53
+     ],
+     [
+      66,
+      67
+     ],
+     [
+      67,
+      68
+     ],
+     [
+      141,
+      143
+     ],
+     [
+      143,
+      144
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"DRAFT\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Linked to Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Medical Visit Documentation • \"",
+     "ratio": 2.47
+    },
+    {
+     "el": "span.inline-flex.items-center \"0 Photos\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-xs.text-gray-500 \"Unsaved changes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.sm:hidden \"Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Shortcuts\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.font-medium \"Consultation type\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-overview \"Overview\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-vitals \"Vitals\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-photos \"Photos\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-prescription \"Prescription\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-labs \"Lab Tests\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-customization \"Customization\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-history \"History\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-xs.text-gray-600 \"Templates\"",
+     "ratio": 2.46
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "thead.bg-gray-50.text-gray-700 \"MedicineFrequency (0-1-0)WhenD\"",
+     "x": -155,
+     "y": 2960,
+     "w": 1080,
+     "h": 47
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.bg-muted.text-muted-foreground \"OverviewVitalsPhotosPrescripti\"",
+     "children": 7,
+     "widths": [
+      115,
+      85,
+      95,
+      134,
+      115,
+      152,
+      97
+     ]
+    },
+    {
+     "container": "div.ml-auto.flex \"Save currentSave fieldsNew tem\"",
+     "children": 3,
+     "widths": [
+      123,
+      110,
+      129
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"AcnePigmentationAgingDrynessSe\"",
+     "children": 7,
+     "widths": [
+      65,
+      127,
+      71,
+      89,
+      106,
+      92,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"Diabetes Hypertension Thyroid\"",
+     "children": 3,
+     "widths": [
+      75,
+      106,
+      67
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"IIIIIIIVVVI\"",
+     "children": 6,
+     "widths": [
+      30,
+      35,
+      39,
+      42,
+      37,
+      42
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"MaculePapulePustuleNodulePlaqu\"",
+     "children": 10,
+     "widths": [
+      82,
+      78,
+      83,
+      81,
+      78,
+      81,
+      68,
+      83,
+      67,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"FaceScalpNeckTrunkArmsLegsHand\"",
+     "children": 11,
+     "widths": [
+      63,
+      69,
+      66,
+      70,
+      67,
+      63,
+      75,
+      59,
+      91,
+      102,
+      118
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"+ Add to Drug DatabaseReuse la\"",
+     "children": 3,
+     "widths": [
+      207,
+      151,
+      94
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"Follow up in 7 daysFollow up i\"",
+     "children": 5,
+     "widths": [
+      153,
+      160,
+      159,
+      163,
+      165
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"7d2w3w30d6w\"",
+     "children": 5,
+     "widths": [
+      32,
+      36,
+      36,
+      42,
+      36
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"PrintTablePrint PreviewCreate \"",
+     "children": 2,
+     "widths": [
+      135,
+      180
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 1041
+    },
+    {
+     "el": "div.flex.items-center \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 296
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 1041
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Back to Setup\"",
+    "button.inline-flex.items-center \"Add\"",
+    "button.inline-flex.items-center \"Add\""
+   ],
+   "unevenRowsTruncated": true
+  }
+ },
+ "375x812-shravya-rx-treatment-table": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 756,
+     "scrollH": 5498
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.grid.grid-cols-2 \"CBCESRCRPLFTFasting lipid prof\"",
+     "w": 1082,
+     "h": 486,
+     "fillPct": 11,
+     "pctOfViewport": 173
+    },
+    {
+     "el": "div.pointer-events-none.absolute",
+     "w": 1078,
+     "h": 404,
+     "fillPct": 0,
+     "pctOfViewport": 143
+    }
+   ],
+   "spacing": {
+    "observed": [
+     1,
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "14px",
+     "16px",
+     "20px",
+     "22px"
+    ],
+    "sizes": {
+     "18px/600": 10,
+     "26px/600": 1,
+     "14px/500": 17,
+     "16px/400": 46,
+     "16px/500": 92,
+     "20px/600": 6,
+     "18px/500": 1,
+     "14px/400": 42,
+     "18px/400": 1,
+     "14px/600": 1,
+     "22px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      -732,
+      -729
+     ],
+     [
+      -647,
+      -645
+     ],
+     [
+      -636,
+      -633
+     ],
+     [
+      -625,
+      -623
+     ],
+     [
+      -607,
+      -606
+     ],
+     [
+      -606,
+      -603
+     ],
+     [
+      -578,
+      -575
+     ],
+     [
+      -530,
+      -529
+     ],
+     [
+      -513,
+      -511
+     ],
+     [
+      -511,
+      -510
+     ],
+     [
+      -500,
+      -498
+     ],
+     [
+      -485,
+      -484
+     ],
+     [
+      -484,
+      -483
+     ],
+     [
+      -410,
+      -408
+     ],
+     [
+      -408,
+      -407
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"DRAFT\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Linked to Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Medical Visit Documentation • \"",
+     "ratio": 2.47
+    },
+    {
+     "el": "span.inline-flex.items-center \"0 Photos\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-xs.text-gray-500 \"Unsaved changes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.sm:hidden \"Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Shortcuts\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.font-medium \"Consultation type\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-overview \"Overview\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-vitals \"Vitals\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-photos \"Photos\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-prescription \"Prescription\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-labs \"Lab Tests\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-customization \"Customization\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-history \"History\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-xs.text-gray-600 \"Templates\"",
+     "ratio": 2.46
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "thead.bg-gray-50.text-gray-700 \"MedicineFrequency (0-1-0)WhenD\"",
+     "x": -706,
+     "y": 145,
+     "w": 1080,
+     "h": 47
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.bg-muted.text-muted-foreground \"OverviewVitalsPhotosPrescripti\"",
+     "children": 7,
+     "widths": [
+      115,
+      85,
+      95,
+      134,
+      115,
+      152,
+      97
+     ]
+    },
+    {
+     "container": "div.ml-auto.flex \"Save currentSave fieldsNew tem\"",
+     "children": 3,
+     "widths": [
+      123,
+      110,
+      129
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"AcnePigmentationAgingDrynessSe\"",
+     "children": 7,
+     "widths": [
+      65,
+      127,
+      71,
+      89,
+      106,
+      92,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"Diabetes Hypertension Thyroid\"",
+     "children": 3,
+     "widths": [
+      75,
+      106,
+      67
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"IIIIIIIVVVI\"",
+     "children": 6,
+     "widths": [
+      30,
+      35,
+      39,
+      42,
+      37,
+      42
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"MaculePapulePustuleNodulePlaqu\"",
+     "children": 10,
+     "widths": [
+      82,
+      78,
+      83,
+      81,
+      78,
+      81,
+      68,
+      83,
+      67,
+      91
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"FaceScalpNeckTrunkArmsLegsHand\"",
+     "children": 11,
+     "widths": [
+      63,
+      69,
+      66,
+      70,
+      67,
+      63,
+      75,
+      59,
+      91,
+      102,
+      118
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"+ Add to Drug DatabaseReuse la\"",
+     "children": 3,
+     "widths": [
+      207,
+      151,
+      94
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"Follow up in 7 daysFollow up i\"",
+     "children": 5,
+     "widths": [
+      153,
+      160,
+      159,
+      163,
+      165
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"7d2w3w30d6w\"",
+     "children": 5,
+     "widths": [
+      32,
+      36,
+      36,
+      42,
+      36
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"PrintTablePrint PreviewCreate \"",
+     "children": 2,
+     "widths": [
+      135,
+      180
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 1041
+    },
+    {
+     "el": "div.flex.items-center \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 296
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 1041
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Back to Setup\"",
+    "button.inline-flex.items-center \"Add\"",
+    "button.inline-flex.items-center \"Add\""
+   ],
+   "unevenRowsTruncated": true
+  }
+ },
+ "375x812-shravya-print-preview": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"@page { size: A4 portrait; mar\"",
+     "clientH": 756,
+     "scrollH": 5498
+    },
+    {
+     "el": "div#print-preview-scroll \"Priya Sharma•Doctor cmw6d9Date\"",
+     "clientH": 406,
+     "scrollH": 1260
+    },
+    {
+     "el": "div.print:hidden.w-full \"📋 Print Settings TipTo remove\"",
+     "clientH": 405,
+     "scrollH": 1435
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div#page-1 \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 794,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 293
+    },
+    {
+     "el": "div.pagedjs_sheet \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 794,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 293
+    },
+    {
+     "el": "div.pagedjs_pagebox \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 794,
+     "h": 1123,
+     "fillPct": 11,
+     "pctOfViewport": 293
+    },
+    {
+     "el": "div.grid.grid-cols-2 \"CBCESRCRPLFTFasting lipid prof\"",
+     "w": 1082,
+     "h": 486,
+     "fillPct": 10,
+     "pctOfViewport": 173
+    },
+    {
+     "el": "div.pointer-events-none.absolute",
+     "w": 1078,
+     "h": 404,
+     "fillPct": 0,
+     "pctOfViewport": 143
+    },
+    {
+     "el": "div \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 375,
+     "h": 1123,
+     "fillPct": 10,
+     "pctOfViewport": 138
+    },
+    {
+     "el": "div#pagedjs-container \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 375,
+     "h": 1123,
+     "fillPct": 10,
+     "pctOfViewport": 138
+    },
+    {
+     "el": "div.pagedjs_pages \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 375,
+     "h": 1123,
+     "fillPct": 10,
+     "pctOfViewport": 138
+    },
+    {
+     "el": "div.pagedjs_pages \"07 Nov 2026PatientPriya Sharma\"",
+     "w": 375,
+     "h": 1123,
+     "fillPct": 10,
+     "pctOfViewport": 138
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "w": 375,
+     "h": 812,
+     "fillPct": 0,
+     "pctOfViewport": 100
+    }
+   ],
+   "spacing": {
+    "observed": [
+     1,
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "14px",
+     "16px",
+     "20px",
+     "22px"
+    ],
+    "sizes": {
+     "18px/600": 10,
+     "26px/600": 1,
+     "14px/500": 24,
+     "16px/400": 71,
+     "16px/500": 103,
+     "20px/600": 7,
+     "18px/500": 1,
+     "14px/400": 56,
+     "18px/400": 2,
+     "14px/600": 4,
+     "22px/600": 1,
+     "16px/600": 1,
+     "14px/700": 2
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      -761,
+      -758
+     ],
+     [
+      -681,
+      -678
+     ],
+     [
+      -655,
+      -653
+     ],
+     [
+      -653,
+      -650
+     ],
+     [
+      -642,
+      -640
+     ],
+     [
+      -640,
+      -639
+     ],
+     [
+      -536,
+      -534
+     ],
+     [
+      -514,
+      -513
+     ],
+     [
+      -478,
+      -477
+     ],
+     [
+      -451,
+      -450
+     ],
+     [
+      -450,
+      -449
+     ],
+     [
+      -425,
+      -423
+     ],
+     [
+      -423,
+      -421
+     ],
+     [
+      -375,
+      -372
+     ],
+     [
+      -314,
+      -311
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    },
+    {
+     "el": "input",
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Visit Documentation\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.inline-flex.items-center \"From Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.text-sm.text-gray-600 \"Patient: Unknown • Doctor: Dr.\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.ml-2.text-blue-600 \"• 18:30-18:45 • OPD\"",
+     "ratio": 1.08
+    },
+    {
+     "el": "button.inline-flex.items-center \"Book\"",
+     "ratio": 1.18
+    },
+    {
+     "el": "button.justify-center.min-w-0 \"Quick Guide\"",
+     "ratio": 1.99
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Calendar\"",
+     "ratio": 1.18
+    },
+    {
+     "el": "button.inline-flex.items-center \"Back to Setup\"",
+     "ratio": 1.18
+    },
+    {
+     "el": "div.font-semibold.text-lg \"Patient Context\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-medium \"Priya Sharma\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"ID: cmw6dbbdu00077dc1wjlcbw55\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Age: 29 • F\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-sm.text-gray-600 \"Phone: 9876543211\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Visit #1DRAFTLinked to Appoint\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"DRAFT\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Linked to Appointment\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Medical Visit Documentation • \"",
+     "ratio": 2.47
+    },
+    {
+     "el": "span.inline-flex.items-center \"0 Photos\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-xs.text-gray-500 \"Unsaved changes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.sm:hidden \"Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button.inline-flex.items-center \"Shortcuts\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.font-medium \"Consultation type\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-overview \"Overview\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-vitals \"Vitals\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-photos \"Photos\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-prescription \"Prescription\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-labs \"Lab Tests\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-customization \"Customization\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_r_6_-trigger-history \"History\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-xs.text-gray-600 \"Templates\"",
+     "ratio": 2.46
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "button.inline-flex.items-center \"Follow up in 6 weeks\"",
+     "b": "button.inline-flex.items-center \"Live Preview: Off\"",
+     "w": 43,
+     "h": 27
+    },
+    {
+     "a": "input.file:text-foreground.placeholder:text-muted-foreground \"Review date\"",
+     "b": "input",
+     "w": 129,
+     "h": 16
+    },
+    {
+     "a": "button.inline-flex.items-center \"Print Preview\"",
+     "b": "button.inline-flex.items-center \"Reset margins\"",
+     "w": 83,
+     "h": 16
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "thead.bg-gray-50.text-gray-700 \"MedicineFrequency (0-1-0)WhenD\"",
+     "x": -735,
+     "y": -911,
+     "w": 1080,
+     "h": 47
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 812
+    },
+    {
+     "el": "div#radix-_r_m_ \"Prescription Preview @import u\"",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 812
+    },
+    {
+     "el": "div.sticky.top-0 \"Priya Sharma•Doctor cmw6d9Date\"",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 97
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.flex.items-center",
+     "children": 6,
+     "widths": [
+      76,
+      76,
+      76,
+      76,
+      76,
+      28
+     ]
+    },
+    {
+     "container": "div.bg-muted.text-muted-foreground \"OverviewVitalsPhotosPrescripti\"",
+     "children": 7,
+     "widths": [
+      109,
+      82,
+      92,
+      131,
+      110,
+      146,
+      94
+     ]
+    },
+    {
+     "container": "div.ml-auto.flex \"Save currentSave fieldsNew tem\"",
+     "children": 3,
+     "widths": [
+      117,
+      104,
+      125
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"AcnePigmentationAgingDrynessSe\"",
+     "children": 7,
+     "widths": [
+      61,
+      124,
+      66,
+      84,
+      102,
+      87,
+      86
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"Diabetes Hypertension Thyroid\"",
+     "children": 3,
+     "widths": [
+      73,
+      102,
+      65
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"IIIIIIIVVVI\"",
+     "children": 6,
+     "widths": [
+      31,
+      35,
+      40,
+      40,
+      35,
+      40
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"MaculePapulePustuleNodulePlaqu\"",
+     "children": 10,
+     "widths": [
+      77,
+      76,
+      81,
+      78,
+      76,
+      77,
+      64,
+      80,
+      64,
+      85
+     ]
+    },
+    {
+     "container": "div.flex.flex-wrap \"FaceScalpNeckTrunkArmsLegsHand\"",
+     "children": 11,
+     "widths": [
+      58,
+      65,
+      62,
+      67,
+      63,
+      59,
+      72,
+      57,
+      86,
+      97,
+      112
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"+ Add to Drug DatabaseReuse la\"",
+     "children": 3,
+     "widths": [
+      194,
+      144,
+      89
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"Follow up in 7 daysFollow up i\"",
+     "children": 5,
+     "widths": [
+      146,
+      153,
+      152,
+      154,
+      157
+     ]
+    },
+    {
+     "container": "div.mt-2.flex \"7d2w3w30d6w\"",
+     "children": 5,
+     "widths": [
+      30,
+      33,
+      33,
+      40,
+      34
+     ]
+    },
+    {
+     "container": "div.flex.gap-2 \"PrintTablePrint PreviewCreate \"",
+     "children": 2,
+     "widths": [
+      130,
+      171
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.space-y-4 \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 1037
+    },
+    {
+     "el": "div.flex.items-center \"Visit DocumentationFrom Appoin\"",
+     "spillPx": 292
+    },
+    {
+     "el": "div.flex.gap-6 \"Patient ContextPriya SharmaID:\"",
+     "spillPx": 1037
+    },
+    {
+     "el": "div \"07 Nov 2026PatientPriya Sharma\"",
+     "spillPx": 419
+    },
+    {
+     "el": "div#pagedjs-container \"07 Nov 2026PatientPriya Sharma\"",
+     "spillPx": 419
+    },
+    {
+     "el": "div.pagedjs_pages \"07 Nov 2026PatientPriya Sharma\"",
+     "spillPx": 419
+    },
+    {
+     "el": "div.pagedjs_pages \"07 Nov 2026PatientPriya Sharma\"",
+     "spillPx": 419
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Back to Setup\"",
+    "button.inline-flex.items-center \"Add\"",
+    "button.inline-flex.items-center \"Add\""
+   ],
+   "unevenRowsTruncated": true
+  }
+ },
+ "extra": {
+  "note": "Supplementary measurements; lowContrast unreliable (oklch).",
+  "mainHorizontalOverflow": {
+   "1440x900-rx": "scrollWidth 1408 vs clientWidth 1184",
+   "768x1024-overview": "840 vs 512",
+   "768x1024-rx": "1408 vs 512",
+   "375x812-overview": "786 vs 375",
+   "375x812-rx": "1400 vs 375"
+  },
+  "footerButtons": {
+   "1440x900": {
+    "Create Prescription": "x1261-1440 clipped",
+    "Complete Visit": "x1297-1440 clipped"
+   },
+   "375x812": "all four start x>=53 and end at 375 inside a 1400px-wide panel"
+  },
+  "keystrokeLatency": {
+   "field": "Chief Complaints textarea",
+   "chars": 17,
+   "totalMs": 10920,
+   "perKeyMs": 642,
+   "caveat": "next dev build, other inspectors running concurrently"
+  },
+  "doctorOptions": {
+   "loggedIn": "Shravya",
+   "options": [
+    "Dr. Praneeta Jain"
+   ],
+   "cause": "visits/page.tsx apiClient.get('/users',{role:'DOCTOR',limit:1})"
+  },
+  "readyToStart": "Patient: Unknown (selectedPatient looked up from patients list fetched with limit:1)",
+  "printPreview": {
+   "headerDoctor": "Doctor cmw6d9",
+   "signature": "Dr. (no name)",
+   "printButton": {
+    "1440x900": "y1380 before settings scroll",
+    "after": "y845"
+   },
+   "zeroMedsPrintEnabled": true,
+   "focusAfterEsc": "sidebar/body"
+  }
+ }
+}

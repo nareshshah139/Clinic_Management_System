@@ -1,0 +1,7932 @@
+{
+ "1440x900-calendar-today": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 836,
+     "scrollH": 1509
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 4,
+     "16px/500": 14,
+     "16px/600": 1,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 19,
+     "20px/600": 1,
+     "18px/600": 1,
+     "12px/400": 9
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 747,
+     "w": 56,
+     "h": 720
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-calendar-populated": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 836,
+     "scrollH": 1509
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 10,
+     "16px/500": 16,
+     "16px/600": 5,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 19,
+     "20px/600": 1,
+     "18px/600": 1,
+     "12px/400": 9,
+     "16px/700": 2,
+     "14px/600": 2
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 747,
+     "w": 56,
+     "h": 720
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"11:30-11:45Deepika NairOPD38yF\"",
+     "children": 3,
+     "widths": [
+      195,
+      432,
+      54
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"38yF\"",
+     "children": 2,
+     "widths": [
+      30,
+      16
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Meera KrishnanOPD27\"",
+     "children": 3,
+     "widths": [
+      221,
+      407,
+      53
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"27yF\"",
+     "children": 2,
+     "widths": [
+      29,
+      16
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-slots-populated": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 836,
+     "scrollH": 1417
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 7,
+     "16px/500": 15,
+     "16px/600": 3,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 11,
+     "20px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "14px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Appointment Scheduler\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select a doctor and date to vi\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Duration\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 297,
+     "y": 696,
+     "w": 56,
+     "h": 720
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      453,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-calendar-empty": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 836,
+     "scrollH": 1509
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 4,
+     "16px/500": 14,
+     "16px/600": 1,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 19,
+     "20px/600": 1,
+     "18px/600": 1,
+     "12px/400": 9
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 747,
+     "w": 56,
+     "h": 720
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-validation-nopatient": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 836,
+     "scrollH": 1509
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 7,
+     "16px/500": 15,
+     "16px/600": 4,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 20,
+     "20px/600": 1,
+     "18px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "14px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "span",
+     "w": 1,
+     "h": 1
+    },
+    {
+     "el": "span",
+     "w": 1,
+     "h": 1
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 74,
+     "w": 56,
+     "h": 720
+    },
+    {
+     "el": "span",
+     "x": -1,
+     "y": 899,
+     "w": 1,
+     "h": 1
+    },
+    {
+     "el": "ol.fixed.top-0 \"Patient requiredSearch and sel\"",
+     "x": 1020,
+     "y": 0,
+     "w": 420,
+     "h": 155
+    },
+    {
+     "el": "span",
+     "x": -1,
+     "y": 899,
+     "w": 1,
+     "h": 1
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      418,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-dialog-open": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 836,
+     "scrollH": 1557
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "clientH": 718,
+     "scrollH": 832
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "w": 1440,
+     "h": 900,
+     "fillPct": 0,
+     "pctOfViewport": 100
+    }
+   ],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 10,
+     "16px/500": 21,
+     "16px/600": 3,
+     "14px/400": 5,
+     "32px/600": 1,
+     "16px/400": 25,
+     "20px/600": 4,
+     "18px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "14px/600": 1,
+     "18px/400": 5,
+     "18px/500": 4
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+     "w": 16,
+     "h": 16
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "div \"Book 09:30-10:00\"",
+     "b": "button.ring-offset-background.focus:ring-ring \"Close\"",
+     "w": 16,
+     "h": 4
+    },
+    {
+     "a": "div \"Book 13:30-14:00\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"OPD Consultation\"",
+     "w": 184,
+     "h": 28
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 74,
+     "w": 56,
+     "h": 720
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "x": 0,
+     "y": 0,
+     "w": 1440,
+     "h": 900
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "x": 464,
+     "y": 90,
+     "w": 512,
+     "h": 720
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      418,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    },
+    {
+     "container": "div.flex.justify-end \"CancelConfirm Booking\"",
+     "children": 2,
+     "widths": [
+      87,
+      160
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-dialog-procedure-noroom": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 836,
+     "scrollH": 1557
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "clientH": 718,
+     "scrollH": 1240
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "w": 1440,
+     "h": 900,
+     "fillPct": 0,
+     "pctOfViewport": 100
+    }
+   ],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 11,
+     "16px/500": 22,
+     "16px/600": 3,
+     "14px/400": 6,
+     "32px/600": 1,
+     "16px/400": 27,
+     "20px/600": 5,
+     "18px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "14px/600": 1,
+     "18px/400": 5,
+     "18px/500": 4
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+     "w": 16,
+     "h": 16
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "input.file:text-foreground.placeholder:text-muted-foreground",
+     "b": "input.file:text-foreground.placeholder:text-muted-foreground",
+     "w": 239,
+     "h": 27
+    },
+    {
+     "a": "button.justify-center.min-w-0 \"Start Tour\"",
+     "b": "input.file:text-foreground.placeholder:text-muted-foreground",
+     "w": 58,
+     "h": 25
+    },
+    {
+     "a": "button.border-input.data-[placeholder]:text-muted-foreground \"All Rooms\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"30 minutes\"",
+     "w": 99,
+     "h": 38
+    },
+    {
+     "a": "div \"Book 17:30-18:00\"",
+     "b": "button.inline-flex.items-center \"Cancel\"",
+     "w": 87,
+     "h": 26
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 74,
+     "w": 56,
+     "h": 720
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "x": 0,
+     "y": 0,
+     "w": 1440,
+     "h": 900
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "x": 464,
+     "y": 90,
+     "w": 512,
+     "h": 720
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      418,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    },
+    {
+     "container": "div.flex.justify-end \"CancelConfirm Booking\"",
+     "children": 2,
+     "widths": [
+      87,
+      160
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "768x1024-calendar-today": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 960,
+     "scrollH": 1834
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 4,
+     "16px/500": 14,
+     "16px/600": 1,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 19,
+     "20px/600": 1,
+     "18px/600": 1,
+     "12px/400": 9
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 973,
+     "w": 56,
+     "h": 819
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "768x1024-calendar-populated": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 960,
+     "scrollH": 1834
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 10,
+     "16px/500": 16,
+     "16px/600": 5,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 19,
+     "20px/600": 1,
+     "18px/600": 1,
+     "12px/400": 9,
+     "16px/700": 2,
+     "14px/600": 2
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ],
+     [
+      555,
+      557
+     ],
+     [
+      609,
+      611
+     ],
+     [
+      691,
+      694
+     ],
+     [
+      694,
+      696
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 973,
+     "w": 56,
+     "h": 819
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"11:30-11:45Deepika NairOPD38yF\"",
+     "children": 3,
+     "widths": [
+      195,
+      34,
+      54
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"38yF\"",
+     "children": 2,
+     "widths": [
+      30,
+      16
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Meera KrishnanOPD27\"",
+     "children": 3,
+     "widths": [
+      221,
+      34,
+      53
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"27yF\"",
+     "children": 2,
+     "widths": [
+      29,
+      16
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 14
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-calendar \"Doctor CalendarDaily calendar \"",
+     "spillPx": 14
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Doctor CalendarDaily calendar \"",
+     "spillPx": 15
+    },
+    {
+     "el": "div.px-6.space-y-4 \"Visit TypeAll TypesRoomAll Roo\"",
+     "spillPx": 15
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 40
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 40
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 56
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 56
+    },
+    {
+     "el": "div.flex-1.grid \"11:30-11:45Deepika NairOPD38yF\"",
+     "spillPx": 56
+    },
+    {
+     "el": "div.absolute.left-0 \"11:30-11:45Deepika NairOPD38yF\"",
+     "spillPx": 54
+    },
+    {
+     "el": "div.font-semibold.px-2 \"11:30-11:45Deepika NairOPD38yF\"",
+     "spillPx": 68
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Meera KrishnanOPD27\"",
+     "spillPx": 56
+    }
+   ],
+   "wrappedControls": [],
+   "overflowSpillsTruncated": true
+  }
+ },
+ "768x1024-slots-populated": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 960,
+     "scrollH": 1664
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 7,
+     "16px/500": 15,
+     "16px/600": 3,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 11,
+     "20px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "14px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ],
+     [
+      691,
+      693
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Appointment Scheduler\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select a doctor and date to vi\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Duration\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 297,
+     "y": 844,
+     "w": 56,
+     "h": 819
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      34,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 10
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-slots \"Appointment SchedulerSelect a \"",
+     "spillPx": 10
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 11
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 11
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 27
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 27
+    },
+    {
+     "el": "div.flex-1.grid \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 27
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 27
+    },
+    {
+     "el": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 84
+    }
+   ],
+   "wrappedControls": []
+  }
+ },
+ "768x1024-calendar-empty": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 960,
+     "scrollH": 1834
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 4,
+     "16px/500": 14,
+     "16px/600": 1,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 19,
+     "20px/600": 1,
+     "18px/600": 1,
+     "12px/400": 9
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 973,
+     "w": 56,
+     "h": 819
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "768x1024-validation-nopatient": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 960,
+     "scrollH": 1834
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 7,
+     "16px/500": 15,
+     "16px/600": 4,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 20,
+     "20px/600": 1,
+     "18px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "14px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ],
+     [
+      691,
+      693
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "span",
+     "w": 1,
+     "h": 1
+    },
+    {
+     "el": "span",
+     "w": 1,
+     "h": 1
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 99,
+     "w": 56,
+     "h": 819
+    },
+    {
+     "el": "span",
+     "x": -1,
+     "y": 1023,
+     "w": 1,
+     "h": 1
+    },
+    {
+     "el": "ol.fixed.top-0 \"Patient requiredSearch and sel\"",
+     "x": 348,
+     "y": 0,
+     "w": 420,
+     "h": 155
+    },
+    {
+     "el": "span",
+     "x": -1,
+     "y": 1023,
+     "w": 1,
+     "h": 1
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      34,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 10
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-calendar \"Doctor CalendarDaily calendar \"",
+     "spillPx": 10
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Doctor CalendarDaily calendar \"",
+     "spillPx": 11
+    },
+    {
+     "el": "div.px-6.space-y-4 \"Visit TypeAll TypesRoomAll Roo\"",
+     "spillPx": 11
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 36
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 36
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.flex-1.grid \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 84
+    }
+   ],
+   "wrappedControls": []
+  }
+ },
+ "768x1024-dialog-open": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 960,
+     "scrollH": 1882
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "clientH": 817,
+     "scrollH": 832
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "w": 768,
+     "h": 1024,
+     "fillPct": 0,
+     "pctOfViewport": 100
+    }
+   ],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 10,
+     "16px/500": 21,
+     "16px/600": 3,
+     "14px/400": 5,
+     "32px/600": 1,
+     "16px/400": 25,
+     "20px/600": 4,
+     "18px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "14px/600": 1,
+     "18px/400": 5,
+     "18px/500": 4
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ],
+     [
+      607,
+      608
+     ],
+     [
+      691,
+      693
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+     "w": 16,
+     "h": 16
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "a.group.relative \"Rooms\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"30 minutes\"",
+     "w": 90,
+     "h": 5
+    },
+    {
+     "a": "a.group.relative \"Pharmacy Counter\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"OPD Consultation\"",
+     "w": 90,
+     "h": 21
+    },
+    {
+     "a": "a.group.relative \"Pharmacy Billing\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"OPD Consultation\"",
+     "w": 90,
+     "h": 15
+    },
+    {
+     "a": "div \"Book 09:00-09:30\"",
+     "b": "button.ring-offset-background.focus:ring-ring \"Close\"",
+     "w": 16,
+     "h": 12
+    },
+    {
+     "a": "div \"Book 17:30-18:00\"",
+     "b": "button.inline-flex.items-center \"Cancel\"",
+     "w": 60,
+     "h": 28
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 99,
+     "w": 56,
+     "h": 819
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "x": 0,
+     "y": 0,
+     "w": 768,
+     "h": 1024
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "x": 128,
+     "y": 102,
+     "w": 512,
+     "h": 819
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      34,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    },
+    {
+     "container": "div.flex.justify-end \"CancelConfirm Booking\"",
+     "children": 2,
+     "widths": [
+      87,
+      160
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 10
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-calendar \"Doctor CalendarDaily calendar \"",
+     "spillPx": 10
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Doctor CalendarDaily calendar \"",
+     "spillPx": 11
+    },
+    {
+     "el": "div.px-6.space-y-4 \"Visit TypeAll TypesRoomAll Roo\"",
+     "spillPx": 11
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 36
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 36
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.flex-1.grid \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 84
+    }
+   ],
+   "wrappedControls": []
+  }
+ },
+ "768x1024-dialog-procedure-noroom": {
+  "layout": {
+   "viewport": {
+    "width": 768,
+    "height": 1024,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 960,
+     "scrollH": 1882
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "clientH": 817,
+     "scrollH": 1240
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "w": 768,
+     "h": 1024,
+     "fillPct": 0,
+     "pctOfViewport": 100
+    }
+   ],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 11,
+     "16px/500": 22,
+     "16px/600": 3,
+     "14px/400": 6,
+     "32px/600": 1,
+     "16px/400": 27,
+     "20px/600": 5,
+     "18px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "14px/600": 1,
+     "18px/400": 5,
+     "18px/500": 4
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ],
+     [
+      607,
+      608
+     ],
+     [
+      691,
+      693
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+     "w": 16,
+     "h": 16
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Desk\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Counter\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Pharmacy Billing\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Riya Sharma\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"RECEPTION\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.hidden.sm:inline \"Start Tour\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "a.group.relative \"Dashboard\"",
+     "b": "input.file:text-foreground.placeholder:text-muted-foreground",
+     "w": 90,
+     "h": 13
+    },
+    {
+     "a": "div \"Book 09:30-10:00\"",
+     "b": "input.file:text-foreground.placeholder:text-muted-foreground",
+     "w": 232,
+     "h": 21
+    },
+    {
+     "a": "div \"Book 17:00-17:30\"",
+     "b": "button.inline-flex.items-center \"Cancel\"",
+     "w": 60,
+     "h": 4
+    },
+    {
+     "a": "div \"Book 17:30-18:00\"",
+     "b": "button.inline-flex.items-center \"Cancel\"",
+     "w": 60,
+     "h": 19
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 99,
+     "w": 56,
+     "h": 819
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 736,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "x": 0,
+     "y": 0,
+     "w": 768,
+     "h": 1024
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "x": 128,
+     "y": 102,
+     "w": 512,
+     "h": 819
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      34,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    },
+    {
+     "container": "div.flex.justify-end \"CancelConfirm Booking\"",
+     "children": 2,
+     "widths": [
+      87,
+      160
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 10
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-calendar \"Doctor CalendarDaily calendar \"",
+     "spillPx": 10
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Doctor CalendarDaily calendar \"",
+     "spillPx": 11
+    },
+    {
+     "el": "div.px-6.space-y-4 \"Visit TypeAll TypesRoomAll Roo\"",
+     "spillPx": 11
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 36
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 36
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.flex-1.grid \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 52
+    },
+    {
+     "el": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 84
+    }
+   ],
+   "wrappedControls": []
+  }
+ },
+ "375x812-calendar-today": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 756,
+     "scrollH": 1986
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "12px"
+    ],
+    "sizes": {
+     "18px/600": 2,
+     "26px/600": 1,
+     "16px/400": 19,
+     "16px/500": 3,
+     "20px/600": 1,
+     "12px/400": 9
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      16,
+      19
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Grid\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"30 minutes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "h3.font-semibold.mb-2 \"Legend\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"OPD\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Procedure\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Telemedicine\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Completed\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (OPD)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (Procedure)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Newly Booked\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Booking In Progress\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-[10px].leading-none \"09:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"10:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"11:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"12:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"13:00\"",
+     "ratio": 2.52
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 58,
+     "y": 1295,
+     "w": 56,
+     "h": 649
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "375x812-calendar-populated": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 756,
+     "scrollH": 1986
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "12px",
+     "14px"
+    ],
+    "sizes": {
+     "18px/600": 2,
+     "26px/600": 1,
+     "16px/400": 19,
+     "16px/500": 5,
+     "20px/600": 1,
+     "12px/400": 9,
+     "16px/700": 2,
+     "16px/600": 4,
+     "14px/600": 2,
+     "14px/500": 6
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      16,
+      19
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Grid\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"30 minutes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "h3.font-semibold.mb-2 \"Legend\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"OPD\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Procedure\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Telemedicine\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Completed\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (OPD)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (Procedure)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Newly Booked\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Booking In Progress\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-[10px].leading-none \"09:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"10:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"11:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"12:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"13:00\"",
+     "ratio": 2.52
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 58,
+     "y": 1295,
+     "w": 56,
+     "h": 649
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"11:30-11:45Deepika NairOPD38yF\"",
+     "children": 3,
+     "widths": [
+      195,
+      34,
+      54
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"38yF\"",
+     "children": 2,
+     "widths": [
+      30,
+      16
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Meera KrishnanOPD27\"",
+     "children": 3,
+     "widths": [
+      221,
+      34,
+      53
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"27yF\"",
+     "children": 2,
+     "widths": [
+      29,
+      16
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 32
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-calendar \"Doctor CalendarDaily calendar \"",
+     "spillPx": 32
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Doctor CalendarDaily calendar \"",
+     "spillPx": 33
+    },
+    {
+     "el": "div.px-6.space-y-4 \"Visit TypeAll TypesRoomAll Roo\"",
+     "spillPx": 33
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 58
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 58
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.flex-1.grid \"11:30-11:45Deepika NairOPD38yF\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.absolute.left-0 \"11:30-11:45Deepika NairOPD38yF\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.font-semibold.px-2 \"11:30-11:45Deepika NairOPD38yF\"",
+     "spillPx": 149
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Meera KrishnanOPD27\"",
+     "spillPx": 74
+    }
+   ],
+   "wrappedControls": [],
+   "overflowSpillsTruncated": true
+  }
+ },
+ "375x812-slots-populated": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 756,
+     "scrollH": 1664
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "12px",
+     "14px"
+    ],
+    "sizes": {
+     "18px/600": 1,
+     "26px/600": 1,
+     "16px/400": 11,
+     "16px/500": 4,
+     "20px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "16px/600": 2,
+     "14px/600": 1,
+     "14px/500": 3
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      16,
+      19
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Appointment Scheduler\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select a doctor and date to vi\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Duration\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"30 minutes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span.text-[10px].leading-none \"09:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"10:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"11:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"12:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"13:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"14:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"15:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"16:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"17:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-blue-700.font-bold \"12:00-12:15\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-semibold \"Sanjay Mehta\"",
+     "ratio": 1
+    },
+    {
+     "el": "span.text-purple-600.font-medium \"OPD\"",
+     "ratio": 3.13
+    },
+    {
+     "el": "span.text-gray-600 \"60y\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "span.text-gray-600.bg-gray-100 \"M\"",
+     "ratio": 1.04
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 33,
+     "y": 1014,
+     "w": 56,
+     "h": 649
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      34,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 49
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-slots \"Appointment SchedulerSelect a \"",
+     "spillPx": 49
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 50
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 50
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 66
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 66
+    },
+    {
+     "el": "div.flex-1.grid \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 66
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 66
+    },
+    {
+     "el": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 128
+    }
+   ],
+   "wrappedControls": []
+  }
+ },
+ "375x812-calendar-empty": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 756,
+     "scrollH": 1986
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "12px"
+    ],
+    "sizes": {
+     "18px/600": 2,
+     "26px/600": 1,
+     "16px/400": 19,
+     "16px/500": 3,
+     "20px/600": 1,
+     "12px/400": 9
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      16,
+      19
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Grid\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"30 minutes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "h3.font-semibold.mb-2 \"Legend\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"OPD\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Procedure\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Telemedicine\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Completed\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (OPD)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (Procedure)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Newly Booked\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Booking In Progress\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-[10px].leading-none \"09:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"10:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"11:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"12:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"13:00\"",
+     "ratio": 2.52
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 58,
+     "y": 1295,
+     "w": 56,
+     "h": 649
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "375x812-validation-nopatient": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 756,
+     "scrollH": 1986
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "12px",
+     "14px"
+    ],
+    "sizes": {
+     "18px/600": 2,
+     "26px/600": 1,
+     "16px/400": 20,
+     "16px/500": 4,
+     "20px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "16px/600": 3,
+     "14px/600": 1,
+     "14px/500": 3
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      16,
+      19
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "span",
+     "w": 1,
+     "h": 1
+    },
+    {
+     "el": "span",
+     "w": 1,
+     "h": 1
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Grid\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"30 minutes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "h3.font-semibold.mb-2 \"Legend\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"OPD\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Procedure\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Telemedicine\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Completed\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (OPD)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (Procedure)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Newly Booked\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Booking In Progress\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-[10px].leading-none \"09:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"10:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"11:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"12:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"13:00\"",
+     "ratio": 2.52
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 58,
+     "y": 65,
+     "w": 56,
+     "h": 649
+    },
+    {
+     "el": "span",
+     "x": -1,
+     "y": 811,
+     "w": 1,
+     "h": 1
+    },
+    {
+     "el": "ol.fixed.top-0 \"Patient requiredSearch and sel\"",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 155
+    },
+    {
+     "el": "span",
+     "x": -1,
+     "y": 811,
+     "w": 1,
+     "h": 1
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      34,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 32
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-calendar \"Doctor CalendarDaily calendar \"",
+     "spillPx": 32
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Doctor CalendarDaily calendar \"",
+     "spillPx": 33
+    },
+    {
+     "el": "div.px-6.space-y-4 \"Visit TypeAll TypesRoomAll Roo\"",
+     "spillPx": 33
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 58
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 58
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.flex-1.grid \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 163
+    }
+   ],
+   "wrappedControls": []
+  }
+ },
+ "375x812-dialog-open": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 756,
+     "scrollH": 2050
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "clientH": 648,
+     "scrollH": 1103
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "w": 375,
+     "h": 812,
+     "fillPct": 0,
+     "pctOfViewport": 100
+    },
+    {
+     "el": "div.grid.grid-cols-1 \"Patient: Rajesh KumarPhone: 98\"",
+     "w": 325,
+     "h": 188,
+     "fillPct": 9,
+     "pctOfViewport": 20
+    }
+   ],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "14px",
+     "12px"
+    ],
+    "sizes": {
+     "18px/600": 2,
+     "26px/600": 1,
+     "16px/400": 25,
+     "16px/500": 10,
+     "20px/600": 4,
+     "14px/500": 6,
+     "12px/400": 9,
+     "16px/700": 1,
+     "16px/600": 2,
+     "14px/600": 1,
+     "18px/400": 5,
+     "18px/500": 4,
+     "14px/400": 3
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      16,
+      19
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+     "w": 16,
+     "h": 16
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Grid\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"30 minutes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Selected: Rajesh Kumar — 98765\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "button.inline-flex.items-center \"Clear\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "h3.font-semibold.mb-2 \"Legend\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"OPD\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Procedure\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Telemedicine\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Completed\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (OPD)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (Procedure)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Newly Booked\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Booking In Progress\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-[10px].leading-none \"09:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"10:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"11:00\"",
+     "ratio": 2.52
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "div \"Book 13:30-14:00\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"30 minutes\"",
+     "w": 40,
+     "h": 26
+    },
+    {
+     "a": "div \"Book 15:00-15:30\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"OPD Consultation\"",
+     "w": 90,
+     "h": 6
+    },
+    {
+     "a": "div \"Book 15:30-16:00\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"OPD Consultation\"",
+     "w": 90,
+     "h": 25
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 58,
+     "y": 64,
+     "w": 56,
+     "h": 649
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 812
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "x": 0,
+     "y": 81,
+     "w": 375,
+     "h": 650
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      34,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    },
+    {
+     "container": "div.flex.justify-end \"CancelConfirm Booking\"",
+     "children": 2,
+     "widths": [
+      87,
+      160
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 32
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-calendar \"Doctor CalendarDaily calendar \"",
+     "spillPx": 32
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Doctor CalendarDaily calendar \"",
+     "spillPx": 33
+    },
+    {
+     "el": "div.px-6.space-y-4 \"Visit TypeAll TypesRoomAll Roo\"",
+     "spillPx": 33
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 58
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 58
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.flex-1.grid \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 163
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Clear\""
+   ]
+  }
+ },
+ "375x812-dialog-procedure-noroom": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 756,
+     "scrollH": 2050
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "clientH": 648,
+     "scrollH": 1391
+    }
+   ],
+   "deadSpace": [
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "w": 375,
+     "h": 812,
+     "fillPct": 0,
+     "pctOfViewport": 100
+    },
+    {
+     "el": "div.grid.grid-cols-1 \"Patient: Rajesh KumarPhone: 98\"",
+     "w": 325,
+     "h": 188,
+     "fillPct": 9,
+     "pctOfViewport": 20
+    }
+   ],
+   "spacing": {
+    "observed": [
+     2,
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "14px",
+     "12px"
+    ],
+    "sizes": {
+     "18px/600": 2,
+     "26px/600": 1,
+     "16px/400": 27,
+     "16px/500": 11,
+     "20px/600": 5,
+     "14px/500": 7,
+     "12px/400": 9,
+     "16px/700": 1,
+     "16px/600": 2,
+     "14px/600": 1,
+     "18px/400": 5,
+     "18px/500": 4,
+     "14px/400": 4
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      16,
+      19
+     ]
+    ]
+   },
+   "smallTargets": [
+    {
+     "el": "button.ring-offset-background.focus:ring-ring \"Close\"",
+     "w": 16,
+     "h": 16
+    }
+   ],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Grid\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"30 minutes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.inline-flex.items-center \"Selected: Rajesh Kumar — 98765\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "button.inline-flex.items-center \"Clear\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "h3.font-semibold.mb-2 \"Legend\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"OPD\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Procedure\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Telemedicine\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Completed\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (OPD)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (Procedure)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Newly Booked\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Booking In Progress\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-[10px].leading-none \"09:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"10:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"11:00\"",
+     "ratio": 2.52
+    }
+   ],
+   "overlaps": [
+    {
+     "a": "button.border-input.data-[placeholder]:text-muted-foreground \"30 minutes\"",
+     "b": "button.border-input.data-[placeholder]:text-muted-foreground \"30 minutes\"",
+     "w": 118,
+     "h": 8
+    },
+    {
+     "a": "div \"Book 17:00-17:30\"",
+     "b": "button.inline-flex.items-center \"Cancel\"",
+     "w": 59,
+     "h": 8
+    },
+    {
+     "a": "div \"Book 17:30-18:00\"",
+     "b": "button.inline-flex.items-center \"Cancel\"",
+     "w": 59,
+     "h": 23
+    }
+   ],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 58,
+     "y": 64,
+     "w": 56,
+     "h": 649
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    },
+    {
+     "el": "div.data-[state=open]:animate-in.data-[state=closed]:animate-out",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 812
+    },
+    {
+     "el": "div#radix-_r_29_ \"Book AppointmentPatient: Rajes\"",
+     "x": 0,
+     "y": 81,
+     "w": 375,
+     "h": 650
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      34,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    },
+    {
+     "container": "div.flex.justify-end \"CancelConfirm Booking\"",
+     "children": 2,
+     "widths": [
+      87,
+      160
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 32
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-calendar \"Doctor CalendarDaily calendar \"",
+     "spillPx": 32
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Doctor CalendarDaily calendar \"",
+     "spillPx": 33
+    },
+    {
+     "el": "div.px-6.space-y-4 \"Visit TypeAll TypesRoomAll Roo\"",
+     "spillPx": 33
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 58
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 58
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.flex-1.grid \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 163
+    }
+   ],
+   "wrappedControls": [
+    "button.inline-flex.items-center \"Clear\""
+   ]
+  }
+ },
+ "1440x900-shravya-calendar-today": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 836,
+     "scrollH": 1509
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 5,
+     "16px/500": 13,
+     "16px/600": 1,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 19,
+     "20px/600": 1,
+     "18px/600": 1,
+     "12px/400": 9
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 747,
+     "w": 56,
+     "h": 720
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-shravya-calendar-populated": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 836,
+     "scrollH": 1509
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "18px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 11,
+     "16px/500": 15,
+     "16px/600": 5,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 19,
+     "20px/600": 1,
+     "18px/600": 1,
+     "12px/400": 9,
+     "16px/700": 2,
+     "14px/600": 2
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 322,
+     "y": 747,
+     "w": 56,
+     "h": 720
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"11:30-11:45Deepika NairOPD38yF\"",
+     "children": 3,
+     "widths": [
+      195,
+      432,
+      54
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"38yF\"",
+     "children": 2,
+     "widths": [
+      30,
+      16
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Meera KrishnanOPD27\"",
+     "children": 3,
+     "widths": [
+      221,
+      407,
+      53
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"27yF\"",
+     "children": 2,
+     "widths": [
+      29,
+      16
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "1440x900-shravya-slots-populated": {
+  "layout": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 836,
+     "scrollH": 1417
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     10,
+     12,
+     16,
+     20,
+     24,
+     40
+    ],
+    "offScale": [
+     3,
+     6,
+     10
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ],
+     [
+      8,
+      10
+     ],
+     [
+      10,
+      12
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "22px",
+     "14px",
+     "16px",
+     "32px",
+     "20px",
+     "12px"
+    ],
+    "sizes": {
+     "22px/600": 1,
+     "14px/500": 8,
+     "16px/500": 14,
+     "16px/600": 3,
+     "14px/400": 2,
+     "32px/600": 1,
+     "16px/400": 11,
+     "20px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "14px/600": 1
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      280,
+      283
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "span.ml-2.text-xl \"ClinicMS\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.px-3.pb-1 \"Overview\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Dashboard\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Clinical\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Patients\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Appointments\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "a.group.relative \"Visits\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Procedures\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Rooms\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Pharmacy\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Inventory\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.px-3.pb-1 \"Admin\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "a.group.relative \"Test Transcribe\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "p.break-words.text-sm \"Shravya Dermatologist\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "p.text-xs.text-[var(--muted-foreground)] \"DOCTOR\"",
+     "ratio": 1.05
+    },
+    {
+     "el": "span.border.font-medium \"3\"",
+     "ratio": 1.1
+    },
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Appointment Scheduler\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select a doctor and date to vi\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Duration\"",
+     "ratio": 2.5
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 297,
+     "y": 696,
+     "w": 56,
+     "h": 720
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 1408,
+     "y": 0,
+     "w": 32,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      453,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "375x812-shravya-calendar-today": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 756,
+     "scrollH": 1986
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "12px"
+    ],
+    "sizes": {
+     "18px/600": 2,
+     "26px/600": 1,
+     "16px/400": 19,
+     "16px/500": 3,
+     "20px/600": 1,
+     "12px/400": 9
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      16,
+      19
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Grid\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"30 minutes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "h3.font-semibold.mb-2 \"Legend\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"OPD\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Procedure\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Telemedicine\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Completed\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (OPD)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (Procedure)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Newly Booked\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Booking In Progress\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-[10px].leading-none \"09:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"10:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"11:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"12:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"13:00\"",
+     "ratio": 2.52
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 58,
+     "y": 1295,
+     "w": 56,
+     "h": 649
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    }
+   ],
+   "overflowSpills": [],
+   "wrappedControls": []
+  }
+ },
+ "375x812-shravya-calendar-populated": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 756,
+     "scrollH": 1986
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "12px",
+     "14px"
+    ],
+    "sizes": {
+     "18px/600": 2,
+     "26px/600": 1,
+     "16px/400": 19,
+     "16px/500": 5,
+     "20px/600": 1,
+     "12px/400": 9,
+     "16px/700": 2,
+     "16px/600": 4,
+     "14px/600": 2,
+     "14px/500": 6
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      16,
+      19
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Doctor Calendar\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Daily calendar for selected do\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Grid\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"30 minutes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "h3.font-semibold.mb-2 \"Legend\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"OPD\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Procedure\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Telemedicine\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Completed\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (OPD)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Past (Procedure)\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Newly Booked\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-sm \"Booking In Progress\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "span.text-[10px].leading-none \"09:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"10:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"11:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"12:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"13:00\"",
+     "ratio": 2.52
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 58,
+     "y": 1295,
+     "w": 56,
+     "h": 649
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"11:30-11:45Deepika NairOPD38yF\"",
+     "children": 3,
+     "widths": [
+      195,
+      34,
+      54
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"38yF\"",
+     "children": 2,
+     "widths": [
+      30,
+      16
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Meera KrishnanOPD27\"",
+     "children": 3,
+     "widths": [
+      221,
+      34,
+      53
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"27yF\"",
+     "children": 2,
+     "widths": [
+      29,
+      16
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 32
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-calendar \"Doctor CalendarDaily calendar \"",
+     "spillPx": 32
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"Doctor CalendarDaily calendar \"",
+     "spillPx": 33
+    },
+    {
+     "el": "div.px-6.space-y-4 \"Visit TypeAll TypesRoomAll Roo\"",
+     "spillPx": 33
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 58
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 58
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.flex-1.grid \"11:30-11:45Deepika NairOPD38yF\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.absolute.left-0 \"11:30-11:45Deepika NairOPD38yF\"",
+     "spillPx": 74
+    },
+    {
+     "el": "div.font-semibold.px-2 \"11:30-11:45Deepika NairOPD38yF\"",
+     "spillPx": 149
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Meera KrishnanOPD27\"",
+     "spillPx": 74
+    }
+   ],
+   "wrappedControls": [],
+   "overflowSpillsTruncated": true
+  }
+ },
+ "375x812-shravya-slots-populated": {
+  "layout": {
+   "viewport": {
+    "width": 375,
+    "height": 812,
+    "pageScrollY": 0,
+    "pageScrollX": 0
+   },
+   "offscreenPrimary": [],
+   "scrollers": [
+    {
+     "el": "main.min-w-0.flex-1 \"AppointmentsDoctorShravya Derm\"",
+     "clientH": 756,
+     "scrollH": 1664
+    }
+   ],
+   "deadSpace": [],
+   "spacing": {
+    "observed": [
+     3,
+     4,
+     6,
+     8,
+     12,
+     16,
+     24
+    ],
+    "offScale": [
+     3,
+     6
+    ],
+    "nearDupes": [
+     [
+      4,
+      6
+     ],
+     [
+      6,
+      8
+     ]
+    ]
+   },
+   "type": {
+    "distinctFontSizes": [
+     "18px",
+     "26px",
+     "16px",
+     "20px",
+     "12px",
+     "14px"
+    ],
+    "sizes": {
+     "18px/600": 1,
+     "26px/600": 1,
+     "16px/400": 11,
+     "16px/500": 4,
+     "20px/600": 1,
+     "12px/400": 9,
+     "16px/700": 1,
+     "16px/600": 2,
+     "14px/600": 1,
+     "14px/500": 3
+    }
+   },
+   "alignment": {
+    "nearMissEdges": [
+     [
+      16,
+      19
+     ]
+    ]
+   },
+   "smallTargets": [],
+   "lowContrast": [
+    {
+     "el": "h1.text-2xl.font-semibold \"Appointments\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Doctor\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"Shravya Dermatologist\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Date\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "button.min-w-0.max-w-full \"Quick Guide\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-calendar \"Calendar\"",
+     "ratio": 1.09
+    },
+    {
+     "el": "button#radix-_R_4lritukndlb_-trigger-slots \"Slots\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-lg.leading-tight \"Appointment Scheduler\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "div.text-muted-foreground.text-sm \"Select a doctor and date to vi\"",
+     "ratio": 2.47
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Visit Type\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Types\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Room\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"All Rooms\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Duration\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span \"30 minutes\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "label.text-sm.text-gray-700 \"Patient\"",
+     "ratio": 2.5
+    },
+    {
+     "el": "span.text-[10px].leading-none \"09:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"10:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"11:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"12:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"13:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"14:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"15:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"16:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-[10px].leading-none \"17:00\"",
+     "ratio": 2.52
+    },
+    {
+     "el": "span.text-blue-700.font-bold \"12:00-12:15\"",
+     "ratio": 2.57
+    },
+    {
+     "el": "span.font-semibold \"Sanjay Mehta\"",
+     "ratio": 1
+    },
+    {
+     "el": "span.text-purple-600.font-medium \"OPD\"",
+     "ratio": 3.13
+    },
+    {
+     "el": "span.text-gray-600 \"60y\"",
+     "ratio": 2.46
+    },
+    {
+     "el": "span.text-gray-600.bg-gray-100 \"M\"",
+     "ratio": 1.04
+    }
+   ],
+   "overlaps": [],
+   "fixedOverlays": [
+    {
+     "el": "div.w-14.sticky \"09:0010:0011:0012:0013:0014:00\"",
+     "x": 33,
+     "y": 1014,
+     "w": 56,
+     "h": 649
+    },
+    {
+     "el": "ol.fixed.top-0",
+     "x": 0,
+     "y": 0,
+     "w": 375,
+     "h": 32
+    }
+   ]
+  },
+  "geometry": {
+   "pageOverflowX": 0,
+   "unevenRows": [
+    {
+     "container": "div.bg-muted.text-muted-foreground \"CalendarSlots\"",
+     "children": 2,
+     "widths": [
+      87,
+      56
+     ]
+    },
+    {
+     "container": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "children": 3,
+     "widths": [
+      204,
+      34,
+      59
+     ]
+    },
+    {
+     "container": "div.flex.items-center \"60yM\"",
+     "children": 2,
+     "widths": [
+      30,
+      21
+     ]
+    }
+   ],
+   "overflowSpills": [
+    {
+     "el": "div.flex.min-w-0 \"AppointmentsDoctorShravya Derm\"",
+     "spillPx": 49
+    },
+    {
+     "el": "div#radix-_R_4lritukndlb_-content-slots \"Appointment SchedulerSelect a \"",
+     "spillPx": 49
+    },
+    {
+     "el": "div.bg-card.text-card-foreground \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 50
+    },
+    {
+     "el": "div.p-4 \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 50
+    },
+    {
+     "el": "div.relative \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 66
+    },
+    {
+     "el": "div.flex \"09:0010:0011:0012:0013:0014:00\"",
+     "spillPx": 66
+    },
+    {
+     "el": "div.flex-1.grid \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 66
+    },
+    {
+     "el": "div.absolute.left-0 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 66
+    },
+    {
+     "el": "div.font-semibold.px-2 \"12:00-12:15Sanjay MehtaOPD60yM\"",
+     "spillPx": 128
+    }
+   ],
+   "wrappedControls": []
+  }
+ },
+ "extra": {
+  "note": "Supplementary measurements by inspector; layout-audit lowContrast unreliable (oklch parse).",
+  "scheduleToday": {
+   "doctor": "Shravya",
+   "date": "2026-11-07",
+   "slots": [
+    "18:30-18:45 Priya Sharma",
+    "19:00-19:15 Kavya Patel",
+    "19:30-19:45 Ananya Gupta"
+   ],
+   "gridHours": "09:00-18:00",
+   "rendered": 0
+  },
+  "doctorRace": {
+   "header": "Shravya Dermatologist",
+   "localStorage": "cmw6d94b200037dw0nxzpi3qc",
+   "afterSlotsTab": "requests /doctor/cmw6d94b400057dw0ce1k8jd2 (Praneeta) schedule; grid shows Sanjay Mehta 12:00 instead of Deepika Nair 11:30 + Meera Krishnan 12:00",
+   "cause": "AppointmentScheduler.tsx:168 setDoctorId(list[0].id)"
+  },
+  "dialog": {
+   "1440x900": {
+    "x": 464,
+    "w": 512,
+    "clientH": 718,
+    "scrollH": 1240
+   },
+   "768x1024": {
+    "x": 128,
+    "w": 512,
+    "clientH": 817,
+    "scrollH": 1240
+   },
+   "375x812": {
+    "x": 0,
+    "w": 375,
+    "clientH": 648,
+    "scrollH": 1391
+   },
+   "confirmDisabledWhenProcedureNoRoom": true
+  },
+  "contrast": {
+   "hourLabel": "12px oklch(0.707 0.022 261) on white = 2.20:1",
+   "cardDescription": "4.76:1",
+   "legendText": "19.29:1"
+  },
+  "tabOrder": "filters -> appointment INFO/RESCHED/START -> leaves main; empty Book slots never focused (40 Tabs)",
+  "focusAfterEsc": "BODY",
+  "hoverActions": [
+   "INFO 49x27",
+   "RESCHED 82x27",
+   "START 61x27"
+  ]
+ }
+}
