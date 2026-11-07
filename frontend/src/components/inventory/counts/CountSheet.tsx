@@ -1,17 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { SignOffDialog } from './SignOffDialog';
-import { BatchLine, Difference } from './count-parts';
-import { countPath, countSummary, failureOf, failureMessage, itemCount, parseCount, type CountDetail, type CountLine } from './count-model';
+import { BatchLine, Difference, Split } from './count-parts';
+import { countPath, countSummary, differ, failureOf, failureMessage, itemCount, parseCount, type CountDetail, type CountLine } from './count-model';
 
 type Entry = { count: string; note: string };
 type SaveState = 'saved' | 'saving' | 'failed';
@@ -49,6 +48,7 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
   const inflight = useRef<Promise<void> | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [server, setServer] = useState(detail);
+  const [noting, setNoting] = useState<string[]>([]);
 
   const flush = useCallback(async (): Promise<boolean> => {
     if (timer.current) clearTimeout(timer.current);
@@ -94,7 +94,6 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
     setEntries((current) => ({ ...current, [line.id]: { ...current[line.id], ...patch } }));
     dirty.current.add(line.id);
     if (missing.includes(line.id)) setMissing((ids) => ids.filter((id) => id !== line.id));
-    setSaveState('saving');
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void flush(), SAVE_DELAY_MS);
   };
@@ -177,11 +176,11 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
                 <BatchLine line={line} />
               </div>
               <div className="col-span-3 text-sm sm:col-span-1">
-                <span className="sm:hidden">Location </span>
+                <span className="sm:sr-only">Location </span>
                 {line.location || <span className="text-muted-foreground">Not recorded</span>}
               </div>
               <div className="text-sm sm:text-right">
-                <span className="block text-xs sm:hidden">System</span>
+                <span className="block text-xs sm:sr-only">System</span>
                 <span className="whitespace-nowrap tabular-nums">{line.systemStock ?? '—'}</span>
               </div>
               <div>
@@ -215,56 +214,67 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
                 )}
               </div>
               <div className="text-sm">
-                <span className="block text-xs sm:hidden">Difference</span>
+                <span className="block text-xs sm:sr-only">Difference</span>
                 <span id={diffId}>
                   <Difference line={line} />
                 </span>
               </div>
               <div className="col-span-3 sm:col-span-1">
-                <label htmlFor={`note-${line.id}`} className="sr-only">
-                  Note for {line.name}
-                </label>
-                <Input
-                  id={`note-${line.id}`}
-                  value={raw.note}
-                  maxLength={300}
-                  placeholder="Note (optional)"
-                  onChange={(event) => change(line, { note: event.target.value })}
-                  onBlur={() => void flush()}
-                  className="h-9 px-2 text-sm md:text-sm"
-                />
+                {raw.note || noting.includes(line.id) || (line.physicalStock !== null && line.physicalStock !== line.systemStock) ? (
+                  <>
+                    <label htmlFor={`note-${line.id}`} className="sr-only">
+                      Note for {line.name}
+                    </label>
+                    <Input
+                      id={`note-${line.id}`}
+                      value={raw.note}
+                      maxLength={300}
+                      placeholder="Why it differs (optional)"
+                      autoFocus={noting.includes(line.id) && !raw.note}
+                      onChange={(event) => change(line, { note: event.target.value })}
+                      onBlur={() => void flush()}
+                      className="h-9 px-2 text-sm md:text-sm"
+                    />
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setNoting((ids) => [...ids, line.id])}
+                    className="inline-flex h-9 items-center gap-1 rounded-md px-1 text-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    <Plus aria-hidden="true" className="size-4" /> Note<span className="sr-only"> for {line.name}</span>
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
       <div className="sticky -bottom-4 z-20 -mx-4 -mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-background px-4 py-3 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] md:-bottom-6 md:-mx-6 md:-mb-6 md:px-6">
-        <div className="flex min-w-0 flex-col gap-1">
-          <p className="whitespace-nowrap text-base font-semibold tabular-nums">
-            {figures.counted} of {figures.items} counted
-            {figures.differences > 0 && <span className="font-normal"> · {figures.differences} differ</span>}
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <p className="flex flex-wrap items-baseline gap-x-2 text-base">
+            <span className="whitespace-nowrap font-semibold tabular-nums">
+              {figures.counted} of {figures.items} counted
+              {figures.differences > 0 && <span className="font-normal"> · {differ(figures.differences)}</span>}
+            </span>
+            <span role="status" aria-live="polite" className="text-sm">
+              {saveState === 'saving' ? (
+                'Saving…'
+              ) : saveState === 'failed' ? (
+                <span className="text-destructive-text">Not saved. Check your connection; your counts stay on this screen.</span>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <Check aria-hidden="true" className="size-4" /> Saved
+                </span>
+              )}
+            </span>
           </p>
-          <div aria-hidden="true" className="h-1.5 w-48 max-w-full overflow-hidden rounded-full bg-muted max-sm:hidden">
-            <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${figures.items ? (100 * figures.counted) / figures.items : 0}%` }} />
-          </div>
-          <p role="status" aria-live="polite" className="text-sm">
-            {saveState === 'saving' ? (
-              'Saving…'
-            ) : saveState === 'failed' ? (
-              'Not saved. Check your connection; your counts stay on this screen.'
-            ) : (
-              <span className="inline-flex items-center gap-1">
-                <Check aria-hidden="true" className="size-4" /> Saved
-              </span>
-            )}
-          </p>
+          {figures.differences > 0 && <Split figures={figures} className="text-sm font-medium" />}
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <Button ref={signButton} aria-label="Sign off count" className="h-11 px-5 text-base" onClick={() => void startSignOff()}>
-            Sign off<span className="max-sm:hidden"> count</span>
-          </Button>
-          {figures.differences > 0 && <span className="whitespace-nowrap text-sm tabular-nums max-sm:hidden">Net {formatRupees(figures.netValue)}</span>}
-        </div>
+        <Button ref={signButton} aria-label="Sign off count" className="h-11 shrink-0 px-5 text-base" onClick={() => void startSignOff()}>
+          <span className="max-sm:hidden">Sign off count</span>
+          <span className="sm:hidden">Sign off</span>
+        </Button>
         {prompt && (
           <p role="alert" className="w-full text-sm font-medium text-destructive-text">
             {prompt}

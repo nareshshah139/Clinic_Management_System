@@ -12,14 +12,13 @@ export const COUNT_STATE_LABELS: Record<CountState, string> = {
   AWAITING_APPROVAL: 'Signed – awaiting approval',
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
-  POSTED_NO_DIFF: 'Posted (no differences)',
+  POSTED_NO_DIFF: 'Confirmed, no differences',
   CANCELLED: 'Cancelled',
 };
 
 export const COUNT_STATE_SHORT: Record<CountState, string> = {
   ...COUNT_STATE_LABELS,
   AWAITING_APPROVAL: 'Awaiting approval',
-  POSTED_NO_DIFF: 'No differences',
 };
 
 export const COUNT_STATE_BADGE: Record<CountState, 'neutral' | 'warning' | 'success' | 'danger' | 'info'> = {
@@ -48,6 +47,11 @@ export type CountRow = {
   differences: number;
   netUnits: number;
   netValue: number;
+  shortUnits: number;
+  shortValue: number;
+  extraUnits: number;
+  extraValue: number;
+  selfApproval: boolean;
   state: CountState;
 };
 
@@ -113,20 +117,22 @@ export type ReconciliationSummary = {
   cycle: Cycle;
   forecast: Forecast;
   mine: AssignedCount[];
-  approvals: { count: number; netValue: number } | null;
+  approvals: ApprovalQueue | null;
   canCount: boolean;
   canApprove: boolean;
   canConfigure: boolean;
   staff: { id: string; name: string; role: string }[] | null;
 };
 
+export type ApprovalQueue = { count: number; netValue: number; shortValue: number; extraValue: number };
+
 export type ReconciliationCards = {
-  due: { counts: number; items: number } | null;
-  approvals: { count: number; netValue: number } | null;
+  due: { counts: number; items: number; documentId: string | null } | null;
+  approvals: ApprovalQueue | null;
   behind: { remaining: number; message: string } | null;
 };
 
-export const COUNT_SORT_KEYS = ['date', 'assignedTo', 'signedAt', 'items', 'differences', 'netValue'] as const;
+export const COUNT_SORT_KEYS = ['date', 'assignedTo', 'signedAt', 'items', 'differences', 'shortValue', 'netValue'] as const;
 export type CountSortKey = (typeof COUNT_SORT_KEYS)[number];
 export const COUNT_FILTER_KEYS = ['state', 'person'] as const;
 export type CountFilterKey = (typeof COUNT_FILTER_KEYS)[number];
@@ -146,7 +152,7 @@ export type CountPage = {
   page: number;
   limit: number;
   personOptions: Person[];
-  totals: { counts: number; differences: number; netValue: number };
+  totals: { counts: number; differences: number; approvedValue: number; awaitingValue: number; rejected: number };
 };
 
 export const RECONCILIATION = '/inventory/workspace/reconciliation';
@@ -169,6 +175,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 export const itemCount = (n: number) => plural(n, 'item');
 export const batchCount = (n: number) => plural(n, 'batch', 'batches');
 export const people = (n: number) => plural(n, 'person', 'people');
+export const differ = (n: number) => `${n} ${n === 1 ? 'differs' : 'differ'}`;
 
 export const signedUnits = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
 export const signedRupees = (n: number) => (n > 0 ? `+${formatRupees(n)}` : n < 0 ? `−${formatRupees(-n)}` : formatRupees(0));
@@ -181,18 +188,44 @@ export function parseCount(text: string): number | null | 'invalid' {
   return /^\d{1,6}$/.test(value) ? Number(value) : 'invalid';
 }
 
+const cents = (n: number) => Math.round(n * 100) / 100;
+
 export function countSummary(lines: readonly Pick<CountLine, 'systemStock' | 'physicalStock' | 'unitCost'>[]) {
   const counted = lines.filter((line) => line.physicalStock !== null);
   const differing = counted.filter((line) => line.physicalStock !== line.systemStock);
   const delta = (line: (typeof lines)[number]) => (line.physicalStock ?? 0) - (line.systemStock ?? 0);
-  const netUnits = differing.reduce((n, line) => n + delta(line), 0);
-  const netValue = Math.round(differing.reduce((n, line) => n + delta(line) * line.unitCost, 0) * 100) / 100;
-  return { items: lines.length, counted: counted.length, differences: differing.length, netUnits, netValue };
+  const units = (part: typeof lines) => part.reduce((n, line) => n + delta(line), 0);
+  const value = (part: typeof lines) => cents(part.reduce((n, line) => n + delta(line) * line.unitCost, 0));
+  const short = differing.filter((line) => delta(line) < 0);
+  const extra = differing.filter((line) => delta(line) > 0);
+  return {
+    items: lines.length,
+    counted: counted.length,
+    differences: differing.length,
+    netUnits: units(differing),
+    netValue: value(differing),
+    shortUnits: units(short),
+    shortValue: value(short),
+    extraUnits: units(extra),
+    extraValue: value(extra),
+  };
 }
+
+export type SplitFigures = { shortUnits?: number; shortValue: number; extraUnits?: number; extraValue: number };
+
+/** "Short −1 (−₹17.50) · Extra +1 (+₹12.50)": a net figure would let a surplus hide a shortage. */
+export function splitParts(figures: SplitFigures) {
+  const part = (label: string, units: number | undefined, value: number) => `${label} ${units === undefined ? signedRupees(value) : `${signedUnits(units)} (${signedRupees(value)})`}`;
+  return [
+    ...(figures.shortValue || figures.shortUnits ? [{ tone: 'short' as const, text: part('Short', figures.shortUnits, figures.shortValue) }] : []),
+    ...(figures.extraValue || figures.extraUnits ? [{ tone: 'extra' as const, text: part('Extra', figures.extraUnits, figures.extraValue) }] : []),
+  ];
+}
+export const splitText = (figures: SplitFigures) => splitParts(figures).map((p) => p.text).join(' · ') || 'No differences';
 
 export function summarySentence(figures: ReturnType<typeof countSummary>) {
   if (!figures.differences) return `${itemCount(figures.items)}, all match the system.`;
-  return `${itemCount(figures.items)}, ${figures.differences} differ: net ${signedUnits(figures.netUnits)} ${figures.netUnits === 1 || figures.netUnits === -1 ? 'unit' : 'units'}, ${signedRupees(figures.netValue)}.`;
+  return `${itemCount(figures.items)}, ${differ(figures.differences)}. ${splitText(figures)}.`;
 }
 
 const ITEMS_PER_DAY_MAX = 200;

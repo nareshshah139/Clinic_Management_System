@@ -27,8 +27,8 @@ import { PurchaseBills } from "./purchase/PurchaseBills";
 import { canRecordSupplierPayments } from "./purchase/purchase-register-model";
 import { InventoryUpdates } from "./InventoryUpdates";
 import { StockCounts } from "./counts/StockCounts";
-import { formatRupees } from "@/lib/pharmacy-invoice-print";
-import type { ReconciliationCards } from "./counts/count-model";
+import { splitText, type ReconciliationCards } from "./counts/count-model";
+import { Split } from "./counts/count-parts";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
   fmtMoney,
@@ -228,7 +228,7 @@ export function InventoryWorkspace() {
     void loadPermissions();
     return () => { permissionRequest.current += 1; };
   }, [loadPermissions]);
-  const availableTasks = (menus[area] || []).filter(([id]) => (id !== "approvals" || canReadEdits) && (id !== "ledger" || caps?.ledger));
+  const availableTasks = (menus[area] || []).filter(([id]) => (id !== "approvals" || canReadEdits) && (id !== "ledger" || caps?.ledger) && (id !== "COUNT" || caps?.kinds?.COUNT?.read));
   const primaryTasks = availableTasks.slice(0, 3);
   const moreTasks = availableTasks.slice(3);
   const switchTask = (id: string, extra: Record<string, string> = {}) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1", ...extra });
@@ -566,24 +566,28 @@ export function InventoryWorkspace() {
  * Today MUST remind, never block: the signed-in counter's count due, an approver's queue with its
  * net value, and a cycle that is short or behind for whoever configures it.
  */
+const due = ({ counts, documentId }: NonNullable<ReconciliationCards["due"]>) =>
+  documentId ? "Open your count and sign off when every batch is counted." : `${counts} lists to count. Sign off each one when every batch is counted.`;
 export function reconciliationRows(cards: ReconciliationCards | null) {
   if (!cards) return [];
   const counts = { area: "stock", view: "COUNT" };
   return [
     ...(cards.due ? [{
-      label: `Stock count due today · ${cards.due.items} ${cards.due.items === 1 ? "item" : "items"}`,
+      label: "Stock count due today",
       count: cards.due.items,
-      detail: "Count your assigned batches and sign off.",
-      target: counts,
+      detail: due(cards.due),
+      note: due(cards.due),
+      target: cards.due.documentId ? { ...counts, document: cards.due.documentId } : counts,
     }] : []),
     ...(cards.approvals?.count ? [{
-      label: `Counts awaiting your approval · ${formatRupees(cards.approvals.netValue)}`,
+      label: "Counts awaiting your approval",
       count: cards.approvals.count,
-      detail: "Signed counts with differences. Stock changes only when you approve.",
+      detail: `${splitText(cards.approvals)}. Stock changes only when you approve.`,
+      note: <><Split figures={cards.approvals} />. Stock changes only when you approve.</>,
       target: { ...counts, tab: "approvals" },
     }] : []),
     ...(cards.behind ? [{
-      label: `Reconciliation behind: ${cards.behind.remaining} ${cards.behind.remaining === 1 ? "batch" : "batches"} not counted this cycle`,
+      label: "Batches not counted this cycle",
       count: cards.behind.remaining,
       detail: cards.behind.message,
       note: cards.behind.message,

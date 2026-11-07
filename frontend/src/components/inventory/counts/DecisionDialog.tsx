@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { requestKey } from '@/components/inventory/workspace-model';
 import { ActionDialog, DialogClose } from '@/components/inventory/purchase/ActionDialog';
-import { countPath, failureMessage, failureOf, signedUnits, type CountDetail } from './count-model';
+import { Difference, Money } from './count-parts';
+import { batchCount, countPath, countSummary, failureMessage, failureOf, splitParts, type CountDetail } from './count-model';
 
 export type Decision = 'approve' | 'reject';
 
@@ -47,6 +48,7 @@ export function DecisionDialog({
   const ownRef = useRef<HTMLInputElement>(null);
   const id = useId();
   const changes = detail.lines.filter((line) => line.difference);
+  const figures = countSummary(detail.lines);
   const self = detail.can.decideOwn;
 
   const submit = async () => {
@@ -88,8 +90,8 @@ export function DecisionDialog({
       title={approve ? 'Approve and adjust stock' : 'Reject this count'}
       description={
         approve
-          ? `Each difference is added to the stock on record now, so sales since the count still count.`
-          : 'Stock does not change. These batches go back into the cycle to be counted again.'
+          ? "Each difference is applied to today's stock, so sales made since the count are kept."
+          : `Rejecting ${[batchCount(detail.lines.length), ...splitParts({ shortValue: figures.shortValue, extraValue: figures.extraValue }).map((part) => part.text.toLowerCase())].join(', ')}. Stock does not change; these batches go back into the cycle to be counted again.`
       }
       saving={saving}
       initialFocus={reasonRef}
@@ -114,21 +116,29 @@ export function DecisionDialog({
             const now = line.currentStock ?? line.systemStock ?? 0;
             const diff = line.difference ?? 0;
             return (
-              <li key={line.id} className="flex flex-col gap-0.5 px-3 py-2">
-                <span className="font-semibold">
-                  {line.name} <span className="font-normal">· {line.batchNumber}</span>
+              <li key={line.id} className="flex items-start justify-between gap-3 px-3 py-2">
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-semibold [overflow-wrap:anywhere]">
+                    {line.name} <span className="font-normal">· {line.batchNumber}</span>
+                  </span>
+                  <span className="tabular-nums">
+                    {now} now <span aria-hidden="true">→</span>
+                    <span className="sr-only">becomes</span> <strong>{now + diff}</strong>
+                  </span>
+                  {line.currentStock !== null && line.currentStock !== line.systemStock && (
+                    <span className="text-xs">It was {line.systemStock} when counted; stock has moved since.</span>
+                  )}
                 </span>
-                <span className="tabular-nums">
-                  {now} now <span aria-hidden="true">→</span>
-                  <span className="sr-only">becomes</span> <strong>{now + diff}</strong> ({signedUnits(diff)})
-                </span>
-                {line.currentStock !== null && line.currentStock !== line.systemStock && (
-                  <span className="text-xs">It was {line.systemStock} when counted; stock has moved since.</span>
-                )}
+                <Difference line={line} />
               </li>
             );
           })}
         </ul>
+      )}
+      {approve && (
+        <p className="text-base font-semibold">
+          Stock value changes by <Money value={figures.netValue} />
+        </p>
       )}
       <div className="flex flex-col gap-1">
         <label htmlFor={id} className="text-sm font-medium">

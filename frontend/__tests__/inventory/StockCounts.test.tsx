@@ -41,7 +41,8 @@ describe('count model', () => {
       { systemStock: 4, physicalStock: 5, unitCost: 20 },
       { systemStock: 6, physicalStock: 6, unitCost: 3 },
     ]);
-    expect(summarySentence(figures)).toBe('3 items, 2 differ: net −2 units, −₹17.50.');
+    expect(summarySentence(figures)).toBe('3 items, 2 differ. Short −3 (−₹37.50) · Extra +1 (+₹20.00).');
+    expect(summarySentence(countSummary([{ systemStock: 10, physicalStock: 9, unitCost: 5 }]))).toBe('1 item, 1 differs. Short −1 (−₹5.00).');
     expect(summarySentence(countSummary([{ systemStock: 1, physicalStock: 1, unitCost: 1 }]))).toBe('1 item, all match the system.');
   });
 
@@ -60,12 +61,18 @@ describe('count model', () => {
 describe('Today cards', () => {
   it('reminds the counter, the approver and whoever configures, and nothing else', () => {
     expect(reconciliationRows(null)).toEqual([]);
-    expect(reconciliationRows({ due: { counts: 1, items: 20 }, approvals: { count: 2, netValue: -612 }, behind: { remaining: 140, message: 'At 10 per person per day with 2 people, a 10-day cycle covers 200 of 340 batches in stock. Raise items per day to 17 or add 2 people.' } }).map((row) => [row.label, row.count, row.target])).toEqual([
-      ['Stock count due today · 20 items', 20, { area: 'stock', view: 'COUNT' }],
-      ['Counts awaiting your approval · -₹612.00', 2, { area: 'stock', view: 'COUNT', tab: 'approvals' }],
-      ['Reconciliation behind: 140 batches not counted this cycle', 140, { area: 'stock', view: 'COUNT', tab: 'settings' }],
+    const forecast = 'At 10 per person per day with 2 people, a 10-day cycle covers 200 of 340 batches in stock. Raise items per day to 17 or add 2 people.';
+    expect(
+      reconciliationRows({ due: { counts: 1, items: 20, documentId: 'count-7' }, approvals: { count: 2, netValue: -12, shortValue: -612, extraValue: 600 }, behind: { remaining: 140, message: forecast } }).map((row) => [row.label, row.count, row.detail, row.target]),
+    ).toEqual([
+      ['Stock count due today', 20, 'Open your count and sign off when every batch is counted.', { area: 'stock', view: 'COUNT', document: 'count-7' }],
+      ['Counts awaiting your approval', 2, 'Short −₹612.00 · Extra +₹600.00. Stock changes only when you approve.', { area: 'stock', view: 'COUNT', tab: 'approvals' }],
+      ['Batches not counted this cycle', 140, forecast, { area: 'stock', view: 'COUNT', tab: 'settings' }],
     ]);
-    expect(reconciliationRows({ due: null, approvals: { count: 0, netValue: 0 }, behind: null })).toEqual([]);
+    expect(reconciliationRows({ due: { counts: 2, items: 30, documentId: null }, approvals: null, behind: null }).map((row) => [row.detail, row.target])).toEqual([
+      ['2 lists to count. Sign off each one when every batch is counted.', { area: 'stock', view: 'COUNT' }],
+    ]);
+    expect(reconciliationRows({ due: null, approvals: { count: 0, netValue: 0, shortValue: 0, extraValue: 0 }, behind: null })).toEqual([]);
   });
 });
 
@@ -109,7 +116,7 @@ describe('counting sheet', () => {
     fireEvent.change(fields[2], { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign off count' }));
     const dialog = await screen.findByRole('dialog', { name: 'Sign off this count' });
-    expect(dialog).toHaveTextContent('Sign off this count3 items, 1 differ: net −3 units, −₹37.50.');
+    expect(dialog).toHaveTextContent('Sign off this count3 items, 1 differs · Short −3 (−₹37.50)');
     expect(within(dialog).getByText('System 10 · counted 7')).toBeInTheDocument();
     await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Sign off and send for approval' }));
@@ -173,7 +180,8 @@ describe('signed record and decision', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Approve and adjust stock' }));
     const dialog = await screen.findByRole('dialog', { name: 'Approve and adjust stock' });
-    expect(within(dialog).getByRole('list', { name: 'Stock changes' })).toHaveTextContent('Isotroin 10 · B-a8 now →becomes 5 (−3)');
+    expect(within(dialog).getByRole('list', { name: 'Stock changes' })).toHaveTextContent('Isotroin 10 · B-a8 now →becomes 5It was 10 when counted; stock has moved since.−3 fewer than the system−₹37.50');
+    expect(within(dialog).getByText(/^Stock value changes by/)).toHaveTextContent('Stock value changes by −₹37.50');
     expect(within(dialog).getByText('It was 10 when counted; stock has moved since.')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Reason (required)')).toHaveValue('Physical count signed by Anil Deshmukh on 06/11/2026');
     await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
@@ -199,6 +207,15 @@ describe('signed record and decision', () => {
     fireEvent.click(within(dialog).getByRole('checkbox'));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Reject count' }));
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/inventory/workspace/reconciliation/counts/count-1/reject', expect.objectContaining({ reason: 'Recount the top shelf', selfApproval: true })));
+  });
+
+  it('names what a rejection covers', async () => {
+    const detailed = awaiting({ count: false, decide: true, decideOwn: false });
+    detailed.lines.push(line('c', 'Clobetasol Cream 15g', { physicalStock: 11, difference: 1, value: 12.5 }));
+    render(<CountRecord detail={detailed} onDecided={jest.fn()} onStale={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Reject this count' });
+    expect(dialog).toHaveTextContent('Rejecting 3 batches, short −₹37.50, extra +₹12.50. Stock does not change; these batches go back into the cycle to be counted again.');
   });
 
   it('tells the signer who decides instead of offering the decision', () => {
@@ -238,9 +255,17 @@ describe('stock counts workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue counting: Stock count 06/11/2026 · Anil Deshmukh' }));
     expect(navigate).toHaveBeenCalledWith({ document: 'count-1' });
     unmount();
-    (apiClient.get as jest.Mock).mockResolvedValue(summary({ canApprove: true, canConfigure: true, approvals: { count: 2, netValue: -612 } }));
+    (apiClient.get as jest.Mock).mockResolvedValue(summary({ canApprove: true, canConfigure: true, approvals: { count: 2, netValue: -612, shortValue: -612, extraValue: 0 } }));
     render(<StockCounts searchParams={new URLSearchParams('area=stock&view=COUNT')} navigate={navigate} onRegisterParams={jest.fn()} />);
     await waitFor(() => expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['My counts1', 'Approvals2', 'History', 'Settings']));
+  });
+
+  it('opens on Approvals for an approver with nothing to count and counts waiting', async () => {
+    (apiClient.get as jest.Mock).mockImplementation(async (path: string) =>
+      path.endsWith('/counts') ? { rows: [], total: 0, page: 1, limit: 50, personOptions: [], totals: { counts: 0, differences: 0, approvedValue: 0, awaitingValue: 0, rejected: 0 } } : summary({ mine: [], canApprove: true, approvals: { count: 1, netValue: -5, shortValue: -17.5, extraValue: 12.5 } }),
+    );
+    render(<StockCounts searchParams={new URLSearchParams('area=stock&view=COUNT')} navigate={jest.fn()} onRegisterParams={jest.fn()} />);
+    await waitFor(() => expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Approvals1'));
   });
 
   it('gives reception the access message instead of an error', async () => {
@@ -250,7 +275,49 @@ describe('stock counts workspace', () => {
   });
 });
 
+describe('on-demand count picker', () => {
+  it('ticks every batch in stock on a shelf, leaves out one already on a count, and counts the rest', async () => {
+    const { StartCountDialog } = await import('@/components/inventory/counts/StartCountDialog');
+    const batch = (id: string, name: string, extra = {}) => ({ id, name, batchNumber: `B-${id}`, expiryDate: '2027-06-30T00:00:00.000Z', storageLocation: 'Rack A2', currentStock: 4, unit: 'STRIPS', openCount: null, ...extra });
+    (apiClient.get as jest.Mock).mockImplementation(async (_path: string, params?: Record<string, string>) =>
+      params?.location
+        ? { batches: [batch('a', 'Isotroin 10'), batch('b', 'Adapalene Gel 15g', { openCount: { id: 'c-9', day: '2026-11-06', person: 'Meera Kulkarni', signed: false } }), batch('c', 'Clobetasol Cream 15g')], total: 3, locations: [] }
+        : params?.q
+          ? { batches: [batch('z', 'Isotroin 20', { currentStock: 0, storageLocation: null })], total: 27, locations: [{ name: 'Rack A2', batches: 3 }] }
+          : { batches: [], total: 0, locations: [{ name: 'Rack A2', batches: 3 }, { name: 'Rack B1', batches: 5 }] },
+    );
+    (apiClient.post as jest.Mock).mockResolvedValue({ id: 'new-count' });
+    const onStarted = jest.fn();
+    const anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+    render(<StartCountDialog anchor={anchor} onClose={jest.fn()} onStarted={onStarted} />);
+    const dialog = await screen.findByRole('dialog', { name: 'Count an item or a shelf' });
+    fireEvent.change(within(dialog).getByPlaceholderText('Item name, batch, or rack'), { target: { value: 'isot' } });
+    expect(await within(dialog).findByText('Showing 1 of 27. Type more of the name or batch to narrow it down.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Location not recorded ·', { exact: false })).toHaveTextContent('Location not recorded · 0 in stock');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Count shelf Rack A2 · 3 batches' }));
+    await waitFor(() => expect(within(dialog).getByRole('checkbox', { name: /Isotroin 10/ })).toBeChecked());
+    expect(within(dialog).getByRole('checkbox', { name: /Adapalene Gel 15g/ })).toBeDisabled();
+    expect(within(dialog).getByText("On Meera Kulkarni's count of 06/11/2026, not signed yet")).toBeInTheDocument();
+    expect(within(dialog).getByRole('checkbox', { name: 'Select all 2 on Rack A2' })).toBeChecked();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Count 2 batches' }));
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith('new-count'));
+    expect((apiClient.post as jest.Mock).mock.calls[0]).toEqual(['/inventory/workspace/counts', { itemIds: ['a', 'c'], requestKey: expect.any(String) }]);
+  });
+});
+
 describe('settings', () => {
+  it('warns how many batches will be counted again when a change restarts the cycle', () => {
+    render(<ReconciliationSettingsPanel summary={summary({ canConfigure: true })} onSaved={jest.fn()} />);
+    fireEvent.change(screen.getByLabelText('Items per person per day'), { target: { value: '12' } });
+    expect(screen.queryByText(/Saving starts a new cycle/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Cycle length (days)'), { target: { value: '14' } });
+    expect(screen.getByText(/^Saving starts a new cycle today/)).toHaveTextContent(
+      'Saving starts a new cycle today. The 120 batches counted in this cycle will be counted again. Counts not yet signed or approved stay with the people counting them.',
+    );
+  });
+
   it('updates the forecast as values change and saves only the cycle settings', async () => {
     (apiClient.patch as jest.Mock).mockResolvedValue({});
     const onSaved = jest.fn();
