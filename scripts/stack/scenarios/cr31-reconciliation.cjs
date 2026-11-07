@@ -3,7 +3,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { chromium } = require("playwright");
 const { bootStack } = require("../boot.cjs");
-const { seed, api, tokenFor, browserLogin, ddmmyyyy } = require("./cr31-seed.cjs");
+const { seed, api, tokenFor, browserLogin, addUser, ddmmyyyy } = require("./cr31-seed.cjs");
 
 const root = path.resolve(__dirname, "../../..");
 const out = path.join(root, "output/stack/cr31");
@@ -209,7 +209,7 @@ const watch = (page) => {
       await page.getByRole("switch", { name: /Stock reconciliation is/ }).click();
       await page.getByLabel("Items per person per day").fill("4");
       await page.getByLabel(/^Anil Deshmukh/).check();
-      s.check("forecast updates as people are chosen", clean(await page.locator('form [role="status"]').innerText()), "At 4 per person per day with 1 person, a 10-day cycle covers all 20 batches in stock.");
+      s.check("forecast updates as people are chosen", clean(await page.locator('form [role="status"]').first().innerText()), "At 4 per person per day with 1 person, a 10-day cycle covers all 20 batches in stock.");
       await page.getByLabel(/^Kavya Joshi/).check();
       s.check("starting a cycle is announced before saving", await page.getByText("Saving starts a new cycle today.").count(), 1);
       await page.getByRole("button", { name: "Save settings" }).click();
@@ -237,13 +237,16 @@ const watch = (page) => {
     await scenario("03", "today-card-for-the-counter", async (s) => {
       const { page } = s.track(await open("pharmacist"));
       await goto(page, "/dashboard/inventory");
-      const card = page.getByRole("button", { name: /Stock count due today · 4 items/ });
+      const card = page.getByRole("button", { name: /Stock count due today/ });
       await card.waitFor({ timeout: 240000 });
+      s.check("the number is the batches to count and the label does not repeat it", clean(await card.innerText()), "4 Stock count due today Open your count and sign off when every batch is counted.");
       s.check("no approval card for a pharmacist", await page.getByRole("button", { name: /Counts awaiting your approval/ }).count(), 0);
-      s.check("no behind card when the cycle covers everything", await page.getByRole("button", { name: /Reconciliation behind/ }).count(), 0);
+      s.check("no behind card when the cycle covers everything", await page.getByRole("button", { name: /Batches not counted this cycle/ }).count(), 0);
       await card.click();
-      await page.getByRole("list", { name: "Counts assigned to you" }).waitFor();
-      s.check("opens My counts", clean(await page.getByRole("list", { name: "Counts assigned to you" }).innerText()), `Stock count ${ddmmyyyy(today)} · Anil Deshmukh Due today 4 items · 0 counted · 4 left Start counting`);
+      await counted(page).first().waitFor({ timeout: 240000 });
+      s.check("the card opens the one count due straight away", await page.getByRole("heading", { name: `Stock count ${ddmmyyyy(today)} · Anil Deshmukh` }).count(), 1);
+      await goto(page);
+      s.check("My counts", clean(await page.getByRole("list", { name: "Counts assigned to you" }).innerText()), `Stock count ${ddmmyyyy(today)} · Anil Deshmukh Due today 4 items · 0 counted · 4 left Start counting`);
       await s.shot(page, "my-counts-1440");
     });
 
@@ -274,8 +277,10 @@ const watch = (page) => {
       await page.keyboard.press("Enter");
       await page.keyboard.type("11");
       await page.keyboard.press("Enter");
-      s.check("Enter on the last field moves to Sign off", await page.evaluate(() => document.activeElement?.textContent?.trim()), "Sign off count");
-      s.check("progress", clean(await page.getByText(/of 4 counted/).innerText()), "4 of 4 counted · 1 differ");
+      s.check("Enter on the last field moves to Sign off", await page.evaluate(() => document.activeElement?.getAttribute("aria-label")), "Sign off count");
+      s.check("the button reads Sign off count with single spaces", await page.getByRole("button", { name: "Sign off count" }).innerText(), "Sign off count");
+      s.check("progress says 1 differs", clean(await page.getByText(/of 4 counted/).innerText()), "4 of 4 counted · 1 differs");
+      s.check("the footer splits short from extra", clean(await page.getByText(/^Short −/).innerText()), `Short −2 (${signed(-2 * unitCost(ANIL[1]))})`);
       const fits = await tableFits(page, '[aria-label="Batches to count"]');
       s.ok("every column visible at 1280", fits.fits, fits);
       s.check("money never wraps", await moneyOnOneLine(page), []);
@@ -283,7 +288,7 @@ const watch = (page) => {
       await page.keyboard.press("Enter");
       const dialog = page.getByRole("dialog", { name: "Sign off this count" });
       await dialog.waitFor();
-      s.check("summary of what is signed", clean(await dialog.locator("p").first().innerText()), `4 items, 1 differ: net −2 units, ${signed(-2 * unitCost(ANIL[1]))}.`);
+      s.check("summary of what is signed", clean(await dialog.locator("p").first().innerText()), `4 items, 1 differs · Short −2 (${signed(-2 * unitCost(ANIL[1]))})`);
       await s.shot(page, "sign-off-1280");
       await armed(page);
       await page.keyboard.type("Two strips found torn and discarded");
@@ -336,18 +341,19 @@ const watch = (page) => {
     await scenario("07", "today-card-and-approvals-for-the-doctor", async (s) => {
       const { page } = s.track(await open("doctor"));
       await goto(page, "/dashboard/inventory");
-      const net = -2 * unitCost(ANIL[1]) + 1 * unitCost(KAVYA[0]) - 1 * unitCost(KAVYA[1]);
-      const card = page.getByRole("button", { name: new RegExp(`Counts awaiting your approval · ${net < 0 ? "-" : ""}${rupees(net).replace(/[.]/g, "\\.")}`) });
+      const card = page.getByRole("button", { name: /Counts awaiting your approval/ });
       await card.waitFor({ timeout: 240000 });
       s.check("card counts both signed counts", clean(await card.locator("span").first().innerText()), "2");
+      s.check("the card splits short from extra in true signs", clean(await card.innerText()), `2 Counts awaiting your approval Short ${signed(-2 * unitCost(ANIL[1]) - unitCost(KAVYA[1]))} · Extra ${signed(unitCost(KAVYA[0]))}. Stock changes only when you approve.`);
       await card.click();
       await grid(page, "Counts awaiting approval");
       const rows = await page.locator('table[aria-label="Counts awaiting approval"] tbody tr').evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll("td")].map((td) => td.innerText.replace(/\s+/g, " ").trim())));
-      s.check("columns", await headsOf(page, "Counts awaiting approval"), ["Date", "Counted by", "Signed at", "Items", "Differences", "Net variance"]);
-      s.check("rows show who counted and the net", rows.map((r) => [r[1], r[3], r[4], r[5]]).sort(), [
-        ["Anil D.", "4", "1", `−2 units · ${signed(-2 * unitCost(ANIL[1]))}`],
-        ["Kavya J.", "4", "2", `0 units · ${signed(unitCost(KAVYA[0]) - unitCost(KAVYA[1]))}`],
+      s.check("columns", await headsOf(page, "Counts awaiting approval"), ["Date", "Counted by", "Signed at", "Items", "Differences", "Short ₹", "Net ₹", ""]);
+      s.check("rows show the shortage apart from the net, and a Review button", rows.map((r) => [r[1], r[3], r[4], r[5], r[6], r[7]]).sort(), [
+        ["Anil D.", "4", "1", signed(-2 * unitCost(ANIL[1])), signed(-2 * unitCost(ANIL[1])), "Review"],
+        ["Kavya J.", "4", "2", signed(-unitCost(KAVYA[1])), signed(unitCost(KAVYA[0]) - unitCost(KAVYA[1])), "Review"],
       ].sort());
+      s.ok("register dates read like 07 Nov", rows.every((r) => /^\d{2} [A-Z][a-z]{2}( · on demand)?$/.test(r[0].split(",")[0].trim())), rows.map((r) => r[0]));
       const fits = await tableFits(page, 'table[aria-label="Counts awaiting approval"]');
       s.ok("approvals fit 1440", fits.fits, fits);
       await s.shot(page, "approvals-1440");
@@ -361,15 +367,19 @@ const watch = (page) => {
       await goto(page, `${COUNTS}&document=${doc.id}`);
       await page.getByText(/^Signed by Kavya Joshi/).waitFor();
       s.check("differing batches first", (await page.getByRole("list", { name: "Counted batches" }).getByRole("listitem").allInnerTexts()).map((t) => clean(t).split(" Batch")[0]), [KAVYA[0], KAVYA[1]]);
+      s.check("the header splits short from extra", clean(await page.getByText(/^4 items, 2 differ/).innerText()), `4 items, 2 differ · Short −1 (${signed(-unitCost(KAVYA[1]))}) · Extra +1 (${signed(unitCost(KAVYA[0]))})`);
+      const bar = await page.getByRole("button", { name: "Approve and adjust stock" }).boundingBox();
+      s.ok("Approve sits in a bar at the bottom of the screen, not above the lines", bar && bar.y + bar.height <= 800 && bar.y > 650, bar);
       await s.shot(page, "approval-detail-1280");
       await page.getByRole("button", { name: "Approve and adjust stock" }).click();
       const dialog = page.getByRole("dialog", { name: "Approve and adjust stock" });
       await dialog.waitFor();
       const changes = (await dialog.getByRole("list", { name: "Stock changes" }).getByRole("listitem").allInnerTexts()).map(clean);
-      s.check("each batch shows now and after", changes, [
-        `${KAVYA[0]} · B002 8 now → becomes 9 (+1)`,
-        `${KAVYA[1]} · B004 18 now → becomes 17 (−1) It was 20 when counted; stock has moved since.`,
+      s.check("each batch shows now, after and its value", changes, [
+        `${KAVYA[0]} · B002 8 now → becomes 9 +1 more than the system ${signed(unitCost(KAVYA[0]))}`,
+        `${KAVYA[1]} · B004 18 now → becomes 17 It was 20 when counted; stock has moved since. −1 fewer than the system ${signed(-unitCost(KAVYA[1]))}`,
       ]);
+      s.check("the total stock value change is above the reason", clean(await dialog.getByText(/^Stock value changes by/).innerText()), `Stock value changes by ${signed(unitCost(KAVYA[0]) - unitCost(KAVYA[1]))}`);
       s.check("reason prefilled with who signed and when", await dialog.getByLabel("Reason (required)").inputValue(), `Physical count signed by Kavya Joshi on ${ddmmyyyy(today)}`);
       await s.shot(page, "approve-dialog-1280");
       await armed(page);
@@ -395,6 +405,7 @@ const watch = (page) => {
       const dialog = page.getByRole("dialog", { name: "Reject this count" });
       await dialog.waitFor();
       s.check("reject reason starts empty", await dialog.getByLabel("Reason (required)").inputValue(), "");
+      s.check("the dialog names what is rejected", clean(await dialog.locator("p").first().innerText()), `Rejecting 4 batches, short ${signed(-2 * unitCost(ANIL[1]))}. Stock does not change; these batches go back into the cycle to be counted again.`);
       await armed(page);
       await dialog.getByRole("button", { name: "Reject count" }).click();
       s.check("a reason is required", clean(await dialog.getByRole("alert").innerText()), "Say why this count is rejected, so the next count can fix it.");
@@ -469,8 +480,8 @@ const watch = (page) => {
       const { page } = s.track(await open("pharmacist"));
       await goto(page);
       await page.getByRole("button", { name: "Count an item" }).click();
-      const dialog = page.getByRole("dialog", { name: "Count an item now" });
-      await dialog.getByLabel("Item or batch").fill("Minoxidil");
+      const dialog = page.getByRole("dialog", { name: "Count an item or a shelf" });
+      await dialog.getByLabel("Find a batch").fill("Minoxidil");
       await dialog.getByRole("checkbox").first().waitFor({ timeout: 60000 });
       await dialog.getByRole("checkbox").first().check();
       await armed(page);
@@ -488,7 +499,8 @@ const watch = (page) => {
       s.check("posted immediately with no stock movement", [docs.at(-1).status, await stockOf("Minoxidil Solution 5%"), await stack.db.stockTransaction.count({ where: { itemId: batches["Minoxidil Solution 5%"].id } })], ["POSTED", 5, 0]);
       s.check("an audit row with zero variance", (await stack.db.inventoryAudit.findMany({ where: { itemId: batches["Minoxidil Solution 5%"].id } })).map((a) => [a.systemStock, a.physicalStock, a.variance]), [[5, 5, 0]]);
       s.ok("toast confirms", (await toasts(page)).some((t) => t.includes("Count signed off. Stock confirmed.")), await toasts(page));
-      s.check("badge", clean(await page.locator('[data-slot="badge"]').first().innerText()), "Posted (no differences)");
+      s.check("badge", clean(await page.locator('[data-slot="badge"]').first().innerText()), "Confirmed, no differences");
+      s.check("no duplicate On-demand count line", await page.getByText("On-demand count", { exact: true }).count(), 0);
     });
 
     await scenario("14", "capacity-short-forecast-and-behind-card", async (s) => {
@@ -499,19 +511,21 @@ const watch = (page) => {
       for (const who of ["Kavya Joshi", "Rajesh Iyer"]) await page.getByLabel(new RegExp(`^${who}`)).uncheck();
       const inStock = await stack.db.inventoryItem.count({ where: { branchId, currentStock: { gt: 0 } } });
       const expected = `At 1 per person per day with 1 person, a 2-day cycle covers 2 of ${inStock} batches in stock. Raise items per day to ${Math.ceil(inStock / 2)} or add ${Math.ceil(inStock / 2) - 1} people.`;
-      s.check("the forecast says plainly that the cycle falls short", clean(await page.locator('form [role="status"]').innerText()), expected);
+      s.check("the forecast says plainly that the cycle falls short", clean(await page.locator('form [role="status"]').first().innerText()), expected);
+      const covered = (await call("admin", "GET", "/inventory/workspace/reconciliation")).forecast.covered;
+      s.check("a restart warns how many batches will be counted again", clean(await page.getByText(/^Saving starts a new cycle today/).innerText()), `Saving starts a new cycle today. The ${covered} batches counted in this cycle will be counted again. Counts not yet signed or approved stay with the people counting them.`);
       await s.shot(page, "settings-short-1440");
       await page.getByRole("button", { name: "Save settings" }).click();
       await page.getByText("Behind:").waitFor();
       await goto(page, "/dashboard/inventory");
-      const card = page.getByRole("button", { name: /Reconciliation behind: \d+ batches not counted this cycle/ });
+      const card = page.getByRole("button", { name: /Batches not counted this cycle/ });
       await card.waitFor({ timeout: 240000 });
       s.ok("the card carries the forecast", clean(await card.innerText()).includes(expected), clean(await card.innerText()));
       const pharmacist = s.track(await open("pharmacist"));
       await goto(pharmacist.page, "/dashboard/inventory");
-      s.check("a counter without settings access sees no behind card", await pharmacist.page.getByRole("button", { name: /Reconciliation behind/ }).count(), 0);
+      s.check("a counter without settings access sees no behind card", await pharmacist.page.getByRole("button", { name: /Batches not counted this cycle/ }).count(), 0);
       const now = await call("admin", "GET", "/inventory/workspace/reconciliation");
-      await call("admin", "PATCH", "/inventory/workspace/settings", { version: now.settingsVersion, reconciliation: { cycleDays: 10, itemsPerPersonPerDay: 4, assigneeIds: [U.pharmacist.id, U.kavya.id, U.owner.id] } });
+      await call("admin", "PATCH", "/inventory/workspace/settings", { version: now.settingsVersion, reconciliation: { enabled: false, cycleDays: 10, itemsPerPersonPerDay: 4, assigneeIds: [U.pharmacist.id, U.kavya.id, U.owner.id] } });
     });
 
     await scenario("15", "double-submit-signs-and-approves-once", async (s) => {
@@ -556,6 +570,8 @@ const watch = (page) => {
       await dialog.getByRole("alert").waitFor();
       s.check("plain message in the dialog", clean(await dialog.getByRole("alert").innerText()), "Hydroquinone Cream 2%: the count found 6 fewer than the system had, but only 5 strips are left now. The count cannot be right. Reject it and ask for a fresh count.");
       s.check("stock untouched", await stockOf("Hydroquinone Cream 2%"), 5);
+      const fresh = await stack.db.inventoryWorkflowDocument.findUnique({ where: { id: created.id } });
+      await call("doctor", "POST", `/inventory/workspace/reconciliation/counts/${created.id}/reject`, { version: fresh.version, requestKey: crypto.randomUUID(), reason: "The count cannot be right; count it again" });
     });
 
     await scenario("17", "history-lists-every-count-with-filters", async (s) => {
@@ -563,24 +579,24 @@ const watch = (page) => {
       await goto(page, `${COUNTS}&tab=history`);
       await grid(page, "Stock count history");
       const heads = await headsOf(page, "Stock count history");
-      s.check("columns", heads, ["Date", "Assigned to", "Signed by", "Signed at", "Items", "Differences", "Net variance", "Status", "Decided by"]);
+      s.check("columns", heads, ["Date", "Counted by", "Signed at", "Items", "Differences", "Short ₹", "Net ₹", "Status", "Decided by"]);
       const fits = await tableFits(page, 'table[aria-label="Stock count history"]');
       s.ok("every column visible at 1280", fits.fits, fits);
       s.check("money never wraps", await moneyOnOneLine(page), []);
       const visibleRows = await page.locator('table[aria-label="Stock count history"] tbody tr').evaluateAll((trs) => trs.filter((tr) => tr.getBoundingClientRect().bottom <= window.innerHeight - 60).length);
       s.ok("at least 5 rows visible at 1280 x 800 above the footer", visibleRows >= 5, visibleRows);
       const states = await page.locator('table[aria-label="Stock count history"] tbody tr td:nth-child(8)').allInnerTexts();
-      s.ok("states shown", ["Approved", "Rejected", "No differences", "Awaiting approval"].every((label) => states.map(clean).includes(label)), states.map(clean));
+      s.ok("states shown", ["Approved", "Rejected", "Confirmed"].every((label) => states.map(clean).includes(label)), states.map(clean));
       await s.shot(page, "history-1280");
       await page.getByLabel("Status").selectOption("REJECTED");
       await page.waitForTimeout(1200);
       const rejected = await page.locator('table[aria-label="Stock count history"] tbody tr').allInnerTexts();
-      s.check("status filter", rejected.map((t) => clean(t).includes("Rejected")), [true]);
+      s.check("status filter", rejected.map((t) => clean(t).includes("Rejected")), [true, true]);
       await page.getByRole("button", { name: "Clear all" }).click();
       await page.getByLabel("Search").fill("Permethrin");
       await page.waitForTimeout(1500);
       s.check("search by item", (await page.locator('table[aria-label="Stock count history"] tbody tr').count()), 1);
-      s.check("footer totals", clean(await page.locator('[role="status"][aria-live="polite"]').last().innerText()).split(" 1–")[0], `1 count · 1 difference · Net ${signed(-1 * unitCost("Permethrin Cream 5%")).replace("−", "-")}`);
+      s.check("footer totals split approved from awaiting", clean(await page.locator('[role="status"][aria-live="polite"]').last().innerText()).split(" 1–")[0], `1 count · Approved ${signed(-1 * unitCost("Permethrin Cream 5%"))} · Awaiting ₹0.00`);
     });
 
     await scenario("18", "layout-1440", async (s) => {
@@ -615,7 +631,7 @@ const watch = (page) => {
       await page.getByRole("list", { name: "Stock counts" }).or(page.getByText("Nothing waiting for approval.")).first().waitFor();
       await s.shot(page, "approvals-390");
       await goto(page, `${COUNTS}&tab=settings`);
-      await page.getByText("Current cycle").waitFor();
+      await page.getByRole("region", { name: "Current cycle" }).waitFor();
       const settingsScroll = await pageScroll(page);
       s.ok("settings: no sideways page scroll", settingsScroll.scroll <= settingsScroll.width, settingsScroll);
       await page.getByLabel("Cycle length (days)").scrollIntoViewIfNeeded();
@@ -701,10 +717,374 @@ const watch = (page) => {
       s.ok("approvals fit 1280", (await tableFits(page, 'table[aria-label="Counts awaiting approval"]')).fits);
       await s.shot(page, "approvals-1280");
       await goto(page, `${COUNTS}&tab=settings`);
-      await page.getByText("Current cycle").waitFor();
+      await page.getByRole("region", { name: "Current cycle" }).waitFor();
       await s.shot(page, "settings-1280");
       const scroll = await pageScroll(page);
       s.ok("no sideways page scroll", scroll.scroll <= scroll.width, scroll);
+    });
+
+    const freshDoc = (id) => stack.db.inventoryWorkflowDocument.findUnique({ where: { id } });
+    const onDemand = (who, names) => call(who, "POST", "/inventory/workspace/counts", { itemIds: names.map((n) => batches[n].id), requestKey: crypto.randomUUID() });
+    const decide = async (who, id, decision, reason) => {
+      const doc = await freshDoc(id);
+      return call(who, "POST", `/inventory/workspace/reconciliation/counts/${id}/${decision}`, { version: doc.version, requestKey: crypto.randomUUID(), reason });
+    };
+    const twinOf = async (doc, assignee) => {
+      const { id: _id, createdAt: _c, updatedAt: _u, ...copy } = await freshDoc(doc.id);
+      return stack.db.inventoryWorkflowDocument.create({
+        data: {
+          ...copy,
+          requestKey: `left-by-the-old-code-${crypto.randomUUID()}`,
+          reference: `Stock count ${ddmmyyyy(today)} · ${stack.users[assignee].firstName} ${stack.users[assignee].lastName}`,
+          createdBy: stack.users[assignee].id,
+          payload: {
+            ...copy.payload,
+            assigneeId: stack.users[assignee].id,
+            lines: copy.payload.lines.map((line) => ({ ...line, id: `${line.id}-twin` })),
+            ...(copy.payload.signOff ? { signOff: { ...copy.payload.signOff, by: stack.users[assignee].id, requestKey: crypto.randomUUID() } } : {}),
+          },
+        },
+      });
+    };
+    const openPicker = async (page) => {
+      await page.getByRole("button", { name: "Count an item" }).click();
+      const dialog = page.getByRole("dialog", { name: "Count an item or a shelf" });
+      await dialog.waitFor();
+      await armed(page);
+      return dialog;
+    };
+    const visibleText = (page, selector) => page.locator(selector).evaluateAll((els) => els.filter((el) => el.getClientRects().length).map((el) => el.innerText.replace(/\s+/g, " ").trim()));
+
+    await scenario("23", "b1-a-batch-on-an-open-count-cannot-be-counted-again", async (s) => {
+      const held = "Hydroquinone Cream 2%";
+      const refused = await attempt("kavya", "POST", "/inventory/workspace/counts", { itemIds: [batches[held].id, batches["Calamine Lotion 100ml"].id], requestKey: crypto.randomUUID() });
+      s.check("the server refuses and names the open count", [refused.status, refused.body?.code, refused.body?.message], [
+        409, "COUNT_BATCH_OPEN", `${held}, batch B011, is already on Priya Menon's count of ${ddmmyyyy(today)}, not signed yet. Count it there, or ask Priya Menon to sign it off first.`,
+      ]);
+      const { page } = s.track(await open("kavya", { width: 1280, height: 800 }));
+      await goto(page);
+      const dialog = await openPicker(page);
+      await dialog.getByLabel("Find a batch").fill("Hydroquinone");
+      const box = dialog.getByRole("checkbox", { name: new RegExp(held.replace(/[%]/g, "\\$&")) });
+      await box.waitFor({ timeout: 60000 });
+      s.check("the picker greys it out and says whose count it is on", [await box.isDisabled(), clean(await dialog.getByText(/^On Priya Menon's count/).innerText())], [true, `On Priya Menon's count of ${ddmmyyyy(today)}, not signed yet`]);
+      await s.shot(page, "picker-held-1280");
+    });
+
+    await scenario("24", "b1-two-counts-of-one-batch-adjust-stock-once", async (s) => {
+      const name = "Adapalene Gel 15g";
+      const before = await stockOf(name);
+      const first = await onDemand("kavya", [name]);
+      await signViaApi("kavya", first, () => before - 1, "One tube missing");
+      const twin = await twinOf(first, "pharmacist");
+      await decide("doctor", first.id, "approve", "Physical count signed by Kavya Joshi");
+      s.check("the first approval adjusts stock", await stockOf(name), before - 1);
+      const { page } = s.track(await open("doctor", { width: 1280, height: 800 }));
+      await goto(page, `${COUNTS}&document=${twin.id}`);
+      await page.getByRole("button", { name: "Approve and adjust stock" }).click();
+      const dialog = page.getByRole("dialog", { name: "Approve and adjust stock" });
+      await armed(page);
+      await dialog.getByRole("button", { name: "Approve and adjust stock" }).click();
+      await dialog.getByRole("alert").waitFor();
+      s.check("the second approval is refused in plain words", clean(await dialog.getByRole("alert").innerText()), `${name}, batch B001, was counted again after this count and that count is already in the stock. Approving this one would apply the difference twice. Reject it instead.`);
+      s.check("stock moved once", [await stockOf(name), (await freshDoc(twin.id)).status], [before - 1, "AWAITING_APPROVAL"]);
+      await s.shot(page, "superseded-1280");
+      await decide("doctor", twin.id, "reject", "Counted twice; the other count is in the stock");
+    });
+
+    await scenario("25", "m1-a-count-saved-before-capture-times-is-typed-again", async (s) => {
+      const name = "Azelaic Acid Cream 20%";
+      const created = await onDemand("pharmacist", [name]);
+      const doc = await freshDoc(created.id);
+      const stock = await stockOf(name);
+      await stack.db.inventoryWorkflowDocument.update({ where: { id: doc.id }, data: { payload: { ...doc.payload, lines: doc.payload.lines.map((line) => ({ ...line, physicalStock: stock })) } } });
+      const refused = await attempt("pharmacist", "POST", `/inventory/workspace/reconciliation/counts/${doc.id}/sign-off`, { version: doc.version, requestKey: crypto.randomUUID(), note: "", lines: doc.payload.lines.map((line) => ({ id: line.id, physicalStock: stock })) });
+      s.check("sign-off asks for it to be typed again", [refused.status, refused.body?.code, refused.body?.message], [400, "COUNT_RETYPE", `Type these counts again before signing off: ${name}. The system quantity they were compared with is out of date.`]);
+      const { page } = s.track(await open("pharmacist", { width: 1280, height: 800 }));
+      await goto(page);
+      const item = page.getByRole("list", { name: "Counts assigned to you" }).getByRole("listitem").filter({ hasText: "on demand" });
+      s.ok("My counts shows it needs typing again", (await item.allInnerTexts()).map(clean).some((t) => t.includes("1 item · 0 counted · 1 to type again")), (await item.allInnerTexts()).map(clean));
+      await goto(page, `${COUNTS}&document=${doc.id}`);
+      await counted(page).first().waitFor({ timeout: 240000 });
+      s.check("the field is empty and says what it was", [await counted(page).first().inputValue(), clean(await page.getByText(/^Type it again/).innerText())], ["", `Type it again (was ${stock})`]);
+      await counted(page).first().fill(String(stock));
+      await page.waitForTimeout(1200);
+      await page.getByRole("button", { name: "Sign off count" }).click();
+      const sign = page.getByRole("dialog", { name: "Sign off this count" });
+      await armed(page);
+      await sign.getByRole("button", { name: "Sign off", exact: true }).click();
+      await page.getByText("Every batch matched the system, so stock was confirmed without a change.").waitFor();
+      s.check("retyped and posted", (await freshDoc(doc.id)).status, "POSTED");
+    });
+
+    await scenario("26", "m1-only-an-unsigned-count-can-be-cancelled", async (s) => {
+      const signed = await stack.db.inventoryWorkflowDocument.findFirst({ where: { branchId, kind: "COUNT", status: "AWAITING_APPROVAL", createdBy: U.doctor.id } });
+      const cancelSigned = await attempt("admin", "POST", `/inventory/workspace/documents/${signed.id}/transition`, { action: "CANCEL", version: signed.version });
+      s.check("a signed count cannot be cancelled", [cancelSigned.status, cancelSigned.body?.message], [400, "A signed count cannot be cancelled. A doctor or administrator rejects it from Stock counts › Approvals."]);
+      const draft = await onDemand("pharmacist", ["Clindamycin Gel 1%"]);
+      const byOther = await attempt("kavya", "POST", `/inventory/workspace/documents/${draft.id}/transition`, { action: "CANCEL", version: draft.version });
+      s.check("someone else cannot cancel it", [byOther.status, byOther.body?.message], [403, "Only the person this count is assigned to, or a doctor or administrator, can cancel it."]);
+      const own = await attempt("pharmacist", "POST", `/inventory/workspace/documents/${draft.id}/transition`, { action: "CANCEL", version: draft.version });
+      s.check("the person counting can", [own.status, own.body?.status], [200, "CANCELLED"]);
+    });
+
+    await scenario("27", "m3-a-manager-does-not-decide-counts", async (s) => {
+      await addUser(stack, "manager", { role: "MANAGER", firstName: "Ravi", lastName: "Kumar", permissions: ["inventory:item:read"] });
+      const signed = await stack.db.inventoryWorkflowDocument.findFirst({ where: { branchId, kind: "COUNT", status: "AWAITING_APPROVAL", createdBy: U.doctor.id } });
+      const refused = await attempt("manager", "POST", `/inventory/workspace/reconciliation/counts/${signed.id}/approve`, { version: signed.version, requestKey: crypto.randomUUID(), reason: "Fine" });
+      s.check("a manager cannot approve a count", [refused.status, refused.body?.message], [403, "A doctor or an administrator decides stock count differences"]);
+      const detail = await call("doctor", "GET", `/inventory/workspace/reconciliation/counts/${signed.id}`);
+      s.check("the signer is pointed at doctors, owners and admins only", detail.approvers, ["Asha Rao", "Rajesh Iyer"]);
+      const { page } = s.track(await open("doctor"));
+      await goto(page, `${COUNTS}&document=${signed.id}`);
+      s.check("the record names them", clean(await page.getByText(/You signed this count, so someone else decides it/).innerText()), "You signed this count, so someone else decides it. Ask Asha Rao or Rajesh Iyer.");
+    });
+
+    const SHELF = ["Benzoyl Peroxide Gel 2.5%", "Calamine Lotion 100ml", "Cetirizine 10mg Tab"];
+    await scenario("28", "u3-count-a-whole-shelf", async (s) => {
+      for (const n of [...SHELF, "Isotretinoin 10mg Cap"]) await stack.db.inventoryItem.update({ where: { id: batches[n].id }, data: { storageLocation: "Rack S-01" } });
+      const { page } = s.track(await open("pharmacist", { width: 1280, height: 800 }));
+      await goto(page);
+      const dialog = await openPicker(page);
+      await dialog.getByRole("radio", { name: "Shelf / location" }).click();
+      await dialog.getByLabel("Shelf").selectOption("Rack S-01");
+      await dialog.getByRole("checkbox", { name: /Select all/ }).waitFor({ timeout: 60000 });
+      const boxes = await dialog.getByRole("list", { name: "Batches" }).getByRole("checkbox").evaluateAll((els) => els.map((el) => [el.closest("label").innerText.split("\n")[0], el.checked, el.disabled]));
+      s.check("every in-stock batch on the shelf is listed and ticked, one on an open count is not", boxes, [
+        [SHELF[0], true, false], [SHELF[1], true, false], [SHELF[2], true, false], ["Isotretinoin 10mg Cap", false, true],
+      ]);
+      s.check("select all names the shelf", [clean(await dialog.getByRole("checkbox", { name: /Select all/ }).locator("..").innerText()), await dialog.getByRole("checkbox", { name: /Select all/ }).isChecked()], ["Select all 3 on Rack S-01", true]);
+      await s.shot(page, "shelf-picker-1280");
+      await dialog.getByRole("button", { name: "Count 3 batches" }).click();
+      await counted(page).first().waitFor({ timeout: 240000 });
+      s.check("the sheet holds the shelf", await counted(page).evaluateAll((els) => els.map((el) => el.getAttribute("id") && el.closest('[role="listitem"]').querySelector(".font-semibold").textContent)), SHELF);
+      s.ok("phone labels stay readable to screen readers on a desktop", (await page.getByRole("list", { name: "Batches to count" }).getByRole("listitem").first().innerText()).includes("System"));
+      for (const [index, n] of SHELF.entries()) await counted(page).nth(index).fill(String(await stockOf(n)));
+      await page.waitForTimeout(1200);
+      await page.getByRole("button", { name: "Sign off count" }).click();
+      const sign = page.getByRole("dialog", { name: "Sign off this count" });
+      await armed(page);
+      await sign.getByRole("button", { name: "Sign off", exact: true }).click();
+      await page.getByText("Every batch matched the system, so stock was confirmed without a change.").waitFor();
+    });
+
+    await scenario("29", "u3-m3-search-finds-zero-stock-and-says-when-it-shows-fewer", async (s) => {
+      for (let n = 1; n <= 24; n++)
+        await stack.db.inventoryItem.create({
+          data: { branchId, name: `Sunscreen Sample Tube ${String(n).padStart(2, "0")}`, type: "MEDICINE", costPrice: 5, sellingPrice: 10, unit: "TUBES", currentStock: 0, batchNumber: `S${n}`, expiryDate: new Date("2027-12-31T00:00:00Z"), stockStatus: "OUT_OF_STOCK", storageLocation: "Rack T-01", status: "ACTIVE" },
+        });
+      const { page } = s.track(await open("pharmacist", { width: 390, height: 844 }));
+      await goto(page);
+      const dialog = await openPicker(page);
+      await dialog.getByLabel("Find a batch").fill("Sunscreen Sample");
+      await dialog.getByText(/^Showing 20 of/).waitFor({ timeout: 60000 });
+      s.check("no silent cap", clean(await dialog.getByText(/^Showing 20 of/).innerText()), "Showing 20 of 24. Type more of the name or batch to narrow it down.");
+      s.ok("zero stock is listed", (await dialog.getByRole("list", { name: "Batches" }).innerText()).includes("0 in stock"));
+      const fits = await dialog.boundingBox();
+      s.ok("the picker fits the phone", fits && fits.x >= 0 && fits.x + fits.width <= 390, fits);
+      await s.shot(page, "search-picker-390");
+      await dialog.getByLabel("Find a batch").fill("Tretinoin");
+      const box = dialog.getByRole("checkbox", { name: /Tretinoin Cream/ });
+      await box.waitFor({ timeout: 60000 });
+      await box.check();
+      await dialog.getByRole("button", { name: "Count 1 batch" }).click();
+      await counted(page).first().waitFor({ timeout: 240000 });
+      await counted(page).first().fill("1");
+      s.check("a found box shows as extra stock", clean(await page.getByText(/^Extra \+1/).innerText()), `Extra +1 (${signed(40)})`);
+      await page.waitForTimeout(1200);
+      await page.getByRole("button", { name: "Sign off count" }).click();
+      const sign = page.getByRole("dialog", { name: "Sign off this count" });
+      await sign.getByLabel("Why do these differ? (required)").fill("Found a box behind the counter");
+      await armed(page);
+      await sign.getByRole("button", { name: "Sign off and send for approval" }).click();
+      await page.getByText(/^Signed by/).waitFor();
+    });
+
+    await scenario("30", "u6-u8-approvals-open-first-with-review-buttons", async (s) => {
+      const { page } = s.track(await open("admin", { width: 1280, height: 800 }));
+      await goto(page);
+      s.check("an approver with nothing to count lands on Approvals", clean(await page.getByRole("tab", { selected: true }).innerText()).replace(/\d+$/, "").trim(), "Approvals");
+      await grid(page, "Counts awaiting approval");
+      const rows = await page.locator('table[aria-label="Counts awaiting approval"] tbody tr').count();
+      s.check("each row has a Review button", await page.getByRole("button", { name: /^Review / }).count(), rows);
+      s.ok("approvals fit 1280", (await tableFits(page, 'table[aria-label="Counts awaiting approval"]')).fits);
+      await s.shot(page, "approvals-1280");
+      const phone = s.track(await open("admin", { width: 390, height: 844 }));
+      await goto(phone.page);
+      await phone.page.getByRole("list", { name: "Stock counts" }).waitFor();
+      const cards = phone.page.getByRole("list", { name: "Stock counts" }).getByRole("button");
+      s.check("every phone card carries a chevron", await cards.evaluateAll((els) => els.every((el) => el.querySelector("svg.lucide-chevron-right"))), true);
+      s.check("money never wraps", await moneyOnOneLine(phone.page), []);
+      await s.shot(phone.page, "approvals-390");
+    });
+
+    await scenario("31", "u2-u7-approve-from-a-sticky-bar-with-values", async (s) => {
+      const [short, extra] = ["Clindamycin Gel 1%", "Doxycycline 100mg Cap"];
+      const [shortStock, extraStock] = [await stockOf(short), await stockOf(extra)];
+      const created = await onDemand("kavya", [short, extra]);
+      await signViaApi("kavya", created, (line) => (line.name === short ? shortStock - 1 : extraStock + 1), "Clindamycin tube split; one Doxycycline strip unrecorded");
+      const split = `Short −1 (${signed(-unitCost(short))}) · Extra +1 (${signed(unitCost(extra))})`;
+      const { page } = s.track(await open("admin", { width: 1280, height: 800 }));
+      await goto(page, `${COUNTS}&document=${created.id}`);
+      await page.getByText(/^Signed by Kavya Joshi/).waitFor();
+      s.check("the header says what is short and what is extra", clean(await page.getByText(/^2 items, 2 differ/).innerText()), `2 items, 2 differ · ${split}`);
+      const approve = page.getByRole("button", { name: "Approve and adjust stock" });
+      const bar = await approve.boundingBox();
+      s.ok("the decision bar is on screen at the bottom", bar && bar.y > 650 && bar.y + bar.height <= 800, bar);
+      s.check("the bar repeats the split", clean(await approve.locator("xpath=ancestor::div[contains(@class,'sticky')][1]").innerText()).startsWith(split), true);
+      await s.shot(page, "approval-detail-1280");
+      await page.getByRole("button", { name: "Reject" }).click();
+      const reject = page.getByRole("dialog", { name: "Reject this count" });
+      s.check("reject names what it covers", clean(await reject.locator("p").first().innerText()), `Rejecting 2 batches, short ${signed(-unitCost(short))}, extra ${signed(unitCost(extra))}. Stock does not change; these batches go back into the cycle to be counted again.`);
+      await s.shot(page, "reject-dialog-1280");
+      await page.keyboard.press("Escape");
+      await approve.click();
+      const dialog = page.getByRole("dialog", { name: "Approve and adjust stock" });
+      await dialog.waitFor();
+      s.check("the description is plain", clean(await dialog.locator("p").first().innerText()), "Each difference is applied to today's stock, so sales made since the count are kept.");
+      s.check("each batch carries its value", (await dialog.getByRole("list", { name: "Stock changes" }).getByRole("listitem").allInnerTexts()).map((t) => clean(t).split(" ").slice(-1)[0]), [signed(-unitCost(short)), signed(unitCost(extra))]);
+      s.check("the total value change", clean(await dialog.getByText(/^Stock value changes by/).innerText()), `Stock value changes by ${signed(unitCost(extra) - unitCost(short))}`);
+      await s.shot(page, "approve-dialog-1280");
+      await page.keyboard.press("Escape");
+      const phone = s.track(await open("admin", { width: 390, height: 844 }));
+      await goto(phone.page, `${COUNTS}&document=${created.id}`);
+      const phoneApprove = phone.page.getByRole("button", { name: "Approve and adjust stock" });
+      await phoneApprove.waitFor();
+      const phoneBar = await phoneApprove.boundingBox();
+      s.ok("on a phone too the bar is on screen without scrolling", phoneBar && phoneBar.y + phoneBar.height <= 844 && phoneBar.y > 600, phoneBar);
+      const scroll = await pageScroll(phone.page);
+      s.ok("no sideways scroll", scroll.scroll <= scroll.width, scroll);
+      await s.shot(phone.page, "approval-detail-390");
+      await phoneApprove.click();
+      const sheet = phone.page.getByRole("dialog", { name: "Approve and adjust stock" });
+      await sheet.waitFor();
+      const box = await sheet.boundingBox();
+      s.ok("the approval sheet fits the phone", box && box.x >= 0 && box.x + box.width <= 390, box);
+      await s.shot(phone.page, "approve-dialog-390");
+      await armed(phone.page);
+      await sheet.getByRole("button", { name: "Approve and adjust stock" }).click();
+      await phone.page.getByText(/^Approved by Asha Rao/).waitFor();
+      s.check("stock adjusted both ways", [await stockOf(short), await stockOf(extra)], [shortStock - 1, extraStock + 1]);
+    });
+
+    await scenario("32", "u5-u14-history-footer-and-own-count", async (s) => {
+      const totals = (await call("doctor", "GET", "/inventory/workspace/reconciliation/counts?view=history")).totals;
+      const { page } = s.track(await open("doctor", { width: 1280, height: 800 }));
+      await goto(page, `${COUNTS}&tab=history`);
+      await grid(page, "Stock count history");
+      s.ok("rejected counts exist to leave out", totals.rejected >= 2, totals);
+      s.check("footer splits approved from awaiting and leaves rejected out", clean(await page.locator('[role="status"][aria-live="polite"]').last().innerText()), `${totals.counts} counts · Approved ${signed(totals.approvedValue)} · Awaiting ${signed(totals.awaitingValue)} ${totals.rejected} rejected counts are not included.`);
+      s.ok("history fits 1280", (await tableFits(page, 'table[aria-label="Stock count history"]')).fits);
+      s.check("money never wraps", await moneyOnOneLine(page), []);
+      await s.shot(page, "history-1280");
+      await page.getByLabel("Search").fill("Fluconazole");
+      await page.waitForTimeout(1500);
+      const own = await page.locator('table[aria-label="Stock count history"] tbody tr').filter({ hasText: "Approved" }).locator("td").last().innerText();
+      s.check("an approver's own count is marked", clean(own), "Own count");
+      const phone = s.track(await open("doctor", { width: 390, height: 844 }));
+      await goto(phone.page, `${COUNTS}&tab=history`);
+      await phone.page.getByRole("list", { name: "Stock counts" }).waitFor();
+      s.check("money never wraps on the cards", await moneyOnOneLine(phone.page), []);
+      await s.shot(phone.page, "history-390");
+    });
+
+    await scenario("33", "u9-phone-tabs-are-whole", async (s) => {
+      const { page } = s.track(await open("doctor", { width: 390, height: 844 }));
+      await goto(page);
+      const tabs = await page.getByRole("tab").evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { text: el.innerText.replace(/\s+/g, " ").trim(), whole: el.scrollWidth <= el.clientWidth + 1 && r.left >= 0 && r.right <= window.innerWidth }; }));
+      s.check("four tabs, every label whole, badges beside them", tabs.map((t) => [t.text.replace(/ \d+$/, " n"), t.whole]), [["My counts n", true], ["Approvals n", true], ["History", true], ["Settings", true]]);
+      await s.shot(page, "tabs-390");
+    });
+
+    await scenario("34", "u10-u11-phone-sheet-keeps-the-split-and-notes-on-demand", async (s) => {
+      const names = ["Fluconazole 150mg Tab", "Calamine Lotion 100ml"];
+      const created = await onDemand("pharmacist", names);
+      const { page } = s.track(await open("pharmacist", { width: 390, height: 844 }));
+      await goto(page, `${COUNTS}&document=${created.id}`);
+      await counted(page).first().waitFor({ timeout: 240000 });
+      s.check("notes stay behind + Note until a row differs", [await page.getByRole("button", { name: /^Note for/ }).count(), await page.getByRole("textbox", { name: /^Note for/ }).count()], [2, 0]);
+      const stock = await stockOf(names[0]);
+      await counted(page).first().fill(String(stock - 1));
+      s.check("Saving… waits for the request", clean(await page.locator('[role="status"][aria-live="polite"]').first().innerText()), "Saved");
+      s.check("a differing row opens its note", await page.getByRole("textbox", { name: `Note for ${names[0]}` }).count(), 1);
+      const described = await counted(page).first().evaluate((el) => el.getAttribute("aria-describedby").split(" ").map((id) => document.getElementById(id)?.innerText.replace(/\s+/g, " ").trim()));
+      s.check("the field describes its live difference", described, [`−1 fewer than the system ${signed(-unitCost(names[0]))}`]);
+      s.check("the phone footer keeps the split", clean(await page.getByText(/^Short −1/).innerText()), `Short −1 (${signed(-unitCost(names[0]))})`);
+      s.check("the footer says 1 differs", clean(await page.getByText(/of 2 counted/).innerText()), "1 of 2 counted · 1 differs");
+      await page.getByRole("button", { name: `Note for ${names[1]}` }).click();
+      s.check("+ Note opens a note on a matching row", await page.getByRole("textbox", { name: `Note for ${names[1]}` }).count(), 1);
+      await page.evaluate(() => document.querySelector('[aria-label="Batches to count"]').scrollIntoView({ block: "start" }));
+      await s.shot(page, "count-sheet-390");
+      const scroll = await pageScroll(page);
+      s.ok("no sideways scroll", scroll.scroll <= scroll.width, scroll);
+    });
+
+    await scenario("35", "u12-today-opens-the-one-due-count-and-next-count-follows", async (s) => {
+      for (const [n, name] of ["Sunscreen SPF 50 Gel", "Sunscreen SPF 30 Lotion"].entries())
+        await stack.db.inventoryItem.create({
+          data: { branchId, name, type: "MEDICINE", costPrice: 120, sellingPrice: 250, unit: "TUBES", currentStock: 6 + n, batchNumber: `U${n + 1}`, expiryDate: new Date("2027-12-31T00:00:00Z"), stockStatus: "IN_STOCK", storageLocation: "Rack U-01", status: "ACTIVE" },
+        });
+      const now = await call("admin", "GET", "/inventory/workspace/reconciliation");
+      await call("admin", "PATCH", "/inventory/workspace/settings", { version: now.settingsVersion, reconciliation: { enabled: true, cycleDays: 10, itemsPerPersonPerDay: 2, assigneeIds: [U.admin.id] } });
+      const { page } = s.track(await open("admin", { width: 1280, height: 800 }));
+      await goto(page, "/dashboard/inventory");
+      const card = page.getByRole("button", { name: /Stock count due today/ });
+      await card.waitFor({ timeout: 240000 });
+      s.check("the detail line is on screen, not only in a tooltip", clean(await card.innerText()), "2 Stock count due today Open your count and sign off when every batch is counted.");
+      await card.click();
+      await counted(page).first().waitFor({ timeout: 240000 });
+      s.check("the card opens the count itself", await page.getByRole("heading", { name: `Stock count ${ddmmyyyy(today)} · Asha Rao` }).count(), 1);
+      const next = await onDemand("admin", ["Clobetasol Cream 15g"]);
+      for (const [index, line] of (await counted(page).evaluateAll((els) => els.map((el) => el.id))).entries()) {
+        const name = await page.locator(`#${line}`).evaluate((el) => el.closest('[role="listitem"]').querySelector(".font-semibold").textContent);
+        await counted(page).nth(index).fill(String((await stack.db.inventoryItem.findFirst({ where: { branchId, name } })).currentStock));
+      }
+      await page.waitForTimeout(1200);
+      await page.getByRole("button", { name: "Sign off count" }).click();
+      const sign = page.getByRole("dialog", { name: "Sign off this count" });
+      await armed(page);
+      await sign.getByRole("button", { name: "Sign off", exact: true }).click();
+      await page.getByText("Every batch matched the system, so stock was confirmed without a change.").waitFor();
+      const go = page.getByRole("button", { name: /^Next count/ });
+      s.check("the locked record offers the next count", await go.count(), 1);
+      await s.shot(page, "next-count-1280");
+      await go.click();
+      await counted(page).first().waitFor({ timeout: 240000 });
+      s.check("Next count opens it", new URL(page.url()).searchParams.get("document"), next.id);
+    });
+
+    await scenario("36", "u13-stock-counts-hidden-without-access", async (s) => {
+      const { page } = s.track(await open("reception"));
+      await page.goto(`${stack.base}/dashboard/inventory?area=stock&view=list`, { waitUntil: "domcontentloaded", timeout: 240000 });
+      await page.getByRole("navigation", { name: "stock tasks" }).or(page.getByText(/access|permission/i).first()).first().waitFor({ timeout: 240000 });
+      s.check("no Stock counts task in the menu", await page.getByRole("navigation", { name: "stock tasks" }).getByRole("button", { name: "Stock counts" }).count(), 0);
+      s.check("no Stock counts option in the phone task list", await page.locator('select[aria-label="Inventory task"] option', { hasText: "Stock counts" }).count(), 0);
+      await page.goto(`${stack.base}${COUNTS}`, { waitUntil: "domcontentloaded", timeout: 240000 });
+      await page.getByText("You don’t have access to stock counts.").waitFor({ timeout: 240000 });
+      s.ok("a direct link still explains", true);
+    });
+
+    await scenario("37", "u15-a-restart-warns-how-many-batches-are-counted-again", async (s) => {
+      const summary = await call("admin", "GET", "/inventory/workspace/reconciliation");
+      const { page } = s.track(await open("admin", { width: 1280, height: 800 }));
+      await goto(page, `${COUNTS}&tab=settings`);
+      await page.getByText("Current cycle").waitFor();
+      s.check("the per-person hint", clean(await page.getByText(/^Each person counts at most/).innerText()), "Each person counts at most this many a day.");
+      await page.getByLabel("Items per person per day").fill("3");
+      s.check("changing items per day keeps the cycle", await page.getByText(/^Saving starts a new cycle/).count(), 0);
+      await page.getByLabel("Cycle length (days)").fill("14");
+      s.ok("something was counted this cycle", summary.forecast.covered > 0, summary.forecast);
+      const warning = page.getByText(/^Saving starts a new cycle today/);
+      s.check("the warning gives the number", clean(await warning.innerText()), `Saving starts a new cycle today. The ${summary.forecast.covered} batches counted in this cycle will be counted again. Counts not yet signed or approved stay with the people counting them.`);
+      s.ok("in warning colours", (await warning.getAttribute("class")).includes("warning"));
+      await warning.scrollIntoViewIfNeeded();
+      await s.shot(page, "settings-restart-1280");
+      await page.getByRole("button", { name: "Undo changes" }).click();
+      const after = await call("admin", "GET", "/inventory/workspace/reconciliation");
+      await call("admin", "PATCH", "/inventory/workspace/settings", { version: after.settingsVersion, reconciliation: { itemsPerPersonPerDay: 3 } });
+      const kept = await call("admin", "GET", "/inventory/workspace/reconciliation");
+      s.check("a save that keeps the cycle length keeps the cycle and its coverage", [kept.cycle.start, kept.forecast.covered], [summary.cycle.start, summary.forecast.covered]);
+      await call("admin", "PATCH", "/inventory/workspace/settings", { version: kept.settingsVersion, reconciliation: { enabled: false } });
     });
 
     const end = await call("admin", "GET", "/inventory/workspace/reconciliation");
