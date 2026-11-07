@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
 import { InventoryWorkflowService } from '../inventory-workflow.service';
 import { InventoryReconciliationService } from './inventory-reconciliation.service';
+import { InventoryWorkspaceService } from '../inventory-workspace.service';
 
 const databaseTests = process.env.RECONCILIATION_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -141,7 +142,7 @@ databaseTests('Stock reconciliation on PostgreSQL', () => {
     const signed = await signAll(anil, count, (line) => (line.inventoryId === 'item-c' ? 7 : 10), 'Three strips of Clobetasol missing');
     expect(signed.status).toBe('AWAITING_APPROVAL');
     expect(await reconciliation.todayCards(anil)).toEqual({ due: null, approvals: null, behind: null });
-    expect(await reconciliation.todayCards(doctor)).toMatchObject({ approvals: { count: 1, netValue: -37.5 } });
+    expect((await reconciliation.todayCards(doctor))?.approvals).toEqual({ count: 1, netValue: -37.5, shortValue: -37.5, extraValue: 0 });
     const detail = await reconciliation.detail(doctor, count.id);
     expect([detail.state, detail.signedBy, detail.signOffNote, detail.differences, detail.netUnits, detail.netValue, detail.can]).toEqual([
       'AWAITING_APPROVAL', { id: 'anil', name: 'Anil Deshmukh' }, 'Three strips of Clobetasol missing', 1, -3, -37.5, { count: false, decide: true, decideOwn: false },
@@ -172,6 +173,9 @@ databaseTests('Stock reconciliation on PostgreSQL', () => {
       ['Stock count 02/11/2026 · Meera Kulkarni', 'ASSIGNED', undefined, undefined, 0, 0, 0],
       ['Stock count 02/11/2026 · Anil Deshmukh', 'APPROVED', 'Anil Deshmukh', 'Priya Menon', 2, -1, -12.5],
     ].sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+    const approved = page.rows.find((row) => row.state === 'APPROVED')!;
+    expect([approved.shortUnits, approved.shortValue, approved.extraUnits, approved.extraValue, approved.selfApproval]).toEqual([-3, -37.5, 2, 25, false]);
+    expect(page.totals).toEqual({ counts: 2, differences: 2, approvedValue: -12.5, awaitingValue: 0, rejected: 0 });
   });
 
   it('rejects without touching stock, and the rejected batches are dealt again the next day', async () => {
@@ -198,8 +202,8 @@ databaseTests('Stock reconciliation on PostgreSQL', () => {
       response: { code: 'COUNT_SEPARATION_OF_DUTIES', message: 'You signed this count, so someone else decides it. Ask Asha Rao.' },
     });
     await expect(reconciliation.decide(anil, count.id, 'APPROVE', { version: signed.version, requestKey: 'pharmacist', reason: 'Fine' })).rejects.toThrow('A doctor or an administrator decides stock count differences');
-    expect((await reconciliation.todayCards(doctor))?.approvals).toEqual({ count: 0, netValue: 0 });
-    expect((await reconciliation.todayCards(admin))?.approvals).toEqual({ count: 1, netValue: -50 });
+    expect((await reconciliation.todayCards(doctor))?.approvals).toEqual({ count: 0, netValue: 0, shortValue: 0, extraValue: 0 });
+    expect((await reconciliation.todayCards(admin))?.approvals).toEqual({ count: 1, netValue: -50, shortValue: -50, extraValue: 0 });
     expect((await workflow.countStaff(branchId)).map((person) => person.name)).toEqual(['Anil Deshmukh', 'Asha Rao', 'Meera Kulkarni', 'Priya Menon']);
     await expect(reconciliation.todayCards(reception)).resolves.toBeNull();
   });
@@ -344,6 +348,28 @@ databaseTests('Stock reconciliation on PostgreSQL', () => {
       await enter(meera, twin.id, () => 10);
       expect((await signSaved(meera, twin.id, '')).status).toBe('POSTED');
     });
+  });
+
+  it('lists a shelf with whose open count each batch is on, and counts a found box at zero stock', async () => {
+    at('2026-11-02T05:00:00Z');
+    const workspace = new InventoryWorkspaceService(db as any, workflow, undefined as any);
+    for (const [id, place] of [['item-a', 'Rack A2'], ['item-b', 'rack a2'], ['item-c', 'Rack A2'], ['item-d', 'Rack B1'], ['item-g', 'Rack A2']])
+      await db.inventoryItem.update({ where: { id }, data: { storageLocation: place } });
+    try {
+      await reconciliation.ensureToday(branchId, 'scheduler');
+      const shelf = await workspace.countPicker(meera, { location: 'RACK A2' });
+      expect(shelf.batches.map((b) => [b.name, b.currentStock, b.openCount && [b.openCount.person, b.openCount.day, b.openCount.signed]])).toEqual([
+        ['Adapalene Gel 15g', 10, ['Anil Deshmukh', '2026-11-02', false]],
+        ['Benzoyl Peroxide 2.5%', 10, [null, '2026-11-02', false]],
+        ['Clobetasol Cream 15g', 10, ['Anil Deshmukh', '2026-11-02', false]],
+      ]);
+      expect([shelf.total, shelf.locations]).toEqual([3, [{ name: 'Rack A2', batches: 3 }, { name: 'Rack B1', batches: 1 }]]);
+      const found = await workspace.createCount(meera, { itemIds: ['item-g'], requestKey: 'found-box' });
+      expect([found.status, found.payload.lines.map((l: any) => [l.inventoryId, l.systemStock])]).toEqual(['DRAFT', [['item-g', 0]]]);
+      await expect(workspace.createCount(meera, { itemIds: ['item-b', 'item-a'], requestKey: 'shelf' })).rejects.toMatchObject({ response: { code: 'COUNT_BATCH_OPEN' } });
+    } finally {
+      await db.inventoryItem.updateMany({ data: { storageLocation: null } });
+    }
   });
 
   describe('planning', () => {

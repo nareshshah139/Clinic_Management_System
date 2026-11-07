@@ -12,7 +12,7 @@ import { cycleOn, cycleRequestKey, forecast, planDay, readReconciliation, type P
 
 export const COUNT_STATES = ['ASSIGNED', 'AWAITING_APPROVAL', 'APPROVED', 'REJECTED', 'POSTED_NO_DIFF', 'CANCELLED'] as const;
 export type CountState = (typeof COUNT_STATES)[number];
-const COUNT_SORTS = ['date', 'assignedTo', 'signedAt', 'items', 'differences', 'netValue'] as const;
+const COUNT_SORTS = ['date', 'assignedTo', 'signedAt', 'items', 'differences', 'shortValue', 'netValue'] as const;
 type CountSort = (typeof COUNT_SORTS)[number];
 
 type Person = { id: string; name: string } | null;
@@ -20,15 +20,24 @@ type CountDoc = { id: string; status: string; reference: string; createdBy: stri
 
 const lineDiff = (l: WorkflowLine) => (l.physicalStock === undefined || l.systemStock === undefined ? 0 : l.physicalStock - l.systemStock);
 
+/** Shortages and surpluses are kept apart because a net figure lets one hide the other. */
 export function countFigures(lines: readonly WorkflowLine[]) {
   const counted = lines.filter((l) => l.physicalStock !== undefined);
   const differing = counted.filter((l) => lineDiff(l) !== 0);
+  const units = (part: WorkflowLine[]) => part.reduce((n, l) => n + lineDiff(l), 0);
+  const value = (part: WorkflowLine[]) => money(part.reduce((n, l) => n + lineDiff(l) * (l.unitPrice || 0), 0));
+  const short = differing.filter((l) => lineDiff(l) < 0);
+  const extra = differing.filter((l) => lineDiff(l) > 0);
   return {
     items: lines.length,
     counted: counted.length,
     differences: differing.length,
-    netUnits: differing.reduce((n, l) => n + lineDiff(l), 0),
-    netValue: money(differing.reduce((n, l) => n + lineDiff(l) * (l.unitPrice || 0), 0)),
+    netUnits: units(differing),
+    netValue: value(differing),
+    shortUnits: units(short),
+    shortValue: value(short),
+    extraUnits: units(extra),
+    extraValue: value(extra),
   };
 }
 
@@ -193,7 +202,9 @@ export class InventoryReconciliationService {
     const waiting = await this.openCounts(actor.branchId, { status: 'AWAITING_APPROVAL' });
     const sole = !(await this.otherApprovers(actor)).length;
     const mine = waiting.filter((doc) => sole || (doc.payload?.signOff?.by || doc.createdBy) !== actor.id);
-    return { count: mine.length, netValue: money(mine.reduce((n, doc) => n + countFigures(doc.payload?.lines || []).netValue, 0)) };
+    const figures = mine.map((doc) => countFigures(doc.payload?.lines || []));
+    const total = (key: 'netValue' | 'shortValue' | 'extraValue') => money(figures.reduce((n, f) => n + f[key], 0));
+    return { count: mine.length, netValue: total('netValue'), shortValue: total('shortValue'), extraValue: total('extraValue') };
   }
 
   private otherApprovers(actor: WorkflowActor) {
@@ -284,6 +295,7 @@ export class InventoryReconciliationService {
       signedAt: doc.payload?.signOff?.at ?? null,
       decidedBy: person(decision?.by),
       decidedAt: decision?.at ?? null,
+      selfApproval: decision?.selfApproval === true,
       ...figures,
       state: countState(doc),
     };
@@ -322,7 +334,13 @@ export class InventoryReconciliationService {
       from,
       to,
       personOptions,
-      totals: { counts: filtered.length, differences: filtered.reduce((n, r) => n + r.differences, 0), netValue: money(filtered.reduce((n, r) => n + r.netValue, 0)) },
+      totals: {
+        counts: filtered.length,
+        differences: filtered.reduce((n, r) => n + r.differences, 0),
+        approvedValue: money(filtered.filter((r) => r.state === 'APPROVED').reduce((n, r) => n + r.netValue, 0)),
+        awaitingValue: money(filtered.filter((r) => r.state === 'AWAITING_APPROVAL').reduce((n, r) => n + r.netValue, 0)),
+        rejected: filtered.filter((r) => r.state === 'REJECTED').length,
+      },
     };
   }
 

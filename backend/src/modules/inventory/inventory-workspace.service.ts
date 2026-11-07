@@ -12,7 +12,7 @@ import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
 import { inventoryProductName } from './inventory-names';
 import { displayDay } from './supplier-return';
-import { clinicDay } from '../pharmacy/register-utils';
+import { clinicDay, peopleById } from '../pharmacy/register-utils';
 import { PharmacySupplierCreditService } from '../pharmacy/pharmacy-supplier-credit.service';
 import { EVERY_ALLOCATION, creditBalance } from '../pharmacy/supplier-credit-balance';
 
@@ -247,6 +247,37 @@ export class InventoryWorkspaceService {
   async reverseAllocation(actor: WorkflowActor, id: string, reason: string) {
     await this.require(actor, 'pharmacy:purchase-ledger:write');
     return this.supplierCredits.reverseAllocation(actor, id, reason);
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] on-demand-count-picker
+   * The on-demand picker MUST find any batch by item name, batch or rack, zero stock included so a
+   * found box can be counted, saying how many matched when it shows fewer. A shelf lists every batch
+   * in stock there. Each batch on an undecided count says whose count it is on.
+   */
+  async countPicker(actor:WorkflowActor,q:Record<string,any>) {
+    await this.workflow.authorize(actor,'COUNT',true);
+    const text=String(q.q??'').trim(),location=String(q.location??'').trim();
+    const [shelves,holders]=await Promise.all([
+      this.prisma.inventoryItem.groupBy({by:['storageLocation'],where:{branchId:actor.branchId,currentStock:{gt:0}},_count:{_all:true}}),
+      this.workflow.openCountHolders(this.prisma,actor.branchId),
+    ]);
+    const places=new Map<string,{name:string;batches:number;top:number}>();
+    for(const shelf of shelves){const name=shelf.storageLocation?.trim();if(!name)continue;const key=name.toLowerCase(),seen=places.get(key),n=shelf._count._all;
+      places.set(key,{name:seen&&seen.top>=n?seen.name:name,top:Math.max(seen?.top??0,n),batches:(seen?.batches??0)+n});}
+    const locations=[...places.values()].map(({name,batches})=>({name,batches})).sort((a,b)=>a.name.localeCompare(b.name,'en',{numeric:true,sensitivity:'base'}));
+    const select={id:true,name:true,batchNumber:true,expiryDate:true,storageLocation:true,currentStock:true,unit:true};
+    let rows:any[]=[],total=0;
+    if(location){rows=await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,currentStock:{gt:0},storageLocation:{equals:location,mode:'insensitive'}},select,orderBy:[{name:'asc'},{batchNumber:'asc'}]});total=rows.length;}
+    else if(text.length>=2){const page=await this.stock(actor,{search:text,limit:20,page:1});rows=page.rows;total=page.total;}
+    const holding=rows.map(r=>holders.get(r.id)).filter(Boolean) as any[];
+    const people=await peopleById(this.prisma,holding.map(doc=>doc.payload?.assigneeId??doc.createdBy));
+    return {
+      batches:rows.map(r=>{const doc=holders.get(r.id);const by=doc?(doc.payload?.assigneeId??doc.createdBy):null;
+        return {id:r.id,name:r.name,batchNumber:r.batchNumber??'',expiryDate:r.expiryDate??null,storageLocation:r.storageLocation??null,currentStock:r.currentStock,unit:r.unit,
+          openCount:doc?{id:doc.id,day:doc.payload?.date??null,person:by===actor.id?null:(people.get(by)?.name??'a former staff member'),signed:doc.status==='AWAITING_APPROVAL'}:null};}),
+      total,
+      locations:text&&!location?locations.filter(l=>l.name.toLowerCase().includes(text.toLowerCase())):locations,
+    };
   }
   /**
    * @cc [owner:nareshshah139,label:product] on-demand-count-scope
