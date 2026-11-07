@@ -133,6 +133,8 @@ interface InvoiceItem {
   stockStatus?: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK' | 'CHECK_FAILED';
   availableStock?: number;
   substituted?: boolean;
+  quantityReview?: string;
+  quantityConfirmed?: boolean;
 }
 
 type CheckoutAttempt = {
@@ -161,6 +163,11 @@ type PrescriptionStockItem = {
   prescriptionVersion?: string;
   inventoryItemId?: string;
   prescribedQuantity?: number | null;
+  billingQuantity?: {
+    quantity: number;
+    unit: string | null;
+    review: { reason: string; message: string } | null;
+  };
   drugName: string;
   matchedDrug: Pick<Drug, 'id' | 'name'> | null;
   stockStatus: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK';
@@ -524,6 +531,8 @@ export function PharmacyInvoiceBuilderFixed({
               const substituted = existingItem?.substituted === true;
               const reviewedDrug = substituted ? existingItem.drug : drug;
               const sameProduct = Boolean(existingItem?.drugId && existingItem.drugId === reviewedDrug?.id);
+              const filledQuantity = firstPositiveNumber(item.quantity, item.prescribedQuantity, item.totalQuantity, item.qty, stock?.billingQuantity?.quantity) || 1;
+              const keepQuantity = Boolean(existingItem && (existingItem.quantityConfirmed || substituted || !stock));
 
               const invoiceItem: InvoiceItem = {
                 id: invoiceItemId,
@@ -540,7 +549,9 @@ export function PharmacyInvoiceBuilderFixed({
                       existingItem?.drug?.manufacturerName ?? '',
                     packSizeLabel: existingItem?.drug?.packSizeLabel ?? '',
                   },
-                quantity: existingItem?.quantity ?? (firstPositiveNumber(item.quantity, item.prescribedQuantity, item.totalQuantity, item.qty, stock?.prescribedQuantity) || 1),
+                quantity: keepQuantity ? existingItem!.quantity : filledQuantity,
+                quantityReview: keepQuantity ? existingItem!.quantityReview : stock?.billingQuantity?.review?.message,
+                quantityConfirmed: existingItem?.quantityConfirmed,
                 unitPrice: sameProduct ? existingItem!.unitPrice : getDrugUnitPrice(reviewedDrug),
                 discountPercent: existingItem?.discountPercent ?? 0,
                 taxPercent: sameProduct ? existingItem!.taxPercent : getDrugGstRate(reviewedDrug),
@@ -1071,13 +1082,19 @@ export function PharmacyInvoiceBuilderFixed({
   ) => {
     const updatedItems = items.map((item) => {
       if (item.id === itemId) {
-        const updatedItem = { ...item, quantity: Math.max(1, quantity) };
+        const updatedItem = { ...item, quantity: Math.max(1, quantity), quantityReview: undefined, quantityConfirmed: true };
         calculateItemTotal(updatedItem);
         return updatedItem;
       }
       return item;
     });
     setItems(updatedItems);
+  };
+
+  const clearQuantityReview = (itemId: string) => {
+    setItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, quantityReview: undefined, quantityConfirmed: true } : item)),
+    );
   };
 
   const updateItemUnitPrice = (itemId: string, unitPrice: number) => {
@@ -2473,6 +2490,23 @@ export function PharmacyInvoiceBuilderFixed({
                                 {item.drug.manufacturerName} •{' '}
                                 {item.drug.packSizeLabel}
                               </p>
+                            )}
+                            {item.quantityReview && (
+                              <div
+                                role="status"
+                                className="mt-2 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
+                              >
+                                <span className="flex-1">{item.quantityReview}</span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 border-amber-300 px-2 text-xs"
+                                  onClick={() => clearQuantityReview(item.id)}
+                                >
+                                  Confirm
+                                </Button>
+                              </div>
                             )}
                             {item.prescribedDrugName && item.prescribedDrugName !== item.drug?.name && (
                               <p className="text-sm text-blue-700">Prescribed: {item.prescribedDrugName}</p>
