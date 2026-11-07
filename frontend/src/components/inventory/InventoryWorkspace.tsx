@@ -15,6 +15,8 @@ import { purchaseInvoiceStatusLabel } from "@/lib/purchase-invoice-review";
 import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
 import { PurchaseLedger } from "@/components/pharmacy/PurchaseLedger";
 import { ComplianceCenter } from "@/components/pharmacy/ComplianceCenter";
+import { DayWiseSummaryReport } from "@/components/pharmacy/DayWiseSummaryReport";
+import { ItemMarginReport } from "@/components/pharmacy/ItemMarginReport";
 import { DistributorAnalytics } from "@/components/pharmacy/DistributorAnalytics";
 import { PharmacyInventoryStarterImport } from "@/components/pharmacy/PharmacyInventoryStarterImport";
 import { PharmacyInvoiceList } from "@/components/pharmacy/PharmacyInvoiceList";
@@ -56,6 +58,8 @@ const menus: Record<string, string[][]> = {
     ["INWARD_CHALLAN", "Inward challans"],
     ["GATE_PASS", "Gate passes"],
     ["reports", "GST & monthly reports"],
+    ["daywise", "Day-wise summary"],
+    ["margin", "Item-wise margin"],
     ["analytics", "Purchase costs"],
   ],
   stock: [
@@ -428,6 +432,8 @@ export function InventoryWorkspace() {
           {area === "purchases" && view === "reports" && (
             <ComplianceCenter reportsOnly />
           )}
+          {area === "purchases" && view === "daywise" && <DayWiseSummaryReport />}
+          {area === "purchases" && view === "margin" && <ItemMarginReport />}
           {area === "purchases" && view === "analytics" && (
             <DistributorAnalytics />
           )}

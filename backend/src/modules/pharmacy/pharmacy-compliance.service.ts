@@ -11,19 +11,25 @@ import {
   ApplyPharmacyAuditAdjustmentsDto,
   CreatePharmacyAuditDto,
   ExpiryReturnWindowDto,
+  PharmacyDayWiseQueryDto,
   PharmacyGstSummaryQueryDto,
+  PharmacyItemMarginQueryDto,
   PharmacyMonthlyReportQueryDto,
 } from './dto/pharmacy-compliance.dto';
+import { CLINIC_TIME_ZONE, clinicDay, clinicPeriod } from './clinic-day';
+import { DayDocument, buildDayWiseReport, highestSequence } from './pharmacy-day-wise';
+import { buildItemMarginReport, marginLinesFrom, productCatalog } from './pharmacy-item-margin';
+import {
+  money,
+  purchaseLineSlab,
+  saleLineSlab,
+  slabsFromLines,
+  sortedSlabs,
+  sumSlabs,
+} from './gst-slabs';
 
-type GstSlab = {
-  slabPercent: number;
-  taxableAmount: number;
-  cgst: number;
-  sgst: number;
-  igst: number;
-  totalGst: number;
-  grossAmount: number;
-};
+const SALE_STATUSES = ['CONFIRMED', 'DISPENSED', 'COMPLETED'];
+const DAY_WISE_MAX_DAYS = 366;
 
 @Injectable()
 export class PharmacyComplianceService {
@@ -63,46 +69,15 @@ export class PharmacyComplianceService {
     ]);
 
     const workflowRows=await this.workflowReportRows(branchId,start,end);purchaseInvoices.push(...workflowRows.purchases);salesInvoices.push(...workflowRows.sales);
-    const purchaseSlabs = new Map<number, GstSlab>();
-    for (const invoice of purchaseInvoices) {
-      for (const item of invoice.items || []) {
-        const slabPercent = this.money(
-          (Number(item.cgstPercent) || 0) +
-            (Number(item.sgstPercent) || 0) +
-            (Number(item.igstPercent) || 0),
-        );
-        this.addSlab(purchaseSlabs, slabPercent, {
-          taxableAmount: item.taxableAmount,
-          cgst: this.percentAmount(item.taxableAmount, item.cgstPercent),
-          sgst: this.percentAmount(item.taxableAmount, item.sgstPercent),
-          igst: this.percentAmount(item.taxableAmount, item.igstPercent),
-          totalGst: item.gstAmount,
-          grossAmount: item.lineTotal,
-        });
-      }
-    }
+    const purchaseSlabs = slabsFromLines(
+      purchaseInvoices.flatMap((invoice: any) => (invoice.items || []).map(purchaseLineSlab)),
+    );
+    const salesSlabs = slabsFromLines(
+      salesInvoices.flatMap((invoice: any) => (invoice.items || []).map(saleLineSlab)),
+    );
 
-    const salesSlabs = new Map<number, GstSlab>();
-    for (const invoice of salesInvoices) {
-      for (const item of invoice.items || []) {
-        const taxableAmount = this.money(
-          Number(item.totalAmount || 0) - Number(item.taxAmount || 0),
-        );
-        const totalGst = this.money(item.taxAmount);
-        const localTax = this.money(totalGst / 2);
-        this.addSlab(salesSlabs, this.money(item.taxPercent), {
-          taxableAmount,
-          cgst: localTax,
-          sgst: this.money(totalGst-localTax),
-          igst: 0,
-          totalGst,
-          grossAmount: item.totalAmount,
-        });
-      }
-    }
-
-    const purchaseInputGst = this.sumSlabs(purchaseSlabs).totalGst;
-    const salesOutputGst = this.sumSlabs(salesSlabs).totalGst;
+    const purchaseInputGst = sumSlabs(purchaseSlabs).totalGst;
+    const salesOutputGst = sumSlabs(salesSlabs).totalGst;
 
     return {
       scope: {branchId,statuses:['STOCK_COMMITTED','CONFIRMED','DISPENSED','COMPLETED','POSTED','RELEASED'],draftsExcluded:true,dateBasis:'Saved document date; inclusive UTC period',startDate:start.toISOString(),endDate:end.toISOString()},
@@ -113,17 +88,167 @@ export class PharmacyComplianceService {
       },
       purchaseInputGst,
       salesOutputGst,
-      netPayable: this.money(salesOutputGst - purchaseInputGst),
+      netPayable: money(salesOutputGst - purchaseInputGst),
       purchases: {
         invoiceCount: purchaseInvoices.length,
-        ...this.sumSlabs(purchaseSlabs),
-        slabs: this.sortedSlabs(purchaseSlabs),
+        ...sumSlabs(purchaseSlabs),
+        slabs: sortedSlabs(purchaseSlabs),
       },
       sales: {
         invoiceCount: salesInvoices.length,
-        ...this.sumSlabs(salesSlabs),
-        slabs: this.sortedSlabs(salesSlabs),
+        ...sumSlabs(salesSlabs),
+        slabs: sortedSlabs(salesSlabs),
       },
+    };
+  }
+
+  async getDayWiseSummary(query: PharmacyDayWiseQueryDto, branchId: string) {
+    const period = clinicPeriod(query.startDate, query.endDate, DAY_WISE_MAX_DAYS);
+    const db = this.prisma as any;
+    const range = { gte: period.start, lte: period.end };
+    const workflow = await this.workflowReportRows(branchId, period.start, period.end);
+    const workflowDocuments = (records: any[]): DayDocument[] =>
+      records.map((record) => ({
+        day: clinicDay(record.invoiceDate),
+        kind: record.kind,
+        reference: record.invoiceNumber,
+        numbering: 'REFERENCE',
+        lines: record.items.map((item: any) => (query.type === 'PURCHASE' ? purchaseLineSlab(item) : saleLineSlab(item))),
+      }));
+
+    let documents: DayDocument[];
+    let priorSequence = new Map<string, number>();
+    if (query.type === 'PURCHASE') {
+      const invoices = await db.pharmacyPurchaseInvoice.findMany({
+        where: { branchId, invoiceDate: range, status: 'STOCK_COMMITTED' },
+        include: { items: true },
+        orderBy: [{ invoiceDate: 'asc' }, { invoiceNumber: 'asc' }],
+      });
+      documents = [
+        ...invoices.map((invoice: any): DayDocument => ({
+          day: clinicDay(invoice.invoiceDate),
+          kind: 'PURCHASE_INVOICE',
+          reference: invoice.invoiceNumber,
+          numbering: 'SUPPLIER',
+          lines: (invoice.items || []).map(purchaseLineSlab),
+        })),
+        ...workflowDocuments(workflow.purchases),
+      ];
+    } else {
+      const [invoices, earlier] = await Promise.all([
+        db.pharmacyInvoice.findMany({
+          where: { branchId, invoiceDate: range, status: { in: SALE_STATUSES } },
+          include: { items: true },
+          orderBy: [{ invoiceDate: 'asc' }, { invoiceNumber: 'asc' }],
+        }),
+        db.pharmacyInvoice.findMany({
+          where: { branchId, invoiceDate: { lt: period.start }, status: { in: SALE_STATUSES } },
+          select: { invoiceNumber: true },
+          orderBy: { invoiceDate: 'desc' },
+          take: 50,
+        }),
+      ]);
+      documents = [
+        ...invoices.map((invoice: any): DayDocument => ({
+          day: clinicDay(invoice.invoiceDate),
+          kind: 'PHARMACY_INVOICE',
+          reference: invoice.invoiceNumber,
+          numbering: 'SEQUENCE',
+          lines: (invoice.items || []).map(saleLineSlab),
+        })),
+        ...workflowDocuments(workflow.sales),
+      ];
+      priorSequence = highestSequence(earlier.map((invoice: any) => invoice.invoiceNumber));
+    }
+
+    const draft = buildDayWiseReport({ days: period.days, documents, priorSequence, unissuedStatus: new Map() });
+    const missingNumbers = draft.rows.flatMap((row) => row.bills.missing.map((bill) => bill.invoiceNumber));
+    const unissued = missingNumbers.length
+      ? await db.pharmacyInvoice.findMany({
+          where: { branchId, invoiceNumber: { in: missingNumbers } },
+          select: { invoiceNumber: true, status: true },
+        })
+      : [];
+    const report = unissued.length
+      ? buildDayWiseReport({
+          days: period.days,
+          documents,
+          priorSequence,
+          unissuedStatus: new Map(unissued.map((invoice: any) => [invoice.invoiceNumber, invoice.status])),
+        })
+      : draft;
+
+    return {
+      type: query.type,
+      period: { startDate: period.startDate, endDate: period.endDate, timeZone: CLINIC_TIME_ZONE },
+      scope: {
+        branchId,
+        statuses: query.type === 'PURCHASE' ? ['STOCK_COMMITTED', 'POSTED', 'RELEASED'] : [...SALE_STATUSES, 'POSTED', 'RELEASED'],
+        draftsExcluded: true,
+        dateBasis: `Saved document date, grouped by ${CLINIC_TIME_ZONE} calendar day`,
+      },
+      ...report,
+    };
+  }
+
+  /**
+   * Item-wise margin for posted sales in the period. Purchase is the recorded cost of the units sold
+   * including the GST paid on them; Net GST is output GST less that input GST; so
+   * Profit = Sales Amt - Purchase - Net GST = taxable sale value - taxable cost.
+   */
+  async getItemMargin(query: PharmacyItemMarginQueryDto, branchId: string) {
+    const period = clinicPeriod(query.startDate, query.endDate);
+    const db = this.prisma as any;
+    const [invoices, batches, workflowDocuments] = await Promise.all([
+      db.pharmacyInvoice.findMany({
+        where: { branchId, invoiceDate: { gte: period.start, lte: period.end }, status: { in: SALE_STATUSES } },
+        include: { items: { include: { drug: true, package: true } } },
+      }),
+      db.inventoryItem.findMany({
+        where: { branchId },
+        select: {
+          id: true, name: true, category: true, manufacturer: true, unit: true, packSize: true, packUnit: true,
+          mrp: true, currentStock: true, gstRate: true, createdAt: true,
+          drugs: { select: { id: true, name: true, manufacturerName: true, packSizeLabel: true, category: true } },
+        },
+      }),
+      db.inventoryWorkflowDocument
+        ? db.inventoryWorkflowDocument.findMany({
+            where: { branchId, status: { in: ['POSTED', 'RELEASED'] }, kind: { in: ['COUNTER_SALE', 'SALES_RETURN'] } },
+          })
+        : [],
+    ]);
+    const documents = workflowDocuments.filter((doc: any) => {
+      const date = new Date(doc.payload?.date);
+      return date >= period.start && date <= period.end;
+    });
+    const sourceSaleIds = documents
+      .filter((doc: any) => doc.kind === 'SALES_RETURN')
+      .flatMap((doc: any) => doc.payload.lines.map((line: any) => line.sourceLineId).filter(Boolean));
+    const movements = await db.stockTransaction.findMany({
+      where: {
+        branchId,
+        OR: [
+          { type: 'SALE', reference: { in: invoices.map((invoice: any) => `INV-${invoice.invoiceNumber}`) } },
+          { reference: { in: documents.filter((doc: any) => doc.kind === 'COUNTER_SALE').map((doc: any) => `WF-${doc.reference}`) } },
+          { id: { in: sourceSaleIds } },
+        ],
+      },
+      select: { id: true, itemId: true, type: true, quantity: true, reference: true, notes: true },
+    });
+
+    const { lines, fallbackProducts } = marginLinesFrom({ invoices, documents, movements, batches });
+    return {
+      period: { startDate: period.startDate, endDate: period.endDate, timeZone: CLINIC_TIME_ZONE },
+      scope: {
+        branchId,
+        statuses: [...SALE_STATUSES, 'POSTED', 'RELEASED'],
+        draftsExcluded: true,
+        dateBasis: `Saved document date, ${CLINIC_TIME_ZONE} calendar days`,
+        costBasis: 'Cost per stock unit recorded on the sale movement (purchase rate before GST); a missing or zero cost is reported as unknown',
+      },
+      search: query.search?.trim() || null,
+      ...buildItemMarginReport({ lines, catalog: productCatalog(batches), fallbackProducts, search: query.search }),
     };
   }
 
@@ -148,8 +273,8 @@ export class PharmacyComplianceService {
     return [...purchases.map(row=>({row,type:'purchase'})),...sales.map(row=>({row,type:'sale'}))].map(({row,type})=>{
       const sourceType=row.sourceType||type,kind=row.kind||(type==='purchase'?'PURCHASE_INVOICE':'PHARMACY_INVOICE');
       return {id:row.id,sourceType,kind,invoiceNumber:row.invoiceNumber,status:row.status,invoiceDate:row.invoiceDate,party:type==='purchase'?row.distributorName:undefined,supplierGstin:row.distributorGstin||null,
-        taxableAmount:this.money(type==='purchase'?row.taxableAmount:Number(row.totalAmount||0)-Number(row.taxAmount||0)),gstAmount:this.money(type==='purchase'?row.totalGst:row.taxAmount),totalAmount:this.money(type==='purchase'?row.netPayable:row.totalAmount),
-        lines:(row.items||[]).map((l:any)=>({id:l.id,lineNumber:l.lineNumber,product:l.productName||l.itemName||l.name||l.drugName||'',batch:l.batchNumber||'',unit:l.packUnitType||l.unit||'Not recorded',pack:l.packSize||null,paidQuantity:l.quantityPurchased??l.quantity??0,freeQuantity:l.freeQuantity||0,MRP:l.mrp??null,PTR:l.purchaseRate??l.unitPrice??null,discountPercent:l.discountPercent||0,schemeAmount:l.schemeAmount||0,taxableAmount:this.money(l.taxableAmount??Number(l.totalAmount||0)-Number(l.taxAmount||0)),gstAmount:this.money(l.gstAmount??l.taxAmount??0),totalAmount:this.money(l.lineTotal??l.totalAmount??0)}))};
+        taxableAmount:money(type==='purchase'?row.taxableAmount:Number(row.totalAmount||0)-Number(row.taxAmount||0)),gstAmount:money(type==='purchase'?row.totalGst:row.taxAmount),totalAmount:money(type==='purchase'?row.netPayable:row.totalAmount),
+        lines:(row.items||[]).map((l:any)=>({id:l.id,lineNumber:l.lineNumber,product:l.productName||l.itemName||l.name||l.drugName||'',batch:l.batchNumber||'',unit:l.packUnitType||l.unit||'Not recorded',pack:l.packSize||null,paidQuantity:l.quantityPurchased??l.quantity??0,freeQuantity:l.freeQuantity||0,MRP:l.mrp??null,PTR:l.purchaseRate??l.unitPrice??null,discountPercent:l.discountPercent||0,schemeAmount:l.schemeAmount||0,taxableAmount:money(l.taxableAmount??Number(l.totalAmount||0)-Number(l.taxAmount||0)),gstAmount:money(l.gstAmount??l.taxAmount??0),totalAmount:money(l.lineTotal??l.totalAmount??0)}))};
     });
   }
 
@@ -206,19 +331,19 @@ export class PharmacyComplianceService {
     ]);
 
     const workflowRows=await this.workflowReportRows(branchId,start,end);purchaseInvoices.push(...workflowRows.purchases);salesInvoices.push(...workflowRows.sales);
-    const procurementTotal = this.money(
+    const procurementTotal = money(
       purchaseInvoices.reduce((sum: number, invoice: any) => sum + Number(invoice.netPayable || 0), 0),
     );
-    const purchaseTaxable = this.money(
+    const purchaseTaxable = money(
       purchaseInvoices.reduce((sum: number, invoice: any) => sum + Number(invoice.taxableAmount || 0), 0),
     );
-    const salesTotal = this.money(
+    const salesTotal = money(
       salesInvoices.reduce((sum: number, invoice: any) => sum + Number(invoice.totalAmount || 0), 0),
     );
-    const salesTax = this.money(
+    const salesTax = money(
       salesInvoices.reduce((sum: number, invoice: any) => sum + Number(invoice.taxAmount || 0), 0),
     );
-    const salesBeforeTax = this.money(salesTotal - salesTax);
+    const salesBeforeTax = money(salesTotal - salesTax);
     const saleStockTransactions = stockTransactions.filter((tx:any)=>['SALE','SALE_RETURN'].includes(jsonObject(tx.notes).accountingCategory) || tx.type === 'SALE');
     const writeOffTransactions = stockTransactions.filter((tx:any)=>jsonObject(tx.notes).accountingCategory === 'LOSS' || ['EXPIRED','DAMAGED'].includes(tx.type));
     const unknownCostMovements = [...saleStockTransactions,...writeOffTransactions].filter((tx:any)=>!Number.isFinite(jsonObject(tx.notes).costPerStockUnit));
@@ -226,14 +351,14 @@ export class PharmacyComplianceService {
       const cost = jsonObject(tx.notes).costPerStockUnit;
       return Number.isFinite(cost) ? -(movementDelta(tx)||0)*cost : 0;
     };
-    const estimatedCogs = this.money(saleStockTransactions.reduce((sum:number,tx:any)=>sum+movementCost(tx),0));
-    const stockValueAtCost = this.money(
+    const estimatedCogs = money(saleStockTransactions.reduce((sum:number,tx:any)=>sum+movementCost(tx),0));
+    const stockValueAtCost = money(
       inventoryItems.reduce(
         (sum: number, item: any) => sum + Number(item.currentStock || 0) * Number(item.costPrice || 0),
         0,
       ),
     );
-    const stockValueAtMrp = this.money(
+    const stockValueAtMrp = money(
       inventoryItems.reduce(
         (sum: number, item: any) =>
           sum +
@@ -242,7 +367,7 @@ export class PharmacyComplianceService {
         0,
       ),
     );
-    const writeOffValue = this.money(
+    const writeOffValue = money(
       writeOffTransactions.reduce(
         (sum: number, tx: any) => sum + movementCost(tx),
         0,
@@ -268,7 +393,7 @@ export class PharmacyComplianceService {
           0,
         ),
         taxableAmount: purchaseTaxable,
-        gstAmount: this.money(
+        gstAmount: money(
           purchaseInvoices.reduce((sum: number, invoice: any) => sum + Number(invoice.totalGst || 0), 0),
         ),
         netPayable: procurementTotal,
@@ -289,13 +414,13 @@ export class PharmacyComplianceService {
         unknownCostAdjustmentCount: writeOffAdjustments.filter((a:any)=>!Number.isFinite(jsonObject(a.metadata).costPerStockUnit)).length,
         revenue: salesBeforeTax,
         estimatedCogs,
-        grossProfit: this.money(salesBeforeTax - estimatedCogs),
+        grossProfit: money(salesBeforeTax - estimatedCogs),
         grossMarginPercent:
           salesBeforeTax > 0
-            ? this.money(((salesBeforeTax - estimatedCogs) / salesBeforeTax) * 100)
+            ? money(((salesBeforeTax - estimatedCogs) / salesBeforeTax) * 100)
             : 0,
         expiredDamagedWriteOff: writeOffValue,
-        netAfterWriteOff: this.money(salesBeforeTax - estimatedCogs - writeOffValue),
+        netAfterWriteOff: money(salesBeforeTax - estimatedCogs - writeOffValue),
       },
       stockValue: {
         asOf:new Date().toISOString(),basis:'Current physical stock snapshot; not a historical month-end valuation',
@@ -336,13 +461,13 @@ export class PharmacyComplianceService {
       totals: {
         batchCount: items.length,
         stockQuantity: items.reduce((sum: number, item: any) => sum + Number(item.currentStock || 0), 0),
-        valueAtCost: this.money(
+        valueAtCost: money(
           items.reduce(
             (sum: number, item: any) => sum + Number(item.currentStock || 0) * Number(item.costPrice || 0),
             0,
           ),
         ),
-        valueAtMrp: this.money(
+        valueAtMrp: money(
           items.reduce(
             (sum: number, item: any) =>
               sum +
@@ -360,8 +485,8 @@ export class PharmacyComplianceService {
         supplier: item.supplier,
         expiryDate: item.expiryDate,
         currentStock: item.currentStock,unit:item.unit,packSize:item.packSize,packUnit:item.packUnit,location:item.storageLocation,heldStock:item.heldStock,available:item.currentStock-item.heldStock,
-        valueAtCost: this.money(Number(item.currentStock || 0) * Number(item.costPrice || 0)),
-        valueAtMrp: this.money(
+        valueAtCost: money(Number(item.currentStock || 0) * Number(item.costPrice || 0)),
+        valueAtMrp: money(
           Number(item.currentStock || 0) *
             Number(item.mrp ?? item.sellingPrice ?? item.costPrice ?? 0),
         ),
@@ -484,13 +609,13 @@ export class PharmacyComplianceService {
         };
       row.invoiceCount += 1;
       row.lineCount += invoice.items?.length || 0;
-      row.netPayable = this.money(row.netPayable + Number(invoice.netPayable || 0));
-      row.gstAmount = this.money(row.gstAmount + Number(invoice.totalGst || 0));
+      row.netPayable = money(row.netPayable + Number(invoice.netPayable || 0));
+      row.gstAmount = money(row.gstAmount + Number(invoice.totalGst || 0));
       for (const item of invoice.items || []) {
-        row.purchasedQuantity = this.money(
+        row.purchasedQuantity = money(
           row.purchasedQuantity + Number(item.quantityPurchased || 0),
         );
-        row.freeQuantity = this.money(row.freeQuantity + Number(item.freeQuantity || 0));
+        row.freeQuantity = money(row.freeQuantity + Number(item.freeQuantity || 0));
       }
       if (new Date(invoice.invoiceDate) > new Date(row.lastInvoiceDate)) {
         row.lastInvoiceDate = invoice.invoiceDate;
@@ -500,48 +625,6 @@ export class PharmacyComplianceService {
     return Array.from(byDistributor.values())
       .sort((a, b) => b.netPayable - a.netPayable)
       .slice(0, 10);
-  }
-
-  private addSlab(
-    slabs: Map<number, GstSlab>,
-    slabPercent: number,
-    amounts: Omit<GstSlab, 'slabPercent'>,
-  ) {
-    const existing =
-      slabs.get(slabPercent) || {
-        slabPercent,
-        taxableAmount: 0,
-        cgst: 0,
-        sgst: 0,
-        igst: 0,
-        totalGst: 0,
-        grossAmount: 0,
-      };
-    existing.taxableAmount = this.money(existing.taxableAmount + Number(amounts.taxableAmount || 0));
-    existing.cgst = this.money(existing.cgst + Number(amounts.cgst || 0));
-    existing.sgst = this.money(existing.sgst + Number(amounts.sgst || 0));
-    existing.igst = this.money(existing.igst + Number(amounts.igst || 0));
-    existing.totalGst = this.money(existing.totalGst + Number(amounts.totalGst || 0));
-    existing.grossAmount = this.money(existing.grossAmount + Number(amounts.grossAmount || 0));
-    slabs.set(slabPercent, existing);
-  }
-
-  private sumSlabs(slabs: Map<number, GstSlab>) {
-    return this.sortedSlabs(slabs).reduce(
-      (sum, slab) => ({
-        taxableAmount: this.money(sum.taxableAmount + slab.taxableAmount),
-        cgst: this.money(sum.cgst + slab.cgst),
-        sgst: this.money(sum.sgst + slab.sgst),
-        igst: this.money(sum.igst + slab.igst),
-        totalGst: this.money(sum.totalGst + slab.totalGst),
-        grossAmount: this.money(sum.grossAmount + slab.grossAmount),
-      }),
-      { taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, totalGst: 0, grossAmount: 0 },
-    );
-  }
-
-  private sortedSlabs(slabs: Map<number, GstSlab>) {
-    return Array.from(slabs.values()).sort((a, b) => a.slabPercent - b.slabPercent);
   }
 
   private dateRange(startDate: string, endDate: string) {
@@ -585,13 +668,5 @@ export class PharmacyComplianceService {
       variance: row.variance,
       status: row.status,
     };
-  }
-
-  private percentAmount(amount: number, percent: number) {
-    return this.money((Number(amount || 0) * Number(percent || 0)) / 100);
-  }
-
-  private money(value: number) {
-    return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
   }
 }
