@@ -25,7 +25,7 @@ const PAGES = [
       ["Set off", (p) => p.getByRole("button", { name: "Set off credit note CN-B against bills" })],
     ],
   },
-  { name: "Stock counts", route: "/dashboard/inventory?area=stock&view=COUNT", actions: [["Start stock count", (p) => p.getByRole("button", { name: "Start stock count" })]] },
+  { name: "Stock counts", route: "/dashboard/inventory?area=stock&view=COUNT", actions: [["Count an item", (p) => p.getByRole("button", { name: "Count an item" })]] },
 ];
 
 async function seedPurchases(stack) {
