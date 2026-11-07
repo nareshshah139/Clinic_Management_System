@@ -162,10 +162,12 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case 'addPick':
       if (action.pick.drugId && state.picks.some(pick => pick.drugId === action.pick.drugId)) return state;
       return { ...state, picks: [...state.picks, action.pick], drafts: { ...state.drafts, [action.pick.localId]: emptyDraft } };
-    case 'removePick': {
-      const { [action.localId]: _removed, ...drafts } = state.drafts;
-      return { ...state, picks: state.picks.filter(pick => pick.localId !== action.localId), drafts };
-    }
+    case 'removePick':
+      return {
+        ...state,
+        picks: state.picks.filter(pick => pick.localId !== action.localId),
+        drafts: Object.fromEntries(Object.entries(state.drafts).filter(([localId]) => localId !== action.localId)),
+      };
     case 'editDraft':
       return { ...state, drafts: { ...state.drafts, [action.localId]: { ...(state.drafts[action.localId] ?? emptyDraft), [action.field]: action.value } } };
     case 'applyToAll':

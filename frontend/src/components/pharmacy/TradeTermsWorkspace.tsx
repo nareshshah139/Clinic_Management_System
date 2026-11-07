@@ -108,33 +108,31 @@ function TermsTable({ terms, canEdit, onEdit, onDeleted }: {
             <TableHead>PTR</TableHead>
             <TableHead>Note</TableHead>
             <TableHead>Entered</TableHead>
-            {canEdit && <TableHead><span className="sr-only">Actions</span></TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {terms.map(term => (
             <TableRow key={term.id}>
-              <TableCell className="font-medium">{term.productName}{!term.drugId && <span className="block text-xs text-muted-foreground">Not linked to a catalogue product</span>}</TableCell>
+              <TableCell className="min-w-40 whitespace-normal font-medium">{term.productName}{!term.drugId && <span className="block text-xs text-muted-foreground">Not linked to a catalogue product</span>}</TableCell>
               <TableCell>{formatPercent(term.discountPercent) ?? '—'}</TableCell>
               <TableCell>{formatScheme(term.schemeBuy, term.schemeFree) ?? '—'}</TableCell>
               <TableCell>{formatExpiry(term.minExpiryMonths) ?? '—'}</TableCell>
               <TableCell>{formatPercent(term.marginPercent) ?? '—'}</TableCell>
               <TableCell>{formatPtr(term) ?? '—'}</TableCell>
-              <TableCell className="max-w-56 whitespace-normal">{term.note || '—'}</TableCell>
-              <TableCell className="whitespace-normal text-sm">
+              <TableCell className="min-w-40 max-w-64 whitespace-normal">{term.note || '—'}</TableCell>
+              <TableCell className="min-w-44 whitespace-normal text-sm">
                 by {term.createdBy.name} on {displayClinicDate(term.createdAt)}
-                {term.updatedAt !== term.createdAt && <span className="block text-muted-foreground">updated by {term.updatedBy.name} on {displayClinicDate(term.updatedAt)}</span>}
-              </TableCell>
-              {canEdit && (
-                <TableCell>
-                  <div className="flex gap-2">
-                    <Button type="button" size="sm" variant="outline" onClick={() => onEdit(term)} aria-label={`Edit terms for ${term.productName}`}>Edit</Button>
+                {(term.updatedBy.id !== term.createdBy.id || displayClinicDate(term.updatedAt) !== displayClinicDate(term.createdAt)) &&
+                  <span className="block text-muted-foreground">updated by {term.updatedBy.name} on {displayClinicDate(term.updatedAt)}</span>}
+                {canEdit && (
+                  <span className="mt-2 flex gap-2">
+                    <Button type="button" size="sm" variant="outline" className="whitespace-nowrap" onClick={() => onEdit(term)} aria-label={`Edit terms for ${term.productName}`}>Edit</Button>
                     {confirming === term.id
-                      ? <Button type="button" size="sm" variant="destructive" onClick={() => void remove(term)}>Confirm delete</Button>
-                      : <Button type="button" size="sm" variant="ghost" onClick={() => setConfirming(term.id)} aria-label={`Delete terms for ${term.productName}`}>Delete</Button>}
-                  </div>
-                </TableCell>
-              )}
+                      ? <Button type="button" size="sm" variant="destructive" className="whitespace-nowrap" onClick={() => void remove(term)}>Confirm delete</Button>
+                      : <Button type="button" size="sm" variant="ghost" className="whitespace-nowrap" onClick={() => setConfirming(term.id)} aria-label={`Delete terms for ${term.productName}`}>Delete</Button>}
+                  </span>
+                )}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -189,13 +187,13 @@ function ProductSearch({ onAdd }: { onAdd: (pick: { drugId?: string; productName
 }
 
 const termInputs: { field: DraftField; label: string; placeholder?: string; wide?: boolean }[] = [
-  { field: 'discountPercent', label: 'Discount %', placeholder: '10' },
-  { field: 'schemeBuy', label: 'Scheme: buy', placeholder: '10' },
-  { field: 'schemeFree', label: 'Scheme: get free', placeholder: '1' },
-  { field: 'minExpiryMonths', label: 'Min expiry (months)', placeholder: '18' },
-  { field: 'marginPercent', label: 'Margin %', placeholder: '20' },
-  { field: 'ptr', label: 'PTR (₹)', placeholder: '42.50' },
-  { field: 'ptrRule', label: 'PTR rule', placeholder: 'MRP less 20%', wide: true },
+  { field: 'discountPercent', label: 'Discount %' },
+  { field: 'schemeBuy', label: 'Scheme: buy' },
+  { field: 'schemeFree', label: 'Scheme: get free' },
+  { field: 'minExpiryMonths', label: 'Min expiry (months)' },
+  { field: 'marginPercent', label: 'Margin %' },
+  { field: 'ptr', label: 'PTR (₹)' },
+  { field: 'ptrRule', label: 'PTR rule', placeholder: 'e.g. MRP less 20%', wide: true },
   { field: 'note', label: 'Note', placeholder: 'What the rep agreed', wide: true },
 ];
 
@@ -374,23 +372,26 @@ export function TradeTermsWorkspace() {
       {wizard ? (
         <TermsWizard initial={wizard} onCancel={() => setWizard(null)} onSaved={replaceTerms} />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(16rem,22rem)_1fr]">
-          <DistributorPicker selectedId={selected?.supplier.id} onSelect={distributor => void open(distributor)} search={search} onSearch={setSearch} directory={directory.data} />
-          <div className="min-w-0 space-y-3">
-            {loadError && <p role="alert" className="text-destructive">{loadError}</p>}
-            {!selected && !loadError && <p className="py-4 text-muted-foreground">Choose a distributor to see the terms agreed with them.</p>}
-            {selected && (
-              <>
+        <div className="min-w-0 space-y-3">
+          {loadError && <p role="alert" className="text-destructive">{loadError}</p>}
+          {selected ? (
+            <>
+              <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
                   <h3 className="text-lg font-semibold">{selected.supplier.name}</h3>
                   <p className="text-sm text-muted-foreground">{selected.supplier.gstNumber || 'No GSTIN'}</p>
                 </div>
-                <TermsTable terms={selected.terms} canEdit={canEdit}
-                  onEdit={term => setWizard(editWizard(selected.supplier, term))}
-                  onDeleted={term => { setSelected({ ...selected, terms: selected.terms.filter(row => row.id !== term.id) }); directory.reload(); }} />
-              </>
-            )}
-          </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setSelected(null)}>All distributors</Button>
+              </div>
+              <TermsTable terms={selected.terms} canEdit={canEdit}
+                onEdit={term => setWizard(editWizard(selected.supplier, term))}
+                onDeleted={term => { setSelected({ ...selected, terms: selected.terms.filter(row => row.id !== term.id) }); directory.reload(); }} />
+            </>
+          ) : (
+            <div className="max-w-2xl">
+              <DistributorPicker onSelect={distributor => void open(distributor)} search={search} onSearch={setSearch} directory={directory.data} />
+            </div>
+          )}
         </div>
       )}
     </section>
