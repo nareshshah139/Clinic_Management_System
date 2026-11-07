@@ -37,7 +37,6 @@ export class InventoryItemRequestService {
   async createOrRequest(
     dto: CreateInventoryItemDto,
     actor: ItemRequestActor,
-    reason?: string,
   ) {
     if (canReviewItemRequests(actor.role)) {
       const item = await this.inventoryService.createInventoryItem(
@@ -54,7 +53,6 @@ export class InventoryItemRequestService {
         requestedById: actor.id,
         itemName: dto.name,
         payload: JSON.parse(JSON.stringify(dto)),
-        reason: reason?.trim() || null,
       },
       include: REQUEST_INCLUDE,
     });

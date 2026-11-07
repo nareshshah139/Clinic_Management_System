@@ -60,7 +60,7 @@ function build() {
 describe('inventory item requests', () => {
   it('queues a request for staff and creates no inventory item', async () => {
     const { service, inventory, prisma } = build();
-    const outcome = await service.createOrRequest(payload as any, reception, ' new variant ');
+    const outcome = await service.createOrRequest(payload as any, reception);
 
     expect(outcome.created).toBe(false);
     expect(inventory.createInventoryItem).not.toHaveBeenCalled();
@@ -70,7 +70,6 @@ describe('inventory item requests', () => {
           branchId: 'b1',
           requestedById: 'rec-1',
           itemName: 'Cetaphil Cleanser 125ml',
-          reason: 'new variant',
           payload,
         }),
       }),
