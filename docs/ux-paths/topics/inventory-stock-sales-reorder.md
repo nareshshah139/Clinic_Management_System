@@ -238,7 +238,7 @@ How the workspace behaves (from code):
 4. Back on the batch detail: Physical 12 · Held 12 · Available to sell 0. The **Blocked stock** tab and "Held stock by source" list the hold reference. The batch state shows as held.
 5. Click **Loss & breakage** → the LOSS editor opens. In **Stock source**, choose the hold reference instead of "Available stock (no hold)". Set Quantity 2 and the reason "2 bottles leaking in carton".
 6. Click **Post stock loss** → status "Posted": "Saved stock effects record the units removed for loss or breakage."
-7. Click **Supplier returns** → the editor opens. Choose the supplier, Stock source = the hold, **Return type** "Expired / near expiry"? No: she changes it to "Other agreed return" and adds the note "Manufacturer recall". **Return price basis** "Purchase rate per stock unit". Quantity 10.
+7. Click **Supplier returns** → the editor opens. Choose the supplier, Stock source = the hold, **Return type**: she first reaches for "Expired / near expiry", then picks "Other agreed return", since the batch is in date, and adds the note "Manufacturer recall". **Return price basis** "Purchase rate per stock unit". Quantity 10.
 8. Click **Save draft**, then **Create return challan** → status "Return challan saved": "Stock has already been sent back to the supplier on this return challan."
 9. Click **Print QR label** to attach to the carton. Click **Export lines** for the delivery boy's copy.
 10. Two days later, the credit note arrives. Today → **Supplier returns in progress** (1) → open the return → click **Finalise supplier credit** → status "Posted". A supplier credit is created and can be allocated under Purchases → Credits & vouchers.
@@ -352,7 +352,7 @@ How the workspace behaves (from code):
 
 ### Edge Cases
 - **Sync shortages** with nothing below minimum: "No new shortages. Existing requests and manual overrides are retained." Items without both a minimum and a maximum are skipped silently.
-- **Create purchase order** before saving a supplier: posting validation rejects it.
+- **Create purchase order** before saving a supplier still succeeds, because SHORTBOOK is not in the supplier check. The resulting PO then fails at **Submit for approval** with "Select a saved supplier with a verified GSTIN" (`inventory-workflow.service.ts:1062-1073`). The user must pick a supplier in the PO editor.
 - Cancelling a PO that already has posted receipts through **Cancel document** fails with "An order with receipts cannot be cancelled". Use **Cancel remaining units** instead.
 - The shortbook rows show raw supplier and user IDs ("Supplier clx…", "Requested by clx…"); see Defects.
 
