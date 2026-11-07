@@ -92,6 +92,17 @@ Before this round, two counts of one batch could both be approved. With 100 on r
 - Frontend: 93 suites and 978 tests pass. Four suites outside inventory timed out under machine load in the parallel run and pass when run alone. Both production TypeScript checks pass.
 - The suite found and fixed these before they shipped: history rows took two lines and only two fitted at 1280 x 800, phone tabs broke mid-word, phone card badges were clipped, a summary broke "+" away from "₹520.00", the phone sign-off bar took three rows, and approvers were named in no fixed order.
 
+## Closure verification, 07/11/2026
+
+- The CR-31 real-stack suite now runs 37 scenarios (203 checks). All 37 pass. The 15 new ones cover:
+  - **One open count per batch.** A batch on the doctor's unsigned count is refused and greyed out in the picker. Two counts of one batch adjust stock once and the second approval says why. A count saved before capture times is typed again and then signs.
+  - **Who decides and cancels.** Only an unsigned count can be cancelled, by its counter or an approver. A manager cannot approve a count and is not named in "Ask …".
+  - **Screens.** The shelf picker at 1280, the search picker at 390 with "Showing 20 of 24" and zero stock, Approvals opening first with Review buttons and phone chevrons, the sticky decision bar with values at 1280 and 390, the approve and reject dialogs, the history footer and "Own count", whole phone tabs, the phone sheet's split figures and notes, Today opening the one due count, Next count, the Stock counts task hidden without access, and the restart warning with its number.
+- The CR-27 returns suite passes 26 of 26 scenarios (125 checks), CR-26 purchase 20 of 20 (337 checks), CR-24 sales 23 of 23 (382 checks), and access roles 93 of 93 checks.
+- Backend: 107 suites and 1439 tests pass in `src`, including the reconciliation database spec (21 tests) and the purchase register, returns and sales register database specs. The production TypeScript check passes.
+- Frontend: 92 of 93 suites and 987 of 990 tests pass in one parallel run. `PrescriptionBuilder.defaults` timed out under machine load and passes alone (10 of 10). The production TypeScript check passes.
+- The suite found these before they shipped. History lost Decided by at 1280. The phone footers broke "2 counts" across lines. The phone sheet pushed Sign off under the figures. Saving an existing planned count was refused by the new "cycle:" key check.
+
 ## Open questions for the clinic
 
 - Batches at zero stock are not dealt in the cycle. They can be counted on demand when a box turns up. Should the cycle count them too?
