@@ -1,0 +1,239 @@
+[
+  {
+    "id": "F-STORY-005-01",
+    "story_id": "STORY-005",
+    "severity": "high",
+    "category": "consistency",
+    "criterion": "Navigation: user always knows where they are / role boundaries enforced",
+    "score": "fail",
+    "description": "The frontend has no route guard. Every role, including LAB_TECH (empty sidebar) and ACCOUNTANT (Dashboard only), loads all 13 pages by URL: Patients with full CRUD and export, Users with Edit/Delete/Reset password/Role & Permissions on every row, and Reports.",
+    "expected": "Pages outside a role's permissions redirect, or show an access-denied state.",
+    "actual": "117 role\u00d7page loads, 0 redirects. Example: labtech-users.png shows the full staff list with all action buttons.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/labtech-users.png",
+    "suggested_fix": "Add a role check in dashboard-layout or middleware that reuses sidebar.tsx allowedRoles, and add matching @Roles on the backend controllers.",
+    "files_likely_involved": [
+      "frontend/src/middleware.ts",
+      "frontend/src/components/layout/dashboard-layout.tsx",
+      "frontend/src/components/layout/sidebar.tsx"
+    ]
+  },
+  {
+    "id": "F-STORY-005-02",
+    "story_id": "STORY-005",
+    "severity": "high",
+    "category": "consistency",
+    "criterion": "Sidebar shows only usable destinations",
+    "score": "fail",
+    "description": "The sidebar links roles to pages whose core APIs return 403 for that role. MANAGER \u2192 Appointments shows 'Failed to load schedule / Forbidden resource'. NURSE and MANAGER \u2192 Rooms get 403 on /appointments/rooms. RECEPTION and PHARMACIST \u2192 Pharmacy Desk/Counter/Billing get 403 on /pharmacy/dashboard and /drugs.",
+    "expected": "Every sidebar link opens a working page for that role.",
+    "actual": "manager-appts.png shows a red toast plus an inline error. nurse-rooms.png shows all-zero counters.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/manager-appts.png",
+    "suggested_fix": "Align sidebar allowedRoles with the backend @Roles lists (appointments, rooms, pharmacy dashboard, drugs), or widen the backend roles.",
+    "files_likely_involved": [
+      "frontend/src/components/layout/sidebar.tsx",
+      "backend/src/modules/appointments/appointments.controller.ts",
+      "backend/src/modules/pharmacy/pharmacy.controller.ts",
+      "backend/src/modules/pharmacy/drug.controller.ts"
+    ]
+  },
+  {
+    "id": "F-STORY-005-03",
+    "story_id": "STORY-005",
+    "severity": "high",
+    "category": "error-handling",
+    "criterion": "Error states shown clearly (not as empty states)",
+    "score": "fail",
+    "description": "403 responses are rendered as real-looking empty data. The Dashboard says 'No appointments scheduled for today' for PHARMACIST, MANAGER, ACCOUNTANT and LAB_TECH while 7 appointments exist today. Rooms shows 'Total Rooms 0 / Available 0' for NURSE, MANAGER, PHARMACIST, ACCOUNTANT and LAB_TECH.",
+    "expected": "A 'you don't have access to X' state, or the widget hidden.",
+    "actual": "The empty state is indistinguishable from 'no data'.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/labtech-dash.png",
+    "suggested_fix": "Have the dashboard and RoomManagement fetches distinguish a 403 and render a permission notice or hide the card.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/page.tsx",
+      "frontend/src/app/dashboard/rooms/page.tsx"
+    ]
+  },
+  {
+    "id": "F-STORY-005-04",
+    "story_id": "STORY-005",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "Network failure: retry option",
+    "score": "fail",
+    "description": "If /auth/me fails (502 simulated) the sidebar shows every link, including Admin and Pharmacy, and the header and footer read 'Unknown User / Unknown Role'. No retry is offered. While /auth/me is slow the same full nav shows with 'Loading\u2026 / Unknown Role'. Mapped defect 19, confirmed.",
+    "expected": "A skeleton nav while loading; on failure, an error with Retry.",
+    "actual": "The full admin nav is exposed to a NURSE session.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/var-authme-502-nurse.png",
+    "suggested_fix": "Return [] from filterNavigationByRole when role is undefined; add a retry banner in dashboard-layout.",
+    "files_likely_involved": [
+      "frontend/src/components/layout/sidebar.tsx",
+      "frontend/src/components/layout/dashboard-layout.tsx"
+    ]
+  },
+  {
+    "id": "F-STORY-005-05",
+    "story_id": "STORY-005",
+    "severity": "medium",
+    "category": "happy-path",
+    "criterion": "Feedback: information is correct for the viewer",
+    "score": "fail",
+    "description": "The doctor's notification bell lists appointments for other doctors. Dr. Shravya's bell shows 'UXW Nurse81617 on 08 Nov 2026', a walk-in booked with Dr. Praneeta during this walk. Mapped defect 5, confirmed live.",
+    "expected": "Only the signed-in doctor's upcoming appointments.",
+    "actual": "All branch appointments for the next 48h are shown.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/bell-shravya.png",
+    "suggested_fix": "Filter by doctorId = req.user.id in the notifications query for DOCTOR.",
+    "files_likely_involved": [
+      "backend/src/modules/reports/reports.service.ts",
+      "frontend/src/components/layout/header.tsx"
+    ]
+  },
+  {
+    "id": "F-STORY-005-06",
+    "story_id": "STORY-005",
+    "severity": "medium",
+    "category": "consistency",
+    "criterion": "Information stated once / consistent across surfaces",
+    "score": "fail",
+    "description": "Stock alerts disagree. The Reports System Alerts strip says 'Low Stock 0' and the pharmacist bell says 'No notifications', while GET /reports/inventory returns lowStockItems: 4. Mapped defect 10, confirmed. NURSE and LAB_TECH bells show an admin summary that links to 'View reports & alerts', a page their sidebar hides.",
+    "expected": "Low stock means below reorder level, consistently, and the pharmacist is notified.",
+    "actual": "0 on the alert surfaces vs 4 in the inventory report.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/bell-pharmacist.png",
+    "suggested_fix": "Use the reorder-level comparison in getSystemAlerts; map bell links per role to pages the role can open.",
+    "files_likely_involved": [
+      "backend/src/modules/reports/reports.service.ts",
+      "frontend/src/components/layout/header.tsx"
+    ]
+  },
+  {
+    "id": "F-STORY-005-07",
+    "story_id": "STORY-005",
+    "severity": "medium",
+    "category": "hierarchy",
+    "criterion": "Importance encoding / truthful content",
+    "score": "fail",
+    "description": "The admin stat cards (Total Users, Active Users, Total Branches, System Status) are shown to every role, including LAB_TECH and ACCOUNTANT. Total always equals Active (12/12), and 'System Status operational' plus the 'All systems operational' alert always show. Mapped defects 8 and 9, confirmed.",
+    "expected": "Role-relevant cards; Active \u2264 Total; status reflects real health.",
+    "actual": "Identical admin cards for all roles; the values are hard-coded or duplicated.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/labtech-dash.png",
+    "suggested_fix": "Gate the cards with showAdminControls; compute Active from status; remove the fake status alert.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/page.tsx",
+      "backend/src/modules/auth/auth.controller.ts"
+    ]
+  },
+  {
+    "id": "F-STORY-005-08",
+    "story_id": "STORY-005",
+    "severity": "medium",
+    "category": "error-handling",
+    "criterion": "No custom 404; user stranded",
+    "score": "fail",
+    "description": "An unknown /dashboard/* path renders Next's bare '404 This page could not be found.' with no sidebar, header or Log out. Mapped defect 23, confirmed.",
+    "expected": "A branded 404 inside the shell, with a way back.",
+    "actual": "A bare black-on-white 404.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/var-404.png",
+    "suggested_fix": "Add app/dashboard/not-found.tsx and error.tsx.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/"
+    ]
+  },
+  {
+    "id": "F-STORY-005-09",
+    "story_id": "STORY-005",
+    "severity": "medium",
+    "category": "layout",
+    "criterion": "Responsive behavior: key controls reachable",
+    "score": "fail",
+    "description": "At 390px the header is hidden: no global search, notifications bell, Branded switch or settings. Only the hamburger remains. Mapped defect 15, confirmed.",
+    "expected": "A collapsed header with search and bell icons.",
+    "actual": "The top bar shows only '\u2261 ClinicMS'.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/mobile-check.png",
+    "suggested_fix": "Render a compact header (search icon, bell) in the mobile bar.",
+    "files_likely_involved": [
+      "frontend/src/components/layout/dashboard-layout.tsx",
+      "frontend/src/components/layout/header.tsx"
+    ]
+  },
+  {
+    "id": "F-STORY-005-10",
+    "story_id": "STORY-005",
+    "severity": "low",
+    "category": "visual",
+    "criterion": "Overflow/clipping",
+    "score": "warn",
+    "description": "The Dashboard 'System Status' card value 'operational' spills 14px past its text column and touches the trend icon tile (measured by geometry-audit).",
+    "expected": "The value fits beside the icon, or wraps or truncates.",
+    "actual": "The text runs into the icon box at 1280px.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/admin-dash.png",
+    "suggested_fix": "Add min-w-0 and truncate, or reduce the value font size, in the stat card.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/page.tsx"
+    ]
+  },
+  {
+    "id": "F-STORY-005-11",
+    "story_id": "STORY-005",
+    "severity": "medium",
+    "category": "visual",
+    "criterion": "Containment: nothing overlapping",
+    "score": "fail",
+    "description": "The Pharmacy Desk command-center header is broken for every role. The four stat tiles (Sales/Invoices/Stock/Packages) overlap: labels collide ('Invoices Stock') and '0 pending' runs into '0 low'. 'Manual Daily Entry' is squeezed into a narrow 3-line column. The geometry audit reports 9 overflow spills (up to 23px). Pharmacy Counter has 3 similar spills.",
+    "expected": "Tiles laid out at full width with readable labels.",
+    "actual": "Overlapping tiles in a cramped area at 1280x800.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/admin-ph-desk.png",
+    "suggested_fix": "Give the command-center stat grid its own row, or allow it to wrap; set min widths.",
+    "files_likely_involved": [
+      "frontend/src/app/dashboard/pharmacy/page.tsx"
+    ]
+  },
+  {
+    "id": "F-STORY-005-12",
+    "story_id": "STORY-005",
+    "severity": "low",
+    "category": "consistency",
+    "criterion": "Navigation: user always knows where they are",
+    "score": "warn",
+    "description": "Test Transcribe ('Voice Transcription Test \u2013 Test the OpenAI Whisper transcription API') is a developer test page in the Admin nav. It renders outside the app shell (no sidebar or header) and is reachable by every role by URL.",
+    "expected": "Dev tools hidden in production nav, or rendered inside the shell.",
+    "actual": "The only way back is a 'Back to dashboard' link.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/admin-transcribe.png",
+    "suggested_fix": "Remove it from the sidebar, or feature-flag it.",
+    "files_likely_involved": [
+      "frontend/src/components/layout/sidebar.tsx",
+      "frontend/src/app/test-transcribe/page.tsx"
+    ]
+  },
+  {
+    "id": "F-STORY-005-13",
+    "story_id": "STORY-005",
+    "severity": "low",
+    "category": "layout",
+    "criterion": "Wrapped controls",
+    "score": "warn",
+    "description": "The DOCTOR sidebar footer wraps the user name 'Shravya Dermatologist' onto 2 lines, pushing the role label down. Unlike other roles' one-line footers. (The geometry audit also flagged 4 wrapped device buttons on Procedures, but they are below the fold and were not visually confirmed, so they are not logged.)",
+    "expected": "Name truncates with ellipsis on one line.",
+    "actual": "Two-line name in the footer.",
+    "screenshot": "/tmp/claude-0/-home-user-Clinic-Management-System/1eff4a85-453f-5886-a484-208393c84f41/scratchpad/ux-walker/shots/auth-shell-navigation--STORY-005/bell-shravya.png",
+    "suggested_fix": null,
+    "files_likely_involved": [
+      "frontend/src/components/layout/sidebar.tsx"
+    ]
+  },
+  {
+    "id": "F-STORY-005-14",
+    "story_id": "STORY-005",
+    "severity": "medium",
+    "category": "flow",
+    "criterion": "Network failure / sign-in resilience",
+    "score": "warn",
+    "description": "Login is throttled to 5 per minute (the auth controller's @Throttle limit). Clinic staff sit behind one IP, so the shared limit is hit at shift change: 4 consecutive 429 'ThrottlerException: Too Many Requests' responses on the first login of this walk. The login page surfaces the raw throttler message.",
+    "expected": "Per-account or higher per-IP limits; a friendly 'too many attempts, try again in N s' message.",
+    "actual": "Repeated 429s; the user must wait an unspecified time.",
+    "screenshot": null,
+    "suggested_fix": "Key the throttle on the identifier plus IP; show the remaining wait time.",
+    "files_likely_involved": [
+      "backend/src/modules/auth/auth.controller.ts",
+      "frontend/src/app/login/page.tsx"
+    ]
+  }
+]

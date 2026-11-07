@@ -108,7 +108,7 @@ Every page was opened by typing its URL for each role. No page redirected or sho
 | Patients | Clean apart from natural button widths |
 | Appointments | Clean |
 | Visits | Clean |
-| Procedures | 4 wrapped device buttons ("Endymed Pro Max", "Fotona Starwalker", "Soprano Platinum LHR", "Hydrafacial") |
+| Procedures | 4 wrapped device buttons reported below the fold (not visually confirmed, not logged) |
 | Rooms | Clean (legend chip widths only) |
 | Pharmacy Desk | **9 spills** in the command-center tiles |
 | Pharmacy Counter | 3 spills (Queue / Exceptions / Ready-Paid tiles, 6–8px) |
