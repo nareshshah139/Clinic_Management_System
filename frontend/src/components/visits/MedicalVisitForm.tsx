@@ -50,6 +50,7 @@ import {
   Keyboard
 } from 'lucide-react';
 import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
+import { missingForCompletion } from '@/lib/visit-completion';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { compactClinicalPatch, mergeClinicalPatch, useClinicalState, acknowledgedVisitVersion } from '@/lib/clinical-patch';
@@ -243,6 +244,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const [visitId, setVisitId] = useState<string | null>(initialVisitSnapshot?.id || initialVisitId || null);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
   const [visitStatus, setVisitStatus] = useState<VisitStatus | 'draft'>('draft');
+  const [hasSavedPrescription, setHasSavedPrescription] = useState(false);
   
   // Form sections state
   const [activeTab, setActiveTab] = useState('overview');
@@ -792,6 +794,17 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     return permissions.includes('all') || permissions.includes(section);
   }, [userRole]);
 
+  const completionGaps = useMemo(() => {
+    const builderDiagnoses = Array.isArray(prescriptionClinical.diagnosis)
+      ? (prescriptionClinical.diagnosis as { diagnosis?: string }[]).map((d) => d?.diagnosis ?? '')
+      : [];
+    return missingForCompletion({
+      diagnoses: [...Array.from(dermDx), ...builderDiagnoses],
+      hasPrescription: hasSavedPrescription,
+      findings: [subjective, objective, plan, skinType, morphology, distribution, acneSeverity, prescriptionClinical.examination],
+    });
+  }, [prescriptionClinical, dermDx, hasSavedPrescription, subjective, objective, plan, skinType, morphology, distribution, acneSeverity]);
+
   // Calculate overall progress (moved up to avoid TDZ issues)
   const getProgress = useCallback(() => {
     const totalSections = hasPermission('all') ? 5 : 3; // Doctor vs Therapist/Nurse (Treatment tab removed)
@@ -1114,6 +1127,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         }
         if (visitVersionRef.current === undefined && !automaticSaveBlocked.current) visitVersionRef.current = res.version;
         if (res.status) setVisitStatus(res.status);
+        if (res?.prescription?.id) setHasSavedPrescription(true);
         if (!latestDraftStateRef.current.consultationType) {
           setConsultationType(res?.consultationType === 'TELE_VIDEO' ? 'TELE_VIDEO' : 'IN_PERSON');
           setTeleVideoConsent(res?.consultationType === 'TELE_VIDEO' && !!res.teleVideoConsentById && !!res.teleVideoConsentAt);
@@ -1555,12 +1569,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         });
         return;
       }
-      const progress = getProgress();
-      if (progress < 80) {
+      if (completionGaps.length > 0) {
         toast({
           variant: 'warning',
           title: 'More details needed to complete',
-          description: 'Fill vitals, complaints, diagnosis, and prescription to reach at least 80% before completing.',
+          description: `Add ${completionGaps.join(' and ')} before completing.`,
         });
         return;
       }
@@ -1863,17 +1876,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                 )}
               </CardTitle>
               <CardDescription>
-                Medical Visit Documentation • Role: {userRole} • Progress: {getProgress()}%
+                Medical Visit Documentation • Role: {userRole}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline">{photoCount} Photos</Badge>
-              <div className="w-20 bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${getProgress()}%` }}
-                />
-              </div>
             <div className="text-xs text-gray-500 min-w-[120px] text-right">
               {saveStatus === 'saving' && 'Saving…'}
               {saveStatus === 'autosaving' && 'Auto-saving…'}
@@ -2023,18 +2030,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                           </div>
                         </div>
                       ))}
-                    </div>
-                    <div className="pt-2 border-t">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">Overall Progress:</span>
-                        <span className="text-sm font-bold text-blue-600">{getProgress()}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${getProgress()}%` }}
-                        />
-                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -2454,7 +2449,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   }}
                   onChangeReviewDate={setReviewDate}
                   onPreview={() => markSectionComplete('prescription')}
-                  onCreated={() => markSectionComplete('prescription')}
+                  onCreated={() => { markSectionComplete('prescription'); setHasSavedPrescription(true); }}
                   refreshKey={builderRefreshKey}
                   includeSections={rxIncludeSections}
                   onChangeIncludeSections={setRxIncludeSections}
@@ -2732,14 +2727,14 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
           {/* Action Buttons */}
           <div className="flex justify-between items-center pt-6 border-t">
             <div className="text-sm text-gray-500">
-              Progress: {getProgress()}% • {completedSections.size} of {hasPermission('all') ? 5 : 3} sections complete
+              {hasPermission('all') && completionGaps.length > 0 ? `To complete, add ${completionGaps.join(' and ')}.` : `${completedSections.size} of ${hasPermission('all') ? 5 : 3} sections complete`}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => void save(false)} disabled={saving}>
                 {saving ? 'Saving...' : 'Save Draft'}
               </Button>
               {hasPermission('all') && (
-                <Button onClick={() => void save(true)} disabled={saving || getProgress() < 80}>
+                <Button onClick={() => void save(true)} disabled={saving || completionGaps.length > 0}>
                   {saving ? 'Completing...' : 'Complete Visit'}
                 </Button>
               )}

@@ -200,3 +200,20 @@ it.each([400, 403, 404, 422])('does not repeatedly resubmit a rejected draft (HT
   await act(async () => { jest.advanceTimersByTime(8100); });
   expect((apiClient.updateVisit as jest.Mock).mock.calls.length).toBeGreaterThan(attempts);
 });
+it('completes a reopened visit that has a diagnosis and a saved prescription but no photos or labs', async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue({ id: 'v', patientId: 'p', version: 3, complaints: [], history: {}, plan: {}, exam: {}, diagnosis: [{ diagnosis: 'Alopecia areata' }], prescription: { id: 'rx-1' } });
+  (apiClient.updateVisit as jest.Mock).mockResolvedValue({ id: 'v', version: 4 });
+  (apiClient.completeVisit as jest.Mock).mockResolvedValue({ id: 'v', version: 5, status: 'COMPLETED' });
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="DOCTOR" />);
+  await flush();
+  const complete = screen.getByRole('button', { name: 'Complete Visit' });
+  expect(complete).toBeEnabled();
+  await act(async () => { fireEvent.click(complete); });
+  expect((apiClient.completeVisit as jest.Mock).mock.calls[0][0]).toBe('v');
+});
+it('says what is missing instead of a percentage when the visit cannot be completed', async () => {
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="DOCTOR" />);
+  await flush();
+  expect(screen.getByRole('button', { name: 'Complete Visit' })).toBeDisabled();
+  expect(screen.getByText('To complete, add a diagnosis and a prescription, examination or notes.')).toBeInTheDocument();
+});
