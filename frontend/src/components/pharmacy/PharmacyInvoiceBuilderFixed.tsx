@@ -2912,7 +2912,7 @@ export function PharmacyInvoiceBuilderFixed({
     </Card>
 
     <Dialog open={printPreviewOpen} onOpenChange={setPrintPreviewOpen}>
-      <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
+      <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] max-h-none p-0 overflow-hidden rounded-none border-0">
         <DialogHeader className="sr-only">
           <DialogTitle>Pharmacy Invoice Preview</DialogTitle>
         </DialogHeader>
