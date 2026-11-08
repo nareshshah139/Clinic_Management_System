@@ -208,6 +208,10 @@ const ROLE_PERMISSIONS = {
  * New visits default to In-person. Tele-video saves and exports MUST be blocked
  * until consent is checked; visit recovery MUST restore the consultation choice.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] completion-progress-explanation
+ * When completion is unavailable because progress is below 80%, the form identifies unfinished tracked sections and states that progress is not a clinical validation.
+ */
 function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
@@ -1709,15 +1713,15 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   };
 
   return (
-    <div className="flex gap-6">
+    <div className="flex min-w-0 flex-col gap-6 xl:flex-row">
       {/* Patient Context Sidebar */}
       {showPatientContext && (
-        <div className="w-80 space-y-4">
+        <div className="w-full shrink-0 space-y-4 xl:w-80">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Patient Context</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setShowPatientContext(false)}>
+                <Button variant="ghost" size="sm" aria-label="Hide patient context" onClick={() => setShowPatientContext(false)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -1725,10 +1729,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
             <CardContent className="space-y-4">
               {patientDetails && (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <User className="h-4 w-4 text-gray-500" />
                     <span className="font-medium">{patientDetails.name}</span>
-                    <Badge variant="outline" className="text-xs">ID: {patientId}</Badge>
+                    <Badge variant="outline" className="max-w-full break-all whitespace-normal text-xs">ID: {patientId}</Badge>
                   </div>
                   <div className="text-sm text-gray-600">
                     Age: {(() => {
@@ -1824,7 +1828,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       )}
       
       {/* Main Content */}
-      <div className={`flex-1 space-y-6 ${showPatientContext ? '' : 'max-w-none'}`}>
+      <div className={`min-w-0 flex-1 space-y-6 ${showPatientContext ? '' : 'max-w-none'}`}>
         {!showPatientContext && (
           <Button variant="outline" size="sm" onClick={() => setShowPatientContext(true)} className="mb-4">
             <User className="h-4 w-4 mr-2" />
@@ -1847,9 +1851,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       {/* Visit Header */}
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <CardTitle className="flex flex-wrap items-center gap-2">
                 <Clock className="h-5 w-5" />
                 Visit #{currentVisitNumber}
                 <Badge variant={visitStatus === 'COMPLETED' ? 'default' : visitStatus === 'IN_PROGRESS' ? 'secondary' : 'outline'}>
@@ -1866,7 +1870,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                 Medical Visit Documentation • Role: {userRole} • Progress: {getProgress()}%
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{photoCount} Photos</Badge>
               <div className="w-20 bg-gray-200 rounded-full h-2">
                 <div 
@@ -2730,16 +2734,21 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
           </Tabs>
 
           {/* Action Buttons */}
-          <div className="flex justify-between items-center pt-6 border-t">
+          <div className="flex flex-wrap justify-between items-center gap-4 pt-6 border-t">
             <div className="text-sm text-gray-500">
               Progress: {getProgress()}% • {completedSections.size} of {hasPermission('all') ? 5 : 3} sections complete
+              {hasPermission('all') && getProgress() < 80 && (
+                <p id="visit-completion-help" className="mt-1 text-gray-700">
+                  Completion requires 80% progress. Remaining: {['vitals', 'photos', 'labs', 'prescription'].filter(section => !completedSections.has(section)).join(', ')}. Section progress does not verify clinical completeness.
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => void save(false)} disabled={saving}>
                 {saving ? 'Saving...' : 'Save Draft'}
               </Button>
               {hasPermission('all') && (
-                <Button onClick={() => void save(true)} disabled={saving || getProgress() < 80}>
+                <Button onClick={() => void save(true)} disabled={saving || getProgress() < 80} aria-describedby={getProgress() < 80 ? 'visit-completion-help' : undefined}>
                   {saving ? 'Completing...' : 'Complete Visit'}
                 </Button>
               )}

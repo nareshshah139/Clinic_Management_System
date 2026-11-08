@@ -34,7 +34,8 @@ describe('DoctorDayCalendar', () => {
     );
 
     // Wait for schedule to load and patient name to render in the grid
-    expect(await screen.findByText(/Alice/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/Alice/i)).length).toBeGreaterThan(0);
+    expect(screen.getByRole('region', { name: /patient queue/i })).toHaveTextContent('Alice');
     // Cancelled (Bob) should not render in schedule
     expect(screen.queryByText(/Bob/i)).toBeNull();
   });

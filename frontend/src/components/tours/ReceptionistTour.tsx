@@ -17,6 +17,10 @@ import { useIntroTour, type TourStep } from '@/hooks/useIntroTour';
 import 'intro.js/introjs.css';
 
 // Function to inject custom styles for tour tooltips
+/**
+ * @cc [owner:nareshshah139,label:accessibility] tour-controls-clickable
+ * Tour styling preserves Intro.js stacking so tooltip controls receive pointer input above the overlay.
+ */
 function injectTourStyles() {
   if (typeof window === 'undefined') return;
   
@@ -51,13 +55,6 @@ function injectTourStyles() {
         -webkit-overflow-scrolling: touch !important;
         word-break: break-word !important;
         overflow-wrap: anywhere !important;
-      }
-      
-      /* Ensure tour overlay and tooltips are always above app UI */
-      .introjs-overlay,
-      .introjs-helperLayer,
-      .introjs-tooltip {
-        z-index: 2147483647 !important;
       }
       
       .introjs-tooltiptext {
@@ -1097,6 +1094,7 @@ export function ReceptionistTour({ autoStart = false }: ReceptionistTourProps) {
       variant="outline"
       size="sm"
       onClick={handleStartTour}
+      aria-label="Start tour"
       className="flex items-center gap-2"
       data-tour="help-button"
     >

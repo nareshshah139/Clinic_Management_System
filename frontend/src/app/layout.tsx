@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Linaé | Clinic Management",
+  title: { default: "Linaé | Clinic Management", template: "%s | Linaé" },
   description: "Linaé clinic workspace for appointments, patient care, pharmacy and billing.",
 };
 

@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api';
@@ -47,6 +48,10 @@ interface PatientFormState {
 /**
  * @cc [owner:nareshshah139,label:accessibility] patient-search-hint-layout
  * Search hints MUST reserve their full wrapped height above the next filter.
+ */
+/**
+ * @cc [owner:nareshshah139,label:accessibility] patient-row-actions
+ * Patient actions remain available through labeled controls when the table is horizontally constrained.
  */
 export default function PatientsManagement() {
   const router = useRouter();
@@ -942,6 +947,7 @@ export default function PatientsManagement() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
                 id="patients-search"
+                aria-label="Search patients"
                 className="pl-10" 
                 placeholder="Search by name, phone, ABHA, or email (min 2 chars)" 
                 value={search} 
@@ -981,7 +987,7 @@ export default function PatientsManagement() {
               )}
             </div>
             <Select value={genderFilter} onValueChange={(v: 'ALL' | Gender) => setGenderFilter(v)}>
-              <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Gender" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by gender" className="w-full sm:w-48"><SelectValue placeholder="Gender" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Genders</SelectItem>
                 <SelectItem value="MALE">Male</SelectItem>
@@ -990,7 +996,7 @@ export default function PatientsManagement() {
               </SelectContent>
             </Select>
             <Select value={consultationTypeFilter} onValueChange={(v: 'ALL' | 'ONLINE' | 'OFFLINE') => setConsultationTypeFilter(v)}>
-              <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Consultation Type" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by consultation type" className="w-full sm:w-48"><SelectValue placeholder="Consultation Type" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Consultations</SelectItem>
                 <SelectItem value="ONLINE">Online</SelectItem>
@@ -998,7 +1004,7 @@ export default function PatientsManagement() {
               </SelectContent>
             </Select>
             <Select value={dateRangeFilter} onValueChange={(v: 'ALL' | 'LAST_1_WEEK' | 'LAST_1_MONTH') => { setDateRangeFilter(v); setCurrentPage(1); }}>
-              <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Date Range" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by date range" className="w-full sm:w-48"><SelectValue placeholder="Date Range" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Time</SelectItem>
                 <SelectItem value="LAST_1_WEEK">Last 1 Week</SelectItem>
@@ -1006,7 +1012,7 @@ export default function PatientsManagement() {
               </SelectContent>
             </Select>
             <Select value={pageSize.toString()} onValueChange={(v: string) => setPageSize(parseInt(v, 10))}>
-              <SelectTrigger className="w-full sm:w-32"><SelectValue placeholder="Per page" /></SelectTrigger>
+              <SelectTrigger aria-label="Patients per page" className="w-full sm:w-32"><SelectValue placeholder="Per page" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="10">10 / page</SelectItem>
                 <SelectItem value="20">20 / page</SelectItem>
@@ -1055,29 +1061,29 @@ export default function PatientsManagement() {
           ) : patients.length === 0 ? (
             <EmptyState title="No patients found" description={search.length >= 2 || genderFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? 'Adjust your search or filters to find a patient.' : 'Add a patient to start their clinic record.'} />
           ) : (
-            <div className="overflow-x-auto" data-tour="patients-table">
+            <div className="min-w-0 max-w-full overflow-x-auto" data-tour="patients-table">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead onClick={() => toggleSort('NAME')} className="cursor-pointer select-none">
-                      Patient {sortBy === 'NAME' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    <TableHead aria-sort={sortBy === 'NAME' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('NAME')}>Patient {sortBy === 'NAME' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
                     <TableHead>Patient Code</TableHead>
-                    <TableHead onClick={() => toggleSort('AGE')} className="cursor-pointer select-none">
-                      Age {sortBy === 'AGE' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    <TableHead aria-sort={sortBy === 'AGE' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('AGE')}>Age {sortBy === 'AGE' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
-                    <TableHead onClick={() => toggleSort('GENDER')} className="cursor-pointer select-none">
-                      Gender {sortBy === 'GENDER' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    <TableHead aria-sort={sortBy === 'GENDER' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('GENDER')}>Gender {sortBy === 'GENDER' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>ABHA ID</TableHead>
                     {displayPatients.some(p => !!p.lastVisitDate) && (
-                      <TableHead onClick={() => toggleSort('LAST_VISIT')} className="cursor-pointer select-none">
-                        Last Visit {sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                      <TableHead aria-sort={sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                        <button type="button" onClick={() => toggleSort('LAST_VISIT')}>Last Visit {sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                       </TableHead>
                     )}
-                    <TableHead onClick={() => toggleSort('REFERRAL')} className="cursor-pointer select-none">
-                      Referral {sortBy === 'REFERRAL' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    <TableHead aria-sort={sortBy === 'REFERRAL' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('REFERRAL')}>Referral {sortBy === 'REFERRAL' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
                     <TableHead>Consultation</TableHead>
                     <TableHead>Actions</TableHead>
@@ -1166,19 +1172,20 @@ export default function PatientsManagement() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
                           <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/patients/${p.id}`); }}><Eye className="h-3 w-3 mr-1" /> View</Button>
-                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(p); }}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
-                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleArchive(p); }}><Archive className="h-3 w-3 mr-1" /> Archive</Button>
-                          {p.portalUserId ? (
-                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleUnlinkPortalUser(p); }}><Unlink className="h-3 w-3 mr-1" /> Unlink</Button>
-                          ) : (
-                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLinkPortalUser(p); }}><LinkIcon className="h-3 w-3 mr-1" /> Link Portal</Button>
-                          )}
-                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleSendWhatsApp(p); }}><MessageSquare className="h-3 w-3 mr-1" /> WhatsApp</Button>
                           <Button size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visits?patientId=${p.id}&autoStart=true`); }}>
                             <Stethoscope className="h-3 w-3 mr-1" /> Start Visit
                           </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="outline" size="sm" aria-label={`More actions for ${formatPatientName(p)}`} onClick={e => e.stopPropagation()}>More</Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e: import('react').MouseEvent) => e.stopPropagation()}>
+                              <DropdownMenuItem onSelect={() => onEdit(p)}>Edit</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => handleArchive(p)}>Archive</DropdownMenuItem>
+                              {p.portalUserId ? <DropdownMenuItem onSelect={() => handleUnlinkPortalUser(p)}>Unlink portal</DropdownMenuItem> : <DropdownMenuItem onSelect={() => handleLinkPortalUser(p)}>Link portal</DropdownMenuItem>}
+                              <DropdownMenuItem onSelect={() => handleSendWhatsApp(p)}>WhatsApp</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
