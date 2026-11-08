@@ -29,7 +29,7 @@ import {
 } from './gst-slabs';
 
 const SALE_STATUSES = ['CONFIRMED', 'DISPENSED', 'COMPLETED'];
-const DAY_WISE_MAX_DAYS = 366;
+const REPORT_MAX_DAYS = 366;
 
 @Injectable()
 export class PharmacyComplianceService {
@@ -103,7 +103,7 @@ export class PharmacyComplianceService {
   }
 
   async getDayWiseSummary(query: PharmacyDayWiseQueryDto, branchId: string) {
-    const period = clinicPeriod(query.startDate, query.endDate, DAY_WISE_MAX_DAYS);
+    const period = clinicPeriod(query.startDate, query.endDate, REPORT_MAX_DAYS);
     const db = this.prisma as any;
     const range = { gte: period.start, lte: period.end };
     const workflow = await this.workflowReportRows(branchId, period.start, period.end);
@@ -197,7 +197,7 @@ export class PharmacyComplianceService {
    * Profit = Sales Amt - Purchase - Net GST = taxable sale value - taxable cost.
    */
   async getItemMargin(query: PharmacyItemMarginQueryDto, branchId: string) {
-    const period = clinicPeriod(query.startDate, query.endDate);
+    const period = clinicPeriod(query.startDate, query.endDate, REPORT_MAX_DAYS);
     const db = this.prisma as any;
     const [invoices, batches, workflowDocuments] = await Promise.all([
       db.pharmacyInvoice.findMany({

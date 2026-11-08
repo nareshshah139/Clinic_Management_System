@@ -156,6 +156,13 @@ describe('Day-wise summary', () => {
 });
 
 describe('Item-wise margin', () => {
+  it('rejects a range longer than a year, like the day-wise report', async () => {
+    const service = new PharmacyComplianceService({} as any);
+    await expect(
+      service.getItemMargin({ startDate: '2025-01-01', endDate: '2026-11-08' }, branchId),
+    ).rejects.toThrow('Choose a range of at most 366 days');
+  });
+
   const batch = (id: string, fields: Row) => ({
     id, category: null, manufacturer: null, unit: 'TUBES', packSize: null, packUnit: null, mrp: null,
     currentStock: 0, gstRate: 12, createdAt: at('2026-10-01T00:00:00.000Z'), drugs: [], branchId, ...fields,
