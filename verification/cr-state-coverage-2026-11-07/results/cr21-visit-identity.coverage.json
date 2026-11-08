@@ -1,0 +1,1030 @@
+{
+  "model": "cr21-visit-identity",
+  "title": "CR-21: patient identity stays visible on Visit Documentation",
+  "startedAt": "2026-11-08T07:01:05.230Z",
+  "finishedAt": "2026-11-08T07:01:54.356Z",
+  "states": {
+    "total": 16,
+    "passed": 15,
+    "failed": 1
+  },
+  "transitions": {
+    "total": 17,
+    "passed": 16,
+    "failed": 1
+  },
+  "uncovered": [],
+  "failures": [
+    {
+      "path": 1,
+      "at": "FreshOpenSaveReached",
+      "error": "check failed: identity bar inside the viewport and on top ({\"ok\":false,\"top\":72,\"labelLeft\":207,\"mainLeft\":256,\"onTop\":false})"
+    },
+    {
+      "path": 1,
+      "at": "FreshOpen --scrollToRxSaveButton--> FreshOpenSaveReached",
+      "error": "check failed: identity bar inside the viewport and on top ({\"ok\":false,\"top\":72,\"labelLeft\":207,\"mainLeft\":256,\"onTop\":false})"
+    }
+  ],
+  "paths": [
+    {
+      "path": 1,
+      "ok": false,
+      "events": [
+        "SetupEmpty --searchAndPickPatient--> SetupReady",
+        "SetupReady --startVisit--> FreshOpen",
+        "FreshOpen --collapseContext--> FreshCollapsed",
+        "FreshCollapsed --expandContext--> FreshOpen",
+        "FreshOpen --scrollToRxSaveButton--> FreshOpenSaveReached"
+      ],
+      "assertions": [
+        {
+          "state": "SetupEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "setup screen shows the patient search"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' on the setup screen"
+            },
+            {
+              "ok": true,
+              "message": "the new patient is not the first row of the patients list"
+            }
+          ]
+        },
+        {
+          "state": "SetupReady",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor picker shows a doctor (Dr. Praneeta Jain)"
+            },
+            {
+              "ok": true,
+              "message": "ready card reads \"Patient: ABHILASH NEW 652311 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652311 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' in the ready card"
+            }
+          ]
+        },
+        {
+          "state": "FreshOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: ABHILASH NEW 652311 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652311 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "context card shows the patient ID"
+            },
+            {
+              "ok": true,
+              "message": "no 'Show Patient Context' button while open"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "FreshCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: ABHILASH NEW 652311 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652311 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "FreshOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: ABHILASH NEW 652311 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652311 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "context card shows the patient ID"
+            },
+            {
+              "ok": true,
+              "message": "no 'Show Patient Context' button while open"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "FreshOpenSaveReached",
+          "ok": false,
+          "checks": [
+            {
+              "ok": true,
+              "message": "<main> scrolled down to the action bar (scrollTop 3108)"
+            },
+            {
+              "ok": true,
+              "message": "header reads \"Patient: ABHILASH NEW 652311 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652311 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": false,
+              "message": "identity bar inside the viewport and on top ({\"ok\":false,\"top\":72,\"labelLeft\":207,\"mainLeft\":256,\"onTop\":false})"
+            }
+          ],
+          "error": "check failed: identity bar inside the viewport and on top ({\"ok\":false,\"top\":72,\"labelLeft\":207,\"mainLeft\":256,\"onTop\":false})"
+        }
+      ]
+    },
+    {
+      "path": 2,
+      "ok": true,
+      "events": [
+        "SetupEmpty --searchAndPickPatient--> SetupReady",
+        "SetupReady --startVisit--> FreshOpen",
+        "FreshOpen --collapseContext--> FreshCollapsed",
+        "FreshCollapsed --scrollToRx--> FreshRxScrolled",
+        "FreshRxScrolled --scrollEveryTab--> FreshTabsScrolled",
+        "FreshTabsScrolled --openAppointmentVisit--> ApptOpen",
+        "ApptOpen --collapseContext--> ApptCollapsed",
+        "ApptCollapsed --expandContext--> ApptOpen",
+        "ApptOpen --collapseContext--> ApptCollapsed",
+        "ApptCollapsed --scrollToRx--> ApptRxScrolled",
+        "ApptRxScrolled --openDobOnlyVisit--> DobOpen",
+        "DobOpen --collapseContext--> DobCollapsed",
+        "DobCollapsed --resumeVisitById--> ResumeOpen",
+        "ResumeOpen --collapseContext--> ResumeCollapsed",
+        "ResumeCollapsed --scrollToRx--> ResumeRxScrolled"
+      ],
+      "assertions": [
+        {
+          "state": "SetupEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "setup screen shows the patient search"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' on the setup screen"
+            },
+            {
+              "ok": true,
+              "message": "the new patient is not the first row of the patients list"
+            }
+          ]
+        },
+        {
+          "state": "SetupReady",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor picker shows a doctor (Dr. Praneeta Jain)"
+            },
+            {
+              "ok": true,
+              "message": "ready card reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' in the ready card"
+            }
+          ]
+        },
+        {
+          "state": "FreshOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "context card shows the patient ID"
+            },
+            {
+              "ok": true,
+              "message": "no 'Show Patient Context' button while open"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "FreshCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "FreshRxScrolled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "<main> scrolled down (scrollTop 1498)"
+            },
+            {
+              "ok": true,
+              "message": "Treatment heading is in the viewport"
+            },
+            {
+              "ok": true,
+              "message": "header reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":72,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "FreshTabsScrolled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "visited 7 tabs"
+            },
+            {
+              "ok": true,
+              "message": "at least one tab scrolls (Overview, Vitals, Photos, Prescription, Lab Tests, Customization, History)"
+            },
+            {
+              "ok": true,
+              "message": "Overview: bar inside viewport at scrollTop 470 ({\"ok\":true,\"top\":72,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "Overview: bar reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "Vitals: bar inside viewport at scrollTop 228 ({\"ok\":true,\"top\":72,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "Vitals: bar reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "Photos: bar inside viewport at scrollTop 375 ({\"ok\":true,\"top\":72,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "Photos: bar reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "Prescription: bar inside viewport at scrollTop 3156 ({\"ok\":true,\"top\":72,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "Prescription: bar reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "Lab Tests: bar inside viewport at scrollTop 446 ({\"ok\":true,\"top\":72,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "Lab Tests: bar reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "Customization: bar inside viewport at scrollTop 1012 ({\"ok\":true,\"top\":72,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "Customization: bar reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "History: bar inside viewport at scrollTop 160 ({\"ok\":true,\"top\":82,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "History: bar reads \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652312 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            }
+          ]
+        },
+        {
+          "state": "ApptOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: MEERA APPT 65231 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 65231 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "context card shows the patient ID"
+            },
+            {
+              "ok": true,
+              "message": "no 'Show Patient Context' button while open"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "ApptCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: MEERA APPT 65231 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 65231 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "ApptOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: MEERA APPT 65231 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 65231 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "context card shows the patient ID"
+            },
+            {
+              "ok": true,
+              "message": "no 'Show Patient Context' button while open"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "ApptCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: MEERA APPT 65231 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 65231 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "ApptRxScrolled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "<main> scrolled down (scrollTop 1498)"
+            },
+            {
+              "ok": true,
+              "message": "Treatment heading is in the viewport"
+            },
+            {
+              "ok": true,
+              "message": "header reads \"Patient: MEERA APPT 65231 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 65231 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":72,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "DobOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: RAVI DOB 65231 · 41 · Male · Doctor: Dr. Praneeta Jain\" (got \"Patient: RAVI DOB 65231 · 41 · Male · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "context card shows the patient ID"
+            },
+            {
+              "ok": true,
+              "message": "no 'Show Patient Context' button while open"
+            },
+            {
+              "ok": true,
+              "message": "DB patient has no age, only dob (NULL\t1985-03-15)"
+            }
+          ]
+        },
+        {
+          "state": "DobCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: RAVI DOB 65231 · 41 · Male · Doctor: Dr. Praneeta Jain\" (got \"Patient: RAVI DOB 65231 · 41 · Male · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            }
+          ]
+        },
+        {
+          "state": "ResumeOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: John Doe · 36 · Male · Doctor: Dr. Shravya Dermatologist\" (got \"Patient: John Doe · 36 · Male · Doctor: Dr. Shravya Dermatologist\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "context card shows the patient ID"
+            },
+            {
+              "ok": true,
+              "message": "no 'Show Patient Context' button while open"
+            }
+          ]
+        },
+        {
+          "state": "ResumeCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: John Doe · 36 · Male · Doctor: Dr. Shravya Dermatologist\" (got \"Patient: John Doe · 36 · Male · Doctor: Dr. Shravya Dermatologist\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            }
+          ]
+        },
+        {
+          "state": "ResumeRxScrolled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "<main> scrolled down (scrollTop 1498)"
+            },
+            {
+              "ok": true,
+              "message": "Treatment heading is in the viewport"
+            },
+            {
+              "ok": true,
+              "message": "header reads \"Patient: John Doe · 36 · Male · Doctor: Dr. Shravya Dermatologist\" (got \"Patient: John Doe · 36 · Male · Doctor: Dr. Shravya Dermatologist\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":72,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 3,
+      "ok": true,
+      "events": [
+        "SetupEmpty --searchAndPickPatient--> SetupReady",
+        "SetupReady --startVisit--> FreshOpen",
+        "FreshOpen --collapseContext--> FreshCollapsed",
+        "FreshCollapsed --scrollToRxSaveButton--> FreshCollapsedSaveReached"
+      ],
+      "assertions": [
+        {
+          "state": "SetupEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "setup screen shows the patient search"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' on the setup screen"
+            },
+            {
+              "ok": true,
+              "message": "the new patient is not the first row of the patients list"
+            }
+          ]
+        },
+        {
+          "state": "SetupReady",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor picker shows a doctor (Dr. Praneeta Jain)"
+            },
+            {
+              "ok": true,
+              "message": "ready card reads \"Patient: ABHILASH NEW 652313 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652313 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' in the ready card"
+            }
+          ]
+        },
+        {
+          "state": "FreshOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: ABHILASH NEW 652313 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652313 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "context card shows the patient ID"
+            },
+            {
+              "ok": true,
+              "message": "no 'Show Patient Context' button while open"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "FreshCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "header reads \"Patient: ABHILASH NEW 652313 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652313 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":242,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        },
+        {
+          "state": "FreshCollapsedSaveReached",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "<main> scrolled down to the action bar (scrollTop 3156)"
+            },
+            {
+              "ok": true,
+              "message": "header reads \"Patient: ABHILASH NEW 652313 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 652313 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+            },
+            {
+              "ok": true,
+              "message": "header has no 'Unknown'"
+            },
+            {
+              "ok": true,
+              "message": "no 'Patient: Unknown' anywhere on the page"
+            },
+            {
+              "ok": true,
+              "message": "identity bar inside the viewport and on top ({\"ok\":true,\"top\":72,\"labelLeft\":280,\"mainLeft\":256,\"onTop\":true})"
+            },
+            {
+              "ok": true,
+              "message": "'Show Patient Context' button visible"
+            },
+            {
+              "ok": true,
+              "message": "context card hidden"
+            },
+            {
+              "ok": true,
+              "message": "patient ID detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "phone detail hidden"
+            },
+            {
+              "ok": true,
+              "message": "form header shows Visit #1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
