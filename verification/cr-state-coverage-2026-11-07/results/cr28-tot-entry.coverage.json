@@ -1,0 +1,2727 @@
+{
+  "model": "cr28-tot-entry",
+  "title": "CR-28 Terms of Trade: doctor entry, edit, delete, persistence",
+  "startedAt": "2026-11-08T07:00:26.122Z",
+  "finishedAt": "2026-11-08T07:01:00.089Z",
+  "states": {
+    "total": 27,
+    "passed": 27,
+    "failed": 0
+  },
+  "transitions": {
+    "total": 38,
+    "passed": 38,
+    "failed": 0
+  },
+  "uncovered": [],
+  "failures": [],
+  "paths": [
+    {
+      "path": 1,
+      "ok": true,
+      "events": [
+        "List --searchName--> ListByName",
+        "ListByName --openFound--> DetailEmpty",
+        "DetailEmpty --allDistributors--> List",
+        "List --searchGstin--> ListByGstin"
+      ],
+      "assertions": [
+        {
+          "state": "List",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Terms of Trade heading"
+            },
+            {
+              "ok": true,
+              "message": "3 distributors listed, got 3"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown on card"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for a doctor"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible for doctor"
+            },
+            {
+              "ok": true,
+              "message": "no recent shortlist before anything is saved"
+            },
+            {
+              "ok": true,
+              "message": "no terms in DB"
+            }
+          ]
+        },
+        {
+          "state": "ListByName",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Zenith shown"
+            },
+            {
+              "ok": true,
+              "message": "Medico filtered out"
+            }
+          ]
+        },
+        {
+          "state": "DetailEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "back to list control"
+            },
+            {
+              "ok": true,
+              "message": "nothing in DB"
+            }
+          ]
+        },
+        {
+          "state": "List",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Terms of Trade heading"
+            },
+            {
+              "ok": true,
+              "message": "3 distributors listed, got 3"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown on card"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for a doctor"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible for doctor"
+            },
+            {
+              "ok": true,
+              "message": "no recent shortlist before anything is saved"
+            },
+            {
+              "ok": true,
+              "message": "no terms in DB"
+            }
+          ]
+        },
+        {
+          "state": "ListByGstin",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Apex found by GSTIN prefix"
+            },
+            {
+              "ok": true,
+              "message": "others filtered out"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 2,
+      "ok": true,
+      "events": [
+        "List --searchNothing--> ListNone"
+      ],
+      "assertions": [
+        {
+          "state": "List",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Terms of Trade heading"
+            },
+            {
+              "ok": true,
+              "message": "3 distributors listed, got 3"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown on card"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for a doctor"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible for doctor"
+            },
+            {
+              "ok": true,
+              "message": "no recent shortlist before anything is saved"
+            },
+            {
+              "ok": true,
+              "message": "no terms in DB"
+            }
+          ]
+        },
+        {
+          "state": "ListNone",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no result list"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 3,
+      "ok": true,
+      "events": [
+        "List --openDistributor--> DetailEmpty",
+        "DetailEmpty --addTerms--> W2",
+        "W2 --back--> W1Chosen",
+        "W1Chosen --next--> W2",
+        "W2 --addProduct--> W2Picked",
+        "W2Picked --addSecondProduct--> W2Two",
+        "W2Two --removeSecond--> W2Picked",
+        "W2Picked --addSecondProduct--> W2Two",
+        "W2Two --next--> W3",
+        "W3 --back--> W2Two",
+        "W2Two --next--> W3",
+        "W3 --fillBadDiscount--> W3BadDiscount",
+        "W3BadDiscount --fillValid--> W3Ready",
+        "W3Ready --next--> Review",
+        "Review --back--> W3Ready"
+      ],
+      "assertions": [
+        {
+          "state": "List",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Terms of Trade heading"
+            },
+            {
+              "ok": true,
+              "message": "3 distributors listed, got 3"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown on card"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for a doctor"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible for doctor"
+            },
+            {
+              "ok": true,
+              "message": "no recent shortlist before anything is saved"
+            },
+            {
+              "ok": true,
+              "message": "no terms in DB"
+            }
+          ]
+        },
+        {
+          "state": "DetailEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "back to list control"
+            },
+            {
+              "ok": true,
+              "message": "nothing in DB"
+            }
+          ]
+        },
+        {
+          "state": "W2",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 2 current"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled without products"
+            },
+            {
+              "ok": true,
+              "message": "0 selected"
+            },
+            {
+              "ok": true,
+              "message": "Back available"
+            }
+          ]
+        },
+        {
+          "state": "W1Chosen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled once chosen"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown beside chosen distributor"
+            }
+          ]
+        },
+        {
+          "state": "W2",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 2 current"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled without products"
+            },
+            {
+              "ok": true,
+              "message": "0 selected"
+            },
+            {
+              "ok": true,
+              "message": "Back available"
+            }
+          ]
+        },
+        {
+          "state": "W2Picked",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Dolo in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W2Two",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Augmentin in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W2Picked",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Dolo in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W2Two",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Augmentin in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W3",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 3 current"
+            },
+            {
+              "ok": true,
+              "message": "one fieldset per product"
+            },
+            {
+              "ok": true,
+              "message": "empty terms explained"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled when empty"
+            }
+          ]
+        },
+        {
+          "state": "W2Two",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Augmentin in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W3",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 3 current"
+            },
+            {
+              "ok": true,
+              "message": "one fieldset per product"
+            },
+            {
+              "ok": true,
+              "message": "empty terms explained"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled when empty"
+            }
+          ]
+        },
+        {
+          "state": "W3BadDiscount",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next disabled for discount 150"
+            }
+          ]
+        },
+        {
+          "state": "W3Ready",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled when every product has valid terms"
+            },
+            {
+              "ok": true,
+              "message": "no validation message left"
+            }
+          ]
+        },
+        {
+          "state": "Review",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "review summarises discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "margin and note in review"
+            },
+            {
+              "ok": true,
+              "message": "second product summarised"
+            },
+            {
+              "ok": true,
+              "message": "Save enabled"
+            },
+            {
+              "ok": true,
+              "message": "nothing saved before Save"
+            }
+          ]
+        },
+        {
+          "state": "W3Ready",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled when every product has valid terms"
+            },
+            {
+              "ok": true,
+              "message": "no validation message left"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 4,
+      "ok": true,
+      "events": [
+        "List --addTerms--> W1",
+        "W1 --chooseDistributor--> W1Chosen",
+        "W1Chosen --next--> W2",
+        "W2 --addProduct--> W2Picked",
+        "W2Picked --addSecondProduct--> W2Two",
+        "W2Two --next--> W3",
+        "W3 --fillBuyOnly--> W3BuyOnly",
+        "W3BuyOnly --fillValid--> W3Ready",
+        "W3Ready --next--> Review",
+        "Review --cancel--> Cancelled"
+      ],
+      "assertions": [
+        {
+          "state": "List",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Terms of Trade heading"
+            },
+            {
+              "ok": true,
+              "message": "3 distributors listed, got 3"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown on card"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for a doctor"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible for doctor"
+            },
+            {
+              "ok": true,
+              "message": "no recent shortlist before anything is saved"
+            },
+            {
+              "ok": true,
+              "message": "no terms in DB"
+            }
+          ]
+        },
+        {
+          "state": "W1",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 1 current"
+            },
+            {
+              "ok": true,
+              "message": "steps Items and Scheme shown"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled until a distributor is chosen"
+            },
+            {
+              "ok": true,
+              "message": "no Back on first step"
+            },
+            {
+              "ok": true,
+              "message": "no recent yet"
+            }
+          ]
+        },
+        {
+          "state": "W1Chosen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled once chosen"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown beside chosen distributor"
+            }
+          ]
+        },
+        {
+          "state": "W2",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 2 current"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled without products"
+            },
+            {
+              "ok": true,
+              "message": "0 selected"
+            },
+            {
+              "ok": true,
+              "message": "Back available"
+            }
+          ]
+        },
+        {
+          "state": "W2Picked",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Dolo in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W2Two",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Augmentin in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W3",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 3 current"
+            },
+            {
+              "ok": true,
+              "message": "one fieldset per product"
+            },
+            {
+              "ok": true,
+              "message": "empty terms explained"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled when empty"
+            }
+          ]
+        },
+        {
+          "state": "W3BuyOnly",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next disabled for buy without free"
+            }
+          ]
+        },
+        {
+          "state": "W3Ready",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled when every product has valid terms"
+            },
+            {
+              "ok": true,
+              "message": "no validation message left"
+            }
+          ]
+        },
+        {
+          "state": "Review",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "review summarises discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "margin and note in review"
+            },
+            {
+              "ok": true,
+              "message": "second product summarised"
+            },
+            {
+              "ok": true,
+              "message": "Save enabled"
+            },
+            {
+              "ok": true,
+              "message": "nothing saved before Save"
+            }
+          ]
+        },
+        {
+          "state": "Cancelled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "wizard closed"
+            },
+            {
+              "ok": true,
+              "message": "back to Terms of Trade page"
+            },
+            {
+              "ok": true,
+              "message": "DB unchanged after Cancel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 5,
+      "ok": true,
+      "events": [
+        "List --addTerms--> W1",
+        "W1 --cancel--> Cancelled"
+      ],
+      "assertions": [
+        {
+          "state": "List",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Terms of Trade heading"
+            },
+            {
+              "ok": true,
+              "message": "3 distributors listed, got 3"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown on card"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for a doctor"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible for doctor"
+            },
+            {
+              "ok": true,
+              "message": "no recent shortlist before anything is saved"
+            },
+            {
+              "ok": true,
+              "message": "no terms in DB"
+            }
+          ]
+        },
+        {
+          "state": "W1",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 1 current"
+            },
+            {
+              "ok": true,
+              "message": "steps Items and Scheme shown"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled until a distributor is chosen"
+            },
+            {
+              "ok": true,
+              "message": "no Back on first step"
+            },
+            {
+              "ok": true,
+              "message": "no recent yet"
+            }
+          ]
+        },
+        {
+          "state": "Cancelled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "wizard closed"
+            },
+            {
+              "ok": true,
+              "message": "back to Terms of Trade page"
+            },
+            {
+              "ok": true,
+              "message": "DB unchanged after Cancel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 6,
+      "ok": true,
+      "events": [
+        "List --openDistributor--> DetailEmpty",
+        "DetailEmpty --addTerms--> W2",
+        "W2 --addProduct--> W2Picked",
+        "W2Picked --addSecondProduct--> W2Two",
+        "W2Two --next--> W3",
+        "W3 --fillBadDiscount--> W3BadDiscount",
+        "W3BadDiscount --fillValid--> W3Ready",
+        "W3Ready --next--> Review",
+        "Review --save--> Saved",
+        "Saved --edit--> EditForm",
+        "EditForm --saveEdit--> Saved",
+        "Saved --delete--> DeleteConfirm",
+        "DeleteConfirm --confirmDelete--> Deleted"
+      ],
+      "assertions": [
+        {
+          "state": "List",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Terms of Trade heading"
+            },
+            {
+              "ok": true,
+              "message": "3 distributors listed, got 3"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown on card"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for a doctor"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible for doctor"
+            },
+            {
+              "ok": true,
+              "message": "no recent shortlist before anything is saved"
+            },
+            {
+              "ok": true,
+              "message": "no terms in DB"
+            }
+          ]
+        },
+        {
+          "state": "DetailEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "back to list control"
+            },
+            {
+              "ok": true,
+              "message": "nothing in DB"
+            }
+          ]
+        },
+        {
+          "state": "W2",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 2 current"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled without products"
+            },
+            {
+              "ok": true,
+              "message": "0 selected"
+            },
+            {
+              "ok": true,
+              "message": "Back available"
+            }
+          ]
+        },
+        {
+          "state": "W2Picked",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Dolo in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W2Two",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Augmentin in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W3",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 3 current"
+            },
+            {
+              "ok": true,
+              "message": "one fieldset per product"
+            },
+            {
+              "ok": true,
+              "message": "empty terms explained"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled when empty"
+            }
+          ]
+        },
+        {
+          "state": "W3BadDiscount",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next disabled for discount 150"
+            }
+          ]
+        },
+        {
+          "state": "W3Ready",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled when every product has valid terms"
+            },
+            {
+              "ok": true,
+              "message": "no validation message left"
+            }
+          ]
+        },
+        {
+          "state": "Review",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "review summarises discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "margin and note in review"
+            },
+            {
+              "ok": true,
+              "message": "second product summarised"
+            },
+            {
+              "ok": true,
+              "message": "Save enabled"
+            },
+            {
+              "ok": true,
+              "message": "nothing saved before Save"
+            }
+          ]
+        },
+        {
+          "state": "Saved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "DB has exactly Augmentin 625, Dolo 650 Tablet, got Augmentin 625,Dolo 650 Tablet"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.discountPercent = 8 got 8"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeBuy = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeFree = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.minExpiryMonths = 12 got 12"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.marginPercent = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptr = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptrRule = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.note = null got null"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows discount 8%"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.discountPercent = 12.5 got 12.5"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeBuy = 10 got 10"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeFree = 1 got 1"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.minExpiryMonths = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.marginPercent = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptr = 22.4 got 22.4"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptrRule = MRP less 20% got MRP less 20%"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.note = agreed with rep Ravi got agreed with rep Ravi"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows discount 12.5%"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows scheme"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows PTR and rule"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows note"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "wizard closed"
+            }
+          ]
+        },
+        {
+          "state": "EditForm",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "edit heading"
+            },
+            {
+              "ok": true,
+              "message": "edit skips the three steps"
+            },
+            {
+              "ok": true,
+              "message": "discount prefilled"
+            },
+            {
+              "ok": true,
+              "message": "note prefilled"
+            },
+            {
+              "ok": true,
+              "message": "Save enabled"
+            }
+          ]
+        },
+        {
+          "state": "Saved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "DB has exactly Augmentin 625, Dolo 650 Tablet, got Augmentin 625,Dolo 650 Tablet"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.discountPercent = 8 got 8"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeBuy = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeFree = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.minExpiryMonths = 12 got 12"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.marginPercent = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptr = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptrRule = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.note = null got null"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows discount 8%"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.discountPercent = 12.5 got 12.5"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeBuy = 10 got 10"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeFree = 1 got 1"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.minExpiryMonths = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.marginPercent = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptr = 22.4 got 22.4"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptrRule = MRP less 20% got MRP less 20%"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.note = edited by doctor got edited by doctor"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows discount 12.5%"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows scheme"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows PTR and rule"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows note"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "wizard closed"
+            }
+          ]
+        },
+        {
+          "state": "DeleteConfirm",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "nothing deleted until confirmed"
+            },
+            {
+              "ok": true,
+              "message": "single confirm button"
+            }
+          ]
+        },
+        {
+          "state": "Deleted",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Dolo row gone from DB"
+            },
+            {
+              "ok": true,
+              "message": "other rows untouched"
+            },
+            {
+              "ok": true,
+              "message": "confirm control gone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 7,
+      "ok": true,
+      "events": [
+        "List --openDistributor--> DetailEmpty",
+        "DetailEmpty --addTerms--> W2",
+        "W2 --addProduct--> W2Picked",
+        "W2Picked --addSecondProduct--> W2Two",
+        "W2Two --next--> W3",
+        "W3 --fillBadDiscount--> W3BadDiscount",
+        "W3BadDiscount --fillValid--> W3Ready",
+        "W3Ready --next--> Review",
+        "Review --save--> Saved",
+        "Saved --reload--> ListPersisted",
+        "ListPersisted --openDistributor--> Saved",
+        "Saved --addTerms--> R2",
+        "R2 --addProduct--> R2Picked",
+        "R2Picked --next--> R3",
+        "R3 --fillValid--> R3Ready",
+        "R3Ready --next--> RReview"
+      ],
+      "assertions": [
+        {
+          "state": "List",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Terms of Trade heading"
+            },
+            {
+              "ok": true,
+              "message": "3 distributors listed, got 3"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown on card"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for a doctor"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible for doctor"
+            },
+            {
+              "ok": true,
+              "message": "no recent shortlist before anything is saved"
+            },
+            {
+              "ok": true,
+              "message": "no terms in DB"
+            }
+          ]
+        },
+        {
+          "state": "DetailEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "back to list control"
+            },
+            {
+              "ok": true,
+              "message": "nothing in DB"
+            }
+          ]
+        },
+        {
+          "state": "W2",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 2 current"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled without products"
+            },
+            {
+              "ok": true,
+              "message": "0 selected"
+            },
+            {
+              "ok": true,
+              "message": "Back available"
+            }
+          ]
+        },
+        {
+          "state": "W2Picked",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Dolo in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W2Two",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Augmentin in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W3",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 3 current"
+            },
+            {
+              "ok": true,
+              "message": "one fieldset per product"
+            },
+            {
+              "ok": true,
+              "message": "empty terms explained"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled when empty"
+            }
+          ]
+        },
+        {
+          "state": "W3BadDiscount",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next disabled for discount 150"
+            }
+          ]
+        },
+        {
+          "state": "W3Ready",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled when every product has valid terms"
+            },
+            {
+              "ok": true,
+              "message": "no validation message left"
+            }
+          ]
+        },
+        {
+          "state": "Review",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "review summarises discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "margin and note in review"
+            },
+            {
+              "ok": true,
+              "message": "second product summarised"
+            },
+            {
+              "ok": true,
+              "message": "Save enabled"
+            },
+            {
+              "ok": true,
+              "message": "nothing saved before Save"
+            }
+          ]
+        },
+        {
+          "state": "Saved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "DB has exactly Augmentin 625, Dolo 650 Tablet, got Augmentin 625,Dolo 650 Tablet"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.discountPercent = 8 got 8"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeBuy = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeFree = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.minExpiryMonths = 12 got 12"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.marginPercent = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptr = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptrRule = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.note = null got null"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows discount 8%"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.discountPercent = 12.5 got 12.5"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeBuy = 10 got 10"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeFree = 1 got 1"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.minExpiryMonths = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.marginPercent = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptr = 22.4 got 22.4"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptrRule = MRP less 20% got MRP less 20%"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.note = agreed with rep Ravi got agreed with rep Ravi"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows discount 12.5%"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows scheme"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows PTR and rule"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows note"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "wizard closed"
+            }
+          ]
+        },
+        {
+          "state": "ListPersisted",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Medico in recent shortlist"
+            },
+            {
+              "ok": true,
+              "message": "Medico card says 2 products with terms after reload"
+            }
+          ]
+        },
+        {
+          "state": "Saved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "DB has exactly Augmentin 625, Dolo 650 Tablet, got Augmentin 625,Dolo 650 Tablet"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.discountPercent = 8 got 8"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeBuy = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeFree = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.minExpiryMonths = 12 got 12"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.marginPercent = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptr = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptrRule = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.note = null got null"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows discount 8%"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.discountPercent = 12.5 got 12.5"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeBuy = 10 got 10"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeFree = 1 got 1"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.minExpiryMonths = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.marginPercent = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptr = 22.4 got 22.4"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptrRule = MRP less 20% got MRP less 20%"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.note = agreed with rep Ravi got agreed with rep Ravi"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows discount 12.5%"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows scheme"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows PTR and rule"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows note"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "wizard closed"
+            }
+          ]
+        },
+        {
+          "state": "R2",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "distributor carried into wizard"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled without products"
+            }
+          ]
+        },
+        {
+          "state": "R2Picked",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "R3",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next disabled with empty terms"
+            }
+          ]
+        },
+        {
+          "state": "R3Ready",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "RReview",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "review shows new discount 15%"
+            },
+            {
+              "ok": true,
+              "message": "replacement warning shown"
+            },
+            {
+              "ok": true,
+              "message": "not saved yet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 8,
+      "ok": true,
+      "events": [
+        "List --openDistributor--> DetailEmpty",
+        "DetailEmpty --addTerms--> W2",
+        "W2 --addProduct--> W2Picked",
+        "W2Picked --addSecondProduct--> W2Two",
+        "W2Two --next--> W3",
+        "W3 --fillBadDiscount--> W3BadDiscount",
+        "W3BadDiscount --fillValid--> W3Ready",
+        "W3Ready --next--> Review",
+        "Review --save--> Saved",
+        "Saved --reload--> ListPersisted",
+        "ListPersisted --openRecent--> Saved"
+      ],
+      "assertions": [
+        {
+          "state": "List",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Terms of Trade heading"
+            },
+            {
+              "ok": true,
+              "message": "3 distributors listed, got 3"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown on card"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for a doctor"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible for doctor"
+            },
+            {
+              "ok": true,
+              "message": "no recent shortlist before anything is saved"
+            },
+            {
+              "ok": true,
+              "message": "no terms in DB"
+            }
+          ]
+        },
+        {
+          "state": "DetailEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "back to list control"
+            },
+            {
+              "ok": true,
+              "message": "nothing in DB"
+            }
+          ]
+        },
+        {
+          "state": "W2",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 2 current"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled without products"
+            },
+            {
+              "ok": true,
+              "message": "0 selected"
+            },
+            {
+              "ok": true,
+              "message": "Back available"
+            }
+          ]
+        },
+        {
+          "state": "W2Picked",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Dolo in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W2Two",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Augmentin in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W3",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 3 current"
+            },
+            {
+              "ok": true,
+              "message": "one fieldset per product"
+            },
+            {
+              "ok": true,
+              "message": "empty terms explained"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled when empty"
+            }
+          ]
+        },
+        {
+          "state": "W3BadDiscount",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next disabled for discount 150"
+            }
+          ]
+        },
+        {
+          "state": "W3Ready",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled when every product has valid terms"
+            },
+            {
+              "ok": true,
+              "message": "no validation message left"
+            }
+          ]
+        },
+        {
+          "state": "Review",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "review summarises discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "margin and note in review"
+            },
+            {
+              "ok": true,
+              "message": "second product summarised"
+            },
+            {
+              "ok": true,
+              "message": "Save enabled"
+            },
+            {
+              "ok": true,
+              "message": "nothing saved before Save"
+            }
+          ]
+        },
+        {
+          "state": "Saved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "DB has exactly Augmentin 625, Dolo 650 Tablet, got Augmentin 625,Dolo 650 Tablet"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.discountPercent = 8 got 8"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeBuy = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeFree = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.minExpiryMonths = 12 got 12"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.marginPercent = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptr = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptrRule = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.note = null got null"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows discount 8%"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.discountPercent = 12.5 got 12.5"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeBuy = 10 got 10"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeFree = 1 got 1"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.minExpiryMonths = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.marginPercent = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptr = 22.4 got 22.4"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptrRule = MRP less 20% got MRP less 20%"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.note = agreed with rep Ravi got agreed with rep Ravi"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows discount 12.5%"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows scheme"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows PTR and rule"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows note"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "wizard closed"
+            }
+          ]
+        },
+        {
+          "state": "ListPersisted",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Medico in recent shortlist"
+            },
+            {
+              "ok": true,
+              "message": "Medico card says 2 products with terms after reload"
+            }
+          ]
+        },
+        {
+          "state": "Saved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "DB has exactly Augmentin 625, Dolo 650 Tablet, got Augmentin 625,Dolo 650 Tablet"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.discountPercent = 8 got 8"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeBuy = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeFree = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.minExpiryMonths = 12 got 12"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.marginPercent = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptr = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptrRule = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.note = null got null"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows discount 8%"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.discountPercent = 12.5 got 12.5"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeBuy = 10 got 10"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeFree = 1 got 1"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.minExpiryMonths = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.marginPercent = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptr = 22.4 got 22.4"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptrRule = MRP less 20% got MRP less 20%"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.note = agreed with rep Ravi got agreed with rep Ravi"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows discount 12.5%"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows scheme"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows PTR and rule"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows note"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "wizard closed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 9,
+      "ok": true,
+      "events": [
+        "List --openDistributor--> DetailEmpty",
+        "DetailEmpty --addTerms--> W2",
+        "W2 --addProduct--> W2Picked",
+        "W2Picked --addSecondProduct--> W2Two",
+        "W2Two --next--> W3",
+        "W3 --fillBadDiscount--> W3BadDiscount",
+        "W3BadDiscount --fillValid--> W3Ready",
+        "W3Ready --next--> Review",
+        "Review --save--> Saved",
+        "Saved --addTerms--> R2",
+        "R2 --addProduct--> R2Picked",
+        "R2Picked --next--> R3",
+        "R3 --fillValid--> R3Ready",
+        "R3Ready --next--> RReview",
+        "RReview --save--> SavedResaved"
+      ],
+      "assertions": [
+        {
+          "state": "List",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Terms of Trade heading"
+            },
+            {
+              "ok": true,
+              "message": "3 distributors listed, got 3"
+            },
+            {
+              "ok": true,
+              "message": "GSTIN shown on card"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for a doctor"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible for doctor"
+            },
+            {
+              "ok": true,
+              "message": "no recent shortlist before anything is saved"
+            },
+            {
+              "ok": true,
+              "message": "no terms in DB"
+            }
+          ]
+        },
+        {
+          "state": "DetailEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "back to list control"
+            },
+            {
+              "ok": true,
+              "message": "nothing in DB"
+            }
+          ]
+        },
+        {
+          "state": "W2",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 2 current"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled without products"
+            },
+            {
+              "ok": true,
+              "message": "0 selected"
+            },
+            {
+              "ok": true,
+              "message": "Back available"
+            }
+          ]
+        },
+        {
+          "state": "W2Picked",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Dolo in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W2Two",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Augmentin in selection"
+            },
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "W3",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "step 3 current"
+            },
+            {
+              "ok": true,
+              "message": "one fieldset per product"
+            },
+            {
+              "ok": true,
+              "message": "empty terms explained"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled when empty"
+            }
+          ]
+        },
+        {
+          "state": "W3BadDiscount",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next disabled for discount 150"
+            }
+          ]
+        },
+        {
+          "state": "W3Ready",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled when every product has valid terms"
+            },
+            {
+              "ok": true,
+              "message": "no validation message left"
+            }
+          ]
+        },
+        {
+          "state": "Review",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "review summarises discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "margin and note in review"
+            },
+            {
+              "ok": true,
+              "message": "second product summarised"
+            },
+            {
+              "ok": true,
+              "message": "Save enabled"
+            },
+            {
+              "ok": true,
+              "message": "nothing saved before Save"
+            }
+          ]
+        },
+        {
+          "state": "Saved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "DB has exactly Augmentin 625, Dolo 650 Tablet, got Augmentin 625,Dolo 650 Tablet"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.discountPercent = 8 got 8"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeBuy = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.schemeFree = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.minExpiryMonths = 12 got 12"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.marginPercent = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptr = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.ptrRule = null got null"
+            },
+            {
+              "ok": true,
+              "message": "DB Augmentin 625.note = null got null"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows discount 8%"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Augmentin 625 row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.discountPercent = 12.5 got 12.5"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeBuy = 10 got 10"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.schemeFree = 1 got 1"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.minExpiryMonths = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.marginPercent = 18 got 18"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptr = 22.4 got 22.4"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.ptrRule = MRP less 20% got MRP less 20%"
+            },
+            {
+              "ok": true,
+              "message": "DB Dolo 650 Tablet.note = agreed with rep Ravi got agreed with rep Ravi"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows discount 12.5%"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows scheme"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows min expiry"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows PTR and rule"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows note"
+            },
+            {
+              "ok": true,
+              "message": "Dolo 650 Tablet row shows who and when"
+            },
+            {
+              "ok": true,
+              "message": "doctor sees Edit"
+            },
+            {
+              "ok": true,
+              "message": "distributor heading"
+            },
+            {
+              "ok": true,
+              "message": "wizard closed"
+            }
+          ]
+        },
+        {
+          "state": "R2",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "distributor carried into wizard"
+            },
+            {
+              "ok": true,
+              "message": "Next disabled without products"
+            }
+          ]
+        },
+        {
+          "state": "R2Picked",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "R3",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next disabled with empty terms"
+            }
+          ]
+        },
+        {
+          "state": "R3Ready",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Next enabled"
+            }
+          ]
+        },
+        {
+          "state": "RReview",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "review shows new discount 15%"
+            },
+            {
+              "ok": true,
+              "message": "replacement warning shown"
+            },
+            {
+              "ok": true,
+              "message": "not saved yet"
+            }
+          ]
+        },
+        {
+          "state": "SavedResaved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "still exactly one Dolo row"
+            },
+            {
+              "ok": true,
+              "message": "row count unchanged (2), got 2"
+            },
+            {
+              "ok": true,
+              "message": "Dolo discount updated to 15 in DB"
+            },
+            {
+              "ok": true,
+              "message": "one Dolo row in UI"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

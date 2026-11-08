@@ -1,0 +1,386 @@
+{
+  "model": "cr28-tot-roles",
+  "title": "CR-28 Terms of Trade: reader vs editor views and API authorization",
+  "startedAt": "2026-11-08T06:58:30.496Z",
+  "finishedAt": "2026-11-08T06:58:42.549Z",
+  "states": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0
+  },
+  "transitions": {
+    "total": 11,
+    "passed": 11,
+    "failed": 0
+  },
+  "uncovered": [],
+  "failures": [],
+  "paths": [
+    {
+      "path": 1,
+      "ok": true,
+      "events": [
+        "DoctorList --openDistributor--> DoctorDetail",
+        "DoctorDetail --asReception--> ReceptionList",
+        "ReceptionList --openDistributor--> ReceptionDetail",
+        "ReceptionDetail --apiWrite--> ReceptionWriteDenied",
+        "ReceptionWriteDenied --apiWriteNoToken--> NoTokenDenied"
+      ],
+      "assertions": [
+        {
+          "state": "DoctorList",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add terms visible to editor"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for editor"
+            },
+            {
+              "ok": true,
+              "message": "no read-only text"
+            }
+          ]
+        },
+        {
+          "state": "DoctorDetail",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Edit visible"
+            },
+            {
+              "ok": true,
+              "message": "Delete visible"
+            },
+            {
+              "ok": true,
+              "message": "Add terms visible"
+            }
+          ]
+        },
+        {
+          "state": "ReceptionList",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "read-only note text"
+            },
+            {
+              "ok": true,
+              "message": "no Add terms button for reader"
+            },
+            {
+              "ok": true,
+              "message": "reader sees the doctor's saved terms count"
+            }
+          ]
+        },
+        {
+          "state": "ReceptionDetail",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Reception sees discount, scheme, expiry, PTR and rule"
+            },
+            {
+              "ok": true,
+              "message": "Reception sees note and margin"
+            },
+            {
+              "ok": true,
+              "message": "Reception sees who entered and when"
+            },
+            {
+              "ok": true,
+              "message": "header plus two rows"
+            },
+            {
+              "ok": true,
+              "message": "no Edit, Delete or Add controls"
+            },
+            {
+              "ok": true,
+              "message": "read-only note"
+            }
+          ]
+        },
+        {
+          "state": "ReceptionWriteDenied",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "PUT as reader is 403, got 403"
+            },
+            {
+              "ok": true,
+              "message": "DELETE as reader is 403, got 403"
+            },
+            {
+              "ok": true,
+              "message": "reader may still look terms up (200 with a match), got 200"
+            },
+            {
+              "ok": true,
+              "message": "DB unchanged"
+            },
+            {
+              "ok": true,
+              "message": "no injected row"
+            },
+            {
+              "ok": true,
+              "message": "Dolo discount still 12.5"
+            }
+          ]
+        },
+        {
+          "state": "NoTokenDenied",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "unauthenticated PUT is 401, got 401"
+            },
+            {
+              "ok": true,
+              "message": "DB unchanged"
+            },
+            {
+              "ok": true,
+              "message": "no Anon row"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 2,
+      "ok": true,
+      "events": [
+        "DoctorList --asAdmin--> AdminList"
+      ],
+      "assertions": [
+        {
+          "state": "DoctorList",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add terms visible to editor"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for editor"
+            },
+            {
+              "ok": true,
+              "message": "no read-only text"
+            }
+          ]
+        },
+        {
+          "state": "AdminList",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add terms visible to editor"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for editor"
+            },
+            {
+              "ok": true,
+              "message": "no read-only text"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 3,
+      "ok": true,
+      "events": [
+        "DoctorList --asReception--> ReceptionList",
+        "ReceptionList --openDistributor--> ReceptionDetail",
+        "ReceptionDetail --asDoctor--> DoctorList",
+        "DoctorList --asPharmacist--> PharmacistList",
+        "PharmacistList --openDistributor--> PharmacistDetail",
+        "PharmacistDetail --apiWrite--> PharmacistWriteDenied"
+      ],
+      "assertions": [
+        {
+          "state": "DoctorList",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add terms visible to editor"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for editor"
+            },
+            {
+              "ok": true,
+              "message": "no read-only text"
+            }
+          ]
+        },
+        {
+          "state": "ReceptionList",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "read-only note text"
+            },
+            {
+              "ok": true,
+              "message": "no Add terms button for reader"
+            },
+            {
+              "ok": true,
+              "message": "reader sees the doctor's saved terms count"
+            }
+          ]
+        },
+        {
+          "state": "ReceptionDetail",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Reception sees discount, scheme, expiry, PTR and rule"
+            },
+            {
+              "ok": true,
+              "message": "Reception sees note and margin"
+            },
+            {
+              "ok": true,
+              "message": "Reception sees who entered and when"
+            },
+            {
+              "ok": true,
+              "message": "header plus two rows"
+            },
+            {
+              "ok": true,
+              "message": "no Edit, Delete or Add controls"
+            },
+            {
+              "ok": true,
+              "message": "read-only note"
+            }
+          ]
+        },
+        {
+          "state": "DoctorList",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add terms visible to editor"
+            },
+            {
+              "ok": true,
+              "message": "no read-only note for editor"
+            },
+            {
+              "ok": true,
+              "message": "no read-only text"
+            }
+          ]
+        },
+        {
+          "state": "PharmacistList",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "read-only note text"
+            },
+            {
+              "ok": true,
+              "message": "no Add terms button for reader"
+            },
+            {
+              "ok": true,
+              "message": "reader sees the doctor's saved terms count"
+            }
+          ]
+        },
+        {
+          "state": "PharmacistDetail",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Pharmacist sees discount, scheme, expiry, PTR and rule"
+            },
+            {
+              "ok": true,
+              "message": "Pharmacist sees note and margin"
+            },
+            {
+              "ok": true,
+              "message": "Pharmacist sees who entered and when"
+            },
+            {
+              "ok": true,
+              "message": "header plus two rows"
+            },
+            {
+              "ok": true,
+              "message": "no Edit, Delete or Add controls"
+            },
+            {
+              "ok": true,
+              "message": "read-only note"
+            }
+          ]
+        },
+        {
+          "state": "PharmacistWriteDenied",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "PUT as reader is 403, got 403"
+            },
+            {
+              "ok": true,
+              "message": "DELETE as reader is 403, got 403"
+            },
+            {
+              "ok": true,
+              "message": "reader may still look terms up (200 with a match), got 200"
+            },
+            {
+              "ok": true,
+              "message": "DB unchanged"
+            },
+            {
+              "ok": true,
+              "message": "no injected row"
+            },
+            {
+              "ok": true,
+              "message": "Dolo discount still 12.5"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
