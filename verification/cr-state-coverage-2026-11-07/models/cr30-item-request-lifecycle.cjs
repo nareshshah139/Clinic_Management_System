@@ -507,7 +507,8 @@ const driver = {
       check(text.includes("Already in inventory (1 batch)"), "warning: Already in inventory (1 batch)");
       check(text.includes(ctx.shared.existingName), "warning names the existing inventory item");
       check(text.includes("0 in stock") && text.includes("same name"), "warning shows stock and the matching field");
-      check(/Also requested by Pharma Cist on /.test(text), "warning: Also requested by Pharma Cist on <date>");
+      const pharmacistName = sql(`select "firstName" || ' ' || "lastName" from users where email = '${ACCOUNTS.pharmacist}'`);
+      check(text.includes(`Also requested by ${pharmacistName} on `), `warning: Also requested by ${pharmacistName} on <date>`);
       check(await c.getByRole("button", { name: "Approve" }).isEnabled(), "Approve is not blocked by the warning");
       check(await c.getByRole("button", { name: "Reject" }).isEnabled(), "Reject available to reject as duplicate");
       check(itemCount(ctx.vars.dupName) === 0, "DB: no item created by merely viewing");

@@ -29,6 +29,9 @@ run_family() {
   psql_admin -d "$db" -c "INSERT INTO users (id, \"firstName\", \"lastName\", email, password, role, status, \"branchId\", \"isActive\", \"createdAt\", \"updatedAt\")
     SELECT 'verify-pharmacist', 'Verify', 'Pharmacist', 'pharmacist@clinic.test', password, 'PHARMACIST', 'ACTIVE', \"branchId\", true, now(), now()
     FROM users WHERE email = 'admin@clinic.test' ON CONFLICT (email) DO NOTHING"
+  # The guard matches permissions exactly and the seeded PHARMACIST role only holds wildcards, so give the user the
+  # explicit list an admin would assign (reception's), as the original CR-30 verification run did.
+  psql_admin -d "$db" -c "UPDATE users SET permissions = (SELECT permissions FROM users WHERE email = 'reception@clinic.test') WHERE email = 'pharmacist@clinic.test' AND permissions IS NULL"
   rm -f /tmp/tot-verify-tokens.json "${TMPDIR:-/tmp}/cr30-itemreq-tokens.json" "$LOG_DIR/$family-tokens.json"
   local url="postgresql://$PGUSER@$PGHOST:$PGPORT/$db"
   (cd "$ROOT/backend" && DATABASE_URL="$url" PORT="$API_PORT" exec node dist/main) > "$LOG_DIR/$family-api.log" 2>&1 &

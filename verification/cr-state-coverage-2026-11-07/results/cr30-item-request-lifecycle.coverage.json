@@ -1,8 +1,8 @@
 {
   "model": "cr30-item-request-lifecycle",
   "title": "CR-30 New item request: staff request -> doctor approve/reject -> inventory",
-  "startedAt": "2026-11-08T07:11:12.701Z",
-  "finishedAt": "2026-11-08T07:12:49.985Z",
+  "startedAt": "2026-11-08T07:50:52.685Z",
+  "finishedAt": "2026-11-08T07:52:01.506Z",
   "states": {
     "total": 26,
     "passed": 26,
@@ -292,7 +292,7 @@
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 1 (DB pending count)"
             }
           ]
         },
@@ -302,7 +302,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (7)'"
+              "message": "task button 'Approve corrections (1)'"
             },
             {
               "ok": true,
@@ -310,11 +310,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 7"
+              "message": "New items tab badge 1"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 1 (DB pending count)"
             },
             {
               "ok": true,
@@ -334,7 +334,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-1f8afd (got CR30-SKU-1f8afd)"
+              "message": "detail SKU = CR30-SKU-11gn70 (got CR30-SKU-11gn70)"
             },
             {
               "ok": true,
@@ -446,11 +446,11 @@
             },
             {
               "ok": true,
-              "message": "DB pending count is 6 (got 6)"
+              "message": "DB pending count is 0 (got 0)"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+              "message": "sidebar Inventory badge absent when nothing is pending"
             }
           ]
         }
@@ -783,7 +783,7 @@
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 8 (DB pending count)"
+              "message": "sidebar Inventory badge shows 2 (DB pending count)"
             }
           ]
         },
@@ -793,7 +793,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (8)'"
+              "message": "task button 'Approve corrections (2)'"
             },
             {
               "ok": true,
@@ -801,11 +801,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 8"
+              "message": "New items tab badge 2"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 8 (DB pending count)"
+              "message": "sidebar Inventory badge shows 2 (DB pending count)"
             },
             {
               "ok": true,
@@ -825,7 +825,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-5m5fwu (got CR30-SKU-5m5fwu)"
+              "message": "detail SKU = CR30-SKU-5g4e33 (got CR30-SKU-5g4e33)"
             },
             {
               "ok": true,
@@ -905,7 +905,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (8)'"
+              "message": "task button 'Approve corrections (2)'"
             },
             {
               "ok": true,
@@ -913,11 +913,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 8"
+              "message": "New items tab badge 2"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 8 (DB pending count)"
+              "message": "sidebar Inventory badge shows 2 (DB pending count)"
             },
             {
               "ok": true,
@@ -937,7 +937,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-5m5fwu (got CR30-SKU-5m5fwu)"
+              "message": "detail SKU = CR30-SKU-5g4e33 (got CR30-SKU-5g4e33)"
             },
             {
               "ok": true,
@@ -1037,15 +1037,15 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-5m5fwu|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-5g4e33|42.5|55)"
             },
             {
               "ok": true,
-              "message": "DB pending count is 7 (got 7)"
+              "message": "DB pending count is 1 (got 1)"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 1 (DB pending count)"
             }
           ]
         },
@@ -1075,15 +1075,15 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-5m5fwu|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-5g4e33|42.5|55)"
             },
             {
               "ok": true,
-              "message": "DB pending count is 7 (got 7)"
+              "message": "DB pending count is 1 (got 1)"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 1 (DB pending count)"
             }
           ]
         },
@@ -1199,7 +1199,7 @@
             },
             {
               "ok": true,
-              "message": "notice names the existing item CR30 Existing mw7hu8u6"
+              "message": "notice names the existing item CR30 Existing mw7j99jv"
             },
             {
               "ok": true,
@@ -1233,7 +1233,7 @@
             },
             {
               "ok": true,
-              "message": "warning: Also requested by Pharma Cist on <date>"
+              "message": "warning: Also requested by Verify Pharmacist on <date>"
             },
             {
               "ok": true,
@@ -1435,7 +1435,7 @@
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 11 (DB pending count)"
+              "message": "sidebar Inventory badge shows 5 (DB pending count)"
             }
           ]
         },
@@ -1445,7 +1445,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (11)'"
+              "message": "task button 'Approve corrections (5)'"
             },
             {
               "ok": true,
@@ -1453,11 +1453,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 11"
+              "message": "New items tab badge 5"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 11 (DB pending count)"
+              "message": "sidebar Inventory badge shows 5 (DB pending count)"
             },
             {
               "ok": true,
@@ -1477,7 +1477,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-7y9ccs (got CR30-SKU-7y9ccs)"
+              "message": "detail SKU = CR30-SKU-74hq8e (got CR30-SKU-74hq8e)"
             },
             {
               "ok": true,
@@ -1577,15 +1577,15 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-7y9ccs|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-74hq8e|42.5|55)"
             },
             {
               "ok": true,
-              "message": "DB pending count is 10 (got 10)"
+              "message": "DB pending count is 4 (got 4)"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 10 (DB pending count)"
+              "message": "sidebar Inventory badge shows 4 (DB pending count)"
             }
           ]
         }
@@ -1750,7 +1750,7 @@
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 11 (DB pending count)"
+              "message": "sidebar Inventory badge shows 5 (DB pending count)"
             }
           ]
         },
@@ -1760,7 +1760,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (11)'"
+              "message": "task button 'Approve corrections (5)'"
             },
             {
               "ok": true,
@@ -1768,11 +1768,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 11"
+              "message": "New items tab badge 5"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 11 (DB pending count)"
+              "message": "sidebar Inventory badge shows 5 (DB pending count)"
             },
             {
               "ok": true,
@@ -1792,7 +1792,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-89r7ua (got CR30-SKU-89r7ua)"
+              "message": "detail SKU = CR30-SKU-855btl (got CR30-SKU-855btl)"
             },
             {
               "ok": true,
@@ -2084,7 +2084,7 @@
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 11 (DB pending count)"
+              "message": "sidebar Inventory badge shows 5 (DB pending count)"
             }
           ]
         },
@@ -2094,7 +2094,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (11)'"
+              "message": "task button 'Approve corrections (5)'"
             },
             {
               "ok": true,
@@ -2102,11 +2102,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 11"
+              "message": "New items tab badge 5"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 11 (DB pending count)"
+              "message": "sidebar Inventory badge shows 5 (DB pending count)"
             },
             {
               "ok": true,
@@ -2126,7 +2126,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-915p1p (got CR30-SKU-915p1p)"
+              "message": "detail SKU = CR30-SKU-9zh1tu (got CR30-SKU-9zh1tu)"
             },
             {
               "ok": true,
@@ -2244,11 +2244,11 @@
             },
             {
               "ok": true,
-              "message": "DB pending count is 10 (got 10)"
+              "message": "DB pending count is 4 (got 4)"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 10 (DB pending count)"
+              "message": "sidebar Inventory badge shows 4 (DB pending count)"
             }
           ]
         },

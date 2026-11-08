@@ -1,8 +1,8 @@
 {
   "model": "cr28-tot-roles",
   "title": "CR-28 Terms of Trade: reader vs editor views and API authorization",
-  "startedAt": "2026-11-08T06:58:30.496Z",
-  "finishedAt": "2026-11-08T06:58:42.549Z",
+  "startedAt": "2026-11-08T07:40:09.432Z",
+  "finishedAt": "2026-11-08T07:40:20.688Z",
   "states": {
     "total": 10,
     "passed": 10,
