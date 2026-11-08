@@ -1,0 +1,2082 @@
+{
+  "model": "cr30-item-request-lifecycle",
+  "title": "CR-30 New item request: staff request -> doctor approve/reject -> inventory",
+  "startedAt": "2026-11-08T06:54:48.230Z",
+  "finishedAt": "2026-11-08T06:56:04.805Z",
+  "states": {
+    "total": 23,
+    "passed": 23,
+    "failed": 0
+  },
+  "transitions": {
+    "total": 29,
+    "passed": 29,
+    "failed": 0
+  },
+  "uncovered": [],
+  "failures": [],
+  "paths": [
+    {
+      "path": 1,
+      "ok": true,
+      "events": [
+        "StaffStock --openAdd--> StaffAddForm",
+        "StaffAddForm --submitDuplicateSku--> StaffDuplicateSku",
+        "StaffDuplicateSku --fixSkuAndSubmit--> StaffSubmitted",
+        "StaffSubmitted --closeAndSearch--> StaffStockPending",
+        "StaffStockPending --openMyRequests--> StaffRequestsPending",
+        "StaffRequestsPending --reload--> StaffRequestsPending",
+        "StaffRequestsPending --staffApproveViaApi--> StaffApproveForbidden",
+        "StaffApproveForbidden --reload--> StaffRequestsPending",
+        "StaffRequestsPending --doctorLoginAndSearch--> DoctorStockPending",
+        "DoctorStockPending --openApprovals--> DoctorNewItemsPending",
+        "DoctorNewItemsPending --clickReject--> RejectDialog",
+        "RejectDialog --typeBlankNote--> RejectDialog",
+        "RejectDialog --typeNote--> RejectReady",
+        "RejectReady --confirmReject--> DoctorRejected"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffAddForm",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add Inventory Item dialog open"
+            },
+            {
+              "ok": true,
+              "message": "item name empty"
+            }
+          ]
+        },
+        {
+          "state": "StaffDuplicateSku",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "form stays open (not sent for approval)"
+            },
+            {
+              "ok": true,
+              "message": "dialog says the SKU already exists"
+            },
+            {
+              "ok": true,
+              "message": "typed values kept for correction"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request created for a duplicate SKU"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "StaffSubmitted",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "confirmation title"
+            },
+            {
+              "ok": true,
+              "message": "confirmation text \"Sent to doctor for approval. The item will appear in inventory once approved.\""
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly one PENDING request"
+            },
+            {
+              "ok": true,
+              "message": "DB: request recorded against the reception user"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: branch pending count +1"
+            }
+          ]
+        },
+        {
+          "state": "StaffStockPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "dialog closed"
+            },
+            {
+              "ok": true,
+              "message": "staff stock search: item absent while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "StaffRequestsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff heading 'My item requests'"
+            },
+            {
+              "ok": true,
+              "message": "request card for the item"
+            },
+            {
+              "ok": true,
+              "message": "status 'Waiting for doctor'"
+            },
+            {
+              "ok": true,
+              "message": "staff has no Approve button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffRequestsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff heading 'My item requests'"
+            },
+            {
+              "ok": true,
+              "message": "request card for the item"
+            },
+            {
+              "ok": true,
+              "message": "status 'Waiting for doctor'"
+            },
+            {
+              "ok": true,
+              "message": "staff has no Approve button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffApproveForbidden",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff approve API returns 403 (got 403)"
+            },
+            {
+              "ok": true,
+              "message": "DB: request still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "StaffRequestsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff heading 'My item requests'"
+            },
+            {
+              "ok": true,
+              "message": "request card for the item"
+            },
+            {
+              "ok": true,
+              "message": "status 'Waiting for doctor'"
+            },
+            {
+              "ok": true,
+              "message": "staff has no Approve button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "DoctorStockPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor stock search: item absent while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "DB: at least one pending request"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+            }
+          ]
+        },
+        {
+          "state": "DoctorNewItemsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "task button 'Approve corrections (6)'"
+            },
+            {
+              "ok": true,
+              "message": "New items tab selected"
+            },
+            {
+              "ok": true,
+              "message": "New items tab badge 6"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+            },
+            {
+              "ok": true,
+              "message": "request card present"
+            },
+            {
+              "ok": true,
+              "message": "status Waiting for doctor"
+            },
+            {
+              "ok": true,
+              "message": "detail Cost price = 10 (got 10)"
+            },
+            {
+              "ok": true,
+              "message": "detail Selling price = 12 (got 12)"
+            },
+            {
+              "ok": true,
+              "message": "detail SKU = CR30-SKU-1huzdn (got CR30-SKU-1huzdn)"
+            },
+            {
+              "ok": true,
+              "message": "shows requester name"
+            },
+            {
+              "ok": true,
+              "message": "Approve button"
+            },
+            {
+              "ok": true,
+              "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "RejectDialog",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Reject dialog"
+            },
+            {
+              "ok": true,
+              "message": "note empty or blank"
+            },
+            {
+              "ok": true,
+              "message": "Reject disabled without a note"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            }
+          ]
+        },
+        {
+          "state": "RejectDialog",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Reject dialog"
+            },
+            {
+              "ok": true,
+              "message": "note empty or blank"
+            },
+            {
+              "ok": true,
+              "message": "Reject disabled without a note"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            }
+          ]
+        },
+        {
+          "state": "RejectReady",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Reject enabled with a note"
+            }
+          ]
+        },
+        {
+          "state": "DoctorRejected",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "card status Rejected"
+            },
+            {
+              "ok": true,
+              "message": "Rejected by the doctor"
+            },
+            {
+              "ok": true,
+              "message": "rejection note shown"
+            },
+            {
+              "ok": true,
+              "message": "no Approve on a rejected request"
+            },
+            {
+              "ok": true,
+              "message": "DB: REJECTED with note and reviewer"
+            },
+            {
+              "ok": true,
+              "message": "DB: item never created"
+            },
+            {
+              "ok": true,
+              "message": "DB pending count is 5 (got 5)"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 5 (DB pending count)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 2,
+      "ok": true,
+      "events": [
+        "StaffStock --staffImportExcel--> StaffImportRefused"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffImportRefused",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "toast 'Import failed'"
+            },
+            {
+              "ok": true,
+              "message": "message 'Ask a doctor to import new items'"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items from the import"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 3,
+      "ok": true,
+      "events": [
+        "StaffStock --pharmacistSubmits--> PharmacistSubmitted"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "PharmacistSubmitted",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "pharmacist sees the approval confirmation"
+            },
+            {
+              "ok": true,
+              "message": "DB: PENDING request by the pharmacist"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 4,
+      "ok": true,
+      "events": [
+        "StaffStock --doctorAddsDirect--> DoctorAddedDirect"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "DoctorAddedDirect",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor's item is in stock search immediately"
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly 1 item"
+            },
+            {
+              "ok": true,
+              "message": "DB: no approval request for a doctor's own add"
+            },
+            {
+              "ok": true,
+              "message": "DB: pending count unchanged"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 5,
+      "ok": true,
+      "events": [
+        "StaffStock --openAdd--> StaffAddForm",
+        "StaffAddForm --submitFullDetails--> StaffSubmitted",
+        "StaffSubmitted --closeAndSearch--> StaffStockPending",
+        "StaffStockPending --openMyRequests--> StaffRequestsPending",
+        "StaffRequestsPending --doctorLoginAndSearch--> DoctorStockPending",
+        "DoctorStockPending --openApprovals--> DoctorNewItemsPending",
+        "DoctorNewItemsPending --clickApprove--> ApproveDialog",
+        "ApproveDialog --cancel--> DoctorNewItemsPending",
+        "DoctorNewItemsPending --clickApprove--> ApproveDialog",
+        "ApproveDialog --confirmApprove--> DoctorApproved",
+        "DoctorApproved --reload--> DoctorApproved",
+        "DoctorApproved --doctorSearchStock--> DoctorStockHasItem",
+        "DoctorStockHasItem --staffLoginAndSearch--> StaffStockHasItem",
+        "StaffStockHasItem --openMyRequests--> StaffSeesApproved"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffAddForm",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add Inventory Item dialog open"
+            },
+            {
+              "ok": true,
+              "message": "item name empty"
+            }
+          ]
+        },
+        {
+          "state": "StaffSubmitted",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "confirmation title"
+            },
+            {
+              "ok": true,
+              "message": "confirmation text \"Sent to doctor for approval. The item will appear in inventory once approved.\""
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly one PENDING request"
+            },
+            {
+              "ok": true,
+              "message": "DB: request recorded against the reception user"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: branch pending count +1"
+            }
+          ]
+        },
+        {
+          "state": "StaffStockPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "dialog closed"
+            },
+            {
+              "ok": true,
+              "message": "staff stock search: item absent while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "StaffRequestsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff heading 'My item requests'"
+            },
+            {
+              "ok": true,
+              "message": "request card for the item"
+            },
+            {
+              "ok": true,
+              "message": "status 'Waiting for doctor'"
+            },
+            {
+              "ok": true,
+              "message": "staff has no Approve button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "DoctorStockPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor stock search: item absent while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "DB: at least one pending request"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+            }
+          ]
+        },
+        {
+          "state": "DoctorNewItemsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "task button 'Approve corrections (7)'"
+            },
+            {
+              "ok": true,
+              "message": "New items tab selected"
+            },
+            {
+              "ok": true,
+              "message": "New items tab badge 7"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+            },
+            {
+              "ok": true,
+              "message": "request card present"
+            },
+            {
+              "ok": true,
+              "message": "status Waiting for doctor"
+            },
+            {
+              "ok": true,
+              "message": "detail Cost price = 42.5 (got 42.5)"
+            },
+            {
+              "ok": true,
+              "message": "detail Selling price = 55 (got 55)"
+            },
+            {
+              "ok": true,
+              "message": "detail SKU = CR30-SKU-5yppkm (got CR30-SKU-5yppkm)"
+            },
+            {
+              "ok": true,
+              "message": "detail Manufacturer = CR30 Pharma Ltd (got CR30 Pharma Ltd)"
+            },
+            {
+              "ok": true,
+              "message": "detail Generic name = Nebulexamol (got Nebulexamol)"
+            },
+            {
+              "ok": true,
+              "message": "detail MRP = 60 (got 60)"
+            },
+            {
+              "ok": true,
+              "message": "detail Pack size = 10 (got 10)"
+            },
+            {
+              "ok": true,
+              "message": "detail HSN = 3004 (got 3004)"
+            },
+            {
+              "ok": true,
+              "message": "detail GST % = 12 (got 12)"
+            },
+            {
+              "ok": true,
+              "message": "detail Batch = B-CR30 (got B-CR30)"
+            },
+            {
+              "ok": true,
+              "message": "shows requester name"
+            },
+            {
+              "ok": true,
+              "message": "Approve button"
+            },
+            {
+              "ok": true,
+              "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "ApproveDialog",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Approve dialog"
+            },
+            {
+              "ok": true,
+              "message": "dialog names the item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items before confirming"
+            }
+          ]
+        },
+        {
+          "state": "DoctorNewItemsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "task button 'Approve corrections (7)'"
+            },
+            {
+              "ok": true,
+              "message": "New items tab selected"
+            },
+            {
+              "ok": true,
+              "message": "New items tab badge 7"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+            },
+            {
+              "ok": true,
+              "message": "request card present"
+            },
+            {
+              "ok": true,
+              "message": "status Waiting for doctor"
+            },
+            {
+              "ok": true,
+              "message": "detail Cost price = 42.5 (got 42.5)"
+            },
+            {
+              "ok": true,
+              "message": "detail Selling price = 55 (got 55)"
+            },
+            {
+              "ok": true,
+              "message": "detail SKU = CR30-SKU-5yppkm (got CR30-SKU-5yppkm)"
+            },
+            {
+              "ok": true,
+              "message": "detail Manufacturer = CR30 Pharma Ltd (got CR30 Pharma Ltd)"
+            },
+            {
+              "ok": true,
+              "message": "detail Generic name = Nebulexamol (got Nebulexamol)"
+            },
+            {
+              "ok": true,
+              "message": "detail MRP = 60 (got 60)"
+            },
+            {
+              "ok": true,
+              "message": "detail Pack size = 10 (got 10)"
+            },
+            {
+              "ok": true,
+              "message": "detail HSN = 3004 (got 3004)"
+            },
+            {
+              "ok": true,
+              "message": "detail GST % = 12 (got 12)"
+            },
+            {
+              "ok": true,
+              "message": "detail Batch = B-CR30 (got B-CR30)"
+            },
+            {
+              "ok": true,
+              "message": "shows requester name"
+            },
+            {
+              "ok": true,
+              "message": "Approve button"
+            },
+            {
+              "ok": true,
+              "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "ApproveDialog",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Approve dialog"
+            },
+            {
+              "ok": true,
+              "message": "dialog names the item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items before confirming"
+            }
+          ]
+        },
+        {
+          "state": "DoctorApproved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "card status Approved"
+            },
+            {
+              "ok": true,
+              "message": "Approved by the doctor"
+            },
+            {
+              "ok": true,
+              "message": "no Approve button left"
+            },
+            {
+              "ok": true,
+              "message": "DB: APPROVED, reviewer, linked item"
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly 1 item (got 1)"
+            },
+            {
+              "ok": true,
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-5yppkm|42.5|55)"
+            },
+            {
+              "ok": true,
+              "message": "DB pending count is 6 (got 6)"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+            }
+          ]
+        },
+        {
+          "state": "DoctorApproved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "card status Approved"
+            },
+            {
+              "ok": true,
+              "message": "Approved by the doctor"
+            },
+            {
+              "ok": true,
+              "message": "no Approve button left"
+            },
+            {
+              "ok": true,
+              "message": "DB: APPROVED, reviewer, linked item"
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly 1 item (got 1)"
+            },
+            {
+              "ok": true,
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-5yppkm|42.5|55)"
+            },
+            {
+              "ok": true,
+              "message": "DB pending count is 6 (got 6)"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+            }
+          ]
+        },
+        {
+          "state": "DoctorStockHasItem",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor stock search: item present after approval"
+            }
+          ]
+        },
+        {
+          "state": "StaffStockHasItem",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff stock search: item present after approval"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffSeesApproved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Approved"
+            },
+            {
+              "ok": true,
+              "message": "staff sees reviewer"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 6,
+      "ok": true,
+      "events": [
+        "StaffStock --openAdd--> StaffAddForm",
+        "StaffAddForm --submitFullDetails--> StaffSubmitted",
+        "StaffSubmitted --closeAndSearch--> StaffStockPending",
+        "StaffStockPending --openMyRequests--> StaffRequestsPending",
+        "StaffRequestsPending --doctorLoginAndSearch--> DoctorStockPending",
+        "DoctorStockPending --openApprovals--> DoctorNewItemsPending",
+        "DoctorNewItemsPending --clickApprove--> ApproveDialog",
+        "ApproveDialog --doubleClickApprove--> DoctorApproved"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffAddForm",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add Inventory Item dialog open"
+            },
+            {
+              "ok": true,
+              "message": "item name empty"
+            }
+          ]
+        },
+        {
+          "state": "StaffSubmitted",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "confirmation title"
+            },
+            {
+              "ok": true,
+              "message": "confirmation text \"Sent to doctor for approval. The item will appear in inventory once approved.\""
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly one PENDING request"
+            },
+            {
+              "ok": true,
+              "message": "DB: request recorded against the reception user"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: branch pending count +1"
+            }
+          ]
+        },
+        {
+          "state": "StaffStockPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "dialog closed"
+            },
+            {
+              "ok": true,
+              "message": "staff stock search: item absent while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "StaffRequestsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff heading 'My item requests'"
+            },
+            {
+              "ok": true,
+              "message": "request card for the item"
+            },
+            {
+              "ok": true,
+              "message": "status 'Waiting for doctor'"
+            },
+            {
+              "ok": true,
+              "message": "staff has no Approve button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "DoctorStockPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor stock search: item absent while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "DB: at least one pending request"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+            }
+          ]
+        },
+        {
+          "state": "DoctorNewItemsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "task button 'Approve corrections (7)'"
+            },
+            {
+              "ok": true,
+              "message": "New items tab selected"
+            },
+            {
+              "ok": true,
+              "message": "New items tab badge 7"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+            },
+            {
+              "ok": true,
+              "message": "request card present"
+            },
+            {
+              "ok": true,
+              "message": "status Waiting for doctor"
+            },
+            {
+              "ok": true,
+              "message": "detail Cost price = 42.5 (got 42.5)"
+            },
+            {
+              "ok": true,
+              "message": "detail Selling price = 55 (got 55)"
+            },
+            {
+              "ok": true,
+              "message": "detail SKU = CR30-SKU-6gv158 (got CR30-SKU-6gv158)"
+            },
+            {
+              "ok": true,
+              "message": "detail Manufacturer = CR30 Pharma Ltd (got CR30 Pharma Ltd)"
+            },
+            {
+              "ok": true,
+              "message": "detail Generic name = Nebulexamol (got Nebulexamol)"
+            },
+            {
+              "ok": true,
+              "message": "detail MRP = 60 (got 60)"
+            },
+            {
+              "ok": true,
+              "message": "detail Pack size = 10 (got 10)"
+            },
+            {
+              "ok": true,
+              "message": "detail HSN = 3004 (got 3004)"
+            },
+            {
+              "ok": true,
+              "message": "detail GST % = 12 (got 12)"
+            },
+            {
+              "ok": true,
+              "message": "detail Batch = B-CR30 (got B-CR30)"
+            },
+            {
+              "ok": true,
+              "message": "shows requester name"
+            },
+            {
+              "ok": true,
+              "message": "Approve button"
+            },
+            {
+              "ok": true,
+              "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "ApproveDialog",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Approve dialog"
+            },
+            {
+              "ok": true,
+              "message": "dialog names the item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items before confirming"
+            }
+          ]
+        },
+        {
+          "state": "DoctorApproved",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "card status Approved"
+            },
+            {
+              "ok": true,
+              "message": "Approved by the doctor"
+            },
+            {
+              "ok": true,
+              "message": "no Approve button left"
+            },
+            {
+              "ok": true,
+              "message": "DB: APPROVED, reviewer, linked item"
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly 1 item (got 1)"
+            },
+            {
+              "ok": true,
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-6gv158|42.5|55)"
+            },
+            {
+              "ok": true,
+              "message": "DB pending count is 6 (got 6)"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 7,
+      "ok": true,
+      "events": [
+        "StaffStock --openAdd--> StaffAddForm",
+        "StaffAddForm --submitFullDetails--> StaffSubmitted",
+        "StaffSubmitted --closeAndSearch--> StaffStockPending",
+        "StaffStockPending --openMyRequests--> StaffRequestsPending",
+        "StaffRequestsPending --doctorLoginAndSearch--> DoctorStockPending",
+        "DoctorStockPending --openApprovals--> DoctorNewItemsPending",
+        "DoctorNewItemsPending --clickApprove--> ApproveDialog",
+        "ApproveDialog --secondDoctorApproves--> StaleApproveDialog",
+        "StaleApproveDialog --confirmApprove--> ApproveConflict"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffAddForm",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add Inventory Item dialog open"
+            },
+            {
+              "ok": true,
+              "message": "item name empty"
+            }
+          ]
+        },
+        {
+          "state": "StaffSubmitted",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "confirmation title"
+            },
+            {
+              "ok": true,
+              "message": "confirmation text \"Sent to doctor for approval. The item will appear in inventory once approved.\""
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly one PENDING request"
+            },
+            {
+              "ok": true,
+              "message": "DB: request recorded against the reception user"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: branch pending count +1"
+            }
+          ]
+        },
+        {
+          "state": "StaffStockPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "dialog closed"
+            },
+            {
+              "ok": true,
+              "message": "staff stock search: item absent while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "StaffRequestsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff heading 'My item requests'"
+            },
+            {
+              "ok": true,
+              "message": "request card for the item"
+            },
+            {
+              "ok": true,
+              "message": "status 'Waiting for doctor'"
+            },
+            {
+              "ok": true,
+              "message": "staff has no Approve button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "DoctorStockPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor stock search: item absent while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "DB: at least one pending request"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+            }
+          ]
+        },
+        {
+          "state": "DoctorNewItemsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "task button 'Approve corrections (7)'"
+            },
+            {
+              "ok": true,
+              "message": "New items tab selected"
+            },
+            {
+              "ok": true,
+              "message": "New items tab badge 7"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+            },
+            {
+              "ok": true,
+              "message": "request card present"
+            },
+            {
+              "ok": true,
+              "message": "status Waiting for doctor"
+            },
+            {
+              "ok": true,
+              "message": "detail Cost price = 42.5 (got 42.5)"
+            },
+            {
+              "ok": true,
+              "message": "detail Selling price = 55 (got 55)"
+            },
+            {
+              "ok": true,
+              "message": "detail SKU = CR30-SKU-7ozjbi (got CR30-SKU-7ozjbi)"
+            },
+            {
+              "ok": true,
+              "message": "detail Manufacturer = CR30 Pharma Ltd (got CR30 Pharma Ltd)"
+            },
+            {
+              "ok": true,
+              "message": "detail Generic name = Nebulexamol (got Nebulexamol)"
+            },
+            {
+              "ok": true,
+              "message": "detail MRP = 60 (got 60)"
+            },
+            {
+              "ok": true,
+              "message": "detail Pack size = 10 (got 10)"
+            },
+            {
+              "ok": true,
+              "message": "detail HSN = 3004 (got 3004)"
+            },
+            {
+              "ok": true,
+              "message": "detail GST % = 12 (got 12)"
+            },
+            {
+              "ok": true,
+              "message": "detail Batch = B-CR30 (got B-CR30)"
+            },
+            {
+              "ok": true,
+              "message": "shows requester name"
+            },
+            {
+              "ok": true,
+              "message": "Approve button"
+            },
+            {
+              "ok": true,
+              "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "ApproveDialog",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Approve dialog"
+            },
+            {
+              "ok": true,
+              "message": "dialog names the item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items before confirming"
+            }
+          ]
+        },
+        {
+          "state": "StaleApproveDialog",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor A's dialog still open"
+            },
+            {
+              "ok": true,
+              "message": "DB: approved by the second doctor"
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly 1 item"
+            }
+          ]
+        },
+        {
+          "state": "ApproveConflict",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "second approve answered 409 (got 409)"
+            },
+            {
+              "ok": true,
+              "message": "doctor A told 'This request was already approved'"
+            },
+            {
+              "ok": true,
+              "message": "the message is visible on screen"
+            },
+            {
+              "ok": true,
+              "message": "toast title 'Review failed'"
+            },
+            {
+              "ok": true,
+              "message": "DB: still exactly 1 item (got 1)"
+            },
+            {
+              "ok": true,
+              "message": "list refreshes to 'Approved by' the second doctor"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 8,
+      "ok": true,
+      "events": [
+        "StaffStock --openAdd--> StaffAddForm",
+        "StaffAddForm --submitFullDetails--> StaffSubmitted",
+        "StaffSubmitted --closeAndSearch--> StaffStockPending",
+        "StaffStockPending --openMyRequests--> StaffRequestsPending",
+        "StaffRequestsPending --doctorLoginAndSearch--> DoctorStockPending",
+        "DoctorStockPending --openApprovals--> DoctorNewItemsPending",
+        "DoctorNewItemsPending --clickReject--> RejectDialog",
+        "RejectDialog --typeNote--> RejectReady",
+        "RejectReady --confirmReject--> DoctorRejected",
+        "DoctorRejected --staffLoginAndOpenRequests--> StaffSeesRejected"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffAddForm",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add Inventory Item dialog open"
+            },
+            {
+              "ok": true,
+              "message": "item name empty"
+            }
+          ]
+        },
+        {
+          "state": "StaffSubmitted",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "confirmation title"
+            },
+            {
+              "ok": true,
+              "message": "confirmation text \"Sent to doctor for approval. The item will appear in inventory once approved.\""
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly one PENDING request"
+            },
+            {
+              "ok": true,
+              "message": "DB: request recorded against the reception user"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: branch pending count +1"
+            }
+          ]
+        },
+        {
+          "state": "StaffStockPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "dialog closed"
+            },
+            {
+              "ok": true,
+              "message": "staff stock search: item absent while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "StaffRequestsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff heading 'My item requests'"
+            },
+            {
+              "ok": true,
+              "message": "request card for the item"
+            },
+            {
+              "ok": true,
+              "message": "status 'Waiting for doctor'"
+            },
+            {
+              "ok": true,
+              "message": "staff has no Approve button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "DoctorStockPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor stock search: item absent while pending"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            },
+            {
+              "ok": true,
+              "message": "DB: at least one pending request"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+            }
+          ]
+        },
+        {
+          "state": "DoctorNewItemsPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "task button 'Approve corrections (7)'"
+            },
+            {
+              "ok": true,
+              "message": "New items tab selected"
+            },
+            {
+              "ok": true,
+              "message": "New items tab badge 7"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+            },
+            {
+              "ok": true,
+              "message": "request card present"
+            },
+            {
+              "ok": true,
+              "message": "status Waiting for doctor"
+            },
+            {
+              "ok": true,
+              "message": "detail Cost price = 42.5 (got 42.5)"
+            },
+            {
+              "ok": true,
+              "message": "detail Selling price = 55 (got 55)"
+            },
+            {
+              "ok": true,
+              "message": "detail SKU = CR30-SKU-86r7fo (got CR30-SKU-86r7fo)"
+            },
+            {
+              "ok": true,
+              "message": "detail Manufacturer = CR30 Pharma Ltd (got CR30 Pharma Ltd)"
+            },
+            {
+              "ok": true,
+              "message": "detail Generic name = Nebulexamol (got Nebulexamol)"
+            },
+            {
+              "ok": true,
+              "message": "detail MRP = 60 (got 60)"
+            },
+            {
+              "ok": true,
+              "message": "detail Pack size = 10 (got 10)"
+            },
+            {
+              "ok": true,
+              "message": "detail HSN = 3004 (got 3004)"
+            },
+            {
+              "ok": true,
+              "message": "detail GST % = 12 (got 12)"
+            },
+            {
+              "ok": true,
+              "message": "detail Batch = B-CR30 (got B-CR30)"
+            },
+            {
+              "ok": true,
+              "message": "shows requester name"
+            },
+            {
+              "ok": true,
+              "message": "Approve button"
+            },
+            {
+              "ok": true,
+              "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        },
+        {
+          "state": "RejectDialog",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Reject dialog"
+            },
+            {
+              "ok": true,
+              "message": "note empty or blank"
+            },
+            {
+              "ok": true,
+              "message": "Reject disabled without a note"
+            },
+            {
+              "ok": true,
+              "message": "DB: still PENDING"
+            }
+          ]
+        },
+        {
+          "state": "RejectReady",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Reject enabled with a note"
+            }
+          ]
+        },
+        {
+          "state": "DoctorRejected",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "card status Rejected"
+            },
+            {
+              "ok": true,
+              "message": "Rejected by the doctor"
+            },
+            {
+              "ok": true,
+              "message": "rejection note shown"
+            },
+            {
+              "ok": true,
+              "message": "no Approve on a rejected request"
+            },
+            {
+              "ok": true,
+              "message": "DB: REJECTED with note and reviewer"
+            },
+            {
+              "ok": true,
+              "message": "DB: item never created"
+            },
+            {
+              "ok": true,
+              "message": "DB pending count is 6 (got 6)"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+            }
+          ]
+        },
+        {
+          "state": "StaffSeesRejected",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff My item requests"
+            },
+            {
+              "ok": true,
+              "message": "staff sees Rejected"
+            },
+            {
+              "ok": true,
+              "message": "staff sees reviewer"
+            },
+            {
+              "ok": true,
+              "message": "staff sees the note"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

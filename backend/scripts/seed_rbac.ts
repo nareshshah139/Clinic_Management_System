@@ -84,8 +84,10 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'billing:payment:read',
     'billing:revenue:read',
     'billing:statistics:read',
+    'pharmacy:compliance:read',
   ],
   PHARMACIST: [
+    'pharmacy:compliance:read',
     'inventory:item:*',
     'inventory:transaction:*',
     'inventory:adjustment:create',
