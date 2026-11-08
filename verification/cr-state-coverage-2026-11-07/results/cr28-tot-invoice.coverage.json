@@ -1,8 +1,8 @@
 {
   "model": "cr28-tot-invoice",
   "title": "CR-28 Terms of Trade: agreed terms on purchase invoice entry",
-  "startedAt": "2026-11-08T09:08:32.300Z",
-  "finishedAt": "2026-11-08T09:09:13.354Z",
+  "startedAt": "2026-11-08T10:14:49.092Z",
+  "finishedAt": "2026-11-08T10:15:29.096Z",
   "states": {
     "total": 10,
     "passed": 10,

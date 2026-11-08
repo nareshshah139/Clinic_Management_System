@@ -1,8 +1,8 @@
 {
   "model": "cr30-item-request-lifecycle",
   "title": "CR-30 New item request: staff request -> doctor approve/reject -> inventory",
-  "startedAt": "2026-11-08T09:17:06.075Z",
-  "finishedAt": "2026-11-08T09:18:16.798Z",
+  "startedAt": "2026-11-08T10:16:36.837Z",
+  "finishedAt": "2026-11-08T10:17:45.163Z",
   "states": {
     "total": 26,
     "passed": 26,
@@ -334,7 +334,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-1u64y5 (got CR30-SKU-1u64y5)"
+              "message": "detail SKU = CR30-SKU-1yodbg (got CR30-SKU-1yodbg)"
             },
             {
               "ok": true,
@@ -825,7 +825,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-5qs8ny (got CR30-SKU-5qs8ny)"
+              "message": "detail SKU = CR30-SKU-5za911 (got CR30-SKU-5za911)"
             },
             {
               "ok": true,
@@ -937,7 +937,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-5qs8ny (got CR30-SKU-5qs8ny)"
+              "message": "detail SKU = CR30-SKU-5za911 (got CR30-SKU-5za911)"
             },
             {
               "ok": true,
@@ -1037,7 +1037,7 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-5qs8ny|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-5za911|42.5|55)"
             },
             {
               "ok": true,
@@ -1075,7 +1075,7 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-5qs8ny|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-5za911|42.5|55)"
             },
             {
               "ok": true,
@@ -1199,7 +1199,7 @@
             },
             {
               "ok": true,
-              "message": "notice names the existing item CR30 Existing mw7mc5dz"
+              "message": "notice names the existing item CR30 Existing mw7ogol4"
             },
             {
               "ok": true,
@@ -1477,7 +1477,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-776vw2 (got CR30-SKU-776vw2)"
+              "message": "detail SKU = CR30-SKU-7a85sk (got CR30-SKU-7a85sk)"
             },
             {
               "ok": true,
@@ -1577,7 +1577,7 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-776vw2|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-7a85sk|42.5|55)"
             },
             {
               "ok": true,
@@ -1792,7 +1792,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-8m4h81 (got CR30-SKU-8m4h81)"
+              "message": "detail SKU = CR30-SKU-8ftonb (got CR30-SKU-8ftonb)"
             },
             {
               "ok": true,
@@ -2126,7 +2126,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-9e0d1s (got CR30-SKU-9e0d1s)"
+              "message": "detail SKU = CR30-SKU-9iwzhd (got CR30-SKU-9iwzhd)"
             },
             {
               "ok": true,
