@@ -1,3 +1,4 @@
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Request, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MAX_SIGNATURE_BYTES } from './doctor-signature';
@@ -7,7 +8,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
-import { Roles } from '../../shared/decorators/roles.decorator';
+import { Authenticated, Roles } from '../../shared/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 
 /** Changing users, roles, permissions and branches is limited to clinic managers (RolesGuard also admits DOCTOR). */
@@ -22,6 +23,7 @@ interface AuthenticatedRequest {
 }
 
 @Controller('users')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -98,6 +100,7 @@ export class UsersController {
   }
 
   @Post(':id/change-password')
+  @Authenticated()
   changePassword(@Param('id') id: string, @Body() changePasswordDto: ChangePasswordDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.changePassword(id, changePasswordDto, req.user);
   }
@@ -105,6 +108,7 @@ export class UsersController {
 
 
   @Patch(':id/profile')
+  @Authenticated()
   updateProfile(@Param('id') id: string, @Body() updateProfileDto: UpdateProfileDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.updateProfile(id, updateProfileDto, req.user);
   }

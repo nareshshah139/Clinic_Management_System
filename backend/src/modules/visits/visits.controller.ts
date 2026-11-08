@@ -1,3 +1,4 @@
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import {
   Controller,
   Get,
@@ -242,6 +243,7 @@ const TRANSCRIBE_UPLOAD_LIMIT_BYTES = (() => {
 
 @ApiTags('Visits')
 @Controller('visits')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class VisitsController {

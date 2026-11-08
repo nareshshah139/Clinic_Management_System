@@ -3,6 +3,7 @@ import { PharmacyPrescriptionQueueService } from '../pharmacy-prescription-queue
 import { queueStatusPage } from '../pharmacy-prescription-queue-query';
 import { PrescriptionQueueStatus } from '../dto/pharmacy-prescription-queue.dto';
 import { localDatabase } from '../../../shared/testing/local-database';
+import { PrescriptionsService } from '../../prescriptions/prescriptions.service';
 
 const databaseTests = process.env.QUEUE_COVERAGE_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -257,4 +258,33 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     const seen = new Set(Object.values(expected));
     expect([...seen].sort()).toEqual(['dispensed', 'partial', 'pending']);
   }, 120000);
+  it('does not classify a historic manually dispensed task as billed', async () => {
+    const at = await clinic('Historical manual task');
+    await rx(at, 'manual-task-without-sale', [line('tricogroStrips')]);
+    await db.pharmacyDispenseTask.create({ data: { branchId: at.branchId, patientId: at.patientId, patientName: 'Test patient', prescriptionId: 'manual-task-without-sale', status: 'DISPENSED' } });
+    expect((await listed(at.branchId)).get('manual-task-without-sale')).toBe(PrescriptionQueueStatus.PENDING);
+    expect((await queue.findOne('manual-task-without-sale', at.branchId)).status).toBe(PrescriptionQueueStatus.PENDING);
+  });
+
+  it('rejects a medicine edit racing an invoice held under the prescription lock', async () => {
+    const at = await clinic('Invoice edit race');
+    await rx(at, 'rx-edit-race', [line('tricogroStrips')]);
+    let release!: () => void;
+    let locked!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const ready = new Promise<void>(resolve => { locked = resolve; });
+    const invoiceWrite = db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM prescriptions WHERE id = ${'rx-edit-race'} FOR UPDATE`;
+      await tx.pharmacyInvoice.create({ data: { branchId: at.branchId, prescriptionId: 'rx-edit-race', patientId: at.patientId, doctorId, invoiceNumber: `RACE-${++invoiceCount}`, status: 'CONFIRMED', subtotal: 10, totalAmount: 10, balanceAmount: 10, paymentMethod: 'CASH', billingName: 'Test patient', billingPhone: '0000000000' } });
+      locked();
+      await gate;
+    });
+    await ready;
+    const edit = new PrescriptionsService(db as any, {} as any).updatePrescription('rx-edit-race', { items: [{ drugName: 'Changed medicine' }] } as any, at.branchId);
+    release();
+    await invoiceWrite;
+    await expect(edit).rejects.toMatchObject({ status: 409 });
+    expect(JSON.parse((await db.prescription.findUniqueOrThrow({ where: { id: 'rx-edit-race' } })).items)[0].drugName).toBe(products.tricogroStrips.drug);
+  });
+
 });
