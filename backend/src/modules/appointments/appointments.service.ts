@@ -1033,9 +1033,8 @@ export class AppointmentsService {
       );
     }
 
-    // Compare appointment slot start time against current time to allow same-day future bookings
-    const timeSlot = SchedulingUtils.parseTimeSlot(dto.slot);
-    const appointmentStart = new Date(`${dto.date}T${timeSlot.start}:00.000Z`);
+    // Slots are IST wall-clock times on the clinic day.
+    const appointmentStart = new Date(istDayStart(dto.date).getTime() + slotToMinutes(dto.slot).start * 60_000);
     const now = new Date();
 
     if (appointmentStart < now) {

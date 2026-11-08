@@ -125,8 +125,8 @@ async function run() {
       });
       const calendar = await page.evaluate(() => ({
         entries: [...document.querySelectorAll('button[title="View Appointment Details"]')].map(button => {
-          const spans = button.parentElement.parentElement.querySelectorAll('div.flex-shrink-0 > span');
-          return { slot: spans[0]?.innerText.trim(), name: spans[1]?.innerText.trim() };
+          const block = button.closest('[data-appointment-block]');
+          return { slot: block?.querySelector('[data-appointment-time]')?.textContent.trim(), name: block?.querySelector('[data-patient-name]')?.textContent.trim() };
         }),
         requestedDay: window.__appointmentRequests.includes('/appointments/doctor/fixture-doctor/schedule?date=2026-11-06'),
       }));
