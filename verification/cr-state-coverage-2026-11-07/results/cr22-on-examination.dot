@@ -1,0 +1,34 @@
+digraph "cr22-on-examination" {
+  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-22: On Examination collapsible, collapsed by default, remembered per doctor\nstates 11/11 (100%) · transitions 16/16 (100%)", pad=0.3, nodesep=0.45, ranksep=0.7];
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, penwidth=1.6];
+  edge [fontname="Helvetica", fontsize=9, penwidth=1.4, arrowsize=0.7];
+  __start [shape=point, width=0.15, label=""];
+  __start -> "CollapsedEmpty";
+  "CollapsedEmpty" [label="New visit: On Examination collapsed, nothing entered", fillcolor="#d1fadf", color="#039855"];
+  "OpenEmpty" [label="Opened, all exam fields shown, empty", fillcolor="#d1fadf", color="#039855"];
+  "OpenFilled" [label="Opened and filled in (skin type, acne, itch, detail)", fillcolor="#d1fadf", color="#039855"];
+  "CollapsedFilled" [label="Collapsed with data: 'filled' badge, values kept", fillcolor="#d1fadf", color="#039855"];
+  "SavedCollapsed" [label="Saved while collapsed: exam stored in DB", fillcolor="#d1fadf", color="#039855"];
+  "SavedOpen" [label="Saved while open: exam stored in DB, stays open", fillcolor="#d1fadf", color="#039855"];
+  "ReopenedWithData" [label="Saved visit reopened: open because it has data", fillcolor="#d1fadf", color="#039855"];
+  "NextPatientCollapsed" [label="Next patient's visit, last choice collapsed", fillcolor="#d1fadf", color="#039855"];
+  "NextPatientOpen" [label="Next patient's visit, last choice open", fillcolor="#d1fadf", color="#039855"];
+  "ShravyaCollapsed" [label="Second doctor's visit: own default (collapsed)", fillcolor="#d1fadf", color="#039855"];
+  "ShravyaOpen" [label="Second doctor opened it", fillcolor="#d1fadf", color="#039855"];
+  "CollapsedEmpty" -> "OpenEmpty" [label="clickHeading ×4", color="#039855", fontcolor="#039855", style=solid];
+  "OpenEmpty" -> "CollapsedEmpty" [label="clickHeading", color="#039855", fontcolor="#039855", style=solid];
+  "CollapsedEmpty" -> "OpenEmpty" [label="pressEnterOnHeading", color="#039855", fontcolor="#039855", style=solid];
+  "OpenEmpty" -> "CollapsedEmpty" [label="pressSpaceOnHeading", color="#039855", fontcolor="#039855", style=solid];
+  "OpenEmpty" -> "OpenFilled" [label="fillExam ×3", color="#039855", fontcolor="#039855", style=solid];
+  "OpenFilled" -> "CollapsedFilled" [label="clickHeading ×2", color="#039855", fontcolor="#039855", style=solid];
+  "CollapsedFilled" -> "OpenFilled" [label="clickHeading", color="#039855", fontcolor="#039855", style=solid];
+  "CollapsedFilled" -> "SavedCollapsed" [label="saveDraft", color="#039855", fontcolor="#039855", style=solid];
+  "SavedCollapsed" -> "ReopenedWithData" [label="reopenSavedVisit", color="#039855", fontcolor="#039855", style=solid];
+  "ReopenedWithData" -> "NextPatientCollapsed" [label="openNextPatientVisit", color="#039855", fontcolor="#039855", style=solid];
+  "NextPatientCollapsed" -> "NextPatientCollapsed" [label="reloadPage", color="#039855", fontcolor="#039855", style=solid];
+  "OpenFilled" -> "SavedOpen" [label="saveDraft ×2", color="#039855", fontcolor="#039855", style=solid];
+  "SavedOpen" -> "NextPatientOpen" [label="openNextPatientVisit ×2", color="#039855", fontcolor="#039855", style=solid];
+  "NextPatientOpen" -> "NextPatientOpen" [label="reloadPage", color="#039855", fontcolor="#039855", style=solid];
+  "NextPatientOpen" -> "ShravyaCollapsed" [label="switchToShravya ×2", color="#039855", fontcolor="#039855", style=solid];
+  "ShravyaCollapsed" -> "ShravyaOpen" [label="clickHeading", color="#039855", fontcolor="#039855", style=solid];
+}
