@@ -1,8 +1,8 @@
 {
   "model": "cr28-tot-entry",
   "title": "CR-28 Terms of Trade: doctor entry, edit, delete, persistence",
-  "startedAt": "2026-11-08T07:39:39.843Z",
-  "finishedAt": "2026-11-08T07:40:09.136Z",
+  "startedAt": "2026-11-08T09:07:25.084Z",
+  "finishedAt": "2026-11-08T09:08:13.340Z",
   "states": {
     "total": 27,
     "passed": 27,
