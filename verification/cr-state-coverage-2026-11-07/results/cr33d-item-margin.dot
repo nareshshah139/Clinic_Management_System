@@ -1,5 +1,5 @@
 digraph "cr33d-item-margin" {
-  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-33d Item-wise Margin\nstates 15/16 (94%) · transitions 33/35 (94%)", pad=0.3, nodesep=0.45, ranksep=0.7];
+  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-33d Item-wise Margin\nstates 16/16 (100%) · transitions 35/35 (100%)", pad=0.3, nodesep=0.45, ranksep=0.7];
   node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, penwidth=1.6];
   edge [fontname="Helvetica", fontsize=9, penwidth=1.4, arrowsize=0.7];
   __start [shape=point, width=0.15, label=""];
@@ -13,14 +13,14 @@ digraph "cr33d-item-margin" {
   "SearchEmpty" [label="Search with no match", fillcolor="#d1fadf", color="#039855"];
   "Empty" [label="Empty range (Download disabled)", fillcolor="#d1fadf", color="#039855"];
   "InvalidBlocked" [label="End before start: submit blocked", fillcolor="#d1fadf", color="#039855"];
-  "ErrorRange" [label="Range over 366 days: server error", fillcolor="#fee4e2", color="#d92d20"];
+  "ErrorRange" [label="Range over 366 days: server error", fillcolor="#d1fadf", color="#039855"];
   "Forbidden" [label="RECEPTION: forbidden message", fillcolor="#d1fadf", color="#039855"];
   "HomeNoReportTasks" [label="RECEPTION: Purchases home, report tasks absent from menu", fillcolor="#d1fadf", color="#039855"];
   "LoadedOtherRole" [label="Loaded as DOCTOR / PHARMACIST", fillcolor="#d1fadf", color="#039855"];
   "TooltipOpen" [label="(i) tooltip open", fillcolor="#d1fadf", color="#039855"];
   "Downloaded" [label="CSV downloaded and checked", fillcolor="#d1fadf", color="#039855"];
   "ItemPage" [label="Item name link opened the item page", fillcolor="#d1fadf", color="#039855"];
-  "PurchasesHome" -> "Loaded" [label="More tasks > Item-wise margin ×6", color="#039855", fontcolor="#039855", style=solid];
+  "PurchasesHome" -> "Loaded" [label="More tasks > Item-wise margin ×5", color="#039855", fontcolor="#039855", style=solid];
   "Loaded" -> "PurchasesHome" [label="leaveReport", color="#039855", fontcolor="#039855", style=solid];
   "Loaded" -> "Loading" [label="goHeld", color="#039855", fontcolor="#039855", style=solid];
   "Loading" -> "Loaded" [label="responseArrives", color="#039855", fontcolor="#039855", style=solid];
@@ -37,8 +37,8 @@ digraph "cr33d-item-margin" {
   "Empty" -> "Loaded" [label="resetRange", color="#039855", fontcolor="#039855", style=solid];
   "Loaded" -> "InvalidBlocked" [label="setBackwardsRange ×2", color="#039855", fontcolor="#039855", style=solid];
   "InvalidBlocked" -> "Loaded" [label="resetRange", color="#039855", fontcolor="#039855", style=solid];
-  "Loaded" -> "ErrorRange" [label="setTooLongRange", color="#d92d20", fontcolor="#d92d20", style=solid];
-  "ErrorRange" -> "Loaded" [label="resetRange", color="#98a2b3", fontcolor="#98a2b3", style=dashed];
+  "Loaded" -> "ErrorRange" [label="setTooLongRange", color="#039855", fontcolor="#039855", style=solid];
+  "ErrorRange" -> "Loaded" [label="resetRange", color="#039855", fontcolor="#039855", style=solid];
   "Loaded" -> "Forbidden" [label="switchReception", color="#039855", fontcolor="#039855", style=solid];
   "Forbidden" -> "Loaded" [label="switchAdmin", color="#039855", fontcolor="#039855", style=solid];
   "Loaded" -> "HomeNoReportTasks" [label="switchReceptionHome", color="#039855", fontcolor="#039855", style=solid];
@@ -49,7 +49,7 @@ digraph "cr33d-item-margin" {
   "LoadedOtherRole" -> "Loaded" [label="switchAdmin ×3", color="#039855", fontcolor="#039855", style=solid];
   "Loaded" -> "TooltipOpen" [label="hoverColumnTip", color="#039855", fontcolor="#039855", style=solid];
   "Loaded" -> "TooltipOpen" [label="hoverTileTip", color="#039855", fontcolor="#039855", style=solid];
-  "TooltipOpen" -> "Loaded" [label="moveAway", color="#039855", fontcolor="#039855", style=solid];
+  "TooltipOpen" -> "Loaded" [label="moveAway ×2", color="#039855", fontcolor="#039855", style=solid];
   "Loaded" -> "Downloaded" [label="download", color="#039855", fontcolor="#039855", style=solid];
   "SortedBySalesAsc" -> "Downloaded" [label="download", color="#039855", fontcolor="#039855", style=solid];
   "Downloaded" -> "Loaded" [label="reload", color="#039855", fontcolor="#039855", style=solid];

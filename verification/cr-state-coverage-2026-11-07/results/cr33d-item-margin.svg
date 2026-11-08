@@ -10,7 +10,7 @@
 <title>cr33d&#45;item&#45;margin</title>
 <polygon fill="white" stroke="transparent" points="-21.6,21.6 -21.6,-1450.52 1872.4,-1450.52 1872.4,21.6 -21.6,21.6"/>
 <text text-anchor="middle" x="925.4" y="-1414.52" font-family="Helvetica,sans-Serif" font-size="13.00">CR&#45;33d Item&#45;wise Margin</text>
-<text text-anchor="middle" x="925.4" y="-1400.52" font-family="Helvetica,sans-Serif" font-size="13.00">states 15/16 (94%) · transitions 33/35 (94%)</text>
+<text text-anchor="middle" x="925.4" y="-1400.52" font-family="Helvetica,sans-Serif" font-size="13.00">states 16/16 (100%) · transitions 35/35 (100%)</text>
 <!-- __start -->
 <g id="node1" class="node">
 <title>__start</title>
@@ -39,7 +39,7 @@
 <title>PurchasesHome&#45;&gt;Loaded</title>
 <path fill="none" stroke="#039855" stroke-width="1.4" d="M292.96,-630.89C348.21,-629.06 415.26,-629.84 474.8,-638.92 508.37,-644.04 544.75,-655.24 573.32,-665.42"/>
 <polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="572.63,-667.77 580.04,-667.84 574.29,-663.16 572.63,-667.77"/>
-<text text-anchor="middle" x="396.3" y="-641.72" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">More tasks &gt; Item&#45;wise margin ×6</text>
+<text text-anchor="middle" x="396.3" y="-641.72" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">More tasks &gt; Item&#45;wise margin ×5</text>
 </g>
 <!-- Loaded&#45;&gt;PurchasesHome -->
 <g id="edge3" class="edge">
@@ -129,15 +129,15 @@
 <!-- ErrorRange -->
 <g id="node11" class="node">
 <title>ErrorRange</title>
-<path fill="#fee4e2" stroke="#d92d20" stroke-width="1.6" d="M1180.3,-563.92C1180.3,-563.92 997.3,-563.92 997.3,-563.92 991.3,-563.92 985.3,-557.92 985.3,-551.92 985.3,-551.92 985.3,-539.92 985.3,-539.92 985.3,-533.92 991.3,-527.92 997.3,-527.92 997.3,-527.92 1180.3,-527.92 1180.3,-527.92 1186.3,-527.92 1192.3,-533.92 1192.3,-539.92 1192.3,-539.92 1192.3,-551.92 1192.3,-551.92 1192.3,-557.92 1186.3,-563.92 1180.3,-563.92"/>
+<path fill="#d1fadf" stroke="#039855" stroke-width="1.6" d="M1180.3,-563.92C1180.3,-563.92 997.3,-563.92 997.3,-563.92 991.3,-563.92 985.3,-557.92 985.3,-551.92 985.3,-551.92 985.3,-539.92 985.3,-539.92 985.3,-533.92 991.3,-527.92 997.3,-527.92 997.3,-527.92 1180.3,-527.92 1180.3,-527.92 1186.3,-527.92 1192.3,-533.92 1192.3,-539.92 1192.3,-539.92 1192.3,-551.92 1192.3,-551.92 1192.3,-557.92 1186.3,-563.92 1180.3,-563.92"/>
 <text text-anchor="middle" x="1088.8" y="-543.12" font-family="Helvetica,sans-Serif" font-size="11.00">Range over 366 days: server error</text>
 </g>
 <!-- Loaded&#45;&gt;ErrorRange -->
 <g id="edge19" class="edge">
 <title>Loaded&#45;&gt;ErrorRange</title>
-<path fill="none" stroke="#d92d20" stroke-width="1.4" d="M657.1,-667.9C686.74,-650.69 733.99,-625.2 777.8,-609.92 842.5,-587.36 917.71,-571.59 977.84,-561.35"/>
-<polygon fill="#d92d20" stroke="#d92d20" stroke-width="1.4" points="978.6,-563.71 985.1,-560.13 977.79,-558.88 978.6,-563.71"/>
-<text text-anchor="middle" x="831.8" y="-612.72" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#d92d20">setTooLongRange</text>
+<path fill="none" stroke="#039855" stroke-width="1.4" d="M657.1,-667.9C686.74,-650.69 733.99,-625.2 777.8,-609.92 842.5,-587.36 917.71,-571.59 977.84,-561.35"/>
+<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="978.6,-563.71 985.1,-560.13 977.79,-558.88 978.6,-563.71"/>
+<text text-anchor="middle" x="831.8" y="-612.72" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">setTooLongRange</text>
 </g>
 <!-- Forbidden -->
 <g id="node12" class="node">
@@ -317,9 +317,9 @@
 <!-- ErrorRange&#45;&gt;Loaded -->
 <g id="edge20" class="edge">
 <title>ErrorRange&#45;&gt;Loaded</title>
-<path fill="none" stroke="#98a2b3" stroke-width="1.4" stroke-dasharray="5,2" d="M984.99,-536.35C922.98,-534.31 843.53,-538.46 777.8,-563.92 723.7,-584.88 674.17,-632.99 647.62,-662.14"/>
-<polygon fill="#98a2b3" stroke="#98a2b3" stroke-width="1.4" points="645.48,-660.86 642.62,-667.7 649.12,-664.13 645.48,-660.86"/>
-<text text-anchor="middle" x="831.8" y="-566.72" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#98a2b3">resetRange</text>
+<path fill="none" stroke="#039855" stroke-width="1.4" d="M984.99,-536.35C922.98,-534.31 843.53,-538.46 777.8,-563.92 723.7,-584.88 674.17,-632.99 647.62,-662.14"/>
+<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="645.48,-660.86 642.62,-667.7 649.12,-664.13 645.48,-660.86"/>
+<text text-anchor="middle" x="831.8" y="-566.72" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">resetRange</text>
 </g>
 <!-- Forbidden&#45;&gt;Loaded -->
 <g id="edge22" class="edge">
@@ -347,7 +347,7 @@
 <title>TooltipOpen&#45;&gt;Loaded</title>
 <path fill="none" stroke="#039855" stroke-width="1.4" d="M1053.83,-127.9C991.96,-97.84 859.7,-46.67 777.8,-109.92 687.32,-179.8 640.83,-559.01 629.87,-660.78"/>
 <polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="627.42,-660.67 629.11,-667.89 632.29,-661.18 627.42,-660.67"/>
-<text text-anchor="middle" x="831.8" y="-112.72" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">moveAway</text>
+<text text-anchor="middle" x="831.8" y="-112.72" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">moveAway ×2</text>
 </g>
 <!-- Downloaded&#45;&gt;Loaded -->
 <g id="edge34" class="edge">
