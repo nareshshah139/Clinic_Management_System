@@ -28,6 +28,7 @@ describe('AppointmentsService.create', () => {
 
   const txMock: any = {
     $executeRaw: jest.fn(),
+    user: { findUnique: jest.fn().mockResolvedValue(null) },
     doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
     doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
     appointment: {
