@@ -1,8 +1,8 @@
 {
   "model": "cr22-on-examination",
   "title": "CR-22: On Examination collapsible, collapsed by default, remembered per doctor",
-  "startedAt": "2026-11-08T07:01:54.576Z",
-  "finishedAt": "2026-11-08T07:03:51.416Z",
+  "startedAt": "2026-11-08T07:22:29.108Z",
+  "finishedAt": "2026-11-08T07:24:12.213Z",
   "states": {
     "total": 11,
     "passed": 11,
@@ -622,7 +622,7 @@
             },
             {
               "ok": true,
-              "message": "visit row exists for patient (cmw7hijko002k7db4793618c5)"
+              "message": "visit row exists for patient (cmw7i90vm00b47d9cr0ychrkl)"
             },
             {
               "ok": true,
@@ -1137,7 +1137,7 @@
             },
             {
               "ok": true,
-              "message": "visit row exists for patient (cmw7hjes400327db4e44b36pi)"
+              "message": "visit row exists for patient (cmw7i9s4y00bm7d9cqjlkl5oy)"
             },
             {
               "ok": true,
@@ -1589,7 +1589,7 @@
             },
             {
               "ok": true,
-              "message": "visit row exists for patient (cmw7hk951003h7db4h5cd0x6g)"
+              "message": "visit row exists for patient (cmw7iagmx00c17d9cm0lwwgo8)"
             },
             {
               "ok": true,
