@@ -9,6 +9,7 @@ import { PermissionsGuard } from './permissions.guard';
 import { InventoryController } from '../../modules/inventory/inventory.controller';
 import { InventoryService } from '../../modules/inventory/inventory.service';
 import { InventoryImportService } from '../../modules/inventory/inventory-import.service';
+import { InventoryItemRequestService } from '../../modules/inventory/inventory-item-request.service';
 import { DrugController } from '../../modules/pharmacy/drug.controller';
 import { DrugService } from '../../modules/pharmacy/drug.service';
 import { PharmacyInvoiceController } from '../../modules/pharmacy/pharmacy-invoice.controller';
@@ -38,6 +39,7 @@ describe('HTTP access policies with pharmacy wildcard grants', () => {
         { provide: PrismaService, useValue: db },
         { provide: InventoryService, useValue: { findAllInventoryItems: jest.fn().mockResolvedValue({ data: [] }) } },
         { provide: InventoryImportService, useValue: {} },
+        { provide: InventoryItemRequestService, useValue: {} },
         { provide: DrugService, useValue: { findAll: jest.fn().mockResolvedValue({ data: [] }) } },
         { provide: PharmacyInvoiceService, useValue: { findAll: jest.fn().mockResolvedValue({ data: [] }) } },
         { provide: APP_GUARD, useValue: auth },
