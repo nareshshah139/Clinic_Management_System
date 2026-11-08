@@ -1,8 +1,8 @@
 {
   "model": "cr21-visit-identity",
   "title": "CR-21: patient identity stays visible on Visit Documentation",
-  "startedAt": "2026-11-08T07:21:44.724Z",
-  "finishedAt": "2026-11-08T07:22:28.870Z",
+  "startedAt": "2026-11-08T07:28:59.727Z",
+  "finishedAt": "2026-11-08T07:29:52.464Z",
   "states": {
     "total": 16,
     "passed": 16,
@@ -55,7 +55,7 @@
             },
             {
               "ok": true,
-              "message": "ready card reads \"Patient: ABHILASH NEW 047241 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047241 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "ready card reads \"Patient: ABHILASH NEW 397271 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397271 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -69,7 +69,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: ABHILASH NEW 047241 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047241 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: ABHILASH NEW 397271 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397271 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -103,7 +103,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: ABHILASH NEW 047241 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047241 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: ABHILASH NEW 397271 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397271 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -145,7 +145,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: ABHILASH NEW 047241 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047241 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: ABHILASH NEW 397271 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397271 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -183,7 +183,7 @@
             },
             {
               "ok": true,
-              "message": "header reads \"Patient: ABHILASH NEW 047241 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047241 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: ABHILASH NEW 397271 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397271 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -262,7 +262,7 @@
             },
             {
               "ok": true,
-              "message": "ready card reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "ready card reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -276,7 +276,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -310,7 +310,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -360,7 +360,7 @@
             },
             {
               "ok": true,
-              "message": "header reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -414,7 +414,7 @@
             },
             {
               "ok": true,
-              "message": "Overview: bar reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "Overview: bar reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -422,7 +422,7 @@
             },
             {
               "ok": true,
-              "message": "Vitals: bar reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "Vitals: bar reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -430,7 +430,7 @@
             },
             {
               "ok": true,
-              "message": "Photos: bar reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "Photos: bar reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -438,7 +438,7 @@
             },
             {
               "ok": true,
-              "message": "Prescription: bar reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "Prescription: bar reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -446,7 +446,7 @@
             },
             {
               "ok": true,
-              "message": "Lab Tests: bar reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "Lab Tests: bar reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -454,7 +454,7 @@
             },
             {
               "ok": true,
-              "message": "Customization: bar reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "Customization: bar reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -462,7 +462,7 @@
             },
             {
               "ok": true,
-              "message": "History: bar reads \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047242 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "History: bar reads \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397272 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             }
           ]
         },
@@ -472,7 +472,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: MEERA APPT 04724 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 04724 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
+              "message": "header reads \"Patient: MEERA APPT 39727 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 39727 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
             },
             {
               "ok": true,
@@ -506,7 +506,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: MEERA APPT 04724 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 04724 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
+              "message": "header reads \"Patient: MEERA APPT 39727 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 39727 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
             },
             {
               "ok": true,
@@ -548,7 +548,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: MEERA APPT 04724 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 04724 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
+              "message": "header reads \"Patient: MEERA APPT 39727 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 39727 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
             },
             {
               "ok": true,
@@ -582,7 +582,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: MEERA APPT 04724 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 04724 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
+              "message": "header reads \"Patient: MEERA APPT 39727 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 39727 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
             },
             {
               "ok": true,
@@ -632,7 +632,7 @@
             },
             {
               "ok": true,
-              "message": "header reads \"Patient: MEERA APPT 04724 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 04724 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
+              "message": "header reads \"Patient: MEERA APPT 39727 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\" (got \"Patient: MEERA APPT 39727 · 41 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · OPD\")"
             },
             {
               "ok": true,
@@ -674,7 +674,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: RAVI DOB 04724 · 41 · Male · Doctor: Dr. Praneeta Jain\" (got \"Patient: RAVI DOB 04724 · 41 · Male · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: RAVI DOB 39727 · 41 · Male · Doctor: Dr. Praneeta Jain\" (got \"Patient: RAVI DOB 39727 · 41 · Male · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -708,7 +708,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: RAVI DOB 04724 · 41 · Male · Doctor: Dr. Praneeta Jain\" (got \"Patient: RAVI DOB 04724 · 41 · Male · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: RAVI DOB 39727 · 41 · Male · Doctor: Dr. Praneeta Jain\" (got \"Patient: RAVI DOB 39727 · 41 · Male · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -894,7 +894,7 @@
             },
             {
               "ok": true,
-              "message": "ready card reads \"Patient: ABHILASH NEW 047243 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047243 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "ready card reads \"Patient: ABHILASH NEW 397273 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397273 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -908,7 +908,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: ABHILASH NEW 047243 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047243 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: ABHILASH NEW 397273 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397273 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -942,7 +942,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "header reads \"Patient: ABHILASH NEW 047243 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047243 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: ABHILASH NEW 397273 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397273 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,
@@ -988,7 +988,7 @@
             },
             {
               "ok": true,
-              "message": "header reads \"Patient: ABHILASH NEW 047243 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 047243 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
+              "message": "header reads \"Patient: ABHILASH NEW 397273 · 33 · Female · Doctor: Dr. Praneeta Jain\" (got \"Patient: ABHILASH NEW 397273 · 33 · Female · Doctor: Dr. Praneeta Jain\")"
             },
             {
               "ok": true,

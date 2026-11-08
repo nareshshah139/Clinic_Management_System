@@ -26,6 +26,9 @@ run_family() {
   local family="$1"; shift
   local db="cov_${family}"
   psql_admin -c "DROP DATABASE IF EXISTS $db" -c "CREATE DATABASE $db TEMPLATE $TEMPLATE_DB"
+  psql_admin -d "$db" -c "INSERT INTO users (id, \"firstName\", \"lastName\", email, password, role, status, \"branchId\", \"isActive\", \"createdAt\", \"updatedAt\")
+    SELECT 'verify-pharmacist', 'Verify', 'Pharmacist', 'pharmacist@clinic.test', password, 'PHARMACIST', 'ACTIVE', \"branchId\", true, now(), now()
+    FROM users WHERE email = 'admin@clinic.test' ON CONFLICT (email) DO NOTHING"
   rm -f /tmp/tot-verify-tokens.json "${TMPDIR:-/tmp}/cr30-itemreq-tokens.json" "$LOG_DIR/$family-tokens.json"
   local url="postgresql://$PGUSER@$PGHOST:$PGPORT/$db"
   (cd "$ROOT/backend" && DATABASE_URL="$url" PORT="$API_PORT" exec node dist/main) > "$LOG_DIR/$family-api.log" 2>&1 &
@@ -40,8 +43,13 @@ run_family() {
 }
 
 status=0
-run_family visits models/cr21-visit-identity.cjs models/cr22-on-examination.cjs
-run_family tot models/cr28-tot-entry.cjs models/cr28-tot-roles.cjs models/cr28-tot-invoice.cjs
-run_family itemreq models/cr30-item-request-lifecycle.cjs
-run_family reports models/cr33c-day-wise-summary.cjs models/cr33d-item-margin.cjs
+for family in ${*:-visits tot itemreq reports}; do
+  case "$family" in
+    visits) run_family visits models/cr21-visit-identity.cjs models/cr22-on-examination.cjs ;;
+    tot) run_family tot models/cr28-tot-entry.cjs models/cr28-tot-roles.cjs models/cr28-tot-invoice.cjs ;;
+    itemreq) run_family itemreq models/cr30-item-request-lifecycle.cjs ;;
+    reports) run_family reports models/cr33c-day-wise-summary.cjs models/cr33d-item-margin.cjs ;;
+    *) echo "unknown family $family" >&2; exit 2 ;;
+  esac
+done
 exit "$status"
