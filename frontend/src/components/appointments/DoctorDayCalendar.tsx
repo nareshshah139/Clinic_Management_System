@@ -169,9 +169,36 @@ export default function DoctorDayCalendar({
     });
   }, [schedule, visitTypeFilter, roomFilter, optimisticAppointment]);
 
+  /**
+   * @cc [owner:nareshshah139,label:product] show-outside-hours-appointments
+   * The timeline MUST include valid appointments outside configured working hours without
+   * creating additional bookable slots or shifting the time gutter out of alignment.
+   */
+  const timelineBounds = useMemo(() => {
+    const workingStart = (timeSlotConfig.startHour ?? 9) * 60;
+    const workingEnd = (timeSlotConfig.endHour ?? 18) * 60;
+    let start = workingStart;
+    let end = workingEnd;
+    for (const apt of filteredSchedule) {
+      const match = /^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/.exec(apt.slot || '');
+      if (!match) continue;
+      const [, sh, sm, eh, em] = match.map(Number);
+      if (sh > 23 || sm > 59 || eh > 24 || em > 59 || (eh === 24 && em !== 0)) continue;
+      const from = sh * 60 + sm;
+      const to = eh * 60 + em;
+      if (to <= from) continue;
+      start = Math.min(start, from);
+      end = Math.max(end, to);
+    }
+    return { start, end, workingStart, workingEnd };
+  }, [filteredSchedule, timeSlotConfig.startHour, timeSlotConfig.endHour]);
+  const slotMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
+  const topPadding = `${80 * (timelineBounds.workingStart - timelineBounds.start) / slotMinutes / Math.max(1, baseGridSlots.length)}vh`;
+  const bottomPadding = `${80 * (timelineBounds.end - timelineBounds.workingEnd) / slotMinutes / Math.max(1, baseGridSlots.length)}vh`;
+
   const appointmentBlocks = useMemo(() => {
-    const dayStartMin = (timeSlotConfig.startHour ?? 9) * 60;
-    const dayEndMin = (timeSlotConfig.endHour ?? 18) * 60;
+    const dayStartMin = timelineBounds.start;
+    const dayEndMin = timelineBounds.end;
     const totalDayMin = Math.max(1, dayEndMin - dayStartMin);
     const spans = filteredSchedule.flatMap((apt, index) => {
       const [start, end] = (apt.slot || '').split('-');
@@ -188,7 +215,7 @@ export default function DoctorDayCalendar({
       topPct: ((span.startMin - dayStartMin) * 100) / totalDayMin,
       heightPct: ((span.endMin - span.startMin) * 100) / totalDayMin,
     }));
-  }, [filteredSchedule, timeSlotConfig.startHour, timeSlotConfig.endHour]);
+  }, [filteredSchedule, timelineBounds]);
   const showLoadingOverlay = loading && (schedule.length > 0 || !!optimisticAppointment);
 
   const fetchSchedule = useCallback(async () => {
@@ -416,7 +443,7 @@ export default function DoctorDayCalendar({
             )}
             <div className="flex">
               {/* Sticky left gutter with hour labels */}
-              <div className="w-14 sticky left-0 top-0 self-start z-10 bg-white/80 backdrop-blur-sm">
+              <div className="w-14 sticky left-0 top-0 self-start z-10 bg-white/80 backdrop-blur-sm" style={{ paddingTop: topPadding, paddingBottom: bottomPadding }}>
                 {baseGridSlots.map((slot) => {
                   const slotStart = slot.split('-')[0];
                   const isHourStart = slotStart.endsWith(':00');
@@ -432,7 +459,7 @@ export default function DoctorDayCalendar({
               {/* Main calendar grid */}
               <div
                 className="flex-1 grid grid-cols-1 gap-0"
-                style={{ position: 'relative', ...(showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : {}) }}
+                style={{ position: 'relative', paddingTop: topPadding, paddingBottom: bottomPadding, gridAutoRows: tileHeightCss, ...(showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : {}) }}
               >
             {appointmentBlocks.map(({ apt, key, start, end, topPct, heightPct, lane, laneCount }) => {
               const status = APPOINTMENT_STATUS_STYLE[apt.status] ?? APPOINTMENT_STATUS_STYLE[AppointmentStatus.SCHEDULED];

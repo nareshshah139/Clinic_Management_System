@@ -84,4 +84,27 @@ databaseTests('Per-doctor overbooking limit on PostgreSQL', () => {
     expect(outcome).toEqual({ accepted: 1, refusedStatuses: [409, 409, 409] });
     expect(await db.appointment.count({ where: { doctorId: 'limit-2', date: new Date(date), slot: '11:00-11:30' } })).toBe(2);
   }, 60000);
+
+  it('lets an overbooked appointment change to a free room but not into an occupied one', async () => {
+    const date = '2099-04-05';
+    const [roomA, roomB] = await Promise.all(['Consult A', 'Consult B'].map((name) => db.room.create({ data: { name, type: 'CONSULTATION', branchId: 'branch' } })));
+    const first = await service.create({ patientId: 'patient', doctorId: 'limit-2', date, slot: '11:00-11:30', roomId: roomA.id }, 'branch');
+    const second = await book('limit-2', date, true);
+    await expect(service.update(second.id, { roomId: roomB.id }, 'branch')).resolves.toMatchObject({ roomId: roomB.id });
+    await expect(service.update(second.id, { roomId: roomA.id }, 'branch')).rejects.toMatchObject({ status: 409 });
+    expect((await db.appointment.findUniqueOrThrow({ where: { id: first.id } })).roomId).toBe(roomA.id);
+  }, 60000);
+
+  it('un-cancels only into a slot with room for the patient, without overbooking', async () => {
+    const date = '2099-04-06';
+    const cancelled = await book('limit-2', date);
+    await service.update(cancelled.id, { status: 'CANCELLED' as any }, 'branch');
+    await book('limit-2', date);
+    await expect(service.update(cancelled.id, { status: 'SCHEDULED' as any }, 'branch')).rejects.toMatchObject({ status: 409 });
+    expect(await booked('limit-2', date)).toHaveLength(1);
+    const freeDate = '2099-04-07';
+    const restored = await book('limit-2', freeDate);
+    await service.update(restored.id, { status: 'CANCELLED' as any }, 'branch');
+    await expect(service.update(restored.id, { status: 'SCHEDULED' as any }, 'branch')).resolves.toMatchObject({ status: 'SCHEDULED' });
+  }, 60000);
 });

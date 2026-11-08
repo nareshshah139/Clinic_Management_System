@@ -106,6 +106,37 @@ describe('AppointmentsService.create', () => {
     await expect(service.create(buildDto({ date: yesterday }), branchId)).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  describe('past-slot check uses clinic (IST) time', () => {
+    const pastMessage = 'Cannot schedule appointment in the past';
+    const createAt = async (nowUtc: string, date: string, slot: string) => {
+      jest.useFakeTimers({ now: new Date(nowUtc), doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+      prismaMock.patient.findFirst.mockResolvedValue({ id: 'patient-1' });
+      prismaMock.user.findFirst.mockResolvedValue({ id: 'doctor-1' });
+      try {
+        await service.create(buildDto({ date, slot }), branchId);
+        return null;
+      } catch (error) {
+        return (error as Error).message;
+      } finally {
+        jest.useRealTimers();
+      }
+    };
+
+    it('rejects a slot earlier today in IST', async () => {
+      // 06:00 UTC is 11:30 IST, so 10:00 IST has already passed.
+      expect(await createAt('2026-11-08T06:00:00Z', '2026-11-08', '10:00-10:30')).toBe(pastMessage);
+    });
+
+    it('accepts a slot later today in IST', async () => {
+      expect(await createAt('2026-11-08T06:00:00Z', '2026-11-08', '12:00-12:30')).not.toBe(pastMessage);
+    });
+
+    it('accepts a morning slot just after IST midnight', async () => {
+      // 19:00 UTC on the 7th is 00:30 IST on the 8th.
+      expect(await createAt('2026-11-07T19:00:00Z', '2026-11-08', '09:00-09:30')).not.toBe(pastMessage);
+    });
+  });
+
   it('throws Conflict when scheduling conflicts exist', async () => {
     prismaMock.patient.findFirst.mockResolvedValue({ id: 'patient-1' });
     prismaMock.user.findFirst.mockResolvedValue({ id: 'doctor-1' });

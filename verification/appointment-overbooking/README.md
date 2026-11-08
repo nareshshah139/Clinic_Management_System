@@ -16,14 +16,14 @@ Line numbers refer to `backend/src/modules/appointments/appointments.service.ts`
 
 | Model | Code |
 | --- | --- |
-| `Requests` | Concurrent calls to `create` (line 115) or `reschedule` (line 484). Each runs in its own `prisma.$transaction`. |
-| `Acquire(r)` and the `lock` variable | `lockSchedule` (line 1199). It takes `pg_advisory_xact_lock` on the doctor-day key, then on the room-day key when a room is set. Both calls in `create` and `reschedule` happen first in the transaction (lines 116 and 485). |
-| `Count(r)` and `seen[r]` | `assertSlotBookable` (line 1213) calls `checkSchedulingConflicts` with the transaction client (line 1217). `booked` is the number of the doctor's non-cancelled appointments that overlap the slot (line 1221). A reschedule excludes the appointment being moved. |
-| `Limit` | `tx.user.findUnique(... maxBookingsPerSlot)` (line 1223), read inside the same transaction and parsed by `slotLimit` in `doctor-availability/availability.ts`. A value outside 1..5 reads as 1. |
+| `Requests` | Concurrent calls to `create` or `reschedule`. Each runs in its own `prisma.$transaction`. |
+| `Acquire(r)` and the `lock` variable | `lockSchedule`. It takes `pg_advisory_xact_lock` on the doctor-day key, then on the room-day key when a room is set. In `create`, `reschedule` and `update` it is the first statement of the transaction. |
+| `Count(r)` and `seen[r]` | `assertSlotBookable` calls `checkSchedulingConflicts` with the transaction client. `booked` is the number of the doctor's non-cancelled appointments that overlap the slot. A reschedule excludes the appointment being moved. |
+| `Limit` | `tx.user.findUnique(... maxBookingsPerSlot)`, read inside the same transaction and parsed by `slotLimit` in `doctor-availability/availability.ts`. A value outside 1..5 reads as 1. |
 | `AsksToOverbook` | The optional boolean `allowOverbook` on `CreateAppointmentDto` and `RescheduleAppointmentDto`. The UI sends it only after the user confirms the "book anyway" dialog. |
-| `Accepts(r, count)` | `acceptsBooking` (line 1261): `booked === 0 \|\| (booked < limit && allowOverbook)`. |
-| `Decide(r)`, booked branch | `assertSlotBookable` returns and the transaction writes the appointment (line 1225). |
-| `Decide(r)`, refused branch | `ConflictException` with `overbook: { allowed, booked, limit }` (line 1228). The transaction ends and Postgres releases the lock. |
+| `Accepts(r, count)` | `acceptsBooking`: `booked === 0 \|\| (booked < limit && allowOverbook)`. |
+| `Decide(r)`, booked branch | `assertSlotBookable` returns and the transaction writes the appointment. |
+| `Decide(r)`, refused branch | `ConflictException` with `overbook: { allowed, booked, limit }`. The transaction ends and Postgres releases the lock. |
 | `WithinLimit` | Exercised against Postgres by `tests/appointments.overbooking.database.spec.ts`: six simultaneous requests at limit 2 leave exactly two bookings. |
 | `NoAccidentalOverbook` | Exercised by `appointments.overbooking.spec.ts`: every combination of limit 1-3, 0-3 existing bookings and the flag, for create and reschedule. |
 
@@ -41,5 +41,7 @@ The Postgres spec bites on the first two as well. With `lockSchedule` moved afte
 - Counting is conservative. Every booking that overlaps the requested slot counts, even if those bookings do not overlap each other. The model treats all requests as the same slot, so the count it checks is never lower than the code's count. The number of patients the doctor sees at one moment therefore never exceeds the limit.
 - The limit is read inside the transaction, after the lock. A limit change that commits during a booking is seen either before or after it. Both values were valid at some point, so the booking is correct for one of them.
 - Lowering the limit does not cancel appointments already booked. A slot can hold more patients than a new, lower limit until those appointments end or are cancelled. New bookings into that slot are refused.
+- Postgres runs these transactions at its default isolation level, READ COMMITTED. Each statement takes a fresh snapshot, so the count, which runs after the lock is granted, sees every booking committed before the lock. Under REPEATABLE READ or SERIALIZABLE, the snapshot would date from the lock statement, taken before waiting, and the count could miss a booking. Changing the isolation level would invalidate this model.
+- `update` re-checks the slot when an appointment changes room or leaves `CANCELLED`. Un-cancelling is checked like a new booking without `allowOverbook`, so it never overbooks. A room change on an active appointment leaves the doctor's load unchanged, so it checks only the room.
 - Rooms are never overbooked. A room clash refuses the request with `overbook.allowed = false`, whatever the doctor's limit.
-- The model has four requests and limits up to 3. It does not cover cancellation, status changes back from `CANCELLED`, or token numbering. A separate Postgres spec covers tokens (`tests/appointments.token.database.spec.ts`).
+- The model has four requests and limits up to 3. It does not cover cancellation or token numbering. Un-cancelling and room changes are covered by `tests/appointments.overbooking.database.spec.ts`. A separate Postgres spec covers tokens (`tests/appointments.token.database.spec.ts`).

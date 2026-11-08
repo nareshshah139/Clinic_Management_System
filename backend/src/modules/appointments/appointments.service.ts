@@ -114,7 +114,7 @@ export class AppointmentsService {
 
     const appointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
       await this.lockSchedule(tx, branchId, doctorId, roomId ?? null, date);
-      await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId, allowOverbook);
+      await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId, { allowOverbook });
       const tokenNumber = await this.nextDoctorToken(tx, branchId, doctorId, date);
 
       return tx.appointment.create({
@@ -408,6 +408,11 @@ export class AppointmentsService {
     return appointment;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:reliability] appointment-edit-conflicts
+   * Room changes and reactivation MUST check doctor and room conflicts under schedule locks.
+   * Concurrent changes to the appointment MUST fail rather than apply to stale scheduling details.
+   */
   async update(
     id: string,
     updateAppointmentDto: UpdateAppointmentDto,
@@ -430,21 +435,41 @@ export class AppointmentsService {
       }
     }
 
-    const updatedAppointment = await this.prisma.appointment.update({
-      where: { id },
-      data: updateAppointmentDto,
-      include: {
-        patient: {
-          select: { id: true, name: true, phone: true },
-        },
-        doctor: {
-          select: { id: true, firstName: true, lastName: true },
-        },
-        room: {
-          select: { id: true, name: true, type: true },
-        },
-      },
-    });
+    const include = {
+      patient: { select: { id: true, name: true, phone: true } },
+      doctor: { select: { id: true, firstName: true, lastName: true } },
+      room: { select: { id: true, name: true, type: true } },
+    } as const;
+    const affectsSchedule = updateAppointmentDto.roomId !== undefined || updateAppointmentDto.status !== undefined;
+    const updatedAppointment = affectsSchedule
+      ? await this.prisma.$transaction(async (tx) => {
+          const date = appointment.date.toISOString().slice(0, 10);
+          const roomId = updateAppointmentDto.roomId === undefined ? appointment.roomId : updateAppointmentDto.roomId;
+          await this.lockSchedule(tx, branchId, appointment.doctorId, roomId, date);
+          const current = await tx.appointment.findFirst({ where: { id, branchId } });
+          if (!current || current.doctorId !== appointment.doctorId ||
+              current.date.getTime() !== appointment.date.getTime() || current.slot !== appointment.slot ||
+              current.roomId !== appointment.roomId || current.status !== appointment.status) {
+            throw new ConflictException('Appointment changed; refresh and try again');
+          }
+          const status = updateAppointmentDto.status ?? current.status;
+          if (status !== AppointmentStatus.CANCELLED &&
+              (roomId !== current.roomId || current.status === AppointmentStatus.CANCELLED)) {
+            // Un-cancelling adds the patient back to the doctor's slot; a room change leaves the
+            // doctor's load unchanged, so only the new room is checked.
+            await this.assertSlotBookable(tx, 'Scheduling conflict detected', current.doctorId, roomId, date, current.slot, branchId, {
+              excludeAppointmentId: id,
+              roomOnly: current.status !== AppointmentStatus.CANCELLED,
+            });
+          }
+          const changed = await tx.appointment.updateMany({
+            where: { id, branchId, doctorId: current.doctorId, date: current.date, slot: current.slot, roomId: current.roomId, status: current.status },
+            data: updateAppointmentDto,
+          });
+          if (changed.count !== 1) throw new ConflictException('Appointment changed; refresh and try again');
+          return tx.appointment.findUniqueOrThrow({ where: { id }, include });
+        })
+      : await this.prisma.appointment.update({ where: { id }, data: updateAppointmentDto, include });
 
     void this.googleCalendar
       ?.syncAppointmentEvent(updatedAppointment.id, callerUserId)
@@ -483,7 +508,10 @@ export class AppointmentsService {
     const newRoomId = rescheduleDto.roomId ?? appointment.roomId ?? null;
     const rescheduledAppointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
       await this.lockSchedule(tx, branchId, appointment.doctorId, newRoomId, rescheduleDto.date);
-      await this.assertSlotBookable(tx, 'Scheduling conflict detected for new time slot', appointment.doctorId, newRoomId, rescheduleDto.date, rescheduleDto.slot, branchId, rescheduleDto.allowOverbook ?? false, id);
+      await this.assertSlotBookable(tx, 'Scheduling conflict detected for new time slot', appointment.doctorId, newRoomId, rescheduleDto.date, rescheduleDto.slot, branchId, {
+        allowOverbook: rescheduleDto.allowOverbook ?? false,
+        excludeAppointmentId: id,
+      });
       return tx.appointment.update({
       where: { id },
       data: {
@@ -1035,9 +1063,8 @@ export class AppointmentsService {
       );
     }
 
-    // Compare appointment slot start time against current time to allow same-day future bookings
-    const timeSlot = SchedulingUtils.parseTimeSlot(dto.slot);
-    const appointmentStart = new Date(`${dto.date}T${timeSlot.start}:00.000Z`);
+    // Slots are IST wall-clock times on the clinic day.
+    const appointmentStart = new Date(istDayStart(dto.date).getTime() + slotToMinutes(dto.slot).start * 60_000);
     const now = new Date();
 
     if (appointmentStart < now) {
@@ -1191,7 +1218,7 @@ export class AppointmentsService {
    */
   /**
    * @cc [owner:nareshshah139,label:product] no-concurrent-double-booking
-   * Booking and rescheduling MUST check doctor and room conflicts inside the write transaction
+   * Booking, rescheduling, and scheduling edits MUST check doctor and room conflicts inside the write transaction
    * while holding the doctor-day lock (and the room-day lock when a room is set), so two
    * concurrent requests can never both take overlapping slots. Locks are taken doctor first,
    * then room, so lock order is fixed.
@@ -1207,14 +1234,17 @@ export class AppointmentsService {
    * is bookable. One that already has some MAY take another only when the request carries
    * allowOverbook and the overlap count is below the doctor's limit, read in this transaction.
    * Room conflicts are never overbooked. A refusal carries `overbook` so the UI can offer
-   * "book anyway" only when resending with allowOverbook would succeed.
+   * "book anyway" only when resending with allowOverbook would succeed. A roomOnly check is for an
+   * appointment that already holds its doctor slot and only changes room: just the room must be free.
    * Model: verification/appointment-overbooking/Overbooking.tla (Count, Decide, Accepts).
    */
   private async assertSlotBookable(
     tx: Prisma.TransactionClient, message: string, doctorId: string, roomId: string | null,
-    date: string, slot: string, branchId: string, allowOverbook: boolean, excludeAppointmentId?: string,
+    date: string, slot: string, branchId: string,
+    { allowOverbook = false, excludeAppointmentId, roomOnly = false }: { allowOverbook?: boolean; excludeAppointmentId?: string; roomOnly?: boolean },
   ) {
-    const conflicts = await this.checkSchedulingConflicts(doctorId, roomId, date, slot, branchId, excludeAppointmentId, tx);
+    const found = await this.checkSchedulingConflicts(doctorId, roomId, date, slot, branchId, excludeAppointmentId, tx);
+    const conflicts = roomOnly ? found.filter((c) => c.type === 'room') : found;
     if (conflicts.length === 0) return;
     // Every booking overlapping the slot counts, even when they do not overlap each other,
     // so simultaneous patients can never exceed the limit.

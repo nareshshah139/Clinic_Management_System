@@ -1,0 +1,7 @@
+@cc [owner:nareshshah139,label:reliability] additive-schema-reconciliation
+The migration MUST create the missing schema objects for a database built from prior migrations
+and MUST preserve existing records when the same objects were already created by schema push.
+
+@cc [owner:nareshshah139,label:reliability] incomplete-existing-tables-fail
+An existing reconciled table missing a required column MUST cause migration failure instead of
+silently accepting an incomplete table.
