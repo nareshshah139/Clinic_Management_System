@@ -1,5 +1,5 @@
 digraph "cr21-visit-identity" {
-  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-21: patient identity stays visible on Visit Documentation\nstates 15/16 (94%) · transitions 16/17 (94%)", pad=0.3, nodesep=0.45, ranksep=0.7];
+  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-21: patient identity stays visible on Visit Documentation\nstates 16/16 (100%) · transitions 17/17 (100%)", pad=0.3, nodesep=0.45, ranksep=0.7];
   node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, penwidth=1.6];
   edge [fontname="Helvetica", fontsize=9, penwidth=1.4, arrowsize=0.7];
   __start [shape=point, width=0.15, label=""];
@@ -10,7 +10,7 @@ digraph "cr21-visit-identity" {
   "FreshCollapsed" [label="Visit #1, Patient Context collapsed", fillcolor="#d1fadf", color="#039855"];
   "FreshRxScrolled" [label="Visit #1 collapsed, Treatment/Rx scrolled into view", fillcolor="#d1fadf", color="#039855"];
   "FreshTabsScrolled" [label="Visit #1 collapsed, every scrolling tab scrolled to bottom", fillcolor="#d1fadf", color="#039855"];
-  "FreshOpenSaveReached" [label="Visit #1, context open, scrolled to the Rx Save Draft button", fillcolor="#fee4e2", color="#d92d20"];
+  "FreshOpenSaveReached" [label="Visit #1, context open, scrolled to the Rx Save Draft button", fillcolor="#d1fadf", color="#039855"];
   "FreshCollapsedSaveReached" [label="Visit #1, context collapsed, scrolled to the Rx Save Draft button", fillcolor="#d1fadf", color="#039855"];
   "ApptOpen" [label="Visit from appointment (slot + OPD), context open", fillcolor="#d1fadf", color="#039855"];
   "ApptCollapsed" [label="Appointment visit, context collapsed", fillcolor="#d1fadf", color="#039855"];
@@ -25,7 +25,7 @@ digraph "cr21-visit-identity" {
   "FreshOpen" -> "FreshCollapsed" [label="collapseContext ×3", color="#039855", fontcolor="#039855", style=solid];
   "FreshCollapsed" -> "FreshOpen" [label="expandContext", color="#039855", fontcolor="#039855", style=solid];
   "FreshCollapsed" -> "FreshRxScrolled" [label="scrollToRx", color="#039855", fontcolor="#039855", style=solid];
-  "FreshOpen" -> "FreshOpenSaveReached" [label="scrollToRxSaveButton", color="#d92d20", fontcolor="#d92d20", style=solid];
+  "FreshOpen" -> "FreshOpenSaveReached" [label="scrollToRxSaveButton", color="#039855", fontcolor="#039855", style=solid];
   "FreshCollapsed" -> "FreshCollapsedSaveReached" [label="scrollToRxSaveButton", color="#039855", fontcolor="#039855", style=solid];
   "FreshRxScrolled" -> "FreshTabsScrolled" [label="scrollEveryTab", color="#039855", fontcolor="#039855", style=solid];
   "FreshTabsScrolled" -> "ApptOpen" [label="openAppointmentVisit", color="#039855", fontcolor="#039855", style=solid];

@@ -10,7 +10,7 @@
 <title>cr21&#45;visit&#45;identity</title>
 <polygon fill="white" stroke="transparent" points="-21.6,21.6 -21.6,-213.6 5769.4,-213.6 5769.4,21.6 -21.6,21.6"/>
 <text text-anchor="middle" x="2873.9" y="-177.6" font-family="Helvetica,sans-Serif" font-size="13.00">CR&#45;21: patient identity stays visible on Visit Documentation</text>
-<text text-anchor="middle" x="2873.9" y="-163.6" font-family="Helvetica,sans-Serif" font-size="13.00">states 15/16 (94%) · transitions 16/17 (94%)</text>
+<text text-anchor="middle" x="2873.9" y="-163.6" font-family="Helvetica,sans-Serif" font-size="13.00">states 16/16 (100%) · transitions 17/17 (100%)</text>
 <!-- __start -->
 <g id="node1" class="node">
 <title>__start</title>
@@ -70,15 +70,15 @@
 <!-- FreshOpenSaveReached -->
 <g id="node8" class="node">
 <title>FreshOpenSaveReached</title>
-<path fill="#fee4e2" stroke="#d92d20" stroke-width="1.6" d="M1645.8,-36C1645.8,-36 1322.8,-36 1322.8,-36 1316.8,-36 1310.8,-30 1310.8,-24 1310.8,-24 1310.8,-12 1310.8,-12 1310.8,-6 1316.8,0 1322.8,0 1322.8,0 1645.8,0 1645.8,0 1651.8,0 1657.8,-6 1657.8,-12 1657.8,-12 1657.8,-24 1657.8,-24 1657.8,-30 1651.8,-36 1645.8,-36"/>
+<path fill="#d1fadf" stroke="#039855" stroke-width="1.6" d="M1645.8,-36C1645.8,-36 1322.8,-36 1322.8,-36 1316.8,-36 1310.8,-30 1310.8,-24 1310.8,-24 1310.8,-12 1310.8,-12 1310.8,-6 1316.8,0 1322.8,0 1322.8,0 1645.8,0 1645.8,0 1651.8,0 1657.8,-6 1657.8,-12 1657.8,-12 1657.8,-24 1657.8,-24 1657.8,-30 1651.8,-36 1645.8,-36"/>
 <text text-anchor="middle" x="1484.3" y="-15.2" font-family="Helvetica,sans-Serif" font-size="11.00">Visit #1, context open, scrolled to the Rx Save Draft button</text>
 </g>
 <!-- FreshOpen&#45;&gt;FreshOpenSaveReached -->
 <g id="edge7" class="edge">
 <title>FreshOpen&#45;&gt;FreshOpenSaveReached</title>
-<path fill="none" stroke="#d92d20" stroke-width="1.4" d="M1149.02,-46.97C1162.42,-45.17 1175.9,-43.47 1188.8,-42 1225.87,-37.79 1265.64,-34.03 1303.59,-30.81"/>
-<polygon fill="#d92d20" stroke="#d92d20" stroke-width="1.4" points="1303.89,-33.25 1310.66,-30.22 1303.47,-28.36 1303.89,-33.25"/>
-<text text-anchor="middle" x="1237.3" y="-44.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#d92d20">scrollToRxSaveButton</text>
+<path fill="none" stroke="#039855" stroke-width="1.4" d="M1149.02,-46.97C1162.42,-45.17 1175.9,-43.47 1188.8,-42 1225.87,-37.79 1265.64,-34.03 1303.59,-30.81"/>
+<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="1303.89,-33.25 1310.66,-30.22 1303.47,-28.36 1303.89,-33.25"/>
+<text text-anchor="middle" x="1237.3" y="-44.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">scrollToRxSaveButton</text>
 </g>
 <!-- FreshCollapsed&#45;&gt;FreshOpen -->
 <g id="edge5" class="edge">

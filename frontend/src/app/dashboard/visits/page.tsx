@@ -1061,9 +1061,9 @@ function VisitsPageInner() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 max-w-full">
+          <div className="flex flex-wrap items-center gap-2">
             <PageHeader title={<>Visit Documentation</>} />
             {appointmentData && (
               <Badge variant="secondary" className="bg-blue-100 text-blue-700">
