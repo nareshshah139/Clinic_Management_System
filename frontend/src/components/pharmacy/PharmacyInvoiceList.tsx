@@ -15,7 +15,6 @@ import {
   Search,
   Filter,
   Eye,
-  Edit,
   Trash2,
   Download,
   Calendar,
@@ -330,20 +329,6 @@ export function PharmacyInvoiceList() {
       alert('Failed to load invoice. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleEditInvoice = (invoiceId: string) => {
-    // Dispatch event to trigger edit mode in PharmacyInvoiceBuilder
-    window.dispatchEvent(new CustomEvent('pharmacy-invoice-edit', {
-      detail: { invoiceId }
-    }));
-    
-    // Scroll to the invoice builder (assuming it's on the same page)
-    // If it's in a different tab/page, you might need to navigate there first
-    const builderElement = document.querySelector('[data-pharmacy-invoice-builder]');
-    if (builderElement) {
-      builderElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
@@ -755,14 +740,6 @@ export function PharmacyInvoiceList() {
                             title="Confirm Invoice"
                           >
                             <CheckCircle className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditInvoice(invoice.id)}
-                            title="Edit Invoice"
-                          >
-                            <Edit className="h-4 w-4" />
                           </Button>
                         </>
                       )}
