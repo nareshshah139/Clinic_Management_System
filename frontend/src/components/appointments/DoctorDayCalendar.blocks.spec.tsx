@@ -92,6 +92,20 @@ describe('DoctorDayCalendar appointment blocks', () => {
     expect(within(dialog).getByText('10:00-10:30')).toBeInTheDocument();
   });
 
+  it('reschedules from the details dialog, which narrow blocks rely on', async () => {
+    renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.CONFIRMED)]);
+    fireEvent.click(await screen.findByRole('button', { name: /Ravi Kumar/ }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reschedule' }));
+    expect(await screen.findByText('Rescheduling Ravi Kumar')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('does not open details for an appointment that is still saving', async () => {
+    renderDay([appointment('optimistic-1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.SCHEDULED)]);
+    expect(await screen.findByRole('button', { name: /Ravi Kumar/ })).toBeDisabled();
+  });
+
   it('still opens details through the INFO control', async () => {
     renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.CONFIRMED)]);
     await screen.findByText('Ravi Kumar');

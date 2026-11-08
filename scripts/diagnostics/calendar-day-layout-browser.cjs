@@ -83,6 +83,29 @@ const inside = (inner, outer) => inner.left >= outer.left - EPS && inner.right <
       const sameSlot = blocks.filter((b) => ['Mohammed Irfan', 'Lakshmi Devi'].includes(b.name));
       if (sameSlot.length !== 2 || sameSlot[0].block.left === sameSlot[1].block.left) problems.push('the two 11:00 appointments are not side by side');
       if (!blocks.some((b) => b.label.includes('Suresh Babu') && b.label.endsWith('No-show'))) problems.push('no-show status missing from accessible name');
+      for (const b of blocks) {
+        const block = page.locator(`[data-appointment-block="${b.id}"]`);
+        await block.scrollIntoViewIfNeeded();
+        await page.mouse.move(0, 0);
+        const nameHitsOwnButton = await block.evaluate((el) => {
+          const r = el.querySelector('[data-patient-name]').getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return !!hit && hit.closest('button') === el.querySelector('button');
+        });
+        if (!nameHitsOwnButton) problems.push(`tapping ${b.name} does not reach its own block`);
+        const box = await block.locator('[data-patient-name]').boundingBox();
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        const actions = await block.evaluate((el) => {
+          const strip = el.querySelector('[data-appointment-actions]');
+          if (!strip || getComputedStyle(strip).display === 'none') return null;
+          const s = strip.getBoundingClientRect();
+          const o = el.getBoundingClientRect();
+          return { inside: s.left >= o.left - 0.5 && s.right <= o.right + 0.5, visible: getComputedStyle(strip).visibility === 'visible' };
+        });
+        if (actions && !actions.inside) problems.push(`${b.name}'s action buttons spill outside its block`);
+        if (actions && !actions.visible) problems.push(`${b.name}'s action buttons stay hidden on hover`);
+      }
+      await page.mouse.move(0, 0);
 
       const outcome = { label, blocks: blocks.length, ellipsized: blocks.filter((b) => b.nameOverflows).map((b) => b.name), pass: problems.length === 0, problems };
       console.log(JSON.stringify(outcome));

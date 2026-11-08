@@ -442,7 +442,7 @@ export default function DoctorDayCalendar({
                 <div
                   key={key}
                   data-appointment-block={apt.id || apt.slot}
-                  className="group absolute p-px"
+                  className="@container group absolute p-px"
                   style={{
                     top: `${topPct}%`,
                     height: `${heightPct}%`,
@@ -456,6 +456,7 @@ export default function DoctorDayCalendar({
                     aria-label={accessibleName}
                     title={accessibleName}
                     onClick={() => setSelectedAppointment(apt)}
+                    disabled={isOptimistic}
                     className={`@container flex h-full w-full items-start overflow-hidden rounded-md border-l-[3px] px-1.5 py-0.5 text-left leading-tight shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${status.accentClassName} ${apt.slot === recentBookedSlot ? 'ring-2 ring-green-500/60' : ''}`}
                     style={{
                       backgroundColor: blockBackground(apt),
@@ -489,7 +490,7 @@ export default function DoctorDayCalendar({
                     </span>
                   </button>
 
-                  <div className="absolute right-1 top-0.5 flex gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                  <div data-appointment-actions className="pointer-events-none invisible absolute right-1 top-0.5 hidden gap-1 group-hover:pointer-events-auto group-hover:visible group-focus-within:pointer-events-auto group-focus-within:visible @min-[16rem]:flex">
                     <button
                       type="button"
                       onClick={(e) => {
@@ -883,6 +884,15 @@ export default function DoctorDayCalendar({
                 <Button onClick={() => handleStartVisit(selectedAppointment)}>
                   <FileText className="h-4 w-4 mr-2" />
                   Start Visit
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setRescheduleTarget(selectedAppointment);
+                    setSelectedAppointment(null);
+                  }}
+                >
+                  Reschedule
                 </Button>
                 <Button
                   variant="destructive"
