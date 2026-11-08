@@ -6,6 +6,29 @@ export interface ItemRequestPerson {
   lastName: string;
 }
 
+export interface DuplicateInventoryItem {
+  id: string;
+  name: string;
+  manufacturer: string | null;
+  unit: string;
+  packSize: number | null;
+  packUnit: string | null;
+  batchNumber: string | null;
+  currentStock: number;
+  matchedOn: Array<'name' | 'sku' | 'barcode'>;
+}
+
+export interface DuplicatePendingRequest {
+  id: string;
+  requestedBy: string;
+  createdAt: string;
+}
+
+export interface PossibleDuplicates {
+  inventory: DuplicateInventoryItem[];
+  pendingRequests: DuplicatePendingRequest[];
+}
+
 export interface InventoryItemRequest {
   id: string;
   status: InventoryItemRequestStatus;
@@ -17,6 +40,7 @@ export interface InventoryItemRequest {
   createdAt: string;
   requestedBy: ItemRequestPerson;
   reviewedBy: ItemRequestPerson | null;
+  possibleDuplicates?: PossibleDuplicates | null;
 }
 
 export interface PendingApprovalResponse {
@@ -70,4 +94,29 @@ export function describeItemRequestPayload(payload: Record<string, unknown>): Ar
 
 export function personName(person: ItemRequestPerson | null): string {
   return person ? `${person.firstName} ${person.lastName}`.trim() : '';
+}
+
+const MATCH_LABEL = { name: 'same name', sku: 'same SKU', barcode: 'same barcode' } as const;
+
+export function hasPossibleDuplicates(duplicates?: PossibleDuplicates | null): duplicates is PossibleDuplicates {
+  return !!duplicates && (duplicates.inventory.length > 0 || duplicates.pendingRequests.length > 0);
+}
+
+export function describePossibleDuplicates(
+  duplicates: PossibleDuplicates,
+  formatDate: (iso: string) => string,
+): { inventoryHeading: string; inventory: string[]; pending: string[] } {
+  const count = duplicates.inventory.length;
+  return {
+    inventoryHeading: count ? `Already in inventory (${count} ${count === 1 ? 'batch' : 'batches'})` : '',
+    inventory: duplicates.inventory.map(item => [
+      item.name,
+      item.manufacturer,
+      item.packSize ? `${item.packSize}${item.packUnit ? ` ${item.packUnit}` : ''} pack` : null,
+      item.batchNumber ? `batch ${item.batchNumber}` : null,
+      `${item.currentStock} in stock`,
+      item.matchedOn.map(m => MATCH_LABEL[m]).join(', '),
+    ].filter(Boolean).join(' · ')),
+    pending: duplicates.pendingRequests.map(r => `Also requested by ${r.requestedBy || 'staff'} on ${formatDate(r.createdAt)}`),
+  };
 }

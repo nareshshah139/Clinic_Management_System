@@ -1,16 +1,16 @@
 {
   "model": "cr30-item-request-lifecycle",
   "title": "CR-30 New item request: staff request -> doctor approve/reject -> inventory",
-  "startedAt": "2026-11-08T06:54:48.230Z",
-  "finishedAt": "2026-11-08T06:56:04.805Z",
+  "startedAt": "2026-11-08T07:11:12.701Z",
+  "finishedAt": "2026-11-08T07:12:49.985Z",
   "states": {
-    "total": 23,
-    "passed": 23,
+    "total": 26,
+    "passed": 26,
     "failed": 0
   },
   "transitions": {
-    "total": 29,
-    "passed": 29,
+    "total": 32,
+    "passed": 32,
     "failed": 0
   },
   "uncovered": [],
@@ -129,6 +129,10 @@
             {
               "ok": true,
               "message": "DB: branch pending count +1"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate notice for a genuinely new name"
             }
           ]
         },
@@ -288,7 +292,7 @@
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
             }
           ]
         },
@@ -298,7 +302,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (6)'"
+              "message": "task button 'Approve corrections (7)'"
             },
             {
               "ok": true,
@@ -306,11 +310,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 6"
+              "message": "New items tab badge 7"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
             },
             {
               "ok": true,
@@ -330,7 +334,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-1huzdn (got CR30-SKU-1huzdn)"
+              "message": "detail SKU = CR30-SKU-1f8afd (got CR30-SKU-1f8afd)"
             },
             {
               "ok": true,
@@ -343,6 +347,10 @@
             {
               "ok": true,
               "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate warning for a new item"
             },
             {
               "ok": true,
@@ -438,11 +446,11 @@
             },
             {
               "ok": true,
-              "message": "DB pending count is 5 (got 5)"
+              "message": "DB pending count is 6 (got 6)"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 5 (DB pending count)"
+              "message": "sidebar Inventory badge shows 6 (DB pending count)"
             }
           ]
         }
@@ -698,6 +706,10 @@
             {
               "ok": true,
               "message": "DB: branch pending count +1"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate notice for a genuinely new name"
             }
           ]
         },
@@ -771,7 +783,7 @@
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 8 (DB pending count)"
             }
           ]
         },
@@ -781,7 +793,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (7)'"
+              "message": "task button 'Approve corrections (8)'"
             },
             {
               "ok": true,
@@ -789,11 +801,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 7"
+              "message": "New items tab badge 8"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 8 (DB pending count)"
             },
             {
               "ok": true,
@@ -813,7 +825,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-5yppkm (got CR30-SKU-5yppkm)"
+              "message": "detail SKU = CR30-SKU-5m5fwu (got CR30-SKU-5m5fwu)"
             },
             {
               "ok": true,
@@ -854,6 +866,10 @@
             {
               "ok": true,
               "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate warning for a new item"
             },
             {
               "ok": true,
@@ -889,7 +905,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (7)'"
+              "message": "task button 'Approve corrections (8)'"
             },
             {
               "ok": true,
@@ -897,11 +913,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 7"
+              "message": "New items tab badge 8"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 8 (DB pending count)"
             },
             {
               "ok": true,
@@ -921,7 +937,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-5yppkm (got CR30-SKU-5yppkm)"
+              "message": "detail SKU = CR30-SKU-5m5fwu (got CR30-SKU-5m5fwu)"
             },
             {
               "ok": true,
@@ -962,6 +978,10 @@
             {
               "ok": true,
               "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate warning for a new item"
             },
             {
               "ok": true,
@@ -1017,15 +1037,15 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-5yppkm|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-5m5fwu|42.5|55)"
             },
             {
               "ok": true,
-              "message": "DB pending count is 6 (got 6)"
+              "message": "DB pending count is 7 (got 7)"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
             }
           ]
         },
@@ -1055,15 +1075,15 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-5yppkm|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-5m5fwu|42.5|55)"
             },
             {
               "ok": true,
-              "message": "DB pending count is 6 (got 6)"
+              "message": "DB pending count is 7 (got 7)"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+              "message": "sidebar Inventory badge shows 7 (DB pending count)"
             }
           ]
         },
@@ -1109,6 +1129,156 @@
     },
     {
       "path": 6,
+      "ok": true,
+      "events": [
+        "StaffStock --openAdd--> StaffAddForm",
+        "StaffAddForm --submitDuplicateName--> StaffDuplicateNameSubmitted",
+        "StaffDuplicateNameSubmitted --doctorOpensDuplicateRequest--> DoctorSeesDuplicateWarning",
+        "DoctorSeesDuplicateWarning --otherRequestTakesSku--> DoctorSeesSkuCollision"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffAddForm",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Add Inventory Item dialog open"
+            },
+            {
+              "ok": true,
+              "message": "item name empty"
+            }
+          ]
+        },
+        {
+          "state": "StaffDuplicateNameSubmitted",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "still sent for approval (duplicates do not block)"
+            },
+            {
+              "ok": true,
+              "message": "confirmation shows a duplicate notice"
+            },
+            {
+              "ok": true,
+              "message": "notice: item with this name is already in inventory; the doctor will see this"
+            },
+            {
+              "ok": true,
+              "message": "notice counts 1 batch in inventory"
+            },
+            {
+              "ok": true,
+              "message": "notice names the existing item CR30 Existing mw7hu8u6"
+            },
+            {
+              "ok": true,
+              "message": "DB: one PENDING request still created"
+            }
+          ]
+        },
+        {
+          "state": "DoctorSeesDuplicateWarning",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "doctor sees the duplicate-name request card"
+            },
+            {
+              "ok": true,
+              "message": "card shows a duplicate warning"
+            },
+            {
+              "ok": true,
+              "message": "warning: Already in inventory (1 batch)"
+            },
+            {
+              "ok": true,
+              "message": "warning names the existing inventory item"
+            },
+            {
+              "ok": true,
+              "message": "warning shows stock and the matching field"
+            },
+            {
+              "ok": true,
+              "message": "warning: Also requested by Pharma Cist on <date>"
+            },
+            {
+              "ok": true,
+              "message": "Approve is not blocked by the warning"
+            },
+            {
+              "ok": true,
+              "message": "Reject available to reject as duplicate"
+            },
+            {
+              "ok": true,
+              "message": "DB: no item created by merely viewing"
+            }
+          ]
+        },
+        {
+          "state": "DoctorSeesSkuCollision",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "SKU-collision request card shows a duplicate warning"
+            },
+            {
+              "ok": true,
+              "message": "warning names the item that took the SKU"
+            },
+            {
+              "ok": true,
+              "message": "warning says same SKU"
+            },
+            {
+              "ok": true,
+              "message": "Approve still clickable (doctor decides)"
+            },
+            {
+              "ok": true,
+              "message": "DB: collision request still PENDING"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 7,
       "ok": true,
       "events": [
         "StaffStock --openAdd--> StaffAddForm",
@@ -1188,6 +1358,10 @@
             {
               "ok": true,
               "message": "DB: branch pending count +1"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate notice for a genuinely new name"
             }
           ]
         },
@@ -1261,7 +1435,7 @@
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 11 (DB pending count)"
             }
           ]
         },
@@ -1271,7 +1445,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (7)'"
+              "message": "task button 'Approve corrections (11)'"
             },
             {
               "ok": true,
@@ -1279,11 +1453,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 7"
+              "message": "New items tab badge 11"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 11 (DB pending count)"
             },
             {
               "ok": true,
@@ -1303,7 +1477,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-6gv158 (got CR30-SKU-6gv158)"
+              "message": "detail SKU = CR30-SKU-7y9ccs (got CR30-SKU-7y9ccs)"
             },
             {
               "ok": true,
@@ -1344,6 +1518,10 @@
             {
               "ok": true,
               "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate warning for a new item"
             },
             {
               "ok": true,
@@ -1399,22 +1577,22 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-6gv158|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-7y9ccs|42.5|55)"
             },
             {
               "ok": true,
-              "message": "DB pending count is 6 (got 6)"
+              "message": "DB pending count is 10 (got 10)"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+              "message": "sidebar Inventory badge shows 10 (DB pending count)"
             }
           ]
         }
       ]
     },
     {
-      "path": 7,
+      "path": 8,
       "ok": true,
       "events": [
         "StaffStock --openAdd--> StaffAddForm",
@@ -1495,6 +1673,10 @@
             {
               "ok": true,
               "message": "DB: branch pending count +1"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate notice for a genuinely new name"
             }
           ]
         },
@@ -1568,7 +1750,7 @@
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 11 (DB pending count)"
             }
           ]
         },
@@ -1578,7 +1760,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (7)'"
+              "message": "task button 'Approve corrections (11)'"
             },
             {
               "ok": true,
@@ -1586,11 +1768,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 7"
+              "message": "New items tab badge 11"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 11 (DB pending count)"
             },
             {
               "ok": true,
@@ -1610,7 +1792,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-7ozjbi (got CR30-SKU-7ozjbi)"
+              "message": "detail SKU = CR30-SKU-89r7ua (got CR30-SKU-89r7ua)"
             },
             {
               "ok": true,
@@ -1651,6 +1833,10 @@
             {
               "ok": true,
               "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate warning for a new item"
             },
             {
               "ok": true,
@@ -1708,7 +1894,11 @@
             },
             {
               "ok": true,
-              "message": "doctor A told 'This request was already approved'"
+              "message": "the stale dialog closed itself (no clickable Approve left)"
+            },
+            {
+              "ok": true,
+              "message": "doctor A told 'This request was already approved' in a role=alert region"
             },
             {
               "ok": true,
@@ -1716,7 +1906,7 @@
             },
             {
               "ok": true,
-              "message": "toast title 'Review failed'"
+              "message": "the announcement is not inside aria-hidden or inert content"
             },
             {
               "ok": true,
@@ -1725,13 +1915,17 @@
             {
               "ok": true,
               "message": "list refreshes to 'Approved by' the second doctor"
+            },
+            {
+              "ok": true,
+              "message": "card has no Approve button after the refresh"
             }
           ]
         }
       ]
     },
     {
-      "path": 8,
+      "path": 9,
       "ok": true,
       "events": [
         "StaffStock --openAdd--> StaffAddForm",
@@ -1813,6 +2007,10 @@
             {
               "ok": true,
               "message": "DB: branch pending count +1"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate notice for a genuinely new name"
             }
           ]
         },
@@ -1886,7 +2084,7 @@
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 11 (DB pending count)"
             }
           ]
         },
@@ -1896,7 +2094,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "task button 'Approve corrections (7)'"
+              "message": "task button 'Approve corrections (11)'"
             },
             {
               "ok": true,
@@ -1904,11 +2102,11 @@
             },
             {
               "ok": true,
-              "message": "New items tab badge 7"
+              "message": "New items tab badge 11"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 7 (DB pending count)"
+              "message": "sidebar Inventory badge shows 11 (DB pending count)"
             },
             {
               "ok": true,
@@ -1928,7 +2126,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-86r7fo (got CR30-SKU-86r7fo)"
+              "message": "detail SKU = CR30-SKU-915p1p (got CR30-SKU-915p1p)"
             },
             {
               "ok": true,
@@ -1969,6 +2167,10 @@
             {
               "ok": true,
               "message": "Reject button"
+            },
+            {
+              "ok": true,
+              "message": "no duplicate warning for a new item"
             },
             {
               "ok": true,
@@ -2042,11 +2244,11 @@
             },
             {
               "ok": true,
-              "message": "DB pending count is 6 (got 6)"
+              "message": "DB pending count is 10 (got 10)"
             },
             {
               "ok": true,
-              "message": "sidebar Inventory badge shows 6 (DB pending count)"
+              "message": "sidebar Inventory badge shows 10 (DB pending count)"
             }
           ]
         },

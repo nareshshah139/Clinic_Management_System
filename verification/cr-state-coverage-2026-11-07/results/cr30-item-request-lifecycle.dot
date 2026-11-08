@@ -1,5 +1,5 @@
 digraph "cr30-item-request-lifecycle" {
-  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-30 New item request: staff request -> doctor approve/reject -> inventory\nstates 23/23 (100%) · transitions 29/29 (100%)", pad=0.3, nodesep=0.45, ranksep=0.7];
+  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-30 New item request: staff request -> doctor approve/reject -> inventory\nstates 26/26 (100%) · transitions 32/32 (100%)", pad=0.3, nodesep=0.45, ranksep=0.7];
   node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, penwidth=1.6];
   edge [fontname="Helvetica", fontsize=9, penwidth=1.4, arrowsize=0.7];
   __start [shape=point, width=0.15, label=""];
@@ -9,6 +9,14 @@ new item absent", fillcolor="#d1fadf", color="#039855"];
   "StaffAddForm" [label="Staff: Add item form open", fillcolor="#d1fadf", color="#039855"];
   "StaffDuplicateSku" [label="Staff: duplicate SKU refused
 (no request created)", fillcolor="#d1fadf", color="#039855"];
+  "StaffDuplicateNameSubmitted" [label="Staff: sent for approval,
+confirmation says item name
+is already in inventory", fillcolor="#d1fadf", color="#039855"];
+  "DoctorSeesDuplicateWarning" [label="Doctor card warns:
+already in inventory +
+also requested by", fillcolor="#d1fadf", color="#039855"];
+  "DoctorSeesSkuCollision" [label="Doctor card warns:
+SKU already used by an item", fillcolor="#d1fadf", color="#039855", peripheries=2];
   "StaffSubmitted" [label="Staff: 'Sent to doctor for approval'
 request PENDING, 0 items", fillcolor="#d1fadf", color="#039855"];
   "StaffStockPending" [label="Staff stock search
@@ -37,7 +45,8 @@ reviewer + note, 0 items", fillcolor="#d1fadf", color="#039855", peripheries=2];
 exactly 1 item, badge -1", fillcolor="#d1fadf", color="#039855"];
   "StaleApproveDialog" [label="Doctor A dialog open
 Doctor B already approved", fillcolor="#d1fadf", color="#039855"];
-  "ApproveConflict" [label="Doctor A: 'already approved'
+  "ApproveConflict" [label="Doctor A: dialog closed,
+'already approved' announced,
 still exactly 1 item", fillcolor="#d1fadf", color="#039855"];
   "DoctorStockHasItem" [label="Doctor stock search
 item present", fillcolor="#d1fadf", color="#039855"];
@@ -47,10 +56,13 @@ item present", fillcolor="#d1fadf", color="#039855"];
 by doctor", fillcolor="#d1fadf", color="#039855", peripheries=2];
   "DoctorAddedDirect" [label="Doctor adds item directly
 no request, 1 item", fillcolor="#d1fadf", color="#039855", peripheries=2];
-  "StaffStock" -> "StaffAddForm" [label="openAdd ×5", color="#039855", fontcolor="#039855", style=solid];
+  "StaffStock" -> "StaffAddForm" [label="openAdd ×6", color="#039855", fontcolor="#039855", style=solid];
   "StaffAddForm" -> "StaffDuplicateSku" [label="submitDuplicateSku", color="#039855", fontcolor="#039855", style=solid];
   "StaffDuplicateSku" -> "StaffSubmitted" [label="fixSkuAndSubmit", color="#039855", fontcolor="#039855", style=solid];
   "StaffAddForm" -> "StaffSubmitted" [label="submitFullDetails ×4", color="#039855", fontcolor="#039855", style=solid];
+  "StaffAddForm" -> "StaffDuplicateNameSubmitted" [label="submitDuplicateName", color="#039855", fontcolor="#039855", style=solid];
+  "StaffDuplicateNameSubmitted" -> "DoctorSeesDuplicateWarning" [label="doctorOpensDuplicateRequest", color="#039855", fontcolor="#039855", style=solid];
+  "DoctorSeesDuplicateWarning" -> "DoctorSeesSkuCollision" [label="otherRequestTakesSku", color="#039855", fontcolor="#039855", style=solid];
   "StaffSubmitted" -> "StaffStockPending" [label="closeAndSearch ×5", color="#039855", fontcolor="#039855", style=solid];
   "StaffStockPending" -> "StaffRequestsPending" [label="openMyRequests ×5", color="#039855", fontcolor="#039855", style=solid];
   "StaffRequestsPending" -> "StaffRequestsPending" [label="reload", color="#039855", fontcolor="#039855", style=solid];

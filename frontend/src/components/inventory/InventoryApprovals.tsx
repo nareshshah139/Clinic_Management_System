@@ -8,7 +8,8 @@ import { InventoryUpdates } from './InventoryUpdates';
 type Tab = 'edits' | 'items';
 
 export function InventoryApprovals({ canReadEdits, pendingItems }: { canReadEdits: boolean; pendingItems: number }) {
-  const [tab, setTab] = useState<Tab>(canReadEdits ? 'edits' : 'items');
+  const [chosen, setTab] = useState<Tab | null>(null);
+  const tab: Tab = chosen ?? (!canReadEdits || pendingItems > 0 ? 'items' : 'edits');
   if (!canReadEdits) return <InventoryItemRequests />;
   return <div className="space-y-6">
     <div role="tablist" aria-label="Approval types" className="flex gap-2">

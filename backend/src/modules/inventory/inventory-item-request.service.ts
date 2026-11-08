@@ -15,6 +15,13 @@ import {
   ItemRequestAction,
   nextItemRequestStatus,
 } from './inventory-item-request.state';
+import {
+  firstNameToken,
+  matchInventory,
+  matchPendingRequests,
+  PossibleDuplicates,
+  probeOf,
+} from './inventory-item-request-duplicates';
 
 export interface ItemRequestActor {
   id: string;
@@ -56,16 +63,87 @@ export class InventoryItemRequestService {
       },
       include: REQUEST_INCLUDE,
     });
-    return { created: false as const, request };
+    const [possibleDuplicates] = await this.possibleDuplicates(
+      [request],
+      actor.branchId,
+    );
+    return {
+      created: false as const,
+      request: { ...request, possibleDuplicates },
+    };
   }
 
   async list(actor: ItemRequestActor, status?: string) {
-    return this.prisma.inventoryItemRequest.findMany({
+    const requests = await this.prisma.inventoryItemRequest.findMany({
       where: this.scope(actor, this.parseStatus(status)),
       include: REQUEST_INCLUDE,
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
+    if (!canReviewItemRequests(actor.role)) {
+      return requests.map((r) => ({ ...r, possibleDuplicates: null }));
+    }
+    const open = requests.filter(
+      (r) => r.status === InventoryItemRequestStatus.PENDING,
+    );
+    const duplicates = await this.possibleDuplicates(open, actor.branchId);
+    const byId = new Map(open.map((r, i) => [r.id, duplicates[i]]));
+    return requests.map((r) => ({
+      ...r,
+      possibleDuplicates: byId.get(r.id) ?? null,
+    }));
+  }
+
+  private async possibleDuplicates(
+    requests: Array<{ id: string; itemName: string; payload: Prisma.JsonValue }>,
+    branchId: string,
+  ): Promise<PossibleDuplicates[]> {
+    if (!requests.length) return [];
+    const probes = requests.map(probeOf);
+    const tokens = [...new Set(probes.map((p) => firstNameToken(p.itemName)))].filter(Boolean);
+    const skus = probes.flatMap((p) => (p.sku ? [p.sku] : []));
+    const barcodes = probes.flatMap((p) => (p.barcode ? [p.barcode] : []));
+
+    const [items, pending] = await Promise.all([
+      this.prisma.inventoryItem.findMany({
+        where: {
+          branchId,
+          OR: [
+            ...tokens.map((t) => ({
+              name: { contains: t, mode: 'insensitive' as const },
+            })),
+            ...(skus.length ? [{ sku: { in: skus } }] : []),
+            ...(barcodes.length ? [{ barcode: { in: barcodes } }] : []),
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          manufacturer: true,
+          unit: true,
+          packSize: true,
+          packUnit: true,
+          batchNumber: true,
+          currentStock: true,
+          sku: true,
+          barcode: true,
+        },
+      }),
+      this.prisma.inventoryItemRequest.findMany({
+        where: { branchId, status: InventoryItemRequestStatus.PENDING },
+        select: {
+          id: true,
+          itemName: true,
+          createdAt: true,
+          requestedBy: { select: { firstName: true, lastName: true } },
+        },
+      }),
+    ]);
+
+    return probes.map((probe) => ({
+      inventory: matchInventory(probe, items),
+      pendingRequests: matchPendingRequests(probe, pending),
+    }));
   }
 
   async pendingCount(actor: ItemRequestActor) {
