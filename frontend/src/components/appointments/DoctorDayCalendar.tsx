@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
+import { Badge, badgeVariants } from '@/components/ui/badge';
+import type { VariantProps } from 'class-variance-authority';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import { apiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -31,6 +32,31 @@ import type {
   Appointment
 } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
+import { layoutDay } from './day-layout';
+
+type StatusStyle = {
+  label: string;
+  badgeVariant: NonNullable<VariantProps<typeof badgeVariants>['variant']>;
+  accentClassName: string;
+  muted: boolean;
+  strikeName: boolean;
+};
+
+const APPOINTMENT_STATUS_STYLE: Record<AppointmentStatus, StatusStyle> = {
+  [AppointmentStatus.SCHEDULED]: { label: 'Scheduled', badgeVariant: 'neutral', accentClassName: 'border-l-slate-400', muted: false, strikeName: false },
+  [AppointmentStatus.CONFIRMED]: { label: 'Confirmed', badgeVariant: 'info', accentClassName: 'border-l-sky-500', muted: false, strikeName: false },
+  [AppointmentStatus.CHECKED_IN]: { label: 'Checked in', badgeVariant: 'warning', accentClassName: 'border-l-amber-500', muted: false, strikeName: false },
+  [AppointmentStatus.IN_PROGRESS]: { label: 'In progress', badgeVariant: 'success', accentClassName: 'border-l-emerald-500', muted: false, strikeName: false },
+  [AppointmentStatus.COMPLETED]: { label: 'Completed', badgeVariant: 'neutral', accentClassName: 'border-l-slate-300', muted: true, strikeName: false },
+  [AppointmentStatus.NO_SHOW]: { label: 'No-show', badgeVariant: 'danger', accentClassName: 'border-l-red-500', muted: true, strikeName: true },
+  [AppointmentStatus.CANCELLED]: { label: 'Cancelled', badgeVariant: 'danger', accentClassName: 'border-l-red-300', muted: true, strikeName: true },
+};
+
+const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> = {
+  OPD: { current: 'rgba(219, 234, 254, 0.95)', past: 'rgba(239, 246, 255, 0.95)' },
+  PROCEDURE: { current: 'rgba(237, 233, 254, 0.95)', past: 'rgba(245, 237, 254, 0.95)' },
+  TELEMED: { current: 'rgba(243, 244, 246, 0.95)', past: 'rgba(249, 250, 251, 0.95)' },
+};
 
 export interface DoctorDayCalendarProps {
   doctorId: string;
@@ -137,8 +163,26 @@ export default function DoctorDayCalendar({
     });
   }, [schedule, visitTypeFilter, roomFilter, optimisticAppointment]);
 
-  // Build quick lookup for overlap checks
-  const bookedBySlot = useMemo(() => new Map(filteredSchedule.map(a => [a.slot, a])), [filteredSchedule]);
+  const appointmentBlocks = useMemo(() => {
+    const dayStartMin = (timeSlotConfig.startHour ?? 9) * 60;
+    const dayEndMin = (timeSlotConfig.endHour ?? 18) * 60;
+    const totalDayMin = Math.max(1, dayEndMin - dayStartMin);
+    const spans = filteredSchedule.flatMap((apt, index) => {
+      const [start, end] = (apt.slot || '').split('-');
+      if (!start || !end) return [];
+      const startMin = Math.max(dayStartMin, Math.min(hhmmToMinutes(start), dayEndMin));
+      const endMin = Math.max(dayStartMin, Math.min(hhmmToMinutes(end), dayEndMin));
+      if (endMin <= startMin) return [];
+      return [{ apt, key: apt.id || `${apt.slot}#${index}`, start, end, startMin, endMin }];
+    });
+    const lanes = layoutDay(spans.map(({ key, startMin, endMin }) => ({ id: key, startMin, endMin })));
+    return spans.map((span) => ({
+      ...span,
+      ...lanes.get(span.key)!,
+      topPct: ((span.startMin - dayStartMin) * 100) / totalDayMin,
+      heightPct: ((span.endMin - span.startMin) * 100) / totalDayMin,
+    }));
+  }, [filteredSchedule, timeSlotConfig.startHour, timeSlotConfig.endHour]);
   const showLoadingOverlay = loading && (schedule.length > 0 || !!optimisticAppointment);
 
   const fetchSchedule = useCallback(async () => {
@@ -203,6 +247,7 @@ export default function DoctorDayCalendar({
               visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
               isFollowUp,
               notes: (a as any).notes ?? undefined,
+              tokenNumber: a.tokenNumber ?? undefined,
             };
           })
       );
@@ -234,6 +279,12 @@ export default function DoctorDayCalendar({
       }
     };
   }, [cleanupTimeouts, longPressTimer]);
+
+  const blockBackground = (apt: AppointmentInSlot) => {
+    if (apt.status === AppointmentStatus.COMPLETED) return 'rgba(226, 232, 240, 0.95)';
+    const tone = VISIT_TYPE_BACKGROUND[apt.visitType] ?? VISIT_TYPE_BACKGROUND.OPD;
+    return isSlotInPast(apt.slot, date) ? tone.past : tone.current;
+  };
 
   const handleCancelAppointment = async (appointment: AppointmentInSlot) => {
     if (!appointment.id || appointment.id.startsWith('optimistic-')) return;
@@ -377,175 +428,108 @@ export default function DoctorDayCalendar({
                 className="flex-1 grid grid-cols-1 gap-0"
                 style={{ position: 'relative', ...(showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : {}) }}
               >
-            {/* Appointment-level background overlays across full spans (merges cells visually) */}
-            {(() => {
-              const dayStartMin = (timeSlotConfig.startHour ?? 9) * 60;
-              const dayEndMin = (timeSlotConfig.endHour ?? 18) * 60;
-              const totalDayMin = Math.max(1, dayEndMin - dayStartMin);
-              const getColor = (apt: AppointmentInSlot) => {
-                const isPast = isSlotInPast(apt.slot, date);
-                
-                // Completed status - 3 shades lighter
-                if (apt.status === AppointmentStatus.COMPLETED) return 'rgba(226, 232, 240, 0.95)';
-                
-                // For past appointments (not completed), use even lighter colors
-                if (isPast) {
-                  if (apt.visitType === 'PROCEDURE') return 'rgba(245, 237, 254, 0.95)'; // very light purple
-                  if (apt.visitType === 'TELEMED') return 'rgba(249, 250, 251, 0.95)'; // very light gray
-                  return 'rgba(239, 246, 255, 0.95)'; // very light blue
-                }
-                
-                // Normal colors - all 3 shades lighter
-                if (apt.visitType === 'PROCEDURE') return 'rgba(237, 233, 254, 0.95)'; // light purple
-                if (apt.visitType === 'TELEMED') return 'rgba(243, 244, 246, 0.95)'; // light gray
-                return 'rgba(219, 234, 254, 0.95)'; // light blue
-              };
-              const byStart = (s: string) => hhmmToMinutes((s || '').split('-')[0] || '00:00');
-              return filteredSchedule.map((apt) => {
-                const [as, ae] = (apt.slot || '').split('-');
-                if (!as || !ae) return null;
-                const aptStart = hhmmToMinutes(as);
-                const aptEnd = hhmmToMinutes(ae);
-                const clampedStart = Math.max(dayStartMin, Math.min(aptStart, dayEndMin));
-                const clampedEnd = Math.max(dayStartMin, Math.min(aptEnd, dayEndMin));
-                if (clampedEnd <= clampedStart) return null;
-                const topPct = ((clampedStart - dayStartMin) * 100) / totalDayMin;
-                const heightPct = ((clampedEnd - clampedStart) * 100) / totalDayMin;
-                const overlapping = filteredSchedule
-                  .filter((b) => doTimeSlotsOverlap(apt.slot, b.slot))
-                  .sort((a, b) => byStart(a.slot) - byStart(b.slot) || String(a.id || a.slot).localeCompare(String(b.id || b.slot)));
-                const index = Math.max(0, overlapping.findIndex((b) => (b.id && apt.id ? b.id === apt.id : b.slot === apt.slot)));
-                const widthPct = 100 / Math.max(1, overlapping.length);
-                const leftPct = index * widthPct;
-                const bg = getColor(apt);
-                return (
-                  <div
-                    key={`span-bg-${apt.id || apt.slot}`}
-                    className="absolute"
+            {appointmentBlocks.map(({ apt, key, start, end, topPct, heightPct, lane, laneCount }) => {
+              const status = APPOINTMENT_STATUS_STYLE[apt.status] ?? APPOINTMENT_STATUS_STYLE[AppointmentStatus.SCHEDULED];
+              const patientName = formatPatientName(apt.patient ?? { name: 'Unknown' });
+              const isOptimistic = apt.id?.startsWith('optimistic-');
+              const accessibleName = [
+                apt.tokenNumber != null ? `Token ${apt.tokenNumber}` : null,
+                patientName,
+                `${start}-${end}`,
+                status.label,
+              ].filter(Boolean).join(', ');
+              return (
+                <div
+                  key={key}
+                  data-appointment-block={apt.id || apt.slot}
+                  className="group absolute p-px"
+                  style={{
+                    top: `${topPct}%`,
+                    height: `${heightPct}%`,
+                    left: `${(lane * 100) / laneCount}%`,
+                    width: `${100 / laneCount}%`,
+                    zIndex: 2,
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-label={accessibleName}
+                    title={accessibleName}
+                    onClick={() => setSelectedAppointment(apt)}
+                    className={`@container flex h-full w-full items-start overflow-hidden rounded-md border-l-[3px] px-1.5 py-0.5 text-left leading-tight shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${status.accentClassName} ${apt.slot === recentBookedSlot ? 'ring-2 ring-green-500/60' : ''}`}
                     style={{
-                      top: `${topPct}%`,
-                      height: `${heightPct}%`,
-                      left: `${leftPct}%`,
-                      width: `${widthPct}%`,
-                      backgroundColor: bg,
-                      borderRadius: 6,
-                      zIndex: 1,
-                      pointerEvents: 'none',
-                    }}
-                  />
-                );
-              });
-            })()}
-            {/* Floating labels across full appointment spans */}
-            {(() => {
-              const dayStartMin = (timeSlotConfig.startHour ?? 9) * 60;
-              const dayEndMin = (timeSlotConfig.endHour ?? 18) * 60;
-              const totalDayMin = Math.max(1, dayEndMin - dayStartMin);
-              return filteredSchedule.map((apt) => {
-                const [as, ae] = (apt.slot || '').split('-');
-                if (!as || !ae) return null;
-                const aptStart = hhmmToMinutes(as);
-                const aptEnd = hhmmToMinutes(ae);
-                const clampedStart = Math.max(dayStartMin, Math.min(aptStart, dayEndMin));
-                const clampedEnd = Math.max(dayStartMin, Math.min(aptEnd, dayEndMin));
-                if (clampedEnd <= clampedStart) return null;
-                const topPct = ((clampedStart - dayStartMin) * 100) / totalDayMin;
-                const heightPct = ((clampedEnd - clampedStart) * 100) / totalDayMin;
-                return (
-                  <div
-                    key={`span-label-${apt.id || apt.slot}`}
-                    className="absolute left-0 right-0 group"
-                    style={{
-                      top: `${topPct}%`,
-                      height: `${heightPct}%`,
-                      pointerEvents: 'auto',
-                      zIndex: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      backgroundColor: blockBackground(apt),
+                      fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))',
                     }}
                   >
-                    {/* Main appointment info */}
-                    <div
-                      className="font-semibold px-2 py-1 flex-1 flex items-center justify-between"
-                      style={{
-                        color: '#000000',
-                        background: 'transparent',
-                        maxWidth: '70%',
-                        fontSize: 'calc(0.875rem + var(--app-text-increase, 0rem))',
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      {/* Left side - Time and Patient */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-blue-700 font-bold">{`${as}-${ae}`}</span>
-                        <span className="font-semibold">
-                          {formatPatientName(apt.patient ?? { name: 'Unknown' })}
-                          {apt.visitType === 'PROCEDURE' && apt.notes && (
-                            <span className="text-purple-700 font-medium ml-1">({apt.notes})</span>
-                          )}
-                        </span>
-                      </div>
-
-                      {/* Center - Status indicators */}
-                      <div className="flex items-center gap-2 flex-1 justify-center">
-                        {apt.isFollowUp && <span className="text-amber-600 font-semibold text-xs">FOLLOW-UP</span>}
-                        <span className="text-purple-600 font-medium">{apt.visitType || 'OPD'}</span>
-                      </div>
-
-                      {/* Right side - Demographics and location */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className={`flex w-full min-w-0 items-center gap-1.5 whitespace-nowrap ${status.muted ? 'text-gray-500' : 'text-gray-900'}`}>
+                      {apt.tokenNumber != null && (
+                        <span className="shrink-0 font-semibold text-gray-500">#{apt.tokenNumber}</span>
+                      )}
+                      <span data-appointment-time className="hidden shrink-0 font-bold text-blue-700 @min-[14rem]:inline">{`${start}-${end}`}</span>
+                      <span
+                        data-patient-name
+                        className={`min-w-0 flex-auto truncate font-semibold ${status.strikeName ? 'line-through' : ''}`}
+                      >
+                        {patientName}
+                      </span>
+                      <span className="hidden min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden @min-[24rem]:flex">
+                        {apt.visitType === 'PROCEDURE' && apt.notes && (
+                          <span className="truncate font-medium text-purple-700">({apt.notes})</span>
+                        )}
+                        {apt.isFollowUp && <span className="font-semibold text-amber-600">FOLLOW-UP</span>}
+                        <span className="font-medium text-purple-600">{apt.visitType || 'OPD'}</span>
                         {apt.patient?.age !== undefined && <span className="text-gray-600">{apt.patient.age}y</span>}
-                        {apt.patient?.gender && <span className="text-gray-600 bg-gray-100 px-1 rounded text-xs">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
-                        {apt.room?.name && <span className="text-green-600 font-medium">{apt.room.name}</span>}
-                      </div>
-                    </div>
+                        {apt.patient?.gender && <span className="rounded bg-gray-100 px-1 text-gray-600">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
+                        {apt.room?.name && <span className="truncate font-medium text-green-600">{apt.room.name}</span>}
+                      </span>
+                      <Badge variant={status.badgeVariant} className="hidden shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] leading-4 @min-[9rem]:inline-flex">
+                        {status.label}
+                      </Badge>
+                    </span>
+                  </button>
 
-                    {/* Action buttons - appear on hover */}
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1 ml-2">
-                      {/* View Appointment Details Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedAppointment(apt);
-                        }}
-                        className="bg-gray-500 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                        title="View Appointment Details"
-                        disabled={apt.id?.startsWith('optimistic-')}
-                      >
-                        INFO
-                      </button>
-
-                      {/* Reschedule Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRescheduleTarget(apt);
-                        }}
-                        className="bg-amber-500 hover:bg-amber-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                        title="Reschedule Appointment"
-                        disabled={apt.id?.startsWith('optimistic-')}
-                      >
-                        RESCHED
-                      </button>
-
-                      {/* Connect to Visit Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartVisit(apt);
-                        }}
-                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                        title={apt.visit?.id ? 'Continue Visit' : 'Start Visit'}
-                        disabled={apt.id?.startsWith('optimistic-')}
-                      >
-                        {apt.visit?.id ? 'CONT' : 'START'}
-                      </button>
-                    </div>
+                  <div className="absolute right-1 top-0.5 flex gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedAppointment(apt);
+                      }}
+                      className="bg-gray-500 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                      title="View Appointment Details"
+                      disabled={isOptimistic}
+                    >
+                      INFO
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRescheduleTarget(apt);
+                      }}
+                      className="bg-amber-500 hover:bg-amber-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                      title="Reschedule Appointment"
+                      disabled={isOptimistic}
+                    >
+                      RESCHED
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartVisit(apt);
+                      }}
+                      className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                      title={apt.visit?.id ? 'Continue Visit' : 'Start Visit'}
+                      disabled={isOptimistic}
+                    >
+                      {apt.visit?.id ? 'CONT' : 'START'}
+                    </button>
                   </div>
-                );
-              });
-            })()}
+                </div>
+              );
+            })}
             {baseGridSlots.map((slot, idx) => {
               // Determine overlaps with any appointment
               const overlappingAppointments = filteredSchedule.filter(a => doTimeSlotsOverlap(a.slot, slot));
@@ -556,8 +540,6 @@ export default function DoctorDayCalendar({
               const isBookingInProgress = bookingInProgress === slot;
               const isDisabled = past || isBookingInProgress || hasAny || (!rescheduleTarget && disableSlotBooking);
               const slotStart = slot.split('-')[0];
-              const primaryStart = primary?.slot?.split('-')[0];
-              const isPrimaryStartTile = !!(hasAny && primary && slotStart === primaryStart);
 
               // Hour divider: draw a subtle top line on HH:00 tiles
               const isHourStart = slotStart.endsWith(':00');
@@ -593,9 +575,6 @@ export default function DoctorDayCalendar({
                 const aptEnd = hhmmToMinutes(ae);
                 return aptStart < tileEndMin && aptEnd > tileEndMin;
               });
-              // Floating labels are enabled, so avoid duplicating inline details on the start tile
-              const showInlineDetails = false;
-              const showInlineActions = false;
               // Compute base border color once; avoid shorthand borderColor conflicts with per-side overrides
               const baseBorderColor = isBookingInProgress ? '#f59e0b' : (past ? '#d1d5db' : '#e5e7eb');
 
@@ -765,100 +744,7 @@ export default function DoctorDayCalendar({
                     onSelectSlot?.(newSpan);
                   }}
                 >
-                  {/* Tile-level overlays removed; appointment-level overlays above handle merged blocks */}
-                  {/* hour labels are rendered in the sticky gutter; suppress in occupied start tile */}
-                  {(showInlineDetails && hasAny && isPrimaryStartTile) && (
-                    <div 
-                      className="text-sm font-medium"
-                      style={{ color: 'white', position: 'relative', zIndex: 1 }}
-                    >
-                      {slot}
-                    </div>
-                  )}
-
-                  {hasAny && primary ? (
-                    isPrimaryStartTile ? (
-                      <div className="flex flex-col gap-2" style={{ position: 'relative', zIndex: 1, padding: '0.25rem' }}>
-                        {showInlineDetails && (
-                          <>
-                            <div 
-                              className="text-xs truncate cursor-pointer font-medium"
-                              style={{ color: 'rgba(255, 255, 255, 0.95)' }}
-                              onClick={() => setSelectedAppointment(primary)}
-                            >
-                              {formatPatientName(primary.patient ?? { name: 'Unknown' })}
-                              {overlappingAppointments.length > 1 && (
-                                <span className="ml-2 text-[11px] opacity-90">(+{overlappingAppointments.length - 1} more)</span>
-                              )}
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <Badge 
-                                variant={primary.visitType === 'PROCEDURE' ? 'destructive' : primary.visitType === 'TELEMED' ? 'secondary' : 'default'}
-                                className="text-xs w-fit"
-                                style={{
-                                  backgroundColor: primary.visitType === 'PROCEDURE' 
-                                    ? 'rgba(220, 38, 38, 0.8)'
-                                    : primary.visitType === 'TELEMED'
-                                    ? 'rgba(107, 114, 128, 0.8)'
-                                    : 'rgba(59, 130, 246, 0.8)',
-                                  color: 'white',
-                                  border: 'none'
-                                }}
-                              >
-                                {primary.visitType || 'OPD'}
-                              </Badge>
-                              {primary.room && (
-                                <div className="text-xs truncate" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>
-                                  Room: {primary.room.name}
-                                </div>
-                              )}
-                            </div>
-                          </>
-                        )}
-                        {showInlineActions && (
-                          <div className="flex gap-1 mt-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 px-2 text-xs text-white hover:bg-white hover:bg-opacity-20"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStartVisit(primary);
-                              }}
-                              disabled={primary.id?.startsWith('optimistic-')}
-                            >
-                              <FileText className="h-3 w-3 mr-1" />
-                              {primary.visit?.id ? 'Continue Visit' : 'Start Visit'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 px-2 text-xs text-white hover:bg-red-500 hover:bg-opacity-80"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCancelAppointment(primary);
-                              }}
-                              disabled={primary.id?.startsWith('optimistic-')}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 px-2 text-xs text-white hover:bg-white hover:bg-opacity-20"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRescheduleTarget(primary);
-                              }}
-                              disabled={primary.id?.startsWith('optimistic-')}
-                            >
-                              Reschedule
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ) : null
-                  ) : (
+                  {hasAny ? null : (
                     <div
                       role="button"
                       aria-label={rescheduleTarget ? `Move to ${slot}` : `Book ${slot}`}
