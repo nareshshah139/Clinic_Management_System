@@ -69,4 +69,12 @@ databaseTests('Clinic invoice updates on PostgreSQL', () => {
     expect(updated.discount).toBe(20);
     expect(updated.total).toBe(900);
   });
+
+  it('bills a GST-exempt (0%) service without GST, on create and on update', async () => {
+    const invoice = await billing.createInvoice({ patientId: 'patient', items: [item('Exempt consult', 1000, 1, { gstRate: 0 })] } as any, 'branch');
+    expect(invoice.total).toBe(1000);
+    expect(invoice.items[0].gstRate).toBe(0);
+    const updated = await billing.updateInvoice(invoice.id, { items: [item('Exempt consult', 1000, 2, { gstRate: 0 })] } as any, 'branch');
+    expect(updated.total).toBe(2000);
+  });
 });
