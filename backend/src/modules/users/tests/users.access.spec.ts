@@ -10,12 +10,12 @@ import { RolesGuard } from '../../../shared/guards/roles.guard';
 const row = (id: string, role: string) => ({
   id, role, branchId: 'branch', firstName: id, lastName: 'Synthetic', email: `${id}@example.test`,
   password: '$2b$10$synthetic-hash', resetToken: 'synthetic-reset', resetTokenExpiry: new Date(), googleRefreshToken: 'synthetic-refresh',
-  permissions: null, metadata: null, branch: { id: 'branch' },
+  permissions: null, metadata: role === 'DOCTOR' ? JSON.stringify({ whatsappAccessToken: 'synthetic-whatsapp-token', textSize: 'LARGE' }) : null, branch: { id: 'branch' },
 });
 
 describe('/users access control', () => {
   let app: INestApplication;
-  const users: Record<string, ReturnType<typeof row>> = { admin: row('admin', 'ADMIN'), reception: row('reception', 'RECEPTION'), doctor: row('doctor', 'DOCTOR') };
+  const users: Record<string, ReturnType<typeof row>> = { admin: row('admin', 'ADMIN'), reception: row('reception', 'RECEPTION'), doctor: row('doctor', 'DOCTOR'), lab: row('lab', 'LAB_TECH') };
   const db: any = {
     user: {
       findMany: jest.fn(async () => Object.values(users)),
@@ -54,6 +54,14 @@ describe('/users access control', () => {
       expect(user).not.toHaveProperty('resetTokenExpiry');
       expect(user).not.toHaveProperty('googleRefreshToken');
     }
+  });
+
+  it('does not reveal a doctor WhatsApp token to a lab user', async () => {
+    const list = await request(app.getHttpServer()).get('/users').set(as('lab')).expect(200);
+    const doctor = list.body.users.find((user: any) => user.id === 'doctor');
+    expect(doctor.metadata).toEqual({ textSize: 'LARGE' });
+    const one = await request(app.getHttpServer()).get('/users/doctor').set(as('lab')).expect(200);
+    expect(one.body.metadata).toEqual({ textSize: 'LARGE' });
   });
 
   it.each([
