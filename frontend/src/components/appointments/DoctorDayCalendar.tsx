@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -58,6 +58,12 @@ const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> =
   TELEMED: { current: 'rgba(243, 244, 246, 0.95)', past: 'rgba(249, 250, 251, 0.95)' },
 };
 
+/**
+ * @cc [owner:nareshshah139,label:product] optimistic-booking-origin
+ * Doctor and date identify the selection for which the optimistic appointment was submitted.
+ */
+export type ScopedAppointment = { doctorId: string; date: string; appointment: AppointmentInSlot };
+
 export interface DoctorDayCalendarProps {
   doctorId: string;
   date: string; // YYYY-MM-DD
@@ -67,11 +73,19 @@ export interface DoctorDayCalendarProps {
   onSelectSlot?: (slot: string) => void;
   refreshKey?: number;
   bookingInProgress?: string;
-  optimisticAppointment?: AppointmentInSlot;
+  optimisticAppointment?: ScopedAppointment;
   onAppointmentUpdate?: () => void;
   timeSlotConfig?: TimeSlotConfig;
   disableSlotBooking?: boolean;
   selectedRoomName?: string;
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] schedule-selection-isolation
+ * Changing the doctor or date resets the calendar and its dialogs; a failed or superseded request cannot display appointments from another selection.
+ */
+export default function DoctorDayCalendar(props: DoctorDayCalendarProps) {
+  return <DoctorDayCalendarForSelection key={JSON.stringify([props.doctorId, props.date])} {...props} />;
 }
 
 /**
@@ -83,7 +97,11 @@ export interface DoctorDayCalendarProps {
  * @cc [owner:nareshshah139,label:product] appointment-queue
  * The queue lists the selected doctor's active, filtered appointments in time order and excludes cancelled, completed, and no-show appointments.
  */
-export default function DoctorDayCalendar({ 
+/**
+ * @cc [owner:nareshshah139,label:product] optimistic-overlap
+ * An optimistic appointment does not hide another appointment solely because they share a time slot.
+ */
+function DoctorDayCalendarForSelection({
   doctorId, 
   date, 
   recentBookedSlot, 
@@ -106,8 +124,9 @@ export default function DoctorDayCalendar({
   const router = useRouter();
   const { toast } = useToast();
   const [schedule, setSchedule] = useState<AppointmentInSlot[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(Boolean(doctorId && date));
   const [error, setError] = useState<string | null>(null);
+  const scheduleRequest = useRef(0);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentInSlot | null>(null);
   const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState<boolean>(false);
@@ -135,6 +154,9 @@ export default function DoctorDayCalendar({
 
   // Compute 'now' data in calendar timezone (defaults to Asia/Kolkata)
   const isToday = useMemo(() => date === getISTDateString(), [date]);
+  const scopedOptimisticAppointment = optimisticAppointment?.doctorId === doctorId && optimisticAppointment.date === date
+    ? optimisticAppointment.appointment
+    : undefined;
   const nowHHMM = useMemo(() => {
     try {
       const tz = timeSlotConfig.timezone || 'Asia/Kolkata';
@@ -150,13 +172,13 @@ export default function DoctorDayCalendar({
   const filteredSchedule = useMemo(() => {
     let appointments = schedule.filter(a => a.status !== AppointmentStatus.CANCELLED);
     
-    if (optimisticAppointment) {
-      const visitTypeMatch = visitTypeFilter === 'ALL' || optimisticAppointment.visitType === visitTypeFilter;
-      const roomMatch = roomFilter === 'ALL' || optimisticAppointment.room?.id === roomFilter;
+    if (scopedOptimisticAppointment) {
+      const visitTypeMatch = visitTypeFilter === 'ALL' || scopedOptimisticAppointment.visitType === visitTypeFilter;
+      const roomMatch = roomFilter === 'ALL' || scopedOptimisticAppointment.room?.id === roomFilter;
       
       if (visitTypeMatch && roomMatch) {
-        appointments = appointments.filter(apt => apt.slot !== optimisticAppointment.slot);
-        appointments.push(optimisticAppointment);
+        appointments = appointments.filter(apt => apt.id !== scopedOptimisticAppointment.id);
+        appointments.push(scopedOptimisticAppointment);
       }
     }
     
@@ -165,7 +187,7 @@ export default function DoctorDayCalendar({
       const roomMatch = roomFilter === 'ALL' || apt.room?.id === roomFilter;
       return visitTypeMatch && roomMatch;
     });
-  }, [schedule, visitTypeFilter, roomFilter, optimisticAppointment]);
+  }, [schedule, visitTypeFilter, roomFilter, scopedOptimisticAppointment]);
 
   const appointmentBlocks = useMemo(() => {
     const dayStartMin = (timeSlotConfig.startHour ?? 9) * 60;
@@ -192,10 +214,14 @@ export default function DoctorDayCalendar({
     .filter(appointment => ![AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW].includes(appointment.status as AppointmentStatus))
     .sort((a, b) => a.slot.localeCompare(b.slot)), [filteredSchedule]);
 
-  const showLoadingOverlay = loading && (schedule.length > 0 || !!optimisticAppointment);
+  const showLoadingOverlay = loading && (schedule.length > 0 || !!scopedOptimisticAppointment);
 
   const fetchSchedule = useCallback(async () => {
-    if (!doctorId || !date) return;
+    const request = ++scheduleRequest.current;
+    if (!doctorId || !date) {
+      setLoading(false);
+      return;
+    }
     
     try {
       setLoading(true);
@@ -261,9 +287,11 @@ export default function DoctorDayCalendar({
           })
       );
       
-      setSchedule(items);
+      if (request === scheduleRequest.current) setSchedule(items);
     } catch (e) {
+      if (request !== scheduleRequest.current) return;
       const errorMessage = getErrorMessage(e);
+      setSchedule([]);
       setError(errorMessage);
       toast({
         variant: "destructive",
@@ -271,12 +299,13 @@ export default function DoctorDayCalendar({
         description: errorMessage,
       });
     } finally {
-      setLoading(false);
+      if (request === scheduleRequest.current) setLoading(false);
     }
   }, [doctorId, date, toast]);
 
   useEffect(() => {
     void fetchSchedule();
+    return () => { scheduleRequest.current += 1; };
   }, [fetchSchedule, refreshKey]);
 
   // Cleanup timeouts on unmount
@@ -385,7 +414,7 @@ export default function DoctorDayCalendar({
     <>
       <Card>
         <CardContent className="p-4">
-          <section aria-labelledby="patient-queue-title" className="mb-5 space-y-2">
+          <section aria-labelledby="patient-queue-title" aria-busy={loading} className="mb-5 space-y-2">
             <h2 id="patient-queue-title" className="font-semibold">Patient queue</h2>
             <p className="text-sm text-gray-700">Active appointments for {date}, in scheduled time order.</p>
             {queue.length === 0 ? <p className="text-sm text-gray-700">No active appointments for these filters.</p> : (
@@ -397,8 +426,8 @@ export default function DoctorDayCalendar({
                       <span className="ml-2 text-sm text-gray-700">{appointment.slot} · {String(appointment.status).replaceAll('_', ' ')}</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" disabled={appointment.id?.startsWith('optimistic-')} onClick={() => setSelectedAppointment(appointment)} aria-label={`View appointment for ${formatPatientName(appointment.patient)}`}>Details</Button>
-                      <Button size="sm" disabled={appointment.id?.startsWith('optimistic-')} onClick={() => handleStartVisit(appointment)} aria-label={`${appointment.visit?.id ? 'Continue' : 'Start'} visit for ${formatPatientName(appointment.patient)}`}>{appointment.visit?.id ? 'Continue visit' : 'Start visit'}</Button>
+                      <Button size="sm" variant="outline" disabled={loading || appointment.id?.startsWith('optimistic-')} onClick={() => setSelectedAppointment(appointment)} aria-label={`View appointment for ${formatPatientName(appointment.patient)}`}>Details</Button>
+                      <Button size="sm" disabled={loading || appointment.id?.startsWith('optimistic-')} onClick={() => handleStartVisit(appointment)} aria-label={`${appointment.visit?.id ? 'Continue' : 'Start'} visit for ${formatPatientName(appointment.patient)}`}>{appointment.visit?.id ? 'Continue visit' : 'Start visit'}</Button>
                     </div>
                   </li>
                 ))}
