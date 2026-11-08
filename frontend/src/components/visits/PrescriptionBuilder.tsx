@@ -3884,16 +3884,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           return null;
         };
 
+        // Bottom of the lowest element that prints text or an image. Element
+        // boxes include their padding, so this errs on the safe side.
         const lowestContentBottom = (root: HTMLElement) => {
           let bottom = -Infinity;
-          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-          while (walker.nextNode()) {
-            if (!walker.currentNode.textContent?.trim()) continue;
-            const range = document.createRange();
-            range.selectNodeContents(walker.currentNode);
-            for (const rect of Array.from(range.getClientRects())) if (rect.height > 0) bottom = Math.max(bottom, rect.bottom);
-          }
-          root.querySelectorAll('img').forEach(img => { bottom = Math.max(bottom, img.getBoundingClientRect().bottom); });
+          root.querySelectorAll<HTMLElement>('*').forEach(el => {
+            const printsText = Array.from(el.childNodes).some(n => n.nodeType === Node.TEXT_NODE && n.textContent?.trim());
+            if (!printsText && el.tagName !== 'IMG') return;
+            const rect = el.getBoundingClientRect();
+            if (rect.height > 0) bottom = Math.max(bottom, rect.bottom);
+          });
           return bottom;
         };
 
