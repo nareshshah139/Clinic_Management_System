@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
+import { usePrefilledPatient } from './usePrefilledPatient';
 import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/lib/doctor-availability';
 import { useToast } from '@/hooks/use-toast';
 import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError, getConflictDetails, doTimeSlotsOverlap, generateTimeSlots, addMinutesToHHMM, getSlotDurationMinutes } from '@/lib/utils';
@@ -18,6 +19,8 @@ import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle, Info } from 'lucide-react';
 import DoctorDayCalendar from './DoctorDayCalendar';
+import { useOverbookConfirm } from './useOverbookConfirm';
+import { overbookFlag } from '@/lib/overbooking';
 import { AppointmentStatus } from '@cms/shared-types';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 
@@ -45,6 +48,7 @@ export default function AppointmentScheduler({
   hideHeaderControls,
 }: AppointmentSchedulerProps) {
   const { toast } = useToast();
+  const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
   const router = useRouter();
   const [slotConfig, setSlotConfig] = useState<TimeSlotConfig>(timeSlotConfig ?? DEFAULT_TIME_SLOT_CONFIG);
   const [date, setDate] = useState<string>(getISTDateString());
@@ -77,11 +81,7 @@ export default function AppointmentScheduler({
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
   // Grid-level duration selector for preview and click actions
   const [gridDurationMinutes, setGridDurationMinutes] = useState<number>(slotConfig.stepMinutes);
-  useEffect(() => {
-    if (prefillPatientId) {
-      setSelectedPatientId(prefillPatientId);
-    }
-  }, [prefillPatientId]);
+  usePrefilledPatient(prefillPatientId, selectedPatientId, setSelectedPatientId, setSelectedPatient);
 
   // Apply controlled doctor/date when provided
   useEffect(() => {
@@ -282,6 +282,10 @@ export default function AppointmentScheduler({
   }, [autoPromptedForSearch, toast]);
 
   const handleBookingRequest = (slot: string) => {
+    if (!selectedPatient || selectedPatient.id !== selectedPatientId) {
+      toast({ variant: 'destructive', title: 'Patient required', description: 'Select a patient before booking.' });
+      return;
+    }
     // Validate the appointment form
     const validationErrors = validateAppointmentForm({
       doctorId,
@@ -319,14 +323,16 @@ export default function AppointmentScheduler({
     try {
       setIsBooking(true);
       const finalSlot = appointmentData.slot || pendingBookingSlot;
-      const created = await apiClient.createAppointment({ 
+      const created = await sendWithOverbookConfirm((allowOverbook) => apiClient.createAppointment({
         doctorId, 
         patientId: selectedPatientId, 
         date, 
         slot: finalSlot, 
         visitType: appointmentData.visitType,
-        roomId: appointmentData.roomId
-      });
+        roomId: appointmentData.roomId,
+        ...overbookFlag(allowOverbook),
+      }));
+      if (!created) return;
       
       // Success toast
       toast({
@@ -447,11 +453,13 @@ export default function AppointmentScheduler({
 
     setRescheduleLoading(true);
     try {
-      await apiClient.rescheduleAppointment(rescheduleContext.appointment.id, {
+      const moved = await sendWithOverbookConfirm((allowOverbook) => apiClient.rescheduleAppointment(rescheduleContext.appointment.id!, {
         date: targetDate,
         slot: newSlot,
         roomId: rescheduleContext.appointment.room?.id,
-      });
+        ...overbookFlag(allowOverbook),
+      }));
+      if (!moved) return;
 
       toast({
         variant: "success",
@@ -487,7 +495,7 @@ export default function AppointmentScheduler({
     } finally {
       setRescheduleLoading(false);
     }
-  }, [rescheduleContext, rescheduleLoading, date, fetchSlots, toast]);
+  }, [rescheduleContext, rescheduleLoading, date, fetchSlots, toast, sendWithOverbookConfirm]);
 
   // Filter appointments based on status, visitType and room
   const filteredAppointments = appointments.filter(apt => {
@@ -781,9 +789,12 @@ export default function AppointmentScheduler({
         bookingInProgress={isBooking ? bookingSlot : undefined}
         onAppointmentUpdate={() => setRefreshKey((prev) => prev + 1)}
         timeSlotConfig={slotConfig}
-        disableSlotBooking={!selectedPatientId && !rescheduleContext}
+        disableSlotBooking={(!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId) && !rescheduleContext}
         optimisticAppointment={optimisticAppointment}
+        maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}
       />
+
+      {overbookDialog}
 
       <AppointmentBookingDialog
         open={bookingDialogOpen}

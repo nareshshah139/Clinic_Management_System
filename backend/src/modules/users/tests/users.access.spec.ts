@@ -10,12 +10,12 @@ import { RolesGuard } from '../../../shared/guards/roles.guard';
 const row = (id: string, role: string) => ({
   id, role, branchId: 'branch', firstName: id, lastName: 'Synthetic', email: `${id}@example.test`,
   password: '$2b$10$synthetic-hash', resetToken: 'synthetic-reset', resetTokenExpiry: new Date(), googleRefreshToken: 'synthetic-refresh',
-  permissions: null, metadata: null, branch: { id: 'branch' },
+  permissions: null, metadata: role === 'DOCTOR' ? JSON.stringify({ whatsappAccessToken: 'synthetic-whatsapp-token', textSize: 'LARGE' }) : null, branch: { id: 'branch' },
 });
 
 describe('/users access control', () => {
   let app: INestApplication;
-  const users: Record<string, ReturnType<typeof row>> = { admin: row('admin', 'ADMIN'), reception: row('reception', 'RECEPTION'), doctor: row('doctor', 'DOCTOR') };
+  const users: Record<string, ReturnType<typeof row>> = { admin: row('admin', 'ADMIN'), reception: row('reception', 'RECEPTION'), doctor: row('doctor', 'DOCTOR'), lab: row('lab', 'LAB_TECH') };
   const db: any = {
     user: {
       findMany: jest.fn(async () => Object.values(users)),
@@ -30,16 +30,17 @@ describe('/users access control', () => {
   const as = (id: string) => ({ 'x-user': id });
 
   beforeAll(async () => {
-    const module = await Test.createTestingModule({
-      controllers: [UsersController],
-      providers: [{ provide: UsersService, useValue: new UsersService(db, {} as any) }, { provide: APP_GUARD, useClass: RolesGuard }],
-    }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => {
+    const auth = { canActivate: (context: any) => {
       const req = context.switchToHttp().getRequest();
       const user = users[req.headers['x-user']];
       if (!user) return false;
       req.user = { id: user.id, role: user.role, branchId: user.branchId };
       return true;
-    } }).compile();
+    } };
+    const module = await Test.createTestingModule({
+      controllers: [UsersController],
+      providers: [{ provide: UsersService, useValue: new UsersService(db, {} as any) }, { provide: APP_GUARD, useValue: auth }, { provide: APP_GUARD, useClass: RolesGuard }],
+    }).overrideGuard(JwtAuthGuard).useValue(auth).compile();
     app = module.createNestApplication();
     await app.init();
   });
@@ -54,6 +55,15 @@ describe('/users access control', () => {
       expect(user).not.toHaveProperty('resetTokenExpiry');
       expect(user).not.toHaveProperty('googleRefreshToken');
     }
+  });
+
+  it('rejects a lab user and redacts doctor WhatsApp tokens from staff responses', async () => {
+    await request(app.getHttpServer()).get('/users').set(as('lab')).expect(403);
+    const list = await request(app.getHttpServer()).get('/users').set(as('reception')).expect(200);
+    const doctor = list.body.users.find((user: any) => user.id === 'doctor');
+    expect(doctor.metadata).toEqual({ textSize: 'LARGE' });
+    const one = await request(app.getHttpServer()).get('/users/doctor').set(as('reception')).expect(200);
+    expect(one.body.metadata).toEqual({ textSize: 'LARGE' });
   });
 
   it.each([

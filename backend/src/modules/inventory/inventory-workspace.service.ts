@@ -5,6 +5,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { randomUUID } from 'node:crypto';
 import { PharmacyPurchaseLedgerService } from '../pharmacy/pharmacy-purchase-ledger.service';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { hasScopedPermission } from '../../shared/guards/scoped-permission';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
@@ -15,7 +16,7 @@ export class InventoryWorkspaceService {
   constructor(private readonly prisma: PrismaService, private readonly workflow: InventoryWorkflowService) {}
   async require(actor: WorkflowActor, permission: string) {
     const p = await this.workflow.permissions(actor);
-    if (!p.has('*') && !p.has(permission)) throw new ForbiddenException(`This action requires ${permission}`);
+    if (!p.has('*') && !hasScopedPermission(p, permission)) throw new ForbiddenException(`This action requires ${permission}`);
   }
   private present(item: any) {
     const metadata = jsonObject(item.metadata), priceBasis = metadata.purchaseInvoice?.priceBasis || metadata.priceBasis;
@@ -166,7 +167,7 @@ export class InventoryWorkspaceService {
    * allowed to read the approval queue, without pagination or catalog-size limits.
    */
   async overview(actor:WorkflowActor) {
-    const caps=await this.workflow.capabilities(actor),p=await this.workflow.permissions(actor),has=(x:string)=>p.has('*')||p.has(x);
+    const caps=await this.workflow.capabilities(actor),p=await this.workflow.permissions(actor),has=(x:string)=>p.has('*')||hasScopedPermission(p,x);
     const stock=has('inventory:item:read')?await this.stock(actor):null;
     const docs=(await this.workflow.documents(actor,{limit:100}));
     const active=await this.prisma.inventoryWorkflowDocument.groupBy({by:['kind','status'],where:{branchId:actor.branchId,kind:{in:Object.keys(caps.kinds).filter(k=>caps.kinds[k].read)}},_count:true});

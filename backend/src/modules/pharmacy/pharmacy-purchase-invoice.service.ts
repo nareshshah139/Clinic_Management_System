@@ -1,3 +1,4 @@
+import { hasScopedPermission } from '../../shared/guards/scoped-permission';
 import { PurchaseImportRecovery, PurchaseImportFence, claimPurchaseImport, bindPurchaseImport, preparePurchaseWrite } from './purchase-import-recovery';
 import { checkedProductQuery, matchProductSearch, normalizeProductSearch, ocrProductSearchQuery, searchPackKey } from '../../shared/search/product-search';
 import { autocompleteDrugCatalog, findDrugSearchCandidates, loadReviewedProductAliases, searchableDrug, DrugSearchCandidate } from '../../shared/search/drug-search';
@@ -106,6 +107,10 @@ export class PharmacyPurchaseInvoiceService {
 
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security;product] purchase-scoped-grants
+   * Purchase capabilities MUST honor action wildcards within their exact permission scope.
+   */
   async capabilities(user: { id: string; role: string }) {
     const dbUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { role: true, permissions: true } });
     const role = dbUser?.role;
@@ -117,7 +122,7 @@ export class PharmacyPurchaseInvoiceService {
     };
     const roleRecord = dbUser ? await this.prisma.role.findFirst({ where: { name: role }, select: { permissions: true } }) : null;
     const permissions = new Set([...parse(dbUser?.permissions), ...parse(roleRecord?.permissions)]);
-    const has = (...keys: string[]) => eligible && (universal || keys.some(key => permissions.has(key)));
+    const has = (...keys: string[]) => eligible && (universal || keys.some(key => hasScopedPermission(permissions, key)));
     const read = has('pharmacy:purchase-invoice:read', 'inventory:po:read');
     const create = has('pharmacy:purchase-invoice:create', 'inventory:po:create');
     const review = has('pharmacy:purchase-invoice:review', 'inventory:po:update');

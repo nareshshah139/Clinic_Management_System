@@ -6,6 +6,8 @@ import { Fragment, useMemo } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useDashboardUser } from "./dashboard-user-context";
+import { usePendingItemRequestCount } from "@/components/inventory/use-pending-item-requests";
+import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import type { LucideIcon } from "lucide-react";
 import {
   Calendar,
@@ -205,6 +207,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const searchParams = useSearchParams();
   const { user, logout, loading } = useDashboardUser();
   const role = user?.role;
+  const pendingItemRequests = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(role || ""));
 
   const navigationItems = useMemo(
     () => filterNavigationByRole(navigation, role),
@@ -275,6 +278,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 )}
               />
               {item.name}
+              {item.href === "/dashboard/inventory" && pendingItemRequests > 0 && (
+                <span className="ml-auto rounded-full bg-destructive px-2 text-xs font-semibold text-destructive-foreground" aria-label={`${pendingItemRequests} new item requests waiting for approval`}>
+                  {pendingItemRequests}
+                </span>
+              )}
             </Link>
             </Fragment>
           );

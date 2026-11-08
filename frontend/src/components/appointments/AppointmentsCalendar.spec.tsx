@@ -13,6 +13,7 @@ jest.mock('@/hooks/use-toast', () => ({
 jest.mock('@/lib/api', () => ({
   apiClient: {
     getDoctorSchedule: jest.fn().mockResolvedValue({ appointments: [] }),
+    getPatient: jest.fn().mockResolvedValue({ id: 'p1', firstName: 'Synthetic', lastName: 'Patient', phone: '0000000000' }),
     getUsers: jest.fn().mockResolvedValue({ data: [{ id: 'd1', firstName: 'Do', lastName: 'Ctor', role: 'DOCTOR' }] }),
     getRooms: jest.fn().mockResolvedValue({ rooms: [] }),
     getRoomSchedule: jest.fn().mockResolvedValue({ appointments: [] }),
@@ -43,6 +44,8 @@ describe('AppointmentsCalendar booking flow', () => {
 
     // Wait for doctor selection effect to run
     await waitFor(() => expect(screen.getByText('Doctor Calendar')).toBeInTheDocument());
+
+    await screen.findByText(/Selected: Synthetic Patient/);
 
     // There should be free tiles; pick the first book button by regex Book HH:MM-HH:MM
     const tiles = await screen.findAllByRole('button', { name: /Book \d{2}:\d{2}-\d{2}:\d{2}/i });

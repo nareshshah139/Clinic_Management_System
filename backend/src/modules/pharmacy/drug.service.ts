@@ -32,19 +32,25 @@ import {
 export class DrugService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:reliability] optional-drug-identifiers
+   * Creating a drug MUST store blank barcode and SKU values as null and check trimmed nonblank identifiers for duplicates.
+   */
   async create(createDrugDto: CreateDrugDto, branchId: string) {
     try {
       this.assertProductMasterComplete(createDrugDto);
+      const barcode = createDrugDto.barcode?.trim() || null;
+      const sku = createDrugDto.sku?.trim() || null;
 
       // Duplicate checks: barcode/SKU, and soft match by name+manufacturer in same branch
       const dup = await this.prisma.drug.findFirst({
         where: {
           branchId,
           OR: [
-            createDrugDto.barcode
-              ? { barcode: createDrugDto.barcode }
+            barcode
+              ? { barcode: barcode }
               : undefined,
-            createDrugDto.sku ? { sku: createDrugDto.sku } : undefined,
+            sku ? { sku: sku } : undefined,
             {
               AND: [
                 { name: { equals: createDrugDto.name, mode: 'insensitive' } },
@@ -61,12 +67,12 @@ export class DrugService {
       });
 
       if (dup) {
-        if (createDrugDto.barcode && dup.barcode === createDrugDto.barcode) {
+        if (barcode && dup.barcode === barcode) {
           throw new ConflictException(
             'A drug with this barcode already exists',
           );
         }
-        if (createDrugDto.sku && dup.sku === createDrugDto.sku) {
+        if (sku && dup.sku === sku) {
           throw new ConflictException('A drug with this SKU already exists');
         }
         // Same name+manufacturer — treat as duplicate
@@ -78,6 +84,8 @@ export class DrugService {
       const drug = await this.prisma.drug.create({
         data: {
           ...createDrugDto,
+          barcode,
+          sku,
           branchId,
         },
         include: {

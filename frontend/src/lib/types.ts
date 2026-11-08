@@ -258,6 +258,7 @@ export interface RescheduleAppointmentPayload {
   slot: string;
   roomId?: string;
   notes?: string;
+  allowOverbook?: boolean;
 }
 
 // Create Appointment DTO
