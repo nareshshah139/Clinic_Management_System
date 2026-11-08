@@ -114,10 +114,18 @@ const menus: Record<string, string[][]> = {
  * Failed capability reads MUST hide stale access and expose an explicit retry. Refresh and
  * actor changes MUST fetch capabilities again; older responses cannot restore superseded access.
  */
+const REPORT_TASK_ROLES: Record<string, readonly string[]> = {
+  reports: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST"],
+  daywise: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
+  margin: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
+};
+
 export function InventoryWorkspace() {
   const { user } = useDashboardUser();
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const canSeeApprovals = canReadEdits || user?.role === "RECEPTION";
+  const taskVisible = ([id]: string[]) =>
+    id === "approvals" ? canSeeApprovals : !REPORT_TASK_ROLES[id] || REPORT_TASK_ROLES[id].includes(user?.role || "");
   const pendingItems = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""));
   const taskLabel = (id: string, label: string) => (id === "approvals" && pendingItems > 0 ? `${label} (${pendingItems})` : label);
   const params = useSearchParams(),
@@ -233,7 +241,7 @@ export function InventoryWorkspace() {
     void loadPermissions();
     return () => { permissionRequest.current += 1; };
   }, [loadPermissions]);
-  const availableTasks = (menus[area] || []).filter(([id]) => id !== "approvals" || canSeeApprovals);
+  const availableTasks = (menus[area] || []).filter(taskVisible);
   const primaryTasks = availableTasks.slice(0, 3);
   const moreTasks = availableTasks.slice(3);
   const switchTask = (id: string) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1" });
@@ -293,7 +301,7 @@ export function InventoryWorkspace() {
               })
             }
           >
-            {menus[area].filter(([id]) => id !== "approvals" || canSeeApprovals).map(([id, label]) => (
+            {menus[area].filter(taskVisible).map(([id, label]) => (
               <option key={id} value={id}>
                 {taskLabel(id, label)}
               </option>

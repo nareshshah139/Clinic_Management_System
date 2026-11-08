@@ -6,10 +6,11 @@ const mockRouter = {push:jest.fn(),refresh:jest.fn()};
 let mockQuery = 'area=stock&view=list';
 jest.mock('@/lib/api', () => ({apiClient:{get:jest.fn()}}));
 jest.mock('next/navigation', () => ({usePathname:()=>'/dashboard/inventory',useRouter:()=>mockRouter,useSearchParams:()=>new URLSearchParams(mockQuery)}));
-jest.mock('@/components/layout/dashboard-user-context', () => ({useDashboardUser:()=>({user:{id:'operator',branchId:'branch',role:'OWNER'}})}));
+let mockRole = 'OWNER';
+jest.mock('@/components/layout/dashboard-user-context', () => ({useDashboardUser:()=>({user:{id:'operator',branchId:'branch',role:mockRole}})}));
 jest.mock('@/components/inventory/WorkflowDocumentEditor', () => ({WorkflowDocumentEditor:({recoveryRequestKey,recoveryVersion,recoveryOperation,onBack}:any)=><div><p>Recover request {recoveryRequestKey || 'missing'}</p><p>Recovery version {recoveryVersion ?? 'missing'} operation {recoveryOperation || 'missing'}</p><button onClick={onBack}>Back from recovery</button></div>}));
 jest.mock('@/components/inventory/WorkspaceStock', () => ({WorkspaceStock:({capabilities}:any)=><p>Count access {capabilities.kinds.COUNT.write?'available':'unavailable'}</p>}));
-beforeEach(()=>{jest.clearAllMocks();mockQuery='area=stock&view=list';});
+beforeEach(()=>{jest.clearAllMocks();mockQuery='area=stock&view=list';mockRole='OWNER';});
 it('retries failed permissions from a named control and renders the recovered access',async()=>{
   (apiClient.get as jest.Mock).mockRejectedValueOnce(new Error('Network unavailable')).mockResolvedValue({kinds:{COUNT:{write:true}}});
   render(<InventoryWorkspace/>);
@@ -130,4 +131,19 @@ it('reloads the current query when an older mutation retains its reload callback
   expect(view.result.current.status).toBe('ready');
   expect(view.result.current.data).toEqual({label:'/current-query'});
   expect((apiClient.get as jest.Mock).mock.calls.map(([url])=>url)).toEqual(['/old-query','/current-query','/current-query']);
+});
+
+it.each([
+  ['RECEPTION', []],
+  ['PHARMACIST', ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin']],
+  ['DOCTOR', ['Day-wise summary', 'Item-wise margin']],
+])('lists only the pharmacy reports the %s role can open', async (role, expected) => {
+  mockRole = role;
+  mockQuery = 'area=purchases&view=suppliers';
+  (apiClient.get as jest.Mock).mockResolvedValue({ kinds: {}, rows: [], total: 0, totalPages: 1 });
+  render(<InventoryWorkspace/>);
+  const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+  const reports = [...new Set(options)].filter((o) => ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin'].includes(o || ''));
+  expect(reports).toEqual(expected);
+  expect(options).toContain('Terms of Trade');
 });
