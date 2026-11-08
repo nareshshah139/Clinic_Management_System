@@ -456,7 +456,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
 }
 
 function VisitsPageInner() {
-  const [patients, setPatients] = useState<PatientMatch[]>([]);
+  const [hasPatients, setHasPatients] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<PatientMatch | null>(null);
   const [doctors, setDoctors] = useState<DoctorSummary[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
@@ -505,9 +506,8 @@ function VisitsPageInner() {
     try {
       const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
       setAppointmentData(appointment);
-      if (appointment?.doctorId) {
-        setSelectedDoctorId(appointment.doctorId);
-      }
+      if (appointment?.patientId) setSelectedPatientId(appointment.patientId);
+      if (appointment?.doctorId) setSelectedDoctorId(appointment.doctorId);
     } catch (error) {
       console.error('Failed to fetch appointment data:', error);
     }
@@ -516,43 +516,25 @@ function VisitsPageInner() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [patientsRes, usersRes] = await Promise.allSettled([
+      const [patientsRes, usersRes, meRes] = await Promise.allSettled([
         apiClient.getPatients({ page: 1, limit: 1 }),
-        apiClient.get('/users', { role: 'DOCTOR', limit: 1 })
+        apiClient.get('/users', { role: 'DOCTOR', limit: 100 }),
+        apiClient.get<{ id?: string; role?: string }>('/auth/me'),
       ]);
 
       if (patientsRes.status === 'fulfilled') {
-        const patientsData = extractPatients(patientsRes.value);
-        setPatients(patientsData);
-        setPatientOptions(patientsData.slice(0, 10));
-        if (patientsData.length > 0) {
-          setSelectedPatientId((prev) => {
-            if (prev) return prev;
-            if (urlPatientId && isValidId(urlPatientId)) return urlPatientId;
-            return ''; // Require an explicit patient selection on the setup screen.
-          });
-        }
+        setHasPatients(extractPatients(patientsRes.value).some((p) => p.id));
       }
 
-      if (usersRes.status === 'fulfilled') {
-        const doctorsData = extractDoctors(usersRes.value);
-        setDoctors(doctorsData);
-        if (doctorsData.length > 0) {
-          const candidate = doctorsData[0]?.id;
-          if (!candidate) {
-            console.warn('[VisitsPage] First doctor missing id, requiring manual selection');
-          }
-          setSelectedDoctorId((prev) => prev || (candidate || ''));
-        }
-      }
+      const doctorsData = usersRes.status === 'fulfilled' ? extractDoctors(usersRes.value) : [];
+      setDoctors(doctorsData);
 
-      try {
-        const currentUser = await apiClient.get<{ role?: string }>('/auth/me');
-        setCurrentUserRole(currentUser?.role ?? 'DOCTOR');
-      } catch (error) {
-        console.error('Failed to get current user:', error);
-        setCurrentUserRole('DOCTOR');
-      }
+      const me = meRes.status === 'fulfilled' ? meRes.value : null;
+      setCurrentUserRole(me?.role ?? 'DOCTOR');
+      const defaultDoctorId = me?.role === 'DOCTOR' && doctorsData.some((d) => d.id === me.id)
+        ? me.id
+        : doctorsData.length === 1 ? doctorsData[0].id : undefined;
+      if (defaultDoctorId) setSelectedDoctorId((prev) => prev || defaultDoctorId);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -566,26 +548,29 @@ function VisitsPageInner() {
 
   // Deep links open documentation; selecting a patient in setup keeps history accessible.
   useEffect(() => {
-    if (urlPatientId && selectedPatientId === urlPatientId && selectedDoctorId) {
+    if ((urlPatientId ? selectedPatientId === urlPatientId : appointmentIdParam && selectedPatientId) && selectedDoctorId) {
       setShowForm(true);
     }
-  }, [selectedPatientId, selectedDoctorId, urlPatientId]);
+  }, [selectedPatientId, selectedDoctorId, urlPatientId, appointmentIdParam]);
 
-  // Handle URL parameters for appointment linking
   useEffect(() => {
-    if (urlPatientId) {
-      setSelectedPatientId(urlPatientId);
-      if (urlDoctorId && isValidId(urlDoctorId)) {
-        setSelectedDoctorId(urlDoctorId);
-      }
-      if (appointmentIdParam) {
-        void fetchAppointmentData(appointmentIdParam);
-      }
-      if (autoStartParam) {
-        setShowForm(true);
-      }
-    }
+    if (urlPatientId) setSelectedPatientId(urlPatientId);
+    if (urlDoctorId && isValidId(urlDoctorId)) setSelectedDoctorId(urlDoctorId);
+    if (appointmentIdParam) void fetchAppointmentData(appointmentIdParam);
+    if (urlPatientId && autoStartParam) setShowForm(true);
   }, [appointmentIdParam, autoStartParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
+
+  useEffect(() => {
+    if (!selectedPatientId) {
+      setSelectedPatient(null);
+      return;
+    }
+    let cancelled = false;
+    apiClient.getPatient(selectedPatientId)
+      .then((patient) => { if (!cancelled) setSelectedPatient(patient as PatientMatch); })
+      .catch(() => { if (!cancelled) setSelectedPatient(null); });
+    return () => { cancelled = true; };
+  }, [selectedPatientId]);
 
   // Handle direct visit resume via visitId in URL
   useEffect(() => {
@@ -670,11 +655,6 @@ function VisitsPageInner() {
     return permissions[currentUserRole as keyof typeof permissions] || permissions.DOCTOR;
   }, [currentUserRole]);
 
-  const selectedPatient = useMemo(
-    () => patients.find((p) => p.id === selectedPatientId) ?? null,
-    [patients, selectedPatientId]
-  );
-
   const selectedDoctor = useMemo(
     () => doctors.find((d) => d.id === selectedDoctorId) ?? null,
     [doctors, selectedDoctorId]
@@ -692,7 +672,7 @@ function VisitsPageInner() {
     );
   }
  
-  if (!patients.some(patient => patient.id) || !doctors.some(doctor => doctor.id)) {
+  if (!hasPatients || !doctors.some(doctor => doctor.id)) {
     return (
       <Card>
         <CardHeader>
@@ -703,7 +683,7 @@ function VisitsPageInner() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {patients.length === 0 && (
+            {!hasPatients && (
               <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
                 <Users className="h-5 w-5 text-red-500" />
                 <div>
@@ -743,7 +723,7 @@ function VisitsPageInner() {
     );
   }
 
-  if (!showForm) {
+  if (!showForm || !selectedPatientId || !selectedDoctorId) {
     return (
       <div className="space-y-6">
         {/* Header with Guide */}

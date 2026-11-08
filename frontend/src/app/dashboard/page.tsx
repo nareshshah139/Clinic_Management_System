@@ -13,6 +13,7 @@ import { apiClient } from '@/lib/api';
 import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { DoctorPatientPanels } from '@/components/dashboard/DoctorPatientPanels';
 import { formatPatientName, getISTDateString } from '@/lib/utils';
@@ -407,32 +408,43 @@ export default function DashboardPage() {
               <p className="text-gray-500 text-center py-4">No appointments scheduled for today</p>
             ) : (
               <div className="space-y-3">
-                {todaysAppointments.map((appointment, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {formatPatientName(appointment.patient)}
-                      </p>
-                      <p className="text-xs text-gray-600">
-                        {appointment.slot}
-                      </p>
-                    </div>
-                    <Badge variant={
-                      appointment.status === 'CONFIRMED' 
-                        ? 'default' 
-                        : appointment.status === 'IN_PROGRESS'
-                        ? 'warning'
-                        : appointment.status === 'COMPLETED'
-                        ? 'default'
-                        : 'outline'
-                    }>
-                      {appointment.status}
-                    </Badge>
-                  </div>
-                ))}
+                {todaysAppointments.map((appointment, index) => {
+                  const rowClass = 'flex items-center justify-between p-3 rounded-lg bg-gray-50';
+                  const row = (
+                    <>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {formatPatientName(appointment.patient)}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {appointment.slot}
+                        </p>
+                      </div>
+                      <Badge variant={
+                        appointment.status === 'CONFIRMED' 
+                          ? 'default' 
+                          : appointment.status === 'IN_PROGRESS'
+                          ? 'warning'
+                          : appointment.status === 'COMPLETED'
+                          ? 'default'
+                          : 'outline'
+                      }>
+                        {appointment.status}
+                      </Badge>
+                    </>
+                  );
+                  return currentUser?.role === 'DOCTOR' ? (
+                    <Link
+                      key={appointment.id ?? index}
+                      href={`/dashboard/visits?appointmentId=${encodeURIComponent(appointment.id)}&patientId=${encodeURIComponent(appointment.patientId)}`}
+                      className={`${rowClass} hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2`}
+                    >
+                      {row}
+                    </Link>
+                  ) : (
+                    <div key={appointment.id ?? index} className={rowClass}>{row}</div>
+                  );
+                })}
                 <Button
                   variant="outline"
                   className="w-full mt-4"
