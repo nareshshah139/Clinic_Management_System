@@ -113,7 +113,22 @@ function TermsTable({ terms, canEdit, onEdit, onDeleted }: {
         <TableBody>
           {terms.map(term => (
             <TableRow key={term.id}>
-              <TableCell className="min-w-40 whitespace-normal font-medium">{term.productName}{!term.drugId && <span className="block text-xs text-muted-foreground">Not linked to a catalogue product</span>}</TableCell>
+              <TableCell className="min-w-40 whitespace-normal font-medium">
+                {term.productName}{!term.drugId && <span className="block text-xs font-normal text-muted-foreground">Not linked to a catalogue product</span>}
+                {canEdit && (
+                  <span className="mt-2 flex flex-wrap gap-2">
+                    <Button type="button" size="sm" variant="outline" className="whitespace-nowrap" onClick={() => onEdit(term)} aria-label={`Edit terms for ${term.productName}`}>Edit</Button>
+                    {confirming === term.id ? (
+                      <>
+                        <Button type="button" size="sm" variant="destructive" className="whitespace-nowrap" onClick={() => void remove(term)}>Confirm delete</Button>
+                        <Button type="button" size="sm" variant="ghost" className="whitespace-nowrap" onClick={() => setConfirming(null)}>Keep</Button>
+                      </>
+                    ) : (
+                      <Button type="button" size="sm" variant="ghost" className="whitespace-nowrap" onClick={() => setConfirming(term.id)} aria-label={`Delete terms for ${term.productName}`}>Delete</Button>
+                    )}
+                  </span>
+                )}
+              </TableCell>
               <TableCell>{formatPercent(term.discountPercent) ?? '—'}</TableCell>
               <TableCell>{formatScheme(term.schemeBuy, term.schemeFree) ?? '—'}</TableCell>
               <TableCell>{formatExpiry(term.minExpiryMonths) ?? '—'}</TableCell>
@@ -124,14 +139,6 @@ function TermsTable({ terms, canEdit, onEdit, onDeleted }: {
                 by {term.createdBy.name} on {displayClinicDate(term.createdAt)}
                 {(term.updatedBy.id !== term.createdBy.id || displayClinicDate(term.updatedAt) !== displayClinicDate(term.createdAt)) &&
                   <span className="block text-muted-foreground">updated by {term.updatedBy.name} on {displayClinicDate(term.updatedAt)}</span>}
-                {canEdit && (
-                  <span className="mt-2 flex gap-2">
-                    <Button type="button" size="sm" variant="outline" className="whitespace-nowrap" onClick={() => onEdit(term)} aria-label={`Edit terms for ${term.productName}`}>Edit</Button>
-                    {confirming === term.id
-                      ? <Button type="button" size="sm" variant="destructive" className="whitespace-nowrap" onClick={() => void remove(term)}>Confirm delete</Button>
-                      : <Button type="button" size="sm" variant="ghost" className="whitespace-nowrap" onClick={() => setConfirming(term.id)} aria-label={`Delete terms for ${term.productName}`}>Delete</Button>}
-                  </span>
-                )}
               </TableCell>
             </TableRow>
           ))}
