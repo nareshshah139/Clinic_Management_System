@@ -25,8 +25,8 @@ item absent while pending", fillcolor="#d1fadf", color="#039855"];
 Waiting for doctor", fillcolor="#d1fadf", color="#039855"];
   "StaffApproveForbidden" [label="Staff calls approve API
 403, still PENDING", fillcolor="#d1fadf", color="#039855"];
-  "StaffImportRefused" [label="Staff bulk import
-'Ask a doctor to import new items'", fillcolor="#d1fadf", color="#039855"];
+  "StaffImportCreatesDirectly" [label="Staff opening-stock import
+creates items directly (outside CR-30)", fillcolor="#d1fadf", color="#039855"];
   "PharmacistSubmitted" [label="Pharmacist add -> sent for approval", fillcolor="#d1fadf", color="#039855", peripheries=2];
   "DoctorStockPending" [label="Doctor stock search
 item absent, badge = pending", fillcolor="#d1fadf", color="#039855"];
@@ -68,7 +68,7 @@ no request, 1 item", fillcolor="#d1fadf", color="#039855", peripheries=2];
   "StaffRequestsPending" -> "StaffRequestsPending" [label="reload", color="#039855", fontcolor="#039855", style=solid];
   "StaffRequestsPending" -> "StaffApproveForbidden" [label="staffApproveViaApi", color="#039855", fontcolor="#039855", style=solid];
   "StaffApproveForbidden" -> "StaffRequestsPending" [label="reload", color="#039855", fontcolor="#039855", style=solid];
-  "StaffStock" -> "StaffImportRefused" [label="staffImportExcel", color="#039855", fontcolor="#039855", style=solid];
+  "StaffStock" -> "StaffImportCreatesDirectly" [label="staffImportExcel", color="#039855", fontcolor="#039855", style=solid];
   "StaffStock" -> "PharmacistSubmitted" [label="pharmacistSubmits", color="#039855", fontcolor="#039855", style=solid];
   "StaffStock" -> "DoctorAddedDirect" [label="doctorAddsDirect", color="#039855", fontcolor="#039855", style=solid];
   "StaffRequestsPending" -> "DoctorStockPending" [label="doctorLoginAndSearch ×5", color="#039855", fontcolor="#039855", style=solid];
