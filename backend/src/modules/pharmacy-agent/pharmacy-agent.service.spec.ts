@@ -455,7 +455,9 @@ describe('PharmacyAgentService new inventory items', () => {
     const prisma = {
       inventoryItemRequest: {
         create: jest.fn(async ({ data }) => ({ id: 'request-1', status: 'PENDING', ...data })),
+        findMany: jest.fn().mockResolvedValue([]),
       },
+      inventoryItem: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const requests = new InventoryItemRequestService(prisma as any, inventory as any);
     const service = new PharmacyAgentService(
