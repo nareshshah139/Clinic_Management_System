@@ -683,7 +683,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
   const [savingFromPreview, setSavingFromPreview] = useState(false);
   const prescriptionSaveInFlight = useRef(false);
-  const skipPostSaveCleanupRef = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [autoPreview, setAutoPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -760,11 +759,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [breakBeforeSignature, setBreakBeforeSignature] = useState(false);
   const [avoidBreakInsideTables, setAvoidBreakInsideTables] = useState(true);
   const [interactions, setInteractions] = useState<any[]>([]);
-  const [confirmPharmacy, setConfirmPharmacy] = useState<{
-    open: boolean;
-    prescriptionId: string;
-    summary: { medicationsCount: number } | null;
-  }>({ open: false, prescriptionId: '', summary: null });
 
   // Warm up Paged.js chunk during idle time to avoid first-use delay
   useEffect(() => {
@@ -2563,7 +2557,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return true;
   }, [onClinicalConflict]);
 
-  const create = useCallback(async (fromPreview = false, exportVisitId?: string) => {
+  const create = useCallback(async (exportVisitId?: string) => {
     if (prescriptionSaveInFlight.current) return;
     if (consultationType === 'TELE_VIDEO' && !teleVideoConsent) {
       toast({ variant: 'destructive', title: 'Patient consent required', description: TELE_VIDEO_CONSENT_REQUIRED });
@@ -2661,19 +2655,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       }
       onCreated?.(res?.id);
 
-      const skipCleanup = skipPostSaveCleanupRef.current;
-      skipPostSaveCleanupRef.current = false;
-
-      if (!skipCleanup && !standalone && !fromPreview) {
-        setConfirmPharmacy({
-          open: true,
-          prescriptionId: res?.id || '',
-          summary: {
-            medicationsCount: validItems.length,
-          },
-        });
-      }
-
       toast({
         variant: 'success',
         title: existingId ? 'Prescription updated' : 'Prescription created',
@@ -2715,7 +2696,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           onVisitSaved?.(saved);
         }
       }
-      const prescriptionId = validItems.length > 0 ? await create(true, savedVisitId || undefined) : undefined;
+      const prescriptionId = validItems.length > 0 ? await create(savedVisitId || undefined) : undefined;
       // create() already displays the specific save error; keep it visible.
       if (validItems.length > 0 && !prescriptionId) return null;
       if (standalone && !prescriptionId) {
@@ -5423,7 +5404,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             </div>
 
                           <div className="flex items-center justify-between pt-2 opacity-100">
-              <div className="text-sm text-gray-600">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
+              <div className="flex items-center gap-3 text-sm text-gray-600">
+                <span>Total items: {validItems.length} • Total qty: {totalQuantity}</span>
+                {hasSavedPrescription && <Badge variant="success">Sent to pharmacy queue</Badge>}
+              </div>
               <div className="flex gap-2">
                 <div className="hidden sm:flex items-center gap-2">
                   <span className="text-sm text-gray-700">Print</span>
@@ -5461,17 +5445,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <Button onClick={() => void create()} disabled={!canCreate || savingFromPreview || savingForExport}>
                   {(visitId || standalone || ensureVisitId) ? 'Create Prescription' : 'Save visit first'}
                 </Button>
-                {!standalone && validItems.length > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&doctorId=${encodeURIComponent(doctorId)}${visitId ? `&visitId=${encodeURIComponent(visitId)}` : ''}`;
-                      window.location.href = url;
-                    }}
-                  >
-                    Go to Pharmacy
-                  </Button>
-                )}
               </div>
             </div>
         </div>
@@ -6192,7 +6165,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <Button
                       className="col-span-2 bg-green-600 hover:bg-green-700 text-white"
                       disabled={!canCreate || savingFromPreview || savingForExport}
-                      onClick={() => void create(true)}
+                      onClick={() => void create()}
                     >
                       {savingFromPreview ? 'Saving…' : canCreate ? 'Save Prescription' : 'Add medications to save'}
                     </Button>
@@ -6725,37 +6698,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           </DialogContent>
         </Dialog>
 
-        <Dialog open={confirmPharmacy.open} onOpenChange={(open: boolean) => setConfirmPharmacy((prev) => ({ ...prev, open }))}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Go to Pharmacy?</DialogTitle>
-              <DialogDescription>
-                {confirmPharmacy.summary?.medicationsCount || 0} medications were added to this prescription. Continue to
-                the pharmacy module to bill them now?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setConfirmPharmacy({ open: false, prescriptionId: '', summary: null })}
-              >
-                Stay Here
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!confirmPharmacy.prescriptionId) {
-                    setConfirmPharmacy({ open: false, prescriptionId: '', summary: null });
-                    return;
-                  }
-                  const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(confirmPharmacy.prescriptionId)}&doctorId=${encodeURIComponent(doctorId)}`;
-                  window.location.href = url;
-                }}
-              >
-                Yes, go to Pharmacy
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         <Dialog
           open={templatePromptOpen}
