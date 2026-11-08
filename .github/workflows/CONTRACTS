@@ -27,3 +27,8 @@ same-invoice recovery paths and negative controls, and retain diagnostics even o
 @cc [owner:nareshshah139,label:security;reliability] formal-checker-pinned-download
 The invoice recovery formal verification workflow MUST verify the pinned SHA-256 of its
 model checker after every download and fail if the artifact is unavailable or differs.
+
+@cc [owner:nareshshah139,label:verification] appointment-overbooking-formal-gate
+Every pull request and main push MUST run the pinned appointment overbooking model checker,
+verify the booking limit at limits 1 to 3, and require each broken variant (no lock, count
+outside the lock, ignored overbook flag) to fail as expected.

@@ -18,6 +18,8 @@ import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle, Info } from 'lucide-react';
 import { AppointmentStatus } from '@cms/shared-types';
+import { useOverbookConfirm } from './useOverbookConfirm';
+import { overbookFlag } from '@/lib/overbooking';
 
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -50,6 +52,7 @@ export default function AppointmentsCalendar({
   hideHeaderControls,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
+  const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
   const [slotConfig, setSlotConfig] = useState<TimeSlotConfig>(timeSlotConfig);
   const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
@@ -356,7 +359,7 @@ export default function AppointmentsCalendar({
       
       setOptimisticAppointment(optimisticAppt);
       
-      const created: any = await apiClient.createAppointment({ 
+      const created: any = await sendWithOverbookConfirm((allowOverbook) => apiClient.createAppointment({
         doctorId, 
         patientId: selectedPatientId, 
         date, 
@@ -364,7 +367,12 @@ export default function AppointmentsCalendar({
         visitType: appointmentData.visitType,
         roomId: appointmentData.roomId,
         notes: appointmentData.notes,
-      });
+        ...overbookFlag(allowOverbook),
+      }));
+      if (!created) {
+        setOptimisticAppointment(null);
+        return;
+      }
       
       // Clear optimistic appointment and refresh with real data
       setOptimisticAppointment(null);
@@ -701,6 +709,7 @@ export default function AppointmentsCalendar({
             disableSlotBooking={!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId}
             selectedRoomName={selectedRoom?.name}
             timeSlotConfig={{ ...slotConfig, stepMinutes: Math.max(10, gridMinutes) }}
+            maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}
           />
         </CardContent>
       </Card>
@@ -715,6 +724,8 @@ export default function AppointmentsCalendar({
         onConfirm={handleBookingConfirm}
         onCancel={handleBookingCancel}
       />
+
+      {overbookDialog}
 
       <PatientQuickCreateDialog
         open={quickCreateOpen}

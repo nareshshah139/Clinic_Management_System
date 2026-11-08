@@ -37,6 +37,7 @@ export interface DoctorAvailability {
   source: HoursSource;
   hours: WeeklyShift[];
   timeOff: TimeOff[];
+  maxBookingsPerSlot: number;
 }
 
 export interface DoctorDay {
@@ -46,6 +47,15 @@ export interface DoctorDay {
   working: MinuteInterval[];
   intervals: MinuteInterval[];
   blocked: (MinuteInterval & { id: string; kind: TimeOffKind; reason: string | null })[];
+  /** Patients the doctor may see in one slot; 1 means no overbooking. */
+  maxBookingsPerSlot: number;
+}
+
+export const MAX_BOOKINGS_PER_SLOT = 5;
+
+/** Anything but an integer in 1..MAX_BOOKINGS_PER_SLOT reads as 1, the no-overbooking default. */
+export function slotLimit(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_BOOKINGS_PER_SLOT ? value : 1;
 }
 
 export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -60,7 +70,7 @@ export const TIME_OFF_LABELS: Record<TimeOffKind, string> = {
 export async function loadDoctorDay(doctorId: string, date: string): Promise<DoctorDay | null> {
   try {
     const day = await apiClient.getDoctorDay(doctorId, date);
-    return day && Array.isArray(day.working) ? day : null;
+    return day && Array.isArray(day.working) ? { ...day, maxBookingsPerSlot: slotLimit(day.maxBookingsPerSlot) } : null;
   } catch {
     return null;
   }

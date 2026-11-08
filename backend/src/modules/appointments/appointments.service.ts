@@ -32,6 +32,7 @@ import {
   istDayStart,
   minutesToHhmm,
   overlaps,
+  slotLimit,
   slotToMinutes,
   timeOffOverlappingSlot,
 } from '../doctor-availability/availability';
@@ -76,6 +77,7 @@ export class AppointmentsService {
       visitType,
       notes,
       source,
+      allowOverbook = false,
     } = createAppointmentDto;
 
     // Validate inputs
@@ -112,7 +114,7 @@ export class AppointmentsService {
 
     const appointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
       await this.lockSchedule(tx, branchId, doctorId, roomId ?? null, date);
-      await this.assertSlotFree(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId);
+      await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId, { allowOverbook });
       const tokenNumber = await this.nextDoctorToken(tx, branchId, doctorId, date);
 
       return tx.appointment.create({
@@ -453,7 +455,12 @@ export class AppointmentsService {
           const status = updateAppointmentDto.status ?? current.status;
           if (status !== AppointmentStatus.CANCELLED &&
               (roomId !== current.roomId || current.status === AppointmentStatus.CANCELLED)) {
-            await this.assertSlotFree(tx, 'Scheduling conflict detected', current.doctorId, roomId, date, current.slot, branchId, id);
+            // Un-cancelling adds the patient back to the doctor's slot; a room change leaves the
+            // doctor's load unchanged, so only the new room is checked.
+            await this.assertSlotBookable(tx, 'Scheduling conflict detected', current.doctorId, roomId, date, current.slot, branchId, {
+              excludeAppointmentId: id,
+              roomOnly: current.status !== AppointmentStatus.CANCELLED,
+            });
           }
           const changed = await tx.appointment.updateMany({
             where: { id, branchId, doctorId: current.doctorId, date: current.date, slot: current.slot, roomId: current.roomId, status: current.status },
@@ -501,7 +508,10 @@ export class AppointmentsService {
     const newRoomId = rescheduleDto.roomId ?? appointment.roomId ?? null;
     const rescheduledAppointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
       await this.lockSchedule(tx, branchId, appointment.doctorId, newRoomId, rescheduleDto.date);
-      await this.assertSlotFree(tx, 'Scheduling conflict detected for new time slot', appointment.doctorId, newRoomId, rescheduleDto.date, rescheduleDto.slot, branchId, id);
+      await this.assertSlotBookable(tx, 'Scheduling conflict detected for new time slot', appointment.doctorId, newRoomId, rescheduleDto.date, rescheduleDto.slot, branchId, {
+        allowOverbook: rescheduleDto.allowOverbook ?? false,
+        excludeAppointmentId: id,
+      });
       return tx.appointment.update({
       where: { id },
       data: {
@@ -1218,14 +1228,34 @@ export class AppointmentsService {
     if (roomId) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`appointment-room:${branchId}:${roomId}:${date}`}))`;
   }
 
-  private async assertSlotFree(
+  /**
+   * @cc [owner:nareshshah139,label:product] doctor-overbooking
+   * Callers hold the locks from lockSchedule. A slot with no overlapping booking for the doctor
+   * is bookable. One that already has some MAY take another only when the request carries
+   * allowOverbook and the overlap count is below the doctor's limit, read in this transaction.
+   * Room conflicts are never overbooked. A refusal carries `overbook` so the UI can offer
+   * "book anyway" only when resending with allowOverbook would succeed. A roomOnly check is for an
+   * appointment that already holds its doctor slot and only changes room: just the room must be free.
+   * Model: verification/appointment-overbooking/Overbooking.tla (Count, Decide, Accepts).
+   */
+  private async assertSlotBookable(
     tx: Prisma.TransactionClient, message: string, doctorId: string, roomId: string | null,
-    date: string, slot: string, branchId: string, excludeAppointmentId?: string,
+    date: string, slot: string, branchId: string,
+    { allowOverbook = false, excludeAppointmentId, roomOnly = false }: { allowOverbook?: boolean; excludeAppointmentId?: string; roomOnly?: boolean },
   ) {
-    const conflicts = await this.checkSchedulingConflicts(doctorId, roomId, date, slot, branchId, excludeAppointmentId, tx);
+    const found = await this.checkSchedulingConflicts(doctorId, roomId, date, slot, branchId, excludeAppointmentId, tx);
+    const conflicts = roomOnly ? found.filter((c) => c.type === 'room') : found;
     if (conflicts.length === 0) return;
+    // Every booking overlapping the slot counts, even when they do not overlap each other,
+    // so simultaneous patients can never exceed the limit.
+    const booked = conflicts.filter((c) => c.type === 'doctor').length;
+    const roomTaken = conflicts.some((c) => c.type === 'room');
+    const doctor = await tx.user.findUnique({ where: { id: doctorId }, select: { maxBookingsPerSlot: true } });
+    const limit = slotLimit(doctor?.maxBookingsPerSlot);
+    if (!roomTaken && acceptsBooking(booked, limit, allowOverbook)) return;
     const suggestions = await this.getAlternativeSlots(doctorId, roomId, date, slot, branchId);
-    throw new ConflictException({ message, conflicts, suggestions });
+    const overbook = { allowed: !roomTaken && booked < limit, booked, limit };
+    throw new ConflictException({ message, conflicts, suggestions, overbook });
   }
 
   /** Callers hold the doctor-day lock from lockSchedule. */
@@ -1255,6 +1285,11 @@ export class AppointmentsService {
     }
   }
 
+}
+
+/** Accepts(r, count) in Overbooking.tla. */
+function acceptsBooking(booked: number, limit: number, allowOverbook: boolean): boolean {
+  return booked === 0 || (booked < limit && allowOverbook);
 }
 
 function describeTimeOff(block: BlockedInterval): string {

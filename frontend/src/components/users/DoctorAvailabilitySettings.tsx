@@ -5,6 +5,9 @@ import { Plus, Trash2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getErrorMessage } from '@/lib/utils';
 import {
   type DoctorAvailability,
@@ -18,7 +21,9 @@ import {
   timeOffSpan,
   hhmmToMinutes,
   istInstant,
+  slotLimit,
   todayIst,
+  MAX_BOOKINGS_PER_SLOT,
 } from '@/lib/doctor-availability';
 
 type Shift = { start: string; end: string };
@@ -151,6 +156,8 @@ export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false
         </div>
       </section>
 
+      {data && <OverbookingSettings doctorId={doctorId} saved={slotLimit(data.maxBookingsPerSlot)} onSaved={setData} />}
+
       <section aria-labelledby={`timeoff-${doctorId}`} className="border rounded-md p-3 space-y-3">
         <h3 id={`timeoff-${doctorId}`} className="font-medium text-gray-900">Leave and blocked time</h3>
         <p className="text-xs text-gray-500">Appointments cannot be booked during leave, blocked time, or clinic holidays.</p>
@@ -176,6 +183,69 @@ export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false
 
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     </div>
+  );
+}
+
+const OVERBOOK_CHOICES = Array.from({ length: MAX_BOOKINGS_PER_SLOT - 1 }, (_, i) => i + 2);
+
+function OverbookingSettings({ doctorId, saved, onSaved }: { doctorId: string; saved: number; onSaved: (data: DoctorAvailability) => void }) {
+  const [allow, setAllow] = useState(saved > 1);
+  const [limit, setLimit] = useState(Math.max(2, saved));
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setAllow(saved > 1);
+    setLimit(Math.max(2, saved));
+  }, [saved]);
+
+  const next = allow ? limit : 1;
+
+  const save = async () => {
+    setSaving(true);
+    setError('');
+    setStatus('');
+    try {
+      onSaved(await apiClient.setDoctorBookingLimit(doctorId, next));
+      setStatus(next > 1 ? `Saved: up to ${next} patients per slot.` : 'Saved: one patient per slot.');
+    } catch (e) {
+      setError(getErrorMessage(e) || 'Could not save overbooking.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section aria-labelledby={`overbook-${doctorId}`} className="border rounded-md p-3 space-y-3">
+      <h3 id={`overbook-${doctorId}`} className="font-medium text-gray-900">Overbooking</h3>
+      <p className="text-xs text-gray-500">
+        Off keeps one patient per time slot. When on, reception must confirm each extra patient in an occupied slot.
+      </p>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Switch id={`overbook-switch-${doctorId}`} checked={allow} onCheckedChange={setAllow} />
+          <Label htmlFor={`overbook-switch-${doctorId}`}>Allow overbooking</Label>
+        </div>
+        {allow && (
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <span>Up to</span>
+            <Select value={String(limit)} onValueChange={(v: string) => setLimit(Number(v))}>
+              <SelectTrigger aria-label="Patients per slot" className="w-20"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {OVERBOOK_CHOICES.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <span>patients per slot</span>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        <Button type="button" disabled={saving || next === saved} onClick={() => void save()}>{saving ? 'Saving…' : 'Save overbooking'}</Button>
+        <p role="status" className="text-sm text-gray-600">{status}</p>
+      </div>
+      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+    </section>
   );
 }
 
