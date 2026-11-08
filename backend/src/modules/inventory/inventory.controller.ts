@@ -12,13 +12,11 @@ import {
   UploadedFile,
   Res,
   UseInterceptors,
-  ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { InventoryService } from './inventory.service';
 import { InventoryImportService } from './inventory-import.service';
 import { InventoryItemRequestService } from './inventory-item-request.service';
-import { canReviewItemRequests } from './inventory-item-request.state';
 import {
   CreateInventoryItemDto,
   UpdateInventoryItemDto,
@@ -57,12 +55,6 @@ interface AuthenticatedRequest {
     branchId: string;
     role: string;
   };
-}
-
-function assertMayImportNewItems(user: AuthenticatedRequest['user']) {
-  if (!canReviewItemRequests(user.role)) {
-    throw new ForbiddenException('Ask a doctor to import new items');
-  }
 }
 
 @Controller('inventory')
@@ -106,7 +98,6 @@ export class InventoryController {
     @Param('id') id: string,
     @Request() req: AuthenticatedRequest,
   ) {
-    assertMayImportNewItems(req.user);
     return this.inventoryImportService.retryFailedRows(
       id,
       req.user.branchId,
@@ -159,7 +150,6 @@ export class InventoryController {
     @UploadedFile() file: Express.Multer.File,
     @Request() req: AuthenticatedRequest,
   ) {
-    assertMayImportNewItems(req.user);
     return this.inventoryImportService.importStarterExcel(
       file,
       req.user.branchId,

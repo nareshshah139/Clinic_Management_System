@@ -208,7 +208,7 @@ const model = {
     StaffStockPending: { label: "Staff stock search\nitem absent while pending" },
     StaffRequestsPending: { label: "Staff 'My item requests'\nWaiting for doctor" },
     StaffApproveForbidden: { label: "Staff calls approve API\n403, still PENDING" },
-    StaffImportRefused: { label: "Staff bulk import\n'Ask a doctor to import new items'" },
+    StaffImportCreatesDirectly: { label: "Staff opening-stock import\ncreates items directly (outside CR-30)" },
     PharmacistSubmitted: { label: "Pharmacist add -> sent for approval", terminal: true },
     DoctorStockPending: { label: "Doctor stock search\nitem absent, badge = pending" },
     DoctorNewItemsPending: { label: "Doctor 'New items' tab\nrequest with all details" },
@@ -238,7 +238,7 @@ const model = {
     { from: "StaffRequestsPending", event: "reload", to: "StaffRequestsPending" },
     { from: "StaffRequestsPending", event: "staffApproveViaApi", to: "StaffApproveForbidden" },
     { from: "StaffApproveForbidden", event: "reload", to: "StaffRequestsPending" },
-    { from: "StaffStock", event: "staffImportExcel", to: "StaffImportRefused" },
+    { from: "StaffStock", event: "staffImportExcel", to: "StaffImportCreatesDirectly" },
     { from: "StaffStock", event: "pharmacistSubmits", to: "PharmacistSubmitted" },
     { from: "StaffStock", event: "doctorAddsDirect", to: "DoctorAddedDirect" },
     { from: "StaffRequestsPending", event: "doctorLoginAndSearch", to: "DoctorStockPending" },
@@ -375,7 +375,7 @@ const driver = {
       await page.locator('input[type="file"]').first().setInputFiles(ctx.shared.makeXlsx(ctx.vars.name));
       await page.getByRole("button", { name: "Preview import" }).click();
       await page.getByRole("button", { name: "Confirm opening import" }).click({ timeout: 30_000 });
-      await page.getByText("Import failed").first().waitFor({ timeout: 30_000 }).catch(() => {});
+      await until(async () => itemCount(ctx.vars.name) > 0 || (await page.getByText("Import failed").count()) > 0, 30_000);
     },
     pharmacistSubmits: async (ctx) => {
       await as(ctx, "pharmacist");
@@ -555,11 +555,10 @@ const driver = {
       check(requestRows(ctx.vars.name)[0]?.status === "PENDING", "DB: request still PENDING");
       check(itemCount(ctx.vars.name) === 0, "DB: 0 items");
     },
-    StaffImportRefused: async (ctx, check) => {
-      const failed = await until(async () => (await ctx.page.getByText("Import failed").count()) > 0, 15_000);
-      check(failed, "toast 'Import failed'");
-      check((await ctx.page.getByText("Ask a doctor to import new items").count()) > 0, "message 'Ask a doctor to import new items'");
-      check(itemCount(ctx.vars.name) === 0, "DB: 0 items from the import");
+    StaffImportCreatesDirectly: async (ctx, check) => {
+      check((await ctx.page.getByText("Import failed").count()) === 0, "no 'Import failed' toast");
+      check(itemCount(ctx.vars.name) === 1, "DB: the imported item exists without an approval request");
+      check(requestRows(ctx.vars.name).length === 0, "DB: no approval request for the imported item");
     },
     PharmacistSubmitted: async (ctx, check) => {
       const d = ctx.page.getByRole("dialog");

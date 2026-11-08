@@ -215,16 +215,12 @@ describe('item request route guards', () => {
   });
 });
 
-describe('staff bulk import of new items', () => {
-  const controller = new (InventoryController as any)({}, { importStarterExcel: jest.fn() }, {});
-
-  it('is refused for staff with a clear message', () => {
-    expect(() => controller.importInventoryStarterExcel({}, { user: reception })).toThrow(
-      'Ask a doctor to import new items',
-    );
-  });
-
-  it('proceeds for a doctor', () => {
-    controller.importInventoryStarterExcel({}, { user: doctor });
+describe('opening stock import', () => {
+  it('still reaches the importer for pharmacy staff', () => {
+    const importer = { importStarterExcel: jest.fn().mockReturnValue({ imported: 2 }) };
+    const controller = new (InventoryController as any)({}, importer, {});
+    const file = { originalname: 'opening.xlsx' };
+    expect(controller.importInventoryStarterExcel(file, { user: reception })).toEqual({ imported: 2 });
+    expect(importer.importStarterExcel).toHaveBeenCalledWith(file, 'b1', 'rec-1');
   });
 });
