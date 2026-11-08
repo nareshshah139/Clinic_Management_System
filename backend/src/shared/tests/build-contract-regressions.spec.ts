@@ -88,7 +88,7 @@ describe('Backend build contract regressions', () => {
       { id: 'consultation-line', total: 300, qty: 1, service: { type: 'CONSULTATION', name: 'Consultation' } },
       { id: 'procedure-line', total: 100, qty: 2, service: { type: 'PROCEDURE', name: 'Procedure' } },
     ];
-    const prisma = { payment: { findMany: jest.fn().mockResolvedValue([
+    const prisma = { newPayment: { findMany: jest.fn().mockResolvedValue([
       { amount: 100, invoice: { items } }, { amount: 200, invoice: { items } },
       { amount: 0, invoice: { items: [] } },
     ]) } };

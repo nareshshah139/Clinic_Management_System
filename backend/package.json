@@ -125,7 +125,6 @@
       "<rootDir>/modules/billing/tests/billing.integration.spec.ts",
       "<rootDir>/modules/billing/tests/billing.service.spec.ts",
       "<rootDir>/modules/prescriptions/tests/prescriptions.integration.spec.ts",
-      "<rootDir>/modules/reports/tests/reports.service.spec.ts",
       "<rootDir>/modules/users/tests/users.integration.spec.ts",
       "<rootDir>/modules/users/tests/users.service.spec.ts",
       "<rootDir>/modules/visits/tests/visits.controller.spec.ts",
