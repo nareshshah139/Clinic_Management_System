@@ -10,6 +10,13 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { Prisma } from '@prisma/client';
 import { generatePatientCode } from '../../shared/ids/patient-code.util';
 
+/**
+ * @cc [owner:nareshshah139,label:security] portal-user-safe-fields
+ * Patient responses MUST expose only portal account identity and status, never credentials,
+ * permissions, or private account metadata.
+ */
+const portalUserSelect = { id: true, firstName: true, lastName: true, email: true, phone: true, role: true, status: true } as const;
+
 @Injectable()
 export class PatientsService {
   constructor(private prisma: PrismaService, private usersService: UsersService, private notifications: NotificationsService) {}
@@ -284,7 +291,7 @@ export class PatientsService {
           orderBy: { createdAt: 'desc' },
           take: 5,
         },
-        portalUser: true,
+        portalUser: { select: portalUserSelect },
       },
     });
     if (!patient) throw new NotFoundException('Patient not found');
@@ -446,7 +453,7 @@ export class PatientsService {
     const updated = await this.prisma.patient.update({
       where: { id: patientId },
       data: { portalUserId: userIdToLink },
-      include: { portalUser: true },
+      include: { portalUser: { select: portalUserSelect } },
     });
 
     return updated;
@@ -459,14 +466,14 @@ export class PatientsService {
     return this.prisma.patient.update({
       where: { id: patientId },
       data: { portalUserId: null },
-      include: { portalUser: true },
+      include: { portalUser: { select: portalUserSelect } },
     });
   }
 
   async getPortalUser(patientId: string, branchId: string) {
     const patient = await this.prisma.patient.findFirst({
       where: { id: patientId, branchId },
-      include: { portalUser: true },
+      include: { portalUser: { select: portalUserSelect } },
     });
     if (!patient) throw new NotFoundException('Patient not found');
     return patient.portalUser;
