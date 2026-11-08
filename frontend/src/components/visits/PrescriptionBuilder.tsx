@@ -16,8 +16,9 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ToastAction } from '@/components/ui/toast';
+import { useOnExaminationPanel } from '@/components/visits/on-examination-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, CalendarDays, ChevronDown, ChevronUp, FlaskConical, Languages, Mic, MicOff, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { AlertCircle, CalendarDays, ChevronDown, ChevronRight, ChevronUp, FlaskConical, Languages, Mic, MicOff, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
 import { ManageClinicInvestigations, hasInvestigation, mergeInvestigationOptions, sameInvestigation, tidyInvestigationName, useClinicInvestigations, type ClinicInvestigation } from './ClinicInvestigations';
@@ -159,31 +160,52 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   children,
   badge,
   highlight = false,
+  open,
+  onOpenChange,
 }: {
   title: string;
   section: string;
   children: React.ReactNode;
   badge?: string;
   highlight?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const headingId = `section-${section}-heading`;
   const contentId = `section-${section}-content`;
+  const collapsible = open !== undefined;
+  const expanded = open ?? true;
   return (
     <Card className={`overflow-visible ${highlight ? 'bg-green-50 border-green-300' : ''}`}>
       <CardHeader className="pb-2">
         <div
           className="flex items-center justify-between w-full"
-          aria-controls={contentId}
-          aria-labelledby={headingId}
+          aria-controls={collapsible ? undefined : contentId}
+          aria-labelledby={collapsible ? undefined : headingId}
         >
           <div className="flex items-center gap-2">
-            <CardTitle id={headingId} className="text-base">{title}</CardTitle>
+            <CardTitle id={headingId} className="text-base" role={collapsible ? 'heading' : undefined} aria-level={collapsible ? 3 : undefined}>
+              {collapsible ? (
+                <button
+                  type="button"
+                  className="flex items-center gap-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-expanded={expanded}
+                  aria-controls={contentId}
+                  onClick={() => onOpenChange?.(!expanded)}
+                >
+                  {expanded ? <ChevronDown className="h-4 w-4" aria-hidden="true" /> : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
+                  {title}
+                </button>
+              ) : (
+                title
+              )}
+            </CardTitle>
             {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
             {highlight && <div className="text-xs text-green-700">Auto-included in preview</div>}
           </div>
         </div>
       </CardHeader>
-      <CardContent id={contentId} className="pt-0 overflow-visible">
+      <CardContent id={contentId} className="pt-0 overflow-visible" hidden={!expanded}>
         {children}
       </CardContent>
     </Card>
@@ -1092,6 +1114,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     pastHistory?.trim()?.length || personalHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length
   ), [pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx]);
   
+  const hasExamination = useMemo(() => Boolean(
+    exSkinType || exAcneSeverity || exItchScore || exMorphology.size || exDistribution.size || exDermDx.size || exObjective?.trim()?.length
+  ), [exSkinType, exAcneSeverity, exItchScore, exMorphology, exDistribution, exDermDx, exObjective]);
+  const onExamination = useOnExaminationPanel(doctorId, hasExamination);
+
   const hasFamilyHistory = useMemo(() => Boolean(
     familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length
   ), [familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers]);
@@ -4760,7 +4787,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             </CollapsibleSection>
 
             {/* On Examination - Dermatology */}
-            <CollapsibleSection title="On Examination" section="on-examination">
+            <CollapsibleSection
+              title="On Examination"
+              section="on-examination"
+              open={onExamination.open}
+              onOpenChange={onExamination.setOpen}
+              badge={!onExamination.open && hasExamination ? 'filled' : undefined}
+            >
               <div className="space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <div>

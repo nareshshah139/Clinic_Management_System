@@ -21,8 +21,10 @@ import { PharmacyComplianceService } from './pharmacy-compliance.service';
 import {
   ApplyPharmacyAuditAdjustmentsDto,
   CreatePharmacyAuditDto,
+  PharmacyDayWiseQueryDto,
   PharmacyExpiryReturnsQueryDto,
   PharmacyGstSummaryQueryDto,
+  PharmacyItemMarginQueryDto,
   PharmacyMonthlyReportQueryDto,
 } from './dto/pharmacy-compliance.dto';
 
@@ -55,6 +57,24 @@ export class PharmacyComplianceController {
     @Request() req: any,
   ) {
     return this.complianceService.getMonthlyReport(query, req.user.branchId);
+  }
+
+  @Get('day-wise-summary')
+  @Roles('OWNER' as any, 'ADMIN' as any, 'ACCOUNTANT' as any, 'PHARMACIST' as any, 'DOCTOR' as any)
+  @Permissions('pharmacy:compliance:read')
+  @ApiOperation({ summary: 'One row per clinic day: bill-number range and GST slab split' })
+  @ApiResponse({ status: 200, description: 'Day-wise summary generated' })
+  getDayWiseSummary(@Query() query: PharmacyDayWiseQueryDto, @Request() req: any) {
+    return this.complianceService.getDayWiseSummary(query, req.user.branchId);
+  }
+
+  @Get('item-margin')
+  @Roles('OWNER' as any, 'ADMIN' as any, 'ACCOUNTANT' as any, 'PHARMACIST' as any, 'DOCTOR' as any)
+  @Permissions('pharmacy:compliance:read')
+  @ApiOperation({ summary: 'Sales, cost of goods sold, net GST and profit per item' })
+  @ApiResponse({ status: 200, description: 'Item-wise margin generated' })
+  getItemMargin(@Query() query: PharmacyItemMarginQueryDto, @Request() req: any) {
+    return this.complianceService.getItemMargin(query, req.user.branchId);
   }
 
   @Get('expiry-returns')

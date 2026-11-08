@@ -81,6 +81,10 @@ model User {
   pharmacyAgentAuditEvents   PharmacyAgentAuditEvent[]
   drugInventoryChangesRequested DrugInventoryChangeRequest[] @relation("DrugInventoryChangeRequestedBy")
   drugInventoryChangesReviewed  DrugInventoryChangeRequest[] @relation("DrugInventoryChangeReviewedBy")
+  tradeTermsCreated             PharmacyTradeTerm[]          @relation("PharmacyTradeTermCreatedBy")
+  tradeTermsUpdated             PharmacyTradeTerm[]          @relation("PharmacyTradeTermUpdatedBy")
+  inventoryItemRequestsMade     InventoryItemRequest[]       @relation("InventoryItemRequestedBy")
+  inventoryItemRequestsReviewed InventoryItemRequest[]       @relation("InventoryItemReviewedBy")
 
   // Back-relations
   createdPrescriptionTemplates PrescriptionTemplate[]
@@ -144,6 +148,8 @@ model Branch {
   pharmacyAgentAuditEvents PharmacyAgentAuditEvent[]
   prescriptionLinks PrescriptionInventoryLink[]
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
+  tradeTerms                  PharmacyTradeTerm[]
+  inventoryItemRequests       InventoryItemRequest[]
 
   // Back-relations
   prescriptionTemplates    PrescriptionTemplate[]
@@ -1023,6 +1029,7 @@ model InventoryItem {
   drugs                Drug[]
   prescriptionLinks PrescriptionInventoryLink[]
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
+  itemRequest                 InventoryItemRequest?
 
   @@index([branchId, name, id], map: "inventory_items_branch_name_id_read_idx")
   @@map("inventory_items")
@@ -1099,6 +1106,7 @@ model Supplier {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   branch        Branch   @relation(fields: [branchId], references: [id])
+  tradeTerms    PharmacyTradeTerm[]
 
   @@map("suppliers")
 }
@@ -1228,6 +1236,7 @@ model Drug {
   inventoryItems InventoryItem[]
   packageItems   PharmacyPackageItem[]
   inventoryChangeRequests DrugInventoryChangeRequest[]
+  tradeTerms              PharmacyTradeTerm[]
 
   @@index([name])
   @@index([manufacturerName])
@@ -1287,6 +1296,61 @@ model DrugInventoryChangeRequest {
   @@index([requestedById])
   @@index([reviewedById])
   @@map("drug_inventory_change_requests")
+}
+
+model PharmacyTradeTerm {
+  id              String   @id @default(cuid())
+  branchId        String
+  supplierId      String
+  drugId          String?
+  productName     String
+  productKey      String
+  discountPercent Float?
+  schemeBuy       Int?
+  schemeFree      Int?
+  minExpiryMonths Int?
+  marginPercent   Float?
+  ptr             Float?
+  ptrRule         String?
+  note            String?
+  createdById     String
+  updatedById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  supplier  Supplier @relation(fields: [supplierId], references: [id])
+  drug      Drug?    @relation(fields: [drugId], references: [id])
+  createdBy User     @relation("PharmacyTradeTermCreatedBy", fields: [createdById], references: [id])
+  updatedBy User     @relation("PharmacyTradeTermUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([branchId, supplierId, productKey])
+  @@index([branchId, supplierId])
+  @@map("pharmacy_trade_terms")
+}
+
+model InventoryItemRequest {
+  id              String                     @id @default(cuid())
+  branchId        String
+  requestedById   String
+  reviewedById    String?
+  status          InventoryItemRequestStatus @default(PENDING)
+  itemName        String
+  payload         Json
+  reason          String?
+  reviewNote      String?
+  inventoryItemId String?                    @unique
+  reviewedAt      DateTime?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  branch        Branch         @relation(fields: [branchId], references: [id])
+  requestedBy   User           @relation("InventoryItemRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy    User?          @relation("InventoryItemReviewedBy", fields: [reviewedById], references: [id])
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([branchId, status])
+  @@map("inventory_item_requests")
 }
 
 // Pharmacy Invoice Model
@@ -2014,6 +2078,12 @@ enum PartnerDailySaleDiscrepancyFlag {
 }
 
 enum DrugInventoryChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum InventoryItemRequestStatus {
   PENDING
   APPROVED
   REJECTED

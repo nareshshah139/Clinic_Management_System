@@ -22,6 +22,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'pharmacy:drug:dosageForms',
     'pharmacy:drug:inventory-change:read',
     'pharmacy:drug:inventory-change:approve',
+    'inventory:item:approve',
     'pharmacy:invoice:read',
     'visits:*',
   ],
@@ -81,8 +82,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'billing:payment:read',
     'billing:revenue:read',
     'billing:statistics:read',
+    'pharmacy:compliance:read',
   ],
   PHARMACIST: [
+    'pharmacy:compliance:read',
     'inventory:item:*',
     'inventory:transaction:*',
     'inventory:adjustment:create',

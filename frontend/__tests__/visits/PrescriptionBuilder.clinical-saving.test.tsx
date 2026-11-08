@@ -15,6 +15,7 @@ it('sends examination diagnosis shortcuts and explicitly unchecked family histor
   const onClinicalDataChange = jest.fn();
   render(<PrescriptionBuilder patientId="synthetic" visitId={null} doctorId="doctor" onClinicalDataChange={onClinicalDataChange} />);
   await waitFor(() => expect(onClinicalDataChange).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole('button', { name: 'On Examination' }));
   fireEvent.click(screen.getByRole('button', { name: 'Acne vulgaris' }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'Diabetes' }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'Diabetes' }));

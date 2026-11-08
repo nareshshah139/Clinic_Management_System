@@ -6,6 +6,8 @@ import { apiClient } from '@/lib/api';
 jest.mock('@/lib/api', () => ({
   apiClient: {
     getPatients: jest.fn(),
+    getPatient: jest.fn().mockResolvedValue({ id: 'patient-1', name: 'Synthetic Patient' }),
+    getUser: jest.fn().mockResolvedValue({ id: 'doctor-1', firstName: 'Synthetic', lastName: 'Doctor' }),
     get: jest.fn(),
     getAppointment: jest.fn(),
     createVisit: jest.fn(),

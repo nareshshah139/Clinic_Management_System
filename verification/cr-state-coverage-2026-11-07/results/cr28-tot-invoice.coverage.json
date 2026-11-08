@@ -1,0 +1,601 @@
+{
+  "model": "cr28-tot-invoice",
+  "title": "CR-28 Terms of Trade: agreed terms on purchase invoice entry",
+  "startedAt": "2026-11-08T10:14:49.092Z",
+  "finishedAt": "2026-11-08T10:15:29.096Z",
+  "states": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0
+  },
+  "transitions": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0
+  },
+  "uncovered": [],
+  "failures": [],
+  "paths": [
+    {
+      "path": 1,
+      "ok": true,
+      "events": [
+        "InvoiceBlank --pickZenith--> ZenithChosen",
+        "ZenithChosen --typeDolo--> ZenithTyped"
+      ],
+      "assertions": [
+        {
+          "state": "InvoiceBlank",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no agreed-terms panel before a supplier is chosen"
+            },
+            {
+              "ok": true,
+              "message": "no hint"
+            },
+            {
+              "ok": true,
+              "message": "an empty invoice line exists"
+            }
+          ]
+        },
+        {
+          "state": "ZenithChosen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "supplier selected"
+            },
+            {
+              "ok": true,
+              "message": "no panel for a distributor without terms"
+            },
+            {
+              "ok": true,
+              "message": "no hint"
+            }
+          ]
+        },
+        {
+          "state": "ZenithTyped",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "product typed"
+            },
+            {
+              "ok": true,
+              "message": "terms of another distributor do not leak into this invoice"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 2,
+      "ok": true,
+      "events": [
+        "InvoiceBlank --pickMedico--> MedicoChosen",
+        "MedicoChosen --pickZenith--> ZenithChosen"
+      ],
+      "assertions": [
+        {
+          "state": "InvoiceBlank",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no agreed-terms panel before a supplier is chosen"
+            },
+            {
+              "ok": true,
+              "message": "no hint"
+            },
+            {
+              "ok": true,
+              "message": "an empty invoice line exists"
+            }
+          ]
+        },
+        {
+          "state": "MedicoChosen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "panel names the distributor"
+            },
+            {
+              "ok": true,
+              "message": "panel shows Dolo discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "panel shows second product"
+            },
+            {
+              "ok": true,
+              "message": "panel shows who entered and when"
+            },
+            {
+              "ok": true,
+              "message": "no hint while the line product is empty"
+            }
+          ]
+        },
+        {
+          "state": "ZenithChosen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "supplier selected"
+            },
+            {
+              "ok": true,
+              "message": "no panel for a distributor without terms"
+            },
+            {
+              "ok": true,
+              "message": "no hint"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 3,
+      "ok": true,
+      "events": [
+        "InvoiceBlank --pickMedico--> MedicoChosen",
+        "MedicoChosen --typeDolo--> HintExact",
+        "HintExact --fillInvoiceLine--> Compare"
+      ],
+      "assertions": [
+        {
+          "state": "InvoiceBlank",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no agreed-terms panel before a supplier is chosen"
+            },
+            {
+              "ok": true,
+              "message": "no hint"
+            },
+            {
+              "ok": true,
+              "message": "an empty invoice line exists"
+            }
+          ]
+        },
+        {
+          "state": "MedicoChosen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "panel names the distributor"
+            },
+            {
+              "ok": true,
+              "message": "panel shows Dolo discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "panel shows second product"
+            },
+            {
+              "ok": true,
+              "message": "panel shows who entered and when"
+            },
+            {
+              "ok": true,
+              "message": "no hint while the line product is empty"
+            }
+          ]
+        },
+        {
+          "state": "HintExact",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "one hint for the one line"
+            },
+            {
+              "ok": true,
+              "message": "hint shows agreed terms, got: Agreed: 12.5% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 0% · 1 paid + 0 free · exp 12/2027 · rate ₹0.00"
+            },
+            {
+              "ok": true,
+              "message": "hint shows what the invoice says (Invoice: 0% · 1 paid + 0 free), got: Agreed: 12.5% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 0% · 1 paid + 0 free · exp 12/2027 · rate ₹0.00"
+            },
+            {
+              "ok": true,
+              "message": "hint visible"
+            },
+            {
+              "ok": true,
+              "message": "panel visible too"
+            }
+          ]
+        },
+        {
+          "state": "Compare",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "one hint for the one line"
+            },
+            {
+              "ok": true,
+              "message": "hint shows agreed terms, got: Agreed: 12.5% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 10% · 20 paid + 2 free · exp 06/2027 · rate ₹20.00"
+            },
+            {
+              "ok": true,
+              "message": "hint shows what the invoice says (Invoice: 10% · 20 paid + 2 free · exp 06/2027 · rate ₹20.00), got: Agreed: 12.5% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 10% · 20 paid + 2 free · exp 06/2027 · rate ₹20.00"
+            },
+            {
+              "ok": true,
+              "message": "hint visible"
+            },
+            {
+              "ok": true,
+              "message": "panel visible too"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 4,
+      "ok": true,
+      "events": [
+        "InvoiceBlank --pickMedico--> MedicoChosen",
+        "MedicoChosen --typeCased--> HintCase"
+      ],
+      "assertions": [
+        {
+          "state": "InvoiceBlank",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no agreed-terms panel before a supplier is chosen"
+            },
+            {
+              "ok": true,
+              "message": "no hint"
+            },
+            {
+              "ok": true,
+              "message": "an empty invoice line exists"
+            }
+          ]
+        },
+        {
+          "state": "MedicoChosen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "panel names the distributor"
+            },
+            {
+              "ok": true,
+              "message": "panel shows Dolo discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "panel shows second product"
+            },
+            {
+              "ok": true,
+              "message": "panel shows who entered and when"
+            },
+            {
+              "ok": true,
+              "message": "no hint while the line product is empty"
+            }
+          ]
+        },
+        {
+          "state": "HintCase",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "one hint for the one line"
+            },
+            {
+              "ok": true,
+              "message": "hint shows agreed terms, got: Agreed: 12.5% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 0% · 1 paid + 0 free · exp 12/2027 · rate ₹0.00"
+            },
+            {
+              "ok": true,
+              "message": "hint shows what the invoice says (Invoice: 0% · 1 paid + 0 free), got: Agreed: 12.5% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 0% · 1 paid + 0 free · exp 12/2027 · rate ₹0.00"
+            },
+            {
+              "ok": true,
+              "message": "hint visible"
+            },
+            {
+              "ok": true,
+              "message": "panel visible too"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 5,
+      "ok": true,
+      "events": [
+        "InvoiceBlank --pickMedico--> MedicoChosen",
+        "MedicoChosen --typeOther--> NoMatch"
+      ],
+      "assertions": [
+        {
+          "state": "InvoiceBlank",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no agreed-terms panel before a supplier is chosen"
+            },
+            {
+              "ok": true,
+              "message": "no hint"
+            },
+            {
+              "ok": true,
+              "message": "an empty invoice line exists"
+            }
+          ]
+        },
+        {
+          "state": "MedicoChosen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "panel names the distributor"
+            },
+            {
+              "ok": true,
+              "message": "panel shows Dolo discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "panel shows second product"
+            },
+            {
+              "ok": true,
+              "message": "panel shows who entered and when"
+            },
+            {
+              "ok": true,
+              "message": "no hint while the line product is empty"
+            }
+          ]
+        },
+        {
+          "state": "NoMatch",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "panel still lists the distributor's terms"
+            },
+            {
+              "ok": true,
+              "message": "no hint for an unmatched product"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 6,
+      "ok": true,
+      "events": [
+        "InvoiceBlank --pickMedico--> MedicoChosen",
+        "MedicoChosen --typeDolo--> HintExact",
+        "HintExact --doctorChangesTerm--> HintUpdated"
+      ],
+      "assertions": [
+        {
+          "state": "InvoiceBlank",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no agreed-terms panel before a supplier is chosen"
+            },
+            {
+              "ok": true,
+              "message": "no hint"
+            },
+            {
+              "ok": true,
+              "message": "an empty invoice line exists"
+            }
+          ]
+        },
+        {
+          "state": "MedicoChosen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "panel names the distributor"
+            },
+            {
+              "ok": true,
+              "message": "panel shows Dolo discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "panel shows second product"
+            },
+            {
+              "ok": true,
+              "message": "panel shows who entered and when"
+            },
+            {
+              "ok": true,
+              "message": "no hint while the line product is empty"
+            }
+          ]
+        },
+        {
+          "state": "HintExact",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "one hint for the one line"
+            },
+            {
+              "ok": true,
+              "message": "hint shows agreed terms, got: Agreed: 12.5% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 0% · 1 paid + 0 free · exp 12/2027 · rate ₹0.00"
+            },
+            {
+              "ok": true,
+              "message": "hint shows what the invoice says (Invoice: 0% · 1 paid + 0 free), got: Agreed: 12.5% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 0% · 1 paid + 0 free · exp 12/2027 · rate ₹0.00"
+            },
+            {
+              "ok": true,
+              "message": "hint visible"
+            },
+            {
+              "ok": true,
+              "message": "panel visible too"
+            }
+          ]
+        },
+        {
+          "state": "HintUpdated",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "hint shows new 15% discount, got: Agreed: 15% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 0% · 1 paid + 0 free · exp 12/2027 · rate ₹0.00"
+            },
+            {
+              "ok": true,
+              "message": "panel shows 15%"
+            },
+            {
+              "ok": true,
+              "message": "old 12.5% gone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 7,
+      "ok": true,
+      "events": [
+        "InvoiceBlank --pickMedico--> MedicoChosen",
+        "MedicoChosen --typeDolo--> HintExact",
+        "HintExact --doctorDeletesTerm--> HintGone"
+      ],
+      "assertions": [
+        {
+          "state": "InvoiceBlank",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no agreed-terms panel before a supplier is chosen"
+            },
+            {
+              "ok": true,
+              "message": "no hint"
+            },
+            {
+              "ok": true,
+              "message": "an empty invoice line exists"
+            }
+          ]
+        },
+        {
+          "state": "MedicoChosen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "panel names the distributor"
+            },
+            {
+              "ok": true,
+              "message": "panel shows Dolo discount, scheme, expiry, PTR"
+            },
+            {
+              "ok": true,
+              "message": "panel shows second product"
+            },
+            {
+              "ok": true,
+              "message": "panel shows who entered and when"
+            },
+            {
+              "ok": true,
+              "message": "no hint while the line product is empty"
+            }
+          ]
+        },
+        {
+          "state": "HintExact",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "one hint for the one line"
+            },
+            {
+              "ok": true,
+              "message": "hint shows agreed terms, got: Agreed: 12.5% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 0% · 1 paid + 0 free · exp 12/2027 · rate ₹0.00"
+            },
+            {
+              "ok": true,
+              "message": "hint shows what the invoice says (Invoice: 0% · 1 paid + 0 free), got: Agreed: 12.5% · Buy 10 Get 1 · min 18 mo expiry · PTR ₹22.40 · MRP less 20%\n\nInvoice: 0% · 1 paid + 0 free · exp 12/2027 · rate ₹0.00"
+            },
+            {
+              "ok": true,
+              "message": "hint visible"
+            },
+            {
+              "ok": true,
+              "message": "panel visible too"
+            }
+          ]
+        },
+        {
+          "state": "HintGone",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no hint after the term was deleted"
+            },
+            {
+              "ok": true,
+              "message": "panel keeps only the remaining term"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

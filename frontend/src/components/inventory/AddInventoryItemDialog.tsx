@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ItemRequestDuplicateWarning } from './ItemRequestDuplicateWarning';
+import { isPendingApproval, type PossibleDuplicates } from '@/lib/inventory-item-requests';
 import { apiClient } from '@/lib/api';
 
 
@@ -24,6 +26,8 @@ interface AddInventoryItemDialogProps {
 export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInventoryItemDialogProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sentForApproval, setSentForApproval] = useState(false);
+  const [duplicates, setDuplicates] = useState<PossibleDuplicates | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -130,7 +134,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
       payload.isControlled = formData.isControlled;
 
       console.log('📦 Creating inventory item:', payload);
-      await apiClient.createInventoryItem(payload);
+      const result = await apiClient.createInventoryItem(payload);
 
       // Reset form
       setFormData({
@@ -167,6 +171,12 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
         status: 'ACTIVE',
       });
 
+      if (isPendingApproval(result)) {
+        setDuplicates(result.request.possibleDuplicates ?? null);
+        setSentForApproval(true);
+        window.dispatchEvent(new CustomEvent('inventory-workspace-refresh'));
+        return;
+      }
       onSuccess();
       onOpenChange(false);
     } catch (err) {
@@ -178,8 +188,20 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next: boolean) => { if (!next) setSentForApproval(false); onOpenChange(next); }}>
       <DialogContent className="inventory-surface w-[calc(100%-2rem)] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        {sentForApproval ? <>
+          <DialogHeader>
+            <DialogTitle>Sent to doctor for approval</DialogTitle>
+            <DialogDescription role="status">
+              Sent to doctor for approval. The item will appear in inventory once approved.
+            </DialogDescription>
+          </DialogHeader>
+          <ItemRequestDuplicateWarning duplicates={duplicates} intro={duplicates?.inventory.length ? 'An item with this name is already in inventory; the doctor will see this.' : 'Another request for this item is already waiting; the doctor will see this.'} />
+          <DialogFooter>
+            <Button type="button" onClick={() => { setSentForApproval(false); onOpenChange(false); }}>Close</Button>
+          </DialogFooter>
+        </> : <>
         <DialogHeader>
           <DialogTitle>Add Inventory Item</DialogTitle>
           <DialogDescription>
@@ -602,6 +624,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
             </Button>
           </DialogFooter>
         </form>
+        </>}
       </DialogContent>
     </Dialog>
   );
