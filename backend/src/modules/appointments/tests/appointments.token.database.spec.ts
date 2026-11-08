@@ -91,6 +91,8 @@ databaseTests('Per-doctor token queue on PostgreSQL', () => {
     await service.update(first.id, { status: 'CANCELLED' } as any, 'branch');
     await service.update(second.id, { roomId: room.id }, 'branch');
     await expect(service.update(first.id, { status: 'SCHEDULED' } as any, 'branch')).rejects.toMatchObject({ status: 409 });
+    const cleared = await service.update(second.id, { roomId: null } as any, 'branch');
+    expect(cleared.roomId).toBeNull();
   });
 
   it('serializes competing room edits for the same time', async () => {

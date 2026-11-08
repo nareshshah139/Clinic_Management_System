@@ -442,7 +442,7 @@ export class AppointmentsService {
     const updatedAppointment = affectsSchedule
       ? await this.prisma.$transaction(async (tx) => {
           const date = appointment.date.toISOString().slice(0, 10);
-          const roomId = updateAppointmentDto.roomId ?? appointment.roomId ?? null;
+          const roomId = updateAppointmentDto.roomId === undefined ? appointment.roomId : updateAppointmentDto.roomId;
           await this.lockSchedule(tx, branchId, appointment.doctorId, roomId, date);
           const current = await tx.appointment.findFirst({ where: { id, branchId } });
           if (!current || current.doctorId !== appointment.doctorId ||
