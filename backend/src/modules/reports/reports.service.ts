@@ -1,6 +1,7 @@
 import { displayClinicDateTime } from '../../common/date-display';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { Prisma } from '@prisma/client';
 import {
   RevenueReportResponseDto,
   PaymentBreakdownDto,
@@ -71,6 +72,9 @@ export class ReportsService {
     const { startDate, endDate, period, doctorId, paymentMode, serviceType, includePaymentBreakdown } = query;
     const dateRange = this.calculateDateRange(startDate, endDate, period);
 
+    const doctorVisitIds = doctorId
+      ? (await this.prisma.visit.findMany({ where: { doctorId, patient: { branchId } }, select: { id: true } })).map(visit => visit.id)
+      : undefined;
     const wherePayments: any = {
       reconStatus: 'COMPLETED',
       createdAt: { gte: dateRange.start, lte: dateRange.end },
@@ -78,12 +82,8 @@ export class ReportsService {
       invoice: {
         is: {
           patient: { branchId },
-          ...(doctorId
-            ? { OR: [{ visit: { doctorId } }, { appointment: { doctorId } }] }
-            : {}),
-          ...(serviceType
-            ? { items: { contains: serviceType, mode: 'insensitive' } }
-            : {}),
+          ...(doctorVisitIds ? { visitId: { in: doctorVisitIds } } : {}),
+          ...(serviceType ? { items: { some: { service: { type: { equals: serviceType, mode: 'insensitive' } } } } } : {}),
         },
       },
     };
@@ -771,6 +771,7 @@ export class ReportsService {
   /**
    * @cc [owner:nareshshah139,label:product] paymentreport-branch-payment-counts
    * Payment groups MUST count matching branch payments without ambiguous joined-column references.
+   * Refund summaries MUST use branch-scoped completed refund records from clinic billing.
    */
   async generatePaymentReport(query: PaymentQueryDto, branchId: string): Promise<PaymentReportResponseDto> {
     const { startDate, endDate, period, paymentMode, gateway, includeReconciliation, includeRefunds } = query;
@@ -814,15 +815,32 @@ export class ReportsService {
       ? { totalTransactions: totalPayments, reconciledTransactions: successfulPayments, pendingReconciliation: pendingPayments, reconciliationRate: totalPayments ? (100 * successfulPayments) / totalPayments : 0, discrepancyAmount: Math.max(0, totalAmount - (modeGroups.reduce((s, g) => s + ((g._sum?.amount as number) || 0), 0))) }
       : { totalTransactions: 0, reconciledTransactions: 0, pendingReconciliation: 0, reconciliationRate: 0, discrepancyAmount: 0 };
 
-    const refundSummary: RefundSummaryDto = includeRefunds
-      ? {
-          totalRefunds: await this.prisma.payment.count({ where: { ...where, status: 'REFUNDED' } }),
-          totalRefundAmount: (await this.prisma.payment.aggregate({ where: { ...where, status: 'REFUNDED' }, _sum: { amount: true } }))._sum.amount || 0,
-          refundRate: totalPayments ? (100 * (await this.prisma.payment.count({ where: { ...where, status: 'REFUNDED' } }))) / totalPayments : 0,
-          averageRefundAmount: 0,
-          refundReasons: await this.getRefundReasons(branchId, dateRange),
-        }
-      : { totalRefunds: 0, totalRefundAmount: 0, refundRate: 0, averageRefundAmount: 0, refundReasons: [] };
+    let refundSummary: RefundSummaryDto = { totalRefunds: 0, totalRefundAmount: 0, refundRate: 0, averageRefundAmount: 0, refundReasons: [] };
+    if (includeRefunds) {
+      const refundWhere: Prisma.NewPaymentWhereInput = {
+        invoice: { branchId }, createdAt: { gte: dateRange.start, lte: dateRange.end },
+        reconStatus: 'COMPLETED', ...(paymentMode ? { mode: paymentMode as any } : {}), ...(gateway ? { gateway } : {}),
+      };
+      const [refunds, positivePayments] = await Promise.all([
+        this.prisma.newPayment.findMany({ where: { ...refundWhere, amount: { lt: 0 }, reference: { startsWith: 'REFUND' } }, select: { amount: true, reference: true } }),
+        this.prisma.newPayment.count({ where: { ...refundWhere, amount: { gt: 0 } } }),
+      ]);
+      const amountsByReason = new Map<string, { count: number; amount: number }>();
+      for (const refund of refunds) {
+        const reason = refund.reference?.replace(/^REFUND:?\s*/, '').trim() || 'Unspecified';
+        const entry = amountsByReason.get(reason) ?? { count: 0, amount: 0 };
+        entry.count += 1;
+        entry.amount += Math.abs(refund.amount);
+        amountsByReason.set(reason, entry);
+      }
+      const totalRefundAmount = refunds.reduce((sum, refund) => sum + Math.abs(refund.amount), 0);
+      refundSummary = {
+        totalRefunds: refunds.length, totalRefundAmount,
+        refundRate: positivePayments ? 100 * refunds.length / positivePayments : 0,
+        averageRefundAmount: refunds.length ? totalRefundAmount / refunds.length : 0,
+        refundReasons: Array.from(amountsByReason, ([reason, value]) => ({ reason, ...value, percentage: 100 * value.count / refunds.length })),
+      };
+    }
 
     return {
       totalPayments,
@@ -839,20 +857,6 @@ export class ReportsService {
       generatedAt: new Date(),
       period: this.formatPeriod(dateRange),
     };
-  }
-
-  private async getRefundReasons(branchId: string, range: { start: Date; end: Date }): Promise<RefundReasonDto[]> {
-    const refunds = await this.prisma.payment.findMany({ where: { createdAt: { gte: range.start, lte: range.end }, status: 'REFUNDED' as any } as any, select: { amount: true, notes: true } as any });
-    const map = new Map<string, { count: number; amount: number }>();
-    for (const r of refunds as any[]) {
-      const reason = r.notes || 'N/A';
-      const cur = map.get(reason) || { count: 0, amount: 0 };
-      cur.count += 1;
-      cur.amount += r.amount || 0;
-      map.set(reason, cur);
-    }
-    const total = Array.from(map.values()).reduce((s, v) => s + v.count, 0) || 1;
-    return Array.from(map.entries()).map(([reason, v]) => ({ reason, count: v.count, amount: v.amount, percentage: (100 * v.count) / total }));
   }
 
   // DASHBOARD
