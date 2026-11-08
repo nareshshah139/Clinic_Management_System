@@ -63,6 +63,10 @@ export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
   // REVENUE REPORTS
+  /**
+   * @cc [owner:nareshshah139,label:product] revenuereport-branch-payment-counts
+   * Payment groups MUST count matching branch payments without ambiguous joined-column references.
+   */
   async generateRevenueReport(query: RevenueQueryDto, branchId: string): Promise<RevenueReportResponseDto> {
     const { startDate, endDate, period, doctorId, paymentMode, serviceType, includePaymentBreakdown } = query;
     const dateRange = this.calculateDateRange(startDate, endDate, period);
@@ -92,9 +96,9 @@ export class ReportsService {
       this.prisma.payment.count({ where: wherePayments }),
       this.prisma.payment.groupBy({ by: ['invoiceId'], where: wherePayments, _count: { invoiceId: true } }),
       includePaymentBreakdown
-        ? this.prisma.payment.groupBy({ by: ['mode'], where: wherePayments, _sum: { amount: true }, _count: { id: true } })
+        ? this.prisma.payment.groupBy({ by: ['mode'], where: wherePayments, _sum: { amount: true }, _count: { _all: true } })
         : Promise.resolve([] as any[]),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where: wherePayments, _sum: { amount: true }, _count: { id: true } }),
+      this.prisma.payment.groupBy({ by: ['createdAt'], where: wherePayments, _sum: { amount: true }, _count: { _all: true } }),
     ]);
 
     const totalRevenue = sumAgg._sum.amount ?? 0;
@@ -104,14 +108,14 @@ export class ReportsService {
       mode: g.mode,
       amount: g._sum.amount ?? 0,
       percentage: totalRevenue ? (100 * (g._sum.amount ?? 0)) / totalRevenue : 0,
-      transactionCount: g._count.id,
+      transactionCount: g._count._all,
     }));
 
     const dailyBreakdown: DailyRevenueDto[] = dailyGroups.map((g) => ({
       date: new Date(g.createdAt).toISOString().split('T')[0],
       revenue: g._sum.amount ?? 0,
-      invoiceCount: g._count.id,
-      averageInvoiceValue: g._count.id ? (g._sum.amount ?? 0) / g._count.id : 0,
+      invoiceCount: g._count._all,
+      averageInvoiceValue: g._count._all ? (g._sum.amount ?? 0) / g._count._all : 0,
     }));
 
     // Compute GST from related invoices' items
@@ -764,6 +768,10 @@ export class ReportsService {
   }
 
   // PAYMENT REPORTS
+  /**
+   * @cc [owner:nareshshah139,label:product] paymentreport-branch-payment-counts
+   * Payment groups MUST count matching branch payments without ambiguous joined-column references.
+   */
   async generatePaymentReport(query: PaymentQueryDto, branchId: string): Promise<PaymentReportResponseDto> {
     const { startDate, endDate, period, paymentMode, gateway, includeReconciliation, includeRefunds } = query;
     const dateRange = this.calculateDateRange(startDate, endDate, period);
@@ -781,25 +789,25 @@ export class ReportsService {
       this.prisma.payment.count({ where: { ...where, reconStatus: 'COMPLETED' } }),
       this.prisma.payment.count({ where: { ...where, reconStatus: 'FAILED' } }),
       this.prisma.payment.count({ where: { ...where, reconStatus: 'PENDING' } }),
-      this.prisma.payment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { id: true } }),
-      this.prisma.payment.groupBy({ by: ['gateway'], where, _sum: { amount: true }, _count: { id: true } }),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { id: true } }),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'COMPLETED' }, _count: { id: true } }),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'FAILED' }, _count: { id: true } }),
+      this.prisma.payment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.payment.groupBy({ by: ['gateway'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.payment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.payment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'COMPLETED' }, _count: { _all: true } }),
+      this.prisma.payment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'FAILED' }, _count: { _all: true } }),
     ]);
 
     const totalAmount = totalAmountAgg._sum.amount || 0;
-    const paymentModeBreakdown: PaymentModeBreakdownDto[] = modeGroups.map((g) => ({ mode: g.mode as any, transactionCount: g._count.id, totalAmount: g._sum.amount || 0, percentage: totalAmount ? (100 * (g._sum.amount || 0)) / totalAmount : 0, successRate: totalPayments ? (100 * successfulPayments) / totalPayments : 0 }));
-    const gatewayBreakdown: GatewayBreakdownDto[] = gatewayGroups.map((g) => ({ gateway: g.gateway || 'N/A', transactionCount: g._count.id, totalAmount: g._sum.amount || 0, successRate: successfulPayments ? (100 * successfulPayments) / totalPayments : 0, averageTransactionAmount: g._count.id ? (g._sum.amount || 0) / g._count.id : 0 }));
+    const paymentModeBreakdown: PaymentModeBreakdownDto[] = modeGroups.map((g) => ({ mode: g.mode as any, transactionCount: g._count._all, totalAmount: g._sum.amount || 0, percentage: totalAmount ? (100 * (g._sum.amount || 0)) / totalAmount : 0, successRate: totalPayments ? (100 * successfulPayments) / totalPayments : 0 }));
+    const gatewayBreakdown: GatewayBreakdownDto[] = gatewayGroups.map((g) => ({ gateway: g.gateway || 'N/A', transactionCount: g._count._all, totalAmount: g._sum.amount || 0, successRate: successfulPayments ? (100 * successfulPayments) / totalPayments : 0, averageTransactionAmount: g._count._all ? (g._sum.amount || 0) / g._count._all : 0 }));
 
     const successMap = new Map<string, number>();
-    for (const g of dailySuccess) successMap.set(new Date(g.createdAt).toISOString().split('T')[0], g._count.id);
+    for (const g of dailySuccess) successMap.set(new Date(g.createdAt).toISOString().split('T')[0], g._count._all);
     const failedMap = new Map<string, number>();
-    for (const g of dailyFailed) failedMap.set(new Date(g.createdAt).toISOString().split('T')[0], g._count.id);
+    for (const g of dailyFailed) failedMap.set(new Date(g.createdAt).toISOString().split('T')[0], g._count._all);
 
     const dailyTrends: DailyPaymentTrendDto[] = dailyGroups.map((g) => {
       const key = new Date(g.createdAt).toISOString().split('T')[0];
-      return { date: key, paymentCount: g._count.id, totalAmount: g._sum.amount || 0, successfulPayments: successMap.get(key) || 0, failedPayments: failedMap.get(key) || 0 };
+      return { date: key, paymentCount: g._count._all, totalAmount: g._sum.amount || 0, successfulPayments: successMap.get(key) || 0, failedPayments: failedMap.get(key) || 0 };
     });
 
     const reconciliationSummary: ReconciliationSummaryDto = includeReconciliation
@@ -848,6 +856,10 @@ export class ReportsService {
   }
 
   // DASHBOARD
+  /**
+   * @cc [owner:nareshshah139,label:product] dashboard-branch-payment-counts
+   * Payment groups MUST count matching branch payments without ambiguous joined-column references.
+   */
   async generateDashboard(query: DashboardQuery, branchId: string): Promise<DashboardResponseDto> {
     const target = query.date ? new Date(query.date) : new Date();
     const start = new Date(target.getFullYear(), target.getMonth(), target.getDate());
@@ -862,7 +874,7 @@ export class ReportsService {
       this.prisma.inventoryItem.count({ where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] } }),
       this.prisma.newPayment.count({ where: { invoice: { branchId }, reconStatus: 'PENDING' } }),
       this.prisma.appointment.findMany({ where: { branchId }, orderBy: { date: 'desc' }, take: 10, select: { id: true, date: true, status: true, visitType: true, patient: { select: { name: true } }, doctor: { select: { firstName: true, lastName: true } } } }),
-      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), lte: end } }, _sum: { amount: true }, _count: { id: true } }),
+      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), lte: end } }, _sum: { amount: true }, _count: { _all: true } }),
     ]);
 
     const recentAppointments: RecentAppointmentDto[] = recentAppointmentsRaw.map((a) => ({
@@ -876,7 +888,7 @@ export class ReportsService {
 
     const revenueTrends: RevenueTrendDto[] = revenueLast7
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
-      .map((g) => ({ date: new Date(g.createdAt).toISOString().split('T')[0], revenue: g._sum.amount || 0, invoiceCount: g._count.id }));
+      .map((g) => ({ date: new Date(g.createdAt).toISOString().split('T')[0], revenue: g._sum.amount || 0, invoiceCount: g._count._all }));
 
     const topDoctors: TopDoctorDto[] = activeDoctors
       .sort((a, b) => b._count.doctorId - a._count.doctorId)
