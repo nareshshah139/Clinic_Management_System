@@ -1,6 +1,7 @@
 import { displayCalendarDate, displayClinicDateTime, displayUtcDate } from '../../common/date-display';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { hasScopedPermission } from '../../shared/guards/scoped-permission';
 import { PharmacyPurchaseInvoiceService } from '../pharmacy/pharmacy-purchase-invoice.service';
 import { QueryPharmacyPurchaseInvoiceDto } from '../pharmacy/dto/pharmacy-purchase-invoice.dto';
 import { InventoryWorkflowService } from './inventory-workflow.service';
@@ -26,7 +27,7 @@ export class InventoryPurchaseActionsService {
     if (!roles.includes(actor.role)) throw new ForbiddenException('This role cannot perform this purchase document action');
     const permissions = await this.workflow.permissions(actor);
     const allowed = write ? ['pharmacy:purchase-invoice:create', 'inventory:po:create'] : ['pharmacy:purchase-invoice:read', 'inventory:po:read'];
-    if (!permissions.has('*') && !allowed.some(key => permissions.has(key))) throw new ForbiddenException(`This action requires ${allowed.join(' or ')}`);
+    if (!permissions.has('*') && !allowed.some(key => hasScopedPermission(permissions, key))) throw new ForbiddenException(`This action requires ${allowed.join(' or ')}`);
     return permissions;
   }
 
@@ -37,7 +38,7 @@ export class InventoryPurchaseActionsService {
    */
   async detail(actor: WorkflowActor, id: string) {
     const permissions = await this.access(actor);
-    const canReadLedger = permissions.has('*') || permissions.has('pharmacy:purchase-ledger:read');
+    const canReadLedger = permissions.has('*') || hasScopedPermission(permissions, 'pharmacy:purchase-ledger:read');
     const invoice = await this.purchases.findOne(id, actor.branchId);
     const [related, logs, payments, credits] = await Promise.all([
       this.prisma.inventoryWorkflowDocument.findMany({ where: { branchId: actor.branchId,
@@ -87,7 +88,7 @@ export class InventoryPurchaseActionsService {
     const actorIds = [...new Set(events.map(e => e.actorId).filter(Boolean))];
     const users = actorIds.length ? await this.prisma.user.findMany({ where: { id: { in: actorIds }, branchId: actor.branchId }, select: { id: true, firstName: true, lastName: true } }) : [];
     const names = new Map(users.map(user => [user.id, `${user.firstName} ${user.lastName}`.trim()]));
-    const has = (...keys: string[]) => permissions.has('*') || keys.some(key => permissions.has(key));
+    const has = (...keys: string[]) => permissions.has('*') || keys.some(key => hasScopedPermission(permissions, key));
     const canEdit = ['OWNER', 'ADMIN', 'PHARMACIST', 'RECEPTION'].includes(actor.role) && has('pharmacy:purchase-invoice:create', 'inventory:po:create');
     return { invoice, version: invoice.actionVersion || 1, metadata: invoice.actionMetadata || {},
       permissions: { attach: canEdit, metadata: canEdit && has('inventory:item:update'),
@@ -125,7 +126,7 @@ export class InventoryPurchaseActionsService {
    */
   async saveMetadata(actor: WorkflowActor, id: string, input: Record<string, any>) {
     const permissions = await this.access(actor, true);
-    if (!permissions.has('*') && !permissions.has('inventory:item:update')) throw new ForbiddenException('This action requires inventory:item:update');
+    if (!permissions.has('*') && !hasScopedPermission(permissions, 'inventory:item:update')) throw new ForbiddenException('This action requires inventory:item:update');
     const reason = String(input.reason || '').trim(), location = String(input.location || '').trim();
     const discount = Number(input.futureSaleDiscountPercent);
     if (reason.length < 3 || reason.length > 500) throw new BadRequestException('Enter a reason between 3 and 500 characters');
