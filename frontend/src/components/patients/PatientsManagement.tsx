@@ -1027,7 +1027,7 @@ export default function PatientsManagement() {
             <div className="text-sm text-gray-600">{linkPortalTarget ? `Patient: ${formatPatientName(linkPortalTarget)}` : ''}</div>
             <div>
               <Label htmlFor="linkPortalEmail">Email</Label>
-              <Input id="linkPortalEmail" value={linkPortalEmail} onChange={(e) => setLinkPortalEmail(e.target.value)} placeholder="Enter email to link" />
+              <Input id="linkPortalEmail" value={linkPortalEmail} onChange={(e) => setLinkPortalEmail(e.target.value)} placeholder="Existing portal account email" />
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
