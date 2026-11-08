@@ -1,0 +1,681 @@
+{
+  "shots": {
+    "a1-filters": {
+      "file": "a1-filters.png",
+      "w": 1160,
+      "h": 220,
+      "callouts": [
+        {
+          "n": 1,
+          "x": 47,
+          "y": 140.390625,
+          "w": 225.546875,
+          "h": 44.84375,
+          "badge": "left"
+        },
+        {
+          "n": 2,
+          "x": 413,
+          "y": 140.390625,
+          "w": 358,
+          "h": 40,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "a1-evening": {
+      "file": "a1-evening.png",
+      "w": 1100,
+      "h": 540,
+      "callouts": [
+        {
+          "n": 4,
+          "x": 76,
+          "y": 470.265625,
+          "w": 1000,
+          "h": 44,
+          "badge": "left"
+        },
+        {
+          "n": 5,
+          "x": 76,
+          "y": 436.265625,
+          "w": 1000,
+          "h": 40,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "a1-badge": {
+      "file": "a1-badge.png",
+      "w": 1100,
+      "h": 330,
+      "callouts": [
+        {
+          "n": 3,
+          "x": 20,
+          "y": 87.609375,
+          "w": 180.65625,
+          "h": 28.65625,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "a2-free-slot": {
+      "file": "a2-free-slot.png",
+      "w": 1100,
+      "h": 330,
+      "callouts": [
+        {
+          "n": 1,
+          "x": 76,
+          "y": 188.265625,
+          "w": 1000,
+          "h": 40,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "a2-search": {
+      "file": "a2-search.png",
+      "w": 768,
+      "h": 868,
+      "callouts": [
+        {
+          "n": 2,
+          "x": 23,
+          "y": 86,
+          "w": 722,
+          "h": 40,
+          "badge": "left"
+        },
+        {
+          "n": 3,
+          "x": 24,
+          "y": 131,
+          "w": 720,
+          "h": 42.84375,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "a2-confirm": {
+      "file": "a2-confirm.png",
+      "w": 768,
+      "h": 754,
+      "callouts": [
+        {
+          "n": 4,
+          "x": 580.609375,
+          "y": 686.0703125,
+          "w": 164.390625,
+          "h": 44.84375,
+          "badge": "top"
+        }
+      ],
+      "caption": ""
+    },
+    "a2-booked": {
+      "file": "a2-booked.png",
+      "w": 1100,
+      "h": 406,
+      "callouts": [
+        {
+          "n": 5,
+          "x": 3,
+          "y": 17.609375,
+          "w": 1090,
+          "h": 81.6875,
+          "badge": "left"
+        },
+        {
+          "n": 6,
+          "x": 76,
+          "y": 293.953125,
+          "w": 1000,
+          "h": 44,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "a3-no-match": {
+      "file": "a3-no-match.png",
+      "w": 768,
+      "h": 832,
+      "callouts": [
+        {
+          "n": 1,
+          "x": 23,
+          "y": 85.5859375,
+          "w": 722,
+          "h": 40,
+          "badge": "left"
+        },
+        {
+          "n": 2,
+          "x": 590.359375,
+          "y": 129.5859375,
+          "w": 154.640625,
+          "h": 36,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "a3-create": {
+      "file": "a3-create.png",
+      "w": 500,
+      "h": 598,
+      "callouts": [
+        {
+          "n": 3,
+          "x": 23,
+          "y": 269.421875,
+          "w": 454,
+          "h": 40,
+          "badge": "left"
+        },
+        {
+          "n": 4,
+          "x": 23,
+          "y": 128.578125,
+          "w": 221,
+          "h": 40,
+          "badge": "left"
+        },
+        {
+          "n": 5,
+          "x": 332.5625,
+          "y": 530.265625,
+          "w": 144.4375,
+          "h": 44.84375,
+          "badge": "top"
+        }
+      ],
+      "caption": ""
+    },
+    "a3-back": {
+      "file": "a3-back.png",
+      "w": 768,
+      "h": 754,
+      "callouts": [
+        {
+          "n": 6,
+          "x": 39,
+          "y": 77.5859375,
+          "w": 152.796875,
+          "h": 31,
+          "badge": "left"
+        },
+        {
+          "n": 7,
+          "x": 580.609375,
+          "y": 686.0703125,
+          "w": 164.390625,
+          "h": 44.84375,
+          "badge": "top"
+        }
+      ],
+      "caption": ""
+    },
+    "b1-today": {
+      "file": "b1-today.png",
+      "w": 580,
+      "h": 810,
+      "callouts": [
+        {
+          "n": 1,
+          "x": 35,
+          "y": 267.578125,
+          "w": 510,
+          "h": 69.5,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "b1-visit": {
+      "file": "b1-visit.png",
+      "w": 1160,
+      "h": 140,
+      "callouts": [
+        {
+          "n": 2,
+          "x": 22,
+          "y": 48.390625,
+          "w": 623.640625,
+          "h": 26.84375,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "b2-footer-empty": {
+      "file": "b2-footer-empty.png",
+      "w": 1172,
+      "h": 130,
+      "callouts": [
+        {
+          "n": 1,
+          "x": 47,
+          "y": 67.421875,
+          "w": 537.984375,
+          "h": 26.84375,
+          "badge": "left"
+        },
+        {
+          "n": 2,
+          "x": 989.640625,
+          "y": 58.421875,
+          "w": 147.359375,
+          "h": 44.84375,
+          "badge": "top"
+        }
+      ],
+      "caption": ""
+    },
+    "b2-footer-dx": {
+      "file": "b2-footer-dx.png",
+      "w": 1172,
+      "h": 130,
+      "callouts": [
+        {
+          "n": 4,
+          "x": 47,
+          "y": 67.078125,
+          "w": 414.984375,
+          "h": 26.84375,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "b3-template": {
+      "file": "b3-template.png",
+      "w": 763,
+      "h": 323,
+      "callouts": [
+        {
+          "n": 1,
+          "x": 22,
+          "y": 58.078125,
+          "w": 244,
+          "h": 44.84375,
+          "badge": "top"
+        },
+        {
+          "n": 2,
+          "x": 27,
+          "y": 187.5,
+          "w": 357.453125,
+          "h": 38.84375,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "b2-diagnosis": {
+      "file": "b2-diagnosis.png",
+      "w": 1160,
+      "h": 220,
+      "callouts": [
+        {
+          "n": 3,
+          "x": 72,
+          "y": 117.890625,
+          "w": 1086,
+          "h": 40,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "b3-save": {
+      "file": "b3-save.png",
+      "w": 1172,
+      "h": 360,
+      "callouts": [
+        {
+          "n": 1,
+          "x": 999.3125,
+          "y": 298.234375,
+          "w": 183.6875,
+          "h": 44.84375,
+          "badge": "top"
+        }
+      ],
+      "caption": ""
+    },
+    "b3-sent": {
+      "file": "b3-sent.png",
+      "w": 1172,
+      "h": 330,
+      "callouts": [
+        {
+          "n": 2,
+          "x": 262.859375,
+          "y": 198.328125,
+          "w": 185.5625,
+          "h": 28.65625,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "b4-ready": {
+      "file": "b4-ready.png",
+      "w": 1172,
+      "h": 130,
+      "callouts": [
+        {
+          "n": 1,
+          "x": 989.640625,
+          "y": 58.421875,
+          "w": 147.359375,
+          "h": 44.84375,
+          "badge": "top"
+        }
+      ],
+      "caption": ""
+    },
+    "b4-done": {
+      "file": "b4-done.png",
+      "w": 386,
+      "h": 121,
+      "callouts": [],
+      "caption": ""
+    },
+    "b3-queue": {
+      "file": "b3-queue.png",
+      "w": 640,
+      "h": 500,
+      "callouts": [
+        {
+          "n": 3,
+          "x": 53,
+          "y": 358.28125,
+          "w": 280,
+          "h": 94,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "c1-chart": {
+      "file": "c1-chart.png",
+      "w": 1172,
+      "h": 260,
+      "callouts": [
+        {
+          "n": 1,
+          "x": 880.859375,
+          "y": 35.09375,
+          "w": 177.359375,
+          "h": 44.84375,
+          "badge": "top"
+        }
+      ],
+      "caption": ""
+    },
+    "c1-calendar": {
+      "file": "c1-calendar.png",
+      "w": 1172,
+      "h": 300,
+      "callouts": [
+        {
+          "n": 2,
+          "x": 413,
+          "y": 152.390625,
+          "w": 358,
+          "h": 40,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    },
+    "c1-dialog": {
+      "file": "c1-dialog.png",
+      "w": 768,
+      "h": 754,
+      "callouts": [
+        {
+          "n": 3,
+          "x": 39,
+          "y": 77.5859375,
+          "w": 212.828125,
+          "h": 31,
+          "badge": "left"
+        },
+        {
+          "n": 4,
+          "x": 580.609375,
+          "y": 686.0703125,
+          "w": 164.390625,
+          "h": 44.84375,
+          "badge": "top"
+        }
+      ],
+      "caption": ""
+    },
+    "d1-choose-doctor": {
+      "file": "d1-choose-doctor.png",
+      "w": 1172,
+      "h": 360,
+      "callouts": [
+        {
+          "n": 3,
+          "x": 64,
+          "y": 258.265625,
+          "w": 1056,
+          "h": 26.84375,
+          "badge": "left"
+        }
+      ],
+      "caption": ""
+    }
+  },
+  "checks": {
+    "A: there is no Slots tab, only the one calendar": {
+      "ok": true,
+      "msg": "A: there is no Slots tab, only the one calendar"
+    },
+    "A: the 2026-11-09 grid shows an \"outside working hours\" badge": {
+      "ok": true,
+      "msg": "A: the 2026-11-09 grid shows an \"outside working hours\" badge"
+    },
+    "A: the grid has an 18:00 row for the evening booking": {
+      "ok": true,
+      "msg": "A: the grid has an 18:00 row for the evening booking"
+    },
+    "A: the 18:30-19:00 evening booking is drawn on the grid": {
+      "ok": true,
+      "msg": "A: the 18:30-19:00 evening booking is drawn on the grid"
+    },
+    "A: the 10:30 slot is free": {
+      "ok": true,
+      "msg": "A: the 10:30 slot is free"
+    },
+    "A: the patient search inside the booking dialog has focus when it": {
+      "ok": true,
+      "msg": "A: the patient search inside the booking dialog has focus when it opens"
+    },
+    "A: typing \"Meghana\" lists Meghana Reddy": {
+      "ok": true,
+      "msg": "A: typing \"Meghana\" lists Meghana Reddy"
+    },
+    "A: Confirm Booking is visible without scrolling (bottom 802px <= 900px)": {
+      "ok": true,
+      "msg": "A: Confirm Booking is visible without scrolling (bottom 802px <= 900px)"
+    },
+    "A: the success banner names the patient": {
+      "ok": true,
+      "msg": "A: the success banner names the patient"
+    },
+    "A: Meghana Reddy has a 10:30 appointment on 2026-11-09 with Dr. Shravya": {
+      "ok": true,
+      "msg": "A: Meghana Reddy has a 10:30 appointment on 2026-11-09 with Dr. Shravya"
+    },
+    "A: the appointment is with Dr. Shravya": {
+      "ok": true,
+      "msg": "A: the appointment is with Dr. Shravya"
+    },
+    "A: after a booking the next slot asks for a patient again": {
+      "ok": true,
+      "msg": "A: after a booking the next slot asks for a patient again (the last patient is not reused)"
+    },
+    "A: a phone-number search fills Phone in the new-patient form, not First": {
+      "ok": true,
+      "msg": "A: a phone-number search fills Phone in the new-patient form, not First Name"
+    },
+    "A: back in the booking dialog, the new patient is already chosen": {
+      "ok": true,
+      "msg": "A: back in the booking dialog, the new patient is already chosen"
+    },
+    "A: the success banner names the new patient": {
+      "ok": true,
+      "msg": "A: the success banner names the new patient"
+    },
+    "A: no page errors ": {
+      "ok": true,
+      "msg": "A: no page errors "
+    },
+    "B: Meghana Reddy is a clickable row in Dr. Shravya's Today's Appointments": {
+      "ok": true,
+      "msg": "B: Meghana Reddy is a clickable row in Dr. Shravya's Today's Appointments"
+    },
+    "B: one click opens the visit for Meghana Reddy under Dr. Shravya": {
+      "ok": true,
+      "msg": "B: one click opens the visit for Meghana Reddy under Dr. Shravya (header \"Patient: Meghana Reddy • Doctor: Dr. Shravya Dermatologist• 10:30-11:00 • OPD\")"
+    },
+    "B: the visit form is open and ready to document": {
+      "ok": true,
+      "msg": "B: the visit form is open and ready to document"
+    },
+    "B: on an empty visit Complete Visit is disabled and the footer": {
+      "ok": true,
+      "msg": "B: on an empty visit Complete Visit is disabled and the footer says \"To complete, add a diagnosis and a prescription, examination or notes.\""
+    },
+    "B: with only a diagnosis the footer names what is left: \"To": {
+      "ok": true,
+      "msg": "B: with only a diagnosis the footer names what is left: \"To complete, add a prescription, examination or notes.\""
+    },
+    "B: the Templates menu offers an Acne template": {
+      "ok": true,
+      "msg": "B: the Templates menu offers an Acne template"
+    },
+    "B: choosing the template replaces a diagnosis typed before it (\"Acne vulgaris,": {
+      "ok": true,
+      "msg": "B: choosing the template replaces a diagnosis typed before it (\"Acne vulgaris, grade II\" became \"Acne vulgaris (mild)\")"
+    },
+    "B: CAUTION the template alone enables Complete Visit before the prescription is": {
+      "ok": true,
+      "msg": "B: CAUTION the template alone enables Complete Visit before the prescription is saved (no badge yet)"
+    },
+    "B: saving the prescription opens no \"Go to Pharmacy?\" dialog": {
+      "ok": true,
+      "msg": "B: saving the prescription opens no \"Go to Pharmacy?\" dialog"
+    },
+    "B: there is no \"Go to Pharmacy\" button on the visit": {
+      "ok": true,
+      "msg": "B: there is no \"Go to Pharmacy\" button on the visit"
+    },
+    "B: a \"Sent to pharmacy queue\" badge confirms the hand-off": {
+      "ok": true,
+      "msg": "B: a \"Sent to pharmacy queue\" badge confirms the hand-off"
+    },
+    "B: the doctor is still on the visit after saving": {
+      "ok": true,
+      "msg": "B: the doctor is still on the visit after saving"
+    },
+    "B: the saved prescription is in the pharmacy queue with no extra": {
+      "ok": true,
+      "msg": "B: the saved prescription is in the pharmacy queue with no extra click"
+    },
+    "B: after reopening the visit, the saved diagnosis and prescription keep Complete": {
+      "ok": true,
+      "msg": "B: after reopening the visit, the saved diagnosis and prescription keep Complete Visit enabled and the footer quiet"
+    },
+    "B: the visit is COMPLETED (got COMPLETED) with no photos, labs or": {
+      "ok": true,
+      "msg": "B: the visit is COMPLETED (got COMPLETED) with no photos, labs or vitals"
+    },
+    "B: a \"Visit completed\" confirmation appears": {
+      "ok": true,
+      "msg": "B: a \"Visit completed\" confirmation appears"
+    },
+    "B: no page errors ": {
+      "ok": true,
+      "msg": "B: no page errors "
+    },
+    "B: Meghana Reddy's prescription is waiting at the Pharmacy Counter": {
+      "ok": true,
+      "msg": "B: Meghana Reddy's prescription is waiting at the Pharmacy Counter"
+    },
+    "C: Meghana Reddy's chart has a Book appointment action": {
+      "ok": true,
+      "msg": "C: Meghana Reddy's chart has a Book appointment action"
+    },
+    "C: the 10:30 slot on 2026-12-07 is free": {
+      "ok": true,
+      "msg": "C: the 10:30 slot on 2026-12-07 is free"
+    },
+    "C: from the chart, the booking dialog already names the patient (no": {
+      "ok": true,
+      "msg": "C: from the chart, the booking dialog already names the patient (no search needed)"
+    },
+    "C: the follow-up on 2026-12-07 at 10:30 is booked for Meghana Reddy": {
+      "ok": true,
+      "msg": "C: the follow-up on 2026-12-07 at 10:30 is booked for Meghana Reddy"
+    },
+    "C: no page errors ": {
+      "ok": true,
+      "msg": "C: no page errors "
+    },
+    "D: Syed Arif has an appointment to link to": {
+      "ok": true,
+      "msg": "D: Syed Arif has an appointment to link to"
+    },
+    "D: a notification link with only the appointment opens that patient and": {
+      "ok": true,
+      "msg": "D: a notification link with only the appointment opens that patient and that appointment's doctor (\"Patient: Syed Arif • Doctor: Dr. Shravya Dermatologist• 15:00-15:30 • OPD\")"
+    },
+    "D: reception starting a visit is asked to choose the doctor instead": {
+      "ok": true,
+      "msg": "D: reception starting a visit is asked to choose the doctor instead of being given a guess"
+    }
+  },
+  "data": {
+    "today": "2026-11-09",
+    "followUp": "2026-12-07",
+    "slotReturning": "10:30",
+    "slotNew": "15:00",
+    "slotFollowUp": "10:30",
+    "returningName": "Meghana Reddy",
+    "returningPhone": "9849012345",
+    "returningId": "cmw7y45g6001c7d7syukc506e",
+    "walkInName": "Syed Arif",
+    "walkInPhone": "9701210630",
+    "doctorId": "cmw6d94b200037dw0nxzpi3qc",
+    "outsideBadge": "1 outside working hours",
+    "returningSlotFull": "10:30-11:00",
+    "visitUrl": "/dashboard/visits?appointmentId=cmw7zoavq00cv7d7sj8iw4ej5&patientId=cmw7y45g6001c7d7syukc506e",
+    "visitId": "cmw7zpb9b00d67d7smhq4coe0",
+    "footerEmpty": "To complete, add a diagnosis and a prescription, examination or notes.",
+    "footerAfterDx": "To complete, add a prescription, examination or notes.",
+    "templateName": "Acne (Mild) — Topical regimen",
+    "diagnosisAfterTemplate": "Acne vulgaris (mild)",
+    "diagnosisFromTemplate": "Acne vulgaris (mild)",
+    "templateFilledMeds": false,
+    "rxId": "cmw7zpbpn00db7d7svjob402z",
+    "chartBookLabel": "Book appointment",
+    "todayLabel": "Monday, 9 November 2026",
+    "followUpLabel": "Monday, 7 December 2026"
+  },
+  "capturedAt": "2026-11-08T15:32:45.932Z"
+}

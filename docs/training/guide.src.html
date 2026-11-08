@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Clinic Workflows Guide</title>
+<style>
+@font-face { font-family: 'Guide Sans'; font-weight: 400; src: url(fonts/inter-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Guide Sans'; font-weight: 700; src: url(fonts/inter-latin-700-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Guide Sans'; font-weight: 800; src: url(fonts/inter-latin-800-normal.woff2) format('woff2'); }
+:root {
+  --ink: #111418;
+  --ink-2: #3b4250;
+  --ink-3: #6b7280;
+  --rule: #d5d9e0;
+  --wash: #f3f5f8;
+  --accent: #0b5c55;
+  --accent-wash: #e6f2f0;
+  --warn: #7a4a00;
+  --warn-wash: #fff6e0;
+}
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; color: var(--ink); }
+body { font-family: 'Guide Sans', sans-serif; font-size: 9.6pt; line-height: 1.42; counter-reset: pg; }
+.page { width: 210mm; height: 297mm; padding: 11mm 15mm 9mm; display: flex; flex-direction: column; page-break-after: always; overflow: hidden; counter-increment: pg; }
+.page:last-child { page-break-after: auto; }
+.run { display: flex; justify-content: space-between; font-size: 7.5pt; color: var(--ink-3); letter-spacing: .02em; }
+header.run { border-bottom: .3mm solid var(--rule); padding-bottom: 1.6mm; margin-bottom: 5mm; }
+footer.run { border-top: .3mm solid var(--rule); padding-top: 1.6mm; margin-top: 3mm; }
+footer.run .pn::after { content: counter(pg); }
+.body { flex: 1; display: flex; flex-direction: column; gap: 3.2mm; min-height: 0; }
+h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -.01em; }
+h2 { font-size: 17pt; line-height: 1.15; }
+h3 { font-size: 10.5pt; }
+p { margin: 0; }
+.mono, code { font-family: 'JetBrains Mono', monospace; font-size: .86em; }
+code { background: var(--wash); border: .25mm solid var(--rule); border-radius: 1mm; padding: 0 1mm; white-space: nowrap; }
+.lesson-head { display: grid; grid-template-columns: 15mm 1fr; gap: 0 4mm; align-items: start; }
+.lesson-no { font-size: 26pt; font-weight: 800; line-height: .95; color: var(--accent); }
+.kicker { display: flex; gap: 2mm; align-items: center; font-size: 7.5pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 1mm; }
+.role { border-radius: 10mm; padding: .5mm 2.4mm; letter-spacing: .1em; }
+.role.reception { border: .35mm solid var(--ink); color: var(--ink); }
+.role.doctor { background: var(--ink); color: #fff; border: .35mm solid var(--ink); }
+.role.pharmacy { border: .35mm dashed var(--ink); color: var(--ink); }
+.idea { font-size: 10.6pt; color: var(--ink-2); margin-top: 1.5mm; max-width: 165mm; }
+.steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 1.8mm; counter-reset: st; }
+.steps li { counter-increment: st; display: grid; grid-template-columns: 6.5mm 1fr; gap: 2mm; }
+.steps li::before { content: counter(st); font-weight: 800; font-size: 10pt; width: 6mm; height: 6mm; border: .4mm solid var(--ink); border-radius: 1.2mm; display: flex; align-items: center; justify-content: center; }
+.n { display: inline-flex; align-items: center; justify-content: center; width: 4.2mm; height: 4.2mm; border-radius: 50%; background: var(--ink); color: #fff; font-size: 6.8pt; font-weight: 700; vertical-align: .2mm; margin: 0 .4mm; }
+.boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+.box { border: .3mm solid var(--rule); border-radius: 1.6mm; padding: 2.4mm 3mm; background: #fff; }
+.box h4 { margin: 0 0 1mm; font-size: 7.4pt; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
+.box.words { background: var(--wash); }
+.box.words code { background: #fff; white-space: normal; display: inline-block; margin: .4mm 0; }
+.box.breaks { border-left: 1.4mm solid var(--ink); }
+.box.caution { border: .45mm solid var(--warn); background: var(--warn-wash); }
+.box.caution h4 { color: var(--warn); }
+.box.changed { border-style: dashed; }
+.cols { display: grid; gap: 4mm; align-items: start; }
+.stack { display: flex; flex-direction: column; gap: 3mm; }
+figure.shot { margin: 0; }
+figure.shot .frame { position: relative; overflow: hidden; border: .3mm solid #b9c0ca; border-radius: 1.2mm; background: #fff; }
+figure.shot img { position: absolute; display: block; height: auto; }
+figure.shot svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+figure.shot .halo { fill: none; stroke: #fff; }
+figure.shot .ring { fill: none; stroke: #000; }
+figure.shot .badge-halo { fill: #fff; }
+figure.shot .badge { fill: #000; }
+figure.shot .badge-n { fill: #fff; font-family: 'Guide Sans', sans-serif; font-weight: 800; text-anchor: middle; }
+figcaption { font-size: 7.6pt; color: var(--ink-3); margin-top: 1mm; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; vertical-align: top; padding: 1.5mm 2mm; border-bottom: .25mm solid var(--rule); }
+th { font-size: 7.4pt; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); border-bottom: .45mm solid var(--ink); }
+.cover { justify-content: space-between; }
+.cover h1 { font-size: 30pt; line-height: 1.05; letter-spacing: -.02em; }
+.cover .sub { font-size: 12pt; color: var(--ink-2); margin-top: 4mm; max-width: 150mm; }
+.meta { display: grid; grid-template-columns: 21mm 1fr; gap: 1.2mm 4mm; font-size: 8.6pt; }
+.meta dt { color: var(--ink-3); }
+.meta dd { margin: 0; }
+.toc { display: grid; grid-template-columns: 6mm 1fr 9mm 6mm; gap: 1.4mm 2mm; align-items: baseline; }
+.toc .part { grid-column: 1 / -1; font-weight: 700; margin-top: 2mm; font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.toc .no { font-weight: 800; color: var(--accent); }
+.toc .pg { text-align: right; color: var(--ink-3); }
+.q { margin: 0; padding-left: 5mm; display: flex; flex-direction: column; gap: 2.2mm; }
+.q li { padding-left: 1mm; }
+.blank { display: block; border-bottom: .3mm solid var(--rule); height: 5.5mm; }
+.answers p { margin-bottom: 1.4mm; }
+.small { font-size: 8pt; color: var(--ink-2); }
+.diagram svg { width: 100%; height: auto; display: block; }
+.diagram text { font-family: 'Guide Sans', sans-serif; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="page cover" id="cover">
+  <header class="run"><span>ClinicMS training</span><span>Reception and doctors</span></header>
+  <div class="body" style="justify-content:space-between">
+    <div>
+      <div class="kicker" style="margin-top:18mm">Training guide · November 2026</div>
+      <h1>Booking, consulting and<br>handing over to pharmacy:<br>the new way</h1>
+      <p class="sub">Nine short lessons that follow one patient through one morning at the OPD. Every picture is a real screen from ClinicMS, with the control you press marked by a numbered box.</p>
+    </div>
+    <figure data-shot="a2-booked" data-w="180"></figure>
+    <div class="cols" style="grid-template-columns: 1fr 1fr">
+      <dl class="meta">
+        <dt>For</dt><dd>Reception (lessons 1, 2, 3, 9) and doctors (lessons 4 to 8)</dd>
+        <dt>Time</dt><dd>About 45 minutes with the practice tasks</dd>
+        <dt>You need</dt><dd>A ClinicMS login and a training patient</dd>
+      </dl>
+      <dl class="meta">
+        <dt>The patient</dt><dd>{{returningName}}, 34, back for acne. Phone {{returningPhone}}.</dd>
+        <dt>The walk-in</dt><dd>{{walkInName}}, new to the clinic.</dd>
+        <dt>The people</dt><dd>Riya Sharma at reception. Dr. Shravya consulting.</dd>
+      </dl>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ HOW TO USE ============ -->
+<section class="page" id="how">
+  <header class="run"><span>ClinicMS training</span><span>Before you start</span></header>
+  <div class="body">
+    <h2>How to use this guide</h2>
+    <div class="cols" style="grid-template-columns: 1fr 1fr">
+      <div class="stack">
+        <p>Each lesson teaches one thing you can now do. Every lesson page has the same parts, in the same order, so you always know where to look.</p>
+        <table>
+          <tr><th>Part of the page</th><th>What it tells you</th></tr>
+          <tr><td><b>The idea</b></td><td>How the screen works, in one sentence.</td></tr>
+          <tr><td><b>Pictures</b></td><td>The real screen. A black box with a number <span class="n">1</span> marks what to look at or press.</td></tr>
+          <tr><td><b>Do this</b></td><td>Three steps. The numbers in the steps match the boxes.</td></tr>
+          <tr><td><b>Words on screen</b></td><td>The exact text you will see, in <code>this type</code>. Look for it to know you are in the right place.</td></tr>
+          <tr><td><b>New since last lesson</b></td><td>What you can do now that you could not one lesson ago.</td></tr>
+          <tr><td><b>If you skip it</b></td><td>What goes wrong at the desk or in the consult room.</td></tr>
+        </table>
+        <p class="small">The pictures work in black and white. Nothing in this guide depends on colour.</p>
+      </div>
+      <div class="stack">
+        <h3>Contents</h3>
+        <div class="toc">
+          <span class="part">Start here</span>
+          <span></span><span>One morning, one patient (map)</span><span></span><span class="pg" data-ref="map"></span>
+          <span></span><span>What changed (quick reference)</span><span></span><span class="pg" data-ref="changed"></span>
+          <span class="part">Part A · Reception</span>
+          <span class="no">1</span><span>Read the doctor's day</span><span><span class="role reception" style="font-size:6pt">Rec</span></span><span class="pg" data-ref="l1"></span>
+          <span class="no">2</span><span>Book a returning patient</span><span><span class="role reception" style="font-size:6pt">Rec</span></span><span class="pg" data-ref="l2a"></span>
+          <span class="no">3</span><span>Add a new patient while booking</span><span><span class="role reception" style="font-size:6pt">Rec</span></span><span class="pg" data-ref="l3a"></span>
+          <span></span><span>Practice A</span><span></span><span class="pg" data-ref="pa"></span>
+          <span class="part">Part B · Doctor</span>
+          <span class="no">4</span><span>Open today's patient in one click</span><span><span class="role doctor" style="font-size:6pt">Dr</span></span><span class="pg" data-ref="l4"></span>
+          <span class="no">5</span><span>Let the footer tell you what is missing</span><span><span class="role doctor" style="font-size:6pt">Dr</span></span><span class="pg" data-ref="l5"></span>
+          <span class="no">6</span><span>Fill the prescription from a template</span><span><span class="role doctor" style="font-size:6pt">Dr</span></span><span class="pg" data-ref="l6"></span>
+          <span class="no">7</span><span>Saving the prescription sends it</span><span><span class="role doctor" style="font-size:6pt">Dr</span></span><span class="pg" data-ref="l7"></span>
+          <span class="no">8</span><span>Complete the visit</span><span><span class="role doctor" style="font-size:6pt">Dr</span></span><span class="pg" data-ref="l8"></span>
+          <span></span><span>Practice B</span><span></span><span class="pg" data-ref="pb"></span>
+          <span class="part">Part C · Reception closes the loop</span>
+          <span class="no">9</span><span>Book the follow-up from the chart</span><span><span class="role reception" style="font-size:6pt">Rec</span></span><span class="pg" data-ref="l9"></span>
+          <span></span><span>Practice C and answers</span><span></span><span class="pg" data-ref="answers"></span>
+        </div>
+      </div>
+    </div>
+    <div class="box">
+      <h4>For the trainer</h4>
+      <p>Run it in three blocks. 10 minutes on the map and the quick reference with everyone. 15 minutes on Part A with reception at their desks while doctors start Part B. 20 minutes for Part B and Part C, then go through the answers together. Use training patients only. Slow down on lesson 7. It is where a patient can leave with nothing waiting at the pharmacy.</p>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ MAP ============ -->
+<section class="page" id="map">
+  <header class="run"><span>ClinicMS training</span><span>Start here</span></header>
+  <div class="body">
+    <h2>One morning, one patient</h2>
+    <p class="idea">{{returningName}} is booked at the desk, seen by Dr. Shravya, and collects her medicines at the pharmacy counter. Nobody walks a paper slip anywhere. Each hand-off below happens because someone saved something.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 760 600" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#111418"/></marker>
+        </defs>
+        <g font-size="11" fill="#6b7280" font-weight="700" letter-spacing="1.2">
+          <text x="10" y="22">RECEPTION</text>
+          <text x="10" y="222">DOCTOR</text>
+          <text x="10" y="462">PHARMACY</text>
+        </g>
+        <rect x="4" y="32" width="752" height="140" rx="10" fill="none" stroke="#111418" stroke-width="1.4"/>
+        <rect x="4" y="232" width="752" height="180" rx="10" fill="#f3f5f8" stroke="#111418" stroke-width="2.6"/>
+        <rect x="4" y="472" width="752" height="110" rx="10" fill="none" stroke="#111418" stroke-width="1.4" stroke-dasharray="7 5"/>
+        <g font-size="13.5" fill="#111418">
+          <g transform="translate(20,70)"><rect width="130" height="64" rx="7" fill="#fff" stroke="#111418" stroke-width="1.6"/><text x="11" y="25" font-weight="800">1  Read the day</text><text x="11" y="46" fill="#3b4250" font-size="11.5">doctor, date, badge</text></g>
+          <g transform="translate(168,70)"><rect width="130" height="64" rx="7" fill="#fff" stroke="#111418" stroke-width="1.6"/><text x="11" y="25" font-weight="800">2  Book Meghana</text><text x="11" y="46" fill="#3b4250" font-size="11.5">slot first, then search</text></g>
+          <g transform="translate(316,70)"><rect width="130" height="64" rx="7" fill="#fff" stroke="#111418" stroke-width="1.6"/><text x="11" y="25" font-weight="800">3  Add Syed Arif</text><text x="11" y="46" fill="#3b4250" font-size="11.5">register in the box</text></g>
+          <g transform="translate(612,70)"><rect width="130" height="64" rx="7" fill="#fff" stroke="#111418" stroke-width="1.6"/><text x="11" y="25" font-weight="800">9  Follow-up</text><text x="11" y="46" fill="#3b4250" font-size="11.5">from her chart</text></g>
+          <g transform="translate(20,262)"><rect width="130" height="64" rx="7" fill="#fff" stroke="#111418" stroke-width="1.6"/><text x="11" y="25" font-weight="800">4  Open visit</text><text x="11" y="46" fill="#3b4250" font-size="11.5">one click from Today</text></g>
+          <g transform="translate(168,262)"><rect width="130" height="64" rx="7" fill="#fff" stroke="#111418" stroke-width="1.6"/><text x="11" y="25" font-weight="800">5  Diagnosis</text><text x="11" y="46" fill="#3b4250" font-size="11.5">footer lists the rest</text></g>
+          <g transform="translate(316,262)"><rect width="130" height="64" rx="7" fill="#fff" stroke="#111418" stroke-width="1.6"/><text x="11" y="25" font-weight="800">6  Template</text><text x="11" y="46" fill="#3b4250" font-size="11.5">re-check diagnosis</text></g>
+          <g transform="translate(464,262)"><rect width="130" height="64" rx="7" fill="#111418"/><text x="11" y="25" font-weight="800" fill="#fff">7  Save Rx</text><text x="11" y="46" fill="#fff" font-size="11.5">Create Prescription</text></g>
+          <g transform="translate(612,262)"><rect width="130" height="64" rx="7" fill="#fff" stroke="#111418" stroke-width="1.6"/><text x="11" y="25" font-weight="800">8  Complete</text><text x="11" y="46" fill="#3b4250" font-size="11.5">diagnosis + saved Rx</text></g>
+          <g transform="translate(444,500)"><rect width="170" height="58" rx="7" fill="#fff" stroke="#111418" stroke-width="1.6" stroke-dasharray="6 4"/><text x="11" y="24" font-weight="800">Pharmacy Counter</text><text x="11" y="44" fill="#3b4250" font-size="11.5">Meghana Reddy · Queued</text></g>
+        </g>
+        <g stroke="#111418" stroke-width="1.8" fill="none" marker-end="url(#ah)">
+          <path d="M150,102 L164,102"/>
+          <path d="M233,134 C233,205 85,195 85,258"/>
+          <path d="M150,294 L164,294"/>
+          <path d="M298,294 L312,294"/>
+          <path d="M446,294 L460,294"/>
+          <path d="M594,294 L608,294"/>
+          <path d="M529,326 L529,496"/>
+          <path d="M677,262 L677,138"/>
+        </g>
+        <path d="M381,326 C381,392 650,392 650,330" stroke="#7a4a00" stroke-width="1.8" fill="none" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+        <g font-size="12" fill="#111418">
+          <rect x="150" y="185" width="174" height="22" rx="4" fill="#fff"/>
+          <text x="157" y="200">appears on Today's list</text>
+          <rect x="537" y="424" width="150" height="38" rx="4" fill="#fff"/>
+          <text x="543" y="439" font-weight="800">saved = sent</text>
+          <text x="543" y="455">no button, no pop-up</text>
+          <rect x="560" y="186" width="106" height="22" rx="4" fill="#fff"/>
+          <text x="566" y="201">review in 4 weeks</text>
+          <rect x="20" y="346" width="262" height="44" rx="5" fill="#fff6e0" stroke="#7a4a00"/>
+          <text x="30" y="364" fill="#7a4a00" font-weight="800">Dashed trap. A template alone</text>
+          <text x="30" y="381" fill="#7a4a00">switches Complete on. Save first.</text>
+        </g>
+      </svg>
+    </div>
+    <div class="boxes">
+      <div class="box"><h4>Read the map like this</h4><p>Solid box: reception. Grey band: the doctor's consult. Dashed box: pharmacy. The black box, lesson 7, is the only step that sends anything to another person, and it happens when the doctor presses <code>Create Prescription</code>.</p></div>
+      <div class="box caution"><h4>The one trap</h4><p>The dashed arrow from 6 to 8 is a shortcut you must not take. A template fills the examination notes, and that alone switches <code>Complete Visit</code> on. Complete it then and the visit closes with no prescription, so the pharmacy counter has nothing for the patient. Always see <code>Sent to pharmacy queue</code> first.</p></div>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ WHAT CHANGED ============ -->
+<section class="page" id="changed">
+  <header class="run"><span>ClinicMS training</span><span>Quick reference</span></header>
+  <div class="body">
+    <h2>What changed</h2>
+    <p class="idea">Pin this page at the desk and in the consult room. Each row is one thing the screen does differently. "Before" is how ClinicMS behaved until this update. An automated walk through the live system checked every "Now" for this guide.</p>
+    <table style="font-size:8.4pt">
+      <tr><th style="width:24mm">Where</th><th style="width:55mm">Before</th><th>Now</th><th style="width:10mm">Lesson</th></tr>
+      <tr><td><b>Booking</b></td><td>Choose the patient first. Clicking a free slot with no patient gave a red "Patient required" message.</td><td>Click a free slot first. <code>Book Appointment</code> opens with the cursor already in <code>Search patient by name or phone</code>.</td><td>2</td></tr>
+      <tr><td><b>New patient</b></td><td>Leave the calendar to register, then come back.</td><td><code>Add new patient</code> inside the booking box. If you typed a phone number, it is already in Phone.</td><td>3</td></tr>
+      <tr><td><b>Confirm button</b></td><td>Below the edge of the box; you had to scroll.</td><td><code>Confirm Booking</code> stays fixed at the bottom of the box.</td><td>2</td></tr>
+      <tr><td><b>Slots tab</b></td><td>Two tabs, Calendar and Slots, booking the same day two ways.</td><td>One calendar. The Slots tab is gone.</td><td>1</td></tr>
+      <tr><td><b>Evening bookings</b></td><td>A booking outside working hours was saved but not drawn on the day.</td><td>It is drawn. Empty rows outside hours are striped, and a badge says <code>1 outside working hours</code>.</td><td>1</td></tr>
+      <tr><td><b>Booking from a chart</b></td><td>Showed "Unknown Patient" and would not confirm.</td><td><code>Book appointment</code> on the chart, pick a slot, confirm. No search.</td><td>9</td></tr>
+      <tr><td><b>Doctor's Today list</b></td><td>Rows were display only.</td><td>Click a row; that patient's visit opens.</td><td>4</td></tr>
+      <tr><td><b>Which doctor</b></td><td>The visit page picked the first doctor in the list, so visits could be saved under the wrong doctor.</td><td>Doctors get themselves. Others see <code>Please select a doctor to start the visit.</code></td><td>4</td></tr>
+      <tr><td><b>Bell links</b></td><td>A link with only the appointment opened an empty setup screen.</td><td>Opens that patient with that appointment's doctor.</td><td>4</td></tr>
+      <tr><td><b>After saving Rx</b></td><td>A "Go to Pharmacy?" box after every save, and a Go to Pharmacy button that sent doctors to billing.</td><td>The doctor stays on the visit. <code>Sent to pharmacy queue</code> shows the prescription is already at the counter.</td><td>7</td></tr>
+      <tr><td><b>Complete Visit</b></td><td>Needed ticks on photos and labs too, and reopening a visit lost the ticks.</td><td>Needs a diagnosis plus a saved prescription or examination notes. Photos, labs and vitals are optional. The footer names what is missing.</td><td>5, 8</td></tr>
+      <tr><td><b>Cost of the new rule</b></td><td>The prescription had to be saved before Complete Visit would switch on.</td><td>Template examination notes alone switch Complete Visit on. <b>Save the prescription first</b>, or nothing reaches the pharmacy.</td><td>7</td></tr>
+    </table>
+    <p class="small">Sources. "Before" comes from the change notes for this update (commits c1acdf5, fd67075, 12ddbb3, 39d68c5, 472cda1). "Now" comes from that automated walk through the real screens, where {{checksPassed}} of {{checksTotal}} checks passed.</p>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ LESSON 1 ============ -->
+<section class="page" id="l1">
+  <header class="run"><span>Part A · Reception</span><span>Lesson 1 of 9</span></header>
+  <div class="body">
+    <div class="lesson-head">
+      <div class="lesson-no">1</div>
+      <div>
+        <div class="kicker"><span class="role reception">Reception</span> Appointments</div>
+        <h2>Read the doctor's day</h2>
+        <p class="idea">The calendar now stretches to fit every booking of the day. Anything outside the doctor's working hours sits in striped rows, and a badge at the top counts them.</p>
+      </div>
+    </div>
+    <figure data-shot="a1-filters" data-w="180" data-crop="0,60,1160,160">Choose the doctor <span class="n">1</span> and the date <span class="n">2</span>. There are no Calendar and Slots tabs any more.</figure>
+    <figure data-shot="a1-badge" data-w="180" data-crop="0,60,1100,190">Above the first row: the badge <span class="n">3</span>.</figure>
+    <figure data-shot="a1-evening" data-w="180" data-crop="0,300,1100,240">Further down: the striped 18:00 row <span class="n">5</span> and the evening booking <span class="n">4</span>.</figure>
+    <div class="cols" style="grid-template-columns: 1fr 1fr">
+      <div class="stack">
+        <h3>Do this</h3>
+        <ol class="steps">
+          <li><span>Open <b>Appointments</b>. Choose the <b>Doctor</b> <span class="n">1</span> and the <b>Date</b> <span class="n">2</span>.</span></li>
+          <li><span>Read the badge <span class="n">3</span>. <code>1 outside working hours</code> means one booking is before opening or after closing.</span></li>
+          <li><span>Scroll to the striped rows <span class="n">5</span> to find it. Today it is Rohit Agarwal at 18:30 <span class="n">4</span>.</span></li>
+        </ol>
+        <div class="box words"><h4>Words on screen</h4><p><code>Doctor Calendar</code> <code>Click a free slot to book an appointment.</code> <code>{{outsideBadge}}</code></p></div>
+      </div>
+      <div class="stack">
+        <div class="box changed"><h4>New since last time</h4><p>One calendar instead of two tabs, and the 18:30 patient is on it. Before this update, a booking like his was saved but not drawn.</p></div>
+        <div class="box breaks"><h4>If you skip it</h4><p>Rohit Agarwal arrives at 18:30 and nobody at the desk can find him, because everyone looked at 09:00 to 18:00 only.</p></div>
+      </div>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ LESSON 2 (two pages) ============ -->
+<section class="page" id="l2a">
+  <header class="run"><span>Part A · Reception</span><span>Lesson 2 of 9</span></header>
+  <div class="body">
+    <div class="lesson-head">
+      <div class="lesson-no">2</div>
+      <div>
+        <div class="kicker"><span class="role reception">Reception</span> Appointments</div>
+        <h2>Book a returning patient</h2>
+        <p class="idea">A free slot is the start button. Click it and the booking box opens with the cursor in the patient search, so you pick the time first and the person second.</p>
+      </div>
+    </div>
+    <figure data-shot="a2-free-slot" data-w="180" data-crop="0,80,1100,190">Any white row is free <span class="n">1</span>. Grey rows earlier in the day are past and cannot be clicked.</figure>
+    <div class="cols" style="grid-template-columns: 112mm 64mm">
+      <figure data-shot="a2-search" data-w="112" data-crop="0,0,768,440">Type part of the name or the phone <span class="n">2</span>. Click the match <span class="n">3</span>.</figure>
+      <div class="stack">
+        <h3>Do this</h3>
+        <ol class="steps">
+          <li><span>Click {{returningName}}'s free {{slotReturning}} row <span class="n">1</span>. <code>Book Appointment</code> opens.</span></li>
+          <li><span>Just type. The cursor is already in the search <span class="n">2</span>. Type <code>Meghana</code> or her phone, then click her name <span class="n">3</span>.</span></li>
+          <li><span>Check the summary and press <code>Confirm Booking</code> <span class="n">4</span>, fixed at the bottom of the box.</span></li>
+        </ol>
+      </div>
+    </div>
+    <div class="boxes">
+      <div class="box changed"><h4>New since last time</h4><p>Lesson 1 showed you the day. Now you put {{returningName}} into it, starting from the slot.</p></div>
+      <div class="box breaks"><h4>If you skip it</h4><p>Look for a Patient box on the calendar before clicking a slot and you will not find one. It moved into the booking box. Always start with the slot.</p></div>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<section class="page" id="l2b">
+  <header class="run"><span>Part A · Reception</span><span>Lesson 2 of 9, continued</span></header>
+  <div class="body">
+    <div class="cols" style="grid-template-columns: 112mm 64mm">
+      <figure data-shot="a2-confirm" data-w="112">After you pick her, the box shows patient, phone, date and time. Duration, type and room are already filled for an OPD visit. <code>Confirm Booking</code> <span class="n">4</span> never scrolls away.</figure>
+      <div class="stack">
+        <div class="box words"><h4>Words on screen</h4><p><code>Search patient by name or phone</code> <code>Not in the list?</code> <code>Confirm Booking</code> <code>Appointment Successfully Booked!</code></p></div>
+        <div class="box"><h4>Good to know</h4><p>After a booking the calendar forgets the patient. The next slot you click asks again, so you cannot book {{returningName}} twice by accident.</p></div>
+      </div>
+    </div>
+    <figure data-shot="a2-booked" data-w="180">Done. A green message names the patient and time <span class="n">5</span>, and her row on the grid has a green edge <span class="n">6</span>.</figure>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ LESSON 3 ============ -->
+<section class="page" id="l3a">
+  <header class="run"><span>Part A · Reception</span><span>Lesson 3 of 9</span></header>
+  <div class="body">
+    <div class="lesson-head">
+      <div class="lesson-no">3</div>
+      <div>
+        <div class="kicker"><span class="role reception">Reception</span> Appointments</div>
+        <h2>Add a new patient while booking</h2>
+        <p class="idea">When the search finds nobody, you register the patient from inside the booking box. The phone you typed carries over, and you land back in the same booking with the new patient chosen.</p>
+      </div>
+    </div>
+    <div class="cols" style="grid-template-columns: 112mm 64mm">
+      <figure data-shot="a3-no-match" data-w="112" data-crop="0,0,768,330">{{walkInName}} gives his phone <span class="n">1</span>. Nobody matches, so press <code>Add new patient</code> <span class="n">2</span>.</figure>
+      <div class="stack">
+        <h3>Do this</h3>
+        <ol class="steps">
+          <li><span>Click the free 15:00 slot. Type the phone in the search <span class="n">1</span>. When it says no match, press <code>Add new patient</code> <span class="n">2</span>.</span></li>
+          <li><span>Check the phone <span class="n">3</span>. Fill First Name <span class="n">4</span>, Last Name and Gender. Press <code>Create Patient</code> <span class="n">5</span>.</span></li>
+          <li><span>Back in the booking, check his name <span class="n">6</span>. Press <code>Confirm Booking</code>, as in lesson 2.</span></li>
+        </ol>
+      </div>
+    </div>
+    <div class="cols" style="grid-template-columns: 84mm 92mm">
+      <figure data-shot="a3-create" data-w="84">The phone is already in Phone <span class="n">3</span>, and First Name is empty <span class="n">4</span>.</figure>
+      <div class="stack">
+        <figure data-shot="a3-back" data-w="92" data-crop="0,36,768,120">Back in the booking box, with {{walkInName}} chosen <span class="n">6</span>.</figure>
+        <div class="box words"><h4>Words on screen</h4><p><code>No matching patients.</code> <code>Add new patient</code> <code>Add New Patient</code> <code>Create Patient</code></p></div>
+        <div class="box changed"><h4>New since last time</h4><p>Lesson 2 needed the patient to exist already. Now a walk-in is registered and booked without leaving the calendar.</p></div>
+        <div class="box breaks"><h4>If you skip it</h4><p>Search by name only and you can miss a patient registered under another spelling, then create a second record for the same person. Search by phone first. Add new only when the phone finds nobody.</p></div>
+      </div>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ PRACTICE A ============ -->
+<section class="page" id="pa">
+  <header class="run"><span>Part A · Reception</span><span>Practice A</span></header>
+  <div class="body">
+    <h2>Practice A: the reception desk</h2>
+    <p class="idea">Do these on the training system, on a day your trainer gives you. Use training patients only. Answers are on the last page.</p>
+    <div class="box">
+      <h4>Tasks</h4>
+      <ol class="q">
+        <li>Open Dr. Shravya's calendar for {{todayLabel}}. Write down what the badge above the grid says, and the name and time of the booking it is counting.<span class="blank"></span></li>
+        <li>Book a returning patient, Kavya Patel, into any free afternoon slot. Start by clicking the slot. Do not touch any other field before the slot.</li>
+        <li>A walk-in, Lakshmi Prasanna, gives you only her phone, 9000012345. Book her into the next free slot without leaving the calendar. Before you press <code>Create Patient</code>, check which field already holds her phone.<span class="blank"></span></li>
+      </ol>
+    </div>
+    <div class="box">
+      <h4>Check your understanding</h4>
+      <ol class="q">
+        <li>You click a free slot and no patient is chosen yet. What happens?<br>(a) A red "Patient required" message appears. (b) The <code>Book Appointment</code> box opens with the cursor in the patient search. (c) Nothing.</li>
+        <li>Where do you go to see the Slots tab?<span class="blank"></span></li>
+        <li>The badge says <code>2 outside working hours</code>. Where on the grid do you look?<span class="blank"></span></li>
+        <li>You just booked one patient. You click another free slot. Will it book the same patient again? Why?<span class="blank"></span></li>
+      </ol>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ LESSON 4 ============ -->
+<section class="page" id="l4">
+  <header class="run"><span>Part B · Doctor</span><span>Lesson 4 of 9</span></header>
+  <div class="body">
+    <div class="lesson-head">
+      <div class="lesson-no">4</div>
+      <div>
+        <div class="kicker"><span class="role doctor">Doctor</span> Dashboard</div>
+        <h2>Open today's patient in one click</h2>
+        <p class="idea">Every row in your Today's Appointments list is a link to that patient's visit, opened under your name and tied to the appointment.</p>
+      </div>
+    </div>
+    <div class="cols" style="grid-template-columns: 86mm 90mm">
+      <figure data-shot="b1-today" data-w="86" data-crop="0,0,580,430">Reception's booking from lesson 2 is on your list at 10:30 <span class="n">1</span>.</figure>
+      <div class="stack">
+        <h3>Do this</h3>
+        <ol class="steps">
+          <li><span>Open <b>Dashboard</b>. Click the patient's row in <b>Today's Appointments</b> <span class="n">1</span>.</span></li>
+          <li><span>Read the header <span class="n">2</span>. It must say <code>Patient: {{returningName}}</code> and <code>Doctor: Dr. Shravya</code>. If it names another doctor, stop and tell the admin.</span></li>
+          <li><span>Close the <b>Patient Context</b> panel with its <b>×</b> if you want more room. You are ready to document.</span></li>
+        </ol>
+        <div class="box words"><h4>Words on screen</h4><p><code>Today's Appointments</code> <code>Visit Documentation</code> <code>From Appointment</code></p></div>
+        <div class="box changed"><h4>New since last time</h4><p>The appointment reception made is your starting point. No searching for the patient.</p></div>
+      </div>
+    </div>
+    <figure data-shot="b1-visit" data-w="180">The visit header names the patient, you, the time and the visit type <span class="n">2</span>.</figure>
+    <figure data-shot="d1-choose-doctor" data-w="180" data-crop="0,170,1172,190">When reception or a nurse starts a visit, the screen asks which doctor <span class="n">3</span> instead of guessing.</figure>
+    <div class="box breaks"><h4>If you skip it</h4><p>Start from the Visits page and pick the patient by hand, and you can open the wrong Meghana or a visit under the wrong doctor. The Today row and the notification bell both open the right patient with the right doctor.</p></div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ LESSON 5 ============ -->
+<section class="page" id="l5">
+  <header class="run"><span>Part B · Doctor</span><span>Lesson 5 of 9</span></header>
+  <div class="body">
+    <div class="lesson-head">
+      <div class="lesson-no">5</div>
+      <div>
+        <div class="kicker"><span class="role doctor">Doctor</span> Visit · Prescription tab</div>
+        <h2>Let the footer tell you what is missing</h2>
+        <p class="idea">The line next to <code>Complete Visit</code> reads the record itself and names exactly what is still missing. It changes as you type. Photos, labs and vitals never appear in it, because they are optional.</p>
+      </div>
+    </div>
+    <figure data-shot="b2-footer-empty" data-w="180">An empty visit: the footer asks for two things <span class="n">1</span>, and <code>Complete Visit</code> is grey <span class="n">2</span>.</figure>
+    <figure data-shot="b2-diagnosis" data-w="180">The Diagnosis field is in the <b>Prescription</b> tab <span class="n">3</span>.</figure>
+    <figure data-shot="b2-footer-dx" data-w="180">With a diagnosis typed, the footer asks for one thing only <span class="n">4</span>.</figure>
+    <div class="cols" style="grid-template-columns: 88mm 88mm">
+      <div class="stack">
+        <h3>Do this</h3>
+        <ol class="steps">
+          <li><span>Scroll to the bottom of the visit and read the footer <span class="n">1</span> before you type anything.</span></li>
+          <li><span>Open the <b>Prescription</b> tab and type the diagnosis <span class="n">3</span>. For Meghana it is <code>Acne vulgaris, grade II</code>.</span></li>
+          <li><span>Read the footer again <span class="n">4</span>. Whatever it still names is your to-do list.</span></li>
+        </ol>
+      </div>
+      <div class="stack">
+        <div class="box words"><h4>Words on screen</h4><p><code>{{footerEmpty}}</code><br><code>{{footerAfterDx}}</code></p></div>
+        <div class="box breaks"><h4>If you skip it</h4><p>You click a grey button and nothing happens, and you start uploading photos the visit does not need. The footer already said what it needed.</p></div>
+      </div>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ LESSON 6 ============ -->
+<section class="page" id="l6">
+  <header class="run"><span>Part B · Doctor</span><span>Lesson 6 of 9</span></header>
+  <div class="body">
+    <div class="lesson-head">
+      <div class="lesson-no">6</div>
+      <div>
+        <div class="kicker"><span class="role doctor">Doctor</span> Visit · Prescription tab</div>
+        <h2>Fill the prescription from a template</h2>
+        <p class="idea">A template writes a whole prescription in one click: medicines, examination notes and its own diagnosis. It writes over what is already in those fields, so read the diagnosis again afterwards.</p>
+      </div>
+    </div>
+    <figure data-shot="b3-template" data-w="130">Open <b>Templates</b> <span class="n">1</span> and choose one <span class="n">2</span>.</figure>
+    <div class="cols" style="grid-template-columns: 88mm 88mm">
+      <div class="stack">
+        <h3>Do this</h3>
+        <ol class="steps">
+          <li><span>In the Prescription tab, open <b>Templates</b> <span class="n">1</span>, where it says <code>No template</code>.</span></li>
+          <li><span>Choose the template that fits <span class="n">2</span>. For Meghana it is <code>{{templateName}}</code>. Medicines and examination notes fill in.</span></li>
+          <li><span>Scroll back to <b>Diagnosis</b> and read it. Correct it if the template replaced yours.</span></li>
+        </ol>
+      </div>
+      <div class="stack">
+        <div class="box caution"><h4>Seen on the test system</h4><p>The doctor typed <code>Acne vulgaris, grade II</code> in lesson 5. Choosing the template changed it to <code>{{diagnosisFromTemplate}}</code>. It had to be typed again.</p></div>
+        <div class="box caution"><h4>Not saved yet</h4><p>The footer goes quiet and <code>Complete Visit</code> turns on as soon as the template fills the examination notes. Nothing is saved and nothing has gone to the pharmacy. Lesson 7 is next, always.</p></div>
+      </div>
+    </div>
+    <div class="boxes">
+      <div class="box changed"><h4>New since last time</h4><p>Lesson 5 gave the visit a diagnosis. Now it has medicines too, ready to save.</p></div>
+      <div class="box breaks"><h4>If you skip it</h4><p>Skip the re-check and the prescription prints "{{diagnosisFromTemplate}}" for a patient you graded II.</p></div>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ LESSON 7 ============ -->
+<section class="page" id="l7">
+  <header class="run"><span>Part B · Doctor, then Pharmacy</span><span>Lesson 7 of 9</span></header>
+  <div class="body">
+    <div class="lesson-head">
+      <div class="lesson-no">7</div>
+      <div>
+        <div class="kicker"><span class="role doctor">Doctor</span><span class="role pharmacy">Pharmacy</span> Visit · Pharmacy Counter</div>
+        <h2>Saving the prescription sends it</h2>
+        <p class="idea">Pressing <code>Create Prescription</code> is the hand-off. The prescription goes into the pharmacy queue at that moment, and you stay on the visit. There is no "Go to Pharmacy" step any more.</p>
+      </div>
+    </div>
+    <figure data-shot="b3-save" data-w="180" data-crop="0,170,1172,190">The save button is at the end of the prescription <span class="n">1</span>.</figure>
+    <figure data-shot="b3-sent" data-w="180" data-crop="0,140,1172,190">After saving, the badge appears <span class="n">2</span>. No pop-up, no page change.</figure>
+    <div class="cols" style="grid-template-columns: 92mm 84mm">
+      <figure data-shot="b3-queue" data-w="92" data-crop="0,0,640,500">At the <b>Pharmacy Counter</b>, under <b>Queue</b>, it is waiting <span class="n">3</span>.</figure>
+      <div class="stack">
+        <h3>Do this</h3>
+        <ol class="steps">
+          <li><span>Scroll to the end of the prescription. Press <code>Create Prescription</code> <span class="n">1</span>.</span></li>
+          <li><span>Look for <code>Sent to pharmacy queue</code> <span class="n">2</span> next to the item total. That badge is your proof.</span></li>
+          <li><span>Stay on the visit. Send the patient to the counter; the prescription is already there <span class="n">3</span>.</span></li>
+        </ol>
+        <div class="box changed"><h4>New since last time</h4><p>Until now everything stayed in the consult room. Saving puts it in front of the pharmacist.</p></div>
+      </div>
+    </div>
+    <div class="box breaks"><h4>If you skip it</h4><p>Press <code>Complete Visit</code> without saving and the visit closes with no prescription. The patient reaches the counter and the queue has nothing for her. This was tried on the test system: a template was chosen, nothing was saved, and the visit completed with no prescription at all.</p></div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ LESSON 8 ============ -->
+<section class="page" id="l8">
+  <header class="run"><span>Part B · Doctor</span><span>Lesson 8 of 9</span></header>
+  <div class="body">
+    <div class="lesson-head">
+      <div class="lesson-no">8</div>
+      <div>
+        <div class="kicker"><span class="role doctor">Doctor</span> Visit</div>
+        <h2>Complete the visit</h2>
+        <p class="idea">A visit can be completed once it has a diagnosis and either a saved prescription or examination notes. It checks the saved record, so a visit you reopen later is still ready.</p>
+      </div>
+    </div>
+    <figure data-shot="b4-ready" data-w="180">The same visit closed and opened again. The saved diagnosis and prescription keep the footer quiet and <code>Complete Visit</code> black <span class="n">1</span>.</figure>
+    <div class="cols" style="grid-template-columns: 88mm 88mm">
+      <div class="stack">
+        <figure data-shot="b4-done" data-w="88">The confirmation after pressing it.</figure>
+        <h3>Do this</h3>
+        <ol class="steps">
+          <li><span>Check you can see <code>Sent to pharmacy queue</code> (lesson 7).</span></li>
+          <li><span>Scroll to the footer. It should name nothing missing.</span></li>
+          <li><span>Press <code>Complete Visit</code> <span class="n">1</span> and wait for <code>Visit completed</code>.</span></li>
+        </ol>
+      </div>
+      <div class="stack">
+        <div class="box"><h4>What you no longer need</h4><p>Photos, lab tests and vitals are optional. A scalp consult with no photos can be completed. Ignore the small <code>N of 5 sections complete</code> count in the footer. It still counts tabs, and it does not decide anything. After reopening this visit it read <code>0 of 5</code> while <code>Complete Visit</code> was ready.</p></div>
+        <div class="box words"><h4>Words on screen</h4><p><code>Complete Visit</code> <code>Visit completed</code> <code>All documentation has been marked complete.</code></p></div>
+        <div class="box changed"><h4>New since last time</h4><p>{{returningName}}'s consult is closed, with her prescription waiting at the counter.</p></div>
+        <div class="box breaks"><h4>If you skip it</h4><p>The visit stays open in your list. At the end of the day nobody can tell which patients were seen and which are still waiting.</p></div>
+      </div>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ PRACTICE B ============ -->
+<section class="page" id="pb">
+  <header class="run"><span>Part B · Doctor</span><span>Practice B</span></header>
+  <div class="body">
+    <h2>Practice B: the consult room</h2>
+    <p class="idea">Use a training patient booked for you today. Answers are on the last page.</p>
+    <div class="box">
+      <h4>Tasks</h4>
+      <ol class="q">
+        <li>Open your first training patient from Today's Appointments with one click. Copy the header line.<span class="blank"></span></li>
+        <li>Before typing, scroll down and copy what the footer asks for.<span class="blank"></span></li>
+        <li>Type a diagnosis, then choose a template. Read the diagnosis again. Did it change? To what?<span class="blank"></span></li>
+        <li>Save the prescription. Find the badge and write its exact words. Then complete the visit.<span class="blank"></span></li>
+      </ol>
+    </div>
+    <div class="box">
+      <h4>Check your understanding</h4>
+      <ol class="q">
+        <li>The footer says <code>To complete, add a prescription, examination or notes.</code> What is already in the record?<span class="blank"></span></li>
+        <li><code>Complete Visit</code> is black, but you cannot see <code>Sent to pharmacy queue</code>. Do you press it? What happens if you do?<span class="blank"></span></li>
+        <li>A scalp consult: no photos, no lab tests. Can you complete the visit? What does it need?<span class="blank"></span></li>
+        <li>After saving the prescription, where is the "Go to Pharmacy" button?<span class="blank"></span></li>
+      </ol>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ LESSON 9 ============ -->
+<section class="page" id="l9">
+  <header class="run"><span>Part C · Reception closes the loop</span><span>Lesson 9 of 9</span></header>
+  <div class="body">
+    <div class="lesson-head">
+      <div class="lesson-no">9</div>
+      <div>
+        <div class="kicker"><span class="role reception">Reception</span> Patient chart</div>
+        <h2>Book the follow-up from the chart</h2>
+        <p class="idea">Starting from the patient's chart carries the patient into the calendar. You choose only the day and the slot, because the booking box already knows who it is for.</p>
+      </div>
+    </div>
+    <figure data-shot="c1-chart" data-w="180" data-crop="0,0,1172,100">{{returningName}}'s chart. Press <code>{{chartBookLabel}}</code> <span class="n">1</span>.</figure>
+    <figure data-shot="c1-calendar" data-w="180" data-crop="0,66,1172,160">The calendar opens for her. Set the review date <span class="n">2</span>.</figure>
+    <div class="cols" style="grid-template-columns: 112mm 64mm">
+      <figure data-shot="c1-dialog" data-w="112" data-crop="0,0,768,200">She is already chosen <span class="n">3</span>, so there is no search box. <code>Confirm Booking</code> <span class="n">4</span> is at the bottom, as in lesson 2.</figure>
+      <div class="stack">
+        <h3>Do this</h3>
+        <ol class="steps">
+          <li><span>Open <b>Patients</b>, find her, press <code>{{chartBookLabel}}</code> <span class="n">1</span>.</span></li>
+          <li><span>Pick the doctor and the review date <span class="n">2</span>, {{followUpLabel}}. Click the free {{slotFollowUp}} slot.</span></li>
+          <li><span>Check her name <span class="n">3</span>. Press <code>Confirm Booking</code> <span class="n">4</span>.</span></li>
+        </ol>
+      </div>
+    </div>
+    <div class="boxes">
+      <div class="box changed"><h4>New since last time</h4><p>Lesson 2 started from an empty slot. This starts from the person, which is what you have at the desk after a consult.</p></div>
+      <div class="box breaks"><h4>If you skip it</h4><p>Before this update the chart button opened a booking for "Unknown Patient" that would not confirm. If you ever see that name, stop and report it.</p></div>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+<!-- ============ PRACTICE C + ANSWERS ============ -->
+<section class="page" id="answers">
+  <header class="run"><span>Part C · Practice and answers</span><span>Answers</span></header>
+  <div class="body">
+    <h2>Practice C, then the answers</h2>
+    <div class="box">
+      <h4>Practice C</h4>
+      <ol class="q">
+        <li>Open the chart of the walk-in you added in Practice A. Book his or her review two weeks later, starting from the chart. Did you have to search for the patient?<span class="blank"></span></li>
+      </ol>
+    </div>
+    <div class="cols answers" style="grid-template-columns: 1fr 1fr">
+      <div class="stack">
+        <h3>Practice A</h3>
+        <p><b>Task 1.</b> <code>{{outsideBadge}}</code>. Rohit Agarwal, 18:30 to 19:00, below the striped 18:00 row.</p>
+        <p><b>Task 3.</b> Phone. A number typed in the search goes to Phone, and First Name stays empty.</p>
+        <p><b>Q1.</b> (b). The red message is the old behaviour.</p>
+        <p><b>Q2.</b> Nowhere. It was removed. The calendar is the only booking screen.</p>
+        <p><b>Q3.</b> The striped rows: early morning above the first working hour, or evening below the last. The grid grows to include them.</p>
+        <p><b>Q4.</b> No. After each booking the calendar forgets the patient, and the next slot asks again.</p>
+        <h3 style="margin-top:2mm">Practice C</h3>
+        <p>No search. The chart carries the patient into the booking box.</p>
+      </div>
+      <div class="stack">
+        <h3>Practice B</h3>
+        <p><b>Task 1.</b> <code>Patient: (name) • Doctor: Dr. (you) • (time) • OPD</code>. If the doctor is not you, report it.</p>
+        <p><b>Task 2.</b> <code>{{footerEmpty}}</code></p>
+        <p><b>Task 3.</b> Yes, if the template has its own diagnosis. On the test system it became <code>{{diagnosisFromTemplate}}</code>.</p>
+        <p><b>Task 4.</b> <code>Sent to pharmacy queue</code>.</p>
+        <p><b>Q1.</b> A diagnosis.</p>
+        <p><b>Q2.</b> No. Save the prescription first. Pressing it completes the visit with no prescription, and the pharmacy gets nothing.</p>
+        <p><b>Q3.</b> Yes. A diagnosis plus a saved prescription, or examination notes.</p>
+        <p><b>Q4.</b> There is none. Saving sent it.</p>
+      </div>
+    </div>
+    <div class="box small">
+      <h4>About these pictures</h4>
+      <p>An automated script captured these screens from a test copy of ClinicMS with test patients. The browser clock was set to {{todayLabel}}, 09:20 for reception and 10:35 for the doctor, so the day looks like a normal morning. To retake every picture and rerun the {{checksTotal}} checks, run <code>node docs/training/capture.cjs</code>, then <code>node docs/training/build.cjs</code>.</p>
+    </div>
+  </div>
+  <footer class="run"><span>Clinic workflows guide</span><span class="pn">Page </span></footer>
+</section>
+
+</body>
+</html>
