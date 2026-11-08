@@ -132,7 +132,7 @@ it('keeps inactive prescriptions viewable without offering dispense mutations', 
   render(<PharmacyCounterCockpit {...props} />);
   await screen.findByText(/10 available/);
   expect(screen.getByRole('button', { name: 'Accept', exact: true })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Dispense', exact: true })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Dispense', exact: true })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Patient rx-1/ }));
   expect(apiClient.post).not.toHaveBeenCalled();
   expect(apiClient.patch).not.toHaveBeenCalled();

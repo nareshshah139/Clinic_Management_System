@@ -257,4 +257,12 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     const seen = new Set(Object.values(expected));
     expect([...seen].sort()).toEqual(['dispensed', 'partial', 'pending']);
   }, 120000);
+  it('does not classify a historic manually dispensed task as billed', async () => {
+    const at = await clinic('Historical manual task');
+    await rx(at, 'manual-task-without-sale', [line('tricogroStrips')]);
+    await db.pharmacyDispenseTask.create({ data: { branchId: at.branchId, patientId: at.patientId, patientName: 'Test patient', prescriptionId: 'manual-task-without-sale', status: 'DISPENSED' } });
+    expect((await listed(at.branchId)).get('manual-task-without-sale')).toBe(PrescriptionQueueStatus.PENDING);
+    expect((await queue.findOne('manual-task-without-sale', at.branchId)).status).toBe(PrescriptionQueueStatus.PENDING);
+  });
+
 });
