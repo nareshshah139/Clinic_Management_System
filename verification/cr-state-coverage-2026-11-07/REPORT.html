@@ -64,7 +64,7 @@ footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line)
 </style>
 <div class="wrap">
   <section class="intro">
-    <p class="eyebrow">Clinic Management System · branch claude/elegant-maxwell-swcfuz · commit b373e32</p>
+    <p class="eyebrow">Clinic Management System · branch claude/elegant-maxwell-swcfuz · commit b335d2c</p>
     <h1>Six pending change requests, built and verified</h1>
     <p>CR-21, CR-22, CR-28, CR-30, CR-33c and CR-33d are implemented. Each was then checked by an agent that did not write it: it modelled the feature's screens as a state machine from the CR text, drove every transition in a real browser against a freshly migrated database, and asserted what the screen and the database showed at each state. The graphs below are from the final run of all models on the merged code.</p>
     <div class="totals">
@@ -1407,7 +1407,7 @@ footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line)
       <header>
         <p class="eyebrow">CR-30 · Inventory → Stock → Approve corrections → New items</p>
         <h2>Doctor approval for new items</h2>
-        <p class="built">Staff who add an item create a request instead; a badge tells doctors; approving creates the item in one transaction, rejecting needs a note. Double approval creates exactly one item. Staff bulk import of new items is refused, and the pharmacy assistant&#x27;s create action goes through the same gate.</p>
+        <p class="built">Staff who add an item create a request instead; a badge tells doctors; approving creates the item in one transaction, rejecting needs a note. Double approval creates exactly one item, and the pharmacy assistant&#x27;s create action goes through the same gate. Opening-stock imports by pharmacy staff work as before and are outside the approval flow.</p>
       </header>
       
       <figure class="model">
@@ -1417,30 +1417,30 @@ footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line)
           <span class="stat">transitions <b>32/32</b></span>
           <span class="stat">9 UX paths · 426 checks</span>
         </figcaption>
-        <div class="graph-panel"><svg width="1052" height="1385" role="img" aria-label="State graph for cr30-item-request-lifecycle"
- viewBox="0.00 0.00 1051.70 1385.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <div class="graph-panel"><svg width="1072" height="1385" role="img" aria-label="State graph for cr30-item-request-lifecycle"
+ viewBox="0.00 0.00 1071.70 1385.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(21.6 1363.4)">
 
-<polygon fill="white" stroke="transparent" points="-21.6,21.6 -21.6,-1363.4 1030.1,-1363.4 1030.1,21.6 -21.6,21.6"/>
-<text text-anchor="middle" x="504.25" y="-1327.4" font-family="Helvetica,sans-Serif" font-size="13.00">CR&#45;30 New item request: staff request &#45;&gt; doctor approve/reject &#45;&gt; inventory</text>
-<text text-anchor="middle" x="504.25" y="-1313.4" font-family="Helvetica,sans-Serif" font-size="13.00">states 26/26 (100%) · transitions 32/32 (100%)</text>
+<polygon fill="white" stroke="transparent" points="-21.6,21.6 -21.6,-1363.4 1050.1,-1363.4 1050.1,21.6 -21.6,21.6"/>
+<text text-anchor="middle" x="514.25" y="-1327.4" font-family="Helvetica,sans-Serif" font-size="13.00">CR&#45;30 New item request: staff request &#45;&gt; doctor approve/reject &#45;&gt; inventory</text>
+<text text-anchor="middle" x="514.25" y="-1313.4" font-family="Helvetica,sans-Serif" font-size="13.00">states 26/26 (100%) · transitions 32/32 (100%)</text>
 <!-- __start -->
 <g id="node1" class="node">
 
-<ellipse fill="black" stroke="black" stroke-width="1.6" cx="575" cy="-1300.4" rx="5.4" ry="5.4"/>
+<ellipse fill="black" stroke="black" stroke-width="1.6" cx="590" cy="-1300.4" rx="5.4" ry="5.4"/>
 </g>
 <!-- StaffStock -->
 <g id="node2" class="node">
 
-<path fill="#d1fadf" stroke="#039855" stroke-width="1.6" d="M651.5,-1244C651.5,-1244 498.5,-1244 498.5,-1244 492.5,-1244 486.5,-1238 486.5,-1232 486.5,-1232 486.5,-1220 486.5,-1220 486.5,-1214 492.5,-1208 498.5,-1208 498.5,-1208 651.5,-1208 651.5,-1208 657.5,-1208 663.5,-1214 663.5,-1220 663.5,-1220 663.5,-1232 663.5,-1232 663.5,-1238 657.5,-1244 651.5,-1244"/>
-<text text-anchor="middle" x="575" y="-1229.2" font-family="Helvetica,sans-Serif" font-size="11.00">Staff (reception) on stock list</text>
-<text text-anchor="middle" x="575" y="-1217.2" font-family="Helvetica,sans-Serif" font-size="11.00">new item absent</text>
+<path fill="#d1fadf" stroke="#039855" stroke-width="1.6" d="M666.5,-1244C666.5,-1244 513.5,-1244 513.5,-1244 507.5,-1244 501.5,-1238 501.5,-1232 501.5,-1232 501.5,-1220 501.5,-1220 501.5,-1214 507.5,-1208 513.5,-1208 513.5,-1208 666.5,-1208 666.5,-1208 672.5,-1208 678.5,-1214 678.5,-1220 678.5,-1220 678.5,-1232 678.5,-1232 678.5,-1238 672.5,-1244 666.5,-1244"/>
+<text text-anchor="middle" x="590" y="-1229.2" font-family="Helvetica,sans-Serif" font-size="11.00">Staff (reception) on stock list</text>
+<text text-anchor="middle" x="590" y="-1217.2" font-family="Helvetica,sans-Serif" font-size="11.00">new item absent</text>
 </g>
 <!-- __start&#45;&gt;StaffStock -->
 <g id="edge1" class="edge">
 
-<path fill="none" stroke="black" stroke-width="1.4" d="M575,-1294.65C575,-1286 575,-1267.12 575,-1251.51"/>
-<polygon fill="black" stroke="black" stroke-width="1.4" points="577.45,-1251.16 575,-1244.16 572.55,-1251.16 577.45,-1251.16"/>
+<path fill="none" stroke="black" stroke-width="1.4" d="M590,-1294.65C590,-1286 590,-1267.12 590,-1251.51"/>
+<polygon fill="black" stroke="black" stroke-width="1.4" points="592.45,-1251.16 590,-1244.16 587.55,-1251.16 592.45,-1251.16"/>
 </g>
 <!-- StaffAddForm -->
 <g id="node3" class="node">
@@ -1451,52 +1451,52 @@ footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line)
 <!-- StaffStock&#45;&gt;StaffAddForm -->
 <g id="edge2" class="edge">
 
-<path fill="none" stroke="#039855" stroke-width="1.4" d="M515.95,-1207.93C456.22,-1190.66 364.08,-1164.03 301.98,-1146.07"/>
-<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="302.35,-1143.63 294.94,-1144.04 300.98,-1148.34 302.35,-1143.63"/>
-<text text-anchor="middle" x="455" y="-1175.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">openAdd ×6</text>
+<path fill="none" stroke="#039855" stroke-width="1.4" d="M528.34,-1207.93C465.84,-1190.63 369.36,-1163.92 304.51,-1145.97"/>
+<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="304.95,-1143.55 297.55,-1144.04 303.64,-1148.27 304.95,-1143.55"/>
+<text text-anchor="middle" x="464" y="-1175.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">openAdd ×6</text>
 </g>
-<!-- StaffImportRefused -->
+<!-- StaffImportCreatesDirectly -->
 <g id="node12" class="node">
 
-<path fill="#d1fadf" stroke="#039855" stroke-width="1.6" d="M542.5,-1144C542.5,-1144 359.5,-1144 359.5,-1144 353.5,-1144 347.5,-1138 347.5,-1132 347.5,-1132 347.5,-1120 347.5,-1120 347.5,-1114 353.5,-1108 359.5,-1108 359.5,-1108 542.5,-1108 542.5,-1108 548.5,-1108 554.5,-1114 554.5,-1120 554.5,-1120 554.5,-1132 554.5,-1132 554.5,-1138 548.5,-1144 542.5,-1144"/>
-<text text-anchor="middle" x="451" y="-1129.2" font-family="Helvetica,sans-Serif" font-size="11.00">Staff bulk import</text>
-<text text-anchor="middle" x="451" y="-1117.2" font-family="Helvetica,sans-Serif" font-size="11.00">&#39;Ask a doctor to import new items&#39;</text>
+<path fill="#d1fadf" stroke="#039855" stroke-width="1.6" d="M562.5,-1144C562.5,-1144 359.5,-1144 359.5,-1144 353.5,-1144 347.5,-1138 347.5,-1132 347.5,-1132 347.5,-1120 347.5,-1120 347.5,-1114 353.5,-1108 359.5,-1108 359.5,-1108 562.5,-1108 562.5,-1108 568.5,-1108 574.5,-1114 574.5,-1120 574.5,-1120 574.5,-1132 574.5,-1132 574.5,-1138 568.5,-1144 562.5,-1144"/>
+<text text-anchor="middle" x="461" y="-1129.2" font-family="Helvetica,sans-Serif" font-size="11.00">Staff opening&#45;stock import</text>
+<text text-anchor="middle" x="461" y="-1117.2" font-family="Helvetica,sans-Serif" font-size="11.00">creates items directly (outside CR&#45;30)</text>
 </g>
-<!-- StaffStock&#45;&gt;StaffImportRefused -->
+<!-- StaffStock&#45;&gt;StaffImportCreatesDirectly -->
 <g id="edge14" class="edge">
 
-<path fill="none" stroke="#039855" stroke-width="1.4" d="M553.4,-1207.93C532.55,-1191.45 500.89,-1166.43 478.3,-1148.58"/>
-<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="479.78,-1146.62 472.77,-1144.2 476.74,-1150.47 479.78,-1146.62"/>
-<text text-anchor="middle" x="558.5" y="-1175.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">staffImportExcel</text>
+<path fill="none" stroke="#039855" stroke-width="1.4" d="M567.53,-1207.93C545.84,-1191.45 512.91,-1166.43 489.4,-1148.58"/>
+<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="490.7,-1146.49 483.65,-1144.2 487.74,-1150.39 490.7,-1146.49"/>
+<text text-anchor="middle" x="571.5" y="-1175.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">staffImportExcel</text>
 </g>
 <!-- PharmacistSubmitted -->
 <g id="node13" class="node">
 
-<path fill="#d1fadf" stroke="#039855" stroke-width="1.6" d="M795.5,-1144C795.5,-1144 602.5,-1144 602.5,-1144 596.5,-1144 590.5,-1138 590.5,-1132 590.5,-1132 590.5,-1120 590.5,-1120 590.5,-1114 596.5,-1108 602.5,-1108 602.5,-1108 795.5,-1108 795.5,-1108 801.5,-1108 807.5,-1114 807.5,-1120 807.5,-1120 807.5,-1132 807.5,-1132 807.5,-1138 801.5,-1144 795.5,-1144"/>
-<path fill="none" stroke="#039855" stroke-width="1.6" d="M799.5,-1148C799.5,-1148 598.5,-1148 598.5,-1148 592.5,-1148 586.5,-1142 586.5,-1136 586.5,-1136 586.5,-1116 586.5,-1116 586.5,-1110 592.5,-1104 598.5,-1104 598.5,-1104 799.5,-1104 799.5,-1104 805.5,-1104 811.5,-1110 811.5,-1116 811.5,-1116 811.5,-1136 811.5,-1136 811.5,-1142 805.5,-1148 799.5,-1148"/>
-<text text-anchor="middle" x="699" y="-1123.2" font-family="Helvetica,sans-Serif" font-size="11.00">Pharmacist add &#45;&gt; sent for approval</text>
+<path fill="#d1fadf" stroke="#039855" stroke-width="1.6" d="M815.5,-1144C815.5,-1144 622.5,-1144 622.5,-1144 616.5,-1144 610.5,-1138 610.5,-1132 610.5,-1132 610.5,-1120 610.5,-1120 610.5,-1114 616.5,-1108 622.5,-1108 622.5,-1108 815.5,-1108 815.5,-1108 821.5,-1108 827.5,-1114 827.5,-1120 827.5,-1120 827.5,-1132 827.5,-1132 827.5,-1138 821.5,-1144 815.5,-1144"/>
+<path fill="none" stroke="#039855" stroke-width="1.6" d="M819.5,-1148C819.5,-1148 618.5,-1148 618.5,-1148 612.5,-1148 606.5,-1142 606.5,-1136 606.5,-1136 606.5,-1116 606.5,-1116 606.5,-1110 612.5,-1104 618.5,-1104 618.5,-1104 819.5,-1104 819.5,-1104 825.5,-1104 831.5,-1110 831.5,-1116 831.5,-1116 831.5,-1136 831.5,-1136 831.5,-1142 825.5,-1148 819.5,-1148"/>
+<text text-anchor="middle" x="719" y="-1123.2" font-family="Helvetica,sans-Serif" font-size="11.00">Pharmacist add &#45;&gt; sent for approval</text>
 </g>
 <!-- StaffStock&#45;&gt;PharmacistSubmitted -->
 <g id="edge15" class="edge">
 
-<path fill="none" stroke="#039855" stroke-width="1.4" d="M596.6,-1207.93C615.84,-1192.73 644.26,-1170.26 666.29,-1152.85"/>
-<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="668.05,-1154.58 672.03,-1148.32 665.02,-1150.74 668.05,-1154.58"/>
-<text text-anchor="middle" x="685.5" y="-1175.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">pharmacistSubmits</text>
+<path fill="none" stroke="#039855" stroke-width="1.4" d="M612.47,-1207.93C632.57,-1192.66 662.31,-1170.07 685.26,-1152.63"/>
+<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="686.85,-1154.5 690.94,-1148.32 683.88,-1150.6 686.85,-1154.5"/>
+<text text-anchor="middle" x="703.5" y="-1175.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">pharmacistSubmits</text>
 </g>
 <!-- DoctorAddedDirect -->
 <g id="node27" class="node">
 
-<path fill="#d1fadf" stroke="#039855" stroke-width="1.6" d="M992.5,-1144C992.5,-1144 859.5,-1144 859.5,-1144 853.5,-1144 847.5,-1138 847.5,-1132 847.5,-1132 847.5,-1120 847.5,-1120 847.5,-1114 853.5,-1108 859.5,-1108 859.5,-1108 992.5,-1108 992.5,-1108 998.5,-1108 1004.5,-1114 1004.5,-1120 1004.5,-1120 1004.5,-1132 1004.5,-1132 1004.5,-1138 998.5,-1144 992.5,-1144"/>
-<path fill="none" stroke="#039855" stroke-width="1.6" d="M996.5,-1148C996.5,-1148 855.5,-1148 855.5,-1148 849.5,-1148 843.5,-1142 843.5,-1136 843.5,-1136 843.5,-1116 843.5,-1116 843.5,-1110 849.5,-1104 855.5,-1104 855.5,-1104 996.5,-1104 996.5,-1104 1002.5,-1104 1008.5,-1110 1008.5,-1116 1008.5,-1116 1008.5,-1136 1008.5,-1136 1008.5,-1142 1002.5,-1148 996.5,-1148"/>
-<text text-anchor="middle" x="926" y="-1129.2" font-family="Helvetica,sans-Serif" font-size="11.00">Doctor adds item directly</text>
-<text text-anchor="middle" x="926" y="-1117.2" font-family="Helvetica,sans-Serif" font-size="11.00">no request, 1 item</text>
+<path fill="#d1fadf" stroke="#039855" stroke-width="1.6" d="M1012.5,-1144C1012.5,-1144 879.5,-1144 879.5,-1144 873.5,-1144 867.5,-1138 867.5,-1132 867.5,-1132 867.5,-1120 867.5,-1120 867.5,-1114 873.5,-1108 879.5,-1108 879.5,-1108 1012.5,-1108 1012.5,-1108 1018.5,-1108 1024.5,-1114 1024.5,-1120 1024.5,-1120 1024.5,-1132 1024.5,-1132 1024.5,-1138 1018.5,-1144 1012.5,-1144"/>
+<path fill="none" stroke="#039855" stroke-width="1.6" d="M1016.5,-1148C1016.5,-1148 875.5,-1148 875.5,-1148 869.5,-1148 863.5,-1142 863.5,-1136 863.5,-1136 863.5,-1116 863.5,-1116 863.5,-1110 869.5,-1104 875.5,-1104 875.5,-1104 1016.5,-1104 1016.5,-1104 1022.5,-1104 1028.5,-1110 1028.5,-1116 1028.5,-1116 1028.5,-1136 1028.5,-1136 1028.5,-1142 1022.5,-1148 1016.5,-1148"/>
+<text text-anchor="middle" x="946" y="-1129.2" font-family="Helvetica,sans-Serif" font-size="11.00">Doctor adds item directly</text>
+<text text-anchor="middle" x="946" y="-1117.2" font-family="Helvetica,sans-Serif" font-size="11.00">no request, 1 item</text>
 </g>
 <!-- StaffStock&#45;&gt;DoctorAddedDirect -->
 <g id="edge16" class="edge">
 
-<path fill="none" stroke="#039855" stroke-width="1.4" d="M643.36,-1207.99C672.58,-1200.56 707.03,-1191.6 738,-1183 775.22,-1172.66 816.37,-1160.49 850.66,-1150.14"/>
-<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="851.43,-1152.47 857.42,-1148.1 850.01,-1147.78 851.43,-1152.47"/>
-<text text-anchor="middle" x="808.5" y="-1175.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">doctorAddsDirect</text>
+<path fill="none" stroke="#039855" stroke-width="1.4" d="M660.02,-1207.92C689.69,-1200.52 724.6,-1191.6 756,-1183 793.63,-1172.7 835.21,-1160.53 869.86,-1150.17"/>
+<polygon fill="#039855" stroke="#039855" stroke-width="1.4" points="870.69,-1152.48 876.7,-1148.13 869.29,-1147.79 870.69,-1152.48"/>
+<text text-anchor="middle" x="827.5" y="-1175.8" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#039855">doctorAddsDirect</text>
 </g>
 <!-- StaffDuplicateSku -->
 <g id="node4" class="node">
@@ -1866,6 +1866,7 @@ footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line)
       <ul class="found"><li><span class="chip fixed">fixed</span><span>Nothing warned about duplicates by name, against the CR&#x27;s own purpose. Doctors and staff now see existing items with the same name, SKU or barcode, and other pending requests for the same name.</span></li>
 <li><span class="chip fixed">fixed</span><span>After a second doctor had already reviewed a request, the dialog stayed open and the error was hidden from screen readers. It now closes, refreshes and announces the outcome.</span></li>
 <li><span class="chip fixed">fixed</span><span>Doctors landed on the price/stock tab even with new items waiting. They now land on New items.</span></li>
+<li><span class="chip open">open</span><span>An earlier version also refused bulk imports from staff. That broke the pharmacist&#x27;s opening-stock import, which the repository&#x27;s recovery tests cover, so imports now behave as before. Bringing imports under approval means turning each new import row into a request, a separate change.</span></li>
 <li><span class="chip open">open</span><span>Found along the way, not caused by this work: the permission check matches exact names, but the PHARMACIST role&#x27;s defaults are wildcards such as inventory:item:*, so a pharmacist without a personal permission list cannot add or view stock items. Pharmacists set up with explicit permissions are unaffected. Left unchanged because it alters access across the whole app.</span></li></ul>
     </section>
     <section class="cr" id="cr-33c">
