@@ -83,4 +83,22 @@ databaseTests('Per-doctor token queue on PostgreSQL', () => {
       service.create({ patientId: 'patient', doctorId, roomId: room.id, date: '2099-03-07', slot: '10:00-10:30' } as any, 'branch'))));
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
   }, 60000);
+  it('rejects a room edit and reactivation that would create a conflict', async () => {
+    const room = await db.room.create({ data: { name: 'Edit room', type: 'PROCEDURE', branchId: 'branch' } });
+    const first = await service.create({ patientId: 'patient', doctorId: 'doctor-a', roomId: room.id, date: '2099-03-08', slot: '10:00-10:30' } as any, 'branch');
+    const second = await service.create({ patientId: 'patient', doctorId: 'doctor-b', date: '2099-03-08', slot: '10:00-10:30' } as any, 'branch');
+    await expect(service.update(second.id, { roomId: room.id }, 'branch')).rejects.toMatchObject({ status: 409 });
+    await service.update(first.id, { status: 'CANCELLED' } as any, 'branch');
+    await service.update(second.id, { roomId: room.id }, 'branch');
+    await expect(service.update(first.id, { status: 'SCHEDULED' } as any, 'branch')).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('serializes competing room edits for the same time', async () => {
+    const room = await db.room.create({ data: { name: 'Race room', type: 'PROCEDURE', branchId: 'branch' } });
+    const appointments = await Promise.all(['doctor-a', 'doctor-b'].map(doctorId => service.create({ patientId: 'patient', doctorId, date: '2099-03-09', slot: '11:00-11:30' } as any, 'branch')));
+    const results = await Promise.allSettled(appointments.map(apt => service.update(apt.id, { roomId: room.id }, 'branch')));
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter(r => r.status === 'rejected').every(r => (r as PromiseRejectedResult).reason?.status === 409)).toBe(true);
+  }, 60000);
+
 });
