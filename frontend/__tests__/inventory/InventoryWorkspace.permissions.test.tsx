@@ -136,7 +136,7 @@ it('reloads the current query when an older mutation retains its reload callback
 it.each([
   ['RECEPTION', []],
   ['PHARMACIST', ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin']],
-  ['DOCTOR', ['Day-wise summary', 'Item-wise margin']],
+  ['DOCTOR', ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin']],
 ])('lists only the pharmacy reports the %s role can open', async (role, expected) => {
   mockRole = role;
   mockQuery = 'area=purchases&view=suppliers';

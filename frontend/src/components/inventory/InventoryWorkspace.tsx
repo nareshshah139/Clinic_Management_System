@@ -115,7 +115,7 @@ const menus: Record<string, string[][]> = {
  * actor changes MUST fetch capabilities again; older responses cannot restore superseded access.
  */
 const REPORT_TASK_ROLES: Record<string, readonly string[]> = {
-  reports: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST"],
+  reports: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
   daywise: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
   margin: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
 };
