@@ -416,59 +416,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         tooltipClass: 'introjs-medium-tooltip',
       },
       {
-        element: '[data-tour="view-tabs"]',
-        intro: `
-          <div class="space-y-3">
-            <div class="flex items-center gap-2">
-              <span class="text-2xl">👁️</span>
-              <h4 class="text-lg font-semibold">Step 3: Choose Your View</h4>
-            </div>
-            <p class="text-sm leading-relaxed mb-3">
-              Two powerful ways to visualize and manage appointments:
-            </p>
-            
-            <div class="grid gap-3">
-              <div class="bg-gradient-to-r from-blue-50 to-blue-100 p-3 rounded-lg border border-blue-200">
-                <div class="flex items-center gap-2 mb-2">
-                  <div class="w-6 h-6 bg-blue-600 rounded-md flex items-center justify-center text-white text-xs font-bold">C</div>
-                  <strong class="text-blue-900">Calendar View</strong>
-                  <span class="ml-auto text-xs bg-blue-600 text-white px-2 py-1 rounded-md">Recommended</span>
-                </div>
-                <ul class="text-xs text-blue-900 space-y-1 ml-8">
-                  <li>• Visual timeline of the entire day</li>
-                  <li>• See appointment gaps at a glance</li>
-                  <li>• Drag to select custom time ranges</li>
-                  <li>• Perfect for busy days</li>
-                </ul>
-              </div>
-              
-              <div class="bg-gradient-to-r from-green-50 to-green-100 p-3 rounded-lg border border-green-200">
-                <div class="flex items-center gap-2 mb-2">
-                  <div class="w-6 h-6 bg-green-600 rounded-md flex items-center justify-center text-white text-xs font-bold">S</div>
-                  <strong class="text-green-900">Slots View</strong>
-                </div>
-                <ul class="text-xs text-green-900 space-y-1 ml-8">
-                  <li>• Traditional time slot grid</li>
-                  <li>• Quick 15-minute increments</li>
-                  <li>• Familiar booking interface</li>
-                  <li>• Great for quick bookings</li>
-                </ul>
-              </div>
-            </div>
-            
-            <div class="bg-purple-50 border-l-4 border-purple-500 p-3 rounded-md text-xs mt-3">
-              <strong class="text-purple-900">💡 When to use what:</strong>
-              <p class="text-purple-800 mt-1">
-                Use <strong>Calendar</strong> when the schedule is complex or you need to see the big picture. 
-                Use <strong>Slots</strong> for straightforward, quick bookings.
-              </p>
-            </div>
-          </div>
-        `,
-        position: 'bottom',
-        tooltipClass: 'introjs-large-tooltip',
-      },
-      {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
@@ -483,32 +430,9 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 <div class="flex gap-3">
                   <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</div>
                   <div class="flex-1">
-                    <p class="font-semibold text-sm text-gray-900">Search for Patient</p>
-                    <p class="text-xs text-gray-700 mt-1">
-                      Look at the top of the calendar. Type patient's name or phone number in the search box.
-                      <span class="block mt-1 text-green-700 font-medium">
-                        → New patient? Click "Add Patient" button first
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                
-                <div class="flex gap-3">
-                  <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</div>
-                  <div class="flex-1">
-                    <p class="font-semibold text-sm text-gray-900">Select the Patient</p>
-                    <p class="text-xs text-gray-700 mt-1">
-                      Click on the patient from the search results. Their name will appear in a blue badge.
-                    </p>
-                  </div>
-                </div>
-                
-                <div class="flex gap-3">
-                  <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</div>
-                  <div class="flex-1">
                     <p class="font-semibold text-sm text-gray-900">Click Available Time Slot</p>
                     <p class="text-xs text-gray-700 mt-1">
-                      Click any <strong>empty white time slot</strong> in the calendar grid.
+                      Click any <strong>empty white time slot</strong> in the calendar grid. The booking dialog opens.
                       <span class="block mt-1 text-blue-700 font-medium">
                         → Advanced: Drag across multiple slots for longer appointments
                       </span>
@@ -517,11 +441,24 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
                 
                 <div class="flex gap-3">
-                  <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">4</div>
+                  <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</div>
                   <div class="flex-1">
-                    <p class="font-semibold text-sm text-gray-900">Configure & Confirm</p>
+                    <p class="font-semibold text-sm text-gray-900">Find the Patient</p>
                     <p class="text-xs text-gray-700 mt-1">
-                      A dialog opens → Choose duration (15/30/45/60/90 min) → Add notes if needed → Click "Book Appointment"
+                      Type the patient's name or phone in the dialog and click the match.
+                      <span class="block mt-1 text-green-700 font-medium">
+                        → New patient? Click "Add new patient"
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                
+                <div class="flex gap-3">
+                  <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</div>
+                  <div class="flex-1">
+                    <p class="font-semibold text-sm text-gray-900">Confirm</p>
+                    <p class="text-xs text-gray-700 mt-1">
+                      Change the duration (15/30/45/60/90 min) or room if needed, then click "Confirm Booking"
                     </p>
                   </div>
                 </div>
@@ -531,7 +468,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <div class="bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded-md text-sm">
               <p class="font-semibold text-yellow-900">⚡ Speed Booking Shortcut:</p>
               <p class="text-yellow-800 text-xs mt-1">
-                Most appointments are 30 minutes. Select patient → click slot → press Enter. 
+                Most appointments are 30 minutes. Click slot → pick patient → Confirm Booking.
                 The system auto-selects 30-min duration!
               </p>
             </div>
@@ -804,8 +741,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 <span class="text-xl">⭐</span>
               </p>
               <p class="text-sm text-purple-900 text-center leading-relaxed">
-                Use <strong>Calendar View</strong> during peak hours to see the big picture. 
-                Switch to <strong>Slots View</strong> during quiet times for quick bookings. 
+                Click a free slot and pick the patient in the dialog.
                 The "Quick Guide" button (Info icon) is always there if you need a refresher!
               </p>
             </div>

@@ -4,9 +4,7 @@ import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import AppointmentScheduler from '@/components/appointments/AppointmentScheduler';
 import AppointmentsCalendar from '@/components/appointments/AppointmentsCalendar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -65,7 +63,7 @@ function AppointmentsPageInner() {
     try { if (date) localStorage.setItem('appointments.date', date); } catch {}
   }, [date]);
   return (
-    <Tabs defaultValue="calendar" className="space-y-4">
+    <div className="space-y-4">
       <PageHeader title="Appointments" />
       <Card>
         <CardContent className="pt-6">
@@ -110,7 +108,7 @@ function AppointmentsPageInner() {
           </DialogHeader>
           <div className="space-y-3">
             <ul className="text-sm text-gray-700 space-y-2">
-              <li>• <strong>Search patient</strong> by name or phone, then <strong>click any free slot</strong> to book</li>
+              <li>• <strong>Click any free slot</strong>, then search the patient by name or phone in the booking dialog</li>
               <li>• Calendar auto-finds 15-min slots even in larger grid views</li>
               <li>• <strong>Single-click</strong> to book, <strong>double-click</strong> appointment to view/edit/cancel</li>
               <li>• <strong>Drag across tiles</strong> to select custom time ranges</li>
@@ -120,27 +118,12 @@ function AppointmentsPageInner() {
         </DialogContent>
       </Dialog>
 
-      <TabsList data-tour="view-tabs">
-        <TabsTrigger value="calendar">Calendar</TabsTrigger>
-        <TabsTrigger value="slots">Slots</TabsTrigger>
-      </TabsList>
-      <TabsContent value="calendar">
-        <AppointmentsCalendar 
-          prefillPatientId={prefillPatientId}
-          controlledDoctorId={doctorId}
-          controlledDate={date}
-          hideHeaderControls
-        />
-      </TabsContent>
-      <TabsContent value="slots">
-        <AppointmentScheduler 
-          prefillPatientId={prefillPatientId}
-          controlledDoctorId={doctorId}
-          controlledDate={date}
-          hideHeaderControls
-        />
-      </TabsContent>
-    </Tabs>
+      <AppointmentsCalendar
+        prefillPatientId={prefillPatientId}
+        doctor={doctors.find((d) => d.id === doctorId)}
+        date={date}
+      />
+    </div>
   );
 }
 

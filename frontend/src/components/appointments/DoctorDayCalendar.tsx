@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import { apiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { X, FileText, AlertTriangle } from 'lucide-react';
@@ -44,7 +43,6 @@ export interface DoctorDayCalendarProps {
   optimisticAppointment?: AppointmentInSlot;
   onAppointmentUpdate?: () => void;
   timeSlotConfig?: TimeSlotConfig;
-  disableSlotBooking?: boolean;
   selectedRoomName?: string;
 }
 
@@ -70,7 +68,6 @@ export default function DoctorDayCalendar({
     stepMinutes: 30,
     timezone: 'Asia/Kolkata'
   },
-  disableSlotBooking = false,
   selectedRoomName,
 }: DoctorDayCalendarProps) {
   const router = useRouter();
@@ -554,7 +551,7 @@ export default function DoctorDayCalendar({
               const past = isSlotInPast(slot, date);
               const isNewlyBooked = recentBookedSlot === slot || (primary?.slot === recentBookedSlot);
               const isBookingInProgress = bookingInProgress === slot;
-              const isDisabled = past || isBookingInProgress || hasAny || (!rescheduleTarget && disableSlotBooking);
+              const isDisabled = past || isBookingInProgress || hasAny;
               const slotStart = slot.split('-')[0];
               const primaryStart = primary?.slot?.split('-')[0];
               const isPrimaryStartTile = !!(hasAny && primary && slotStart === primaryStart);
@@ -665,12 +662,6 @@ export default function DoctorDayCalendar({
                     
                     if (rescheduleTarget) return; // creation only
                     if (past) return;
-                    if (disableSlotBooking) {
-                      if (!hasAny) {
-                        toast({ variant: 'destructive', title: 'Patient required', description: 'Search and select a patient before booking a slot.' });
-                      }
-                      return;
-                    }
                     setSelecting(true);
                     setSelectionStartIdx(idx);
                     setSelectionEndIdx(idx);
@@ -865,10 +856,6 @@ export default function DoctorDayCalendar({
                       onClick={async () => {
                         if (selecting) return;
                         if (past) return;
-                        if (disableSlotBooking && !rescheduleTarget) {
-                          toast({ variant: 'destructive', title: 'Patient required', description: 'Search and select a patient before booking a slot.' });
-                          return;
-                        }
                         if (rescheduleTarget && rescheduleTarget.id) {
                           const dur = Math.max(1, getSlotDurationMinutes(rescheduleTarget.slot));
                           // Flexible reschedule: try to place within this tile's first free sub-range
@@ -922,7 +909,7 @@ export default function DoctorDayCalendar({
                       style={{
                         height: '1.75rem',
                         backgroundColor: past ? '#ffffff' : (isBookingInProgress ? '#fbbf24' : '#ffffff'),
-                        cursor: (past || (disableSlotBooking && !rescheduleTarget) || freeStartMin === null) ? 'not-allowed' : 'pointer'
+                        cursor: (past || freeStartMin === null) ? 'not-allowed' : 'pointer'
                       }}
                     />
                   )}

@@ -13,6 +13,7 @@ import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage, filterRoomsByVisitType, formatPatientName, addMinutesToHHMM, doTimeSlotsOverlap, getSlotDurationMinutes } from '@/lib/utils';
 import { checkSlot, loadDoctorDay, type DoctorDay } from '@/lib/doctor-availability';
+import PatientSearchField from './PatientSearchField';
 import type { 
   Patient, 
   Room, 
@@ -28,6 +29,8 @@ interface AppointmentBookingDialogProps {
   date: string;
   slot: string;
   patient: Patient | null;
+  onPatientChange: (patient: Patient | null) => void;
+  onAddNewPatient: (query: string) => void;
   onConfirm: (appointmentData: { 
     visitType: VisitType; 
     roomId?: string;
@@ -44,6 +47,8 @@ export default function AppointmentBookingDialog({
   date,
   slot,
   patient,
+  onPatientChange,
+  onAddNewPatient,
   onConfirm,
   onCancel
 }: AppointmentBookingDialogProps) {
@@ -175,10 +180,6 @@ export default function AppointmentBookingDialog({
       validationErrors.push('Please select an appointment type');
     }
     
-    if (!patient) {
-      validationErrors.push('Patient information is missing');
-    }
-    
     if (!doctorId) {
       validationErrors.push('Doctor information is missing');
     }
@@ -250,16 +251,28 @@ export default function AppointmentBookingDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-3xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Book Appointment</DialogTitle>
         </DialogHeader>
-        
-        <div className="space-y-6">
-          {/* Appointment Details */}
+
+        <div className="-mx-6 min-h-0 flex-1 space-y-6 overflow-y-auto px-6">
+          {!patient && (
+            <PatientSearchField onSelect={onPatientChange} onAddNew={onAddNewPatient} />
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-            <div><span className="font-medium">Patient:</span> {formatPatientName(patient)}</div>
-            <div><span className="font-medium">Phone:</span> {patient?.phone || 'N/A'}</div>
+            {patient && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span><span className="font-medium">Patient:</span> {formatPatientName(patient)}</span>
+                  <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => onPatientChange(null)}>
+                    Change
+                  </Button>
+                </div>
+                <div><span className="font-medium">Phone:</span> {patient.phone || 'N/A'}</div>
+              </>
+            )}
             <div><span className="font-medium">Date:</span> {displayCalendarDate(date)}</div>
             <div><span className="font-medium">Time Slot:</span> {derivedSlot}</div>
           </div>
@@ -429,18 +442,18 @@ export default function AppointmentBookingDialog({
             </div>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 pt-4 border-t">
-            <Button variant="outline" onClick={onCancel} disabled={loading}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleConfirm} 
-              disabled={loading || Boolean(slotCheck.blocked) || (visitType === 'PROCEDURE' && !selectedRoomId)}
-            >
-              {loading ? 'Booking...' : 'Confirm Booking'}
-            </Button>
-          </div>
+        </div>
+
+        <div className="flex shrink-0 justify-end space-x-3 border-t pt-4">
+          <Button variant="outline" onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={loading || !patient || Boolean(slotCheck.blocked) || (visitType === 'PROCEDURE' && !selectedRoomId)}
+          >
+            {loading ? 'Booking...' : 'Confirm Booking'}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

@@ -22,6 +22,8 @@ const baseProps = {
   date: '2099-01-01',
   slot: '10:00-10:30',
   patient: { id: 'p1', name: 'John Doe', phone: '123', email: 'j@d.com' } as any,
+  onPatientChange: jest.fn(),
+  onAddNewPatient: jest.fn(),
   onConfirm: jest.fn().mockResolvedValue(undefined),
   onCancel: jest.fn(),
 };

@@ -5,25 +5,23 @@ import { Calendar as CalendarIcon } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/lib/doctor-availability';
 import { useToast } from '@/hooks/use-toast';
-import { createCleanupTimeouts, getISTDateString, formatPatientName } from '@/lib/utils';
+import { formatPatientName } from '@/lib/utils';
 import type { User, Patient, TimeSlotConfig, AppointmentInSlot } from '@/lib/types';
 import DoctorDayCalendar from '@/components/appointments/DoctorDayCalendar';
 import { Badge } from '@/components/ui/badge';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
-import { AlertCircle, Info } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { AppointmentStatus } from '@cms/shared-types';
 
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
   prefillPatientId?: string;
-  controlledDoctorId?: string;
-  controlledDate?: string;
-  hideHeaderControls?: boolean;
+  doctor: User | undefined;
+  date: string;
 }
 
 /**
@@ -44,24 +42,15 @@ export default function AppointmentsCalendar({
     timezone: 'Asia/Kolkata'
   },
   prefillPatientId,
-  controlledDoctorId,
-  controlledDate,
-  hideHeaderControls,
+  doctor,
+  date,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
+  const doctorId = doctor?.id ?? '';
   const [slotConfig, setSlotConfig] = useState<TimeSlotConfig>(timeSlotConfig);
-  const [date, setDate] = useState<string>(getISTDateString());
-  const [doctorId, setDoctorId] = useState<string>('');
-  const [patientSearch, setPatientSearch] = useState<string>('');
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [doctors, setDoctors] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  // const [error, setError] = useState<string | null>(null);
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [bookingDetails, setBookingDetails] = useState<any | null>(null);
-  const [searchingPatients, setSearchingPatients] = useState<boolean>(false);
-  // const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [visitTypeFilter, setVisitTypeFilter] = useState<string>('ALL');
   const [roomFilter, setRoomFilter] = useState<string>('ALL');
   const [rooms, setRooms] = useState<{ id: string; name: string; type: string }[]>([]);
@@ -85,21 +74,20 @@ export default function AppointmentsCalendar({
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
   const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
-  const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
-  const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
-
-  const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
+  const [newPatientQuery, setNewPatientQuery] = useState<string | null>(null);
 
   useEffect(() => {
-    void fetchDoctors();
     void fetchRooms();
   }, []);
 
   useEffect(() => {
-    if (prefillPatientId) {
-      setSelectedPatientId(prefillPatientId);
-    }
-  }, [prefillPatientId]);
+    if (!prefillPatientId) return;
+    let cancelled = false;
+    apiClient.getPatient(prefillPatientId)
+      .then((patient) => { if (!cancelled) setSelectedPatient(patient as Patient); })
+      .catch(() => toast({ variant: 'destructive', title: 'Patient not found', description: 'Search for the patient in the booking dialog instead.' }));
+    return () => { cancelled = true; };
+  }, [prefillPatientId, toast]);
 
   // Keep local slot config in sync with prop defaults
   useEffect(() => {
@@ -117,7 +105,6 @@ export default function AppointmentsCalendar({
     });
   }, [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.stepMinutes, timeSlotConfig.timezone]);
 
-  // Apply doctor working hours when doctor/date changes (mirrors AppointmentScheduler behavior)
   const [doctorDay, setDoctorDay] = useState<DoctorDay | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -138,14 +125,6 @@ export default function AppointmentsCalendar({
       setGridMinutes(slotConfig.stepMinutes);
     }
   }, [slotConfig.stepMinutes]);
-
-  // Apply controlled doctor/date when provided
-  useEffect(() => {
-    if (controlledDoctorId) setDoctorId(controlledDoctorId);
-  }, [controlledDoctorId]);
-  useEffect(() => {
-    if (controlledDate) setDate(controlledDate);
-  }, [controlledDate]);
 
   useEffect(() => {
     // Clear transient highlights when doctor/date changes
@@ -170,18 +149,6 @@ export default function AppointmentsCalendar({
       setDoctorGoogleStatus({ connected: false });
     }
   }, [doctorId]);
-
-  const fetchDoctors = async () => {
-    try {
-      const res: any = await apiClient.getUsers({ limit: 100 });
-      const list: User[] = (res.users || res.data || []).filter((u: User) => u.role === 'DOCTOR');
-      setDoctors(list);
-      if (list[0]?.id) setDoctorId(list[0].id);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to fetch doctors', e);
-    }
-  };
 
   const fetchRooms = async () => {
     try {
@@ -259,53 +226,7 @@ export default function AppointmentsCalendar({
     }
   };
 
-  const searchPatients = async (q: string) => {
-    setPatientSearch(q);
-
-    if (!q.trim()) {
-      setPatients([]);
-      setQuickCreateOpen(false);
-      setAutoPromptedForSearch(false);
-      setSearchingPatients(false);
-      return;
-    }
-
-    try {
-      setSearchingPatients(true);
-      const res: any = await apiClient.getPatients({ search: q, limit: 10 });
-      const matches = (res.data || res.patients || []).map((p: any) => ({
-        ...p,
-        firstName: p.firstName || p.name?.split(' ')[0] || '',
-        lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
-      }));
-      setPatients(matches);
-      if (matches.length === 0 && !autoPromptedForSearch) {
-        setQuickCreateOpen(true);
-        setAutoPromptedForSearch(true);
-      }
-      if (matches.length > 0) {
-        setQuickCreateOpen(false);
-        setAutoPromptedForSearch(false);
-      }
-      setSearchingPatients(false);
-    } catch (error) {
-      console.error('Failed to search patients', error);
-      setSearchingPatients(false);
-    }
-  };
-
   const handleBookingRequest = (slot: string) => {
-    const pid = selectedPatientId?.trim();
-    if (!pid) {
-      toast({
-        variant: 'destructive',
-        title: 'Patient required',
-        description: 'Select an existing patient or add a new one before booking.',
-      });
-      setQuickCreateOpen(true);
-      return;
-    }
-
     setPendingBookingSlot(slot);
     setBookingDialogOpen(true);
   };
@@ -316,6 +237,7 @@ export default function AppointmentsCalendar({
     slot?: string;
     notes?: string;
   }) => {
+    if (!selectedPatient) return;
     try {
       setLoading(true);
       
@@ -324,19 +246,12 @@ export default function AppointmentsCalendar({
         ? rooms.find(r => r.id === appointmentData.roomId) 
         : undefined;
         
-      const optimisticPatient = selectedPatient
-        ? {
-            id: selectedPatient.id,
-            name: `${selectedPatient.firstName ?? ''} ${selectedPatient.lastName ?? ''}`.trim() || selectedPatient.name || 'Unknown',
-            phone: selectedPatient.phone,
-            email: selectedPatient.email,
-          }
-        : {
-            id: selectedPatientId,
-            name: patientSearch || 'Unknown Patient',
-          };
-
-      const optimisticDoctor = doctors.find((d) => d.id === doctorId);
+      const optimisticPatient = {
+        id: selectedPatient.id,
+        name: formatPatientName(selectedPatient),
+        phone: selectedPatient.phone,
+        email: selectedPatient.email,
+      };
 
       const finalSlot = appointmentData.slot || pendingBookingSlot;
 
@@ -344,8 +259,8 @@ export default function AppointmentsCalendar({
         id: `optimistic-${finalSlot}`,
         slot: finalSlot,
         patient: optimisticPatient,
-        doctor: optimisticDoctor
-          ? { id: optimisticDoctor.id, firstName: optimisticDoctor.firstName, lastName: optimisticDoctor.lastName }
+        doctor: doctor
+          ? { id: doctor.id, firstName: doctor.firstName, lastName: doctor.lastName }
           : { id: doctorId, firstName: 'Dr.', lastName: 'Unknown' },
         visitType: appointmentData.visitType,
         room: selectedRoom ? { id: selectedRoom.id, name: selectedRoom.name, type: selectedRoom.type } : undefined,
@@ -357,7 +272,7 @@ export default function AppointmentsCalendar({
       
       const created: any = await apiClient.createAppointment({ 
         doctorId, 
-        patientId: selectedPatientId, 
+        patientId: selectedPatient.id, 
         date, 
         slot: finalSlot, 
         visitType: appointmentData.visitType,
@@ -370,8 +285,9 @@ export default function AppointmentsCalendar({
       setRefreshKey(prev => prev + 1);
       
       // Set success feedback and highlight newly booked slot
-      setBookingDetails(created);
+      setBookingDetails({ patient: optimisticPatient, ...created });
       setRecentBookedSlot(finalSlot);
+      setSelectedPatient(null);
       
       // Refresh rooms after booking
       void fetchRooms();
@@ -414,9 +330,8 @@ export default function AppointmentsCalendar({
     setPendingBookingSlot('');
   };
 
-  const currentDoctor = doctors.find((d) => d.id === doctorId);
-  const currentDoctorName = currentDoctor
-    ? `Dr. ${currentDoctor.firstName ?? ''} ${currentDoctor.lastName ?? ''}`.trim()
+  const currentDoctorName = doctor
+    ? `Dr. ${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim()
     : 'the selected doctor';
   const isCurrentUserTheDoctor = googleStatus.connected && doctorGoogleStatus.connected
     && googleStatus.calendarId === doctorGoogleStatus.calendarId;
@@ -431,7 +346,7 @@ export default function AppointmentsCalendar({
                 <CalendarIcon className="h-5 w-5" /> 
                 Doctor Calendar
               </CardTitle>
-              <CardDescription>Daily calendar for selected doctor. Click an empty slot to schedule.</CardDescription>
+              <CardDescription>Click a free slot to book an appointment.</CardDescription>
             </div>
             {googleConfigured !== false && (
               <div className="flex items-center gap-2">
@@ -497,24 +412,7 @@ export default function AppointmentsCalendar({
           )}
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-            {!hideHeaderControls && (
-              <>
-                <div>
-                  <label className="text-sm text-gray-700">Doctor</label>
-                  <Select value={doctorId} onValueChange={setDoctorId}>
-                    <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                    <SelectContent>
-                      {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-700">Date</label>
-                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                </div>
-              </>
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="text-sm text-gray-700">Visit Type</label>
               <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>
@@ -540,10 +438,6 @@ export default function AppointmentsCalendar({
               </Select>
             </div>
             <div>
-              <label className="text-sm text-gray-700">Patient</label>
-              <Input placeholder="Search patient by name/phone" value={patientSearch} onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }} />
-            </div>
-            <div>
               <label className="text-sm text-gray-700">Grid</label>
               <Select value={String(gridMinutes)} onValueChange={(v: string) => setGridMinutes(parseInt(v, 10))}>
                 <SelectTrigger><SelectValue placeholder="Grid granularity" /></SelectTrigger>
@@ -562,53 +456,9 @@ export default function AppointmentsCalendar({
           {selectedPatient && (
             <div className="flex items-center gap-2">
               <Badge variant="secondary">
-                Selected: {selectedPatient.firstName} {selectedPatient.lastName} — {selectedPatient.phone}
+                Booking for {formatPatientName(selectedPatient)} — {selectedPatient.phone}
               </Badge>
-              <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); setQuickCreateOpen(false); }}>Clear</Button>
-            </div>
-          )}
-
-          {!selectedPatientId && patientSearch && (
-            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              <AlertCircle className="h-4 w-4" />
-              <span>Select a patient from the list or add them as new before booking.</span>
-            </div>
-          )}
-
-          {patientSearch && patients.length > 0 && (
-            <div className="max-h-40 overflow-auto border rounded">
-              {patients.map((p) => (
-                <div
-                  key={p.id}
-                  className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                  onClick={() => {
-                    setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
-                    setSelectedPatientId(p.id);
-                    setSelectedPatient(p);
-                    setPatients([]);
-                    setQuickCreateOpen(false);
-                    setAutoPromptedForSearch(false);
-                  }}
-                >
-                  {p.firstName} {p.lastName} — {p.phone}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {patientSearch && patients.length === 0 && !selectedPatientId && !searchingPatients && (
-            <div className="rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-              <div className="flex items-center justify-between">
-                <span>No matching patients found.</span>
-                <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
-                  + Add "{patientSearch}" as a new patient
-                </Button>
-              </div>
-            </div>
-          )}
-          {patientSearch && !patients.length && !quickCreateOpen && !selectedPatientId && !searchingPatients && (
-            <div className="text-xs text-gray-500">
-              Tip: enter patient name and phone, then use "Add" to create a new record instantly.
+              <Button variant="outline" size="sm" onClick={() => setSelectedPatient(null)}>Clear</Button>
             </div>
           )}
 
@@ -670,7 +520,7 @@ export default function AppointmentsCalendar({
                 <div className="ml-3">
                   <p className="font-medium">Appointment Successfully Booked!</p>
                   <p style={{ color: '#16a34a' }}>
-                    {bookingDetails.patient?.name || `${selectedPatient?.firstName ?? ''} ${selectedPatient?.lastName ?? ''}`.trim()} 
+                    {bookingDetails.patient?.name} 
                     {' '} scheduled for {bookingDetails.slot}
                     {bookingDetails.room && ` in ${bookingDetails.room.name}`}
                     {bookingDetails.visitType && ` (${bookingDetails.visitType})`}
@@ -697,7 +547,6 @@ export default function AppointmentsCalendar({
             bookingInProgress={loading ? pendingBookingSlot : undefined}
             optimisticAppointment={optimisticAppointment || undefined}
             onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
-            disableSlotBooking={!selectedPatientId}
             selectedRoomName={selectedRoom?.name}
             timeSlotConfig={{ ...slotConfig, stepMinutes: Math.max(10, gridMinutes) }}
           />
@@ -711,27 +560,20 @@ export default function AppointmentsCalendar({
         date={date}
         slot={pendingBookingSlot}
         patient={selectedPatient}
+        onPatientChange={setSelectedPatient}
+        onAddNewPatient={setNewPatientQuery}
         onConfirm={handleBookingConfirm}
         onCancel={handleBookingCancel}
       />
 
       <PatientQuickCreateDialog
-        open={quickCreateOpen}
-        onOpenChange={(open: boolean) => {
-          setQuickCreateOpen(open);
-          if (!open && !selectedPatientId) {
-            setPatientSearch('');
-            setAutoPromptedForSearch(false);
-          }
-        }}
-        initialName={patientSearch}
+        open={newPatientQuery !== null}
+        onOpenChange={(open: boolean) => { if (!open) setNewPatientQuery(null); }}
+        initialName={newPatientQuery && !/^[+\d\s-]+$/.test(newPatientQuery) ? newPatientQuery : undefined}
+        initialPhone={newPatientQuery && /^[+\d\s-]+$/.test(newPatientQuery) ? newPatientQuery : undefined}
         onPatientCreated={(patient) => {
-          setSelectedPatientId(patient.id);
           setSelectedPatient(patient);
-          setPatientSearch(`${patient.firstName ?? ''} ${patient.lastName ?? ''} — ${patient.phone ?? ''}`.trim());
-          setPatients([]);
-          setQuickCreateOpen(false);
-          setAutoPromptedForSearch(false);
+          setNewPatientQuery(null);
         }}
       />
     </>
