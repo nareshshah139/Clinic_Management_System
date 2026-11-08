@@ -50,6 +50,8 @@ model User {
   statusReason               String?
   isActive                   Boolean            @default(true)
   metadata                   String?
+  // Patients a doctor may see in one time slot (1..5); 1 means no overbooking.
+  maxBookingsPerSlot         Int                @default(1)
   // Google Calendar integration (per-user)
   googleCalendarId           String?
   googleRefreshToken         String?

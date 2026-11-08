@@ -11,6 +11,7 @@ describe('AppointmentsService.reschedule', () => {
   const prismaMock: any = {
     doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
     doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
+    user: { findUnique: jest.fn().mockResolvedValue(null) },
     appointment: {
       findFirst: jest.fn(),
       update: jest.fn(),

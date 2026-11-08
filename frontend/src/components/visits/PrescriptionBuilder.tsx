@@ -33,6 +33,7 @@ import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
+import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -44,6 +45,19 @@ const PRINT_LINE_SPACING_OPTIONS: Array<{ value: PrintLineSpacing; label: string
   { value: 'compact', label: 'Compact' },
   { value: 'tight', label: 'Tight' },
 ];
+
+/**
+ * @cc [owner:nareshshah139,label:product] continuation-pages-keep-bottom-margin
+ * Continuation pages MAY be moved down to clear the letterhead, and a printer
+ * profile MAY move content down, but no printed line MAY end inside the bottom
+ * margin. Pagination MUST reserve the space these moves take.
+ */
+// Continuation pages start about one line lower than page 1 so they breathe
+// under the letterhead. Paged.js gives them this much extra bottom margin so
+// the nudge never pushes text into the real bottom margin.
+const CONTINUATION_NUDGE_PX = 36;
+const CONTINUATION_RESERVE_PX = 48;
+const PRINT_PX_PER_MM = 96 / 25.4;
 
 type DosageUnit = 'MG' | 'ML' | 'MCG' | 'IU' | 'TABLET' | 'CAPSULE' | 'DROP' | 'SPRAY' | 'PATCH' | 'INJECTION';
 
@@ -712,6 +726,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [previewJustUpdated, setPreviewJustUpdated] = useState(false);
   const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TABLE');
   const [spaceOptimized, setSpaceOptimized] = useState(false);
+  const [fitToPage, setFitToPage] = useState(false);
+  const [fitResult, setFitResult] = useState<{ fontPx: number; fits: boolean; pages: number } | null>(null);
+  // Fit to 1 page prints with the space-optimized markup and then sizes it.
+  const printCompact = spaceOptimized || fitToPage;
   const [lineSpacing, setLineSpacing] = useState<PrintLineSpacing>('normal');
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
@@ -751,6 +769,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     overrideTopMarginPx: number | null;
     overrideBottomMarginPx: number | null;
     spaceOptimized: boolean;
+    fitToPage: boolean;
     lineSpacing: PrintLineSpacing;
     personalHistory: string | undefined;
   } | null>(null);
@@ -981,10 +1000,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   // Keep rx layout consistent in space-optimized mode
   useEffect(() => {
-    if (spaceOptimized && rxPrintFormat !== 'TABLE') {
+    if (printCompact && rxPrintFormat !== 'TABLE') {
       setRxPrintFormat('TABLE');
     }
-  }, [spaceOptimized, rxPrintFormat]);
+  }, [printCompact, rxPrintFormat]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1122,12 +1141,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
    * @cc [owner:nareshshah139,label:product] compact-print-vertical-spacing
    * Space-optimized print MUST tighten the gaps between blocks, Rx rows and the
    * signature so a typical prescription fits one page, without shrinking text.
-   * The normal layout MUST keep its original spacing.
+   * The normal layout MUST keep its original spacing. Fit to 1 page reads its
+   * spacing from the CSS variables of the chosen fit step instead.
    */
-  const printBlockPadding = spaceOptimized ? 'py-0.5' : 'py-3';
-  const rxRowPadding = spaceOptimized ? '2px 0' : '6px 0';
-  const rxCellPadding = spaceOptimized ? '0 6px' : '0 12px';
-  const rxColumnFlex = spaceOptimized
+  const printBlockPadding = fitToPage ? 'print-fit-block' : spaceOptimized ? 'py-0.5' : 'py-3';
+  const rxRowPadding = fitToPage ? 'var(--fit-row-pad, 2px) 0' : spaceOptimized ? '2px 0' : '6px 0';
+  const rxCellPadding = printCompact ? '0 6px' : '0 12px';
+  const pageBreakClass = (enabled: boolean) => (enabled && !fitToPage ? 'pb-before-page' : '');
+  const rxColumnFlex = printCompact
     ? { medicine: '2 1 0%', frequency: '0.9 1 0%', timing: '0.9 1 0%', duration: '0.8 1 0%', instructions: '2.2 1 0%' }
     : { medicine: '2 1 0%', frequency: '1 1 0%', timing: '1 1 0%', duration: '1 1 0%', instructions: '1.5 1 0%' };
   const patientName = useMemo(() => visitData?.patient?.name || patientData?.name || '—', [visitData, patientData]);
@@ -3446,6 +3467,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       overrideTopMarginPx,
       overrideBottomMarginPx,
       spaceOptimized,
+      fitToPage,
       lineSpacing,
     };
 
@@ -3487,7 +3509,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [isTeleVideo, previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, personalHistory, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, lineSpacing, avoidBreakInsideTables, translateForPreview]);
+  }, [isTeleVideo, previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, personalHistory, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, fitToPage, lineSpacing, avoidBreakInsideTables, translateForPreview]);
 
   // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
   useEffect(() => {
@@ -3560,6 +3582,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       letterheadOption,
       rxPrintFormat,
       spaceOptimized,
+      fitToPage,
       lineSpacing,
     });
     
@@ -3719,15 +3742,27 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         window.addEventListener('error', errorHandler as EventListener);
         window.addEventListener('unhandledrejection', errorHandler as EventListener);
         
+        // Content moved down after pagination (a printer profile's offset, and
+        // the continuation-page nudge) must not end inside the bottom margin,
+        // so Paged.js lays out each page with that much extra bottom margin.
+        const baseOffsetYPx = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0);
+        const nudgesContinuationPages = !(useLetterheadForDownload && resolvedPrintBgUrl === PRESCRIPTION_LETTERHEAD_URL);
+        const pxToMmUp = (px: number) => Math.ceil((px / PRINT_PX_PER_MM) * 10) / 10;
+        const firstPageBottomMm = Math.round((bottomMarginMm + pxToMmUp(Math.max(0, baseOffsetYPx))) * 10) / 10;
+        const continuationBottomMm = Math.round((firstPageBottomMm + (nudgesContinuationPages ? pxToMmUp(CONTINUATION_RESERVE_PX) : 0)) * 10) / 10;
+
         // Build CSS string with page rules
         // Note: @page rules must be passed to Paged.js through the CSS parameter, not inline styles
         const pageRulesCSS = `
           @page {
             size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
             margin-top: ${topMarginMm}mm !important;
-            margin-bottom: ${bottomMarginMm}mm !important;
+            margin-bottom: ${continuationBottomMm}mm !important;
             margin-left: ${leftMarginMm}mm !important;
             margin-right: ${rightMarginMm}mm !important;
+          }
+          @page :first {
+            margin-bottom: ${firstPageBottomMm}mm !important;
           }
         `;
         
@@ -3764,7 +3799,38 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         }
         let flow: any;
         try {
-          flow = await paged.preview(content, [pageRulesUrl, contentRulesUrl], pagesHost);
+          // Fit to 1 page: measure off-screen to pick the roomiest step that
+          // fits, render it, and step tighter if Paged.js still needs 2 pages.
+          let fitFrom = 0;
+          let previewer = paged;
+          for (;;) {
+            let html = content;
+            let fit: { index: number; fits: boolean } | null = null;
+            if (fitToPage) {
+              await document.fonts?.ready;
+              // Page 1's bottom margin already includes any downward content offset.
+              const box = pageContentBoxPx(paperPreset, { topMm: topMarginMm, bottomMm: firstPageBottomMm, leftMm: leftMarginMm, rightMm: rightMarginMm });
+              const availablePx = box.heightPx - 2;
+              const fitted = fitPrintMarkup(content, { widthPx: box.widthPx, availablePx, from: fitFrom, hostClassName: 'prescription-pdf-export' });
+              html = fitted.html;
+              fit = fitted;
+            }
+            flow = await previewer.preview(html, [pageRulesUrl, contentRulesUrl], pagesHost);
+            if (!fit) {
+              setFitResult(null);
+              break;
+            }
+            const pageCount = container.querySelectorAll('.pagedjs_page').length;
+            if (pageCount > 1 && fit.index < PRINT_FIT_STEPS.length - 1) {
+              fitFrom = fit.index + 1;
+              pagesHost.innerHTML = '';
+              previewer = new Previewer();
+              pagedInstanceRef.current = previewer;
+              continue;
+            }
+            setFitResult({ fontPx: PRINT_FIT_STEPS[fit.index].fontPx, fits: pageCount <= 1, pages: pageCount });
+            break;
+          }
         } finally {
           URL.revokeObjectURL(pageRulesUrl);
           URL.revokeObjectURL(contentRulesUrl);
@@ -3845,11 +3911,24 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           return null;
         };
 
+        // Bottom of the lowest element that prints text or an image. Element
+        // boxes include their padding, so this errs on the safe side.
+        const lowestContentBottom = (root: HTMLElement) => {
+          let bottom = -Infinity;
+          root.querySelectorAll<HTMLElement>('*').forEach(el => {
+            const printsText = Array.from(el.childNodes).some(n => n.nodeType === Node.TEXT_NODE && n.textContent?.trim());
+            if (!printsText && el.tagName !== 'IMG') return;
+            const rect = el.getBoundingClientRect();
+            if (rect.height > 0) bottom = Math.max(bottom, rect.bottom);
+          });
+          return bottom;
+        };
+
         // Match continuation pages to page 1 by copying the vertical offset of
         // the first rendered text block, then nudge continuation pages down by
         // about one line so the second page breathes a bit more under the
         // letterhead.
-        const continuationExtraOffsetPx = 36;
+        const continuationExtraOffsetPx = CONTINUATION_NUDGE_PX;
         let firstPageTextOffsetPx = 0;
         const firstPageContent = pages[0]?.querySelector('.pagedjs_page_content') as HTMLElement | null;
         const firstPageBox = pages[0]?.querySelector('.pagedjs_pagebox') as HTMLElement | null;
@@ -3890,9 +3969,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           const contentArea = page.querySelector('.pagedjs_page_content');
           if (contentArea) {
             const offsetX = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0);
-            const baseOffsetY = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0);
             let continuationOffsetY = 0;
-            if (idx > 0 && firstPageTextOffsetPx > 0 && !(useLetterheadForDownload && resolvedPrintBgUrl === PRESCRIPTION_LETTERHEAD_URL)) {
+            if (idx > 0 && firstPageTextOffsetPx > 0 && nudgesContinuationPages) {
               const pageBox = page.querySelector('.pagedjs_pagebox') as HTMLElement | null;
               const firstText = findFirstTextElement(contentArea as HTMLElement);
               if (pageBox && firstText) {
@@ -3900,9 +3978,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 const textRect = firstText.getBoundingClientRect();
                 const currentOffset = Math.round(textRect.top - pageBoxRect.top);
                 continuationOffsetY = Math.max(0, Math.min(firstPageTextOffsetPx - currentOffset, 240));
+                // Never move the last line into the bottom margin: cap the
+                // nudge at the free space left under this page's content.
+                const scale = pageBoxRect.height / (pageBox.offsetHeight || pageBoxRect.height) || 1;
+                const limitPx = (pageBoxRect.bottom - pageBoxRect.top) / scale - bottomMarginMm * PRINT_PX_PER_MM - Math.max(0, baseOffsetYPx);
+                const contentBottomPx = (lowestContentBottom(contentArea as HTMLElement) - pageBoxRect.top) / scale;
+                continuationOffsetY = Math.max(0, Math.min(continuationOffsetY, Math.floor(limitPx - contentBottomPx - 1)));
               }
             }
-            const effectiveOffsetY = baseOffsetY + continuationOffsetY;
+            const effectiveOffsetY = baseOffsetYPx + continuationOffsetY;
             (contentArea as HTMLElement).style.transform = `translate(${offsetX}px, ${effectiveOffsetY}px)`;
             (contentArea as HTMLElement).style.transformOrigin = 'top left';
           }
@@ -4087,7 +4171,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       // Only clear the reference, not the container content
       // The container will be cleared by processWithPagedJs when it runs next
     };
-  }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, lineSpacing, investigationsStringified, customSectionsStringified, followUpInstructions,
+  }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, fitToPage, lineSpacing, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
       designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, resolvedPrintBgUrl, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
@@ -5460,13 +5544,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="flex gap-2">
                 <div className="hidden sm:flex items-center gap-2">
                   <span className="text-sm text-gray-700">Print</span>
-                  <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={spaceOptimized}>
+                  <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={printCompact}>
                     <SelectTrigger className="w-36 h-9">
                       <SelectValue placeholder="Format" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="TABLE">Table</SelectItem>
-                      <SelectItem value="TEXT" disabled={spaceOptimized}>Text</SelectItem>
+                      <SelectItem value="TEXT" disabled={printCompact}>Text</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -5552,6 +5636,20 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 [data-line-spacing="tight"],
                 [data-line-spacing="tight"] * {
                   line-height: 1.2 !important;
+                }
+                /* Fit to 1 page: the chosen fit step sets these variables on the content root. */
+                [data-fit-to-page][data-fit-to-page],
+                [data-fit-to-page][data-fit-to-page] * {
+                  font-size: var(--fit-font-size, 14px) !important;
+                  line-height: var(--fit-line-height, 1.45) !important;
+                }
+                [data-fit-to-page] .print-fit-block {
+                  padding-top: var(--fit-block-pad, 2px) !important;
+                  padding-bottom: var(--fit-block-pad, 2px) !important;
+                }
+                [data-fit-to-page] .print-fit-sign {
+                  margin-top: var(--fit-sign-gap, 8px) !important;
+                  padding-top: var(--fit-sign-gap, 8px) !important;
                 }
                 ${rxPrintFormat === 'TEXT' ? `
                   /* Text print mode - hide non-text content in Paged.js output only */
@@ -5694,8 +5792,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   fontSize: '14px',
                 }}
               >
-                <div id="prescription-print-content" data-line-spacing={lineSpacing}>
-                  {(!spaceOptimized || isTeleVideo) && (
+                <div id="prescription-print-content" data-line-spacing={lineSpacing} data-fit-to-page={fitToPage ? '' : undefined}>
+                  {(!printCompact || isTeleVideo) && (
                     <div className="text-sm text-gray-700 mb-2">{todayStr}{isTeleVideo && <span data-consultation-label> • Consultation: Tele-video</span>}</div>
                   )}
                   {/* Optional plain text preview block (shown only when TEXT format) */}
@@ -5774,8 +5872,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                   {/* Patient Info */}
                   {includeSections.patientInfo && (
-                    spaceOptimized ? (
-                      <div className="py-1 text-sm flex flex-wrap gap-x-4 gap-y-1 items-baseline">
+                    printCompact ? (
+                      <div className={`${fitToPage ? 'print-fit-block' : 'py-1'} text-sm flex flex-wrap gap-x-4 gap-y-1 items-baseline`}>
                         <span className="text-gray-800">{todayStr}</span>
                         <span className="font-semibold">{patientName}</span>
                         {patientAgeSex ? <span className="text-gray-700">{patientAgeSex}</span> : null}
@@ -5822,9 +5920,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       entries.push({ label: 'PR', value: <>{vitalsPulse} bpm</> });
                     }
                     return (
-                      <div className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2' : ''}`}>
-                        <div className={`font-semibold ${spaceOptimized ? 'shrink-0 text-sm' : 'mb-1'}`}>Vitals{spaceOptimized ? ':' : ''}</div>
-                        {spaceOptimized ? (
+                      <div className={`${printBlockPadding} ${printCompact ? 'flex items-baseline gap-2' : ''}`}>
+                        <div className={`font-semibold ${printCompact ? 'shrink-0 text-sm' : 'mb-1'}`}>Vitals{printCompact ? ':' : ''}</div>
+                        {printCompact ? (
                           <div className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
                             {entries.map((e, idx) => (
                               <span key={`vitals-${idx}`} className="text-gray-800"><span className="text-gray-600 mr-1">{e.label}:</span>{e.value}</span>
@@ -5845,7 +5943,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {/* Diagnosis */}
                 {includeSections.diagnosis && (
                   <div className={`${printBlockPadding} text-sm`}>
-                    <div className={`flex flex-wrap gap-2 items-start ${spaceOptimized ? '' : 'mb-1'}`}>
+                    <div className={`flex flex-wrap gap-2 items-start ${printCompact ? '' : 'mb-1'}`}>
                       <span className="font-semibold">Diagnosis:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{(diagnosis?.trim() || '').length > 0 ? tt('diagnosis', diagnosis) : '—'}</span>
                     </div>
@@ -5854,9 +5952,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Chief Complaints */}
                 {(chiefComplaints?.trim()?.length > 0) && (
-                  <div className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
-                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Chief Complaints{spaceOptimized ? ':' : ''}</div>
-                    <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('chiefComplaints', chiefComplaints)}</div>
+                  <div className={`${printBlockPadding} ${printCompact ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                    <div className={`font-semibold ${printCompact ? 'shrink-0' : 'mb-1'}`}>Chief Complaints{printCompact ? ':' : ''}</div>
+                    <div className={`text-sm whitespace-pre-wrap ${printCompact ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('chiefComplaints', chiefComplaints)}</div>
                   </div>
                 )}
 
@@ -5873,9 +5971,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {/* Personal history */}
                 {!!personalHistory?.trim() && (
                   <div className={`${printBlockPadding} text-sm`} data-personal-history>
-                    <div className={spaceOptimized ? 'flex flex-wrap gap-2 items-start' : ''}>
-                      <div className={`font-semibold ${spaceOptimized ? '' : 'mb-1'}`}>Personal history{spaceOptimized ? ':' : ''}</div>
-                      <div className={spaceOptimized ? 'flex-1 min-w-[200px] whitespace-pre-wrap' : 'whitespace-pre-wrap'}>{tt('personalHistory', personalHistory)}</div>
+                    <div className={printCompact ? 'flex flex-wrap gap-2 items-start' : ''}>
+                      <div className={`font-semibold ${printCompact ? '' : 'mb-1'}`}>Personal history{printCompact ? ':' : ''}</div>
+                      <div className={printCompact ? 'flex-1 min-w-[200px] whitespace-pre-wrap' : 'whitespace-pre-wrap'}>{tt('personalHistory', personalHistory)}</div>
                     </div>
                   </div>
                 )}
@@ -5892,8 +5990,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Medications */}
                 {includeSections.medications && (
-                  <div className={`${printBlockPadding} ${breakBeforeMedications ? 'pb-before-page' : ''}`}>
-                    <div className={`font-semibold ${spaceOptimized ? 'mb-0.5' : 'mb-2'}`}>Rx</div>
+                  <div className={`${printBlockPadding} ${pageBreakClass(breakBeforeMedications)}`}>
+                    <div className={`font-semibold ${printCompact ? 'mb-0.5' : 'mb-2'}`}>Rx</div>
                     {validItems.length > 0 ? (
                       rxPrintFormat === 'TABLE' ? (
                         <div className="text-sm" style={{ width: '100%' }}>
@@ -5937,7 +6035,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Investigations */}
                 {(Array.isArray(investigations) && investigations.length > 0) && (
-                  <div className={`${printBlockPadding} ${breakBeforeInvestigations ? 'pb-before-page' : ''}`}>
+                  <div className={`${printBlockPadding} ${pageBreakClass(breakBeforeInvestigations)}`}>
                     <div className="text-sm flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">Investigations:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{investigations.map((inv, i) => tt(`investigations.${i}`, inv)).join(', ')}</span>
@@ -5947,9 +6045,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Counseling / Advice */}
                 {(counselingText?.trim()?.length) ? (
-                  <div className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
-                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Counseling{spaceOptimized ? ':' : ''}</div>
-                    <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('counseling', counselingText)}</div>
+                  <div className={`${printBlockPadding} ${printCompact ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                    <div className={`font-semibold ${printCompact ? 'shrink-0' : 'mb-1'}`}>Counseling{printCompact ? ':' : ''}</div>
+                    <div className={`text-sm whitespace-pre-wrap ${printCompact ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('counseling', counselingText)}</div>
                   </div>
                 ) : null}
 
@@ -5976,9 +6074,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {/* Custom Sections */}
                 {customSections.length > 0 && customSections.map((s, i) => (
                   (s.title?.trim() || s.content?.trim()) ? (
-                    <div key={`cs-${s.id}`} className={`${printBlockPadding} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
-                      {!spaceOptimized || s.title?.trim() ? <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>{tt(`custom.${i}.title`, s.title)}{spaceOptimized && s.content?.trim() ? ':' : ''}</div> : null}
-                      <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt(`custom.${i}.content`, s.content)}</div>
+                    <div key={`cs-${s.id}`} className={`${printBlockPadding} ${printCompact ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                      {!printCompact || s.title?.trim() ? <div className={`font-semibold ${printCompact ? 'shrink-0' : 'mb-1'}`}>{tt(`custom.${i}.title`, s.title)}{printCompact && s.content?.trim() ? ':' : ''}</div> : null}
+                      <div className={`text-sm whitespace-pre-wrap ${printCompact ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt(`custom.${i}.content`, s.content)}</div>
                     </div>
                   ) : null
                 ))}
@@ -5987,34 +6085,34 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {(() => {
                   const hasFollowUp = !!followUpInstructions?.trim()?.length;
                   const reviewDate = reviewDateDisplay ? (
-                    <div className={spaceOptimized ? 'flex items-baseline gap-2 shrink-0' : undefined}>
-                      <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Review Date{spaceOptimized ? ':' : ''}</div>
-                      <div className={`text-sm ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{reviewDateDisplay}</div>
+                    <div className={printCompact ? 'flex items-baseline gap-2 shrink-0' : undefined}>
+                      <div className={`font-semibold ${printCompact ? 'shrink-0' : 'mb-1'}`}>Review Date{printCompact ? ':' : ''}</div>
+                      <div className={`text-sm ${printCompact ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{reviewDateDisplay}</div>
                     </div>
                   ) : null;
                   const followUp = hasFollowUp ? (
-                    <div className={spaceOptimized ? 'flex items-baseline gap-2 min-w-[55%] flex-1' : undefined}>
-                      <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>{spaceOptimized ? 'Follow-up:' : 'Follow-up Instructions'}</div>
-                      <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('followUpInstructions', followUpInstructions)}</div>
+                    <div className={printCompact ? 'flex items-baseline gap-2 min-w-[55%] flex-1' : undefined}>
+                      <div className={`font-semibold ${printCompact ? 'shrink-0' : 'mb-1'}`}>{printCompact ? 'Follow-up:' : 'Follow-up Instructions'}</div>
+                      <div className={`text-sm whitespace-pre-wrap ${printCompact ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('followUpInstructions', followUpInstructions)}</div>
                     </div>
                   ) : null;
-                  if (spaceOptimized && reviewDate && followUp && !breakBeforeFollowUp) {
+                  if (printCompact && reviewDate && followUp && !pageBreakClass(breakBeforeFollowUp)) {
                     return <div className={`${printBlockPadding} flex flex-wrap items-baseline gap-x-6 gap-y-0.5 text-sm`}>{reviewDate}{followUp}</div>;
                   }
                   return (
                     <>
-                      {reviewDate ? <div className={`${printBlockPadding} ${spaceOptimized ? 'text-sm' : ''}`}>{reviewDate}</div> : null}
-                      {followUp ? <div className={`${printBlockPadding} ${spaceOptimized ? 'text-sm' : ''} ${breakBeforeFollowUp ? 'pb-before-page' : ''}`}>{followUp}</div> : null}
+                      {reviewDate ? <div className={`${printBlockPadding} ${printCompact ? 'text-sm' : ''}`}>{reviewDate}</div> : null}
+                      {followUp ? <div className={`${printBlockPadding} ${printCompact ? 'text-sm' : ''} ${pageBreakClass(breakBeforeFollowUp)}`}>{followUp}</div> : null}
                     </>
                   );
                 })()}
 
                 {/* Keep the required disclaimer with the signature, independently of signature visibility. */}
-                <div data-prescription-signoff className={breakBeforeSignature ? 'pb-before-page' : undefined} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                <div data-prescription-signoff className={pageBreakClass(breakBeforeSignature) || undefined} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                 {isTeleVideo && <p data-tele-video-disclaimer className="mt-4 border-t pt-3 text-sm text-gray-700">{TELE_VIDEO_DISCLAIMER}</p>}
                 {/* Signature */}
                 {includeSections.doctorSignature && (
-                  <div className={`doctor-signature-block border-t ${spaceOptimized ? 'pt-2 mt-2' : 'pt-6 mt-4'}`} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                  <div className={`doctor-signature-block border-t ${fitToPage ? 'print-fit-sign' : printCompact ? 'pt-2 mt-2' : 'pt-6 mt-4'}`} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                     <div className="flex justify-end text-sm">
                       <div className="text-right">
                         {printedSignatureUrl ? (
@@ -6022,7 +6120,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <img data-doctor-signature src={printedSignatureUrl} alt="Doctor’s signature" width={signatureWidth} height={signatureHeight} style={{ display: 'block', width: signatureWidth, height: signatureHeight, marginLeft: 'auto', marginBottom: 4 }} />
                         ) : <div className="h-10" />}
                         <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
-                        {!spaceOptimized && <div className="text-gray-600">Signature</div>}
+                        {!printCompact && <div className="text-gray-600">Signature</div>}
                       </div>
                     </div>
                   </div>
@@ -6139,14 +6237,28 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                   <div className="space-y-1">
                     <label className="flex items-center gap-2 text-sm text-gray-700">
-                      <input type="checkbox" checked={spaceOptimized} onChange={(e) => setSpaceOptimized(e.target.checked)} />
+                      <input type="checkbox" checked={printCompact} disabled={fitToPage} onChange={(e) => setSpaceOptimized(e.target.checked)} />
                       Space-optimized layout
                     </label>
                     <p className="text-xs text-gray-500">Inline headers for patient info, vitals, diagnosis, histories, and procedures. Forces Rx table format.</p>
                   </div>
                   <div className="space-y-1">
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input type="checkbox" checked={fitToPage} onChange={(e) => setFitToPage(e.target.checked)} />
+                      Fit to 1 page
+                    </label>
+                    <p className="text-xs text-gray-500">Uses the space-optimized layout, then picks the roomiest spacing and largest text that fit on one page. Text never goes below {PRINT_FIT_MIN_FONT_PX} px. Page breaks and line spacing are set automatically.</p>
+                    {fitToPage && fitResult && !pagedJsProcessing && (
+                      fitResult.fits ? (
+                        <p data-fit-status className="text-xs text-emerald-700">Fits on 1 page{fitResult.fontPx < 14 ? ` with text at ${fitResult.fontPx} px` : ''}.</p>
+                      ) : (
+                        <p data-fit-status role="status" className="text-xs text-amber-700">Too much content for one page at a readable size. Printing on {fitResult.pages} pages with text at {fitResult.fontPx} px.</p>
+                      )
+                    )}
+                  </div>
+                  <div className="space-y-1">
                     <span className="text-sm text-gray-700">Line spacing</span>
-                    <Select value={lineSpacing} onValueChange={(v: PrintLineSpacing) => setLineSpacing(v)}>
+                    <Select value={lineSpacing} onValueChange={(v: PrintLineSpacing) => setLineSpacing(v)} disabled={fitToPage}>
                       <SelectTrigger className="w-full" aria-label="Line spacing">
                         <SelectValue placeholder="Select line spacing" />
                       </SelectTrigger>
@@ -6160,13 +6272,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Print Format</span>
-                    <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={spaceOptimized}>
+                    <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={printCompact}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select format" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="TABLE">Table</SelectItem>
-                        <SelectItem value="TEXT" disabled={spaceOptimized}>Text</SelectItem>
+                        <SelectItem value="TEXT" disabled={printCompact}>Text</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -6186,10 +6298,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Page Breaks</span>
                     <div className="space-y-2 text-sm text-gray-700">
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeMedications} onChange={(e) => setBreakBeforeMedications(e.target.checked)} /> Break before Rx</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeInvestigations} onChange={(e) => setBreakBeforeInvestigations(e.target.checked)} /> Break before Investigations</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeFollowUp} onChange={(e) => setBreakBeforeFollowUp(e.target.checked)} /> Break before Follow-up</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeSignature} onChange={(e) => setBreakBeforeSignature(e.target.checked)} /> Break before Signature</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeMedications} disabled={fitToPage} onChange={(e) => setBreakBeforeMedications(e.target.checked)} /> Break before Rx</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeInvestigations} disabled={fitToPage} onChange={(e) => setBreakBeforeInvestigations(e.target.checked)} /> Break before Investigations</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeFollowUp} disabled={fitToPage} onChange={(e) => setBreakBeforeFollowUp(e.target.checked)} /> Break before Follow-up</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeSignature} disabled={fitToPage} onChange={(e) => setBreakBeforeSignature(e.target.checked)} /> Break before Signature</label>
                       <label className="flex items-center gap-2"><input type="checkbox" checked={avoidBreakInsideTables} onChange={(e) => setAvoidBreakInsideTables(e.target.checked)} /> Avoid breaks inside tables</label>
                     </div>
                   </div>

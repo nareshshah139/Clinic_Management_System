@@ -21,6 +21,7 @@ import {
   AvailabilityRangeDto,
   CreateTimeOffDto,
   ReplaceWorkingHoursDto,
+  SetBookingLimitDto,
 } from './dto/doctor-availability.dto';
 
 const READ_ROLES = [
@@ -89,5 +90,15 @@ export class DoctorAvailabilityController {
     @Request() req: { user: Actor },
   ) {
     return this.service.replaceHours(doctorId, dto, req.user);
+  }
+
+  @Put(':doctorId/booking-limit')
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.DOCTOR)
+  setBookingLimit(
+    @Param('doctorId') doctorId: string,
+    @Body() dto: SetBookingLimitDto,
+    @Request() req: { user: Actor },
+  ) {
+    return this.service.setBookingLimit(doctorId, dto, req.user);
   }
 }
