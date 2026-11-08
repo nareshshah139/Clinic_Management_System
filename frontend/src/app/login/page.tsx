@@ -13,6 +13,19 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api';
 
+/**
+ * @cc [owner:nareshshah139,label:security] login-local-redirect
+ * Post-login destinations MUST be local absolute paths; missing or unsafe values fall back to
+ * /dashboard, and local query strings and fragments remain intact.
+ */
+function loginDestination(next: string | null): string {
+  if (!next || !next.startsWith('/') || next.startsWith('//') ||
+      /[\\\u0000-\u001f\u007f]/.test(next) || /^\/(?:%2f|%5c)/i.test(next)) {
+    return '/dashboard';
+  }
+  return next;
+}
+
 function LoginPageInner() {
   const { brandedEnabled, toggleBranded, loading: brandedLoading } = useBrandedMode();
   const router = useRouter();
@@ -33,8 +46,7 @@ function LoginPageInner() {
       setLoading(true);
       setError(null);
       await apiClient.login(trimmedIdentifier, password);
-      const next = search.get('next') || '/dashboard';
-      router.replace(next);
+      router.replace(loginDestination(search.get('next')));
     } catch (e: any) {
       setError(e?.message || 'Login failed');
     } finally {
