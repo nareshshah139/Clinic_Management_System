@@ -78,7 +78,7 @@ async function createFixtures({ baseUrl, apiUrl, shared }) {
       date: todayIst(day),
       slot: "16:00-16:30",
       visitType: "OPD",
-    }).catch((e) => (/409/.test(e.message) ? null : Promise.reject(e)));
+    }).catch((e) => (/409|in the past/i.test(e.message) ? null : Promise.reject(e)));
   }
 
   const resumeVisit = await api(apiUrl, shravya.token, "POST", "/visits", {
