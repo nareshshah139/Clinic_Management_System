@@ -61,9 +61,13 @@ async function seed({ apiUrl, shared }) {
   sql(`insert into users (id,"firstName","lastName",email,password,role,status,"branchId","isActive","createdAt","updatedAt")
        select 'verify-pharmacist','Verify','Pharmacist','pharmacist@clinic.test',password,'PHARMACIST','ACTIVE',"branchId",true,now(),now() from users where email='admin@clinic.test'
        on conflict (email) do nothing`);
+  sql(`insert into users (id,"firstName","lastName",email,password,role,status,"branchId","isActive","createdAt","updatedAt")
+       select 'verify-accountant','Verify','Accountant','accountant@clinic.test',password,'ACCOUNTANT','ACTIVE',"branchId",true,now(),now() from users where email='admin@clinic.test'
+       on conflict (email) do nothing`);
   shared.tokens.reception = await login(apiUrl, "reception@clinic.test");
   shared.tokens.doctor = await login(apiUrl, "praneeta@clinic.test");
   shared.tokens.pharmacist = await login(apiUrl, "pharmacist@clinic.test");
+  shared.tokens.accountant = await login(apiUrl, "accountant@clinic.test");
 
   // Drugs (product master) via the API, then linked to their existing stock batches
   const items = {
@@ -143,7 +147,11 @@ async function seed({ apiUrl, shared }) {
 // Reuse an already seeded DB (same fixture): only log in and read ids back
 async function load({ apiUrl, shared }) {
   shared.tokens = {};
-  for (const [k, id] of [["admin", "admin@clinic.test"], ["reception", "reception@clinic.test"], ["doctor", "praneeta@clinic.test"], ["pharmacist", "pharmacist@clinic.test"]]) shared.tokens[k] = await login(apiUrl, id);
+  sql(`insert into users (id,"firstName","lastName",email,password,role,status,"branchId","isActive","createdAt","updatedAt")
+       select 'verify-accountant','Verify','Accountant','accountant@clinic.test',password,'ACCOUNTANT','ACTIVE',"branchId",true,now(),now() from users where email='admin@clinic.test'
+       on conflict (email) do nothing`);
+
+  for (const [k, id] of [["admin", "admin@clinic.test"], ["reception", "reception@clinic.test"], ["doctor", "praneeta@clinic.test"], ["pharmacist", "pharmacist@clinic.test"], ["accountant", "accountant@clinic.test"]]) shared.tokens[k] = await login(apiUrl, id);
   shared.bills = {};
   for (const r of sqlJson(`select id,"invoiceNumber" n,status from pharmacy_invoices order by "invoiceNumber"`)) shared.bills["b" + Number(r.n.slice(-3))] = { id: r.id, number: r.n, confirmed: r.status === "CONFIRMED" };
 }

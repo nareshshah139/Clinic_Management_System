@@ -1,43 +1,20 @@
 {
   "model": "cr33c-day-wise-summary",
   "title": "CR-33c Day-wise Summary",
-  "startedAt": "2026-11-08T06:54:44.614Z",
-  "finishedAt": "2026-11-08T06:56:51.731Z",
+  "startedAt": "2026-11-08T07:10:27.545Z",
+  "finishedAt": "2026-11-08T07:11:55.708Z",
   "states": {
-    "total": 13,
-    "passed": 12,
-    "failed": 1
+    "total": 14,
+    "passed": 14,
+    "failed": 0
   },
   "transitions": {
-    "total": 27,
-    "passed": 24,
-    "failed": 2
+    "total": 30,
+    "passed": 30,
+    "failed": 0
   },
-  "uncovered": [
-    "ScrolledRight --scrollLeft--> Loaded"
-  ],
-  "failures": [
-    {
-      "path": 2,
-      "at": "LoadedOtherRole",
-      "error": "check failed: Download enabled with rows"
-    },
-    {
-      "path": 2,
-      "at": "Loaded --switchPharmacist--> LoadedOtherRole",
-      "error": "check failed: Download enabled with rows"
-    },
-    {
-      "path": 3,
-      "at": "ScrolledRight",
-      "error": "check failed: Bill Date header still in view"
-    },
-    {
-      "path": 3,
-      "at": "Loaded --scrollRight--> ScrolledRight",
-      "error": "check failed: Bill Date header still in view"
-    }
-  ],
+  "uncovered": [],
+  "failures": [],
   "paths": [
     {
       "path": 1,
@@ -4015,7 +3992,7 @@
             },
             {
               "ok": true,
-              "message": "message names the 366-day limit (got \"Choose a range of at most 366 days (Reference: 30f7e592-a8a9-4453-9a2b-54c359fe3bef) Check the dates and press Go to try again.\")"
+              "message": "message names the 366-day limit (got \"Choose a range of at most 366 days (Reference: cd95a460-adce-41f6-9cb4-43ebc404d4fe) Check the dates and press Go to try again.\")"
             },
             {
               "ok": true,
@@ -4495,6 +4472,10 @@
           "checks": [
             {
               "ok": true,
+              "message": "RECEPTION menu hides the report tasks even on the direct URL"
+            },
+            {
+              "ok": true,
               "message": "RECEPTION sees the forbidden alert"
             },
             {
@@ -4523,12 +4504,24 @@
     },
     {
       "path": 2,
-      "ok": false,
+      "ok": true,
       "events": [
         "PurchasesHome --openFromMenu--> Loaded",
+        "Loaded --switchReceptionHome--> HomeNoReportTasks",
+        "HomeNoReportTasks --switchAdminHome--> PurchasesHome",
+        "PurchasesHome --openFromMenu--> Loaded",
+        "Loaded --switchAccountant--> LoadedOtherRole",
+        "LoadedOtherRole --switchAdmin--> Loaded",
         "Loaded --switchDoctor--> LoadedOtherRole",
         "LoadedOtherRole --switchAdmin--> Loaded",
-        "Loaded --switchPharmacist--> LoadedOtherRole"
+        "Loaded --switchPharmacist--> LoadedOtherRole",
+        "LoadedOtherRole --switchAdmin--> Loaded",
+        "Loaded --hoverBillNoTip--> TooltipOpen",
+        "TooltipOpen --moveAway--> Loaded",
+        "Loaded --scrollRight--> ScrolledRight",
+        "ScrolledRight --scrollLeft--> Loaded",
+        "Loaded --download--> Downloaded",
+        "Downloaded --reload--> Loaded"
       ],
       "assertions": [
         {
@@ -4550,6 +4543,1412 @@
             {
               "ok": true,
               "message": "URL has no daywise view"
+            }
+          ]
+        },
+        {
+          "state": "Loaded",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "URL is view=daywise"
+            },
+            {
+              "ok": true,
+              "message": "Day-wise Summary title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "Type dropdown shows SALES"
+            },
+            {
+              "ok": true,
+              "message": "Go enabled"
+            },
+            {
+              "ok": true,
+              "message": "Download enabled with rows"
+            },
+            {
+              "ok": true,
+              "message": "frozen columns Bill Date, Bill No. come first"
+            },
+            {
+              "ok": true,
+              "message": "slab groups CESS 0% 5% 12% 18% 28% 40% Total (got CESS 0% 5% 12% 18% 28% 40% Total)"
+            },
+            {
+              "ok": true,
+              "message": "each group has Base SGST CGST IGST (+ Amount)"
+            },
+            {
+              "ok": true,
+              "message": "totals row sits under the header"
+            },
+            {
+              "ok": true,
+              "message": "totals row label \"Total\", 6 bills"
+            },
+            {
+              "ok": true,
+              "message": "one row per day (8), not per bill; got 8"
+            },
+            {
+              "ok": true,
+              "message": "row 0 date 01 Nov 2026 (got 01 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 1 date 02 Nov 2026 (got 02 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 2 date 03 Nov 2026 (got 03 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 Bill No. range \"1 - 2\" (got \"1 - 2\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 money cells equal SQL expectation [980,24.5,24.5,220,13.2,13.2,560,50.4,50.4,1760,88.1,88.1,1936.2] (got [980,24.5,24.5,220,13.2,13.2,560,50.4,50.4,1760,88.1,88.1,1936.2])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 3 date 04 Nov 2026 (got 04 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 Bill No. range \"3 - 5\" (got \"3 - 5gap: 4 (draft)\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 shows gap PHI-2026-004 (DRAFT)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 money cells equal SQL expectation [194,11.64,11.64,560,50.4,50.4,754,62.04,62.04,878.08] (got [194,11.64,11.64,560,50.4,50.4,754,62.04,62.04,878.08])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 4 date 05 Nov 2026 (got 05 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 5 date 06 Nov 2026 (got 06 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 Bill No. range \"6\" (got \"6\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 money cells equal SQL expectation [131,7.86,7.86,131,7.86,7.86,146.72] (got [131,7.86,7.86,131,7.86,7.86,146.72])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 6 date 07 Nov 2026 (got 07 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 Bill No. range \"7\" (got \"7\n+ 1 customer return\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 counts the customer return beside the range"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 7 date 08 Nov 2026 (got 08 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "daily rows sum to the totals row in every column"
+            },
+            {
+              "ok": true,
+              "message": "totals row equals SQL totals (amount 2961)"
+            },
+            {
+              "ok": true,
+              "message": "Total for the range (top right 2961) = totals row Amount = sum of daily Totals"
+            },
+            {
+              "ok": true,
+              "message": "Total for the range label visible"
+            },
+            {
+              "ok": true,
+              "message": "summary says 6 bills over 8 days"
+            },
+            {
+              "ok": true,
+              "message": "summary mentions 4 no-bill days"
+            },
+            {
+              "ok": true,
+              "message": "summary mentions 1 missing numbers"
+            },
+            {
+              "ok": true,
+              "message": "4 Nov shows \"3 - 5\" with the draft bill's gap (got \"3 - 5gap: 4 (draft)\")"
+            }
+          ]
+        },
+        {
+          "state": "HomeNoReportTasks",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "RECEPTION menu hides the report tasks (options: More tasks…, Gmail intake, Suppliers, Terms of Trade, Payments & dues, Credits & vouchers, Inward challans, Gate passes, Purchase costs)"
+            },
+            {
+              "ok": true,
+              "message": "viewing as RECEPTION"
+            }
+          ]
+        },
+        {
+          "state": "PurchasesHome",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "More tasks… menu visible"
+            },
+            {
+              "ok": true,
+              "message": "menu offers Day-wise summary"
+            },
+            {
+              "ok": true,
+              "message": "no Day-wise report shown yet"
+            },
+            {
+              "ok": true,
+              "message": "URL has no daywise view"
+            }
+          ]
+        },
+        {
+          "state": "Loaded",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "URL is view=daywise"
+            },
+            {
+              "ok": true,
+              "message": "Day-wise Summary title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "Type dropdown shows SALES"
+            },
+            {
+              "ok": true,
+              "message": "Go enabled"
+            },
+            {
+              "ok": true,
+              "message": "Download enabled with rows"
+            },
+            {
+              "ok": true,
+              "message": "frozen columns Bill Date, Bill No. come first"
+            },
+            {
+              "ok": true,
+              "message": "slab groups CESS 0% 5% 12% 18% 28% 40% Total (got CESS 0% 5% 12% 18% 28% 40% Total)"
+            },
+            {
+              "ok": true,
+              "message": "each group has Base SGST CGST IGST (+ Amount)"
+            },
+            {
+              "ok": true,
+              "message": "totals row sits under the header"
+            },
+            {
+              "ok": true,
+              "message": "totals row label \"Total\", 6 bills"
+            },
+            {
+              "ok": true,
+              "message": "one row per day (8), not per bill; got 8"
+            },
+            {
+              "ok": true,
+              "message": "row 0 date 01 Nov 2026 (got 01 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 1 date 02 Nov 2026 (got 02 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 2 date 03 Nov 2026 (got 03 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 Bill No. range \"1 - 2\" (got \"1 - 2\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 money cells equal SQL expectation [980,24.5,24.5,220,13.2,13.2,560,50.4,50.4,1760,88.1,88.1,1936.2] (got [980,24.5,24.5,220,13.2,13.2,560,50.4,50.4,1760,88.1,88.1,1936.2])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 3 date 04 Nov 2026 (got 04 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 Bill No. range \"3 - 5\" (got \"3 - 5gap: 4 (draft)\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 shows gap PHI-2026-004 (DRAFT)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 money cells equal SQL expectation [194,11.64,11.64,560,50.4,50.4,754,62.04,62.04,878.08] (got [194,11.64,11.64,560,50.4,50.4,754,62.04,62.04,878.08])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 4 date 05 Nov 2026 (got 05 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 5 date 06 Nov 2026 (got 06 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 Bill No. range \"6\" (got \"6\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 money cells equal SQL expectation [131,7.86,7.86,131,7.86,7.86,146.72] (got [131,7.86,7.86,131,7.86,7.86,146.72])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 6 date 07 Nov 2026 (got 07 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 Bill No. range \"7\" (got \"7\n+ 1 customer return\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 counts the customer return beside the range"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 7 date 08 Nov 2026 (got 08 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "daily rows sum to the totals row in every column"
+            },
+            {
+              "ok": true,
+              "message": "totals row equals SQL totals (amount 2961)"
+            },
+            {
+              "ok": true,
+              "message": "Total for the range (top right 2961) = totals row Amount = sum of daily Totals"
+            },
+            {
+              "ok": true,
+              "message": "Total for the range label visible"
+            },
+            {
+              "ok": true,
+              "message": "summary says 6 bills over 8 days"
+            },
+            {
+              "ok": true,
+              "message": "summary mentions 4 no-bill days"
+            },
+            {
+              "ok": true,
+              "message": "summary mentions 1 missing numbers"
+            },
+            {
+              "ok": true,
+              "message": "4 Nov shows \"3 - 5\" with the draft bill's gap (got \"3 - 5gap: 4 (draft)\")"
+            }
+          ]
+        },
+        {
+          "state": "LoadedOtherRole",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Day-wise Summary title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "Type dropdown shows SALES"
+            },
+            {
+              "ok": true,
+              "message": "Go enabled"
+            },
+            {
+              "ok": true,
+              "message": "Download enabled with rows"
+            },
+            {
+              "ok": true,
+              "message": "frozen columns Bill Date, Bill No. come first"
+            },
+            {
+              "ok": true,
+              "message": "slab groups CESS 0% 5% 12% 18% 28% 40% Total (got CESS 0% 5% 12% 18% 28% 40% Total)"
+            },
+            {
+              "ok": true,
+              "message": "each group has Base SGST CGST IGST (+ Amount)"
+            },
+            {
+              "ok": true,
+              "message": "totals row sits under the header"
+            },
+            {
+              "ok": true,
+              "message": "totals row label \"Total\", 6 bills"
+            },
+            {
+              "ok": true,
+              "message": "one row per day (8), not per bill; got 8"
+            },
+            {
+              "ok": true,
+              "message": "row 0 date 01 Nov 2026 (got 01 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 1 date 02 Nov 2026 (got 02 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 2 date 03 Nov 2026 (got 03 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 Bill No. range \"1 - 2\" (got \"1 - 2\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 money cells equal SQL expectation [980,24.5,24.5,220,13.2,13.2,560,50.4,50.4,1760,88.1,88.1,1936.2] (got [980,24.5,24.5,220,13.2,13.2,560,50.4,50.4,1760,88.1,88.1,1936.2])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 3 date 04 Nov 2026 (got 04 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 Bill No. range \"3 - 5\" (got \"3 - 5gap: 4 (draft)\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 shows gap PHI-2026-004 (DRAFT)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 money cells equal SQL expectation [194,11.64,11.64,560,50.4,50.4,754,62.04,62.04,878.08] (got [194,11.64,11.64,560,50.4,50.4,754,62.04,62.04,878.08])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 4 date 05 Nov 2026 (got 05 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 5 date 06 Nov 2026 (got 06 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 Bill No. range \"6\" (got \"6\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 money cells equal SQL expectation [131,7.86,7.86,131,7.86,7.86,146.72] (got [131,7.86,7.86,131,7.86,7.86,146.72])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 6 date 07 Nov 2026 (got 07 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 Bill No. range \"7\" (got \"7\n+ 1 customer return\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 counts the customer return beside the range"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 7 date 08 Nov 2026 (got 08 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "daily rows sum to the totals row in every column"
+            },
+            {
+              "ok": true,
+              "message": "totals row equals SQL totals (amount 2961)"
+            },
+            {
+              "ok": true,
+              "message": "Total for the range (top right 2961) = totals row Amount = sum of daily Totals"
+            },
+            {
+              "ok": true,
+              "message": "Total for the range label visible"
+            },
+            {
+              "ok": true,
+              "message": "summary says 6 bills over 8 days"
+            },
+            {
+              "ok": true,
+              "message": "summary mentions 4 no-bill days"
+            },
+            {
+              "ok": true,
+              "message": "summary mentions 1 missing numbers"
+            },
+            {
+              "ok": true,
+              "message": "viewed as accountant"
             }
           ]
         },
@@ -5925,7 +7324,7 @@
         },
         {
           "state": "LoadedOtherRole",
-          "ok": false,
+          "ok": true,
           "checks": [
             {
               "ok": true,
@@ -5944,43 +7343,436 @@
               "message": "Go enabled"
             },
             {
-              "ok": false,
+              "ok": true,
               "message": "Download enabled with rows"
-            }
-          ],
-          "error": "check failed: Download enabled with rows"
-        }
-      ]
-    },
-    {
-      "path": 3,
-      "ok": false,
-      "events": [
-        "PurchasesHome --openFromMenu--> Loaded",
-        "Loaded --hoverBillNoTip--> TooltipOpen",
-        "TooltipOpen --moveAway--> Loaded",
-        "Loaded --scrollRight--> ScrolledRight"
-      ],
-      "assertions": [
-        {
-          "state": "PurchasesHome",
-          "ok": true,
-          "checks": [
-            {
-              "ok": true,
-              "message": "More tasks… menu visible"
             },
             {
               "ok": true,
-              "message": "menu offers Day-wise summary"
+              "message": "frozen columns Bill Date, Bill No. come first"
             },
             {
               "ok": true,
-              "message": "no Day-wise report shown yet"
+              "message": "slab groups CESS 0% 5% 12% 18% 28% 40% Total (got CESS 0% 5% 12% 18% 28% 40% Total)"
             },
             {
               "ok": true,
-              "message": "URL has no daywise view"
+              "message": "each group has Base SGST CGST IGST (+ Amount)"
+            },
+            {
+              "ok": true,
+              "message": "totals row sits under the header"
+            },
+            {
+              "ok": true,
+              "message": "totals row label \"Total\", 6 bills"
+            },
+            {
+              "ok": true,
+              "message": "one row per day (8), not per bill; got 8"
+            },
+            {
+              "ok": true,
+              "message": "row 0 date 01 Nov 2026 (got 01 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 1 date 02 Nov 2026 (got 02 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 2 date 03 Nov 2026 (got 03 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 Bill No. range \"1 - 2\" (got \"1 - 2\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 money cells equal SQL expectation [980,24.5,24.5,220,13.2,13.2,560,50.4,50.4,1760,88.1,88.1,1936.2] (got [980,24.5,24.5,220,13.2,13.2,560,50.4,50.4,1760,88.1,88.1,1936.2])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 3 date 04 Nov 2026 (got 04 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 Bill No. range \"3 - 5\" (got \"3 - 5gap: 4 (draft)\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 shows gap PHI-2026-004 (DRAFT)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 money cells equal SQL expectation [194,11.64,11.64,560,50.4,50.4,754,62.04,62.04,878.08] (got [194,11.64,11.64,560,50.4,50.4,754,62.04,62.04,878.08])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 4 date 05 Nov 2026 (got 05 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 5 date 06 Nov 2026 (got 06 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 Bill No. range \"6\" (got \"6\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 money cells equal SQL expectation [131,7.86,7.86,131,7.86,7.86,146.72] (got [131,7.86,7.86,131,7.86,7.86,146.72])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 6 date 07 Nov 2026 (got 07 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 Bill No. range \"7\" (got \"7\n+ 1 customer return\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 counts the customer return beside the range"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 7 date 08 Nov 2026 (got 08 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "daily rows sum to the totals row in every column"
+            },
+            {
+              "ok": true,
+              "message": "totals row equals SQL totals (amount 2961)"
+            },
+            {
+              "ok": true,
+              "message": "Total for the range (top right 2961) = totals row Amount = sum of daily Totals"
+            },
+            {
+              "ok": true,
+              "message": "Total for the range label visible"
+            },
+            {
+              "ok": true,
+              "message": "summary says 6 bills over 8 days"
+            },
+            {
+              "ok": true,
+              "message": "summary mentions 4 no-bill days"
+            },
+            {
+              "ok": true,
+              "message": "summary mentions 1 missing numbers"
+            },
+            {
+              "ok": true,
+              "message": "viewed as pharmacist"
             }
           ]
         },
@@ -6924,7 +8716,7 @@
         },
         {
           "state": "ScrolledRight",
-          "ok": false,
+          "ok": true,
           "checks": [
             {
               "ok": true,
@@ -6935,49 +8727,20 @@
               "message": "Bill No. column frozen beside it"
             },
             {
-              "ok": false,
+              "ok": true,
               "message": "Bill Date header still in view"
-            }
-          ],
-          "error": "check failed: Bill Date header still in view"
-        }
-      ]
-    },
-    {
-      "path": 4,
-      "ok": true,
-      "events": [
-        "PurchasesHome --openFromMenu--> Loaded",
-        "Loaded --download--> Downloaded",
-        "Downloaded --reload--> Loaded",
-        "Loaded --setNarrowRange--> LoadedRange",
-        "LoadedRange --reload--> Loaded",
-        "Loaded --typePurchase--> LoadedPurchase",
-        "LoadedPurchase --download--> Downloaded",
-        "Downloaded --reload--> Loaded",
-        "Loaded --switchReception--> Forbidden",
-        "Forbidden --switchAdmin--> Loaded"
-      ],
-      "assertions": [
-        {
-          "state": "PurchasesHome",
-          "ok": true,
-          "checks": [
-            {
-              "ok": true,
-              "message": "More tasks… menu visible"
             },
             {
               "ok": true,
-              "message": "menu offers Day-wise summary"
+              "message": "Total Amount column scrolled into view on the right"
             },
             {
               "ok": true,
-              "message": "no Day-wise report shown yet"
+              "message": "CESS group scrolled out behind the frozen columns"
             },
             {
               "ok": true,
-              "message": "URL has no daywise view"
+              "message": "totals row also keeps its left cells frozen"
             }
           ]
         },
@@ -7734,6 +9497,502 @@
             {
               "ok": true,
               "message": "page still loaded after download"
+            }
+          ]
+        },
+        {
+          "state": "Loaded",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "URL is view=daywise"
+            },
+            {
+              "ok": true,
+              "message": "Day-wise Summary title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "Type dropdown shows SALES"
+            },
+            {
+              "ok": true,
+              "message": "Go enabled"
+            },
+            {
+              "ok": true,
+              "message": "Download enabled with rows"
+            },
+            {
+              "ok": true,
+              "message": "frozen columns Bill Date, Bill No. come first"
+            },
+            {
+              "ok": true,
+              "message": "slab groups CESS 0% 5% 12% 18% 28% 40% Total (got CESS 0% 5% 12% 18% 28% 40% Total)"
+            },
+            {
+              "ok": true,
+              "message": "each group has Base SGST CGST IGST (+ Amount)"
+            },
+            {
+              "ok": true,
+              "message": "totals row sits under the header"
+            },
+            {
+              "ok": true,
+              "message": "totals row label \"Total\", 6 bills"
+            },
+            {
+              "ok": true,
+              "message": "one row per day (8), not per bill; got 8"
+            },
+            {
+              "ok": true,
+              "message": "row 0 date 01 Nov 2026 (got 01 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-01 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 1 date 02 Nov 2026 (got 02 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-02 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 2 date 03 Nov 2026 (got 03 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 Bill No. range \"1 - 2\" (got \"1 - 2\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 money cells equal SQL expectation [980,24.5,24.5,220,13.2,13.2,560,50.4,50.4,1760,88.1,88.1,1936.2] (got [980,24.5,24.5,220,13.2,13.2,560,50.4,50.4,1760,88.1,88.1,1936.2])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-03 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 3 date 04 Nov 2026 (got 04 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 Bill No. range \"3 - 5\" (got \"3 - 5gap: 4 (draft)\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 shows gap PHI-2026-004 (DRAFT)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 money cells equal SQL expectation [194,11.64,11.64,560,50.4,50.4,754,62.04,62.04,878.08] (got [194,11.64,11.64,560,50.4,50.4,754,62.04,62.04,878.08])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-04 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 4 date 05 Nov 2026 (got 05 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-05 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 5 date 06 Nov 2026 (got 06 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 Bill No. range \"6\" (got \"6\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 money cells equal SQL expectation [131,7.86,7.86,131,7.86,7.86,146.72] (got [131,7.86,7.86,131,7.86,7.86,146.72])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-06 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 6 date 07 Nov 2026 (got 07 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 Bill No. range \"7\" (got \"7\n+ 1 customer return\")"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 no gap marker"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 counts the customer return beside the range"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-07 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "row 7 date 08 Nov 2026 (got 08 Nov 2026)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 marked \"No bills\" (got No bills)"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 money cells equal SQL expectation [] (got [])"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 Total amount = Base+SGST+CGST+IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "2026-11-08 SGST = CGST unless IGST"
+            },
+            {
+              "ok": true,
+              "message": "daily rows sum to the totals row in every column"
+            },
+            {
+              "ok": true,
+              "message": "totals row equals SQL totals (amount 2961)"
+            },
+            {
+              "ok": true,
+              "message": "Total for the range (top right 2961) = totals row Amount = sum of daily Totals"
+            },
+            {
+              "ok": true,
+              "message": "Total for the range label visible"
+            },
+            {
+              "ok": true,
+              "message": "summary says 6 bills over 8 days"
+            },
+            {
+              "ok": true,
+              "message": "summary mentions 4 no-bill days"
+            },
+            {
+              "ok": true,
+              "message": "summary mentions 1 missing numbers"
+            },
+            {
+              "ok": true,
+              "message": "4 Nov shows \"3 - 5\" with the draft bill's gap (got \"3 - 5gap: 4 (draft)\")"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 3,
+      "ok": true,
+      "events": [
+        "PurchasesHome --openFromMenu--> Loaded",
+        "Loaded --setNarrowRange--> LoadedRange",
+        "LoadedRange --reload--> Loaded",
+        "Loaded --typePurchase--> LoadedPurchase",
+        "LoadedPurchase --download--> Downloaded",
+        "Downloaded --reload--> Loaded",
+        "Loaded --switchReception--> Forbidden",
+        "Forbidden --switchAdmin--> Loaded"
+      ],
+      "assertions": [
+        {
+          "state": "PurchasesHome",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "More tasks… menu visible"
+            },
+            {
+              "ok": true,
+              "message": "menu offers Day-wise summary"
+            },
+            {
+              "ok": true,
+              "message": "no Day-wise report shown yet"
+            },
+            {
+              "ok": true,
+              "message": "URL has no daywise view"
             }
           ]
         },
@@ -10029,6 +12288,10 @@
           "state": "Forbidden",
           "ok": true,
           "checks": [
+            {
+              "ok": true,
+              "message": "RECEPTION menu hides the report tasks even on the direct URL"
+            },
             {
               "ok": true,
               "message": "RECEPTION sees the forbidden alert"

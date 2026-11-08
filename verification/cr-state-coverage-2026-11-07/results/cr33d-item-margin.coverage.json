@@ -1,57 +1,31 @@
 {
   "model": "cr33d-item-margin",
   "title": "CR-33d Item-wise Margin",
-  "startedAt": "2026-11-08T06:56:52.326Z",
-  "finishedAt": "2026-11-08T06:57:58.225Z",
+  "startedAt": "2026-11-08T07:13:50.052Z",
+  "finishedAt": "2026-11-08T07:15:14.408Z",
   "states": {
-    "total": 15,
-    "passed": 12,
-    "failed": 2
+    "total": 16,
+    "passed": 15,
+    "failed": 1
   },
   "transitions": {
-    "total": 32,
-    "passed": 22,
-    "failed": 3
+    "total": 35,
+    "passed": 33,
+    "failed": 1
   },
   "uncovered": [
-    "SortedBySalesDesc --sortProfit--> Loaded",
-    "InvalidBlocked --resetRange--> Loaded",
-    "ErrorRange --resetRange--> Loaded",
-    "SortedBySalesAsc --download--> Downloaded",
-    "Downloaded --reload--> Loaded",
-    "Loaded --openItem--> ItemPage",
-    "ItemPage --goBack--> Loaded"
+    "ErrorRange --resetRange--> Loaded"
   ],
   "failures": [
     {
       "path": 2,
       "at": "ErrorRange",
-      "error": "check failed: error alert for a range over 366 days"
+      "error": "check failed: error alert for a range over 366 days (API must reject, as day-wise does)"
     },
     {
       "path": 2,
       "at": "Loaded --setTooLongRange--> ErrorRange",
-      "error": "check failed: error alert for a range over 366 days"
-    },
-    {
-      "path": 3,
-      "at": "LoadedOtherRole",
-      "error": "check failed: Go and Download enabled"
-    },
-    {
-      "path": 3,
-      "at": "Loaded --switchPharmacist--> LoadedOtherRole",
-      "error": "check failed: Go and Download enabled"
-    },
-    {
-      "path": 4,
-      "at": "Downloaded",
-      "error": "check failed: CSV item rows sum to the Total row in \"Sale Qty\""
-    },
-    {
-      "path": 4,
-      "at": "Loaded --download--> Downloaded",
-      "error": "check failed: CSV item rows sum to the Total row in \"Sale Qty\""
+      "error": "check failed: error alert for a range over 366 days (API must reject, as day-wise does)"
     }
   ],
   "paths": [
@@ -2711,23 +2685,32 @@
           "checks": [
             {
               "ok": false,
-              "message": "error alert for a range over 366 days"
+              "message": "error alert for a range over 366 days (API must reject, as day-wise does)"
             }
           ],
-          "error": "check failed: error alert for a range over 366 days"
+          "error": "check failed: error alert for a range over 366 days (API must reject, as day-wise does)"
         }
       ]
     },
     {
       "path": 3,
-      "ok": false,
+      "ok": true,
       "events": [
         "PurchasesHome --openFromMenu--> Loaded",
         "Loaded --switchReception--> Forbidden",
         "Forbidden --switchAdmin--> Loaded",
+        "Loaded --switchReceptionHome--> HomeNoReportTasks",
+        "HomeNoReportTasks --switchAdminHome--> PurchasesHome",
+        "PurchasesHome --openFromMenu--> Loaded",
+        "Loaded --switchAccountant--> LoadedOtherRole",
+        "LoadedOtherRole --switchAdmin--> Loaded",
         "Loaded --switchDoctor--> LoadedOtherRole",
         "LoadedOtherRole --switchAdmin--> Loaded",
-        "Loaded --switchPharmacist--> LoadedOtherRole"
+        "Loaded --switchPharmacist--> LoadedOtherRole",
+        "LoadedOtherRole --switchAdmin--> Loaded",
+        "Loaded --hoverColumnTip--> TooltipOpen",
+        "TooltipOpen --moveAway--> Loaded",
+        "Loaded --hoverTileTip--> TooltipOpen"
       ],
       "assertions": [
         {
@@ -2980,6 +2963,10 @@
           "checks": [
             {
               "ok": true,
+              "message": "RECEPTION menu hides the report tasks even on the direct URL"
+            },
+            {
+              "ok": true,
               "message": "RECEPTION sees the forbidden message"
             },
             {
@@ -2989,6 +2976,716 @@
             {
               "ok": true,
               "message": "API answers 403 to RECEPTION (got 403)"
+            }
+          ]
+        },
+        {
+          "state": "Loaded",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "URL is view=margin"
+            },
+            {
+              "ok": true,
+              "message": "Item-wise Margin title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "search box shows \"\""
+            },
+            {
+              "ok": true,
+              "message": "Go and Download enabled"
+            },
+            {
+              "ok": true,
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
+            },
+            {
+              "ok": true,
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Profit descending"
+            },
+            {
+              "ok": true,
+              "message": "row order Doxycycline, Cetirizine, Adapalene, Broad, Glutathione (got Doxycycline, Cetirizine, Adapalene, Broad, Glutathione)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            }
+          ]
+        },
+        {
+          "state": "HomeNoReportTasks",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "RECEPTION menu hides the report tasks (options: More tasks…, Gmail intake, Suppliers, Terms of Trade, Payments & dues, Credits & vouchers, Inward challans, Gate passes, Purchase costs)"
+            },
+            {
+              "ok": true,
+              "message": "viewing as RECEPTION"
+            }
+          ]
+        },
+        {
+          "state": "PurchasesHome",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "More tasks… menu visible"
+            },
+            {
+              "ok": true,
+              "message": "menu offers Item-wise margin"
+            },
+            {
+              "ok": true,
+              "message": "no margin report shown yet"
+            }
+          ]
+        },
+        {
+          "state": "Loaded",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "URL is view=margin"
+            },
+            {
+              "ok": true,
+              "message": "Item-wise Margin title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "search box shows \"\""
+            },
+            {
+              "ok": true,
+              "message": "Go and Download enabled"
+            },
+            {
+              "ok": true,
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
+            },
+            {
+              "ok": true,
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Profit descending"
+            },
+            {
+              "ok": true,
+              "message": "row order Doxycycline, Cetirizine, Adapalene, Broad, Glutathione (got Doxycycline, Cetirizine, Adapalene, Broad, Glutathione)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            }
+          ]
+        },
+        {
+          "state": "LoadedOtherRole",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Item-wise Margin title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "search box shows \"\""
+            },
+            {
+              "ok": true,
+              "message": "Go and Download enabled"
+            },
+            {
+              "ok": true,
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
+            },
+            {
+              "ok": true,
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Profit descending"
+            },
+            {
+              "ok": true,
+              "message": "row order Doxycycline, Cetirizine, Adapalene, Broad, Glutathione (got Doxycycline, Cetirizine, Adapalene, Broad, Glutathione)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            },
+            {
+              "ok": true,
+              "message": "viewed as accountant"
             }
           ]
         },
@@ -3672,7 +4369,7 @@
         },
         {
           "state": "LoadedOtherRole",
-          "ok": false,
+          "ok": true,
           "checks": [
             {
               "ok": true,
@@ -3687,41 +4384,212 @@
               "message": "search box shows \"\""
             },
             {
-              "ok": false,
+              "ok": true,
               "message": "Go and Download enabled"
-            }
-          ],
-          "error": "check failed: Go and Download enabled"
-        }
-      ]
-    },
-    {
-      "path": 4,
-      "ok": false,
-      "events": [
-        "PurchasesHome --openFromMenu--> Loaded",
-        "Loaded --hoverColumnTip--> TooltipOpen",
-        "TooltipOpen --moveAway--> Loaded",
-        "Loaded --hoverTileTip--> TooltipOpen",
-        "TooltipOpen --moveAway--> Loaded",
-        "Loaded --download--> Downloaded"
-      ],
-      "assertions": [
-        {
-          "state": "PurchasesHome",
-          "ok": true,
-          "checks": [
-            {
-              "ok": true,
-              "message": "More tasks… menu visible"
             },
             {
               "ok": true,
-              "message": "menu offers Item-wise margin"
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
             },
             {
               "ok": true,
-              "message": "no margin report shown yet"
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Profit descending"
+            },
+            {
+              "ok": true,
+              "message": "row order Doxycycline, Cetirizine, Adapalene, Broad, Glutathione (got Doxycycline, Cetirizine, Adapalene, Broad, Glutathione)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            },
+            {
+              "ok": true,
+              "message": "viewed as pharmacist"
             }
           ]
         },
@@ -4212,6 +5080,44 @@
               "message": "tooltip inside the viewport"
             }
           ]
+        }
+      ]
+    },
+    {
+      "path": 4,
+      "ok": true,
+      "events": [
+        "PurchasesHome --openFromMenu--> Loaded",
+        "Loaded --download--> Downloaded",
+        "Downloaded --reload--> Loaded",
+        "Loaded --openItem--> ItemPage",
+        "ItemPage --goBack--> Loaded",
+        "Loaded --sortSales--> SortedBySalesDesc",
+        "SortedBySalesDesc --sortProfit--> Loaded",
+        "Loaded --setBackwardsRange--> InvalidBlocked",
+        "InvalidBlocked --resetRange--> Loaded",
+        "Loaded --sortSales--> SortedBySalesDesc",
+        "SortedBySalesDesc --sortSales--> SortedBySalesAsc",
+        "SortedBySalesAsc --download--> Downloaded"
+      ],
+      "assertions": [
+        {
+          "state": "PurchasesHome",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "More tasks… menu visible"
+            },
+            {
+              "ok": true,
+              "message": "menu offers Item-wise margin"
+            },
+            {
+              "ok": true,
+              "message": "no margin report shown yet"
+            }
+          ]
         },
         {
           "state": "Loaded",
@@ -4441,7 +5347,7 @@
         },
         {
           "state": "Downloaded",
-          "ok": false,
+          "ok": true,
           "checks": [
             {
               "ok": true,
@@ -4452,19 +5358,1764 @@
               "message": "CSV has 5 item rows plus a Total row"
             },
             {
-              "ok": false,
-              "message": "CSV item rows sum to the Total row in \"Sale Qty\""
+              "ok": true,
+              "message": "Total row leaves Sale Qty blank (units differ across items; not summed)"
+            },
+            {
+              "ok": true,
+              "message": "CSV item rows sum to the Total row in \"Sales Amt\""
+            },
+            {
+              "ok": true,
+              "message": "CSV item rows sum to the Total row in \"Purchase\""
+            },
+            {
+              "ok": true,
+              "message": "CSV item rows sum to the Total row in \"Net GST\""
+            },
+            {
+              "ok": true,
+              "message": "CSV item rows sum to the Total row in \"Profit\""
+            },
+            {
+              "ok": true,
+              "message": "CSV Total row equals the four tiles on screen"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 0 (Doxycycline) = screen row, same order"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 0: Sale Qty x Average Sale Price = Sales Amt"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 1 (Cetirizine) = screen row, same order"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 1: Sale Qty x Average Sale Price = Sales Amt"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 2 (Adapalene) = screen row, same order"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 2: Sale Qty x Average Sale Price = Sales Amt"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 3 (Broad) = screen row, same order"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 3: Sale Qty x Average Sale Price = Sales Amt"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 4 (Glutathione) = screen row, same order"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 4: Sale Qty x Average Sale Price = Sales Amt"
+            },
+            {
+              "ok": true,
+              "message": "CSV totals equal SQL (2961 / 405)"
             }
-          ],
-          "error": "check failed: CSV item rows sum to the Total row in \"Sale Qty\""
+          ]
+        },
+        {
+          "state": "Loaded",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "URL is view=margin"
+            },
+            {
+              "ok": true,
+              "message": "Item-wise Margin title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "search box shows \"\""
+            },
+            {
+              "ok": true,
+              "message": "Go and Download enabled"
+            },
+            {
+              "ok": true,
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
+            },
+            {
+              "ok": true,
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Profit descending"
+            },
+            {
+              "ok": true,
+              "message": "row order Doxycycline, Cetirizine, Adapalene, Broad, Glutathione (got Doxycycline, Cetirizine, Adapalene, Broad, Glutathione)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            }
+          ]
+        },
+        {
+          "state": "ItemPage",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "item page URL carries the item id (?area=stock&view=list&item=cmw6fgoa1000p7d3dnyp4sp9y&return=)"
+            },
+            {
+              "ok": true,
+              "message": "the item's name is shown on the item page"
+            },
+            {
+              "ok": true,
+              "message": "left the margin report"
+            }
+          ]
+        },
+        {
+          "state": "Loaded",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "URL is view=margin"
+            },
+            {
+              "ok": true,
+              "message": "Item-wise Margin title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "search box shows \"\""
+            },
+            {
+              "ok": true,
+              "message": "Go and Download enabled"
+            },
+            {
+              "ok": true,
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
+            },
+            {
+              "ok": true,
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Profit descending"
+            },
+            {
+              "ok": true,
+              "message": "row order Doxycycline, Cetirizine, Adapalene, Broad, Glutathione (got Doxycycline, Cetirizine, Adapalene, Broad, Glutathione)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            }
+          ]
+        },
+        {
+          "state": "SortedBySalesDesc",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Item-wise Margin title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "search box shows \"\""
+            },
+            {
+              "ok": true,
+              "message": "Go and Download enabled"
+            },
+            {
+              "ok": true,
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
+            },
+            {
+              "ok": true,
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Sales Amt. descending"
+            },
+            {
+              "ok": true,
+              "message": "row order Broad, Glutathione, Adapalene, Doxycycline, Cetirizine (got Broad, Glutathione, Adapalene, Doxycycline, Cetirizine)"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            }
+          ]
+        },
+        {
+          "state": "Loaded",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "URL is view=margin"
+            },
+            {
+              "ok": true,
+              "message": "Item-wise Margin title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "search box shows \"\""
+            },
+            {
+              "ok": true,
+              "message": "Go and Download enabled"
+            },
+            {
+              "ok": true,
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
+            },
+            {
+              "ok": true,
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Profit descending"
+            },
+            {
+              "ok": true,
+              "message": "row order Doxycycline, Cetirizine, Adapalene, Broad, Glutathione (got Doxycycline, Cetirizine, Adapalene, Broad, Glutathione)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            }
+          ]
+        },
+        {
+          "state": "InvalidBlocked",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no request sent for end-before-start"
+            },
+            {
+              "ok": true,
+              "message": "end date flagged invalid by the form"
+            },
+            {
+              "ok": true,
+              "message": "previous results remain"
+            }
+          ]
+        },
+        {
+          "state": "Loaded",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "URL is view=margin"
+            },
+            {
+              "ok": true,
+              "message": "Item-wise Margin title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "search box shows \"\""
+            },
+            {
+              "ok": true,
+              "message": "Go and Download enabled"
+            },
+            {
+              "ok": true,
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
+            },
+            {
+              "ok": true,
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Profit descending"
+            },
+            {
+              "ok": true,
+              "message": "row order Doxycycline, Cetirizine, Adapalene, Broad, Glutathione (got Doxycycline, Cetirizine, Adapalene, Broad, Glutathione)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            }
+          ]
+        },
+        {
+          "state": "SortedBySalesDesc",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Item-wise Margin title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "search box shows \"\""
+            },
+            {
+              "ok": true,
+              "message": "Go and Download enabled"
+            },
+            {
+              "ok": true,
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
+            },
+            {
+              "ok": true,
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Sales Amt. descending"
+            },
+            {
+              "ok": true,
+              "message": "row order Broad, Glutathione, Adapalene, Doxycycline, Cetirizine (got Broad, Glutathione, Adapalene, Doxycycline, Cetirizine)"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            }
+          ]
+        },
+        {
+          "state": "SortedBySalesAsc",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Item-wise Margin title visible"
+            },
+            {
+              "ok": true,
+              "message": "range pickers show 2026-11-01 to 2026-11-08"
+            },
+            {
+              "ok": true,
+              "message": "search box shows \"\""
+            },
+            {
+              "ok": true,
+              "message": "Go and Download enabled"
+            },
+            {
+              "ok": true,
+              "message": "columns in CR order (got Item Name | Category | Unit | Manufacturer | Sale (qty) | Stock | MRP | Sales Amt. | Purchase | Net GST | Profit ₹ (%))"
+            },
+            {
+              "ok": true,
+              "message": "every column header has an (i) tooltip button"
+            },
+            {
+              "ok": true,
+              "message": "sorted by Sales Amt. ascending"
+            },
+            {
+              "ok": true,
+              "message": "row order Cetirizine, Doxycycline, Adapalene, Glutathione, Broad (got Cetirizine, Doxycycline, Adapalene, Glutathione, Broad)"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Allergy / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5, current stock 145, MRP 18"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales 84 Purchase 56 Net GST 3 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Profit 25 (33.33) match SQL (got ₹25.00 (33.33))"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): sale qty 5 x average sale price 16.8 = Sales Amt 84"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): Sales - Purchase - Net GST (25) = Profit 25"
+            },
+            {
+              "ok": true,
+              "message": "Cetirizine 10 mg Tablets (Strip of 10): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): category/unit(pack size)/manufacturer = Acne / 10 tabs / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5, current stock 115, MRP 30"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Sales 156.8 Purchase 60.48 Net GST 3.6 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): Profit 30 (35.71) match SQL (got ₹30.00 (35.71))"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): sale qty 5 x average sale price 31.36 = Sales Amt 156.8"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): costed part reconciles (Sales - uncosted 62.72 - Purchase - Net GST = Profit 30)"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): NOTE literal CR rule Sales - Purchase - Net GST (92.72) differs from Profit 30 by the uncosted sales"
+            },
+            {
+              "ok": true,
+              "message": "Doxycycline 100 mg Tablets (Strip of 10): row flagged \"1 line without recorded cost\""
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: category/unit(pack size)/manufacturer = Acne / 15 g / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3, current stock 77, MRP 125"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales 369.6 Purchase 302.4 Net GST 7.2 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Profit 60 (18.18) match SQL (got ₹60.00 (18.18))"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: sale qty 3 x average sale price 123.2 = Sales Amt 369.6"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: Sales - Purchase - Net GST (60) = Profit 60"
+            },
+            {
+              "ok": true,
+              "message": "Adapalene 0.1% Gel 15g: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): category/unit(pack size)/manufacturer = Aesthetic / 1 vial / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1, current stock 5, MRP 1050"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales 1029 Purchase 892.5 Net GST 6.5 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Profit 130 (13.27) match SQL (got ₹130.00 (13.27))"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): sale qty 1 x average sale price 1029 = Sales Amt 1029"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): Sales - Purchase - Net GST (130) = Profit 130"
+            },
+            {
+              "ok": true,
+              "message": "Glutathione 600 mg Injection (Vial): no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: category/unit(pack size)/manufacturer = Sun Care / 50 ml / Fixture Labs"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2, current stock 33, MRP 590"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales 1321.6 Purchase 1132.8 Net GST 28.8 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Profit 160 (14.29) match SQL (got ₹160.00 (14.29))"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: name links to the item page for its stock record"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: sale qty 2 x average sale price 660.8 = Sales Amt 1321.6"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: Sales - Purchase - Net GST (160) = Profit 160"
+            },
+            {
+              "ok": true,
+              "message": "Broad Spectrum Sunscreen SPF 50 50ml: no cost flag on a fully costed row"
+            },
+            {
+              "ok": true,
+              "message": "tiles: Sale 2961, Purchase 2444.18, Net GST 49.1 match SQL"
+            },
+            {
+              "ok": true,
+              "message": "Total Profit tile \"₹405.00 (15.64%)\" (got \"₹405.00 (15.64%)\")"
+            },
+            {
+              "ok": true,
+              "message": "row totals add up to the four summary tiles"
+            },
+            {
+              "ok": true,
+              "message": "banner flags ₹62.72 of sales without recorded cost"
+            },
+            {
+              "ok": true,
+              "message": "uncosted lines flagged on their rows"
+            }
+          ]
+        },
+        {
+          "state": "Downloaded",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "file name item-margin-2026-11-01-to-2026-11-08.csv (got item-margin-2026-11-01-to-2026-11-08.csv)"
+            },
+            {
+              "ok": true,
+              "message": "CSV has 5 item rows plus a Total row"
+            },
+            {
+              "ok": true,
+              "message": "Total row leaves Sale Qty blank (units differ across items; not summed)"
+            },
+            {
+              "ok": true,
+              "message": "CSV item rows sum to the Total row in \"Sales Amt\""
+            },
+            {
+              "ok": true,
+              "message": "CSV item rows sum to the Total row in \"Purchase\""
+            },
+            {
+              "ok": true,
+              "message": "CSV item rows sum to the Total row in \"Net GST\""
+            },
+            {
+              "ok": true,
+              "message": "CSV item rows sum to the Total row in \"Profit\""
+            },
+            {
+              "ok": true,
+              "message": "CSV Total row equals the four tiles on screen"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 0 (Cetirizine) = screen row, same order"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 0: Sale Qty x Average Sale Price = Sales Amt"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 1 (Doxycycline) = screen row, same order"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 1: Sale Qty x Average Sale Price = Sales Amt"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 2 (Adapalene) = screen row, same order"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 2: Sale Qty x Average Sale Price = Sales Amt"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 3 (Glutathione) = screen row, same order"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 3: Sale Qty x Average Sale Price = Sales Amt"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 4 (Broad) = screen row, same order"
+            },
+            {
+              "ok": true,
+              "message": "CSV row 4: Sale Qty x Average Sale Price = Sales Amt"
+            },
+            {
+              "ok": true,
+              "message": "CSV totals equal SQL (2961 / 405)"
+            }
+          ]
         }
       ]
-    },
-    {
-      "path": 5,
-      "ok": true,
-      "events": [],
-      "assertions": []
     }
   ]
 }

@@ -27,6 +27,7 @@ const model = {
     InvalidBlocked: { label: "End before start: submit blocked, no request" },
     ErrorRange: { label: "Range over 366 days: server error shown" },
     Forbidden: { label: "RECEPTION: forbidden message" },
+    HomeNoReportTasks: { label: "RECEPTION: Purchases home, report tasks absent from menu" },
     LoadedOtherRole: { label: "Loaded as DOCTOR / PHARMACIST" },
     TooltipOpen: { label: "Bill No. (i) tooltip open" },
     ScrolledRight: { label: "Scrolled right, left columns frozen" },
@@ -50,6 +51,9 @@ const model = {
     { from: "ErrorRange", event: "resetRange", to: "Loaded" },
     { from: "Loaded", event: "switchReception", to: "Forbidden" },
     { from: "Forbidden", event: "switchAdmin", to: "Loaded" },
+    { from: "Loaded", event: "switchReceptionHome", to: "HomeNoReportTasks" },
+    { from: "HomeNoReportTasks", event: "switchAdminHome", to: "PurchasesHome" },
+    { from: "Loaded", event: "switchAccountant", to: "LoadedOtherRole" },
     { from: "Loaded", event: "switchDoctor", to: "LoadedOtherRole" },
     { from: "Loaded", event: "switchPharmacist", to: "LoadedOtherRole" },
     { from: "LoadedOtherRole", event: "switchAdmin", to: "Loaded" },
@@ -191,13 +195,16 @@ const driver = {
     switchReception: (ctx) => openReport(ctx, "reception"),
     switchAdmin: (ctx) => openReport(ctx, "admin"),
     switchDoctor: (ctx) => openReport(ctx, "doctor"),
+    switchAccountant: (ctx) => openReport(ctx, "accountant"),
+    async switchReceptionHome(ctx) { await D.openPurchasesHome(ctx, "reception"); },
+    async switchAdminHome(ctx) { await D.openPurchasesHome(ctx, "admin"); },
     switchPharmacist: (ctx) => openReport(ctx, "pharmacist"),
     async hoverBillNoTip(ctx) { await ctx.page.getByRole("button", { name: "How the Bill No. column is calculated" }).hover(); await ctx.page.getByRole("tooltip").first().waitFor(); },
     async moveAway(ctx) { await ctx.page.mouse.move(5, 5); await ctx.page.getByRole("tooltip").first().waitFor({ state: "hidden" }).catch(() => {}); },
     async scrollRight(ctx) {
       const cell = ctx.page.getByRole("table", { name: TABLE }).locator("tbody tr").first().locator("td").first();
       ctx.vars.dateX = (await cell.boundingBox()).x;
-      await D.scrollTable(ctx.page, TABLE, 1400);
+      await D.scrollTable(ctx.page, TABLE, 100000);
     },
     scrollLeft: (ctx) => D.scrollTable(ctx.page, TABLE, 0),
     async download(ctx) {
@@ -211,6 +218,7 @@ const driver = {
   checks: {
     async PurchasesHome(ctx, check) {
       const p = ctx.page;
+      await p.waitForFunction((t) => [...document.querySelectorAll("select option")].some((o) => o.textContent === t), "Day-wise summary", { timeout: 15000 }).catch(() => {});
       check(await p.locator("select").filter({ hasText: "More tasks" }).first().isVisible(), "More tasks… menu visible");
       check((await p.locator("select").filter({ hasText: "More tasks" }).first().locator("option").allInnerTexts()).includes("Day-wise summary"), "menu offers Day-wise summary");
       check((await p.getByText("Day-wise Summary", { exact: true }).count()) === 0 && (await p.getByText("Total for the range").count()) === 0, "no Day-wise report shown yet");
@@ -269,6 +277,9 @@ const driver = {
     },
     async Forbidden(ctx, check) {
       const p = ctx.page;
+      await p.waitForTimeout(2000);
+      const menu = await p.locator("select").filter({ hasText: "More tasks" }).first().locator("option").allInnerTexts().catch(() => []);
+      check(!menu.includes("Day-wise summary") && !menu.includes("Item-wise margin"), "RECEPTION menu hides the report tasks even on the direct URL");
       const alert = p.getByRole("alert").filter({ hasText: /pharmacy reports/ });
       check(await alert.isVisible(), "RECEPTION sees the forbidden alert");
       check(/Your role cannot open pharmacy reports/.test(await alert.innerText()), "alert says the role cannot open pharmacy reports");
@@ -278,10 +289,15 @@ const driver = {
       const status = await ctx.context.request.get(`${ctx.apiUrl}/pharmacy/compliance/day-wise-summary?startDate=2026-11-01&endDate=2026-11-07&type=SALES`, { headers: { authorization: `Bearer ${ctx.shared.tokens.reception}` } });
       check(status.status() === 403, `API answers 403 to RECEPTION (got ${status.status()})`);
     },
+    async HomeNoReportTasks(ctx, check) {
+      const opts = await ctx.page.locator("select").filter({ hasText: "More tasks" }).first().locator("option").allInnerTexts().catch(() => []);
+      check(opts.length > 0 && !opts.includes("Day-wise summary") && !opts.includes("Item-wise margin"), `RECEPTION menu hides the report tasks (options: ${opts.join(", ")})`);
+      check(ctx.vars.who === "reception", "viewing as RECEPTION");
+    },
     async LoadedOtherRole(ctx, check) {
       const [start, end] = defaultRange();
       await checkReport(ctx, check, { start, end, type: "SALES" });
-      check(["doctor", "pharmacist"].includes(ctx.vars.who), `viewed as ${ctx.vars.who}`);
+      check(["doctor", "pharmacist", "accountant"].includes(ctx.vars.who), `viewed as ${ctx.vars.who}`);
     },
     async TooltipOpen(ctx, check) {
       const tip = ctx.page.getByRole("tooltip").first();

@@ -32,6 +32,7 @@ const model = {
     InvalidBlocked: { label: "End before start: submit blocked" },
     ErrorRange: { label: "Range over 366 days: server error" },
     Forbidden: { label: "RECEPTION: forbidden message" },
+    HomeNoReportTasks: { label: "RECEPTION: Purchases home, report tasks absent from menu" },
     LoadedOtherRole: { label: "Loaded as DOCTOR / PHARMACIST" },
     TooltipOpen: { label: "(i) tooltip open" },
     Downloaded: { label: "CSV downloaded and checked" },
@@ -59,6 +60,9 @@ const model = {
     { from: "ErrorRange", event: "resetRange", to: "Loaded" },
     { from: "Loaded", event: "switchReception", to: "Forbidden" },
     { from: "Forbidden", event: "switchAdmin", to: "Loaded" },
+    { from: "Loaded", event: "switchReceptionHome", to: "HomeNoReportTasks" },
+    { from: "HomeNoReportTasks", event: "switchAdminHome", to: "PurchasesHome" },
+    { from: "Loaded", event: "switchAccountant", to: "LoadedOtherRole" },
     { from: "Loaded", event: "switchDoctor", to: "LoadedOtherRole" },
     { from: "Loaded", event: "switchPharmacist", to: "LoadedOtherRole" },
     { from: "LoadedOtherRole", event: "switchAdmin", to: "Loaded" },
@@ -181,6 +185,9 @@ const driver = {
     switchReception: (ctx) => openReport(ctx, "reception"),
     switchAdmin: (ctx) => openReport(ctx, "admin"),
     switchDoctor: (ctx) => openReport(ctx, "doctor"),
+    switchAccountant: (ctx) => openReport(ctx, "accountant"),
+    async switchReceptionHome(ctx) { await D.openPurchasesHome(ctx, "reception"); },
+    async switchAdminHome(ctx) { await D.openPurchasesHome(ctx, "admin"); },
     switchPharmacist: (ctx) => openReport(ctx, "pharmacist"),
     async hoverColumnTip(ctx) { ctx.vars.tip = "column"; await ctx.page.getByRole("button", { name: "How Profit ₹ (%) is calculated" }).hover(); await ctx.page.getByRole("tooltip").first().waitFor(); },
     async hoverTileTip(ctx) { ctx.vars.tip = "tile"; await ctx.page.getByRole("button", { name: "How Total Net GST is calculated" }).hover(); await ctx.page.getByRole("tooltip").first().waitFor(); },
@@ -196,6 +203,7 @@ const driver = {
   checks: {
     async PurchasesHome(ctx, check) {
       const p = ctx.page;
+      await p.waitForFunction((t) => [...document.querySelectorAll("select option")].some((o) => o.textContent === t), "Item-wise margin", { timeout: 15000 }).catch(() => {});
       check(await p.locator("select").filter({ hasText: "More tasks" }).first().isVisible(), "More tasks… menu visible");
       check((await p.locator("select").filter({ hasText: "More tasks" }).first().locator("option").allInnerTexts()).includes("Item-wise margin"), "menu offers Item-wise margin");
       check((await p.getByText("Item-wise Margin", { exact: true }).count()) === 0 && (await p.getByText("Total Sale Amount").count()) === 0, "no margin report shown yet");
@@ -243,8 +251,8 @@ const driver = {
     },
     async ErrorRange(ctx, check) {
       const p = ctx.page;
-      const alert = p.getByRole("alert").filter({ hasText: /\S/ }).first();
-      check(await alert.isVisible(), "error alert for a range over 366 days");
+      const alert = p.getByRole("alert").filter({ hasText: /366|range|dates/i }).first();
+      check(await alert.isVisible(), "error alert for a range over 366 days (API must reject, as day-wise does)");
       const text = await alert.innerText();
       check(/366/.test(text), `message names the 366-day limit (got "${text}")`);
       check(await p.getByRole("button", { name: "Download" }).isDisabled(), "Download disabled on error");
@@ -252,16 +260,24 @@ const driver = {
     },
     async Forbidden(ctx, check) {
       const p = ctx.page;
+      await p.waitForTimeout(2000);
+      const menu = await p.locator("select").filter({ hasText: "More tasks" }).first().locator("option").allInnerTexts().catch(() => []);
+      check(!menu.includes("Day-wise summary") && !menu.includes("Item-wise margin"), "RECEPTION menu hides the report tasks even on the direct URL");
       const alert = p.getByRole("alert").filter({ hasText: /pharmacy reports/ });
       check(await alert.isVisible() && /Your role cannot open pharmacy reports/.test(await alert.innerText()), "RECEPTION sees the forbidden message");
       check((await p.getByRole("table", { name: TABLE }).count()) === 0 && (await tileValue(p, "Total Sale Amount")).trim() === "—", "no data or tiles leaked");
       const r = await ctx.context.request.get(`${ctx.apiUrl}/pharmacy/compliance/item-margin?startDate=2026-11-01&endDate=2026-11-07`, { headers: { authorization: `Bearer ${ctx.shared.tokens.reception}` } });
       check(r.status() === 403, `API answers 403 to RECEPTION (got ${r.status()})`);
     },
+    async HomeNoReportTasks(ctx, check) {
+      const opts = await ctx.page.locator("select").filter({ hasText: "More tasks" }).first().locator("option").allInnerTexts().catch(() => []);
+      check(opts.length > 0 && !opts.includes("Day-wise summary") && !opts.includes("Item-wise margin"), `RECEPTION menu hides the report tasks (options: ${opts.join(", ")})`);
+      check(ctx.vars.who === "reception", "viewing as RECEPTION");
+    },
     async LoadedOtherRole(ctx, check) {
       const [start, end] = defaultRange();
       await checkReport(ctx, check, { start, end });
-      check(["doctor", "pharmacist"].includes(ctx.vars.who), `viewed as ${ctx.vars.who}`);
+      check(["doctor", "pharmacist", "accountant"].includes(ctx.vars.who), `viewed as ${ctx.vars.who}`);
     },
     async TooltipOpen(ctx, check) {
       const tip = ctx.page.getByRole("tooltip").first();
@@ -277,7 +293,8 @@ const driver = {
       check(csv.name === `item-margin-${range[0]}-to-${range[1]}.csv`, `file name item-margin-${range[0]}-to-${range[1]}.csv (got ${csv.name})`);
       const items = csv.rows.slice(0, -1), total = csv.rows[csv.rows.length - 1];
       check(items.length === screen.rows.length && total["Item Name"] === "Total", `CSV has ${screen.rows.length} item rows plus a Total row`);
-      for (const h of ["Sale Qty", "Sales Amt", "Purchase", "Net GST", "Profit"]) check(near(items.reduce((a, r) => a + Number(r[h] || 0), 0), Number(total[h]), 0.011 * items.length), `CSV item rows sum to the Total row in "${h}"`);
+      check(total["Sale Qty"] === "" && total["Average Sale Price"] === "", "Total row leaves Sale Qty blank (units differ across items; not summed)");
+      for (const h of ["Sales Amt", "Purchase", "Net GST", "Profit"]) check(near(items.reduce((a, r) => a + Number(r[h] || 0), 0), Number(total[h]), 0.011 * items.length), `CSV item rows sum to the Total row in "${h}"`);
       check(near(Number(total["Sales Amt"]), screen.tiles.sales) && near(Number(total["Purchase"]), screen.tiles.purchase) && near(Number(total["Net GST"]), screen.tiles.netGst) && near(Number(total["Profit"]), profitOf(screen.tiles.profitText.replace("%)", ")")).profit), "CSV Total row equals the four tiles on screen");
       items.forEach((r, i) => {
         const c = screen.rows[i].cells, p = profitOf(c[10]);

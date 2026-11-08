@@ -39,9 +39,14 @@ function trackRequests(ctx) {
 const purchasesUrl = (ctx) => `${ctx.baseUrl}/dashboard/inventory?area=purchases`;
 
 async function openPurchasesHome(ctx, who = "admin") {
+  ctx.vars.who = who;
   await useRole(ctx, who);
   await ctx.page.goto(purchasesUrl(ctx));
-  await ctx.page.locator("select").filter({ hasText: "More tasks" }).first().waitFor({ timeout: 90000 });
+  const sel = ctx.page.locator("select").filter({ hasText: "More tasks" }).first();
+  await sel.waitFor({ timeout: 90000 });
+  // The menu is filled from the user's permissions a moment after first paint: wait for the final list
+  if (who === "reception") await ctx.page.waitForTimeout(2500);
+  else await ctx.page.waitForFunction(() => [...document.querySelectorAll("select option")].some((o) => o.textContent === "Item-wise margin"), null, { timeout: 30000 });
 }
 
 async function openFromMenu(ctx, label) {
