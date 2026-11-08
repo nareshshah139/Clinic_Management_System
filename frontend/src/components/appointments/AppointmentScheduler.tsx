@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
+import { usePrefilledPatient } from './usePrefilledPatient';
 import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/lib/doctor-availability';
 import { useToast } from '@/hooks/use-toast';
 import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError, getConflictDetails, doTimeSlotsOverlap, generateTimeSlots, addMinutesToHHMM, getSlotDurationMinutes } from '@/lib/utils';
@@ -77,11 +78,7 @@ export default function AppointmentScheduler({
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
   // Grid-level duration selector for preview and click actions
   const [gridDurationMinutes, setGridDurationMinutes] = useState<number>(slotConfig.stepMinutes);
-  useEffect(() => {
-    if (prefillPatientId) {
-      setSelectedPatientId(prefillPatientId);
-    }
-  }, [prefillPatientId]);
+  usePrefilledPatient(prefillPatientId, selectedPatientId, setSelectedPatientId, setSelectedPatient);
 
   // Apply controlled doctor/date when provided
   useEffect(() => {
@@ -282,6 +279,10 @@ export default function AppointmentScheduler({
   }, [autoPromptedForSearch, toast]);
 
   const handleBookingRequest = (slot: string) => {
+    if (!selectedPatient || selectedPatient.id !== selectedPatientId) {
+      toast({ variant: 'destructive', title: 'Patient required', description: 'Select a patient before booking.' });
+      return;
+    }
     // Validate the appointment form
     const validationErrors = validateAppointmentForm({
       doctorId,
@@ -781,7 +782,7 @@ export default function AppointmentScheduler({
         bookingInProgress={isBooking ? bookingSlot : undefined}
         onAppointmentUpdate={() => setRefreshKey((prev) => prev + 1)}
         timeSlotConfig={slotConfig}
-        disableSlotBooking={!selectedPatientId && !rescheduleContext}
+        disableSlotBooking={(!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId) && !rescheduleContext}
         optimisticAppointment={optimisticAppointment}
       />
 

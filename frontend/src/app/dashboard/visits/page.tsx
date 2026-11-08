@@ -501,6 +501,27 @@ function VisitsPageInner() {
     return [];
   }, []);
 
+  /**
+   * @cc [owner:nareshshah139,label:product] visits-doctor-pages
+   * The visit doctor picker MUST load every page of the branch doctor list; a failed page
+   * MUST fail the load rather than silently present a partial list.
+   */
+  const loadDoctors = useCallback(async () => {
+    const doctorsById = new Map<string, DoctorSummary>();
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const response = await apiClient.get<GetUsersResponse & { pagination?: { totalPages: number } }>(
+        '/users', { role: 'DOCTOR', page, limit: 100 },
+      );
+      extractDoctors(response).forEach((doctor) => doctorsById.set(doctor.id, doctor));
+      const count = response.pagination?.totalPages;
+      if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) totalPages = count;
+      page += 1;
+    } while (page <= totalPages);
+    return Array.from(doctorsById.values());
+  }, [extractDoctors]);
+
   const fetchAppointmentData = useCallback(async (appointmentId: string) => {
     try {
       const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
@@ -518,7 +539,7 @@ function VisitsPageInner() {
     try {
       const [patientsRes, usersRes] = await Promise.allSettled([
         apiClient.getPatients({ page: 1, limit: 1 }),
-        apiClient.get('/users', { role: 'DOCTOR', limit: 1 })
+        loadDoctors()
       ]);
 
       if (patientsRes.status === 'fulfilled') {
@@ -535,7 +556,7 @@ function VisitsPageInner() {
       }
 
       if (usersRes.status === 'fulfilled') {
-        const doctorsData = extractDoctors(usersRes.value);
+        const doctorsData = usersRes.value;
         setDoctors(doctorsData);
         if (doctorsData.length > 0) {
           const candidate = doctorsData[0]?.id;
@@ -558,7 +579,7 @@ function VisitsPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [extractDoctors, extractPatients, urlPatientId]);
+  }, [loadDoctors, extractPatients, urlPatientId]);
 
   useEffect(() => {
     void loadData();

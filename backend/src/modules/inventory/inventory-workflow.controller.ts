@@ -1,3 +1,5 @@
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { InventoryReplenishmentService } from './inventory-replenishment.service';
 import { InventoryLabelService } from './inventory-label.service';
 import { Res } from '@nestjs/common';
@@ -25,6 +27,7 @@ import {
 } from './inventory-workflow.types';
 
 @Controller('inventory/workspace')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 export class InventoryWorkflowController {
   constructor(

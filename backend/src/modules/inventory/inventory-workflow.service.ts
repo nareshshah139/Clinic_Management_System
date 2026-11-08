@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { hasScopedPermission } from '../../shared/guards/scoped-permission';
 import {
   DEFAULT_INVENTORY_SETTINGS,
   SaveWorkflowDocumentDto,
@@ -61,6 +62,11 @@ const amount = (v: unknown, name: string, fallback = 0) => {
 export class InventoryWorkflowService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security] inventory-privileged-bypass
+   * Only OWNER, ADMIN, and DOCTOR receive the global bypass. A stored bare wildcard MUST NOT
+   * grant another role unrestricted inventory access.
+   */
   async permissions(actor: WorkflowActor): Promise<Set<string>> {
     if (!actor.id || !actor.branchId)
       throw new ForbiddenException('Authenticated branch and user required');
@@ -80,7 +86,7 @@ export class InventoryWorkflowService {
     const parse = (v: unknown): string[] => {
       try {
         const p = Array.isArray(v) ? v : JSON.parse(String(v || '[]'));
-        return Array.isArray(p) ? p.filter((x) => typeof x === 'string') : [];
+        return Array.isArray(p) ? p.filter((x) => typeof x === 'string' && x !== '*') : [];
       } catch {
         return [];
       }
@@ -99,12 +105,12 @@ export class InventoryWorkflowService {
   async authorize(actor: WorkflowActor, kind: string, write = false) {
     const p = await this.permissions(actor);
     const required = this.permissionFor(kind, write);
-    if (!p.has('*') && !p.has(required))
+    if (!p.has('*') && !hasScopedPermission(p, required))
       throw new ForbiddenException(`This action requires ${required}`);
   }
   async capabilities(actor: WorkflowActor) {
     const p = await this.permissions(actor),
-      has = (key: string) => p.has('*') || p.has(key);
+      has = (key: string) => p.has('*') || hasScopedPermission(p, key);
     return {
       approve: APPROVERS.has(actor.role),
       settings: APPROVERS.has(actor.role),
@@ -662,7 +668,7 @@ export class InventoryWorkflowService {
   async documents(actor: WorkflowActor, query: Record<string, any> = {}) {
     const perms = await this.permissions(actor);
     const kinds = WORKFLOW_KINDS.filter(
-      (k) => perms.has('*') || perms.has(this.permissionFor(k, false)),
+      (k) => perms.has('*') || hasScopedPermission(perms, this.permissionFor(k, false)),
     );
     const where: any = { branchId: actor.branchId, kind: { in: kinds } };
     if (query.kind) {

@@ -260,6 +260,11 @@ export default function SmartProceduresPage() {
     }));
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] procedure-visit-payload
+   * Saving a procedure MUST send the required complaints array and retain the selected therapist
+   * inside the stored procedure details. Missing required selections MUST prevent the save.
+   */
   const saveProcedure = async () => {
     if (!procedureData.patientId || !procedureData.doctorId || !procedureData.selectedMachine) {
       alert('Please fill in all required fields');
@@ -271,11 +276,12 @@ export default function SmartProceduresPage() {
       const payload = {
         patientId: procedureData.patientId,
         doctorId: procedureData.doctorId,
-        therapistId: procedureData.therapistId,
+        complaints: [],
         treatmentPlan: {
           dermatology: {
             procedures: [{
               type: MACHINES[procedureData.selectedMachine as keyof typeof MACHINES]?.name,
+              therapistId: procedureData.therapistId || undefined,
               sessionNo: procedureData.sessionNo,
               bodyPart: procedureData.bodyPart,
               indications: procedureData.indications,
