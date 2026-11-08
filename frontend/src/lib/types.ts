@@ -111,6 +111,7 @@ export interface AppointmentInSlot {
   visit?: { id: string; status?: string | null };
   isFollowUp?: boolean;
   notes?: string;
+  tokenNumber?: number;
 }
 
 // Available Slots
