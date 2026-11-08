@@ -95,17 +95,32 @@ const inside = (inner, outer) => inner.left >= outer.left - EPS && inner.right <
         if (!nameHitsOwnButton) problems.push(`tapping ${b.name} does not reach its own block`);
         const box = await block.locator('[data-patient-name]').boundingBox();
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.waitForTimeout(300);
         const actions = await block.evaluate((el) => {
           const strip = el.querySelector('[data-appointment-actions]');
           if (!strip || getComputedStyle(strip).display === 'none') return null;
           const s = strip.getBoundingClientRect();
           const o = el.getBoundingClientRect();
-          return { inside: s.left >= o.left - 0.5 && s.right <= o.right + 0.5, visible: getComputedStyle(strip).visibility === 'visible' };
+          return { inside: s.left >= o.left - 0.5 && s.right <= o.right + 0.5, visible: getComputedStyle(strip).opacity === '1' && getComputedStyle(strip).pointerEvents !== 'none' };
         });
         if (actions && !actions.inside) problems.push(`${b.name}'s action buttons spill outside its block`);
         if (actions && !actions.visible) problems.push(`${b.name}'s action buttons stay hidden on hover`);
       }
       await page.mouse.move(0, 0);
+      const keyboard = await page.evaluate(() => {
+        const all = [...document.querySelectorAll('[data-appointment-block]')];
+        const i = all.findIndex((el, k) => k + 1 < all.length && getComputedStyle(el.querySelector('[data-appointment-actions]')).display !== 'none');
+        return i < 0 ? null : { current: all[i].getAttribute('data-appointment-block'), next: all[i + 1].getAttribute('data-appointment-block') };
+      });
+      if (keyboard) {
+        const insideActions = (id) => page.evaluate((id) => !!document.activeElement?.closest(`[data-appointment-block="${id}"] [data-appointment-actions]`), id);
+        await page.locator(`[data-appointment-block="${keyboard.current}"] > button`).focus();
+        await page.keyboard.press('Tab');
+        if (!(await insideActions(keyboard.current))) problems.push('Tab from a block does not reach its action buttons');
+        await page.locator(`[data-appointment-block="${keyboard.next}"] > button`).focus();
+        await page.keyboard.press('Shift+Tab');
+        if (!(await insideActions(keyboard.current))) problems.push('Shift+Tab does not reach the previous block\'s action buttons');
+      }
 
       const outcome = { label, blocks: blocks.length, ellipsized: blocks.filter((b) => b.nameOverflows).map((b) => b.name), pass: problems.length === 0, problems };
       console.log(JSON.stringify(outcome));

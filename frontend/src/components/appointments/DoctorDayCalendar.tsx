@@ -490,7 +490,7 @@ export default function DoctorDayCalendar({
                     </span>
                   </button>
 
-                  <div data-appointment-actions className="pointer-events-none invisible absolute right-1 top-0.5 hidden gap-1 group-hover:pointer-events-auto group-hover:visible group-focus-within:pointer-events-auto group-focus-within:visible @min-[16rem]:flex">
+                  <div data-appointment-actions className="pointer-events-none absolute right-1 top-0.5 hidden gap-1 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 @min-[16rem]:flex">
                     <button
                       type="button"
                       onClick={(e) => {
