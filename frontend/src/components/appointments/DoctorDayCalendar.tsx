@@ -30,6 +30,7 @@ import type {
   Appointment
 } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
+import { computeGridWindow } from '@/lib/calendar-window';
 
 export interface DoctorDayCalendarProps {
   doctorId: string;
@@ -88,15 +89,6 @@ export default function DoctorDayCalendar({
   const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isLongPressing, setIsLongPressing] = useState<boolean>(false);
 
-  // Use selected grid size (stepMinutes) to control tiles per hour
-  const baseGridSlots = useMemo(() => generateTimeSlots({
-    startHour: timeSlotConfig.startHour,
-    endHour: timeSlotConfig.endHour,
-    stepMinutes: Math.max(5, timeSlotConfig.stepMinutes || 10),
-    timezone: timeSlotConfig.timezone,
-  }), [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.stepMinutes, timeSlotConfig.timezone]);
-  // Tile height so the entire day grid fits in ~80% of the viewport
-  const tileHeightCss = useMemo(() => `calc(80vh / ${Math.max(1, baseGridSlots.length)})`, [baseGridSlots.length]);
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
   const roomFilterLabel = roomFilter !== 'ALL' ? (selectedRoomName ?? 'Unknown Room') : undefined;
 
@@ -133,6 +125,23 @@ export default function DoctorDayCalendar({
       return visitTypeMatch && roomMatch;
     });
   }, [schedule, visitTypeFilter, roomFilter, optimisticAppointment]);
+
+  const gridWindow = useMemo(
+    () => computeGridWindow({ startHour: timeSlotConfig.startHour, endHour: timeSlotConfig.endHour }, filteredSchedule.map((a) => a.slot)),
+    [timeSlotConfig.startHour, timeSlotConfig.endHour, filteredSchedule],
+  );
+  const workStartMin = timeSlotConfig.startHour * 60;
+  const workEndMin = timeSlotConfig.endHour * 60;
+  const dayStartMin = gridWindow.startHour * 60;
+  const dayEndMin = gridWindow.endHour * 60;
+  const baseGridSlots = useMemo(() => generateTimeSlots({
+    startHour: gridWindow.startHour,
+    endHour: gridWindow.endHour,
+    stepMinutes: Math.max(5, timeSlotConfig.stepMinutes || 10),
+    timezone: timeSlotConfig.timezone,
+  }), [gridWindow.startHour, gridWindow.endHour, timeSlotConfig.stepMinutes, timeSlotConfig.timezone]);
+  // Tile height so the entire day grid fits in ~80% of the viewport
+  const tileHeightCss = useMemo(() => `calc(80vh / ${Math.max(1, baseGridSlots.length)})`, [baseGridSlots.length]);
 
   // Build quick lookup for overlap checks
   const bookedBySlot = useMemo(() => new Map(filteredSchedule.map(a => [a.slot, a])), [filteredSchedule]);
@@ -348,6 +357,11 @@ export default function DoctorDayCalendar({
                 </Button>
               </div>
             )}
+            {gridWindow.outsideCount > 0 && (
+              <div className="mb-2">
+                <Badge variant="warning">{gridWindow.outsideCount} outside working hours</Badge>
+              </div>
+            )}
             {showLoadingOverlay && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm transition-opacity duration-200">
                 <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
@@ -376,8 +390,6 @@ export default function DoctorDayCalendar({
               >
             {/* Appointment-level background overlays across full spans (merges cells visually) */}
             {(() => {
-              const dayStartMin = (timeSlotConfig.startHour ?? 9) * 60;
-              const dayEndMin = (timeSlotConfig.endHour ?? 18) * 60;
               const totalDayMin = Math.max(1, dayEndMin - dayStartMin);
               const getColor = (apt: AppointmentInSlot) => {
                 const isPast = isSlotInPast(apt.slot, date);
@@ -435,8 +447,6 @@ export default function DoctorDayCalendar({
             })()}
             {/* Floating labels across full appointment spans */}
             {(() => {
-              const dayStartMin = (timeSlotConfig.startHour ?? 9) * 60;
-              const dayEndMin = (timeSlotConfig.endHour ?? 18) * 60;
               const totalDayMin = Math.max(1, dayEndMin - dayStartMin);
               return filteredSchedule.map((apt) => {
                 const [as, ae] = (apt.slot || '').split('-');
@@ -578,6 +588,7 @@ export default function DoctorDayCalendar({
               const [tileStartStr, tileEndStr] = slot.split('-');
               const tileStartMin = hhmmToMinutes(tileStartStr);
               const tileEndMin = hhmmToMinutes(tileEndStr);
+              const offHours = tileStartMin < workStartMin || tileStartMin >= workEndMin;
               const crossesTop = hasAny && overlappingAppointments.some((apt) => {
                 const [as, ae] = apt.slot.split('-');
                 const aptStart = hhmmToMinutes(as);
@@ -615,12 +626,14 @@ export default function DoctorDayCalendar({
               return (
                 <div 
                   key={slot} 
+                  data-off-hours={offHours || undefined}
                   className={`border rounded-none ${hasAny ? 'p-0' : 'p-1'} flex flex-col gap-1 transition-all duration-200 relative`}
                   style={{
                     backgroundColor: (() => {
                       if (isBookingInProgress) return '#fbbf24';
                       return past ? '#f3f4f6' : (inSelectionPreview ? '#fef3c7' : 'white');
                     })(),
+                    backgroundImage: offHours && !hasAny ? 'repeating-linear-gradient(135deg, transparent 0 6px, rgba(148, 163, 184, 0.18) 6px 12px)' : undefined,
                     // Per-side border colors to avoid shorthand conflicts
                     borderTopColor: hasAny && crossesTop ? 'transparent' : baseBorderColor,
                     borderBottomColor: hasAny && crossesBottom ? 'transparent' : baseBorderColor,
