@@ -25,6 +25,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { downloadInvoicePdf } from '@/lib/download-invoice-pdf';
 import type {
   PharmacyInvoiceListResponse,
   PharmacyInvoiceSummary,
@@ -374,27 +375,19 @@ export function PharmacyInvoiceList() {
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] invoice-list-pdf-download
+   * Downloading an invoice MUST save its fetched printable content as a PDF without a pop-up.
+   * Retrieval or rendering failure MUST be reported.
+   */
   const handleDownloadInvoice = async (invoiceId: string) => {
     try {
       setLoading(true);
       const invoice = await apiClient.get(`/pharmacy/invoices/${invoiceId}`);
       
-      // For now, open print dialog which allows save as PDF
-      const win = window.open('', '_blank');
-      if (!win) {
-        alert('Please allow pop-ups to download the invoice');
-        return;
-      }
       const html = renderPrintHtml(invoice);
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-      
-      // Auto-trigger print dialog
-      setTimeout(() => {
-        win.focus();
-        win.print();
-      }, 500);
+      const source = new DOMParser().parseFromString(html, 'text/html');
+      await downloadInvoicePdf(source, (invoice as any)?.invoiceNumber || invoiceId);
     } catch (error) {
       console.error('Failed to download invoice:', error);
       alert('Failed to download invoice. Please try again.');

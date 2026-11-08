@@ -1,5 +1,7 @@
 'use client';
 
+import { downloadInvoicePdf } from '@/lib/download-invoice-pdf';
+
 import { displayClinicDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -1903,42 +1905,10 @@ export function PharmacyInvoiceBuilderFixed({
     }
 
     setSavingPdf(true);
-    let wrapper: HTMLDivElement | null = null;
     try {
       const invoiceCore = getPrintPreviewInvoiceCore();
       const invoiceNumber = invoiceCore?.invoiceNumber || 'draft';
-      const source = frameDocument.body.cloneNode(true) as HTMLElement;
-      source.querySelectorAll('.no-print').forEach((element) => {
-        element.remove();
-      });
-
-      const styles = Array.from(frameDocument.querySelectorAll('style'))
-        .map((style) => style.textContent || '')
-        .join('\n');
-      wrapper = document.createElement('div');
-      wrapper.style.position = 'fixed';
-      wrapper.style.left = '-10000px';
-      wrapper.style.top = '0';
-      wrapper.style.width = '210mm';
-
-      const styleElement = document.createElement('style');
-      styleElement.textContent = styles;
-      wrapper.appendChild(styleElement);
-      wrapper.appendChild(source);
-      document.body.appendChild(wrapper);
-
-      const { default: html2pdf } = await import('html2pdf.js');
-      await html2pdf()
-        .set({
-          margin: 0,
-          filename: `pharmacy-invoice-${invoiceNumber}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'] },
-        })
-        .from(wrapper)
-        .save();
+      await downloadInvoicePdf(frameDocument, invoiceNumber);
 
       toast({
         title: 'PDF ready',
@@ -1952,7 +1922,6 @@ export function PharmacyInvoiceBuilderFixed({
         variant: 'destructive',
       });
     } finally {
-      wrapper?.remove();
       setSavingPdf(false);
     }
   };
