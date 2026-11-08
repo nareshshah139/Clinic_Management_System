@@ -1,8 +1,8 @@
 {
   "model": "cr33d-item-margin",
   "title": "CR-33d Item-wise Margin",
-  "startedAt": "2026-11-08T09:13:57.786Z",
-  "finishedAt": "2026-11-08T09:15:44.475Z",
+  "startedAt": "2026-11-08T10:20:03.005Z",
+  "finishedAt": "2026-11-08T10:21:46.357Z",
   "states": {
     "total": 16,
     "passed": 16,
@@ -2690,7 +2690,7 @@
             },
             {
               "ok": true,
-              "message": "message names the 366-day limit (got \"Choose a range of at most 366 days (Reference: 03fe2aff-8fd7-4300-bc9f-00ffb8644d26) Check the dates and press Go to try again.\")"
+              "message": "message names the 366-day limit (got \"Choose a range of at most 366 days (Reference: 123460b4-c2a4-4b50-97de-430849c1d5c7) Check the dates and press Go to try again.\")"
             },
             {
               "ok": true,
@@ -5858,7 +5858,7 @@
           "checks": [
             {
               "ok": true,
-              "message": "item page URL carries the item id (?area=stock&view=list&item=cmw6fgoa1000p7d3dnyp4sp9y&return=)"
+              "message": "item page URL carries the item id (?area=stock&view=list&item=cmw7o8n9z000p7d2e2vdffxcs&return=)"
             },
             {
               "ok": true,
