@@ -90,7 +90,7 @@ function SortHeader({ column, sort, onSort }: { column: (typeof COLUMNS)[number]
   return (
     <TableHead
       aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
-      className={cn("whitespace-nowrap px-2", column.numeric && "text-right")}
+      className={cn("whitespace-nowrap px-2", column.numeric && "text-right", column.key === "name" && FROZEN_NAME)}
     >
       <span className={cn("inline-flex items-center gap-1", column.numeric && "justify-end")}>
         <button type="button" className="inline-flex items-center gap-1 font-medium hover:underline" onClick={() => onSort(column.key)}>
@@ -103,6 +103,8 @@ function SortHeader({ column, sort, onSort }: { column: (typeof COLUMNS)[number]
   );
 }
 
+const FROZEN_NAME = "sticky left-0 z-10 min-w-48 max-w-64 whitespace-normal border-r bg-background";
+
 const itemHref = (itemId: string) =>
   `/dashboard/inventory?area=stock&view=list&item=${encodeURIComponent(itemId)}&return=${encodeURIComponent("area=purchases&view=margin")}`;
 
@@ -110,7 +112,7 @@ function MarginTableRow({ row }: { row: MarginRow }) {
   const money = "px-2 text-right tabular-nums";
   return (
     <TableRow>
-      <TableCell className="px-2 font-medium">
+      <TableCell className={cn("px-2 font-medium", FROZEN_NAME)}>
         {row.itemId ? <a className="text-primary underline-offset-4 hover:underline" href={itemHref(row.itemId)}>{row.name}</a> : row.name}
       </TableCell>
       <TableCell className="px-2">{row.category || "—"}</TableCell>
