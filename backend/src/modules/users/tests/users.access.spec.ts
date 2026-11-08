@@ -30,16 +30,17 @@ describe('/users access control', () => {
   const as = (id: string) => ({ 'x-user': id });
 
   beforeAll(async () => {
-    const module = await Test.createTestingModule({
-      controllers: [UsersController],
-      providers: [{ provide: UsersService, useValue: new UsersService(db, {} as any) }, { provide: APP_GUARD, useClass: RolesGuard }],
-    }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => {
+    const auth = { canActivate: (context: any) => {
       const req = context.switchToHttp().getRequest();
       const user = users[req.headers['x-user']];
       if (!user) return false;
       req.user = { id: user.id, role: user.role, branchId: user.branchId };
       return true;
-    } }).compile();
+    } };
+    const module = await Test.createTestingModule({
+      controllers: [UsersController],
+      providers: [{ provide: UsersService, useValue: new UsersService(db, {} as any) }, { provide: APP_GUARD, useValue: auth }, { provide: APP_GUARD, useClass: RolesGuard }],
+    }).overrideGuard(JwtAuthGuard).useValue(auth).compile();
     app = module.createNestApplication();
     await app.init();
   });
@@ -56,11 +57,12 @@ describe('/users access control', () => {
     }
   });
 
-  it('does not reveal a doctor WhatsApp token to a lab user', async () => {
-    const list = await request(app.getHttpServer()).get('/users').set(as('lab')).expect(200);
+  it('rejects a lab user and redacts doctor WhatsApp tokens from staff responses', async () => {
+    await request(app.getHttpServer()).get('/users').set(as('lab')).expect(403);
+    const list = await request(app.getHttpServer()).get('/users').set(as('reception')).expect(200);
     const doctor = list.body.users.find((user: any) => user.id === 'doctor');
     expect(doctor.metadata).toEqual({ textSize: 'LARGE' });
-    const one = await request(app.getHttpServer()).get('/users/doctor').set(as('lab')).expect(200);
+    const one = await request(app.getHttpServer()).get('/users/doctor').set(as('reception')).expect(200);
     expect(one.body.metadata).toEqual({ textSize: 'LARGE' });
   });
 

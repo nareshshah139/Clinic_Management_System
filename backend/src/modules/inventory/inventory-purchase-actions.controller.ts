@@ -1,3 +1,5 @@
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { Body, Controller, Get, Param, Patch, Post, Query, Request, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -7,6 +9,7 @@ import { QueryPharmacyPurchaseInvoiceDto } from '../pharmacy/dto/pharmacy-purcha
 import { InventoryPurchaseActionsService } from './inventory-purchase-actions.service';
 
 @Controller('inventory/workspace/purchases')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 export class InventoryPurchaseActionsController {
   constructor(private readonly actions: InventoryPurchaseActionsService) {}

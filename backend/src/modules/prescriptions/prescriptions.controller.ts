@@ -1,3 +1,4 @@
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Controller,
@@ -46,6 +47,7 @@ interface AuthenticatedRequest {
 }
 
 @Controller('prescriptions')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 export class PrescriptionsController {
   constructor(private readonly prescriptionsService: PrescriptionsService) {}
