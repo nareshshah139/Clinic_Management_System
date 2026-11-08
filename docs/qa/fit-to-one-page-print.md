@@ -22,30 +22,52 @@ The print preview has a new **Fit to 1 page** checkbox, below **Space-optimized 
 - **The server-generated PDF.** `POST /prescriptions/:id/pdf` and sharing with `includePdf` use the separate pdfkit layout. It has no fit mode.
 - **Text format.** Fit to 1 page always prints the Rx as a table.
 
-## Known issue in existing code
+## Printed text never ends inside the bottom margin
 
-The continuation-page nudge in `PrescriptionBuilder.tsx` (`continuationExtraOffsetPx`) moves the content of page 2 onward about 35 px down. It does not shorten those pages for Paged.js, so a full continuation page can run that far into the bottom margin. Fit to 1 page only produces a continuation page in the 11 px overflow case. There, 11 px rows leave less slack at the bottom of the page than 14 px rows, so the synthetic 40-medicine prescription shows it: page 2 ends 10 px below the printable area. No normal or space-optimized page in these runs crossed the line. This change does not alter that code.
+This applies to every layout, not only Fit to 1 page.
+
+Two things move content down after Paged.js has split it into pages:
+
+- Continuation pages are nudged about one line lower than page 1, so they sit clear of the letterhead (`CONTINUATION_NUDGE_PX`, 36 px).
+- A printer profile, or the doctor's saved print layout, can set a vertical content offset.
+
+Before this change Paged.js did not know about either move, so a full page could end inside the bottom margin. Two synthetic prescriptions showed it:
+
+- 40 medicines, Fit to 1 page: page 2 ended 10 px inside the margin.
+- A 60 px content offset, normal layout: page 1 ended 42 px inside the margin.
+
+Now Paged.js lays out each page with extra bottom margin for these moves:
+
+- **Every page** gets extra bottom margin equal to any downward content offset.
+- **Continuation pages** get another 48 px (`CONTINUATION_RESERVE_PX`) through `@page`, while `@page :first` keeps page 1 at the normal margin. The built-in Dr. Praneeta Jain letterhead does not nudge continuation pages, so it gets no extra 48 px.
+
+As a backstop, each continuation page's nudge is capped at the free space below its last line.
+
+Content still moves down as before. The cost is that a long prescription can need one more page. The 40-medicine normal layout now prints on 8 pages instead of 7.
+
+Fit to 1 page measures page 1 against its bottom margin including the offset, so a prescription with a 60 px offset fits at a smaller step than the same prescription without one.
 
 ## Verification, 08/11/2026
 
 `scripts/diagnostics/fit-one-page-browser.cjs` runs against the actual local frontend and Chromium's Paged.js render. Every API response is synthetic, and each prescription is seeded as a local draft. No real patient records are read or changed.
 
-It has 30 prescriptions. They range from a single medicine to 40 medicines with long instructions. Others have 30 investigations, six custom sections, long complaints, a follow-up with an unbroken word, very long medicine names, multi-line personal history, Hindi and Telugu instructions, a 260 px top margin, a 180 px bottom margin, and all four page breaks ticked.
+It has 31 prescriptions. They range from a single medicine to 40 medicines with long instructions. Others have 30 investigations, six custom sections, long complaints, a follow-up with an unbroken word, very long medicine names, multi-line personal history, Hindi and Telugu instructions, a 260 px top margin, a 180 px bottom margin, a 60 px content offset from the doctor's saved print layout, and all four page breaks ticked.
 
 For each prescription the script records the page count in the normal and space-optimized layouts, ticks Fit to 1 page, and checks the following:
 
 - Every medicine, investigation, diagnosis, complaint and follow-up is printed, and the signature is on the last page.
-- The 27 prescriptions that are expected to fit print on one page. The other three, which are 26 medicines with two-line instructions, all sections heavy, and 40 medicines, must either fit or use 11 px with the overflow notice. All sections heavy fits, at 11.5 px.
+- The 28 prescriptions that are expected to fit print on one page. The other three, which are 26 medicines with two-line instructions, all sections heavy, and 40 medicines, must either fit or use 11 px with the overflow notice. All sections heavy fits, at 11.5 px.
 - No text is smaller than 11 px, and line height is at least 1.14 times the text size.
-- Text on page 1 stays inside the printable area. Continuation pages are allowed the existing nudge described above.
+- In the normal, space-optimized and fitted layouts, no text on any page ends inside the bottom margin shown in the settings panel. This includes nudged continuation pages and offset content.
 - No two lines of text overlap.
 - Each heading shares a line with its value.
 - Forced page breaks are dropped.
-- When text is shrunk, the page is more than 80% full, so a roomier step could not have fitted. A prescription that fits on one page in Space-optimized layout keeps 14 px text.
+- When text is shrunk, the printed page is laid out again at the next roomier step, and that layout must not fit. Page fullness alone does not prove this. In the content-offset prescription, the step that fits leaves the page 71% full, because at 13 px the long medicine names wrap and the page grows from 550 px to 780 px.
+- A prescription that fits on one page in Space-optimized layout keeps 14 px text.
 
 Four prescriptions are also downloaded as PDFs, and the PDF must have the same number of pages as the preview. One prescription is unticked again to check that the normal page count and stacked layout come back.
 
-All 30 pass.
+All 31 pass.
 
 | Prescription | Normal | Space-optimized | Fit to 1 page |
 | --- | --- | --- | --- |
@@ -61,7 +83,7 @@ All 30 pass.
 | 26 medicines, two-line instructions | 5 | 3 | 2, 11 px, with notice |
 | 40 medicines, long everything | 7 | 5 | 3, 11 px, with notice |
 
-The other 19 prescriptions fit at 14 px. Per-prescription results and page images are written to the output folder, along with `summary.json`.
+The content-offset prescription fits at 12.5 px. The other 19 fit at 14 px. Per-prescription results and page images are written to the output folder, along with `summary.json`.
 
 Regression checks:
 

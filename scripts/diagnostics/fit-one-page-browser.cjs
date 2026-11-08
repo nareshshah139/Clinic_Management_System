@@ -64,6 +64,7 @@ const scenarios = [
   { name: 'vitals-two-meds', mustFit: true, vitals, draft: { items: meds(2) } },
   { name: 'extreme-overflow', expectOverflow: true, reviewDate: '2026-12-20', vitals, draft: { chiefComplaints: sentence.repeat(8), diagnosis: 'Multiple chronic dermatoses', pastHistory: 'Multiple comorbidities', items: meds(40, longInstr), investigations: inv, followUpInstructions: 'Continue all medicines. '.repeat(10) } },
   { name: 'big-top-margin', mustFit: true, topMarginPx: 260, reviewDate: '2026-12-20', vitals, draft: { diagnosis: 'Psoriasis', items: meds(12), investigations: inv.slice(0, 10), followUpInstructions: 'Review in 2 weeks' } },
+  { name: 'content-offset-down', mustFit: true, offsetYPx: 60, reviewDate: '2026-11-20', vitals, draft: { diagnosis: 'Psoriasis with nail involvement', items: meds(20), investigations: inv.slice(0, 10), followUpInstructions: 'Review with reports' } },
   { name: 'big-bottom-margin', mustFit: true, bottomMarginPx: 180, reviewDate: '2026-12-20', vitals, draft: { diagnosis: 'Psoriasis', items: meds(12), investigations: inv.slice(0, 10), followUpInstructions: 'Review in 2 weeks' } },
   { name: 'multiline-personal-history', mustFit: true, reviewDate: '2026-12-20', draft: { personalHistory: 'Diet: vegetarian\nSleep: 6 hours\nOccupation: software engineer\nExercise: walks 30 minutes daily\nSun exposure: minimal', diagnosis: 'Seborrhoeic dermatitis', items: meds(7) } },
   { name: 'meds-30-no-instructions', mustFit: true, reviewDate: '2026-12-20', draft: { diagnosis: 'Polypharmacy review', items: meds(30, '') } },
@@ -134,6 +135,7 @@ function measure(page) {
     }
     const pages = pageEls.map(pageEl => {
       const area = pageEl.querySelector('.pagedjs_area').getBoundingClientRect();
+      const pageBox = pageEl.querySelector('.pagedjs_pagebox').getBoundingClientRect();
       const content = pageEl.querySelector('.pagedjs_page_content');
       const lines = [];
       const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
@@ -154,6 +156,7 @@ function measure(page) {
       }
       const fitRoot = content.querySelector('[data-fit-to-page]');
       return {
+        pageBoxBottom: pageBox.bottom,
         areaTop: area.top, areaBottom: area.bottom, areaLeft: area.left, areaRight: area.right, areaHeight: area.height,
         textBottom: Math.max(...lines.map(l => l.bottom)), textRight: Math.max(...lines.map(l => l.right)), textLeft: Math.min(...lines.map(l => l.left)),
         minFont: Math.min(...lines.map(l => l.fontSize)),
@@ -164,10 +167,15 @@ function measure(page) {
       };
     });
     const fitRoot = root.querySelector('[data-fit-to-page]');
+    const marginLabel = [...document.querySelectorAll('label')].find(el => el.textContent.trim() === 'Bottom margin');
+    const bottomMarginMm = parseFloat(marginLabel.parentElement.querySelector('span').textContent);
+    const firstBox = pageEls[0].querySelector('.pagedjs_pagebox');
     const lastPage = pageEls[pageEls.length - 1];
     return {
       pageCount: pageEls.length,
       pages,
+      bottomMarginMm,
+      scale: firstBox.getBoundingClientRect().height / firstBox.offsetHeight,
       text,
       step: fitRoot ? Number(fitRoot.getAttribute('data-fit-step')) : null,
       fontVar: fitRoot ? fitRoot.style.getPropertyValue('--fit-font-size') : null,
@@ -190,12 +198,58 @@ async function exportPdf(page, dir) {
   return fs.readdirSync(dir).filter(f => /^pdf-\d+\.png$/.test(f)).length;
 }
 
+// The step table, read from the app so the check cannot drift from it.
+const FIT_STEPS = [...fs.readFileSync(path.join(__dirname, '../../frontend/src/lib/print-fit.ts'), 'utf8').matchAll(/\{ fontPx: ([\d.]+), lineHeight: ([\d.]+), blockPadPx: (\d+), rowPadPx: (\d+), signGapPx: (\d+) \}/g)]
+  .map(m => ({ fontPx: +m[1], lineHeight: +m[2], blockPadPx: +m[3], rowPadPx: +m[4], signGapPx: +m[5] }));
+assert.equal(FIT_STEPS.length, 10, 'read the 10 fit steps from print-fit.ts');
+
+// Lays page 1's printed content out off-screen at the page's content width
+// with another step's spacing, and returns its height.
+function heightAtStep(page, step) {
+  return page.evaluate(step => {
+    const pageEl = document.querySelector('#pagedjs-container .pagedjs_page');
+    const content = pageEl.querySelector('.pagedjs_page_content');
+    const host = document.createElement('div');
+    host.className = 'prescription-pdf-export';
+    host.style.cssText = `position:absolute;left:-100000px;top:0;visibility:hidden;display:flow-root;width:${content.offsetWidth}px;`;
+    host.innerHTML = content.querySelector('[data-fit-to-page]').outerHTML;
+    document.body.appendChild(host);
+    const root = host.firstElementChild;
+    root.style.setProperty('--fit-font-size', `${step.fontPx}px`);
+    root.style.setProperty('--fit-line-height', String(step.lineHeight));
+    root.style.setProperty('--fit-block-pad', `${step.blockPadPx}px`);
+    root.style.setProperty('--fit-row-pad', `${step.rowPadPx}px`);
+    root.style.setProperty('--fit-sign-gap', `${step.signGapPx}px`);
+    const height = host.offsetHeight;
+    host.remove();
+    return height;
+  }, step);
+}
+
 const norm = s => s.replace(/\s+/g, ' ').trim();
+const shiftOf = p => Number((p.transform.match(/,\s*(-?[\d.]+)px/) || [])[1] || 0);
+
+// Every page is held to the bottom margin shown in the settings panel,
+// including continuation pages after the downward nudge under the letterhead
+// and content moved down by a content offset.
+function assertAboveBottomMargin(m, key) {
+  const marginPx = m.bottomMarginMm * 96 / 25.4 * m.scale;
+  for (const [i, p] of m.pages.entries()) {
+    const limit = p.pageBoxBottom - marginPx;
+    assert(p.textBottom <= limit + 1, `${key}: page ${i + 1} text ends ${Math.round(p.textBottom - limit)}px inside the bottom margin (content ${p.transform || 'not shifted'})`);
+  }
+}
 
 async function runScenario(browser, scenario) {
   const page = await browser.newPage({ viewport: { width: 1500, height: 1100 } });
   const draft = { dosageSchemaVersion: 1, ...scenario.draft };
-  await page.addInitScript(({ key, draft }) => { localStorage.clear(); localStorage.setItem(key, JSON.stringify(draft)); }, { key: `rxDraft:${patient.id}:${visitId}`, draft });
+  await page.addInitScript(({ key, draft, offsetY }) => {
+    localStorage.clear();
+    localStorage.setItem(key, JSON.stringify(draft));
+    if (offsetY) localStorage.setItem('rx_offset_y_px', String(offsetY));
+  }, { key: `rxDraft:${patient.id}:${visitId}`, draft, offsetY: scenario.offsetYPx || 0 });
+  // A content offset normally comes from the doctor's saved print layout.
+  const visitDoctor = scenario.offsetYPx ? { ...doctor, metadata: { rxPrintProfile: { contentOffset: { xPx: 0, yPx: scenario.offsetYPx } } } } : doctor;
   await page.context().addCookies([{ name: 'auth_token', value: 'synthetic-browser-fixture', url: baseUrl }]);
   const visit = { id: visitId, patientId: patient.id, doctorId: doctor.id, patient, doctor, complaints: draft.chiefComplaints ? [{ complaint: draft.chiefComplaints }] : [], history: {}, exam: {}, vitals: scenario.vitals, plan: { followUpDate: scenario.reviewDate || '', followUpInstructions: draft.followUpInstructions || '' }, diagnosis: [], createdAt: '2026-10-25T09:00:00Z' };
   await page.route('**/api/**', route => {
@@ -206,7 +260,7 @@ async function runScenario(browser, scenario) {
       if (name.startsWith('/visits/')) body = { ...visit, version: 2 };
       else if (name.startsWith('/prescriptions')) body = { id: 'rx-synthetic-fit', prescription: { id: 'rx-synthetic-fit' } };
       else body = { ok: true };
-    } else if (name === '/auth/me' || name === `/users/${doctor.id}`) body = doctor;
+    } else if (name === '/auth/me' || name === `/users/${doctor.id}`) body = visitDoctor;
     else if (name === '/users') body = { users: [doctor] };
     else if (name === '/patients') body = { patients: [patient], total: 1 };
     else if (name === `/patients/${patient.id}`) body = patient;
@@ -274,15 +328,15 @@ async function runScenario(browser, scenario) {
       assert(state.status.includes(`Printing on ${state.pageCount} pages`), `${key}: status must explain the overflow, got "${state.status}"`);
     }
 
+    // No layout lets text end inside the bottom margin, on any page.
+    assertAboveBottomMargin(before, `${key}/normal`);
+    assertAboveBottomMargin(optimized, `${key}/space-optimized`);
+    assertAboveBottomMargin(state, `${key}/fit`);
+
     // Readable, inside the page, no collisions.
     for (const [i, p] of state.pages.entries()) {
       assert(p.minFont >= MIN_FONT_PX, `${key}: page ${i + 1} has ${p.minFont}px text, below ${MIN_FONT_PX}px`);
       assert(p.minLineRatio >= 1.14, `${key}: page ${i + 1} line height ratio ${p.minLineRatio.toFixed(2)} is too tight`);
-      // Continuation pages carry the existing downward nudge under the
-      // letterhead (continuationExtraOffsetPx), which Paged.js does not
-      // subtract from the page; only page 1 is held to the printable area.
-      const shiftPx = i > 0 ? Number((p.transform.match(/,\s*(-?[\d.]+)px/) || [])[1] || 0) : 0;
-      assert(p.textBottom <= p.areaBottom + Math.max(0, shiftPx) + 1, `${key}: page ${i + 1} text ends ${Math.round(p.textBottom - p.areaBottom)}px below the printable area (content ${p.transform || 'not shifted'})`);
       assert(p.textRight <= p.areaRight + 1 && p.textLeft >= p.areaLeft - 1, `${key}: page ${i + 1} text runs outside the printable width`);
       assert.equal(p.overlaps, 0, `${key}: page ${i + 1} has ${p.overlaps} overlapping text lines`);
     }
@@ -291,9 +345,14 @@ async function runScenario(browser, scenario) {
       assert(f.valueLeft > f.labelRight, `${key}: ${name} value must follow its heading`);
     }
 
-    // Best fit: text shrinks only when it has to, and a shrunk page is well used.
+    // Best fit: the printed page, laid out again at the next roomier step,
+    // must not fit. Heights can drop sharply between steps when long cells
+    // stop wrapping, so page fullness alone does not prove this.
     const fill = state.pages[0].fillHeight / state.pages[0].areaHeight;
-    if (fits && state.step > 0) assert(fill > 0.8, `${key}: step ${state.step} leaves the page ${Math.round(fill * 100)}% full, so a roomier step would have fit`);
+    if (fits && state.step > 0) {
+      const roomier = await heightAtStep(page, FIT_STEPS[state.step - 1]);
+      assert(roomier > state.pages[0].areaHeight - 2, `${key}: step ${state.step - 1} is ${Math.round(roomier)}px tall and fits the ${Math.round(state.pages[0].areaHeight)}px page, so step ${state.step} shrinks text it did not need to`);
+    }
     if (optimized.pageCount === 1) assert(parseFloat(state.fontVar) === 14, `${key}: fits space-optimized at 14px, so fit mode must not shrink text (got ${state.fontVar})`);
 
     const shots = [];
@@ -320,10 +379,10 @@ async function runScenario(browser, scenario) {
       assert(after.text.includes('Patient Code'), `${key}: unticking must restore the stacked layout`);
     }
 
-    const belowArea = m => Math.max(0, ...m.pages.map(p => Math.round(p.textBottom - p.areaBottom)));
-    const summary = { normalBelowAreaPx: belowArea(before), optimizedBelowAreaPx: belowArea(optimized), normalPages: before.pageCount, optimizedPages: optimized.pageCount, fitPages: state.pageCount, step: state.step, font: state.fontVar, fill: Math.round(fill * 100), status: state.status, pdfPages: state.pdfPages };
-    if (summary.normalBelowAreaPx || summary.optimizedBelowAreaPx) console.log(`NOTE ${key}: without fit, text ends ${summary.normalBelowAreaPx}px (normal) / ${summary.optimizedBelowAreaPx}px (space-optimized) below the printable area`);
-    console.log(`PASS ${key}: normal ${before.pageCount}p, space-optimized ${optimized.pageCount}p -> fit ${state.pageCount}p at step ${state.step} (${state.fontVar}), ${summary.fill}% of page${state.pdfPages ? `, PDF ${state.pdfPages}p` : ''}`);
+    const nudges = m => m.pages.slice(1).map(p => Math.round(shiftOf(p)));
+    const summary = { normalNudgesPx: nudges(before), optimizedNudgesPx: nudges(optimized), fitNudgesPx: nudges(state), normalPages: before.pageCount, optimizedPages: optimized.pageCount, fitPages: state.pageCount, step: state.step, font: state.fontVar, fill: Math.round(fill * 100), status: state.status, pdfPages: state.pdfPages };
+    const nudgeText = ['normal', 'optimized', 'fit'].map(l => summary[`${l}NudgesPx`]).some(n => n.length) ? `, page 2+ nudged ${['normal', 'optimized', 'fit'].map(l => `${l} [${summary[`${l}NudgesPx`].join(',')}]`).join(' ')}` : '';
+    console.log(`PASS ${key}: normal ${before.pageCount}p, space-optimized ${optimized.pageCount}p -> fit ${state.pageCount}p at step ${state.step} (${state.fontVar}), ${summary.fill}% of page${state.pdfPages ? `, PDF ${state.pdfPages}p` : ''}${nudgeText}`);
     return summary;
   } catch (error) {
     await page.screenshot({ path: path.join(dir, 'failure.png') }).catch(() => {});

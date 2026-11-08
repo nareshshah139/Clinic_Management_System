@@ -45,6 +45,19 @@ const PRINT_LINE_SPACING_OPTIONS: Array<{ value: PrintLineSpacing; label: string
   { value: 'tight', label: 'Tight' },
 ];
 
+/**
+ * @cc [owner:nareshshah139,label:product] continuation-pages-keep-bottom-margin
+ * Continuation pages MAY be moved down to clear the letterhead, and a printer
+ * profile MAY move content down, but no printed line MAY end inside the bottom
+ * margin. Pagination MUST reserve the space these moves take.
+ */
+// Continuation pages start about one line lower than page 1 so they breathe
+// under the letterhead. Paged.js gives them this much extra bottom margin so
+// the nudge never pushes text into the real bottom margin.
+const CONTINUATION_NUDGE_PX = 36;
+const CONTINUATION_RESERVE_PX = 48;
+const PRINT_PX_PER_MM = 96 / 25.4;
+
 type DosageUnit = 'MG' | 'ML' | 'MCG' | 'IU' | 'TABLET' | 'CAPSULE' | 'DROP' | 'SPRAY' | 'PATCH' | 'INJECTION';
 
 type Frequency = string;
@@ -3702,15 +3715,27 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         window.addEventListener('error', errorHandler as EventListener);
         window.addEventListener('unhandledrejection', errorHandler as EventListener);
         
+        // Content moved down after pagination (a printer profile's offset, and
+        // the continuation-page nudge) must not end inside the bottom margin,
+        // so Paged.js lays out each page with that much extra bottom margin.
+        const baseOffsetYPx = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0);
+        const nudgesContinuationPages = !(useLetterheadForDownload && resolvedPrintBgUrl === PRESCRIPTION_LETTERHEAD_URL);
+        const pxToMmUp = (px: number) => Math.ceil((px / PRINT_PX_PER_MM) * 10) / 10;
+        const firstPageBottomMm = Math.round((bottomMarginMm + pxToMmUp(Math.max(0, baseOffsetYPx))) * 10) / 10;
+        const continuationBottomMm = Math.round((firstPageBottomMm + (nudgesContinuationPages ? pxToMmUp(CONTINUATION_RESERVE_PX) : 0)) * 10) / 10;
+
         // Build CSS string with page rules
         // Note: @page rules must be passed to Paged.js through the CSS parameter, not inline styles
         const pageRulesCSS = `
           @page {
             size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
             margin-top: ${topMarginMm}mm !important;
-            margin-bottom: ${bottomMarginMm}mm !important;
+            margin-bottom: ${continuationBottomMm}mm !important;
             margin-left: ${leftMarginMm}mm !important;
             margin-right: ${rightMarginMm}mm !important;
+          }
+          @page :first {
+            margin-bottom: ${firstPageBottomMm}mm !important;
           }
         `;
         
@@ -3756,10 +3781,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             let fit: { index: number; fits: boolean } | null = null;
             if (fitToPage) {
               await document.fonts?.ready;
-              const box = pageContentBoxPx(paperPreset, { topMm: topMarginMm, bottomMm: bottomMarginMm, leftMm: leftMarginMm, rightMm: rightMarginMm });
-              const offsetY = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0);
-              // A downward content offset pushes the last lines toward the page edge.
-              const availablePx = box.heightPx - Math.max(0, offsetY) - 2;
+              // Page 1's bottom margin already includes any downward content offset.
+              const box = pageContentBoxPx(paperPreset, { topMm: topMarginMm, bottomMm: firstPageBottomMm, leftMm: leftMarginMm, rightMm: rightMarginMm });
+              const availablePx = box.heightPx - 2;
               const fitted = fitPrintMarkup(content, { widthPx: box.widthPx, availablePx, from: fitFrom, hostClassName: 'prescription-pdf-export' });
               html = fitted.html;
               fit = fitted;
@@ -3860,11 +3884,24 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           return null;
         };
 
+        const lowestContentBottom = (root: HTMLElement) => {
+          let bottom = -Infinity;
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          while (walker.nextNode()) {
+            if (!walker.currentNode.textContent?.trim()) continue;
+            const range = document.createRange();
+            range.selectNodeContents(walker.currentNode);
+            for (const rect of Array.from(range.getClientRects())) if (rect.height > 0) bottom = Math.max(bottom, rect.bottom);
+          }
+          root.querySelectorAll('img').forEach(img => { bottom = Math.max(bottom, img.getBoundingClientRect().bottom); });
+          return bottom;
+        };
+
         // Match continuation pages to page 1 by copying the vertical offset of
         // the first rendered text block, then nudge continuation pages down by
         // about one line so the second page breathes a bit more under the
         // letterhead.
-        const continuationExtraOffsetPx = 36;
+        const continuationExtraOffsetPx = CONTINUATION_NUDGE_PX;
         let firstPageTextOffsetPx = 0;
         const firstPageContent = pages[0]?.querySelector('.pagedjs_page_content') as HTMLElement | null;
         const firstPageBox = pages[0]?.querySelector('.pagedjs_pagebox') as HTMLElement | null;
@@ -3905,9 +3942,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           const contentArea = page.querySelector('.pagedjs_page_content');
           if (contentArea) {
             const offsetX = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0);
-            const baseOffsetY = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0);
             let continuationOffsetY = 0;
-            if (idx > 0 && firstPageTextOffsetPx > 0 && !(useLetterheadForDownload && resolvedPrintBgUrl === PRESCRIPTION_LETTERHEAD_URL)) {
+            if (idx > 0 && firstPageTextOffsetPx > 0 && nudgesContinuationPages) {
               const pageBox = page.querySelector('.pagedjs_pagebox') as HTMLElement | null;
               const firstText = findFirstTextElement(contentArea as HTMLElement);
               if (pageBox && firstText) {
@@ -3915,9 +3951,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 const textRect = firstText.getBoundingClientRect();
                 const currentOffset = Math.round(textRect.top - pageBoxRect.top);
                 continuationOffsetY = Math.max(0, Math.min(firstPageTextOffsetPx - currentOffset, 240));
+                // Never move the last line into the bottom margin: cap the
+                // nudge at the free space left under this page's content.
+                const scale = pageBoxRect.height / (pageBox.offsetHeight || pageBoxRect.height) || 1;
+                const limitPx = (pageBoxRect.bottom - pageBoxRect.top) / scale - bottomMarginMm * PRINT_PX_PER_MM - Math.max(0, baseOffsetYPx);
+                const contentBottomPx = (lowestContentBottom(contentArea as HTMLElement) - pageBoxRect.top) / scale;
+                continuationOffsetY = Math.max(0, Math.min(continuationOffsetY, Math.floor(limitPx - contentBottomPx - 1)));
               }
             }
-            const effectiveOffsetY = baseOffsetY + continuationOffsetY;
+            const effectiveOffsetY = baseOffsetYPx + continuationOffsetY;
             (contentArea as HTMLElement).style.transform = `translate(${offsetX}px, ${effectiveOffsetY}px)`;
             (contentArea as HTMLElement).style.transformOrigin = 'top left';
           }
