@@ -1,3 +1,4 @@
+import { hasScopedPermission } from '../../shared/guards/scoped-permission';
 import {
   BadRequestException,
   ForbiddenException,
@@ -1500,6 +1501,10 @@ export class PharmacyAgentService implements OnModuleInit {
     return map[targetType];
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security;product] agent-scoped-grants
+   * Agent permission checks MUST honor action wildcards in the exact required scope.
+   */
   private async hasPermission(user: AgentUser, permission?: string | null) {
     if (!permission) return true;
     if (
@@ -1521,7 +1526,7 @@ export class PharmacyAgentService implements OnModuleInit {
       select: { permissions: true },
     });
     const rolePermissions = this.parsePermissions(role?.permissions);
-    return new Set([...rolePermissions, ...userPermissions]).has(permission);
+    return hasScopedPermission(new Set([...rolePermissions, ...userPermissions]), permission);
   }
 
   private parsePermissions(value?: string | null): string[] {

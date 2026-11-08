@@ -1,3 +1,5 @@
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import {
   Controller,
   Get,
@@ -35,6 +37,7 @@ import {
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('pharmacy/packages')
+@Roles(...CLINIC_STAFF_ROLES)
 export class PharmacyPackageController {
   constructor(private readonly pharmacyPackageService: PharmacyPackageService) {}
 

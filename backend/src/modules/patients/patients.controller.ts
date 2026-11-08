@@ -1,3 +1,5 @@
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import {
   Controller,
   Get,
@@ -24,6 +26,7 @@ interface AuthenticatedRequest {
 }
 
 @Controller('patients')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 export class PatientsController {
   constructor(private readonly patientsService: PatientsService) {}

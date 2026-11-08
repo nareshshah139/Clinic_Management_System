@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VisitsPage from '@/app/dashboard/visits/page';
 import { apiClient } from '@/lib/api';
 
@@ -29,6 +29,23 @@ jest.mock('@/components/visits/MedicalVisitForm', () => {
 describe('VisitsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('offers doctors from every page of the branch user list', async () => {
+    const scrollIntoView = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = jest.fn();
+    jest.mocked(apiClient.getPatients).mockResolvedValue({ data: [{ id: 'patient-123', name: 'Patient' }] });
+    jest.mocked(apiClient.get).mockImplementation(async (path: string, params?: any) => {
+      if (path === '/auth/me') return { role: 'DOCTOR' } as any;
+      if (params?.page === 2) return { users: [{ id: 'doctor-2', firstName: 'Second', lastName: 'Doctor' }], pagination: { totalPages: 2 } } as any;
+      return { users: [{ id: 'doctor-1', firstName: 'First', lastName: 'Doctor' }], pagination: { totalPages: 2 } } as any;
+    });
+
+    render(<VisitsPage />);
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/users', { role: 'DOCTOR', page: 2, limit: 100 }));
+    fireEvent.click(await screen.findByRole('combobox'));
+    expect(await screen.findByText('Dr. Second Doctor')).toBeInTheDocument();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
   });
 
   it('renders loading state initially', () => {
@@ -136,7 +153,7 @@ describe('VisitsPage', () => {
     
     await waitFor(() => {
       expect(mockGetPatients).toHaveBeenCalledWith({ page: 1, limit: 1 });
-      expect(mockGet).toHaveBeenCalledWith('/users', { role: 'DOCTOR', limit: 1 });
+      expect(mockGet).toHaveBeenCalledWith('/users', { role: 'DOCTOR', page: 1, limit: 100 });
     });
   });
 

@@ -10,6 +10,7 @@ describe('PrescriptionsService', () => {
   let prisma: PrismaService;
 
   const mockPrisma = {
+    pharmacyInvoice: { findFirst: jest.fn().mockResolvedValue(null) },
     $transaction: jest.fn(),
     $queryRaw: jest.fn().mockResolvedValue([{ id: 'prescription-123' }]),
     patient: {
