@@ -47,7 +47,9 @@ function build() {
         return row;
       }),
       findFirstOrThrow: jest.fn(async ({ where }: any) => ({ ...rows.get(where.id) })),
+      findMany: jest.fn(async () => []),
     },
+    inventoryItem: { findMany: jest.fn(async () => []) },
     $transaction: jest.fn(async (fn: any) => fn(tx)),
   };
   const inventory: any = {

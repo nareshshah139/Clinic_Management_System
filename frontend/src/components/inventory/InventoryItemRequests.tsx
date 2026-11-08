@@ -13,6 +13,7 @@ import {
   personName,
   type InventoryItemRequest,
 } from '@/lib/inventory-item-requests';
+import { ItemRequestDuplicateWarning } from './ItemRequestDuplicateWarning';
 import { inputClass } from './workspace-model';
 
 const STATUS_LABEL = { PENDING: 'Waiting for doctor', APPROVED: 'Approved', REJECTED: 'Rejected' } as const;
@@ -27,6 +28,7 @@ export function InventoryItemRequests() {
   const [review, setReview] = useState<{ request: InventoryItemRequest; action: 'approve' | 'reject' } | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [conflict, setConflict] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,6 +50,7 @@ export function InventoryItemRequests() {
     if (!review || busy) return;
     if (review.action === 'reject' && !note.trim()) return;
     setBusy(true);
+    setConflict('');
     try {
       if (review.action === 'approve') {
         await apiClient.approveInventoryItemRequest(review.request.id);
@@ -59,7 +62,14 @@ export function InventoryItemRequests() {
       setReview(null);
       setNote('');
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Review failed', description: e.body?.message || e.message });
+      const message = e.body?.message || e.message;
+      if (e.status === 409) {
+        setConflict(`${message}. The list below is up to date.`);
+        setReview(null);
+        setNote('');
+      } else {
+        toast({ variant: 'destructive', title: 'Review failed', description: message });
+      }
     } finally {
       setBusy(false);
       window.dispatchEvent(new CustomEvent('inventory-workspace-refresh'));
@@ -86,6 +96,7 @@ export function InventoryItemRequests() {
       {request.reviewedAt ? ` · ${displayClinicDateTime(request.reviewedAt)}` : ''}
       {request.reviewNote && <><br /><span className="font-medium">Note: </span>{request.reviewNote}</>}
     </p>}
+    {actions && <ItemRequestDuplicateWarning duplicates={request.possibleDuplicates} intro="Check before approving." />}
     {actions && <div className="flex gap-2">
       <Button onClick={() => { setNote(''); setReview({ request, action: 'approve' }); }}>Approve</Button>
       <Button variant="outline" onClick={() => { setNote(''); setReview({ request, action: 'reject' }); }}>Reject</Button>
@@ -98,6 +109,7 @@ export function InventoryItemRequests() {
         <p className="text-muted-foreground">New items enter inventory only after a doctor approves them.</p></div>
       <Button variant="outline" onClick={load} disabled={loading}>Refresh requests</Button>
     </header>
+    {conflict && <p role="alert" className="rounded-md border border-destructive p-3 text-sm">{conflict}</p>}
     {error ? <p role="alert">{error} <Button variant="outline" onClick={load}>Retry</Button></p>
       : loading && requests.length === 0 ? <p role="status">Loading requests…</p>
       : <>

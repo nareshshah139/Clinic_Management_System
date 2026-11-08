@@ -2,14 +2,18 @@
 
 // CR-30: a new item enters inventory only after a doctor approves it.
 // Lifecycle of one item request across staff, doctor and second-doctor sessions.
-// Env: DB_URL (Postgres the API uses), BASE_URL, API_URL.
+// Env: DB_URL or DATABASE_NAME (+ PGHOST/PGPORT/PGUSER), BASE_URL, API_URL.
 
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 
-const DB_URL = process.env.DB_URL || process.env.DATABASE_URL;
+const DB_URL =
+  process.env.DB_URL ||
+  (process.env.DATABASE_NAME
+    ? `postgresql://${process.env.PGUSER || "postgres"}@${process.env.PGHOST || "127.0.0.1"}:${process.env.PGPORT || "5433"}/${process.env.DATABASE_NAME}`
+    : process.env.DATABASE_URL);
 const BRANCH = "branch-seed-1";
 const PASSWORD = "password123";
 const ACCOUNTS = {
@@ -197,6 +201,9 @@ const model = {
     StaffStock: { label: "Staff (reception) on stock list\nnew item absent" },
     StaffAddForm: { label: "Staff: Add item form open" },
     StaffDuplicateSku: { label: "Staff: duplicate SKU refused\n(no request created)" },
+    StaffDuplicateNameSubmitted: { label: "Staff: sent for approval,\nconfirmation says item name\nis already in inventory" },
+    DoctorSeesDuplicateWarning: { label: "Doctor card warns:\nalready in inventory +\nalso requested by", terminal: false },
+    DoctorSeesSkuCollision: { label: "Doctor card warns:\nSKU already used by an item", terminal: true },
     StaffSubmitted: { label: "Staff: 'Sent to doctor for approval'\nrequest PENDING, 0 items" },
     StaffStockPending: { label: "Staff stock search\nitem absent while pending" },
     StaffRequestsPending: { label: "Staff 'My item requests'\nWaiting for doctor" },
@@ -212,7 +219,7 @@ const model = {
     ApproveDialog: { label: "Approve dialog open" },
     DoctorApproved: { label: "Doctor: Approved\nexactly 1 item, badge -1" },
     StaleApproveDialog: { label: "Doctor A dialog open\nDoctor B already approved" },
-    ApproveConflict: { label: "Doctor A: 'already approved'\nstill exactly 1 item" },
+    ApproveConflict: { label: "Doctor A: dialog closed,\n'already approved' announced,\nstill exactly 1 item" },
     DoctorStockHasItem: { label: "Doctor stock search\nitem present" },
     StaffStockHasItem: { label: "Staff stock search\nitem present" },
     StaffSeesApproved: { label: "Staff sees Approved\nby doctor", terminal: true },
@@ -223,6 +230,9 @@ const model = {
     { from: "StaffAddForm", event: "submitDuplicateSku", to: "StaffDuplicateSku" },
     { from: "StaffDuplicateSku", event: "fixSkuAndSubmit", to: "StaffSubmitted" },
     { from: "StaffAddForm", event: "submitFullDetails", to: "StaffSubmitted" },
+    { from: "StaffAddForm", event: "submitDuplicateName", to: "StaffDuplicateNameSubmitted" },
+    { from: "StaffDuplicateNameSubmitted", event: "doctorOpensDuplicateRequest", to: "DoctorSeesDuplicateWarning" },
+    { from: "DoctorSeesDuplicateWarning", event: "otherRequestTakesSku", to: "DoctorSeesSkuCollision" },
     { from: "StaffSubmitted", event: "closeAndSearch", to: "StaffStockPending" },
     { from: "StaffStockPending", event: "openMyRequests", to: "StaffRequestsPending" },
     { from: "StaffRequestsPending", event: "reload", to: "StaffRequestsPending" },
@@ -258,8 +268,9 @@ const driver = {
     shared.sessions = await sessions(apiUrl);
     const stamp = Date.now().toString(36);
     shared.existingSku = `CR30-EXIST-${stamp}`;
+    shared.existingName = `CR30 Existing ${stamp}`;
     const r = await api({ apiUrl, shared }, "admin", "POST", "/inventory/items", {
-      name: `CR30 Existing ${stamp}`, type: "MEDICINE", costPrice: 5, sellingPrice: 6, unit: "PIECES", sku: shared.existingSku,
+      name: shared.existingName, type: "MEDICINE", costPrice: 5, sellingPrice: 6, unit: "PIECES", sku: shared.existingSku,
     });
     if (r.status !== 201) throw Error(`fixture item: ${r.status} ${JSON.stringify(r.body)}`);
     const XLSX = require(path.resolve(__dirname, "../../../node_modules/xlsx"));
@@ -278,6 +289,8 @@ const driver = {
     const tag = `${ctx.pathIndex}${Math.random().toString(36).slice(2, 7)}`;
     ctx.vars.name = `CR30 Nebulex ${tag}`;
     ctx.vars.sku = `CR30-SKU-${tag}`;
+    ctx.vars.dupName = ctx.shared.existingName.toUpperCase();
+    ctx.vars.dupOtherName = ` ${ctx.shared.existingName.toLowerCase().replace(" ", "   ")} `;
     ctx.vars.note = `Duplicate of an existing 120 ml pack (${tag})`;
     await as(ctx, "staff");
     await openStock(ctx);
@@ -307,6 +320,33 @@ const driver = {
       await fillAddForm(ctx.page, ctx.vars.details);
       await ctx.page.getByRole("button", { name: "Add Item" }).click();
       await ctx.page.getByRole("dialog").getByRole("heading", { name: "Sent to doctor for approval" }).waitFor({ timeout: 15_000 }).catch(() => {});
+    },
+    submitDuplicateName: async (ctx) => {
+      await fillAddForm(ctx.page, { name: ctx.vars.dupName, costPrice: "10", sellingPrice: "12", sku: ctx.vars.sku });
+      await ctx.page.getByRole("button", { name: "Add Item" }).click();
+      await ctx.page.getByRole("dialog").getByRole("heading", { name: "Sent to doctor for approval" }).waitFor({ timeout: 15_000 }).catch(() => {});
+    },
+    doctorOpensDuplicateRequest: async (ctx) => {
+      const other = await api(ctx, "pharmacist", "POST", "/inventory/items", {
+        name: ctx.vars.dupOtherName, type: "MEDICINE", costPrice: 8, sellingPrice: 9, unit: "PIECES", sku: `${ctx.vars.sku}-B`,
+      });
+      if (other.status !== 202) throw Error(`pharmacist request: ${other.status} ${JSON.stringify(other.body)}`);
+      await as(ctx, "doctor");
+      await openStock(ctx);
+      await openApprovals(ctx);
+    },
+    otherRequestTakesSku: async (ctx) => {
+      const sku = `${ctx.vars.sku}-SHARED`;
+      ctx.vars.collisionName = `CR30 Collide ${ctx.pathIndex}${Math.random().toString(36).slice(2, 6)}`;
+      const first = await api(ctx, "staff", "POST", "/inventory/items", { name: `${ctx.vars.collisionName} first`, type: "MEDICINE", costPrice: 1, sellingPrice: 2, unit: "PIECES", sku });
+      const second = await api(ctx, "staff", "POST", "/inventory/items", { name: ctx.vars.collisionName, type: "MEDICINE", costPrice: 1, sellingPrice: 2, unit: "PIECES", sku });
+      if (first.status !== 202 || second.status !== 202) throw Error(`collision fixtures: ${first.status}/${second.status}`);
+      const approved = await api(ctx, "admin", "POST", `/inventory/item-requests/${first.body.request.id}/approve`, {});
+      if (approved.status !== 200) throw Error(`approve first: ${approved.status}`);
+      ctx.vars.collisionSku = sku;
+      await ctx.page.reload();
+      await ctx.page.getByRole("heading", { name: "New item requests" }).waitFor({ timeout: 60_000 });
+      await ctx.page.getByText(/Loading requests/).waitFor({ state: "detached", timeout: 30_000 }).catch(() => {});
     },
     closeAndSearch: async (ctx) => {
       await ctx.page.getByRole("dialog").getByRole("button", { name: "Close" }).first().click();
@@ -390,8 +430,7 @@ const driver = {
       const answered = ctx.page.waitForResponse((r) => r.url().includes("/approve") && r.request().method() === "POST", { timeout: 15_000 });
       await ctx.page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
       ctx.vars.lastApprove = (await answered).status();
-      if (t.from === "StaleApproveDialog") await ctx.page.getByText("Review failed").first().waitFor({ timeout: 5_000 }).catch(() => {});
-      else await ctx.page.getByRole("dialog").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
+      await ctx.page.getByRole("dialog").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
     },
     doubleClickApprove: async (ctx) => {
       await ctx.page.getByRole("dialog").getByRole("button", { name: "Approve" }).dblclick();
@@ -446,6 +485,43 @@ const driver = {
       check(requestRows(ctx.vars.name).length === 0, "DB: no request created for a duplicate SKU");
       check(itemCount(ctx.vars.name) === 0, "DB: 0 items");
     },
+    StaffDuplicateNameSubmitted: async (ctx, check) => {
+      const d = ctx.page.getByRole("dialog");
+      check(await d.getByRole("heading", { name: "Sent to doctor for approval" }).isVisible(), "still sent for approval (duplicates do not block)");
+      const w = d.getByTestId("duplicate-warning");
+      check((await w.count()) === 1, "confirmation shows a duplicate notice");
+      const text = (await w.textContent().catch(() => "")) || "";
+      check(text.includes("An item with this name is already in inventory; the doctor will see this."), "notice: item with this name is already in inventory; the doctor will see this");
+      check(text.includes("Already in inventory (1 batch)"), "notice counts 1 batch in inventory");
+      check(text.includes(ctx.shared.existingName), `notice names the existing item ${ctx.shared.existingName}`);
+      const reqs = requestRows(ctx.vars.dupName);
+      check(reqs.length === 1 && reqs[0].status === "PENDING", "DB: one PENDING request still created");
+    },
+    DoctorSeesDuplicateWarning: async (ctx, check) => {
+      const c = card(ctx, ctx.vars.dupName);
+      const shown = await until(async () => (await c.count()) === 1);
+      check(shown, "doctor sees the duplicate-name request card");
+      const w = c.getByTestId("duplicate-warning");
+      check((await w.count()) === 1, "card shows a duplicate warning");
+      const text = (await w.textContent().catch(() => "")) || "";
+      check(text.includes("Already in inventory (1 batch)"), "warning: Already in inventory (1 batch)");
+      check(text.includes(ctx.shared.existingName), "warning names the existing inventory item");
+      check(text.includes("0 in stock") && text.includes("same name"), "warning shows stock and the matching field");
+      check(/Also requested by Pharma Cist on /.test(text), "warning: Also requested by Pharma Cist on <date>");
+      check(await c.getByRole("button", { name: "Approve" }).isEnabled(), "Approve is not blocked by the warning");
+      check(await c.getByRole("button", { name: "Reject" }).isEnabled(), "Reject available to reject as duplicate");
+      check(itemCount(ctx.vars.dupName) === 0, "DB: no item created by merely viewing");
+    },
+    DoctorSeesSkuCollision: async (ctx, check) => {
+      const c = card(ctx, ctx.vars.collisionName);
+      const shown = await until(async () => (await c.getByTestId("duplicate-warning").count()) === 1);
+      check(shown, "SKU-collision request card shows a duplicate warning");
+      const text = (await c.getByTestId("duplicate-warning").textContent().catch(() => "")) || "";
+      check(text.includes(`${ctx.vars.collisionName} first`), "warning names the item that took the SKU");
+      check(text.includes("same SKU"), "warning says same SKU");
+      check(await c.getByRole("button", { name: "Approve" }).isEnabled(), "Approve still clickable (doctor decides)");
+      check(requestRows(ctx.vars.collisionName)[0]?.status === "PENDING", "DB: collision request still PENDING");
+    },
     StaffSubmitted: async (ctx, check) => {
       const d = ctx.page.getByRole("dialog");
       check(await d.getByRole("heading", { name: "Sent to doctor for approval" }).isVisible(), "confirmation title");
@@ -455,6 +531,7 @@ const driver = {
       check(reqs[0] && reqs[0].requester === ACCOUNTS.staff, "DB: request recorded against the reception user");
       check(itemCount(ctx.vars.name) === 0, "DB: 0 inventory items while pending");
       check(pendingCount() === ctx.vars.pendingBefore + 1, "DB: branch pending count +1");
+      check((await d.getByTestId("duplicate-warning").count()) === 0, "no duplicate notice for a genuinely new name");
     },
     StaffStockPending: async (ctx, check) => {
       check((await ctx.page.getByRole("dialog").count()) === 0, "dialog closed");
@@ -530,6 +607,7 @@ const driver = {
       check((await c.getByText(`Requested by ${ctx.shared.sessions.staff.name}`).count()) === 1, "shows requester name");
       check((await c.getByRole("button", { name: "Approve" }).count()) === 1, "Approve button");
       check((await c.getByRole("button", { name: "Reject" }).count()) === 1, "Reject button");
+      check((await c.getByTestId("duplicate-warning").count()) === 0, "no duplicate warning for a new item");
       check(requestRows(ctx.vars.name)[0]?.status === "PENDING", "DB: still PENDING");
       check(itemCount(ctx.vars.name) === 0, "DB: 0 items");
     },
@@ -591,15 +669,19 @@ const driver = {
     },
     ApproveConflict: async (ctx, check) => {
       const { page } = ctx;
-      const msg = await until(async () => (await page.getByText("This request was already approved").count()) > 0);
       check(ctx.vars.lastApprove === 409, `second approve answered 409 (got ${ctx.vars.lastApprove})`);
-      check(msg, "doctor A told 'This request was already approved'");
-      check(await page.getByText("This request was already approved").first().isVisible(), "the message is visible on screen");
-      check((await page.getByText("Review failed").count()) > 0, "toast title 'Review failed'");
+      check((await page.getByRole("dialog").count()) === 0, "the stale dialog closed itself (no clickable Approve left)");
+      const alert = page.getByRole("alert").filter({ hasText: "This request was already approved" });
+      const msg = await until(async () => (await alert.count()) === 1);
+      check(msg, "doctor A told 'This request was already approved' in a role=alert region");
+      check(await alert.first().isVisible().catch(() => false), "the message is visible on screen");
+      const hidden = await alert.first().evaluate((el) => !!el.closest('[aria-hidden="true"], [inert]')).catch(() => true);
+      check(hidden === false, "the announcement is not inside aria-hidden or inert content");
       check(itemCount(ctx.vars.name) === 1, `DB: still exactly 1 item (got ${itemCount(ctx.vars.name)})`);
       const c = card(ctx, ctx.vars.name);
       const shown = await until(async () => (await c.getByText(`Approved by ${ctx.shared.sessions.doctor2.name}`).count()) === 1);
       check(shown, "list refreshes to 'Approved by' the second doctor");
+      check((await c.getByRole("button", { name: "Approve" }).count()) === 0, "card has no Approve button after the refresh");
     },
     DoctorStockHasItem: async (ctx, check) => {
       check((await stockRow(ctx, ctx.vars.name).count()) === 1, "doctor stock search: item present after approval");

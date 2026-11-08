@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { isPendingApproval } from '@/lib/inventory-item-requests';
+import { ItemRequestDuplicateWarning } from './ItemRequestDuplicateWarning';
+import { isPendingApproval, type PossibleDuplicates } from '@/lib/inventory-item-requests';
 import { apiClient } from '@/lib/api';
 
 
@@ -26,6 +27,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentForApproval, setSentForApproval] = useState(false);
+  const [duplicates, setDuplicates] = useState<PossibleDuplicates | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -170,6 +172,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
       });
 
       if (isPendingApproval(result)) {
+        setDuplicates(result.request.possibleDuplicates ?? null);
         setSentForApproval(true);
         window.dispatchEvent(new CustomEvent('inventory-workspace-refresh'));
         return;
@@ -194,6 +197,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
               Sent to doctor for approval. The item will appear in inventory once approved.
             </DialogDescription>
           </DialogHeader>
+          <ItemRequestDuplicateWarning duplicates={duplicates} intro={duplicates?.inventory.length ? 'An item with this name is already in inventory; the doctor will see this.' : 'Another request for this item is already waiting; the doctor will see this.'} />
           <DialogFooter>
             <Button type="button" onClick={() => { setSentForApproval(false); onOpenChange(false); }}>Close</Button>
           </DialogFooter>
