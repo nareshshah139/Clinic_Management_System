@@ -21,10 +21,10 @@ const testUrl = process.env.REPORT_TEST_DATABASE_URL;
       const doctor = await tx.user.create({ data: { branchId: branchA.id, firstName: 'Synthetic', lastName: 'Doctor', email: `${suffix}@example.invalid`, password: 'none', role: 'DOCTOR' } });
       const visit = await tx.visit.create({ data: { patientId: patientA.id, doctorId: doctor.id, complaints: '[]' } });
       const service = await tx.service.create({ data: { branchId: branchA.id, name: 'Synthetic treatment', type: 'PROCEDURE', priceMrp: 100, priceNet: 100 } });
-      const invoiceA = await tx.invoice.create({ data: { patientId: patientA.id, visitId: visit.id, invoiceNo: `A-${suffix}`, total: 100, balance: 0, items: { create: { serviceId: service.id, qty: 1, unitPrice: 100, total: 100 } } } });
-      const invoiceB = await tx.invoice.create({ data: { patientId: patientB.id, invoiceNo: `B-${suffix}`, total: 900, balance: 0 } });
+      const invoiceA = await tx.newInvoice.create({ data: { patientId: patientA.id, branchId: branchA.id, visitId: visit.id, invoiceNo: `A-${suffix}`, total: 100, balance: 0, items: { create: { serviceId: service.id, name: 'Synthetic treatment', qty: 1, unitPrice: 100, total: 100 } } } });
+      const invoiceB = await tx.newInvoice.create({ data: { patientId: patientB.id, branchId: branchB.id, invoiceNo: `B-${suffix}`, total: 900, balance: 0 } });
       const now = new Date();
-      await tx.payment.createMany({ data: [
+      await tx.newPayment.createMany({ data: [
         { invoiceId: invoiceA.id, amount: 30, mode: 'CASH', reconStatus: 'COMPLETED', createdAt: now },
         { invoiceId: invoiceA.id, amount: 70, mode: 'CASH', reconStatus: 'COMPLETED', createdAt: now },
         { invoiceId: invoiceB.id, amount: 900, mode: 'CASH', reconStatus: 'COMPLETED', createdAt: now },
@@ -37,17 +37,17 @@ const testUrl = process.env.REPORT_TEST_DATABASE_URL;
       const reports = new ReportsService(tx as any);
 
       const revenue = await reports.generateRevenueReport({ includePaymentBreakdown: true } as any, branchA.id);
-      expect(revenue.totalRevenue).toBe(100);
-      expect(revenue.paymentBreakdown[0].transactionCount).toBe(2);
+      expect(revenue.totalRevenue).toBe(120);
+      expect(revenue.paymentBreakdown[0].transactionCount).toBe(4);
       const filtered = await reports.generateRevenueReport({ doctorId: doctor.id, serviceType: 'PROCEDURE' } as any, branchA.id);
       expect(filtered.totalRevenue).toBe(100);
       const payments = await reports.generatePaymentReport({ includeRefunds: true } as any, branchA.id);
-      expect(payments.totalPayments).toBe(2);
-      expect(payments.totalAmount).toBe(100);
+      expect(payments.totalPayments).toBe(4);
+      expect(payments.totalAmount).toBe(120);
       expect(payments.refundSummary).toMatchObject({ totalRefunds: 1, totalRefundAmount: 15, averageRefundAmount: 15, refundReasons: [{ reason: 'Synthetic reason', count: 1, amount: 15 }] });
       const dashboard = await reports.generateDashboard({} as any, branchA.id);
-      expect(dashboard.todayRevenue).toBe(20);
-      expect(dashboard.revenueTrends[0].invoiceCount).toBe(2);
+      expect(dashboard.todayRevenue).toBe(120);
+      expect(dashboard.revenueTrends[0].invoiceCount).toBe(4);
       await reports.generatePatientReport({} as any, branchA.id);
       await reports.generateDoctorReport({ includePerformanceMetrics: true, includeRevenueMetrics: true } as any, branchA.id);
       await reports.generateAppointmentReport({ includePeakHours: true, includeRoomUtilization: true, includeWaitTimes: true, includeCancellationReasons: true } as any, branchA.id);

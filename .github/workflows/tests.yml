@@ -9,6 +9,25 @@ permissions:
   contents: read
 
 jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 24.x for cc-check
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'npm'
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Check code contract syntax and attachment
+        run: npm run contracts:check
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -73,9 +92,19 @@ jobs:
           DOCTOR_AVAILABILITY_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           CLINIC_INVESTIGATIONS_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           PASSWORD_RESET_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          RESET_CODE_SCRIPT_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          PATIENT_MERGE_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          INVOICE_NUMBERS_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           BILLING_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          REPORTS_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           QUEUE_COVERAGE_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
         run: npm test -- --ci --runInBand
+
+      - name: Prove the RBAC scripts are safe to rerun
+        working-directory: backend
+        env:
+          RERUN_PROOF_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+        run: ../node_modules/.bin/ts-node --transpile-only scripts/verify_rerun_safety.ts
 
       - name: Verify inventory state presentations and recovery proofs
         run: |

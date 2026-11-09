@@ -1,0 +1,32 @@
+@cc [owner:nareshshah139,label:security] seed-rbac-converges-on-rerun
+seed_rbac.ts MUST set every Role row's permissions to the seeded list for that role, creating the row
+when missing, and MUST create each missing Permission row once, so a second run changes no row. It
+MUST give the seeded list to a user only when that user's stored permissions are null or empty, and
+MUST NOT change any other user, any Role isActive flag, any Permission it did not create, or any table
+other than permissions, roles and users. OWNER and ADMIN receive "*". It MAY be rerun, but every run
+discards manual edits to Role.permissions. verify_rerun_safety.ts, run in CI, fails unless the second run is a no-op.
+
+@cc [owner:nareshshah139,label:security] reception-backfill-only-adds-permissions
+backfill_reception_permissions.ts MUST add the RECEPTION defaults to the RECEPTION Role row and to
+every user whose role is RECEPTION, keeping each permission already stored, and MUST NOT remove a
+permission or change a user of any other role, any other Role row, or any table other than roles and
+users. It MUST set the RECEPTION Role active, and it MUST replace unparseable stored permissions with
+the defaults. It MAY be rerun, because a second run adds nothing. A rerun re-grants any default an
+admin removed from a RECEPTION user (inventory:item:delete, billing:payment:process), and the header
+comment, which says only null or invalid permissions are targeted, is wrong: every RECEPTION user is
+merged. verify_rerun_safety.ts, run in CI, fails unless the second run is a no-op.
+
+@cc [owner:nareshshah139,label:security] reception-inventory-merge-only-adds-permissions
+merge_reception_full_inventory.ts MUST add the thirty inventory:* permissions to the RECEPTION Role
+row and to every user whose role is RECEPTION, keeping each permission already stored, and MUST NOT
+remove a permission, change another role's users or Role rows, or touch any inventory item,
+transaction or stock quantity. It MUST set the RECEPTION Role active and replace unparseable stored
+permissions with the thirty. It MAY be rerun, because a second run adds nothing, but a rerun
+re-grants inventory delete, bulk and purchase-order rights an admin removed from a RECEPTION user.
+verify_rerun_safety.ts, run in CI, fails unless the second run is a no-op.
+
+@cc [owner:nareshshah139,label:security;target] rbac-scripts-confirm-target-database
+seed_rbac.ts, backfill_reception_permissions.ts and merge_reception_full_inventory.ts MUST NOT write
+permissions to a database the operator has not confirmed, for example by printing the database host
+and name and requiring an explicit flag for a non-loopback host. This is a target obligation, not a
+pass claim: each script writes to whatever DATABASE_URL points at and prints nothing about the target.

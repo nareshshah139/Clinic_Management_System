@@ -3,6 +3,11 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { QueryAuditLogsDto } from './dto/query-audit-logs.dto';
 import { Prisma } from '@prisma/client';
 
+/**
+ * @cc [owner:nareshshah139,label:integrity] audit-log-add-only
+ * The service MUST NOT create or update audit entries and MUST only read them, except
+ * deleteOldLogs, the single deletion path. Entries are added by the database layer, not here.
+ */
 @Injectable()
 export class AuditLogsService {
   private readonly logger = new Logger(AuditLogsService.name);
@@ -251,7 +256,16 @@ export class AuditLogsService {
     return csvContent;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:integrity] audit-log-retention
+   * deleteOldLogs MUST delete only entries strictly older than daysToKeep days (default 90) and
+   * MUST reject a negative or non-finite value before deleting anything. No route or job calls it
+   * today, so no role can trigger it over HTTP; a future caller MUST be limited to OWNER or ADMIN.
+   */
   async deleteOldLogs(daysToKeep: number = 90) {
+    if (!Number.isFinite(daysToKeep) || daysToKeep < 0) {
+      throw new RangeError('daysToKeep must be a non-negative number');
+    }
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
