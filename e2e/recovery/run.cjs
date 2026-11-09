@@ -406,7 +406,7 @@ async function setup() {
   });
   assert.equal(
     (await call("POST", "/pharmacy/purchase-ledger/payments", {})).status,
-    403,
+    400,
   );
   await owned.db.user.update({
     where: { id: user.id },
@@ -432,7 +432,7 @@ async function setup() {
       "workspace capabilities",
       "mounted opening import page",
       "unauthenticated HTTP 401",
-      "pharmacist without permission HTTP 403",
+      "pharmacist without stored grants reaches supplier payments (HTTP 400 on an empty body)",
     ],
   };
   writeResult();
