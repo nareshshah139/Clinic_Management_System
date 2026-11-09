@@ -14,7 +14,8 @@ describe('AppointmentsService.reschedule', () => {
     user: { findUnique: jest.fn().mockResolvedValue(null) },
     appointment: {
       findFirst: jest.fn(),
-      update: jest.fn(),
+      updateMany: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
     },
     $executeRaw: jest.fn(),
     $transaction: jest.fn(async (cb: any) => cb(prismaMock)),
@@ -38,6 +39,7 @@ describe('AppointmentsService.reschedule', () => {
     doctorId: 'doc-1',
     roomId: 'room-1',
     date: new Date('2099-01-01T10:00:00.000Z'),
+    slot: '09:00-09:30',
     status: 'SCHEDULED',
     notes: 'n',
     ...overrides,
@@ -65,11 +67,12 @@ describe('AppointmentsService.reschedule', () => {
   it('updates appointment on success', async () => {
     prismaMock.appointment.findFirst.mockResolvedValue(existing());
     jest.spyOn<any, any>(service as any, 'checkSchedulingConflicts').mockResolvedValue([]);
-    prismaMock.appointment.update.mockResolvedValue({ id: 'apt-1' });
+    prismaMock.appointment.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.appointment.findUniqueOrThrow.mockResolvedValue({ id: 'apt-1' });
 
     const res = await service.reschedule('apt-1', { date: '2099-01-02', slot: '12:00-12:30' }, branchId);
     expect(res).toEqual({ id: 'apt-1' });
-    expect(prismaMock.appointment.update).toHaveBeenCalled();
+    expect(prismaMock.appointment.updateMany).toHaveBeenCalledTimes(1);
   });
 });
 

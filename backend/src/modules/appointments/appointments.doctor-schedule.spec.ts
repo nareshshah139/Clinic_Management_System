@@ -34,8 +34,8 @@ describe('AppointmentsService.getDoctorSchedule', () => {
   it('returns ordered appointments with doctor name', async () => {
     prismaMock.user.findFirst.mockResolvedValue({ id: 'doc-1', firstName: 'Do', lastName: 'Ctor' });
     prismaMock.appointment.findMany.mockResolvedValue([
-      { slot: '10:00-10:30' },
-      { slot: '11:00-11:30' },
+      { slot: '10:00-10:30', status: 'SCHEDULED' },
+      { slot: '11:00-11:30', status: 'CHECKED_IN' },
     ]);
 
     const result = await service.getDoctorSchedule('doc-1', '2099-01-01', branchId);
@@ -48,6 +48,8 @@ describe('AppointmentsService.getDoctorSchedule', () => {
       }),
     );
     expect(result.appointments[0].slot).toBe('10:00-10:30');
+    expect(result.appointments.map((a) => a.calendar)).toEqual(['SCHEDULED', 'CONFIRMED']);
+    expect(prismaMock.appointment.findMany.mock.calls[0][0].where.status).toEqual({ not: 'CANCELLED' });
   });
 });
 
