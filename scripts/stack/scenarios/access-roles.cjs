@@ -13,7 +13,7 @@ const PHARMACY_LINKS = ["Pharmacy Desk", "Pharmacy Counter", "Sales", "Inventory
 const PAGES = [
   { name: "Pharmacy Desk", route: "/dashboard/pharmacy?section=desk", actions: [] },
   { name: "Pharmacy Counter", route: "/dashboard/pharmacy?section=counter", actions: [] },
-  { name: "New sale bill", route: "/dashboard/pharmacy/sales/bill", actions: [["Save draft", (p) => p.getByRole("button", { name: "Save draft" })], ["Load prescriptions", (p) => p.getByRole("heading", { name: /Prescription/ })]] },
+  { name: "New sale bill", route: "/dashboard/pharmacy/sales/bill", actions: [["Save draft", (p) => p.getByRole("button", { name: "Save draft" })], ["Prescription queue", (p) => p.getByText("Prescription dispensing queue")]] },
   { name: "Sales", route: "/dashboard/pharmacy/sales", actions: [["New sale", (p) => p.getByRole("button", { name: /New sale/ })]] },
   { name: "Purchase bills", route: "/dashboard/inventory?area=purchases&view=register", actions: [["Mark paid", (p) => p.getByRole("button", { name: "Mark bill LIN-1 paid" })]] },
   { name: "Payments & dues", route: `/dashboard/inventory?area=purchases&view=ledger&gstin=${GSTIN}`, actions: [["Purchase Ledger", (p) => p.getByRole("heading", { name: "Purchase Ledger" })]] },
