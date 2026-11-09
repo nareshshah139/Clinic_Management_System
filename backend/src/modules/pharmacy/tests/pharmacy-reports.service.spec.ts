@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { PharmacyComplianceService } from '../pharmacy-compliance.service';
-import { PharmacyDayWiseTypeDto } from '../dto/pharmacy-compliance.dto';
+import { PharmacyDayWiseTypeDto, PharmacyItemMarginQueryDto } from '../dto/pharmacy-compliance.dto';
 
 type Row = Record<string, any>;
 
@@ -165,7 +167,7 @@ describe('Item-wise margin', () => {
 
   const batch = (id: string, fields: Row) => ({
     id, category: null, manufacturer: null, unit: 'TUBES', packSize: null, packUnit: null, mrp: null,
-    currentStock: 0, gstRate: 12, createdAt: at('2026-10-01T00:00:00.000Z'), drugs: [], branchId, ...fields,
+    currentStock: 0, gstRate: 12, createdAt: at('2026-10-01T00:00:00.000Z'), tags: null, type: 'MEDICINE', drugs: [], branchId, ...fields,
   });
   const adapaleneDrug = { id: 'drug-1', name: 'Adapalene 0.1% Gel', manufacturerName: 'Galderma', packSizeLabel: 'tube of 15 gm gel', category: 'Acne' };
   const sale = (id: string, itemId: string, quantity: number, reference: string, notes: Row) => ({
@@ -180,9 +182,9 @@ describe('Item-wise margin', () => {
       invoice('PHI-2026-599', '2026-11-05T09:00:00.000Z', 'DRAFT'),
     ]),
     inventoryItem: table([
-      batch('b1', { name: 'Adapalene Gel 15g', category: 'Acne', manufacturer: 'Galderma', packSize: 15, packUnit: 'g', mrp: 118, currentStock: 10, drugs: [adapaleneDrug] }),
-      batch('b2', { name: 'Adapalene Gel 15g', category: 'Acne', manufacturer: 'Galderma', packSize: 15, packUnit: 'g', mrp: 120, currentStock: 5, createdAt: at('2026-11-01T00:00:00.000Z'), drugs: [adapaleneDrug] }),
-      batch('b3', { name: 'Sunscreen SPF 50', category: 'Sun Care', manufacturer: 'Derma Co', unit: 'BOTTLES', packSize: 50, packUnit: 'ml', mrp: 590, currentStock: 3, gstRate: 18 }),
+      batch('b1', { name: 'Adapalene Gel 15g', category: 'Acne', manufacturer: 'Galderma', packSize: 15, packUnit: 'g', mrp: 118, currentStock: 10, tags: '["Retinoid","Acne"]', drugs: [adapaleneDrug] }),
+      batch('b2', { name: 'Adapalene Gel 15g', category: 'Acne', manufacturer: 'Galderma', packSize: 15, packUnit: 'g', mrp: 120, currentStock: 5, tags: '["retinoid"]', createdAt: at('2026-11-01T00:00:00.000Z'), drugs: [adapaleneDrug] }),
+      batch('b3', { name: 'Sunscreen SPF 50', category: 'Sun Care', manufacturer: 'Derma Co', type: 'SUPPLY', unit: 'BOTTLES', packSize: 50, packUnit: 'ml', mrp: 590, currentStock: 3, gstRate: 18 }),
       batch('b4', { name: 'Calamine Lotion', category: 'Itch', unit: 'BOTTLES', packSize: 100, packUnit: 'ml', mrp: 95, currentStock: 26 }),
     ]),
     stockTransaction: table([
@@ -199,8 +201,8 @@ describe('Item-wise margin', () => {
     ]),
   });
 
-  const run = (search?: string) =>
-    new PharmacyComplianceService(marginPrisma() as any).getItemMargin({ startDate: '2026-11-01', endDate: '2026-11-30', search }, branchId);
+  const run = (search?: string, extra: Partial<PharmacyItemMarginQueryDto> = {}) =>
+    new PharmacyComplianceService(marginPrisma() as any).getItemMargin({ startDate: '2026-11-01', endDate: '2026-11-30', search, ...extra }, branchId);
 
   it('computes sales, purchase, net GST and profit per product, highest margin first', async () => {
     const report = await run();
@@ -246,5 +248,68 @@ describe('Item-wise margin', () => {
 
     expect(report.rows.map((row) => row.name)).toEqual(['Sunscreen SPF 50']);
     expect(report.totals).toMatchObject({ salesAmount: 590, purchase: 472, netGst: 18, profit: 100, profitPercent: 20 });
+  });
+
+  it('shows sales only or returns only for the Type filter, and nets both by default', async () => {
+    const adapalene = (report: Awaited<ReturnType<typeof run>>) => report.rows.find((row) => row.key === 'drug:drug-1');
+
+    expect(adapalene(await run())).toMatchObject({ saleQuantity: 2, salesAmount: 224 });
+    expect(adapalene(await run(undefined, { type: 'SALES' }))).toMatchObject({ saleQuantity: 3, salesAmount: 336 });
+    const returns = await run(undefined, { type: 'RETURNS' });
+    expect(returns.rows.map((row) => row.name)).toEqual(['Adapalene 0.1% Gel']);
+    expect(returns.rows[0]).toMatchObject({ saleQuantity: -1, salesAmount: -112 });
+    expect(returns.totals).toMatchObject({ salesAmount: -112, itemCount: 1 });
+  });
+
+  it('filters by tag across the product batches, ignoring case, and offers only tags of the period', async () => {
+    const report = await run(undefined, { tag: 'RETINOID' });
+
+    expect(report.rows.map((row) => row.name)).toEqual(['Adapalene 0.1% Gel']);
+    expect(report.options.tags).toEqual(['Acne', 'Retinoid']);
+    expect(report.filters).toMatchObject({ type: 'NET', searchField: 'ALL', tag: 'RETINOID', costStatus: 'ALL' });
+  });
+
+  it('searches only the chosen field', async () => {
+    expect((await run('derma co', { searchField: 'MANUFACTURER' })).rows.map((row) => row.name)).toEqual(['Sunscreen SPF 50']);
+    expect((await run('derma co', { searchField: 'NAME' })).rows).toEqual([]);
+    expect((await run('acne', { searchField: 'CATEGORY' })).rows.map((row) => row.name)).toEqual(['Adapalene 0.1% Gel']);
+  });
+
+  it('filters by category, manufacturer, item type and cost status, with totals from the visible rows', async () => {
+    expect((await run(undefined, { category: 'sun care' })).totals.itemCount).toBe(1);
+    expect((await run(undefined, { manufacturer: 'Galderma' })).rows.map((row) => row.name)).toEqual(['Adapalene 0.1% Gel']);
+    expect((await run(undefined, { itemType: 'SUPPLY' })).rows.map((row) => row.name)).toEqual(['Sunscreen SPF 50']);
+    const missing = await run(undefined, { costStatus: 'MISSING_COST' });
+    expect(missing.rows.map((row) => row.name)).toEqual(['Calamine Lotion']);
+    expect(missing.totals.salesAmount).toBe(112);
+    expect((await run(undefined, { costStatus: 'LOSS' })).rows).toEqual([]);
+  });
+
+  it('lists dropdown options from the whole period, whatever the row filters hide', async () => {
+    const report = await run(undefined, { category: 'Acne' });
+
+    expect(report.options).toEqual({
+      tags: ['Acne', 'Retinoid'],
+      categories: ['Acne', 'Itch', 'Sun Care'],
+      manufacturers: ['Derma Co', 'Galderma'],
+      itemTypes: ['MEDICINE', 'SUPPLY'],
+    });
+  });
+});
+
+describe('Item-wise margin query validation', () => {
+  const errors = async (query: Record<string, string>) =>
+    (await validate(plainToInstance(PharmacyItemMarginQueryDto, { startDate: '2026-11-01', endDate: '2026-11-30', ...query }))).map((e) => e.property);
+
+  it('rejects an unknown enum value instead of widening it', async () => {
+    expect(await errors({ type: 'EVERYTHING' })).toEqual(['type']);
+    expect(await errors({ searchField: 'EMAIL' })).toEqual(['searchField']);
+    expect(await errors({ itemType: 'PET' })).toEqual(['itemType']);
+    expect(await errors({ costStatus: 'FREE' })).toEqual(['costStatus']);
+  });
+
+  it('accepts the documented values and caps text length', async () => {
+    expect(await errors({ type: 'RETURNS', searchField: 'CATEGORY', itemType: 'SUPPLY', costStatus: 'LOSS', tag: 'Acne' })).toEqual([]);
+    expect(await errors({ tag: 'x'.repeat(101) })).toEqual(['tag']);
   });
 });

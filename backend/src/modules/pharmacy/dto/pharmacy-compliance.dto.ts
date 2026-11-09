@@ -3,6 +3,7 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -13,6 +14,7 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
+import { MARGIN_COST_STATUSES, MARGIN_ITEM_TYPES, MARGIN_SEARCH_FIELDS, MARGIN_TYPES } from '../pharmacy-item-margin';
 
 export enum ExpiryReturnWindowDto {
   ONE_MONTH = '1m',
@@ -62,6 +64,44 @@ export class PharmacyItemMarginQueryDto extends PharmacyClinicPeriodQueryDto {
   @IsString()
   @MaxLength(100)
   search?: string;
+
+  @ApiPropertyOptional({ enum: MARGIN_TYPES, default: 'NET', description: 'Net sales, sales only, or customer returns only' })
+  @IsOptional()
+  @IsIn(MARGIN_TYPES)
+  type?: (typeof MARGIN_TYPES)[number];
+
+  @ApiPropertyOptional({ enum: MARGIN_SEARCH_FIELDS, default: 'ALL', description: 'Which field `search` matches' })
+  @IsOptional()
+  @IsIn(MARGIN_SEARCH_FIELDS)
+  searchField?: (typeof MARGIN_SEARCH_FIELDS)[number];
+
+  @ApiPropertyOptional({ description: 'Item tag, matched exactly ignoring case' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  tag?: string;
+
+  @ApiPropertyOptional({ description: 'Item category, matched exactly ignoring case' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  category?: string;
+
+  @ApiPropertyOptional({ description: 'Manufacturer, matched exactly ignoring case' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  manufacturer?: string;
+
+  @ApiPropertyOptional({ enum: MARGIN_ITEM_TYPES })
+  @IsOptional()
+  @IsIn(MARGIN_ITEM_TYPES)
+  itemType?: (typeof MARGIN_ITEM_TYPES)[number];
+
+  @ApiPropertyOptional({ enum: MARGIN_COST_STATUSES, default: 'ALL' })
+  @IsOptional()
+  @IsIn(MARGIN_COST_STATUSES)
+  costStatus?: (typeof MARGIN_COST_STATUSES)[number];
 }
 
 export class PharmacyMonthlyReportQueryDto {
