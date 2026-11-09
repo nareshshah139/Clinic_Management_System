@@ -503,4 +503,40 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
       ),
     ).toBe('400: Payment amount exceeds remaining balance');
   });
+
+  it('leaves an insurance bill due and collects a cash bill at checkout', async () => {
+    const insured = await invoices.checkout(
+      {
+        ...fiveHundred,
+        paymentMethod: 'INSURANCE',
+        requestKey: 'insurance-bill',
+      },
+      'branch',
+      'asha',
+    );
+    expect([
+      insured.status,
+      insured.paidAmount,
+      insured.balanceAmount,
+      insured.paymentStatus,
+      await ledger(insured.id),
+    ]).toEqual(['CONFIRMED', 0, 500, 'PENDING', []]);
+
+    const cash = await invoices.checkout(
+      { ...fiveHundred, requestKey: 'cash-bill' },
+      'branch',
+      'asha',
+    );
+    expect([
+      cash.paidAmount,
+      cash.balanceAmount,
+      cash.paymentStatus,
+      await ledger(cash.id),
+    ]).toEqual([
+      500,
+      0,
+      'COMPLETED',
+      [{ amount: 500, method: 'CASH', status: 'COMPLETED' }],
+    ]);
+  });
 });

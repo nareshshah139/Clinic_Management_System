@@ -20,10 +20,18 @@ import {
   PharmacyInvoiceItemDto,
 } from './dto/pharmacy-invoice.dto';
 
-import { Prisma } from '@prisma/client';
+import { PharmacyPaymentMethod, Prisma } from '@prisma/client';
 import { InvoiceNumbersService } from '../../shared/numbering/invoice-numbers.service';
 
 type DraftFence = { checkoutRequestKey: string; checkoutPayloadHash: string };
+
+const COLLECTED_AT_COUNTER = new Set<PharmacyPaymentMethod>([
+  'CASH',
+  'CARD',
+  'UPI',
+  'NETBANKING',
+  'WALLET',
+]);
 
 const settlement = (total: number, paid: number) => ({
   paidAmount: paid,
@@ -192,8 +200,9 @@ export class PharmacyInvoiceService {
 
   /**
    * @cc [owner:nareshshah139,label:product] checkout-collects-payment
-   * A finished bill MUST record one completed payment of what its completed payments leave due, in
-   * the bill's payment method, within the checkout transaction, so the ledger equals the total. Paid,
+   * A finished bill paid at the counter (cash, card, UPI, netbanking or wallet) MUST record one
+   * completed payment of what its completed payments leave due, in the bill's payment method, within
+   * the checkout transaction, so the ledger equals the total. An insurance bill MUST stay due. Paid,
    * balance and payment status MUST come from the ledger. A checkout replay MUST NOT collect again.
    */
   private async collectCheckoutPayment(
@@ -206,7 +215,7 @@ export class PharmacyInvoiceService {
     });
     const total = money(invoice.totalAmount);
     const due = Math.max(0, money(total - (await this.paidOn(tx, id))));
-    if (due > 0)
+    if (due > 0 && COLLECTED_AT_COUNTER.has(invoice.paymentMethod))
       await tx.pharmacyPayment.create({
         data: {
           invoiceId: id,
