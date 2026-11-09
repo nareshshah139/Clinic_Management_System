@@ -18,7 +18,7 @@ CR-08's other blocks already printed inline on `main` before this change. That c
 ## Not included
 
 - **Examination.** CR-08 lists Examination, but examination details are for the doctor only and never print, in either layout. The clinic confirmed this on 09/11/2026, so CR-08 is complete without it. Do not add Examination to the printout.
-- **Review Date and Follow-up on one line.** CR-08 marks this as optional. The target prescription fits on one page without it.
+- **Review Date and Follow-up on one line.** CR-08 marks this as optional, and this change left it out. It was added later: in the space-optimized layout, and in Fit to 1 page, the two now share one line when both are present. A long follow-up moves to its own line. Ticking "Break before Follow-up" keeps them on separate lines, except in Fit to 1 page, which ignores page breaks. See `print-line-spacing-and-pdf-export.md`.
 - **The server-generated PDF.** `POST /prescriptions/:id/pdf`, and sharing with `includePdf`, use a separate pdfkit layout in `backend/src/modules/prescriptions/prescriptions.service.ts`. That layout has no space-optimized mode and prints only medicines and a signature. This change does not touch it.
 
 ## Verification, 06/11/2026
