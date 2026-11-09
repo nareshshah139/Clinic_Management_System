@@ -216,11 +216,20 @@ describe('item request route guards', () => {
 });
 
 describe('opening stock import', () => {
-  it('still reaches the importer for pharmacy staff', () => {
-    const importer = { importStarterExcel: jest.fn().mockReturnValue({ imported: 2 }) };
+  it('reaches the importer for pharmacy staff and answers 202 while the file waits for a doctor', async () => {
+    const summary = { importId: 'imp-1', created: 0, approval: { status: 'PENDING' } };
+    const importer = { importStarterExcel: jest.fn().mockResolvedValue(summary) };
     const controller = new (InventoryController as any)({}, importer, {});
+    const res = { status: jest.fn() };
     const file = { originalname: 'opening.xlsx' };
-    expect(controller.importInventoryStarterExcel(file, { user: reception })).toEqual({ imported: 2 });
-    expect(importer.importStarterExcel).toHaveBeenCalledWith(file, 'b1', 'rec-1');
+
+    expect(await controller.importInventoryStarterExcel(file, { user: reception }, res)).toEqual({
+      status: 'PENDING_APPROVAL',
+      importId: 'imp-1',
+      created: 0,
+      approval: { status: 'PENDING' },
+    });
+    expect(res.status.mock.calls).toEqual([[202]]);
+    expect(importer.importStarterExcel.mock.calls).toEqual([[file, reception]]);
   });
 });

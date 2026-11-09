@@ -147,10 +147,21 @@ export class InventoryItemRequestService {
   }
 
   async pendingCount(actor: ItemRequestActor) {
-    const count = await this.prisma.inventoryItemRequest.count({
-      where: this.scope(actor, InventoryItemRequestStatus.PENDING),
-    });
-    return { count };
+    const [requests, imports] = await Promise.all([
+      this.prisma.inventoryItemRequest.count({
+        where: this.scope(actor, InventoryItemRequestStatus.PENDING),
+      }),
+      this.prisma.inventoryMigration.count({
+        where: {
+          branchId: actor.branchId,
+          ...(canReviewItemRequests(actor.role)
+            ? {}
+            : { requestedById: actor.id }),
+          approval: 'PENDING',
+        },
+      }),
+    ]);
+    return { count: requests + imports };
   }
 
   async approve(id: string, actor: ItemRequestActor, note?: string) {

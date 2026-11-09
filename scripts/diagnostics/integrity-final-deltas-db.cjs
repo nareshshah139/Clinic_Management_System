@@ -97,7 +97,7 @@ const workbook = rows => { const w = XLSX.utils.book_new(); XLSX.utils.book_appe
   const row = { Name: 'Opening final ' + randomUUID(), Pack: '10 tablets', Batch: 'FINAL-OPEN', Expiry: '2032-12-31', Quantity: 10, 'Cost price': 25, 'Selling price': 30, MRP: 40, Location: 'Rack A', GST: 12, 'Min stock': 2, 'Max stock': 20 };
   const original = workbook([row]); let imported, openingItem;
   await test('Opening source is retained and controller download returns byte-identical bytes with branch isolation', async () => {
-    imported = await importer.importStarterExcel(original, branch.id, user.id); assert.equal(imported.created, 1); assert.equal(imported.skipped, 0);
+    imported = await importer.importStarterExcel(original, actor); assert.equal(imported.created, 1); assert.equal(imported.skipped, 0);
     openingItem = await db.inventoryItem.findFirstOrThrow({ where: { branchId: branch.id, name: row.Name } }); assert.equal(openingItem.currentStock, 10);
     const retained = await importer.originalImport(imported.importId, branch.id); assert.equal(hash(retained.data), hash(original.buffer)); assert.equal(retained.sha256, hash(original.buffer));
     await assert.rejects(() => importer.originalImport(imported.importId, 'different-branch'), /not found/);
@@ -108,22 +108,22 @@ const workbook = rows => { const w = XLSX.utils.book_new(); XLSX.utils.book_appe
   for (const [field, value] of [['Cost price', 26], ['Pack', '20 tablets'], ['Expiry', '2033-01-31'], ['MRP', 41], ['Selling price', 31]]) {
     await test(`Opening re-import rejects changed ${field} and rolls back inventory, linked Drug and movements`, async () => {
       const before = await fresh(openingItem), beforeDrug = await db.drug.findFirstOrThrow({ where: { branchId: branch.id, name: row.Name } }), beforeMoves = await db.stockTransaction.count({ where: { itemId: openingItem.id } });
-      const out = await importer.importStarterExcel(workbook([{ ...row, [field]: value }]), branch.id, user.id);
+      const out = await importer.importStarterExcel(workbook([{ ...row, [field]: value }]), actor);
       assert.equal(out.skipped, 1); assert.equal(out.errors[0].row, 2); assert.match(out.errors[0].message, /cannot replace its pack, expiry or price basis/);
       assert.deepEqual(await fresh(openingItem), before); assert.deepEqual(await db.drug.findUniqueOrThrow({ where: { id: beforeDrug.id } }), beforeDrug); assert.equal(await db.stockTransaction.count({ where: { itemId: openingItem.id } }), beforeMoves);
     });
   }
   await test('Valid opening metadata refresh adds an audit without changing stock or retained originals', async () => {
-    const before = await fresh(openingItem); const out = await importer.importStarterExcel(workbook([{ ...row, Location: 'Rack B' }]), branch.id, user.id); assert.equal(out.updated, 1); assert.equal(out.stockAdjusted, 0);
+    const before = await fresh(openingItem); const out = await importer.importStarterExcel(workbook([{ ...row, Location: 'Rack B' }]), actor); assert.equal(out.updated, 1); assert.equal(out.stockAdjusted, 0);
     const after = await fresh(openingItem); assert.equal(after.currentStock, before.currentStock); assert.equal(after.costPrice, before.costPrice); assert.equal(after.packSize, before.packSize); assert.equal(after.storageLocation, 'Rack B');
     assert.equal(await db.auditLog.count({ where: { entityId: openingItem.id, action: 'OPENING_IMPORT_METADATA' } }), 1); assert.equal(hash((await importer.originalImport(imported.importId, branch.id)).data), hash(original.buffer));
   });
   await test('Retrying original workbook after operating sale does not reset stock or add movements', async () => {
     await post(await save('COUNTER_SALE', [{ inventoryId: openingItem.id, quantity: 1 }])); const before = await db.stockTransaction.count({ where: { itemId: openingItem.id } });
-    const retry = await importer.importStarterExcel(original, branch.id, user.id); assert.equal(retry.importId, imported.importId); assert.equal((await fresh(openingItem)).currentStock, 9); assert.equal(await db.stockTransaction.count({ where: { itemId: openingItem.id } }), before);
+    const retry = await importer.importStarterExcel(original, actor); assert.equal(retry.importId, imported.importId); assert.equal((await fresh(openingItem)).currentStock, 9); assert.equal(await db.stockTransaction.count({ where: { itemId: openingItem.id } }), before);
   });
   await test('Opening import uses inclusive expiry-today stock status', async () => {
-    const name = 'Opening today ' + randomUUID(); const out = await importer.importStarterExcel(workbook([{ ...row, Name: name, Batch: 'TODAY', Expiry: today.toISOString().slice(0, 10) }]), branch.id, user.id);
+    const name = 'Opening today ' + randomUUID(); const out = await importer.importStarterExcel(workbook([{ ...row, Name: name, Batch: 'TODAY', Expiry: today.toISOString().slice(0, 10) }]), actor);
     assert.equal(out.skipped, 0); const i = await db.inventoryItem.findFirstOrThrow({ where: { branchId: branch.id, name } }); assert.equal(i.stockStatus, 'IN_STOCK');
   });
   const sourceFiles = ['backend/src/modules/inventory/inventory-workflow.service.ts', 'backend/src/modules/inventory/inventory-import.service.ts', 'backend/src/modules/inventory/inventory-stock.ts', 'backend/src/modules/inventory/inventory.controller.ts'];

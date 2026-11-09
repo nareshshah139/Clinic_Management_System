@@ -12,11 +12,14 @@ import {
   UploadedFile,
   Res,
   UseInterceptors,
+  HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { InventoryService } from './inventory.service';
 import { InventoryImportService } from './inventory-import.service';
 import { InventoryItemRequestService } from './inventory-item-request.service';
+import { importRowsMayRun } from './inventory-import-approval.state';
+import { ReviewInventoryItemRequestDto } from './dto/inventory-item-request.dto';
 import {
   CreateInventoryItemDto,
   UpdateInventoryItemDto,
@@ -92,6 +95,40 @@ export class InventoryController {
     return { status: 'PENDING_APPROVAL', request: outcome.request };
   }
 
+  @Get('imports/pending')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('inventory:item:read')
+  pendingImports(@Request() req: AuthenticatedRequest) {
+    return this.inventoryImportService.pendingImports(req.user);
+  }
+
+  @Get('imports/reviewed')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('inventory:item:read')
+  reviewedImports(@Request() req: AuthenticatedRequest) {
+    return this.inventoryImportService.reviewedImports(req.user);
+  }
+
+  @Post('imports/:id/approve')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @Permissions('inventory:item:approve')
+  approveImport(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.inventoryImportService.approve(id, req.user);
+  }
+
+  @Post('imports/:id/reject')
+  @HttpCode(200)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @Permissions('inventory:item:approve')
+  rejectImport(
+    @Param('id') id: string,
+    @Body() dto: ReviewInventoryItemRequestDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.inventoryImportService.reject(id, req.user, dto.note);
+  }
+
   @Get('imports/:id')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:item:read')
@@ -154,15 +191,18 @@ export class InventoryController {
       limits: { fileSize: 5 * 1024 * 1024 },
     }),
   )
-  importInventoryStarterExcel(
+  async importInventoryStarterExcel(
     @UploadedFile() file: Express.Multer.File,
     @Request() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: any,
   ) {
-    return this.inventoryImportService.importStarterExcel(
+    const summary = await this.inventoryImportService.importStarterExcel(
       file,
-      req.user.branchId,
-      req.user.id,
+      req.user,
     );
+    if (importRowsMayRun(summary.approval.status)) return summary;
+    res.status(202);
+    return { status: 'PENDING_APPROVAL', ...summary };
   }
 
   @Get('items')

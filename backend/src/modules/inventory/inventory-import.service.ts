@@ -7,8 +7,17 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import * as XLSX from 'xlsx';
-import { Prisma } from '@prisma/client';
+import { InventoryImportApproval, Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
+import {
+  ImportReviewAction,
+  importApprovalOnUpload,
+  importRowsBlockedReason,
+  importRowsMayRun,
+  newImportApproval,
+  nextImportApproval,
+} from './inventory-import-approval.state';
+import { canReviewItemRequests } from './inventory-item-request.state';
 import {
   InventoryItemType,
   InventoryStatus,
@@ -62,6 +71,31 @@ interface InventoryStarterImportOutcome {
   stockAdjusted: boolean;
 }
 
+export interface ImportActor {
+  id: string;
+  branchId: string;
+  role: string;
+}
+
+const PERSON = { select: { id: true, firstName: true, lastName: true } };
+const APPROVAL_INCLUDE = {
+  requestedBy: PERSON,
+  reviewedBy: PERSON,
+} satisfies Prisma.InventoryMigrationInclude;
+type ImportWithApproval = Prisma.InventoryMigrationGetPayload<{
+  include: typeof APPROVAL_INCLUDE;
+}>;
+
+function approvalOf(migration: ImportWithApproval) {
+  return {
+    status: migration.approval,
+    requestedBy: migration.requestedBy,
+    reviewedBy: migration.reviewedBy,
+    reviewedAt: migration.reviewedAt,
+    note: migration.reviewNote,
+  };
+}
+
 @Injectable()
 export class InventoryImportService {
   private readonly logger = new Logger(InventoryImportService.name);
@@ -70,6 +104,7 @@ export class InventoryImportService {
   async originalImport(id: string, branchId: string) {
     const source = await this.prisma.inventoryMigration.findFirst({
       where: { id, branchId },
+      include: APPROVAL_INCLUDE,
     });
     if (!source)
       throw new NotFoundException('Opening import original not found');
@@ -84,31 +119,35 @@ export class InventoryImportService {
   async previewStarterExcel(file: Express.Multer.File | undefined) {
     if (!file?.buffer?.length || !/\.(xlsx|xls)$/i.test(file.originalname))
       throw new BadRequestException('Choose an Excel inventory file');
-    const rows = this.readWorkbookRows(file.buffer).filter((r) =>
+    return {
+      fileName: file.originalname,
+      hash: createHash('sha256').update(file.buffer).digest('hex'),
+      rows: this.previewWorkbook(file.buffer),
+    };
+  }
+
+  private previewWorkbook(buffer: Buffer) {
+    const rows = this.readWorkbookRows(buffer).filter((r) =>
       Object.values(r).some((v) => String(v ?? '').trim()),
     );
     if (rows.length > 1000)
       throw new BadRequestException('Preview is limited to 1,000 rows');
     const duplicates = this.findDuplicateImportRows(rows);
-    return {
-      fileName: file.originalname,
-      hash: createHash('sha256').update(file.buffer).digest('hex'),
-      rows: rows.map((row, index) => {
-        const sourceRow =
-          typeof row.__rowNum__ === 'number' ? row.__rowNum__ + 1 : index + 2;
-        try {
-          const parsed = this.mapImportRow(row);
-          if (!parsed) throw new Error('Product name is required');
-          if (duplicates.has(sourceRow))
-            throw new Error('Duplicate product/code and batch');
-          if (parsed.minStockLevel > parsed.maxStockLevel)
-            throw new Error('Minimum exceeds maximum');
-          return { sourceRow, ...parsed };
-        } catch (e) {
-          return { sourceRow, error: (e as Error).message };
-        }
-      }),
-    };
+    return rows.map((row, index) => {
+      const sourceRow =
+        typeof row.__rowNum__ === 'number' ? row.__rowNum__ + 1 : index + 2;
+      try {
+        const parsed = this.mapImportRow(row);
+        if (!parsed) throw new Error('Product name is required');
+        if (duplicates.has(sourceRow))
+          throw new Error('Duplicate product/code and batch');
+        if (parsed.minStockLevel > parsed.maxStockLevel)
+          throw new Error('Minimum exceeds maximum');
+        return { sourceRow, ...parsed };
+      } catch (e) {
+        return { sourceRow, error: (e as Error).message };
+      }
+    });
   }
 
   /**
@@ -116,10 +155,15 @@ export class InventoryImportService {
    * Re-uploading the same branch and workbook MUST preserve every successful row, including
    * zero-stock and metadata-only rows. Failed rows run again only through explicit retry.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] opening-import-doctor-approval
+   * A workbook uploaded by staff MUST wait for a doctor, admin or owner to approve it and MUST NOT
+   * create catalogue, inventory or stock-ledger records before that approval. An approver's upload
+   * runs immediately. Rows run only while the import is NOT_REQUIRED or APPROVED.
+   */
   async importStarterExcel(
     file: Express.Multer.File | undefined,
-    branchId: string,
-    userId: string,
+    actor: ImportActor,
   ) {
     if (!file?.buffer?.length)
       throw new BadRequestException('Please upload a non-empty Excel file');
@@ -127,20 +171,219 @@ export class InventoryImportService {
       throw new BadRequestException('Only .xlsx and .xls files are supported');
     const rows = this.importRows(file.buffer);
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
-    const migration = await this.prisma.inventoryMigration.upsert({
-      where: { branchId_sha256: { branchId, sha256 } },
+    const approval = newImportApproval(actor.role);
+    const uploaded = await this.prisma.inventoryMigration.upsert({
+      where: { branchId_sha256: { branchId: actor.branchId, sha256 } },
       update: {},
       create: {
-        branchId,
-        createdBy: userId,
+        branchId: actor.branchId,
+        createdBy: actor.id,
         fileName: file.originalname,
         sha256,
         data: file.buffer,
         rowTrackingVersion: 1,
+        approval,
+        requestedById: approval === 'PENDING' ? actor.id : null,
       },
     });
+    const migration = await this.reopenOnUpload(uploaded, actor);
     await this.ensureRowOutcomes(migration, rows);
-    return this.processImport(migration.id, branchId, userId, rows, false);
+    if (!importRowsMayRun(migration.approval))
+      return this.importOutcome(migration.id, actor.branchId);
+    return this.processImport(migration.id, actor.branchId, actor.id, rows, false);
+  }
+
+  private async reopenOnUpload(
+    migration: { id: string; approval: InventoryImportApproval },
+    actor: ImportActor,
+  ) {
+    const next = importApprovalOnUpload(migration.approval, actor.role);
+    if (next !== migration.approval) {
+      await this.prisma.$transaction(async (tx) => {
+        const moved = await tx.inventoryMigration.updateMany({
+          where: {
+            id: migration.id,
+            branchId: actor.branchId,
+            approval: migration.approval,
+          },
+          data:
+            next === 'PENDING'
+              ? {
+                  approval: next,
+                  requestedById: actor.id,
+                  reviewedById: null,
+                  reviewedAt: null,
+                  reviewNote: null,
+                }
+              : {
+                  approval: next,
+                  reviewedById: actor.id,
+                  reviewedAt: new Date(),
+                  reviewNote: null,
+                },
+        });
+        if (moved.count === 1 && next === 'APPROVED')
+          await this.audit(tx, actor, 'INVENTORY_IMPORT_APPROVED', migration.id, {
+            reuploaded: true,
+          });
+      });
+    }
+    return this.prisma.inventoryMigration.findUniqueOrThrow({
+      where: { id: migration.id },
+    });
+  }
+
+  async approve(id: string, actor: ImportActor) {
+    const migration = await this.prisma.$transaction(async (tx) => {
+      const claimed = await this.claimReview(tx, id, actor, 'approve');
+      await this.audit(tx, actor, 'INVENTORY_IMPORT_APPROVED', id, {});
+      return claimed;
+    });
+    const rows = this.importRows(Buffer.from(migration.data));
+    await this.ensureRowOutcomes(migration, rows);
+    return this.processImport(id, actor.branchId, actor.id, rows, false);
+  }
+
+  async reject(id: string, actor: ImportActor, note?: string) {
+    const trimmed = note?.trim();
+    if (!trimmed)
+      throw new BadRequestException('A note is required to reject an import');
+    await this.prisma.$transaction(async (tx) => {
+      await this.claimReview(tx, id, actor, 'reject', trimmed);
+      await this.audit(tx, actor, 'INVENTORY_IMPORT_REJECTED', id, {
+        note: trimmed,
+      });
+    });
+    return this.importOutcome(id, actor.branchId);
+  }
+
+  private async claimReview(
+    tx: Prisma.TransactionClient,
+    id: string,
+    actor: ImportActor,
+    action: ImportReviewAction,
+    note?: string,
+  ) {
+    const migration = await tx.inventoryMigration.findFirst({
+      where: { id, branchId: actor.branchId },
+    });
+    if (!migration) throw new NotFoundException('Opening import not found');
+    const next = nextImportApproval(migration.approval, action);
+    if (!next) this.throwAlreadyReviewed(migration.approval);
+    const claimed = await tx.inventoryMigration.updateMany({
+      where: { id, branchId: actor.branchId, approval: 'PENDING' },
+      data: {
+        approval: next!,
+        reviewedById: actor.id,
+        reviewedAt: new Date(),
+        reviewNote: note ?? null,
+      },
+    });
+    if (claimed.count !== 1) {
+      const current = await tx.inventoryMigration.findFirst({
+        where: { id, branchId: actor.branchId },
+        select: { approval: true },
+      });
+      this.throwAlreadyReviewed(current?.approval ?? migration.approval);
+    }
+    return migration;
+  }
+
+  private throwAlreadyReviewed(approval: InventoryImportApproval): never {
+    const message = {
+      NOT_REQUIRED: 'This import does not need approval',
+      PENDING: 'This import is still waiting for review',
+      APPROVED: 'This import was already approved',
+      REJECTED: 'This import was already rejected',
+    }[approval];
+    throw new ConflictException({ message, approval });
+  }
+
+  private audit(
+    tx: Prisma.TransactionClient,
+    actor: ImportActor,
+    action: string,
+    entityId: string,
+    detail: Record<string, unknown>,
+  ) {
+    return tx.auditLog.create({
+      data: {
+        userId: actor.id,
+        action,
+        entity: 'InventoryMigration',
+        entityId,
+        newValues: JSON.stringify({ branchId: actor.branchId, ...detail }),
+      },
+    });
+  }
+
+  async pendingImports(actor: ImportActor) {
+    const imports = await this.prisma.inventoryMigration.findMany({
+      where: { ...this.approvalScope(actor), approval: 'PENDING' },
+      include: APPROVAL_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    return Promise.all(
+      imports.map(async (migration) => {
+        const rows = await this.reviewRows(migration);
+        return {
+          importId: migration.id,
+          fileName: migration.fileName,
+          createdAt: migration.createdAt,
+          rowCount: rows.length,
+          approval: approvalOf(migration),
+          rows,
+        };
+      }),
+    );
+  }
+
+  async reviewedImports(actor: ImportActor) {
+    const imports = await this.prisma.inventoryMigration.findMany({
+      where: {
+        ...this.approvalScope(actor),
+        approval: { in: ['APPROVED', 'REJECTED'] },
+      },
+      include: { ...APPROVAL_INCLUDE, _count: { select: { rows: true } } },
+      orderBy: { reviewedAt: 'desc' },
+      take: 50,
+    });
+    return imports.map((migration) => ({
+      importId: migration.id,
+      fileName: migration.fileName,
+      createdAt: migration.createdAt,
+      rowCount: migration._count.rows,
+      approval: approvalOf(migration),
+    }));
+  }
+
+  private approvalScope(actor: ImportActor) {
+    return {
+      branchId: actor.branchId,
+      ...(canReviewItemRequests(actor.role) ? {} : { requestedById: actor.id }),
+    };
+  }
+
+  private async reviewRows(migration: { data: Uint8Array; branchId: string }) {
+    const rows = this.previewWorkbook(Buffer.from(migration.data));
+    return Promise.all(
+      rows.map(async (row) => {
+        if ('error' in row) return row;
+        const existing = await this.findImportedInventoryItem(
+          this.prisma,
+          row,
+          migration.branchId,
+        );
+        return existing
+          ? {
+              ...row,
+              batch: 'EXISTING' as const,
+              existingStock: existing.currentStock,
+            }
+          : { ...row, batch: 'NEW' as const };
+      }),
+    );
   }
 
   /**
@@ -305,6 +548,7 @@ export class InventoryImportService {
         : migration.legacyResult;
     const result = {
       importId: migration.id,
+      approval: approvalOf(migration),
       totalRows: rows.length,
       created: legacy?.created ?? 0,
       updated: legacy?.updated ?? 0,
@@ -355,6 +599,13 @@ export class InventoryImportService {
     rows: Record<string, unknown>[],
     retry: boolean,
   ) {
+    const gate = await this.prisma.inventoryMigration.findUniqueOrThrow({
+      where: { id },
+      select: { approval: true, reviewNote: true },
+    });
+    const blocked = importRowsBlockedReason(gate.approval, gate.reviewNote);
+    if (blocked)
+      throw new ConflictException({ message: blocked, approval: gate.approval });
     const startedAt = Date.now();
     this.logger.log({
       event: 'inventory_import_started',

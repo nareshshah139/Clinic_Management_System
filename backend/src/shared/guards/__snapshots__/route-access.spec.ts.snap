@@ -80,6 +80,8 @@ GET /inventory/categories | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inv
 GET /inventory/dashboard | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:dashboard:read
 GET /inventory/imports/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
 GET /inventory/imports/:id/original | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
+GET /inventory/imports/pending | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
+GET /inventory/imports/reviewed | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
 GET /inventory/item-requests | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
 GET /inventory/item-requests/pending-count | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
 GET /inventory/items | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
@@ -302,6 +304,8 @@ POST /drugs/inventory-change-requests/:id/reject | roles: ADMIN,DOCTOR | permiss
 POST /google-calendar/disconnect | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /google-calendar/exchange | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/adjustments | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:adjustment:create
+POST /inventory/imports/:id/approve | roles: ADMIN,DOCTOR | permissions: inventory:item:approve
+POST /inventory/imports/:id/reject | roles: ADMIN,DOCTOR | permissions: inventory:item:approve
 POST /inventory/imports/:id/retry-failed-rows | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:create
 POST /inventory/item-requests/:id/approve | roles: ADMIN,DOCTOR | permissions: inventory:item:approve
 POST /inventory/item-requests/:id/reject | roles: ADMIN,DOCTOR | permissions: inventory:item:approve
