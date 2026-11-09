@@ -283,12 +283,12 @@ export function PharmacyInvoiceBuilderFixed({
   const [checkoutAttempt, setCheckoutAttempt] = useState<CheckoutAttempt | null>(null);
   const checkoutAttemptRef = useRef<CheckoutAttempt | null>(null);
   const checkoutInFlight = useRef(false);
-  const billContext = useRef(draft ? `draft:${draft.session.id}` : incomingPrefillKey).current;
   /**
    * @cc [owner:nareshshah139,label:product] finished-checkout-stays-with-its-bill
    * A pending checkout MUST be offered for reconciliation on any bill. A confirmed checkout MUST only be
    * shown again when the same bill is reopened, never on a blank new sale, another prescription or another draft.
    */
+  const billContext = useRef(draft ? `draft:${draft.session.id}` : incomingPrefillKey).current;
   useEffect(() => {
     const saved = sessionStorage.getItem(checkoutStorageKey);
     if (saved) {
