@@ -20,9 +20,21 @@ import {
   PharmacyInvoiceItemDto,
 } from './dto/pharmacy-invoice.dto';
 
-type DraftFence = { checkoutRequestKey: string; checkoutPayloadHash: string };
 import { Prisma } from '@prisma/client';
 import { InvoiceNumbersService } from '../../shared/numbering/invoice-numbers.service';
+
+type DraftFence = { checkoutRequestKey: string; checkoutPayloadHash: string };
+
+const settlement = (total: number, paid: number) => ({
+  paidAmount: paid,
+  balanceAmount: money(total - paid),
+  paymentStatus:
+    paid >= total
+      ? ('COMPLETED' as const)
+      : paid > 0
+        ? ('PARTIALLY_PAID' as const)
+        : ('PENDING' as const),
+});
 
 type InvoiceItemType = 'DRUG' | 'PACKAGE';
 
@@ -180,8 +192,9 @@ export class PharmacyInvoiceService {
 
   /**
    * @cc [owner:nareshshah139,label:product] checkout-collects-payment
-   * A finished bill MUST record one completed payment of its total in the bill's payment method
-   * within the checkout transaction, leaving no balance due. A checkout replay MUST NOT collect again.
+   * A finished bill MUST record one completed payment of what its completed payments leave due, in
+   * the bill's payment method, within the checkout transaction, so the ledger equals the total. Paid,
+   * balance and payment status MUST come from the ledger. A checkout replay MUST NOT collect again.
    */
   private async collectCheckoutPayment(
     tx: Prisma.TransactionClient,
@@ -191,13 +204,14 @@ export class PharmacyInvoiceService {
     const invoice = await tx.pharmacyInvoice.findUniqueOrThrow({
       where: { id },
     });
-    const amount = money(invoice.totalAmount);
-    if (amount > 0)
+    const total = money(invoice.totalAmount);
+    const due = Math.max(0, money(total - (await this.paidOn(tx, id))));
+    if (due > 0)
       await tx.pharmacyPayment.create({
         data: {
           invoiceId: id,
           requestKey: `checkout:${requestKey}`,
-          amount,
+          amount: due,
           method: invoice.paymentMethod,
           status: 'COMPLETED',
         },
@@ -205,9 +219,7 @@ export class PharmacyInvoiceService {
     return tx.pharmacyInvoice.update({
       where: { id },
       data: {
-        paidAmount: amount,
-        balanceAmount: 0,
-        paymentStatus: 'COMPLETED',
+        ...settlement(total, await this.paidOn(tx, id)),
         mutationVersion: { increment: 1 },
       },
       include: {
@@ -216,6 +228,14 @@ export class PharmacyInvoiceService {
         doctor: true,
       },
     });
+  }
+
+  private async paidOn(tx: Prisma.TransactionClient, invoiceId: string) {
+    const paid = await tx.pharmacyPayment.aggregate({
+      where: { invoiceId, status: 'COMPLETED' },
+      _sum: { amount: true },
+    });
+    return money(paid._sum.amount || 0);
   }
 
   private async checkoutReplay(
@@ -1199,24 +1219,13 @@ export class PharmacyInvoiceService {
       updateData.subtotal = recomputeTotals.subtotal;
       updateData.discountAmount = recomputeTotals.totalDiscount;
       updateData.taxAmount = recomputeTotals.totalTax;
-      const paid = await prisma.pharmacyPayment.aggregate({
-        where: { invoiceId: id, status: 'COMPLETED' },
-        _sum: { amount: true },
-      });
-      const paidAmount = money(paid._sum.amount || 0);
+      const paidAmount = await this.paidOn(prisma, id);
       if (money(grandTotal) < paidAmount)
         throw new BadRequestException(
           'Invoice total cannot be lower than payments already received',
         );
       updateData.totalAmount = money(grandTotal);
-      updateData.paidAmount = paidAmount;
-      updateData.balanceAmount = money(grandTotal - paidAmount);
-      updateData.paymentStatus =
-        paidAmount >= money(grandTotal)
-          ? 'COMPLETED'
-          : paidAmount > 0
-            ? 'PARTIALLY_PAID'
-            : 'PENDING';
+      Object.assign(updateData, settlement(money(grandTotal), paidAmount));
 
       // Delete existing items
       await prisma.pharmacyInvoiceItem.deleteMany({
@@ -2332,7 +2341,8 @@ export class PharmacyInvoiceService {
    * @cc [owner:nareshshah139,label:product] payment-atomic-retry
    * A payment MUST lock its invoice, reject overpayment using completed ledger entries, and commit
    * its receipt and recomputed balance together. The same invoice request key and payload MUST
-   * return the original receipt; a changed payload MUST conflict without collecting again.
+   * return the original receipt; a changed payload MUST conflict without collecting again. A draft
+   * MUST NOT take payment; finishing it in Sales collects what is due.
    */
   async addPayment(
     invoiceId: string,
@@ -2369,11 +2379,13 @@ export class PharmacyInvoiceService {
         throw new BadRequestException(
           'Cancelled invoices cannot receive payments',
         );
-      const before = await tx.pharmacyPayment.aggregate({
-        where: { invoiceId, status: 'COMPLETED' },
-        _sum: { amount: true },
-      });
-      const remaining = money(invoice.totalAmount - (before._sum.amount || 0));
+      if (invoice.status === 'DRAFT')
+        throw new BadRequestException(
+          'Finish the bill in Sales before taking payment',
+        );
+      const remaining = money(
+        invoice.totalAmount - (await this.paidOn(tx, invoiceId)),
+      );
       if (dto.amount > remaining)
         throw new BadRequestException(
           'Payment amount exceeds remaining balance',
@@ -2390,18 +2402,13 @@ export class PharmacyInvoiceService {
           status: 'COMPLETED',
         },
       });
-      const after = await tx.pharmacyPayment.aggregate({
-        where: { invoiceId, status: 'COMPLETED' },
-        _sum: { amount: true },
-      });
-      const paidAmount = money(after._sum.amount || 0);
-      const balanceAmount = money(invoice.totalAmount - paidAmount);
       await tx.pharmacyInvoice.update({
         where: { id: invoiceId },
         data: {
-          paidAmount,
-          balanceAmount,
-          paymentStatus: balanceAmount === 0 ? 'COMPLETED' : 'PARTIALLY_PAID',
+          ...settlement(
+            money(invoice.totalAmount),
+            await this.paidOn(tx, invoiceId),
+          ),
           mutationVersion: { increment: 1 },
         },
       });

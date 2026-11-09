@@ -386,4 +386,121 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
       ),
     ]).toEqual(['404: Invoice not found', '404: Invoice not found']);
   });
+
+  const cashRegister = async () => {
+    const page = await register.list(
+      {
+        register: 'sales',
+        from: '2000-01-01',
+        to: '2099-12-31',
+        paymentMode: 'CASH',
+        sortBy: 'billNo',
+        sortDir: 'asc',
+        page: 1,
+        limit: 50,
+      },
+      'branch',
+    );
+    return [
+      page.rows.map((row) => [row.recordId, row.paymentModes, row.due]),
+      page.totals.collected,
+    ];
+  };
+  const ledger = async (invoiceId: string) =>
+    db.pharmacyPayment.findMany({
+      where: { invoiceId },
+      select: { amount: true, method: true, status: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  const fiveHundred = {
+    patientId: 'patient',
+    billingName: 'Meera Shah',
+    billingPhone: '9876543210',
+    paymentMethod: 'CASH' as const,
+    items: [
+      {
+        drugId: 'tablet',
+        quantity: 1,
+        unitPrice: 500,
+        discountPercent: 0,
+        taxPercent: 0,
+      },
+    ],
+  };
+
+  it('refuses payments on a draft and finishes a draft holding an earlier receipt by collecting only the rest', async () => {
+    const draft = await invoices.create(fiveHundred, 'branch', 'asha');
+    expect(
+      await failure(
+        invoices.addPayment(
+          draft.id,
+          { requestKey: 'draft-receipt', amount: 200, method: 'CASH' },
+          'branch',
+        ),
+      ),
+    ).toBe('400: Finish the bill in Sales before taking payment');
+
+    await db.pharmacyPayment.create({
+      data: {
+        invoiceId: draft.id,
+        requestKey: 'receipt-before-sales',
+        amount: 200,
+        method: 'CASH',
+        status: 'COMPLETED',
+      },
+    });
+    await db.pharmacyInvoice.update({
+      where: { id: draft.id },
+      data: {
+        paidAmount: 200,
+        balanceAmount: 300,
+        paymentStatus: 'PARTIALLY_PAID',
+        mutationVersion: { increment: 1 },
+      },
+    });
+
+    const finish = {
+      ...fiveHundred,
+      requestKey: 'finish-part-paid',
+      draftId: draft.id,
+      draftVersion: 1,
+    };
+    const finished = await invoices.checkout(finish, 'branch', 'asha');
+    expect([
+      finished.status,
+      finished.totalAmount,
+      finished.paidAmount,
+      finished.balanceAmount,
+      finished.paymentStatus,
+      await ledger(draft.id),
+      await cashRegister(),
+    ]).toEqual([
+      'CONFIRMED',
+      500,
+      500,
+      0,
+      'COMPLETED',
+      [
+        { amount: 200, method: 'CASH', status: 'COMPLETED' },
+        { amount: 300, method: 'CASH', status: 'COMPLETED' },
+      ],
+      [[[draft.id, ['CASH'], 0]], 500],
+    ]);
+
+    const retried = await invoices.checkout(finish, 'branch', 'asha');
+    expect([
+      retried.paidAmount,
+      (await ledger(draft.id)).length,
+      await sales(draft.invoiceNumber),
+    ]).toEqual([500, 2, 1]);
+    expect(
+      await failure(
+        invoices.addPayment(
+          draft.id,
+          { requestKey: 'after-finish', amount: 1, method: 'CASH' },
+          'branch',
+        ),
+      ),
+    ).toBe('400: Payment amount exceeds remaining balance');
+  });
 });
