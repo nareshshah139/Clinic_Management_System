@@ -28,6 +28,7 @@ import {
   QueryPharmacyInvoiceDto,
   QueryPharmacyInvoicePrintDto,
   PharmacyPaymentDto,
+  DiscardPharmacyInvoiceQueryDto,
 } from './dto/pharmacy-invoice.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 
@@ -120,9 +121,11 @@ export class PharmacyInvoiceController {
   @Permissions('pharmacy:invoice:update')
   @ApiOperation({ summary: 'Update a pharmacy invoice' })
   @ApiResponse({ status: 200, description: 'Invoice updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid update data' })
   @ApiResponse({
-    status: 400,
-    description: 'Invalid update data or invoice not in draft status',
+    status: 409,
+    description:
+      'Invoice already finished, or the draft changed since expectedVersion',
   })
   @ApiResponse({ status: 404, description: 'Invoice not found' })
   async update(
@@ -163,10 +166,22 @@ export class PharmacyInvoiceController {
   @Permissions('pharmacy:invoice:delete')
   @ApiOperation({ summary: 'Delete a pharmacy invoice' })
   @ApiResponse({ status: 200, description: 'Invoice deleted successfully' })
-  @ApiResponse({ status: 400, description: 'Invoice not in draft status' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Invoice already finished, or the draft changed since that version',
+  })
   @ApiResponse({ status: 404, description: 'Invoice not found' })
-  async remove(@Param('id') id: string, @Request() req: any) {
-    return this.pharmacyInvoiceService.remove(id, req.user.branchId);
+  async remove(
+    @Param('id') id: string,
+    @Query() query: DiscardPharmacyInvoiceQueryDto,
+    @Request() req: any,
+  ) {
+    return this.pharmacyInvoiceService.remove(
+      id,
+      req.user.branchId,
+      query.version,
+    );
   }
 
   @Post(':id/payments')

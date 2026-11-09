@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsEnum,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -217,9 +218,33 @@ export class CheckoutPharmacyInvoiceDto extends CreatePharmacyInvoiceDto {
   @IsString()
   @Length(1, 128)
   requestKey: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Saved draft to finish as this bill. Its number is kept and its lines are replaced by this payload.',
+  })
+  @IsOptional()
+  @IsString()
+  draftId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Version of the draft the payload was edited from.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  draftVersion?: number;
 }
 
 export class UpdatePharmacyInvoiceDto {
+  @ApiProperty({
+    description:
+      'Version of the draft the edit was made from. A different current version is refused.',
+  })
+  @IsInt()
+  @Min(0)
+  expectedVersion: number;
+
   @ApiPropertyOptional({ description: 'Patient ID', example: 'patient-123' })
   @IsOptional()
   @IsString()
@@ -313,6 +338,18 @@ export class UpdatePharmacyInvoiceDto {
   @ValidateNested({ each: true })
   @Type(() => PharmacyInvoiceItemDto)
   items?: PharmacyInvoiceItemDto[];
+}
+
+export class DiscardPharmacyInvoiceQueryDto {
+  @ApiPropertyOptional({
+    description:
+      'Version of the draft being discarded. A different current version is refused.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  version?: number;
 }
 
 export class UpdatePharmacyInvoiceStatusDto {
