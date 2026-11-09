@@ -449,12 +449,128 @@ exports.opening = async (f, s) => {
   await f.db.$executeRawUnsafe(
     "CREATE TRIGGER recovery_fail_success BEFORE UPDATE ON inventory_migration_rows FOR EACH ROW EXECUTE FUNCTION recovery_fail_success()",
   );
+  const openingNames = { name: { in: ["Opening successful row", "Opening retry row"] } };
+  const movementsBeforeUpload = await f.db.stockTransaction.count();
   await navigate(f, "/dashboard/inventory?area=stock&view=opening");
   await upload(book.file);
-  await visible(f.page, "Retry failed rows");
+  await visible(
+    f.page,
+    "Sent to a doctor for approval. No stock changes until it is approved.",
+  );
   const migration = await f.db.inventoryMigration.findFirstOrThrow({
     where: { branchId: f.branch.id, fileName: "opening.xlsx" },
   });
+  const heldRetry = await f.call(
+    "POST",
+    `/inventory/imports/${migration.id}/retry-failed-rows`,
+  );
+  const staffApprove = await f.call(
+    "POST",
+    `/inventory/imports/${migration.id}/approve`,
+    {},
+  );
+  f.check(
+    s,
+    "Pharmacist upload waits for a doctor without catalogue or stock effects",
+    {
+      approval: (
+        await f.db.inventoryMigration.findUniqueOrThrow({
+          where: { id: migration.id },
+        })
+      ).approval,
+      requestedBy: (
+        await f.db.inventoryMigration.findUniqueOrThrow({
+          where: { id: migration.id },
+        })
+      ).requestedById,
+      statuses: (
+        await f.db.inventoryMigrationRow.findMany({
+          where: { importId: migration.id },
+          orderBy: { sourceRow: "asc" },
+        })
+      ).map((r) => r.status),
+      drugs: await f.db.drug.count({ where: openingNames }),
+      items: await f.db.inventoryItem.count({ where: openingNames }),
+      movements: (await f.db.stockTransaction.count()) - movementsBeforeUpload,
+      retryWhilePending: heldRetry.status,
+      pharmacistApprove: staffApprove.status,
+    },
+    {
+      approval: "PENDING",
+      requestedBy: f.user.id,
+      statuses: ["PENDING", "PENDING"],
+      drugs: 0,
+      items: 0,
+      movements: 0,
+      retryWhilePending: 409,
+      pharmacistApprove: 403,
+    },
+  );
+  await f.capture(s, "pending-approval");
+  const doctorPassword = "Synthetic-Recovery-Doctor-2026";
+  const doctor = await f.db.user.create({
+    data: {
+      branchId: f.branch.id,
+      email: "recovery-doctor@example.invalid",
+      firstName: "Recovery",
+      lastName: "Doctor",
+      role: "DOCTOR",
+      password: await f.req("bcryptjs").hash(doctorPassword, 4),
+    },
+  });
+  const doctorLogin = await fetch(`${f.base}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ identifier: doctor.email, password: doctorPassword }),
+  });
+  assert.equal(doctorLogin.status, 201);
+  const doctorCookie = doctorLogin.headers
+    .getSetCookie()
+    .map((c) => c.split(";")[0])
+    .find((c) => c.startsWith("auth_token="));
+  assert(doctorCookie, "Doctor login sets the auth cookie");
+  const approveAsDoctor = async () => {
+    const r = await fetch(
+      `${f.base}/api/inventory/imports/${migration.id}/approve`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: doctorCookie },
+        body: "{}",
+      },
+    );
+    return { status: r.status, body: await r.json() };
+  };
+  const approved = await approveAsDoctor();
+  const approvedAgain = await approveAsDoctor();
+  f.check(
+    s,
+    "Doctor approval runs the rows once and hits the durable marker failure",
+    {
+      status: approved.status,
+      approval: approved.body.approval?.status,
+      reviewedBy: approved.body.approval?.reviewedBy?.id,
+      created: approved.body.created,
+      retryableRows: approved.body.retryableRows,
+      secondApprove: approvedAgain.status,
+      successfulRowMovers: (
+        await f.db.stockTransaction.findMany({
+          where: { item: { name: "Opening successful row" } },
+          select: { userId: true, quantityDelta: true },
+        })
+      ),
+    },
+    {
+      status: 200,
+      approval: "APPROVED",
+      reviewedBy: doctor.id,
+      created: 1,
+      retryableRows: 1,
+      secondApprove: 409,
+      successfulRowMovers: [{ userId: doctor.id, quantityDelta: 10 }],
+    },
+  );
+  await click(f.page, "Check import outcome");
+  await visible(f.page, "Retry failed rows");
   const otherBranch = await f.db.branch.create({
     data: { name: "Isolated other branch", address: "Synthetic" },
   });

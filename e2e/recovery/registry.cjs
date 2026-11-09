@@ -23,6 +23,7 @@ module.exports = Object.freeze([
     id: "opening",
     category: "production-ui",
     checkpoints: [
+      "pending-approval",
       "failed-row",
       "retry-unconfirmed",
       "recovered",
