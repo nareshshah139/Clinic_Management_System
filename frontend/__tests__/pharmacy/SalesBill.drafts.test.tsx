@@ -146,6 +146,35 @@ it('refuses a save over a newer change with a plain message, and reloads the lat
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
+it.each([
+  ['the draft itself', 'Invoice not found', 'This draft was discarded, so it can no longer be saved. Your changes on this screen were not saved.', null],
+  ['a record the draft names', 'Prescription not found in this branch', null, 'Prescription not found in this branch'],
+])('says the draft was discarded only when a save cannot find %s', async (_, server, alert, toast) => {
+  open('draft=d-1');
+  fireEvent.change(await screen.findByLabelText('Notes'), { target: { value: 'My edit' } });
+  api.updatePharmacyInvoice.mockRejectedValueOnce(conflict(404, server));
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+  await waitFor(() => expect(api.updatePharmacyInvoice).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled());
+  expect([
+    screen.queryByRole('alert')?.querySelector('p')?.textContent ?? null,
+    mockToast.mock.calls.find(([shown]) => shown.title === 'Draft not saved')?.[0].description ?? null,
+  ]).toEqual([alert, toast]);
+});
+
+it('shows the server reason when finishing a draft hits a missing record', async () => {
+  open('draft=d-1');
+  await lineFor(cream.name);
+  api.post.mockRejectedValueOnce(conflict(404, 'Prescription not found in this branch'));
+  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
+  await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Error Confirming Invoice' })));
+  expect([
+    screen.queryByRole('alert'),
+    mockToast.mock.calls.find(([shown]) => shown.title === 'Error Confirming Invoice')?.[0].description,
+  ]).toEqual([null, 'Prescription not found in this branch']);
+});
+
 it('discards a draft only after confirming and returns to Sales', async () => {
   open('draft=d-1');
   fireEvent.click(await screen.findByRole('button', { name: 'Discard draft' }));

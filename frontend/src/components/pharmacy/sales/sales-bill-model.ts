@@ -176,7 +176,8 @@ export type DraftRefusal = { status: 404 | 409; message: string };
 
 export function draftRefusal(error: unknown, fallback: string): DraftRefusal | null {
   const status = (error as { status?: number })?.status;
-  if (status !== 404 && status !== 409) return null;
   const message = (error as { body?: { message?: unknown } })?.body?.message;
-  return { status, message: status === 404 ? 'This draft was discarded, so it can no longer be saved.' : typeof message === 'string' ? message : fallback };
+  if (status === 404 && message === 'Invoice not found') return { status, message: 'This draft was discarded, so it can no longer be saved.' };
+  if (status !== 409) return null;
+  return { status, message: typeof message === 'string' ? message : fallback };
 }
