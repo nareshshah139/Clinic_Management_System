@@ -82,7 +82,7 @@ function Tile({ label, value, help, tone }: { label: string; value: string; help
       <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
         {label} <ReportInfoTip label={label}>{help}</ReportInfoTip>
       </p>
-      <p className={cn("mt-1 truncate text-lg font-semibold tabular-nums", tone === "good" && "text-emerald-700 dark:text-emerald-400", tone === "bad" && "text-destructive")}>
+      <p className={cn("mt-1 break-words text-lg font-semibold tabular-nums", tone === "good" && "text-emerald-700 dark:text-emerald-400", tone === "bad" && "text-destructive")}>
         {value}
       </p>
     </div>
@@ -243,11 +243,11 @@ export function ItemMarginReport() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(2,minmax(0,11rem))_minmax(0,11rem)_minmax(0,11rem)]">
             <div className="space-y-1">
               <Label htmlFor="margin-start">From</Label>
-              <Input id="margin-start" type="date" required value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} />
+              <Input id="margin-start" className="h-10" type="date" required value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="margin-end">To</Label>
-              <Input id="margin-end" type="date" required value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} />
+              <Input id="margin-end" className="h-10" type="date" required value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} />
             </div>
             <FilterSelect id="margin-type" label="Type" value={filters.type} onChange={(value) => setFilter("type", value as MarginFilters["type"])}>
               {MARGIN_TYPES.map((type) => <option key={type} value={type}>{MARGIN_TYPE_LABELS[type]}</option>)}
@@ -263,7 +263,7 @@ export function ItemMarginReport() {
             </FilterSelect>
             <div className="space-y-1">
               <Label htmlFor="margin-search">Search</Label>
-              <Input id="margin-search" type="search" maxLength={100} placeholder="Type to search" value={filters.search} onChange={(event) => setFilter("search", event.target.value)} />
+              <Input id="margin-search" className="h-10" type="search" maxLength={100} placeholder="Type to search" value={filters.search} onChange={(event) => setFilter("search", event.target.value)} />
             </div>
             <Button type="submit" disabled={state.status === "loading"}>Go</Button>
             <Button type="button" variant="outline" aria-expanded={moreOpen} aria-controls="margin-more-filters" onClick={() => setMoreOpen((open) => !open)}>
