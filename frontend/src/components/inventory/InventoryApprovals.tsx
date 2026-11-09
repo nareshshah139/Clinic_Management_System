@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { InventoryItemRequests } from './InventoryItemRequests';
 import { InventoryUpdates } from './InventoryUpdates';
@@ -17,6 +17,9 @@ function NewItemApprovals() {
 
 export function InventoryApprovals({ canReadEdits, pendingItems }: { canReadEdits: boolean; pendingItems: number }) {
   const [chosen, setTab] = useState<Tab | null>(null);
+  useEffect(() => {
+    if (chosen === null && pendingItems > 0) setTab('items');
+  }, [chosen, pendingItems]);
   const tab: Tab = chosen ?? (!canReadEdits || pendingItems > 0 ? 'items' : 'edits');
   if (!canReadEdits) return <NewItemApprovals />;
   return <div className="space-y-6">

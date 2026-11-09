@@ -70,3 +70,10 @@ it('opens approvals on New items when requests are waiting, else on Price / stoc
   render(<InventoryApprovals canReadEdits pendingItems={0} />);
   expect(screen.getByRole('tab', { name: 'Price / stock' })).toHaveAttribute('aria-selected', 'true');
 });
+
+it('stays on New items after the last pending entry is reviewed', () => {
+  api.getInventoryItemRequests.mockResolvedValue([]);
+  const { rerender } = render(<InventoryApprovals canReadEdits pendingItems={1} />);
+  rerender(<InventoryApprovals canReadEdits pendingItems={0} />);
+  expect(screen.getByRole('tab', { name: /New items/ })).toHaveAttribute('aria-selected', 'true');
+});
