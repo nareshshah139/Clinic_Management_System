@@ -57,6 +57,10 @@ interface SearchResult {
  * Pending responses MUST NOT reopen dismissed results; editing or focusing a
  * query of at least two non-whitespace characters may reopen them.
  */
+/**
+ * @cc [owner:nareshshah139,label:accessibility] notification-control-label
+ * The notifications control has an accessible name whether or not notifications are present.
+ */
 export function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -619,7 +623,7 @@ export function Header() {
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="relative">
+            <Button variant="ghost" size="sm" className="relative" aria-label="Notifications">
               <Bell className="h-5 w-5" />
               {notifItems.length > 0 && (
                 <Badge

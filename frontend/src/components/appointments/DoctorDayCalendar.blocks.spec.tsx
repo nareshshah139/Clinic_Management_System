@@ -27,7 +27,8 @@ function renderDay(appointments: object[], onSelectSlot = jest.fn()) {
   return onSelectSlot;
 }
 
-const blockFor = (name: RegExp) => screen.getByRole('button', { name }).parentElement as HTMLElement;
+const blockFor = (name: RegExp) => screen.getByRole('button', { name: new RegExp(`^(?:Token \\d+, )?${name.source}, `, name.flags) }).parentElement as HTMLElement;
+const calendarName = { selector: '[data-appointment-block] [data-patient-name]' };
 
 describe('DoctorDayCalendar appointment blocks', () => {
   it('lays two appointments in the same slot side by side, each with its own readable name', async () => {
@@ -36,8 +37,8 @@ describe('DoctorDayCalendar appointment blocks', () => {
       appointment('a2', '11:00-11:15', 'Lakshmi Devi', AppointmentStatus.SCHEDULED, { tokenNumber: 7 }),
     ]);
 
-    expect(await screen.findByText('Mohammed Irfan')).toBeInTheDocument();
-    expect(screen.getByText('Lakshmi Devi')).toBeInTheDocument();
+    expect(await screen.findByText('Mohammed Irfan', calendarName)).toBeInTheDocument();
+    expect(screen.getByText('Lakshmi Devi', calendarName)).toBeInTheDocument();
 
     const first = blockFor(/Mohammed Irfan/);
     const second = blockFor(/Lakshmi Devi/);
@@ -62,7 +63,7 @@ describe('DoctorDayCalendar appointment blocks', () => {
     [AppointmentStatus.NO_SHOW, 'No-show'],
   ])('shows a %s chip on the block', async (status, label) => {
     renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', status)]);
-    await screen.findByText('Ravi Kumar');
+    await screen.findByText('Ravi Kumar', calendarName);
     expect(within(blockFor(/Ravi Kumar/)).getByText(label)).toBeInTheDocument();
   });
 
@@ -71,8 +72,8 @@ describe('DoctorDayCalendar appointment blocks', () => {
       appointment('a1', '10:00-10:30', 'Suresh Babu', AppointmentStatus.NO_SHOW),
       appointment('a2', '12:00-12:30', 'Priya Nair', AppointmentStatus.SCHEDULED),
     ]);
-    expect(await screen.findByText('Suresh Babu')).toHaveClass('line-through');
-    expect(screen.getByText('Priya Nair')).not.toHaveClass('line-through');
+    expect(await screen.findByText('Suresh Babu', calendarName)).toHaveClass('line-through');
+    expect(screen.getByText('Priya Nair', calendarName)).not.toHaveClass('line-through');
   });
 
   it('does not draw cancelled appointments', async () => {
@@ -80,13 +81,13 @@ describe('DoctorDayCalendar appointment blocks', () => {
       appointment('a1', '10:00-10:30', 'Alice', AppointmentStatus.SCHEDULED),
       appointment('a2', '10:30-11:00', 'Bob', AppointmentStatus.CANCELLED),
     ]);
-    await screen.findByText('Alice');
+    await screen.findByText('Alice', calendarName);
     expect(screen.queryByText('Bob')).toBeNull();
   });
 
   it('opens appointment details when a block is activated', async () => {
     renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.CONFIRMED)]);
-    fireEvent.click(await screen.findByRole('button', { name: /Ravi Kumar/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Ravi Kumar, / }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Appointment Details')).toBeInTheDocument();
     expect(within(dialog).getByText('10:00-10:30')).toBeInTheDocument();
@@ -94,7 +95,7 @@ describe('DoctorDayCalendar appointment blocks', () => {
 
   it('reschedules from the details dialog, which narrow blocks rely on', async () => {
     renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.CONFIRMED)]);
-    fireEvent.click(await screen.findByRole('button', { name: /Ravi Kumar/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Ravi Kumar, / }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Reschedule' }));
     expect(await screen.findByText('Rescheduling Ravi Kumar')).toBeInTheDocument();
@@ -103,12 +104,12 @@ describe('DoctorDayCalendar appointment blocks', () => {
 
   it('does not open details for an appointment that is still saving', async () => {
     renderDay([appointment('optimistic-1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.SCHEDULED)]);
-    expect(await screen.findByRole('button', { name: /Ravi Kumar/ })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /^Ravi Kumar, / })).toBeDisabled();
   });
 
   it('still opens details through the INFO control', async () => {
     renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.CONFIRMED)]);
-    await screen.findByText('Ravi Kumar');
+    await screen.findByText('Ravi Kumar', calendarName);
     fireEvent.click(screen.getByTitle('View Appointment Details'));
     expect(await screen.findByRole('dialog')).toHaveTextContent('Ravi Kumar');
   });
@@ -119,9 +120,9 @@ describe('DoctorDayCalendar appointment blocks', () => {
       appointment('normal', '10:00-10:30', 'Normal Patient', AppointmentStatus.SCHEDULED),
       appointment('late', '18:30-19:00', 'Late Patient', AppointmentStatus.SCHEDULED),
     ]);
-    const early = (await screen.findByRole('button', { name: /Early Patient/ })).closest('[data-appointment-block]') as HTMLElement;
-    const normal = screen.getByRole('button', { name: /Normal Patient/ }).closest('[data-appointment-block]') as HTMLElement;
-    const late = screen.getByRole('button', { name: /Late Patient/ }).closest('[data-appointment-block]') as HTMLElement;
+    const early = (await screen.findByRole('button', { name: /^Early Patient, / })).closest('[data-appointment-block]') as HTMLElement;
+    const normal = screen.getByRole('button', { name: /^Normal Patient, / }).closest('[data-appointment-block]') as HTMLElement;
+    const late = screen.getByRole('button', { name: /^Late Patient, / }).closest('[data-appointment-block]') as HTMLElement;
     expect(parseFloat(early.style.top)).toBe(0);
     expect(parseFloat(normal.style.top)).toBeGreaterThan(0);
     expect(parseFloat(late.style.top)).toBeLessThan(100);
@@ -136,14 +137,14 @@ describe('DoctorDayCalendar appointment blocks', () => {
 
   it('books the clicked empty slot', async () => {
     const onSelectSlot = renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.SCHEDULED)]);
-    await screen.findByText('Ravi Kumar');
+    await screen.findByText('Ravi Kumar', calendarName);
     fireEvent.click(screen.getByRole('button', { name: 'Book 14:00-14:30' }));
     expect(onSelectSlot).toHaveBeenCalledWith('14:00-14:15');
   });
 
   it('books a press-and-release on an empty tile as the whole tile', async () => {
     const onSelectSlot = renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.SCHEDULED)]);
-    await screen.findByText('Ravi Kumar');
+    await screen.findByText('Ravi Kumar', calendarName);
     const tile = screen.getByRole('button', { name: 'Book 14:00-14:30' }).parentElement as HTMLElement;
     fireEvent.mouseDown(tile, { button: 0 });
     fireEvent.mouseUp(tile);

@@ -73,7 +73,7 @@ function AppointmentsPageInner() {
             <div data-tour="doctor-select">
               <label className="text-sm text-gray-700">Doctor</label>
               <Select value={doctorId} onValueChange={setDoctorId}>
-                <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
+                <SelectTrigger aria-label="Doctor"><SelectValue placeholder="Select doctor" /></SelectTrigger>
                 <SelectContent>
                   {doctors.map((d) => (
                     <SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>
@@ -83,7 +83,7 @@ function AppointmentsPageInner() {
             </div>
             <div data-tour="date-picker">
               <label className="text-sm text-gray-700">Date</label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              <Input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
             <div>
               <label className="text-sm text-gray-700">&nbsp;</label>

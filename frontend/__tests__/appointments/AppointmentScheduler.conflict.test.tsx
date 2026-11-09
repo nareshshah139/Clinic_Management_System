@@ -1,6 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AppointmentScheduler from '@/components/appointments/AppointmentScheduler';
+import { apiClient } from '@/lib/api';
 
 // Mock API to produce a 409 conflict on createAppointment
 jest.mock('@/lib/api', () => {
@@ -28,11 +29,14 @@ jest.mock('@/hooks/use-toast', () => ({
 }));
 
 jest.mock('@/components/appointments/DoctorDayCalendar', () => {
-  return function MockDoctorDayCalendar({ onSelectSlot }: { onSelectSlot: (slot: string) => void }) {
+  return function MockDoctorDayCalendar({ onSelectSlot, date, optimisticAppointment }: { onSelectSlot: (slot: string) => void; date: string; optimisticAppointment?: { appointment: { patient?: { name?: string } } } }) {
     return (
-      <button type="button" onClick={() => onSelectSlot('10:00-10:30')}>
-        10:00-10:30
-      </button>
+      <div data-testid="calendar">
+        {date} {optimisticAppointment?.appointment.patient?.name}
+        <button type="button" onClick={() => onSelectSlot('10:00-10:30')}>
+          10:00-10:30
+        </button>
+      </div>
     );
   };
 });
@@ -70,5 +74,21 @@ describe('AppointmentScheduler - conflict handling (toast)', () => {
       expect(String(args.description)).toMatch(/11:00-11:30/);
       expect(args.variant).toBe('destructive');
     });
+  });
+
+  it('does not place a late booking response in the newly selected date', async () => {
+    let resolveBooking!: (value: unknown) => void;
+    jest.mocked(apiClient.createAppointment).mockReturnValueOnce(new Promise(resolve => { resolveBooking = resolve; }) as never);
+    const { rerender } = render(<AppointmentScheduler controlledDoctorId="doc-1" controlledDate="2099-01-01" />);
+    await waitFor(() => expect(screen.getByTestId('calendar')).toHaveTextContent('2099-01-01'));
+    fireEvent.change(screen.getByPlaceholderText('Search patient by name/phone'), { target: { value: 'Pat' } });
+    fireEvent.click(await screen.findByText(/Pat Ient/));
+    fireEvent.click(screen.getByText('10:00-10:30'));
+    fireEvent.click(await screen.findByRole('button', { name: /Confirm Booking/i }));
+    await waitFor(() => expect(apiClient.createAppointment).toHaveBeenCalled());
+    rerender(<AppointmentScheduler controlledDoctorId="doc-1" controlledDate="2099-01-02" />);
+    await waitFor(() => expect(screen.getByTestId('calendar')).toHaveTextContent('2099-01-02'));
+    await act(async () => resolveBooking({ id: 'a1' }));
+    expect(screen.getByTestId('calendar')).not.toHaveTextContent('Pat Ient');
   });
 });
