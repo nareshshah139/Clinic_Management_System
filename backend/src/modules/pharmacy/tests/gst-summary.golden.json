@@ -1,0 +1,369 @@
+{
+  "records": [
+    {
+      "id": "purchase-1",
+      "sourceType": "purchase",
+      "kind": "PURCHASE_INVOICE",
+      "invoiceNumber": "SUP/88",
+      "status": "STOCK_COMMITTED",
+      "invoiceDate": "2026-11-03T00:00:00.000Z",
+      "party": "Apex Pharma",
+      "supplierGstin": "29ABCDE1234F1Z5",
+      "taxableAmount": 1250,
+      "gstAmount": 99,
+      "totalAmount": 1349,
+      "lines": [
+        {
+          "id": "pl-1",
+          "lineNumber": 1,
+          "product": "Adapalene Gel",
+          "batch": "AD1",
+          "unit": "Tube",
+          "pack": "15 g",
+          "paidQuantity": 10,
+          "freeQuantity": 1,
+          "MRP": 120,
+          "PTR": 90,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": 900,
+          "gstAmount": 108,
+          "totalAmount": 1008
+        },
+        {
+          "id": "pl-2",
+          "lineNumber": 2,
+          "product": "Zinc Tabs",
+          "batch": "ZN1",
+          "unit": "Strip",
+          "pack": "10 tabs",
+          "paidQuantity": 5,
+          "freeQuantity": 0,
+          "MRP": 80,
+          "PTR": 70,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": 350.35,
+          "gstAmount": 17.52,
+          "totalAmount": 367.87
+        }
+      ]
+    },
+    {
+      "id": "purchase-2",
+      "sourceType": "purchase",
+      "kind": "PURCHASE_INVOICE",
+      "invoiceNumber": "KA-771",
+      "status": "STOCK_COMMITTED",
+      "invoiceDate": "2026-11-04T00:00:00.000Z",
+      "party": "Interstate Distributors",
+      "supplierGstin": "27ZZZZZ9999Z1Z1",
+      "taxableAmount": 500,
+      "gstAmount": 90,
+      "totalAmount": 590,
+      "lines": [
+        {
+          "id": "pl-3",
+          "lineNumber": 1,
+          "product": "Sunscreen SPF 50",
+          "batch": "SS1",
+          "unit": "Bottle",
+          "pack": "50 ml",
+          "paidQuantity": 2,
+          "freeQuantity": 0,
+          "MRP": 590,
+          "PTR": 250,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": 500,
+          "gstAmount": 90,
+          "totalAmount": 590
+        }
+      ]
+    },
+    {
+      "id": "wf-3",
+      "sourceType": "workflow",
+      "kind": "SUPPLIER_RETURN",
+      "invoiceNumber": "RET-9",
+      "status": "POSTED",
+      "invoiceDate": "2026-11-07T00:00:00.000Z",
+      "party": "RET-9",
+      "supplierGstin": "29ABCDE1234F1Z5",
+      "taxableAmount": -70,
+      "gstAmount": -3.5,
+      "totalAmount": -73.5,
+      "lines": [
+        {
+          "product": "Zinc Tabs",
+          "batch": "ZN1",
+          "unit": "STRIPS",
+          "pack": null,
+          "paidQuantity": -1,
+          "freeQuantity": 0,
+          "MRP": null,
+          "PTR": 70,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": -70,
+          "gstAmount": -3.5,
+          "totalAmount": -73.5
+        }
+      ]
+    },
+    {
+      "id": "sale-1",
+      "sourceType": "sale",
+      "kind": "PHARMACY_INVOICE",
+      "invoiceNumber": "PHI-2026-536",
+      "status": "CONFIRMED",
+      "invoiceDate": "2026-11-05T04:30:00.000Z",
+      "supplierGstin": null,
+      "taxableAmount": 380,
+      "gstAmount": 45.6,
+      "totalAmount": 425.6,
+      "lines": [
+        {
+          "id": "sl-1",
+          "product": "",
+          "batch": "",
+          "unit": "Not recorded",
+          "pack": null,
+          "paidQuantity": 2,
+          "freeQuantity": 0,
+          "MRP": null,
+          "PTR": 110,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": 220,
+          "gstAmount": 26.4,
+          "totalAmount": 246.4
+        },
+        {
+          "id": "sl-2",
+          "product": "",
+          "batch": "",
+          "unit": "Not recorded",
+          "pack": null,
+          "paidQuantity": 1,
+          "freeQuantity": 0,
+          "MRP": null,
+          "PTR": 160,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": 160,
+          "gstAmount": 19.2,
+          "totalAmount": 179.2
+        }
+      ]
+    },
+    {
+      "id": "sale-2",
+      "sourceType": "sale",
+      "kind": "PHARMACY_INVOICE",
+      "invoiceNumber": "PHI-2026-537",
+      "status": "DISPENSED",
+      "invoiceDate": "2026-11-05T10:00:00.000Z",
+      "supplierGstin": null,
+      "taxableAmount": 590,
+      "gstAmount": 106.15,
+      "totalAmount": 696.15,
+      "lines": [
+        {
+          "id": "sl-3",
+          "product": "",
+          "batch": "",
+          "unit": "Not recorded",
+          "pack": null,
+          "paidQuantity": 1,
+          "freeQuantity": 0,
+          "MRP": null,
+          "PTR": 560,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": 560,
+          "gstAmount": 100.8,
+          "totalAmount": 660.8
+        },
+        {
+          "id": "sl-4",
+          "product": "",
+          "batch": "",
+          "unit": "Not recorded",
+          "pack": null,
+          "paidQuantity": 1,
+          "freeQuantity": 0,
+          "MRP": null,
+          "PTR": 30,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": 30,
+          "gstAmount": 1.5,
+          "totalAmount": 31.5
+        },
+        {
+          "id": "sl-5",
+          "product": "",
+          "batch": "",
+          "unit": "Not recorded",
+          "pack": null,
+          "paidQuantity": 1,
+          "freeQuantity": 0,
+          "MRP": null,
+          "PTR": 3.65,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": 3.65,
+          "gstAmount": 0,
+          "totalAmount": 3.65
+        }
+      ]
+    },
+    {
+      "id": "wf-1",
+      "sourceType": "workflow",
+      "kind": "COUNTER_SALE",
+      "invoiceNumber": "CS-11",
+      "status": "POSTED",
+      "invoiceDate": "2026-11-06T00:00:00.000Z",
+      "supplierGstin": null,
+      "taxableAmount": 170,
+      "gstAmount": 20.4,
+      "totalAmount": 190.4,
+      "lines": [
+        {
+          "product": "Calamine",
+          "batch": "CL1",
+          "unit": "BOTTLES",
+          "pack": null,
+          "paidQuantity": 2,
+          "freeQuantity": 0,
+          "MRP": null,
+          "PTR": 85,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": 170,
+          "gstAmount": 20.4,
+          "totalAmount": 190.4
+        }
+      ]
+    },
+    {
+      "id": "wf-2",
+      "sourceType": "workflow",
+      "kind": "SALES_RETURN",
+      "invoiceNumber": "SR-2",
+      "status": "POSTED",
+      "invoiceDate": "2026-11-06T00:00:00.000Z",
+      "supplierGstin": null,
+      "taxableAmount": -110,
+      "gstAmount": -13.2,
+      "totalAmount": -123.2,
+      "lines": [
+        {
+          "product": "Adapalene",
+          "batch": "AD1",
+          "unit": "TUBES",
+          "pack": null,
+          "paidQuantity": -1,
+          "freeQuantity": 0,
+          "MRP": null,
+          "PTR": 110,
+          "discountPercent": 0,
+          "schemeAmount": 0,
+          "taxableAmount": -110,
+          "gstAmount": -13.2,
+          "totalAmount": -123.2
+        }
+      ]
+    }
+  ],
+  "purchaseInputGst": 212.02,
+  "salesOutputGst": 155.1,
+  "netPayable": -56.92,
+  "purchases": {
+    "invoiceCount": 3,
+    "taxableAmount": 1680.35,
+    "cgst": 61.01,
+    "sgst": 61.01,
+    "igst": 90,
+    "totalGst": 212.02,
+    "grossAmount": 1892.37,
+    "slabs": [
+      {
+        "slabPercent": 5,
+        "taxableAmount": 280.35,
+        "cgst": 7.01,
+        "sgst": 7.01,
+        "igst": 0,
+        "totalGst": 14.02,
+        "grossAmount": 294.37
+      },
+      {
+        "slabPercent": 12,
+        "taxableAmount": 900,
+        "cgst": 54,
+        "sgst": 54,
+        "igst": 0,
+        "totalGst": 108,
+        "grossAmount": 1008
+      },
+      {
+        "slabPercent": 18,
+        "taxableAmount": 500,
+        "cgst": 0,
+        "sgst": 0,
+        "igst": 90,
+        "totalGst": 90,
+        "grossAmount": 590
+      }
+    ]
+  },
+  "sales": {
+    "invoiceCount": 4,
+    "taxableAmount": 1033.65,
+    "cgst": 77.55,
+    "sgst": 77.55,
+    "igst": 0,
+    "totalGst": 155.1,
+    "grossAmount": 1188.75,
+    "slabs": [
+      {
+        "slabPercent": 0,
+        "taxableAmount": 3.65,
+        "cgst": 0,
+        "sgst": 0,
+        "igst": 0,
+        "totalGst": 0,
+        "grossAmount": 3.65
+      },
+      {
+        "slabPercent": 5,
+        "taxableAmount": 30,
+        "cgst": 0.75,
+        "sgst": 0.75,
+        "igst": 0,
+        "totalGst": 1.5,
+        "grossAmount": 31.5
+      },
+      {
+        "slabPercent": 12,
+        "taxableAmount": 440,
+        "cgst": 26.4,
+        "sgst": 26.4,
+        "igst": 0,
+        "totalGst": 52.8,
+        "grossAmount": 492.8
+      },
+      {
+        "slabPercent": 18,
+        "taxableAmount": 560,
+        "cgst": 50.4,
+        "sgst": 50.4,
+        "igst": 0,
+        "totalGst": 100.8,
+        "grossAmount": 660.8
+      }
+    ]
+  }
+}

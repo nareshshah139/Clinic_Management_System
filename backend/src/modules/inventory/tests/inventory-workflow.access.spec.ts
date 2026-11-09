@@ -55,6 +55,12 @@ describe('/inventory/workspace access control', () => {
     },
   );
 
+  it('refuses a patient account even with every inventory permission granted', async () => {
+    await read('patient').expect(403);
+    await batchChange('patient').expect(403);
+    await bulkChange('patient').expect(403);
+  });
+
   it('lets a non-manager with the read permission read but not change stock', async () => {
     await read('pharmacistReader').expect(200);
     await batchChange('pharmacistReader').expect(403);

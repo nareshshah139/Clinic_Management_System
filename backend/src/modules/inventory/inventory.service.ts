@@ -41,27 +41,38 @@ export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
 
   // Inventory Item Management
-  async createInventoryItem(createItemDto: CreateInventoryItemDto, branchId: string) {
-    // Check if item with same SKU or barcode already exists
-    if (createItemDto.sku) {
-      const existingSku = await this.prisma.inventoryItem.findFirst({
-        where: { sku: createItemDto.sku, branchId },
+  async assertItemIdentifiersFree(
+    dto: Pick<CreateInventoryItemDto, 'sku' | 'barcode'>,
+    branchId: string,
+    db: Pick<PrismaService, 'inventoryItem'> = this.prisma,
+  ) {
+    if (dto.sku) {
+      const existingSku = await db.inventoryItem.findFirst({
+        where: { sku: dto.sku, branchId },
       });
       if (existingSku) {
         throw new ConflictException('Item with this SKU already exists');
       }
     }
 
-    if (createItemDto.barcode) {
-      const existingBarcode = await this.prisma.inventoryItem.findFirst({
-        where: { barcode: createItemDto.barcode, branchId },
+    if (dto.barcode) {
+      const existingBarcode = await db.inventoryItem.findFirst({
+        where: { barcode: dto.barcode, branchId },
       });
       if (existingBarcode) {
         throw new ConflictException('Item with this barcode already exists');
       }
     }
+  }
 
-    const item = await this.prisma.inventoryItem.create({
+  async createInventoryItem(
+    createItemDto: CreateInventoryItemDto,
+    branchId: string,
+    db: Pick<PrismaService, 'inventoryItem'> = this.prisma,
+  ) {
+    await this.assertItemIdentifiersFree(createItemDto, branchId, db);
+
+    const item = await db.inventoryItem.create({
       data: {
         ...createItemDto,
         ...inventoryRegimenDefaults(createItemDto),

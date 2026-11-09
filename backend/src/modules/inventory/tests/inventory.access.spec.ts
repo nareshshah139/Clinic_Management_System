@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { InventoryController } from '../inventory.controller';
 import { InventoryImportService } from '../inventory-import.service';
+import { InventoryItemRequestService } from '../inventory-item-request.service';
 import { InventoryService } from '../inventory.service';
 import { accessApp } from './inventory-access-app';
 
@@ -43,6 +44,7 @@ describe('/inventory access control', () => {
     app = await accessApp(InventoryController, [
       { provide: InventoryService, useValue: stock },
       { provide: InventoryImportService, useValue: {} },
+      { provide: InventoryItemRequestService, useValue: {} },
     ]);
   });
   afterAll(() => app.close());

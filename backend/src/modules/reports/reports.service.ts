@@ -72,19 +72,13 @@ export class ReportsService {
     const { startDate, endDate, period, doctorId, paymentMode, serviceType, includePaymentBreakdown } = query;
     const dateRange = this.calculateDateRange(startDate, endDate, period);
 
-    const doctorVisitIds = doctorId
-      ? (await this.prisma.visit.findMany({ where: { doctorId, patient: { branchId } }, select: { id: true } })).map(visit => visit.id)
-      : undefined;
     const wherePayments: any = {
       reconStatus: 'COMPLETED',
       createdAt: { gte: dateRange.start, lte: dateRange.end },
-      // Use relation filter on invoice
       invoice: {
-        is: {
-          patient: { branchId },
-          ...(doctorVisitIds ? { visitId: { in: doctorVisitIds } } : {}),
-          ...(serviceType ? { items: { some: { service: { type: { equals: serviceType, mode: 'insensitive' } } } } } : {}),
-        },
+        branchId,
+        ...(doctorId ? { OR: [{ visit: { doctorId } }, { appointment: { doctorId } }] } : {}),
+        ...(serviceType ? { items: { some: { service: { type: { equals: serviceType, mode: 'insensitive' } } } } } : {}),
       },
     };
     if (paymentMode) {
@@ -92,13 +86,13 @@ export class ReportsService {
     }
 
     const [sumAgg, paymentCount, invoiceIdGroups, paymentModeGroups, dailyGroups] = await Promise.all([
-      this.prisma.payment.aggregate({ where: wherePayments, _sum: { amount: true } }),
-      this.prisma.payment.count({ where: wherePayments }),
-      this.prisma.payment.groupBy({ by: ['invoiceId'], where: wherePayments, _count: { invoiceId: true } }),
+      this.prisma.newPayment.aggregate({ where: wherePayments, _sum: { amount: true } }),
+      this.prisma.newPayment.count({ where: wherePayments }),
+      this.prisma.newPayment.groupBy({ by: ['invoiceId'], where: wherePayments, _count: { invoiceId: true } }),
       includePaymentBreakdown
-        ? this.prisma.payment.groupBy({ by: ['mode'], where: wherePayments, _sum: { amount: true }, _count: { _all: true } })
+        ? this.prisma.newPayment.groupBy({ by: ['mode'], where: wherePayments, _sum: { amount: true }, _count: { _all: true } })
         : Promise.resolve([] as any[]),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where: wherePayments, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: wherePayments, _sum: { amount: true }, _count: { _all: true } }),
     ]);
 
     const totalRevenue = sumAgg._sum.amount ?? 0;
@@ -118,31 +112,15 @@ export class ReportsService {
       averageInvoiceValue: g._count._all ? (g._sum.amount ?? 0) / g._count._all : 0,
     }));
 
-    // Compute GST from related invoices' items
-    const invoiceIdsForGst = invoiceIdGroups.map((g: any) => g.invoiceId).filter(Boolean);
+    // Each payment carries the invoice's GST in proportion to the share of the invoice it paid.
+    const gstPayments = await this.prisma.newPayment.findMany({
+      where: wherePayments,
+      select: { amount: true, invoice: { select: { total: true, items: { select: { total: true, gstRate: true } } } } },
+    });
     let totalGst = 0;
-    if (invoiceIdsForGst.length > 0) {
-      const invoicesForGst = await this.prisma.invoice.findMany({
-        where: { id: { in: invoiceIdsForGst } },
-        select: { items: true },
-      });
-      for (const inv of invoicesForGst) {
-        const itemsRaw = (inv as any).items;
-        if (!itemsRaw) continue;
-        try {
-          const items = typeof itemsRaw === 'string' ? JSON.parse(itemsRaw) : itemsRaw;
-          for (const it of items as any[]) {
-            const quantity = Number(it.quantity ?? it.qty ?? 1);
-            const unitPrice = Number(it.unitPrice ?? it.price ?? 0);
-            const discountPct = Number(it.discount ?? 0);
-            const gstRate = Number(it.gstRate ?? it.gst ?? 0);
-            const discounted = quantity * unitPrice * (1 - discountPct / 100);
-            totalGst += (discounted * gstRate) / 100;
-          }
-        } catch (_) {
-          // ignore parse errors
-        }
-      }
+    for (const p of gstPayments) {
+      const invoiceGst = p.invoice.items.reduce((sum, it) => sum + (it.total * it.gstRate) / 100, 0);
+      if (p.invoice.total > 0) totalGst += (p.amount * invoiceGst) / p.invoice.total;
     }
 
     // Doctor revenue breakdown via included joins
@@ -165,48 +143,32 @@ export class ReportsService {
   }
 
   private async getDoctorRevenueBreakdown(paymentWhere: any): Promise<DoctorRevenueDto[]> {
-    // Fetch payments with invoice visitId only (Invoice has no direct visit relation in schema)
-    const payments = await this.prisma.payment.findMany({
+    const doctor = { select: { id: true, firstName: true, lastName: true } };
+    const payments = await this.prisma.newPayment.findMany({
       where: paymentWhere,
       select: {
         amount: true,
-        invoice: { select: { id: true, visitId: true } },
+        invoice: { select: { patientId: true, visit: { select: { doctor } }, appointment: { select: { doctor } } } },
       },
     });
 
-    const visitIdSet = new Set<string>();
-    for (const p of payments) if (p.invoice?.visitId) visitIdSet.add(p.invoice.visitId);
-    const visitIds = Array.from(visitIdSet);
-
-    const visits = visitIds.length
-      ? await this.prisma.visit.findMany({
-          where: { id: { in: visitIds } },
-          select: { id: true, doctorId: true, doctor: { select: { id: true, firstName: true, lastName: true } } },
-        })
-      : [];
-    const visitIdToDoctor = new Map<string, { id: string; name: string }>();
-    for (const v of visits) {
-      const name = `${v.doctor?.firstName || ''} ${v.doctor?.lastName || ''}`.trim() || 'Doctor';
-      visitIdToDoctor.set(v.id, { id: v.doctorId, name });
-    }
-
-    const doctorMap = new Map<string, { id: string; name: string; revenue: number; visitCount: number }>();
+    const doctorMap = new Map<string, { id: string; name: string; revenue: number; patients: Set<string> }>();
     for (const p of payments) {
-      const vInfo = p.invoice?.visitId ? visitIdToDoctor.get(p.invoice.visitId) : undefined;
-      if (!vInfo?.id) continue;
-      const current = doctorMap.get(vInfo.id) || { id: vInfo.id, name: vInfo.name, revenue: 0, visitCount: 0 };
+      const d = p.invoice.visit?.doctor ?? p.invoice.appointment?.doctor;
+      if (!d) continue;
+      const current = doctorMap.get(d.id) ?? { id: d.id, name: `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Doctor', revenue: 0, patients: new Set<string>() };
       current.revenue += p.amount;
-      current.visitCount += 1;
-      doctorMap.set(vInfo.id, current);
+      current.patients.add(p.invoice.patientId);
+      doctorMap.set(d.id, current);
     }
 
     const result: DoctorRevenueDto[] = Array.from(doctorMap.values()).map((d) => ({
       doctorId: d.id,
       doctorName: d.name,
       revenue: d.revenue,
-      patientCount: d.visitCount,
-      averageRevenuePerPatient: d.visitCount ? d.revenue / d.visitCount : 0,
-      visitCount: d.visitCount,
+      patientCount: d.patients.size,
+      averageRevenuePerPatient: d.patients.size ? d.revenue / d.patients.size : 0,
+      visitCount: d.patients.size,
     }));
 
     result.sort((a, b) => b.revenue - a.revenue);
@@ -219,7 +181,7 @@ export class ReportsService {
    * multiple partial payments cannot count the full invoice repeatedly or duplicate service counts.
    */
   private async getServiceRevenueBreakdown(paymentWhere: any): Promise<ServiceRevenueDto[]> {
-    const payments = await this.prisma.payment.findMany({
+    const payments = await this.prisma.newPayment.findMany({
       where: paymentWhere,
       include: { invoice: { select: { items: { include: { service: true } } } } },
     });
@@ -379,7 +341,7 @@ export class ReportsService {
         orderBy: { createdAt: 'desc' },
         select: { patientId: true, createdAt: true },
       }),
-      this.prisma.payment.findMany({
+      this.prisma.newPayment.findMany({
         where: { reconStatus: 'COMPLETED', createdAt: { gte: dateRange.start, lte: dateRange.end }, invoice: { patientId: { in: patientIds } } },
         select: { amount: true, invoice: { select: { patientId: true } } },
       }),
@@ -422,12 +384,16 @@ export class ReportsService {
               this.prisma.appointment.count({ where: { ...apptWhere, status: 'COMPLETED' } }),
               this.prisma.appointment.count({ where: { ...apptWhere, status: 'CANCELLED' } }),
               this.prisma.appointment.count({ where: { ...apptWhere, status: 'NO_SHOW' } }),
-              this.prisma.payment.findMany({
-                where: { createdAt: { gte: dateRange.start, lte: dateRange.end } as any },
-                select: { amount: true },
+              this.prisma.newPayment.aggregate({
+                where: {
+                  reconStatus: 'COMPLETED',
+                  createdAt: { gte: dateRange.start, lte: dateRange.end },
+                  invoice: { branchId, OR: [{ visit: { doctorId: d.id } }, { appointment: { doctorId: d.id } }] },
+                },
+                _sum: { amount: true },
               }),
             ]);
-            const totalRevenue = payments.reduce((s, p) => s + (p as any).amount, 0);
+            const totalRevenue = payments._sum.amount ?? 0;
             return {
               doctorId: d.id,
               doctorName: `${d.firstName} ${d.lastName}`.trim(),
@@ -778,23 +744,23 @@ export class ReportsService {
     const dateRange = this.calculateDateRange(startDate, endDate, period);
 
     const where: any = {
-      invoice: { is: { patient: { branchId } } },
+      invoice: { branchId },
       createdAt: { gte: dateRange.start, lte: dateRange.end },
     };
     if (paymentMode) where.mode = paymentMode as any; // Fixed: use 'mode' instead of 'method'
     if (gateway) where.gateway = gateway;
 
     const [totalAmountAgg, totalPayments, successfulPayments, failedPayments, pendingPayments, modeGroups, gatewayGroups, dailyGroups, dailySuccess, dailyFailed] = await Promise.all([
-      this.prisma.payment.aggregate({ where, _sum: { amount: true } }),
-      this.prisma.payment.count({ where }),
-      this.prisma.payment.count({ where: { ...where, reconStatus: 'COMPLETED' } }),
-      this.prisma.payment.count({ where: { ...where, reconStatus: 'FAILED' } }),
-      this.prisma.payment.count({ where: { ...where, reconStatus: 'PENDING' } }),
-      this.prisma.payment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { _all: true } }),
-      this.prisma.payment.groupBy({ by: ['gateway'], where, _sum: { amount: true }, _count: { _all: true } }),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { _all: true } }),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'COMPLETED' }, _count: { _all: true } }),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'FAILED' }, _count: { _all: true } }),
+      this.prisma.newPayment.aggregate({ where, _sum: { amount: true } }),
+      this.prisma.newPayment.count({ where }),
+      this.prisma.newPayment.count({ where: { ...where, reconStatus: 'COMPLETED' } }),
+      this.prisma.newPayment.count({ where: { ...where, reconStatus: 'FAILED' } }),
+      this.prisma.newPayment.count({ where: { ...where, reconStatus: 'PENDING' } }),
+      this.prisma.newPayment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['gateway'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'COMPLETED' }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'FAILED' }, _count: { _all: true } }),
     ]);
 
     const totalAmount = totalAmountAgg._sum.amount || 0;

@@ -97,6 +97,17 @@ describe('PatientDeduplicationService', () => {
     expect(prisma.patient.findMany).not.toHaveBeenCalled();
   });
 
+  it('logs and rethrows when a run outlives its lock transaction', async () => {
+    const expired = Object.assign(new Error('Transaction already closed'), { code: 'P2028' });
+    const prisma = { $transaction: jest.fn().mockRejectedValue(expired) } as any;
+    const service = new PatientDeduplicationService(prisma);
+    const logged = jest.spyOn((service as any).logger, 'error').mockImplementation(() => undefined);
+
+    await expect(service.runDuplicatePatientMergeJob()).rejects.toBe(expired);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('outlived its lock transaction'));
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { timeout: 24 * 60 * 60 * 1000 });
+  });
+
   it('merges duplicate patients and renumbers visits by date order', async () => {
     const canonical = makePatient({
       id: 'patient-1',

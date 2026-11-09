@@ -41,7 +41,7 @@ export class SchedulingUtils {
     const match = /^(\d{1,2}):([0-5]\d)-(\d{1,2}):([0-5]\d)$/.exec(slot);
     if (!match) return null;
     const [startHour, startMinute, endHour, endMinute] = match.slice(1).map(Number);
-    if (startHour > 23 || endHour > 23) return null;
+    if (startHour > 23 || endHour > 24 || (endHour === 24 && endMinute !== 0)) return null;
     return { start: startHour * 60 + startMinute, end: endHour * 60 + endMinute };
   }
 
@@ -130,11 +130,12 @@ export class SchedulingUtils {
   /**
    * @cc [owner:nareshshah139,label:validation] bookable-slot-is-comparable
    * A slot accepted for booking or rescheduling MUST be zero-padded HH:MM-HH:MM within one day with
-   * its end after its start. Unpadded hours ("9:00-10:00"), empty, reversed and overnight slots
-   * ("10:30-10:00", "23:30-00:30") MUST be refused, so every stored new slot compares for overlap.
+   * its end after its start; it MAY end at 24:00, where a doctor's day ends. Unpadded hours
+   * ("9:00-10:00"), empty, reversed and overnight slots ("10:30-10:00", "23:30-00:30") MUST be
+   * refused, so every stored new slot compares for overlap.
    */
   static isValidTimeSlot(slot: string): boolean {
-    if (!/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(slot)) return false;
+    if (!/^([01]\d|2[0-3]):[0-5]\d-(([01]\d|2[0-3]):[0-5]\d|24:00)$/.test(slot)) return false;
     const minutes = this.slotMinutes(slot);
     return minutes !== null && minutes.end > minutes.start;
   }

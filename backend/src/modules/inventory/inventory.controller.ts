@@ -16,6 +16,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { InventoryService } from './inventory.service';
 import { InventoryImportService } from './inventory-import.service';
+import { InventoryItemRequestService } from './inventory-item-request.service';
 import {
   CreateInventoryItemDto,
   UpdateInventoryItemDto,
@@ -70,20 +71,25 @@ export class InventoryController {
   constructor(
     private readonly inventoryService: InventoryService,
     private readonly inventoryImportService: InventoryImportService,
+    private readonly itemRequestService: InventoryItemRequestService,
   ) {}
 
   // Inventory Item Management
   @Post('items')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:item:create')
-  createInventoryItem(
+  async createInventoryItem(
     @Body() createItemDto: CreateInventoryItemDto,
     @Request() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: any,
   ) {
-    return this.inventoryService.createInventoryItem(
+    const outcome = await this.itemRequestService.createOrRequest(
       createItemDto,
-      req.user.branchId,
+      req.user,
     );
+    if (outcome.created) return outcome.item;
+    res.status(202);
+    return { status: 'PENDING_APPROVAL', request: outcome.request };
   }
 
   @Get('imports/:id')

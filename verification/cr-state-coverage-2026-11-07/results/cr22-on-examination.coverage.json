@@ -1,0 +1,1793 @@
+{
+  "model": "cr22-on-examination",
+  "title": "CR-22: On Examination collapsible, collapsed by default, remembered per doctor",
+  "startedAt": "2026-11-08T10:11:33.210Z",
+  "finishedAt": "2026-11-08T10:12:57.955Z",
+  "states": {
+    "total": 11,
+    "passed": 11,
+    "failed": 0
+  },
+  "transitions": {
+    "total": 16,
+    "passed": 16,
+    "failed": 0
+  },
+  "uncovered": [],
+  "failures": [],
+  "paths": [
+    {
+      "path": 1,
+      "ok": true,
+      "events": [
+        "CollapsedEmpty --clickHeading--> OpenEmpty",
+        "OpenEmpty --clickHeading--> CollapsedEmpty",
+        "CollapsedEmpty --pressEnterOnHeading--> OpenEmpty",
+        "OpenEmpty --pressSpaceOnHeading--> CollapsedEmpty",
+        "CollapsedEmpty --clickHeading--> OpenEmpty",
+        "OpenEmpty --fillExam--> OpenFilled",
+        "OpenFilled --clickHeading--> CollapsedFilled",
+        "CollapsedFilled --clickHeading--> OpenFilled",
+        "OpenFilled --saveDraft--> SavedOpen",
+        "SavedOpen --openNextPatientVisit--> NextPatientOpen",
+        "NextPatientOpen --reloadPage--> NextPatientOpen",
+        "NextPatientOpen --switchToShravya--> ShravyaCollapsed"
+      ],
+      "assertions": [
+        {
+          "state": "CollapsedEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is null (got null)"
+            }
+          ]
+        },
+        {
+          "state": "OpenEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "CollapsedEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is false (got false)"
+            }
+          ]
+        },
+        {
+          "state": "OpenEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "CollapsedEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is false (got false)"
+            }
+          ]
+        },
+        {
+          "state": "OpenEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "OpenFilled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity kept as 'moderate'"
+            },
+            {
+              "ok": true,
+              "message": "itch score kept as '6'"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination text kept"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "CollapsedFilled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge shown"
+            },
+            {
+              "ok": true,
+              "message": "acne severity kept as 'moderate'"
+            },
+            {
+              "ok": true,
+              "message": "itch score kept as '6'"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination text kept"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is false (got false)"
+            }
+          ]
+        },
+        {
+          "state": "OpenFilled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity kept as 'moderate'"
+            },
+            {
+              "ok": true,
+              "message": "itch score kept as '6'"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination text kept"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "SavedOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity kept as 'moderate'"
+            },
+            {
+              "ok": true,
+              "message": "itch score kept as '6'"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination text kept"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            },
+            {
+              "ok": true,
+              "message": "visit row exists for patient (cmw7oaene001y7d60jqjpue8q)"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds the detailed examination text"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds acne severity"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds Fitzpatrick skin type"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds itch score 6"
+            }
+          ]
+        },
+        {
+          "state": "NextPatientOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "NextPatientOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "ShravyaCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for shravya@clinic.test is null (got null)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test still true (got true)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 2,
+      "ok": true,
+      "events": [
+        "CollapsedEmpty --clickHeading--> OpenEmpty",
+        "OpenEmpty --fillExam--> OpenFilled",
+        "OpenFilled --clickHeading--> CollapsedFilled",
+        "CollapsedFilled --saveDraft--> SavedCollapsed",
+        "SavedCollapsed --reopenSavedVisit--> ReopenedWithData",
+        "ReopenedWithData --openNextPatientVisit--> NextPatientCollapsed",
+        "NextPatientCollapsed --reloadPage--> NextPatientCollapsed"
+      ],
+      "assertions": [
+        {
+          "state": "CollapsedEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is null (got null)"
+            }
+          ]
+        },
+        {
+          "state": "OpenEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "OpenFilled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity kept as 'moderate'"
+            },
+            {
+              "ok": true,
+              "message": "itch score kept as '6'"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination text kept"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "CollapsedFilled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge shown"
+            },
+            {
+              "ok": true,
+              "message": "acne severity kept as 'moderate'"
+            },
+            {
+              "ok": true,
+              "message": "itch score kept as '6'"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination text kept"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is false (got false)"
+            }
+          ]
+        },
+        {
+          "state": "SavedCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge shown"
+            },
+            {
+              "ok": true,
+              "message": "acne severity kept as 'moderate'"
+            },
+            {
+              "ok": true,
+              "message": "itch score kept as '6'"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination text kept"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is false (got false)"
+            },
+            {
+              "ok": true,
+              "message": "visit row exists for patient (cmw7ob0qr002g7d60m8hadi70)"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds the detailed examination text"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds acne severity"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds Fitzpatrick skin type"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds itch score 6"
+            }
+          ]
+        },
+        {
+          "state": "ReopenedWithData",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "the saved visit is the one open"
+            },
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity kept as 'moderate'"
+            },
+            {
+              "ok": true,
+              "message": "itch score kept as '6'"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination text kept"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is false (got false)"
+            }
+          ]
+        },
+        {
+          "state": "NextPatientCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is false (got false)"
+            }
+          ]
+        },
+        {
+          "state": "NextPatientCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is false (got false)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 3,
+      "ok": true,
+      "events": [
+        "CollapsedEmpty --clickHeading--> OpenEmpty",
+        "OpenEmpty --fillExam--> OpenFilled",
+        "OpenFilled --saveDraft--> SavedOpen",
+        "SavedOpen --openNextPatientVisit--> NextPatientOpen",
+        "NextPatientOpen --switchToShravya--> ShravyaCollapsed",
+        "ShravyaCollapsed --clickHeading--> ShravyaOpen"
+      ],
+      "assertions": [
+        {
+          "state": "CollapsedEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is null (got null)"
+            }
+          ]
+        },
+        {
+          "state": "OpenEmpty",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "OpenFilled",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity kept as 'moderate'"
+            },
+            {
+              "ok": true,
+              "message": "itch score kept as '6'"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination text kept"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "SavedOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity kept as 'moderate'"
+            },
+            {
+              "ok": true,
+              "message": "itch score kept as '6'"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination text kept"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            },
+            {
+              "ok": true,
+              "message": "visit row exists for patient (cmw7obkyy002v7d60j15v60im)"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds the detailed examination text"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds acne severity"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds Fitzpatrick skin type"
+            },
+            {
+              "ok": true,
+              "message": "DB exam holds itch score 6"
+            }
+          ]
+        },
+        {
+          "state": "NextPatientOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test is true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "ShravyaCollapsed",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=false"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' hidden"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "order is Patient History, On Examination heading, Treatment"
+            },
+            {
+              "ok": true,
+              "message": "Treatment follows the collapsed heading closely (107px)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for shravya@clinic.test is null (got null)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test still true (got true)"
+            }
+          ]
+        },
+        {
+          "state": "ShravyaOpen",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "heading aria-expanded=true"
+            },
+            {
+              "ok": true,
+              "message": "'Fitzpatrick Skin Type' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Acne Severity' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Itch Score (0-10)' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Morphology' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Distribution / Body Areas' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Dermatology Diagnoses' visible"
+            },
+            {
+              "ok": true,
+              "message": "'Detailed Examination' visible"
+            },
+            {
+              "ok": true,
+              "message": "'filled' badge absent"
+            },
+            {
+              "ok": true,
+              "message": "acne severity empty"
+            },
+            {
+              "ok": true,
+              "message": "detailed examination empty"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for shravya@clinic.test is true (got true)"
+            },
+            {
+              "ok": true,
+              "message": "stored choice for praneeta@clinic.test still true (got true)"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

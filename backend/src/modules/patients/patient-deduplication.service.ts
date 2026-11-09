@@ -19,8 +19,11 @@ type MergeSummary = {
   visitsRenumbered: number;
 };
 
-/** Well under the 6-hour schedule; Prisma's 5-second default would end the lock mid-run. */
-const MERGE_RUN_TIMEOUT_MS = 60 * 60 * 1000;
+/**
+ * The lock lasts only as long as this transaction, so the timeout must outlast any real run;
+ * Prisma's 5-second default would end the lock mid-run and let a second run overlap.
+ */
+const MERGE_RUN_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class PatientDeduplicationService {
@@ -46,6 +49,7 @@ export class PatientDeduplicationService {
    * @cc [owner:nareshshah139,label:reliability] merge-lock-released-after-run
    * The merge lock MUST be held only by one transaction that spans the run, so Postgres releases it
    * when the run ends, fails or loses its connection, and the next run in any process can proceed.
+   * A run that outlives the 24-hour transaction timeout loses the lock; that MUST be logged.
    */
   async runDuplicatePatientMergeJob(): Promise<MergeSummary> {
     return this.prisma.$transaction(
@@ -66,7 +70,12 @@ export class PatientDeduplicationService {
         return this.mergeAllDuplicateGroups();
       },
       { timeout: MERGE_RUN_TIMEOUT_MS },
-    );
+    ).catch((error: unknown) => {
+      if ((error as { code?: string })?.code === 'P2028') {
+        this.logger.error('Duplicate patient merge job outlived its lock transaction, so another run may have overlapped it.');
+      }
+      throw error;
+    });
   }
 
   private async mergeAllDuplicateGroups(): Promise<MergeSummary> {

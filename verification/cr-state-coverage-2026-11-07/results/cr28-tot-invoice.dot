@@ -1,0 +1,27 @@
+digraph "cr28-tot-invoice" {
+  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-28 Terms of Trade: agreed terms on purchase invoice entry\nstates 10/10 (100%) · transitions 10/10 (100%)", pad=0.3, nodesep=0.45, ranksep=0.7];
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, penwidth=1.6];
+  edge [fontname="Helvetica", fontsize=9, penwidth=1.4, arrowsize=0.7];
+  __start [shape=point, width=0.15, label=""];
+  __start -> "InvoiceBlank";
+  "InvoiceBlank" [label="Invoice entry, no supplier", fillcolor="#d1fadf", color="#039855"];
+  "ZenithChosen" [label="Supplier without terms: no panel", fillcolor="#d1fadf", color="#039855"];
+  "ZenithTyped" [label="Supplier without terms, product typed: no hint", fillcolor="#d1fadf", color="#039855", peripheries=2];
+  "MedicoChosen" [label="Supplier with terms: panel lists both products", fillcolor="#d1fadf", color="#039855"];
+  "HintExact" [label="Line product matches: hint beside invoice values", fillcolor="#d1fadf", color="#039855"];
+  "HintCase" [label="Differently cased free-typed name still matches", fillcolor="#d1fadf", color="#039855"];
+  "NoMatch" [label="Unmatched product: panel but no hint", fillcolor="#d1fadf", color="#039855"];
+  "Compare" [label="Hint tracks what the invoice line says", fillcolor="#d1fadf", color="#039855"];
+  "HintUpdated" [label="Terms changed by doctor: new values shown", fillcolor="#d1fadf", color="#039855"];
+  "HintGone" [label="Term deleted by doctor: no hint, panel without it", fillcolor="#d1fadf", color="#039855"];
+  "InvoiceBlank" -> "ZenithChosen" [label="pickZenith", color="#039855", fontcolor="#039855", style=solid];
+  "InvoiceBlank" -> "MedicoChosen" [label="pickMedico ×6", color="#039855", fontcolor="#039855", style=solid];
+  "ZenithChosen" -> "ZenithTyped" [label="typeDolo", color="#039855", fontcolor="#039855", style=solid];
+  "MedicoChosen" -> "ZenithChosen" [label="pickZenith", color="#039855", fontcolor="#039855", style=solid];
+  "MedicoChosen" -> "HintExact" [label="typeDolo ×3", color="#039855", fontcolor="#039855", style=solid];
+  "MedicoChosen" -> "HintCase" [label="typeCased", color="#039855", fontcolor="#039855", style=solid];
+  "MedicoChosen" -> "NoMatch" [label="typeOther", color="#039855", fontcolor="#039855", style=solid];
+  "HintExact" -> "Compare" [label="fillInvoiceLine", color="#039855", fontcolor="#039855", style=solid];
+  "HintExact" -> "HintUpdated" [label="doctorChangesTerm", color="#039855", fontcolor="#039855", style=solid];
+  "HintExact" -> "HintGone" [label="doctorDeletesTerm", color="#039855", fontcolor="#039855", style=solid];
+}

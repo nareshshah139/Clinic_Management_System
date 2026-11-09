@@ -100,6 +100,16 @@ databaseTests('Per-doctor token queue on PostgreSQL', () => {
     expect(moved?.slot).toBe('11:00-11:30');
   });
 
+  it('books the last slot of a day that ends at 24:00 exactly when it is listed', async () => {
+    const date = '2099-04-11';
+    const listed = async () => (await service.getAvailableSlots({ doctorId: 'doctor-b', date, durationMinutes: 30, startHour: 23, endHour: 24 } as any, 'branch')).availableSlots;
+    expect(await listed()).toEqual(['23:00-23:30', '23:30-24:00']);
+    await service.create({ patientId: 'patient', doctorId: 'doctor-b', date, slot: '23:30-24:00' } as any, 'branch');
+    expect(await listed()).toEqual(['23:00-23:30']);
+    await expect(service.create({ patientId: 'patient', doctorId: 'doctor-b', date, slot: '23:45-24:00' } as any, 'branch'))
+      .rejects.toMatchObject({ status: 409 });
+  });
+
   it('treats a stored unpadded slot as taking its time', async () => {
     const date = '2099-04-10';
     await db.appointment.create({ data: { patientId: 'patient', doctorId: 'doctor-b', date: new Date(date), slot: '9:00-10:00', branchId: 'branch', tokenNumber: 1 } });

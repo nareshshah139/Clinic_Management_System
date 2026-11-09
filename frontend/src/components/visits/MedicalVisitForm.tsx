@@ -60,7 +60,7 @@ import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { DoctorTour } from '@/components/tours';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
-import { getErrorMessage } from '@/lib/utils';
+import { calculateAge, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { isUuid } from '@/lib/id';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
@@ -1709,10 +1709,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   };
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col gap-6 lg:flex-row">
       {/* Patient Context Sidebar */}
       {showPatientContext && (
-        <div className="w-80 space-y-4">
+        <div className="w-full space-y-4 lg:w-80 lg:shrink-0">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -1731,21 +1731,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     <Badge variant="outline" className="text-xs">ID: {patientId}</Badge>
                   </div>
                   <div className="text-sm text-gray-600">
-                    Age: {(() => {
-                      if ((patientDetails as any).age != null) return (patientDetails as any).age;
-                      if (!patientDetails.dob) return 'N/A';
-                      const dob = new Date(patientDetails.dob);
-                      const today = new Date();
-                      const isToday = 
-                        dob.getFullYear() === today.getFullYear() &&
-                        dob.getMonth() === today.getMonth() &&
-                        dob.getDate() === today.getDate();
-                      if (isToday) return 'N/A';
-                      const age = today.getFullYear() - dob.getFullYear();
-                      const monthDiff = today.getMonth() - dob.getMonth();
-                      const adjustedAge = (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) ? age - 1 : age;
-                      return adjustedAge >= 0 ? adjustedAge : 'N/A';
-                    })()} • {patientDetails.gender || 'N/A'}
+                    Age: {calculateAge(patientDetails) ?? 'N/A'} • {patientDetails.gender || 'N/A'}
                   </div>
                   <div className="text-sm text-gray-600">
                     Phone: {patientDetails.phone || 'N/A'}
@@ -1824,7 +1810,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       )}
       
       {/* Main Content */}
-      <div className={`flex-1 space-y-6 ${showPatientContext ? '' : 'max-w-none'}`}>
+      <div className={`min-w-0 flex-1 space-y-6 ${showPatientContext ? '' : 'max-w-none'}`}>
         {!showPatientContext && (
           <Button variant="outline" size="sm" onClick={() => setShowPatientContext(true)} className="mb-4">
             <User className="h-4 w-4 mr-2" />
@@ -1847,9 +1833,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       {/* Visit Header */}
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex flex-wrap items-center gap-2">
                 <Clock className="h-5 w-5" />
                 Visit #{currentVisitNumber}
                 <Badge variant={visitStatus === 'COMPLETED' ? 'default' : visitStatus === 'IN_PROGRESS' ? 'secondary' : 'outline'}>
@@ -1866,7 +1852,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                 Medical Visit Documentation • Role: {userRole} • Progress: {getProgress()}%
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{photoCount} Photos</Badge>
               <div className="w-20 bg-gray-200 rounded-full h-2">
                 <div 
@@ -2282,13 +2268,13 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between pt-2 border-t">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
                       <div className="text-xs text-gray-500">Selections and results are saved under Treatment Plan → Dermatology.</div>
-                      <div className="flex gap-2">
-                        <div className="flex flex-col gap-0.5">
+                      <div className="flex min-w-0 max-w-full flex-wrap gap-2">
+                        <div className="flex min-w-0 max-w-full flex-col gap-0.5">
                           <label className="text-sm">
                             <input
-                              type="file"
+                              type="file" className="w-full max-w-full"
                               accept="image/*,application/pdf"
                               onChange={async (e) => {
                                 const f = e.target.files?.[0];
@@ -2568,7 +2554,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                         </div>
                       </div>
                       <div className="md:col-span-3 border-t pt-3 mt-2">
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
                           <label className="text-sm font-medium">Design Aids</label>
                           <label className="flex items-center gap-2 text-sm">
                             <input type="checkbox" checked={designAidsEnabled} onChange={(e) => setDesignAidsEnabled(e.target.checked)} /> Enable

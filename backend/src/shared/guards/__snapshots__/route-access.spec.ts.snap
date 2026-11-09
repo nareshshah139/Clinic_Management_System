@@ -13,6 +13,7 @@ DELETE /inventory/suppliers/:id | roles: ADMIN,PHARMACIST,RECEPTION | permission
 DELETE /inventory/transactions/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:transaction:delete
 DELETE /pharmacy/invoices/:id | roles: ADMIN,PHARMACIST | permissions: pharmacy:invoice:delete
 DELETE /pharmacy/packages/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+DELETE /pharmacy/trade-terms/:id | roles: OWNER,ADMIN,DOCTOR | permissions: -
 DELETE /prescriptions/:id | roles: DOCTOR,ADMIN,OWNER | permissions: -
 DELETE /prescriptions/assets/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 DELETE /prescriptions/printer-profiles/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -79,6 +80,8 @@ GET /inventory/categories | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inv
 GET /inventory/dashboard | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:dashboard:read
 GET /inventory/imports/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
 GET /inventory/imports/:id/original | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
+GET /inventory/item-requests | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
+GET /inventory/item-requests/pending-count | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
 GET /inventory/items | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
 GET /inventory/items/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:read
 GET /inventory/manufacturers | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:catalog:manufacturers
@@ -132,8 +135,10 @@ GET /pharmacy/agent/sessions | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissi
 GET /pharmacy/agent/sessions/:sessionId | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use
 GET /pharmacy/agent/sessions/:sessionId/proposals | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use
 GET /pharmacy/agent/status | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use
+GET /pharmacy/compliance/day-wise-summary | roles: OWNER,ADMIN,ACCOUNTANT,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:read
 GET /pharmacy/compliance/expiry-returns | roles: OWNER,ADMIN,PHARMACIST | permissions: pharmacy:compliance:read
 GET /pharmacy/compliance/gst-summary | roles: OWNER,ADMIN,ACCOUNTANT,PHARMACIST | permissions: pharmacy:compliance:read
+GET /pharmacy/compliance/item-margin | roles: OWNER,ADMIN,ACCOUNTANT,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:read
 GET /pharmacy/compliance/monthly-report | roles: OWNER,ADMIN,ACCOUNTANT,PHARMACIST | permissions: pharmacy:compliance:read
 GET /pharmacy/dashboard | roles: ADMIN,PHARMACIST | permissions: pharmacy:dashboard:read
 GET /pharmacy/dashboard/alerts | roles: ADMIN,PHARMACIST | permissions: pharmacy:dashboard:alerts:read
@@ -177,6 +182,8 @@ GET /pharmacy/purchase-ledger/aging | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR 
 GET /pharmacy/purchase-ledger/alerts | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:read
 GET /pharmacy/purchase-ledger/distributors | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:read
 GET /pharmacy/purchase-ledger/distributors/:gstin | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:read
+GET /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
+GET /pharmacy/trade-terms/distributors | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
 GET /prescriptions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/:id/print-events | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -295,6 +302,8 @@ POST /google-calendar/disconnect | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEP
 POST /google-calendar/exchange | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/adjustments | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:adjustment:create
 POST /inventory/imports/:id/retry-failed-rows | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:create
+POST /inventory/item-requests/:id/approve | roles: ADMIN,DOCTOR | permissions: inventory:item:approve
+POST /inventory/item-requests/:id/reject | roles: ADMIN,DOCTOR | permissions: inventory:item:approve
 POST /inventory/items | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:create
 POST /inventory/items/import | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:create
 POST /inventory/items/import-preview | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:create
@@ -375,6 +384,7 @@ POST /pharmacy/purchase-invoices/suppliers | roles: ADMIN,PHARMACIST,RECEPTION |
 POST /pharmacy/purchase-ledger/payments | roles: ADMIN,PHARMACIST,ACCOUNTANT | permissions: pharmacy:purchase-ledger:write
 POST /pharmacy/purchase-ledger/payments/:id/reallocate | roles: ADMIN,PHARMACIST,ACCOUNTANT | permissions: pharmacy:purchase-ledger:write
 POST /pharmacy/purchase-ledger/payments/:id/reverse | roles: ADMIN,PHARMACIST,ACCOUNTANT | permissions: pharmacy:purchase-ledger:write
+POST /pharmacy/trade-terms/lookup | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
 POST /prescriptions | roles: DOCTOR,ADMIN,OWNER | permissions: -
 POST /prescriptions/:id/pdf | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /prescriptions/:id/print-events | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -420,5 +430,6 @@ POST /whatsapp/templates | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/:id/test | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/generate | roles: ADMIN,DOCTOR | permissions: -
 PUT /doctor-availability/:doctorId/booking-limit | roles: ADMIN,OWNER,DOCTOR | permissions: -
-PUT /doctor-availability/:doctorId/hours | roles: ADMIN,OWNER,DOCTOR | permissions: -"
+PUT /doctor-availability/:doctorId/hours | roles: ADMIN,OWNER,DOCTOR | permissions: -
+PUT /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR | permissions: -"
 `;

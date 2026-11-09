@@ -417,11 +417,13 @@ databaseTests('Patient merge with PostgreSQL', () => {
         ).runDuplicatePatientMergeJob();
         requestsInFlight = false;
         await otherRequests;
-        const [row] = await other.$queryRaw<
-          { locked: boolean }[]
-        >`SELECT pg_try_advisory_lock(8042601) AS locked`;
-        if (row.locked) await other.$queryRaw`SELECT pg_advisory_unlock(8042601)`;
-        runs.push({ skipped: summary.skipped, merged: summary.duplicateGroupsMerged, lockFree: row.locked });
+        const lockFree = await other.$transaction(async (probe) => {
+          const [row] = await probe.$queryRaw<
+            { locked: boolean }[]
+          >`SELECT pg_try_advisory_xact_lock(8042601) AS locked`;
+          return row.locked;
+        });
+        runs.push({ skipped: summary.skipped, merged: summary.duplicateGroupsMerged, lockFree });
       }
       expect(runs).toEqual(
         Array.from({ length: 10 }, () => ({ skipped: false, merged: 1, lockFree: true })),
