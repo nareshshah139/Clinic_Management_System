@@ -155,7 +155,10 @@ type CheckoutAttempt = {
   payload: ReturnType<typeof billPayload> & { draftId?: string; draftVersion?: number };
   previewItems: InvoiceItem[];
   confirmed: boolean;
+  context?: string;
 };
+
+const BLANK_BILL = JSON.stringify([undefined, undefined, undefined, undefined]);
 
 const checkoutStorageKey = 'pharmacy-checkout-attempt-v1';
 
@@ -280,13 +283,20 @@ export function PharmacyInvoiceBuilderFixed({
   const [checkoutAttempt, setCheckoutAttempt] = useState<CheckoutAttempt | null>(null);
   const checkoutAttemptRef = useRef<CheckoutAttempt | null>(null);
   const checkoutInFlight = useRef(false);
+  const billContext = useRef(draft ? `draft:${draft.session.id}` : incomingPrefillKey).current;
+  /**
+   * @cc [owner:nareshshah139,label:product] finished-checkout-stays-with-its-bill
+   * A pending checkout MUST be offered for reconciliation on any bill. A confirmed checkout MUST only be
+   * shown again when the same bill is reopened, never on a blank new sale, another prescription or another draft.
+   */
   useEffect(() => {
     const saved = sessionStorage.getItem(checkoutStorageKey);
     if (saved) {
       try {
         const attempt = JSON.parse(saved) as CheckoutAttempt;
-        const otherBill = attempt.confirmed && draft && attempt.payload?.draftId !== draft.session.id;
-        if (attempt.requestKey && attempt.payload?.items && attempt.previewItems && !otherBill) {
+        const finishedElsewhere = attempt.confirmed && (attempt.context !== billContext || billContext === BLANK_BILL);
+        if (finishedElsewhere) sessionStorage.removeItem(checkoutStorageKey);
+        else if (attempt.requestKey && attempt.payload?.items && attempt.previewItems) {
           checkoutAttemptRef.current = attempt;
           setCheckoutAttempt(attempt);
         }
@@ -294,7 +304,7 @@ export function PharmacyInvoiceBuilderFixed({
         toast({ title: 'Checkout recovery failed', description: 'Stored checkout could not be read. Check the invoice list before creating another sale.', variant: 'destructive' });
       }
     }
-  }, [toast, draft]);
+  }, [toast, billContext]);
   const [session, setSession] = useState<BillSession>(draft?.session ?? { kind: 'new' });
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(() =>
     draft ? JSON.stringify(billPayload(draft.fields, savedLines(draft))) : null,
@@ -1353,6 +1363,7 @@ export function PharmacyInvoiceBuilderFixed({
         payload: invoicePayload,
         previewItems: validItems,
         confirmed: false,
+        context: billContext,
       });
       sessionStorage.setItem(checkoutStorageKey, JSON.stringify(attempt));
       checkoutAttemptRef.current = attempt;

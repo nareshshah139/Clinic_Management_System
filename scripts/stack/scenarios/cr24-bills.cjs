@@ -203,6 +203,7 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
 
         const draftPatient = await patient();
         await clickTo(page, page.locator("main header").getByRole("button", { name: /New sale/ }), "**/dashboard/pharmacy/sales/bill");
+        check(`${tag} a new sale after finishing a bill starts clean`, await page.getByText("This checkout is confirmed").count(), 0);
         await pickPatient(page, draftPatient);
         await addDrug(page, TABLET);
         await addDrug(page, GEL);
@@ -320,8 +321,8 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         const landed = new URL(page.url());
         check(`${tag} the old Pharmacy Billing link lands on a Sales bill with its prefill`, [
           landed.pathname, landed.searchParams.get("patientId"), landed.searchParams.get("prescriptionId"), landed.searchParams.get("section"),
-          await page.getByLabel("Patient *").inputValue(), await lineHeadings(page),
-        ], ["/dashboard/pharmacy/sales/bill", oldPatient.id, oldRx.id, null, `${oldPatient.name} (${oldPatient.phone})`, [CREAM, GEL]]);
+          await page.getByLabel("Patient *").inputValue(), await lineHeadings(page), await page.getByText("This checkout is confirmed").count(),
+        ], ["/dashboard/pharmacy/sales/bill", oldPatient.id, oldRx.id, null, `${oldPatient.name} (${oldPatient.phone})`, [CREAM, GEL], 0]);
         await shot(page, `${tag}-12-old-billing-link`);
         check(`${tag} no unexpected console error or refused call`, [seen.errors, seen.refused], [[], []]);
         await context.close();

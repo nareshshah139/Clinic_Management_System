@@ -169,3 +169,19 @@ it.each([
   expect(screen.getByText(detail, { exact: false })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
 });
+
+it('keeps a finished checkout with its own bill and still offers a pending one anywhere', async () => {
+  const attempt = (confirmed: boolean) => JSON.stringify({
+    requestKey: 'k-1', confirmed, context: JSON.stringify(['patient-1', 'rx-1', undefined, undefined]),
+    payload: { patientId: 'patient-1', billingName: 'Meera Shah', items: [] }, previewItems: [],
+  });
+  sessionStorage.setItem('pharmacy-checkout-attempt-v1', attempt(true));
+  open('');
+  expect(await screen.findByRole('button', { name: 'Save draft' })).toBeInTheDocument();
+  expect(screen.queryByText('This checkout is confirmed. Reopen it for another copy.')).not.toBeInTheDocument();
+  expect(sessionStorage.getItem('pharmacy-checkout-attempt-v1')).toBeNull();
+
+  sessionStorage.setItem('pharmacy-checkout-attempt-v1', attempt(false));
+  open('draft=d-1');
+  expect(await screen.findByText('A checkout for Meera Shah needs confirmation. Retry it before starting another sale.')).toBeInTheDocument();
+});
