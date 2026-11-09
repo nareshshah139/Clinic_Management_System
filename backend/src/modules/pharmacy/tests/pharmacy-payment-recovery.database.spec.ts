@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { InventoryWorkspaceService } from '../../inventory/inventory-workspace.service';
 import { PharmacyPurchaseLedgerService } from '../pharmacy-purchase-ledger.service';
 import { PharmacyPurchasePaymentModeDto } from '../dto/pharmacy-purchase-ledger.dto';
+import { PharmacySupplierCreditService } from '../pharmacy-supplier-credit.service';
 import { permissionGrants } from '../../../shared/access/permission-grants';
 
 const databaseTests = process.env.PAYMENT_RECOVERY_TEST_DATABASE_URL ? describe : describe.skip;
@@ -164,10 +165,10 @@ databaseTests('Supplier payment recovery with real PostgreSQL', () => {
     const payment = await pay();
     await service.reversePayment(payment.id, correction(payment), branchId, userId);
     const workflow = { permissions: async () => permissionGrants(['*']), transaction: (run: any) => prisma.$transaction(run, { isolationLevel: 'Serializable' }) };
-    const workspace = new InventoryWorkspaceService(prisma, workflow as any);
+    const workspace = new InventoryWorkspaceService(prisma, workflow as any, new PharmacySupplierCreditService(prisma));
     const actor = { id: userId, branchId, role: 'ACCOUNTANT' };
     expect((await workspace.credits(actor)).invoices.find(row => row.id === a.id)!.outstanding).toBe(100);
-    const credit = await prisma.inventorySupplierCredit.create({ data: { branchId, supplierGstin: gstin, documentId: randomUUID(), reference: 'SYN-CREDIT', amount: 50 } });
+    const credit = await prisma.inventorySupplierCredit.create({ data: { branchId, supplierGstin: gstin, documentId: randomUUID(), reference: 'SYN-CREDIT', creditNoteNumber: 'CN-SYN-1', amount: 50 } });
     await workspace.allocateCredit(actor, { requestKey: randomUUID(), creditId: credit.id, purchaseInvoiceId: a.id, amount: 50 });
     expect((await workspace.credits(actor)).invoices.find(row => row.id === a.id)!.outstanding).toBe(50);
     const ledger = await service.getDistributorLedger(branchId, gstin);
