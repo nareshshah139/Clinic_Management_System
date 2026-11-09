@@ -1,7 +1,7 @@
 import { saveInventoryItemMetadata } from './inventory-item-metadata';
 import { performStockOperation, registerStockOperation, requireStockOperationId, stockRequestFingerprint } from './inventory-stock-operations';
 import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
-import { writeStockMovement, movementDelta, money } from './inventory-stock';
+import { batchDeleteBlock, writeStockMovement, movementDelta, money } from './inventory-stock';
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
@@ -230,16 +230,11 @@ export class InventoryService {
       throw new NotFoundException('Inventory item not found');
     }
 
-    if (item.currentStock || item.heldStock) throw new BadRequestException('Dispose or return remaining stock before deleting a batch');
-    if (await this.prisma.inventoryWorkflowEffect.count({where:{branchId,inventoryId:id}})) throw new BadRequestException('This batch has workflow history and must be archived instead');
-    // Check if item has stock transactions
-    const transactionCount = await this.prisma.stockTransaction.count({
-      where: { itemId: id },
+    const blocked = batchDeleteBlock(item, {
+      effects: await this.prisma.inventoryWorkflowEffect.count({ where: { branchId, inventoryId: id } }),
+      transactions: await this.prisma.stockTransaction.count({ where: { itemId: id } }),
     });
-
-    if (transactionCount > 0) {
-      throw new BadRequestException('Cannot delete item with existing stock transactions');
-    }
+    if (blocked) throw new BadRequestException(blocked);
 
     await this.prisma.inventoryItem.delete({
       where: { id },

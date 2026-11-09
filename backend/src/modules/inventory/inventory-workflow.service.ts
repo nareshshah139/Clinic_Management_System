@@ -153,6 +153,7 @@ export class InventoryWorkflowService {
       selfApprove: SELF_APPROVERS.has(actor.role),
       settings: INVENTORY_APPROVERS.has(actor.role),
       itemWrite: has('inventory:item:update'),
+      itemDelete: has('inventory:item:delete'),
       itemCreate: has('inventory:item:create'),
       supplierWrite: has('inventory:supplier:create'),
       supplierUpdate: has('inventory:supplier:update'),
