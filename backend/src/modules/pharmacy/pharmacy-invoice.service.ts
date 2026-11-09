@@ -8,6 +8,7 @@ import {
   ConflictException,
   HttpException,
 } from '@nestjs/common';
+import { RefundPharmacyBillDto, ReviseBillDiscountDto } from './dto/pharmacy-invoice.dto';
 import { jsonObject, money } from '../inventory/inventory-stock';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
@@ -20,8 +21,16 @@ import {
   PharmacyInvoiceItemDto,
 } from './dto/pharmacy-invoice.dto';
 
-import { PharmacyPaymentMethod, Prisma } from '@prisma/client';
+import { PharmacyPaymentMethod, PharmacyPaymentStatus, Prisma } from '@prisma/client';
 import { InvoiceNumbersService } from '../../shared/numbering/invoice-numbers.service';
+import {
+  BillDiscount,
+  BillPrice,
+  BillPricingError,
+  PricedLine,
+  priceBill,
+} from './bill-pricing';
+import { draftBillNumber, isIssuedBillNumber } from './bill-number';
 
 type DraftFence = { checkoutRequestKey: string; checkoutPayloadHash: string };
 
@@ -32,6 +41,10 @@ const COLLECTED_AT_COUNTER = new Set<PharmacyPaymentMethod>([
   'NETBANKING',
   'WALLET',
 ]);
+
+const LEDGER_STATUSES: PharmacyPaymentStatus[] = ['COMPLETED', 'REFUNDED'];
+const POSTED_STATUSES = ['CONFIRMED', 'DISPENSED', 'COMPLETED'];
+const SETTLED_RETURN_STATUSES = ['CANCELLED', 'REJECTED', 'REVERSED'];
 
 const settlement = (total: number, paid: number) => ({
   paidAmount: paid,
@@ -46,6 +59,23 @@ const settlement = (total: number, paid: number) => ({
 
 type InvoiceItemType = 'DRUG' | 'PACKAGE';
 
+const lineMoney = (line: PricedLine) => ({
+  discountAmount: line.lineDiscount,
+  billDiscountAmount: line.billDiscount,
+  taxAmount: line.tax,
+  totalAmount: line.total,
+});
+
+const billTotals = (price: BillPrice, discount?: BillDiscount | null) => ({
+  subtotal: price.subtotal,
+  discountAmount: price.discount,
+  billDiscountKind: discount?.value ? discount.kind : null,
+  billDiscountValue: discount?.value ? discount.value : 0,
+  billDiscountAmount: price.billDiscount,
+  taxAmount: price.tax,
+  totalAmount: price.total,
+});
+
 type StockDeductionOp = {
   inventoryItemId: string;
   drugName: string;
@@ -54,6 +84,17 @@ type StockDeductionOp = {
   batchNumber?: string | null;
   expiryDate?: Date | null;
   notes: string;
+};
+
+type SaleRequirement = {
+  drugId: string;
+  drugName: string;
+  inventoryItemId?: string;
+  quantity: number;
+  fallbackUnitPrice: number;
+  taxableAmount: number;
+  taxAmount: number;
+  sourceNames: string[];
 };
 
 type GstSlabSummary = {
@@ -82,12 +123,8 @@ export class PharmacyInvoiceService {
     branchId: string,
     userId?: string,
   ) {
-    return this.withInvoiceNumber(
-      (tx, invoiceNumber) =>
-        this.createDraft(tx, dto, branchId, invoiceNumber, {
-          createdById: userId,
-        }),
-      branchId,
+    return this.prisma.$transaction((tx) =>
+      this.createDraft(tx, dto, branchId, { createdById: userId }),
     );
   }
 
@@ -110,7 +147,7 @@ export class PharmacyInvoiceService {
     if (dto.draftId) return this.finishDraft(dto, branchId, userId);
     const { requestKey, ...payload } = dto;
     const payloadHash = this.payloadHash(payload);
-    return this.withInvoiceNumber(async (tx, invoiceNumber) => {
+    return this.serializable(async (tx) => {
       const replay = await this.checkoutReplay(
         tx,
         branchId,
@@ -118,17 +155,11 @@ export class PharmacyInvoiceService {
         payloadHash,
       );
       if (replay) return replay;
-      const invoice = await this.createDraft(
-        tx,
-        payload,
-        branchId,
-        invoiceNumber,
-        {
-          checkoutRequestKey: requestKey,
-          checkoutPayloadHash: payloadHash,
-          createdById: userId,
-        },
-      );
+      const invoice = await this.createDraft(tx, payload, branchId, {
+        checkoutRequestKey: requestKey,
+        checkoutPayloadHash: payloadHash,
+        createdById: userId,
+      });
       await this.transitionInvoice(
         tx,
         invoice.id,
@@ -137,12 +168,12 @@ export class PharmacyInvoiceService {
         userId,
       );
       return this.collectCheckoutPayment(tx, invoice.id, requestKey);
-    }, branchId);
+    });
   }
 
   /**
    * @cc [owner:nareshshah139,label:product] draft-finish-same-bill
-   * Finishing a draft MUST save its edited lines and post that same invoice under its own number in
+   * Finishing a draft MUST save its edited lines and post that same invoice, issuing its bill number, in
    * one transaction, only from the draft's current version. A retry with the same request key and
    * payload MUST return that bill without posting stock again.
    */
@@ -157,45 +188,27 @@ export class PharmacyInvoiceService {
         'A draft version is required to finish a draft',
       );
     const payloadHash = this.payloadHash({ ...bill, draftId, draftVersion });
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        return await this.prisma.$transaction(
-          async (tx) => {
-            const replay = await this.checkoutReplay(
-              tx,
-              branchId,
-              requestKey,
-              payloadHash,
-            );
-            if (replay) return replay;
-            await this.writeDraft(
-              tx,
-              draftId!,
-              { ...bill, expectedVersion: draftVersion },
-              branchId,
-              {
-                checkoutRequestKey: requestKey,
-                checkoutPayloadHash: payloadHash,
-              },
-            );
-            await this.transitionInvoice(
-              tx,
-              draftId!,
-              'CONFIRMED',
-              branchId,
-              userId,
-            );
-            return this.collectCheckoutPayment(tx, draftId!, requestKey);
-          },
-          { timeout: 15000, isolationLevel: 'Serializable' },
-        );
-      } catch (error) {
-        if (!this.isSerializationFailure(error)) throw error;
-      }
-    }
-    throw new ConflictException(
-      'Invoice or stock changed concurrently. Retry this request with the same key.',
-    );
+    return this.serializable(async (tx) => {
+      const replay = await this.checkoutReplay(
+        tx,
+        branchId,
+        requestKey,
+        payloadHash,
+      );
+      if (replay) return replay;
+      await this.writeDraft(
+        tx,
+        draftId!,
+        { ...bill, expectedVersion: draftVersion },
+        branchId,
+        {
+          checkoutRequestKey: requestKey,
+          checkoutPayloadHash: payloadHash,
+        },
+      );
+      await this.transitionInvoice(tx, draftId!, 'CONFIRMED', branchId, userId);
+      return this.collectCheckoutPayment(tx, draftId!, requestKey);
+    });
   }
 
   /**
@@ -241,7 +254,7 @@ export class PharmacyInvoiceService {
 
   private async paidOn(tx: Prisma.TransactionClient, invoiceId: string) {
     const paid = await tx.pharmacyPayment.aggregate({
-      where: { invoiceId, status: 'COMPLETED' },
+      where: { invoiceId, status: { in: LEDGER_STATUSES } },
       _sum: { amount: true },
     });
     return money(paid._sum.amount || 0);
@@ -274,20 +287,16 @@ export class PharmacyInvoiceService {
     return existing;
   }
 
-  private async withInvoiceNumber<T>(
-    command: (
-      tx: Prisma.TransactionClient,
-      invoiceNumber: string,
-    ) => Promise<T>,
-    branchId: string,
+  private async serializable<T>(
+    command: (tx: Prisma.TransactionClient) => Promise<T>,
+    conflict = 'Invoice or stock changed concurrently. Retry this request with the same key.',
   ): Promise<T> {
     for (let attempt = 0; attempt < 5; attempt++) {
-      const invoiceNumber = await this.generateInvoiceNumber(branchId);
       try {
-        return await this.prisma.$transaction(
-          (tx) => command(tx, invoiceNumber),
-          { timeout: 15000, isolationLevel: 'Serializable' },
-        );
+        return await this.prisma.$transaction(command, {
+          timeout: 15000,
+          isolationLevel: 'Serializable',
+        });
       } catch (error) {
         const duplicate =
           error?.code === 'P2002' &&
@@ -295,16 +304,13 @@ export class PharmacyInvoiceService {
         if (!duplicate && !this.isSerializationFailure(error)) throw error;
       }
     }
-    throw new ConflictException(
-      'Invoice or stock changed concurrently. Retry this request with the same key.',
-    );
+    throw new ConflictException(conflict);
   }
 
   private async createDraft(
     tx: Prisma.TransactionClient,
     createInvoiceDto: CreatePharmacyInvoiceDto,
     branchId: string,
-    invoiceNumber: string,
     operation: {
       checkoutRequestKey?: string;
       checkoutPayloadHash?: string;
@@ -429,23 +435,21 @@ export class PharmacyInvoiceService {
       packages,
     );
 
-    // Calculate totals
-    const { subtotal, totalDiscount, totalTax, grandTotal } =
-      this.calculateInvoiceTotals(createInvoiceDto, packages);
-    // Create invoice
+    const priced = this.priceItems(
+      createInvoiceDto.items,
+      packages,
+      createInvoiceDto.billDiscount,
+    );
     const invoice = await tx.pharmacyInvoice.create({
       data: {
-        invoiceNumber,
+        invoiceNumber: draftBillNumber(),
         ...operation,
         patientId: createInvoiceDto.patientId,
         doctorId: createInvoiceDto.doctorId || undefined,
         prescriptionId: createInvoiceDto.prescriptionId || undefined,
         branchId,
-        subtotal,
-        discountAmount: totalDiscount,
-        taxAmount: totalTax,
-        totalAmount: money(grandTotal),
-        balanceAmount: money(grandTotal),
+        ...priced.totals,
+        balanceAmount: priced.totals.totalAmount,
         paymentMethod: createInvoiceDto.paymentMethod,
         billingName: createInvoiceDto.billingName,
         billingPhone: createInvoiceDto.billingPhone,
@@ -463,35 +467,14 @@ export class PharmacyInvoiceService {
       },
     });
 
-    // Create invoice items
-    const invoiceItems = await Promise.all(
-      createInvoiceDto.items.map(async (item) => {
-        const resolvedUnitPrice = this.resolveUnitPrice(
-          item as unknown as PharmacyInvoiceItemDto,
-          packages,
-        );
-        const discountAmount =
-          (item.quantity * resolvedUnitPrice * (item.discountPercent || 0)) /
-          100;
-        const discountedAmount =
-          item.quantity * resolvedUnitPrice - discountAmount;
-        const taxAmount = (discountedAmount * (item.taxPercent || 0)) / 100;
-        const totalAmount = discountedAmount + taxAmount;
-
-        return tx.pharmacyInvoiceItem.create({
+    const invoiceItems: any[] = [];
+    for (const [index, line] of priced.lines.entries()) {
+      const item = createInvoiceDto.items[index];
+      invoiceItems.push(
+        await tx.pharmacyInvoiceItem.create({
           data: {
             invoiceId: invoice.id,
-            drugId: item.drugId,
-            inventoryItemId: item.inventoryItemId,
-            packageId: item.packageId,
-            itemType: item.itemType || 'DRUG',
-            quantity: item.quantity,
-            unitPrice: resolvedUnitPrice,
-            discountPercent: item.discountPercent || 0,
-            discountAmount,
-            taxPercent: item.taxPercent || 0,
-            taxAmount,
-            totalAmount,
+            ...line,
             dosage: item.dosage,
             frequency: item.frequency,
             duration: item.duration,
@@ -522,9 +505,9 @@ export class PharmacyInvoiceService {
                 }
               : undefined,
           },
-        });
-      }),
-    );
+        }),
+      );
+    }
 
     return { ...invoice, items: invoiceItems };
   }
@@ -757,6 +740,12 @@ export class PharmacyInvoiceService {
               createdAt: 'desc',
             },
           },
+          revisions: {
+            orderBy: { createdAt: 'desc' },
+            include: {
+              revisedBy: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
           branch: {
             select: {
               id: true,
@@ -874,6 +863,10 @@ export class PharmacyInvoiceService {
       if (!invoice) {
         throw new NotFoundException('Invoice not found');
       }
+      if (['DRAFT', 'PENDING'].includes(invoice.status))
+        throw new ConflictException(
+          'Finish this bill before printing it. A draft is not a tax invoice and has no bill number yet.',
+        );
 
       const reference = `INV-${invoice.invoiceNumber}`;
       const stockTransactions = await prismaAny.stockTransaction.findMany({
@@ -908,7 +901,7 @@ export class PharmacyInvoiceService {
       const gstSummary = this.buildGstSummary(lines);
       const paidAmount = this.money(
         invoice.payments
-          .filter((payment: any) => payment.status === 'COMPLETED')
+          .filter((payment: any) => LEDGER_STATUSES.includes(payment.status))
           .reduce((sum: number, payment: any) => sum + payment.amount, 0),
       );
       const totalAmount = this.money(invoice.totalAmount);
@@ -927,6 +920,13 @@ export class PharmacyInvoiceService {
           dueDate: invoice.dueDate,
           subtotal: this.money(invoice.subtotal),
           discountAmount: this.money(invoice.discountAmount),
+          lineDiscountAmount: this.money(
+            invoice.discountAmount - invoice.billDiscountAmount,
+          ),
+          billDiscountKind: invoice.billDiscountKind,
+          billDiscountValue: invoice.billDiscountValue,
+          billDiscountAmount: this.money(invoice.billDiscountAmount),
+          revisedAt: invoice.revisedAt,
           taxableAmount: this.money(invoice.subtotal - invoice.discountAmount),
           taxAmount: this.money(invoice.taxAmount),
           totalAmount,
@@ -999,12 +999,7 @@ export class PharmacyInvoiceService {
         },
       };
     } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
+      if (error instanceof HttpException) throw error;
       console.error('❌ PharmacyInvoiceService.getPrintData error:', error);
       throw new InternalServerErrorException(
         `Failed to build invoice print data: ${error.message}`,
@@ -1039,7 +1034,7 @@ export class PharmacyInvoiceService {
   private async writeDraft(
     prisma: Prisma.TransactionClient,
     id: string,
-    { expectedVersion, ...updateInvoiceDto }: UpdatePharmacyInvoiceDto,
+    { expectedVersion, billDiscount, ...updateInvoiceDto }: UpdatePharmacyInvoiceDto,
     branchId: string,
     fence?: DraftFence,
   ) {
@@ -1205,60 +1200,33 @@ export class PharmacyInvoiceService {
         packages,
       );
 
-      // For update flow, reuse our pure builder for consistency
-      const builtItems = this.buildInvoiceItems(
-        updateInvoiceDto.items as any,
+      const priced = this.priceItems(
+        updateInvoiceDto.items as unknown as PharmacyInvoiceItemDto[],
         packages,
+        billDiscount === undefined
+          ? this.storedBillDiscount(existingInvoice)
+          : billDiscount,
       );
-      const recomputeTotals = builtItems.reduce(
-        (acc, bi) => {
-          const itemSubtotal = bi.quantity * bi.unitPrice;
-          acc.subtotal += itemSubtotal;
-          acc.totalDiscount += bi.discountAmount;
-          acc.totalTax += bi.taxAmount;
-          return acc;
-        },
-        { subtotal: 0, totalDiscount: 0, totalTax: 0 },
-      );
-      const grandTotal =
-        recomputeTotals.subtotal -
-        recomputeTotals.totalDiscount +
-        recomputeTotals.totalTax;
-
-      updateData.subtotal = recomputeTotals.subtotal;
-      updateData.discountAmount = recomputeTotals.totalDiscount;
-      updateData.taxAmount = recomputeTotals.totalTax;
       const paidAmount = await this.paidOn(prisma, id);
-      if (money(grandTotal) < paidAmount)
+      if (priced.totals.totalAmount < paidAmount)
         throw new BadRequestException(
           'Invoice total cannot be lower than payments already received',
         );
-      updateData.totalAmount = money(grandTotal);
-      Object.assign(updateData, settlement(money(grandTotal), paidAmount));
+      Object.assign(
+        updateData,
+        priced.totals,
+        settlement(priced.totals.totalAmount, paidAmount),
+      );
 
-      // Delete existing items
       await prisma.pharmacyInvoiceItem.deleteMany({
         where: { invoiceId: id },
       });
-
-      // Create new items
-      for (let idx = 0; idx < builtItems.length; idx++) {
-        const bi = builtItems[idx];
-        const original = updateInvoiceDto.items[idx] as any;
+      for (const [index, line] of priced.lines.entries()) {
+        const original = updateInvoiceDto.items[index] as any;
         await prisma.pharmacyInvoiceItem.create({
           data: {
             invoiceId: id,
-            drugId: bi.drugId,
-            inventoryItemId: bi.inventoryItemId,
-            packageId: bi.packageId,
-            itemType: bi.itemType,
-            quantity: bi.quantity,
-            unitPrice: bi.unitPrice,
-            discountPercent: bi.discountPercent,
-            discountAmount: bi.discountAmount,
-            taxPercent: bi.taxPercent,
-            taxAmount: bi.taxAmount,
-            totalAmount: bi.totalAmount,
+            ...line,
             dosage: original.dosage,
             frequency: original.frequency,
             duration: original.duration,
@@ -1268,6 +1236,23 @@ export class PharmacyInvoiceService {
       }
 
       delete updateData.items;
+    } else if (billDiscount !== undefined) {
+      const { totals } = await this.repriceStoredItems(
+        prisma,
+        id,
+        new Map(),
+        billDiscount,
+      );
+      const paidAmount = await this.paidOn(prisma, id);
+      if (totals.totalAmount < paidAmount)
+        throw new BadRequestException(
+          'Invoice total cannot be lower than payments already received',
+        );
+      Object.assign(
+        updateData,
+        totals,
+        settlement(totals.totalAmount, paidAmount),
+      );
     }
 
     const updatedInvoice = await prisma.pharmacyInvoice.update({
@@ -1411,6 +1396,14 @@ export class PharmacyInvoiceService {
           branchId,
         )
       : [];
+    const issued =
+      shouldApplyStock && !isIssuedBillNumber(existingInvoice.invoiceNumber)
+        ? {
+            invoiceNumber: await this.issueBillNumber(tx, branchId),
+            invoiceDate: new Date(),
+          }
+        : {};
+    const invoiceNumber = issued.invoiceNumber ?? existingInvoice.invoiceNumber;
 
     const updatedInvoice = await tx.pharmacyInvoice.update({
       where: {
@@ -1419,7 +1412,11 @@ export class PharmacyInvoiceService {
         status: oldStatus,
         updatedAt: existingInvoice.updatedAt,
       },
-      data: { status: status as any, mutationVersion: { increment: 1 } },
+      data: {
+        ...issued,
+        status: status as any,
+        mutationVersion: { increment: 1 },
+      },
       include: {
         items: {
           include: {
@@ -1445,7 +1442,7 @@ export class PharmacyInvoiceService {
             quantityDelta: -op.quantity,
             unitPrice: op.unitPrice,
             totalAmount: money(op.unitPrice * op.quantity),
-            reference: `INV-${existingInvoice.invoiceNumber}`,
+            reference: `INV-${invoiceNumber}`,
             notes: op.notes,
             batchNumber: op.batchNumber || undefined,
             expiryDate: op.expiryDate || undefined,
@@ -1643,7 +1640,10 @@ export class PharmacyInvoiceService {
     const unitPrice = this.money(item.unitPrice);
     const grossAmount = this.money(quantity * unitPrice);
     const discountAmount = this.money(item.discountAmount);
-    const taxableAmount = this.money(grossAmount - discountAmount);
+    const billDiscountAmount = this.money(item.billDiscountAmount);
+    const taxableAmount = this.money(
+      grossAmount - discountAmount - billDiscountAmount,
+    );
     const taxPercent = this.money(item.taxPercent);
     const taxAmount = this.money(item.taxAmount);
     const totalAmount = this.money(item.totalAmount);
@@ -1687,6 +1687,7 @@ export class PharmacyInvoiceService {
       unitPrice,
       discountPercent: this.money(item.discountPercent),
       discountAmount,
+      billDiscountAmount,
       taxPercent,
       taxAmount,
       taxableAmount,
@@ -1962,24 +1963,8 @@ export class PharmacyInvoiceService {
    * Held or expired stock is unavailable; ambiguous links or mixed units MUST reject confirmation.
    * Repeated lines MUST share an allocation budget so a batch cannot be spent twice.
    */
-  private async planConfirmedStockDeductions(
-    tx: any,
-    invoiceItems: any[],
-    branchId: string,
-  ): Promise<StockDeductionOp[]> {
-    const requirements = new Map<
-      string,
-      {
-        drugId: string;
-        drugName: string;
-        inventoryItemId?: string;
-        quantity: number;
-        fallbackUnitPrice: number;
-        taxableAmount: number;
-        taxAmount: number;
-        sourceNames: string[];
-      }
-    >();
+  private saleRequirements(invoiceItems: any[]) {
+    const requirements = new Map<string, SaleRequirement>();
 
     for (const item of invoiceItems) {
       const itemType = this.normalizeInvoiceItemType(
@@ -2043,6 +2028,15 @@ export class PharmacyInvoiceService {
       }
     }
 
+    return requirements;
+  }
+
+  private async planConfirmedStockDeductions(
+    tx: any,
+    invoiceItems: any[],
+    branchId: string,
+  ): Promise<StockDeductionOp[]> {
+    const requirements = this.saleRequirements(invoiceItems);
     const now = new Date();
     const stockOps: StockDeductionOp[] = [];
 
@@ -2142,19 +2136,7 @@ export class PharmacyInvoiceService {
   }
 
   private addStockRequirement(
-    requirements: Map<
-      string,
-      {
-        drugId: string;
-        drugName: string;
-        inventoryItemId?: string;
-        quantity: number;
-        fallbackUnitPrice: number;
-        taxableAmount: number;
-        taxAmount: number;
-        sourceNames: string[];
-      }
-    >,
+    requirements: Map<string, SaleRequirement>,
     drugId: string,
     drugName: string,
     quantity: number,
@@ -2304,8 +2286,280 @@ export class PharmacyInvoiceService {
   }
 
   /**
+   * @cc [owner:nareshshah139,label:product] finished-bill-discount-revision
+   * A finished bill's bill discount and line discount % MAY change, and nothing else: items, quantities,
+   * batches, prices, stock and the bill number MUST stay as they are. The change MUST name the bill version
+   * it was made from and MUST be refused for drafts, cancelled bills and bills with a sales return. It MUST
+   * record who, when, why and the old and new amounts, and later returns MUST refund the revised line value.
+   * Paid, balance and status MUST come from the ledger, so money already taken above the new total shows as
+   * a refund due rather than being kept or dropped.
+   */
+  async reviseDiscount(
+    id: string,
+    dto: ReviseBillDiscountDto,
+    branchId: string,
+    userId: string,
+  ) {
+    return this.serializable(async (tx) => {
+      await this.lockInvoice(tx, id, branchId);
+      const invoice = await tx.pharmacyInvoice.findUniqueOrThrow({
+        where: { id },
+      });
+      if (invoice.status === 'CANCELLED')
+        throw new ConflictException(
+          'This bill was cancelled, so its discount cannot be changed.',
+        );
+      if (!POSTED_STATUSES.includes(invoice.status))
+        throw new ConflictException(
+          'This bill is not finished yet. Change its discount in the draft.',
+        );
+      if (invoice.mutationVersion !== dto.expectedVersion)
+        throw new ConflictException(
+          'This bill was changed after you opened it. Reload it to see the latest amounts.',
+        );
+      const returns = await this.salesReturnsAgainst(tx, invoice);
+      if (returns.length)
+        throw new ConflictException(
+          `This bill has a sales return (${returns.join(', ')}), so its discount can no longer be changed. Correct it through the return.`,
+        );
+      const lineDiscounts = new Map(
+        dto.lines.map((line) => [line.id, line.discountPercent]),
+      );
+      const discount =
+        dto.billDiscount === undefined
+          ? this.storedBillDiscount(invoice)
+          : dto.billDiscount;
+      const { items, price, totals } = await this.repriceStoredItems(
+        tx,
+        id,
+        lineDiscounts,
+        discount,
+      );
+      if (dto.lines.some((line) => !items.some((item) => item.id === line.id)))
+        throw new BadRequestException(
+          'A discounted line is not on this bill. Reload the bill and try again.',
+        );
+      const before = {
+        billDiscount: this.storedBillDiscount(invoice),
+        lines: items.map((item) => ({
+          id: item.id,
+          discountPercent: item.discountPercent,
+          totalAmount: item.totalAmount,
+        })),
+        discountAmount: invoice.discountAmount,
+        taxAmount: invoice.taxAmount,
+        totalAmount: invoice.totalAmount,
+      };
+      const after = {
+        billDiscount: discount?.value ? discount : null,
+        lines: items.map((item, index) => ({
+          id: item.id,
+          discountPercent: lineDiscounts.get(item.id) ?? item.discountPercent,
+          totalAmount: price.lines[index].total,
+        })),
+        discountAmount: totals.discountAmount,
+        taxAmount: totals.taxAmount,
+        totalAmount: totals.totalAmount,
+      };
+      const inputs = (side: typeof before) =>
+        JSON.stringify([
+          side.billDiscount?.kind ?? null,
+          side.billDiscount?.value ?? 0,
+          ...side.lines.map((line) => line.discountPercent),
+        ]);
+      if (inputs(before) === inputs(after))
+        throw new BadRequestException(
+          'The discount is unchanged. Change a discount before saving.',
+        );
+      await this.reviseSaleTerms(tx, invoice.invoiceNumber, branchId);
+      const revisedAt = new Date();
+      await tx.pharmacyInvoiceRevision.create({
+        data: {
+          invoiceId: id,
+          branchId,
+          revisedById: userId,
+          reason: dto.reason,
+          previousTotal: invoice.totalAmount,
+          revisedTotal: totals.totalAmount,
+          before,
+          after,
+          createdAt: revisedAt,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: 'PHARMACY_BILL_DISCOUNT_REVISED',
+          entity: 'PharmacyInvoice',
+          entityId: id,
+          oldValues: JSON.stringify({ branchId, ...before }),
+          newValues: JSON.stringify({ branchId, ...after, reason: dto.reason }),
+        },
+      });
+      await tx.pharmacyInvoice.update({
+        where: { id },
+        data: {
+          ...totals,
+          ...settlement(totals.totalAmount, await this.paidOn(tx, id)),
+          revisedAt,
+          mutationVersion: { increment: 1 },
+        },
+      });
+      return { id };
+    }, 'This bill changed while saving. Reload it and try again.').then(() =>
+      this.findOne(id, branchId),
+    );
+  }
+
+  private async salesReturnsAgainst(
+    tx: Prisma.TransactionClient,
+    invoice: { id: string; branchId: string; invoiceNumber: string },
+  ) {
+    const rows = await tx.$queryRaw<{ reference: string }[]>`
+      SELECT d.reference FROM inventory_workflow_documents d
+      WHERE d."branchId" = ${invoice.branchId}
+        AND d.kind = 'SALES_RETURN'
+        AND d.status <> ALL(${SETTLED_RETURN_STATUSES})
+        AND (
+          d."salesInvoiceId" = ${invoice.id}
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(COALESCE(d.payload->'lines', '[]'::jsonb)) line
+            JOIN stock_transactions sale ON sale.id = line->>'sourceLineId'
+            WHERE sale."branchId" = ${invoice.branchId}
+              AND sale.type = 'SALE'
+              AND sale.reference = ${`INV-${invoice.invoiceNumber}`}
+          )
+        )
+      ORDER BY d."createdAt"`;
+    return rows.map((row) => row.reference);
+  }
+
+  private async reviseSaleTerms(
+    tx: Prisma.TransactionClient,
+    invoiceNumber: string,
+    branchId: string,
+  ) {
+    const items = await tx.pharmacyInvoiceItem.findMany({
+      where: { invoice: { invoiceNumber } },
+      include: {
+        drug: true,
+        package: { include: { items: { include: { drug: true } } } },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const byDrug = new Map<string, { taxable: number; tax: number }>();
+    for (const requirement of this.saleRequirements(items).values()) {
+      const group = byDrug.get(requirement.drugId) ?? { taxable: 0, tax: 0 };
+      group.taxable += requirement.taxableAmount;
+      group.tax += requirement.taxAmount;
+      byDrug.set(requirement.drugId, group);
+    }
+    const movements = await tx.stockTransaction.findMany({
+      where: { branchId, type: 'SALE', reference: `INV-${invoiceNumber}` },
+      include: { item: { select: { drugs: { select: { id: true } } } } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const groups = new Map<string, typeof movements>();
+    for (const movement of movements) {
+      const drugs = movement.item?.drugs ?? [];
+      if (drugs.length !== 1 || !byDrug.has(drugs[0].id)) continue;
+      groups.set(drugs[0].id, [...(groups.get(drugs[0].id) ?? []), movement]);
+    }
+    for (const [drugId, group] of groups) {
+      const { taxable, tax } = byDrug.get(drugId)!;
+      const quantity = group.reduce((sum, movement) => sum + movement.quantity, 0);
+      let before = 0;
+      for (const movement of group) {
+        const notes = jsonObject(movement.notes);
+        const share = (amount: number) =>
+          money(((before + movement.quantity) * amount) / quantity) -
+          money((before * amount) / quantity);
+        if (notes.saleTerms)
+          await tx.stockTransaction.update({
+            where: { id: movement.id },
+            data: {
+              notes: JSON.stringify({
+                ...notes,
+                saleTerms: {
+                  ...notes.saleTerms,
+                  unitPrice: taxable / quantity,
+                  gstRate: taxable > 0 ? (tax / taxable) * 100 : 0,
+                  taxablePerUnit: share(taxable) / movement.quantity,
+                  taxPerUnit: share(tax) / movement.quantity,
+                },
+              }),
+            },
+          });
+        before += movement.quantity;
+      }
+    }
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] refund-due-recorded-explicitly
+   * Money taken above a bill's total MUST go back only through an explicit refund of at most that excess,
+   * recorded as a REFUNDED ledger entry of minus the amount in the chosen method, with the bill's paid,
+   * balance and status recomputed from the ledger in the same transaction. The same request key and
+   * payload MUST return the original entry; a changed payload MUST conflict without refunding again.
+   */
+  async recordRefund(
+    invoiceId: string,
+    dto: RefundPharmacyBillDto,
+    branchId: string,
+  ) {
+    this.assertRequestKey(dto.requestKey);
+    const { requestKey, ...payload } = dto;
+    const payloadHash = this.payloadHash(payload);
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockInvoice(tx, invoiceId, branchId);
+      const existing = await tx.pharmacyPayment.findUnique({
+        where: { invoiceId_requestKey: { invoiceId, requestKey } },
+      });
+      if (existing) {
+        if (existing.payloadHash !== payloadHash)
+          throw new ConflictException(
+            'Refund request key was already used with different refund details',
+          );
+        return existing;
+      }
+      const invoice = await tx.pharmacyInvoice.findUniqueOrThrow({
+        where: { id: invoiceId },
+      });
+      const due = money((await this.paidOn(tx, invoiceId)) - invoice.totalAmount);
+      if (due <= 0)
+        throw new BadRequestException('Nothing is due back on this bill.');
+      if (dto.amount > due)
+        throw new BadRequestException(
+          `Only ₹${due.toFixed(2)} is due back on this bill. Reload it to see the latest amounts.`,
+        );
+      const refund = await tx.pharmacyPayment.create({
+        data: {
+          invoiceId,
+          requestKey,
+          payloadHash,
+          amount: -dto.amount,
+          method: dto.method,
+          reference: dto.reference,
+          status: 'REFUNDED',
+        },
+      });
+      await tx.pharmacyInvoice.update({
+        where: { id: invoiceId },
+        data: {
+          ...settlement(
+            money(invoice.totalAmount),
+            await this.paidOn(tx, invoiceId),
+          ),
+          mutationVersion: { increment: 1 },
+        },
+      });
+      return refund;
+    });
+  }
+
+  /**
    * @cc [owner:nareshshah139,label:product] payment-atomic-retry
-   * A payment MUST lock its invoice, reject overpayment using completed ledger entries, and commit
+   * A payment MUST lock its invoice, reject overpayment using the ledger (receipts less refunds), and commit
    * its receipt and recomputed balance together. The same invoice request key and payload MUST
    * return the original receipt; a changed payload MUST conflict without collecting again. A draft
    * MUST NOT take payment; finishing it in Sales collects what is due.
@@ -2382,89 +2636,116 @@ export class PharmacyInvoiceService {
     });
   }
 
-  private calculateInvoiceTotals(
-    invoiceDto: CreatePharmacyInvoiceDto,
-    packages: any[] = [],
-  ) {
-    let subtotal = 0;
-    let totalDiscount = 0;
-    let totalTax = 0;
-
-    for (const item of invoiceDto.items) {
-      // For packages, use the package price if not overridden
-      let unitPrice = item.unitPrice;
-      if (item.itemType === 'PACKAGE' && item.packageId) {
-        const package_ = packages.find((p) => p.id === item.packageId);
-        if (package_ && !item.unitPrice) {
-          unitPrice = package_.packagePrice;
-        }
-      }
-
-      const itemSubtotal = item.quantity * unitPrice;
-      const itemDiscount = (itemSubtotal * (item.discountPercent || 0)) / 100;
-      const discountedAmount = itemSubtotal - itemDiscount;
-      const itemTax = (discountedAmount * (item.taxPercent || 0)) / 100;
-
-      subtotal += itemSubtotal;
-      totalDiscount += itemDiscount;
-      totalTax += itemTax;
+  private price(lines: Parameters<typeof priceBill>[0], discount?: BillDiscount | null) {
+    try {
+      return priceBill(lines, discount);
+    } catch (error) {
+      if (error instanceof BillPricingError)
+        throw new BadRequestException(error.message);
+      throw error;
     }
-
-    const grandTotal = subtotal - totalDiscount + totalTax;
-
-    return { subtotal, totalDiscount, totalTax, grandTotal };
   }
 
-  private async generateInvoiceNumber(branchId: string): Promise<string> {
-    const { sequence, periodKey } = await this.invoiceNumbers.reserve({
-      type: 'PHARMACY',
-      branchId,
-    });
-    const year = periodKey; // YYYY
-    return `PHI-${year}-${String(sequence).padStart(3, '0')}`;
-  }
-
-  // ===== Extracted helpers (pure or side-effect free) =====
-  private buildInvoiceItems(
+  private priceItems(
     items: PharmacyInvoiceItemDto[],
     packages: any[],
-  ): Array<{
-    drugId?: string;
-    inventoryItemId?: string;
-    packageId?: string;
-    itemType: 'DRUG' | 'PACKAGE';
-    quantity: number;
-    unitPrice: number;
-    discountPercent: number;
-    discountAmount: number;
-    taxPercent: number;
-    taxAmount: number;
-    totalAmount: number;
-  }> {
-    return items.map((item) => {
-      const unitPrice = this.resolveUnitPrice(item, packages);
-      const discountPercent = item.discountPercent || 0;
-      const taxPercent = item.taxPercent || 0;
-      const itemSubtotal = item.quantity * unitPrice;
-      const discountAmount = (itemSubtotal * discountPercent) / 100;
-      const discountedAmount = itemSubtotal - discountAmount;
-      const taxAmount = (discountedAmount * taxPercent) / 100;
-      const totalAmount = discountedAmount + taxAmount;
-      return {
+    discount?: BillDiscount | null,
+  ) {
+    const unitPrices = items.map((item) => this.resolveUnitPrice(item, packages));
+    const price = this.price(
+      items.map((item, index) => ({
+        quantity: item.quantity,
+        unitPrice: unitPrices[index],
+        discountPercent: item.discountPercent || 0,
+        taxPercent: item.taxPercent || 0,
+      })),
+      discount,
+    );
+    return {
+      lines: items.map((item, index) => ({
         drugId: item.drugId,
         inventoryItemId: item.inventoryItemId,
         packageId: item.packageId,
-        itemType: (item.itemType as any) || 'DRUG',
+        itemType: (item.itemType as InvoiceItemType) || 'DRUG',
         quantity: item.quantity,
-        unitPrice,
-        discountPercent,
-        discountAmount,
-        taxPercent,
-        taxAmount,
-        totalAmount,
-      };
-    });
+        unitPrice: unitPrices[index],
+        discountPercent: item.discountPercent || 0,
+        taxPercent: item.taxPercent || 0,
+        ...lineMoney(price.lines[index]),
+      })),
+      totals: billTotals(price, discount),
+    };
   }
+
+  private storedBillDiscount(invoice: {
+    billDiscountKind: BillDiscount['kind'] | null;
+    billDiscountValue: number;
+  }): BillDiscount | null {
+    return invoice.billDiscountKind
+      ? { kind: invoice.billDiscountKind, value: invoice.billDiscountValue }
+      : null;
+  }
+
+  private async repriceStoredItems(
+    tx: Prisma.TransactionClient,
+    invoiceId: string,
+    lineDiscounts: Map<string, number>,
+    discount: BillDiscount | null,
+  ) {
+    const items = await tx.pharmacyInvoiceItem.findMany({
+      where: { invoiceId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const discountPercents = items.map(
+      (item) => lineDiscounts.get(item.id) ?? item.discountPercent,
+    );
+    const price = this.price(
+      items.map((item, index) => ({
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discountPercent: discountPercents[index],
+        taxPercent: item.taxPercent,
+      })),
+      discount,
+    );
+    for (const [index, item] of items.entries())
+      await tx.pharmacyInvoiceItem.update({
+        where: { id: item.id },
+        data: {
+          discountPercent: discountPercents[index],
+          ...lineMoney(price.lines[index]),
+        },
+      });
+    return { items, price, totals: billTotals(price, discount) };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:integrity] bill-number-issued-at-finish
+   * A pharmacy bill MUST get its PHI number only when it is first posted, reserved on the posting
+   * transaction, so drafts, discarded drafts and rolled-back or retried postings consume no number and
+   * finished bills stay consecutive per series. A draft that already holds a number keeps it.
+   */
+  private async issueBillNumber(
+    tx: Prisma.TransactionClient,
+    branchId: string,
+  ): Promise<string> {
+    for (let attempt = 0; attempt < 1000; attempt++) {
+      const { sequence, periodKey } = await this.invoiceNumbers.reserve(
+        { type: 'PHARMACY', branchId },
+        tx,
+      );
+      const invoiceNumber = `PHI-${periodKey}-${String(sequence).padStart(3, '0')}`;
+      const taken = await tx.pharmacyInvoice.findUnique({
+        where: { invoiceNumber },
+        select: { id: true },
+      });
+      if (!taken) return invoiceNumber;
+    }
+    throw new InternalServerErrorException(
+      'Could not issue a free pharmacy bill number',
+    );
+  }
+
   private resolveUnitPrice(
     item: PharmacyInvoiceItemDto,
     packages: any[],

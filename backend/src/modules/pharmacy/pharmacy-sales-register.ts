@@ -8,6 +8,7 @@ import {
   money,
   pageOf,
 } from './register-utils';
+import { isIssuedBillNumber } from './bill-number';
 
 export const SALES_REGISTERS = ['sales', 'returns'] as const;
 export const SALE_SOURCES = [
@@ -63,6 +64,9 @@ export type SalesRegisterRow = {
   amount: number;
   paymentModes: PaymentMode[];
   due: number;
+  refundDue: number;
+  refunded: number;
+  revisedAt: string | null;
   linkedBillNos: string[];
 };
 
@@ -127,6 +131,7 @@ export type PharmacyBillRecord = {
   invoiceDate: Date;
   createdAt: Date;
   totalAmount: number;
+  revisedAt: Date | null;
   billingName: string | null;
   billingPhone: string | null;
   patient: { name: string | null; phone: string | null } | null;
@@ -220,13 +225,19 @@ export function billEntry(
   }
   const amount = money(bill.totalAmount);
   const paid = money(bill.payments.reduce((sum, p) => sum + p.amount, 0));
+  const refunded = money(
+    -bill.payments.reduce((sum, p) => sum + Math.min(0, p.amount), 0),
+  );
   return {
     row: {
       id: `PHARMACY_BILL:${bill.id}`,
       source: 'PHARMACY_BILL',
       recordId: bill.id,
       billNo: state === 'DRAFT' ? null : bill.invoiceNumber,
-      reservedNo: state === 'DRAFT' ? bill.invoiceNumber : null,
+      reservedNo:
+        state === 'DRAFT' && isIssuedBillNumber(bill.invoiceNumber)
+          ? bill.invoiceNumber
+          : null,
       state,
       entryAt: bill.createdAt.toISOString(),
       billDate: clinicDay(bill.invoiceDate),
@@ -236,6 +247,9 @@ export function billEntry(
       amount,
       paymentModes: Object.keys(collected) as PaymentMode[],
       due: state === 'FINAL' ? Math.max(0, money(amount - paid)) : 0,
+      refundDue: state === 'FINAL' ? Math.max(0, money(paid - amount)) : 0,
+      refunded,
+      revisedAt: bill.revisedAt?.toISOString() ?? null,
       linkedBillNos: [],
     },
     collected,
@@ -271,6 +285,9 @@ export function workflowEntry(
       amount,
       paymentModes: [mode],
       due: 0,
+      refundDue: 0,
+      refunded: 0,
+      revisedAt: null,
       linkedBillNos: source === 'SALES_RETURN' ? linkedBillNos : [],
     },
     collected: { [mode]: amount },

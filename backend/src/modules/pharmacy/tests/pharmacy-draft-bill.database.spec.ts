@@ -65,6 +65,7 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
         })
       ).map((item) => [item.id, item.currentStock]),
     );
+  const year = new Date().getFullYear();
   const sales = async (invoiceNumber: string) =>
     db.stockTransaction.count({ where: { reference: `INV-${invoiceNumber}` } });
   const failure = (promise: Promise<unknown>) =>
@@ -271,7 +272,7 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
         row.due,
       ]);
     expect(await registerRow()).toEqual([
-      [draft.id, null, draft.invoiceNumber, 'DRAFT', [], 0],
+      [draft.id, null, null, 'DRAFT', [], 0],
     ]);
 
     const finish = {
@@ -287,7 +288,7 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
       finished.invoiceNumber,
       finished.status,
       finished.mutationVersion,
-    ]).toEqual([draft.id, draft.invoiceNumber, 'CONFIRMED', 4]);
+    ]).toEqual([draft.id, `PHI-${year}-001`, 'CONFIRMED', 4]);
     expect([
       finished.paymentStatus,
       finished.balanceAmount,
@@ -305,13 +306,13 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
       'shampoo-batch': 2,
       'tablet-batch': 4,
     });
-    expect(await sales(draft.invoiceNumber)).toBe(3);
+    expect(await sales(`PHI-${year}-001`)).toBe(3);
 
     const retried = await invoices.checkout(finish, 'branch', 'asha');
     expect([
       retried.id,
       retried.status,
-      await sales(draft.invoiceNumber),
+      await sales(`PHI-${year}-001`),
     ]).toEqual([draft.id, 'CONFIRMED', 3]);
     expect(await stock()).toEqual({
       'cream-batch': 6,
@@ -319,7 +320,7 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
       'tablet-batch': 4,
     });
     expect(await registerRow()).toEqual([
-      [draft.id, draft.invoiceNumber, null, 'FINAL', ['UPI'], 0],
+      [draft.id, `PHI-${year}-001`, null, 'FINAL', ['UPI'], 0],
     ]);
     expect(
       await db.pharmacyPayment.count({ where: { invoiceId: draft.id } }),
@@ -491,7 +492,7 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
     expect([
       retried.paidAmount,
       (await ledger(draft.id)).length,
-      await sales(draft.invoiceNumber),
+      await sales(finished.invoiceNumber),
     ]).toEqual([500, 2, 1]);
     expect(
       await failure(

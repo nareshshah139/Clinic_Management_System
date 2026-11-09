@@ -39,6 +39,9 @@ const entry = (
     amount,
     paymentModes,
     due: 0,
+    refundDue: 0,
+    refunded: 0,
+    revisedAt: null,
     linkedBillNos: [],
     ...overrides,
   };
@@ -70,6 +73,7 @@ const pharmacyBill = (
   invoiceDate: new Date('2026-05-01T06:00:00.000Z'),
   createdAt: new Date('2026-05-01T06:00:00.000Z'),
   totalAmount: 10,
+  revisedAt: null,
   billingName: 'Walk In',
   billingPhone: '9000000000',
   patient: null,
@@ -116,10 +120,47 @@ describe('sales register rows', () => {
         amount: 1234.5,
         paymentModes: ['UPI', 'CASH'],
         due: 400,
+        refundDue: 0,
+        refunded: 0,
+        revisedAt: null,
         linkedBillNos: [],
       },
       collected: { UPI: 534.5, CASH: 300 },
     });
+  });
+
+  it('shows a revised bill paid above its new total as a refund due, and a recorded refund nets out of the takings', () => {
+    const revised = (payments: PharmacyBillRecord['payments']) =>
+      billEntry(
+        pharmacyBill({
+          totalAmount: 450,
+          revisedAt: new Date('2026-05-02T09:30:00.000Z'),
+          payments,
+        }),
+        null,
+      );
+    const due = revised([{ method: 'CASH', amount: 500 }]);
+    const settled = revised([
+      { method: 'CASH', amount: 500 },
+      { method: 'CASH', amount: -50 },
+    ]);
+    expect(
+      [due, settled].map(({ row: r, collected }) => [r.amount, r.due, r.refundDue, r.refunded, r.revisedAt, collected]),
+    ).toEqual([
+      [450, 0, 50, 0, '2026-05-02T09:30:00.000Z', { CASH: 500 }],
+      [450, 0, 0, 50, '2026-05-02T09:30:00.000Z', { CASH: 450 }],
+    ]);
+  });
+
+  it('keeps a legacy draft number as reserved but never shows a draft placeholder as one', () => {
+    const draft = (invoiceNumber: string) =>
+      billEntry(pharmacyBill({ status: 'DRAFT', invoiceNumber }), null).row;
+    expect(
+      [draft('PHI-2026-007'), draft('DRAFT-6f1c2a9e-0b7d-4c55-9b0e-3f8e2a1d4c10')].map((r) => [r.billNo, r.reservedNo]),
+    ).toEqual([
+      [null, 'PHI-2026-007'],
+      [null, null],
+    ]);
   });
 
   it('reserves the number of a draft or pending bill, shows no payment mode when nothing was paid and owes only on final bills', () => {
@@ -225,6 +266,9 @@ describe('sales register rows', () => {
         amount: 450.1,
         paymentModes: ['UPI'],
         due: 0,
+        refundDue: 0,
+        refunded: 0,
+        revisedAt: null,
         linkedBillNos: [],
       },
       collected: { UPI: 450.1 },
@@ -395,6 +439,9 @@ describe('sales register page', () => {
         amount: 100.1,
         paymentModes: ['CASH'],
         due: 0,
+        refundDue: 0,
+        refunded: 0,
+        revisedAt: null,
         linkedBillNos: [],
       },
     ]);

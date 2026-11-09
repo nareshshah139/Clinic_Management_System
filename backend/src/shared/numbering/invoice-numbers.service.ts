@@ -12,16 +12,20 @@ export class InvoiceNumbersService {
    * @cc [owner:nareshshah139,label:integrity] invoice-numbers-unique-per-period
    * reserve() MUST hand out each number once per type, branch and period: concurrent callers for one
    * key get distinct consecutive numbers, the first call in a period gets 1, and other branches,
-   * types and periods MUST NOT advance.
+   * types and periods MUST NOT advance. Reserved on a caller's transaction, the number MUST be released
+   * again when that transaction rolls back.
    */
-  async reserve(params: { type: InvoiceNumberType; branchId: string; date?: Date }): Promise<{ sequence: number; periodKey: string }> {
+  async reserve(
+    params: { type: InvoiceNumberType; branchId: string; date?: Date },
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ sequence: number; periodKey: string }> {
     const { type, branchId } = params;
     const date = params.date ?? new Date();
     const periodKey = this.computePeriodKey(type, date);
 
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        const row = await this.prisma.numberSequence.upsert({
+        const row = await client.numberSequence.upsert({
           where: { type_branchId_periodKey: { type, branchId, periodKey } },
           update: { lastNumber: { increment: 1 } },
           create: { type, branchId, periodKey, lastNumber: 1 },

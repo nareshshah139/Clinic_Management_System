@@ -29,6 +29,8 @@ import {
   QueryPharmacyInvoicePrintDto,
   PharmacyPaymentDto,
   DiscardPharmacyInvoiceQueryDto,
+  RefundPharmacyBillDto,
+  ReviseBillDiscountDto,
 } from './dto/pharmacy-invoice.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 
@@ -136,6 +138,49 @@ export class PharmacyInvoiceController {
     return this.pharmacyInvoiceService.update(
       id,
       updateInvoiceDto,
+      req.user.branchId,
+    );
+  }
+
+  @Patch(':id/discount')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Permissions('pharmacy:invoice:update')
+  @ApiOperation({
+    summary:
+      'Change the bill and line discounts of a finished bill, with a reason',
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Bill changed since expectedVersion, is not finished, is cancelled or has a sales return',
+  })
+  async reviseDiscount(
+    @Param('id') id: string,
+    @Body() dto: ReviseBillDiscountDto,
+    @Request() req: any,
+  ) {
+    return this.pharmacyInvoiceService.reviseDiscount(
+      id,
+      dto,
+      req.user.branchId,
+      req.user.id,
+    );
+  }
+
+  @Post(':id/refunds')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Permissions('pharmacy:invoice:payment:add')
+  @ApiOperation({
+    summary: 'Record a refund of money taken above the bill total',
+  })
+  async recordRefund(
+    @Param('id') id: string,
+    @Body() dto: RefundPharmacyBillDto,
+    @Request() req: any,
+  ) {
+    return this.pharmacyInvoiceService.recordRefund(
+      id,
+      dto,
       req.user.branchId,
     );
   }
