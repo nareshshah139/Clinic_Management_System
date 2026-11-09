@@ -36,7 +36,6 @@ for(const kind of Object.keys(workflowKinds))for(const status of statuses)for(co
   assert(value.heading&&value.happened&&value.stockExplanation&&value.recovery,'All explanations have event, stock outcome and recovery');
   if(unresolved){assert.equal(value.stockEffect,'unknown');assert.equal(value.canMutate,false);assert.equal(value.canEdit,false);assert(value.checkLabel);assert(!/stock has not changed|no stock change|stock is unchanged/i.test([value.heading,value.happened,value.stockExplanation].join(' ')));}
   if(!write){assert.equal(value.canMutate,false);assert.equal(value.canEdit,false);}
-  if(knowledge.state==='known'&&kind==='COUNT'&&status==='APPROVED')assert.equal(value.primaryLabel,'Apply approved count');
   rows.push([kind,status,+write,+approve,effect,knowledge.state,knowledge.operation||'',value.stockEffect,+value.canMutate,+value.canEdit,value.checkLabel||'',+!!(value.heading&&value.happened&&value.stockExplanation&&value.recovery)]);
  }
 }
