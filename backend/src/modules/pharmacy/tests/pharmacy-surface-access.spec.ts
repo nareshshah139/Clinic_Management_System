@@ -14,6 +14,14 @@ const PHARMACIST_EXCLUDED: Record<string, string> = {
     'Separation of duties: pharmacists submit price and stock edits; doctors, admins and owners approve them.',
   'DrugController.rejectInventoryChangeRequest':
     'Separation of duties: rejecting is the same review decision as approving.',
+  'PharmacyTradeTermsController.save':
+    'CR-28: Terms of Trade are edited by owners, admins and doctors (TRADE_TERM_EDITORS); pharmacists read them.',
+  'PharmacyTradeTermsController.remove':
+    'CR-28: deleting a term is an edit, limited to TRADE_TERM_EDITORS.',
+  'InventoryItemRequestController.approve':
+    'CR-30: a new inventory item needs a doctor\'s approval; the pharmacist is the requester (ITEM_REQUEST_APPROVER_ROLES).',
+  'InventoryItemRequestController.reject':
+    'CR-30: rejecting a new item request is the same review decision as approving it.',
 };
 
 type Route = { key: string; label: string; controller: Function; handler: Function };
