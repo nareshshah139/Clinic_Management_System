@@ -30,6 +30,24 @@ export function stockStatus(item: any, quantity = item.currentStock) {
     ? 'LOW_STOCK'
     : 'IN_STOCK';
 }
+/**
+ * @cc [owner:nareshshah139,label:product] batch-delete-guard
+ * A batch MAY be deleted only when it holds no physical or held units, has no workflow history
+ * and has no stock movements. The item page MUST show the same reason the delete endpoint gives.
+ */
+export function batchDeleteBlock(
+  batch: { currentStock: number; heldStock: number },
+  history: { effects: number; transactions: number },
+): string | null {
+  if (batch.currentStock || batch.heldStock)
+    return 'Dispose or return remaining stock before deleting a batch';
+  if (history.effects)
+    return 'This batch has workflow history and must be archived instead';
+  if (history.transactions)
+    return 'Cannot delete item with existing stock transactions';
+  return null;
+}
+
 export function movementDelta(row: any): number | null {
   if (Number.isFinite(row.quantityDelta)) return row.quantityDelta;
   const info = jsonObject(row.notes);
