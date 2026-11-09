@@ -2,14 +2,15 @@ import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY, PermissionRequirement } from '../decorators/permissions.decorator';
 import { PrismaService } from '../database/prisma.service';
-import { hasScopedPermission } from './scoped-permission';
+import { grantsForRole, parsePermissionList, permissionGrants } from '../access/permission-grants';
 
 /**
  * @cc [owner:nareshshah139,label:security] permission-gate
  * OWNER (from the token) and ADMIN or DOCTOR (from the stored user role, not the token) MUST
  * pass every Permissions() requirement. Other users MUST hold every string requirement and one
- * entry of every alternative group in the union of their role and user grants. A missing user,
- * id or record, malformed grant JSON or an empty group MUST grant nothing.
+ * entry of every alternative group in the union of their role and user grants, plus pharmacy:*
+ * and inventory:* for a stored PHARMACIST. A missing user, id or record, malformed grant JSON or
+ * an empty group MUST grant nothing.
  */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -20,8 +21,9 @@ export class PermissionsGuard implements CanActivate {
 
   /**
    * @cc [owner:nareshshah139,label:security] scoped-permission-wildcards
-   * A grant ending in :* matches one nonempty action in the same scope, but MUST NOT match
-   * nested scopes or a bare wildcard; all permission requirement groups remain mandatory.
+   * A grant ending in :* matches its scope and every permission nested under it at a segment
+   * boundary. A stored bare wildcard MUST NOT act as a bypass for roles outside OWNER, ADMIN and
+   * DOCTOR, and all permission requirement groups remain mandatory.
    */
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredPermissions = this.reflector.getAllAndOverride<PermissionRequirement[]>(PERMISSIONS_KEY, [
@@ -64,49 +66,20 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    let userPermissions: string[] = [];
-    if (dbUser.permissions) {
-      try {
-        const parsed = JSON.parse(dbUser.permissions);
-        if (Array.isArray(parsed)) {
-          userPermissions = parsed.filter((p) => typeof p === 'string');
-        }
-      } catch {
-        // malformed permissions JSON -> treat as no permissions
-        userPermissions = [];
-      }
-    }
+    const roleRecord = await this.prisma.role
+      .findFirst({ where: { name: dbUser.role }, select: { permissions: true } })
+      .catch(() => null);
+    const grants = permissionGrants(
+      grantsForRole(dbUser.role, [
+        ...parsePermissionList(roleRecord?.permissions),
+        ...parsePermissionList(dbUser.permissions),
+      ]),
+    );
 
-    // Merge in role default permissions (union) before evaluating
-    let rolePermissions: string[] = [];
-    try {
-      const roleRecord = await this.prisma.role.findFirst({
-        where: { name: dbUser.role },
-        select: { permissions: true },
-      });
-      if (roleRecord?.permissions) {
-        try {
-          const parsedRole = JSON.parse(roleRecord.permissions);
-          if (Array.isArray(parsedRole)) {
-            rolePermissions = parsedRole.filter((p) => typeof p === 'string');
-          }
-        } catch {
-          rolePermissions = [];
-        }
-      }
-    } catch {
-      rolePermissions = [];
-    }
-
-    const effectivePermissions = new Set([...(rolePermissions || []), ...(userPermissions || [])]);
-    const permits = (permission: string) => hasScopedPermission(effectivePermissions, permission);
-
-    // Existing string entries retain all-of semantics. Alternatives are accepted
-    // only when explicitly declared by that endpoint.
     return requiredPermissions.every((requirement) =>
       typeof requirement === 'string'
-        ? permits(requirement)
-        : requirement.some(permits),
+        ? grants.has(requirement)
+        : requirement.some((permission) => grants.has(permission)),
     );
   }
 }

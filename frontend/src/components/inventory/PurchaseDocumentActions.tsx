@@ -80,8 +80,8 @@ export function PurchaseDocumentActions({ invoice, onRefresh, onEdit, onDocument
     setNotice(format === 'qr' ? 'QR PDF downloaded. Print it, then scan or paste its purchase code into the register search.' : 'Saved purchase downloaded with all rows, taxes, totals and status.');
   };
   const linkedDraftKey = (kind: string) => encodeURIComponent(`purchase-${invoice.id}-${kind}`);
-  const returnToSupplier = () => onReturn ? onReturn(invoice.id) : window.location.assign(`/dashboard/inventory?area=stock&view=SUPPLIER_RETURN&new=${linkedDraftKey('return')}&purchaseInvoiceId=${encodeURIComponent(invoice.id)}`);
-  const openDocument = (doc: any) => onDocument ? onDocument(doc.kind, doc.id) : window.location.assign(`/dashboard/inventory?area=${['PURCHASE_ORDER'].includes(doc.kind) ? 'reorder' : ['SUPPLIER_RETURN', 'CORRECTION'].includes(doc.kind) ? 'stock' : 'purchases'}&view=${encodeURIComponent(doc.kind)}&document=${encodeURIComponent(doc.id)}`);
+  const returnToSupplier = () => onReturn ? onReturn(invoice.id) : window.location.assign(`/dashboard/inventory?area=purchases&view=SUPPLIER_RETURN&new=${linkedDraftKey('return')}&purchaseInvoiceId=${encodeURIComponent(invoice.id)}`);
+  const openDocument = (doc: any) => onDocument ? onDocument(doc.kind, doc.id) : window.location.assign(`/dashboard/inventory?area=${['PURCHASE_ORDER'].includes(doc.kind) ? 'reorder' : doc.kind === 'CORRECTION' ? 'stock' : 'purchases'}&view=${encodeURIComponent(doc.kind)}&document=${encodeURIComponent(doc.id)}`);
   const posted = (detail?.invoice?.status || invoice.status) === 'STOCK_COMMITTED';
   const editable = ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(detail?.invoice?.status || invoice.status);
   const returns = (detail?.related || []).filter((doc: any) => ['SUPPLIER_RETURN', 'CORRECTION', 'CREDIT_NOTE'].includes(doc.kind));

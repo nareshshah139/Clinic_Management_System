@@ -1034,7 +1034,7 @@ export function PurchaseInvoiceWorkbench({
  */
 /**
  * @cc [owner:nareshshah139,label:product] historical-stock-recovery-guidance
- * Historical-stock holds with a confirmed unposted invoice status MUST offer Counts & audit
+ * Historical-stock holds with a confirmed unposted invoice status MUST offer Stock counts
  * and a copyable invoice handoff.
  * Guidance MUST retain stock uncertainty and distinguish physical reconciliation from supplier accounting.
  */
@@ -2066,7 +2066,7 @@ function PurchaseInvoiceEditor({
       setRejectedImportId(expectedId);
       setUnknownStockInvoiceId(result.invoiceId || 'unconfirmed-import');
       setError(null);
-      setNotice('Further intake rejected. Historical stock remains unverified. Use Counts & audit to reconcile physical inventory.');
+      setNotice('Further intake rejected. Historical stock remains unverified. Use Stock counts to reconcile physical inventory.');
       return true;
     }
     if (result.outcome === 'NO_STOCK_WRITTEN' && result.invoiceId === null) {
@@ -3535,15 +3535,15 @@ function PurchaseInvoiceEditor({
         <p>Further intake rejected. Historical stock remains unverified; this does not mean no stock was posted.</p>
         <p className="break-all text-sm">Recovery reference: {rejectedImportId}</p>
         {sourceDocument && access.read && <OriginalDocumentLink document={sourceDocument} />}
-        <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Reconcile physical inventory in Counts &amp; audit</a>
+        <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Reconcile physical inventory in Stock counts</a>
         <p className="text-sm">Keep this invoice out of new intake. Verify physical quantities and product identities, then record an independent checkpoint. Supplier accounting remains separate.</p>
       </div>}
       {historicalStockHold && !stockAdded && !stockStatusUnknown && <section className="space-y-2" aria-label="Historical stock recovery">
         <p>This invoice may already be included in opening stock. Its historical stock outcome needs verification; do not add it as a new receipt.</p>
-        <p className="text-sm">Ask an inventory administrator to compare this bill with opening-stock records and verify a physical count in Counts &amp; audit. Supplier accounting remains separate.</p>
+        <p className="text-sm">Ask an inventory administrator to compare this bill with opening-stock records and verify a physical count in Stock counts. Supplier accounting remains separate.</p>
         <p className="break-all text-sm">Invoice reference: {activeInvoice?.invoiceNumber || activeInvoice?.id}</p>
         <div className="flex flex-wrap gap-2">
-          <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Open Counts &amp; audit</a>
+          <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Open Stock counts</a>
           <Button variant="outline" onClick={copyHandoff}>Copy historical stock handoff</Button>
         </div>
       </section>}

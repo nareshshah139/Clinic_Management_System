@@ -76,3 +76,19 @@ it('reloads when the workspace refresh action fires', async () => {
   window.dispatchEvent(new CustomEvent('inventory-workspace-refresh'));
   await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(2));
 });
+
+it('names a stock count and a supplier return once each and opens them', async () => {
+  const workflow = (id: string, kind: string, number: string, channel: string, label: string, delta: number) =>
+    row({ id, type: 'ADJUSTMENT', delta, balance: { before: 12, after: 12 + delta }, reference: number,
+      source: { channel, label, counterparty: null, document: { type: 'WORKFLOW', id, kind, number, status: 'POSTED' } } });
+  (apiClient.get as jest.Mock).mockResolvedValue({ ...timeline, rows: [
+    workflow('count-1', 'COUNT', 'Stock count 09/11/2026 · on demand', 'STOCK_COUNT', 'Stock count', -1),
+    workflow('ret-1', 'SUPPLIER_RETURN', 'RET-A', 'SUPPLIER_RETURN', 'Supplier return', -2),
+  ] });
+  const p = props();
+  render(<InventoryLedger {...p} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Stock count 09/11/2026 · on demand' }));
+  expect(p.onDocument).toHaveBeenCalledWith('COUNT', 'count-1');
+  fireEvent.click(screen.getByRole('button', { name: 'Supplier returns RET-A' }));
+  expect(p.onDocument).toHaveBeenCalledWith('SUPPLIER_RETURN', 'ret-1');
+});

@@ -36,7 +36,7 @@ describe('Automatic intake HTTP permissions', () => {
     await app.listen(0, '127.0.0.1');
   });
   afterAll(async () => { await app?.close(); });
-  beforeEach(() => { role = 'PHARMACIST'; permissions = [...required]; jest.clearAllMocks(); service.capabilities.mockResolvedValue({read:true}); });
+  beforeEach(() => { role = 'RECEPTION'; permissions = [...required]; jest.clearAllMocks(); service.capabilities.mockResolvedValue({read:true}); });
   const upload = () => request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/import')
     .field('attemptId', '12345678-1234-4234-8234-123456789abc')
     .field('goodsReceivedDate', '2026-09-12')
@@ -164,7 +164,7 @@ describe('Automatic intake HTTP permissions', () => {
   it('forwards denied read capability without widening automatic import permissions', async () => {
     service.capabilities.mockResolvedValue({read:false});
     await upload().expect(201);
-    expect(service.capabilities).toHaveBeenCalledWith({id:'user-1',branchId:'branch-1',role:'PHARMACIST'});
+    expect(service.capabilities).toHaveBeenCalledWith({id:'user-1',branchId:'branch-1',role:'RECEPTION'});
     expect(service.importWithRecovery).toHaveBeenCalledWith([expect.objectContaining({originalname:'test.jpg'})],'12345678-1234-4234-8234-123456789abc','branch-1','user-1','2026-09-12',false);
   });
 
@@ -174,6 +174,17 @@ describe('Automatic intake HTTP permissions', () => {
     await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/invoice-1/process').send({}).expect(403);
     expect(service.importWithRecovery).not.toHaveBeenCalled();
     expect(service.processInvoice).not.toHaveBeenCalled();
+  });
+
+  it('lets a pharmacist with no stored permissions import, recover and process', async () => {
+    role = 'PHARMACIST';
+    permissions = [];
+    await upload().expect(201);
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/invoice-1/process').send({}).expect(201);
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/recover-unlinked')
+      .send({ recoveryId: '12345678-1234-4234-8234-123456789abc', legacy: true, reason: 'Lost legacy response' }).expect(201);
+    expect(service.importWithRecovery).toHaveBeenCalledTimes(1);
+    expect(service.processInvoice).toHaveBeenCalledWith('invoice-1', 'branch-1', 'user-1');
   });
 
   it('allows Reception with all three corresponding Inventory permissions', async () => {

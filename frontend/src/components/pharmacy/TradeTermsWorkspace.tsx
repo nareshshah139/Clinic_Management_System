@@ -13,7 +13,7 @@ import {
   type DraftField, type Distributor, type DistributorSearch, type DistributorTerms, type TermDraft, type TradeTerm, type WizardState,
 } from '@/lib/trade-terms';
 
-const READ_ONLY_NOTE = 'Read-only. Only doctors can change terms.';
+const READ_ONLY_NOTE = 'Read-only. Doctors and admins can change terms.';
 const errorText = (error: unknown) => (error instanceof Error ? error.message : 'Something went wrong.');
 
 function useDistributorSearch(search: string) {

@@ -28,13 +28,14 @@ export const accessUsers: Record<string, AccessUser> = {
   owner: { role: 'OWNER' },
   admin: { role: 'ADMIN' },
   doctor: { role: 'DOCTOR' },
-  pharmacistReader: { role: 'PHARMACIST', grants: ['inventory:item:read'] },
-  pharmacistDeleter: {
-    role: 'PHARMACIST',
+  pharmacist: { role: 'PHARMACIST' },
+  receptionReader: { role: 'RECEPTION', grants: ['inventory:item:read'] },
+  receptionDeleter: {
+    role: 'RECEPTION',
     grants: ['inventory:item:read', 'inventory:item:delete'],
   },
-  pharmacistStocker: {
-    role: 'PHARMACIST',
+  receptionStocker: {
+    role: 'RECEPTION',
     grants: [
       'inventory:item:read',
       'inventory:transaction:create',

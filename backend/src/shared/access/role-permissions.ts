@@ -1,6 +1,6 @@
-import { UserRole } from '@prisma/client';
+import type { UserRole } from '@prisma/client';
 
-export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
+export const ROLE_PERMISSIONS: Readonly<Record<UserRole, readonly string[]>> = {
   OWNER: ['*'],
   ADMIN: ['*'],
   MANAGER: [
@@ -45,7 +45,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'billing:payment:process',
     'billing:payment:confirm',
     'billing:payment:read',
-    // Inventory - full control
     'inventory:item:create',
     'inventory:item:read',
     'inventory:item:update',
@@ -85,7 +84,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'pharmacy:compliance:read',
   ],
   PHARMACIST: [
-    'pharmacy:compliance:read',
     'inventory:item:*',
     'inventory:transaction:*',
     'inventory:adjustment:create',
@@ -111,6 +109,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'pharmacy:purchase-invoice:read',
     'pharmacy:purchase-invoice:review',
     'pharmacy:purchase-invoice:commit-stock',
+    'pharmacy:purchase-ledger:read',
+    'pharmacy:purchase-ledger:write',
+    'pharmacy:compliance:read',
+    'pharmacy:compliance:audit',
     'pharmacy:dashboard:*',
   ],
   LAB_TECH: [],

@@ -5,12 +5,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { PrismaService } from '../../shared/database/prisma.service';
-import { hasScopedPermission } from '../../shared/guards/scoped-permission';
 import {
+  COUNT_APPROVERS,
   DEFAULT_INVENTORY_SETTINGS,
+  INVENTORY_APPROVERS,
+  LEGACY_COUNT_SETTINGS,
+  mayApproveDocument,
   SaveWorkflowDocumentDto,
+  SELF_APPROVERS,
   TransitionWorkflowDto,
   WORKFLOW_KINDS,
   WorkflowActor,
@@ -24,6 +29,27 @@ import {
   stockStatus,
   writeStockMovement,
 } from './inventory-stock';
+import { clinicDay, clinicDayOf, isCalendarDay } from '../pharmacy/register-utils';
+import { EVERY_ALLOCATION, creditBalance } from '../pharmacy/supplier-credit-balance';
+import {
+  CREDIT_NOTE_NUMBER_MAX,
+  creditNoteNumberOf,
+  displayDay,
+  isCreditNoteNumberClash,
+  returnMovementReason,
+  rupees,
+  supplierReturnReason,
+} from './supplier-return';
+import {
+  grantsForRole,
+  parsePermissionList,
+  permissionGrants,
+  PermissionGrants,
+} from '../../shared/access/permission-grants';
+import {
+  parseReconciliationInput,
+  readReconciliation,
+} from './reconciliation/reconciliation-cycle';
 
 const FINAL = new Set([
   'POSTED',
@@ -33,11 +59,35 @@ const FINAL = new Set([
   'CANCELLED',
   'REJECTED',
 ]);
-const APPROVERS = new Set(['OWNER', 'ADMIN', 'MANAGER']);
 const FINANCIAL = new Set(['CREDIT_NOTE']);
 const SALES = new Set(['COUNTER_SALE', 'QUOTATION', 'SALES_RETURN']);
 const REORDER = new Set(['SHORTBOOK', 'PURCHASE_ORDER', 'TARGET_REVIEW']);
 const clean = (v: unknown) => String(v ?? '').trim();
+const fingerprintOf = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const RETURN_KINDS = ['SUPPLIER_RETURN', 'CREDIT_NOTE'];
+const OPEN_COUNT = ['DRAFT', 'AWAITING_APPROVAL'];
+type OpenCount = { id: string; status: string; reference: string; createdBy: string; payload: any };
+const batchLabel = (line: Pick<WorkflowLine, 'name' | 'batchNumber'>) => `${line.name || 'Selected batch'}, batch ${line.batchNumber || 'not recorded'}`;
+const batches = (n: number) => `${n} more ${n === 1 ? 'batch' : 'batches'}`;
+/**
+ * A counted line compares the shelf with the system figure taken when the count was typed. That
+ * comparison is out of date when it has no capture time (saved before capture times were kept) or
+ * when another count of the batch was posted at or after it, because that count already put the
+ * shelf quantity into the stock.
+ */
+export function observationOutdated(line: Pick<WorkflowLine, 'physicalStock' | 'capturedAt'>, metadata: Record<string, any>, documentId: string, fallback?: string) {
+  if (line.physicalStock === undefined || line.physicalStock === null) return false;
+  const at = line.capturedAt ?? fallback;
+  if (!at) return true;
+  return typeof metadata.lastCountAt === 'string' && metadata.lastCountDocumentId !== documentId && metadata.lastCountAt >= at;
+}
+export type CreditNoteInput = {
+  requestKey: string;
+  version: number;
+  number: string;
+  date: string;
+  amount: number;
+};
 const integer = (v: unknown, name: string, minimum = 0) => {
   if (
     v === '' ||
@@ -67,7 +117,7 @@ export class InventoryWorkflowService {
    * Only OWNER, ADMIN, and DOCTOR receive the global bypass. A stored bare wildcard MUST NOT
    * grant another role unrestricted inventory access.
    */
-  async permissions(actor: WorkflowActor): Promise<Set<string>> {
+  async permissions(actor: WorkflowActor): Promise<PermissionGrants> {
     if (!actor.id || !actor.branchId)
       throw new ForbiddenException('Authenticated branch and user required');
     const user = await this.prisma.user.findFirst({
@@ -78,20 +128,7 @@ export class InventoryWorkflowService {
       throw new ForbiddenException(
         'User is not in the active branch or role changed',
       );
-    if (['OWNER', 'ADMIN', 'DOCTOR'].includes(user.role)) return new Set(['*']);
-    const role = await this.prisma.role.findFirst({
-      where: { name: user.role },
-      select: { permissions: true },
-    });
-    const parse = (v: unknown): string[] => {
-      try {
-        const p = Array.isArray(v) ? v : JSON.parse(String(v || '[]'));
-        return Array.isArray(p) ? p.filter((x) => typeof x === 'string' && x !== '*') : [];
-      } catch {
-        return [];
-      }
-    };
-    return new Set([...parse(user.permissions), ...parse(role?.permissions)]);
+    return this.grantsOf(user);
   }
   private permissionFor(kind: string, write: boolean) {
     if (FINANCIAL.has(kind))
@@ -105,15 +142,16 @@ export class InventoryWorkflowService {
   async authorize(actor: WorkflowActor, kind: string, write = false) {
     const p = await this.permissions(actor);
     const required = this.permissionFor(kind, write);
-    if (!p.has('*') && !hasScopedPermission(p, required))
+    if (!p.has(required))
       throw new ForbiddenException(`This action requires ${required}`);
   }
   async capabilities(actor: WorkflowActor) {
     const p = await this.permissions(actor),
-      has = (key: string) => p.has('*') || hasScopedPermission(p, key);
+      has = (key: string) => p.has(key);
     return {
-      approve: APPROVERS.has(actor.role),
-      settings: APPROVERS.has(actor.role),
+      approve: INVENTORY_APPROVERS.has(actor.role),
+      selfApprove: SELF_APPROVERS.has(actor.role),
+      settings: INVENTORY_APPROVERS.has(actor.role),
       itemWrite: has('inventory:item:update'),
       itemCreate: has('inventory:item:create'),
       supplierWrite: has('inventory:supplier:create'),
@@ -173,30 +211,56 @@ export class InventoryWorkflowService {
     const row = await this.prisma.inventoryWorkflowSettings.findUnique({
       where: { branchId: actor.branchId },
     });
-    return {
+    const stored = jsonObject(row?.settings);
+    const value: Record<string, any> = {
       ...DEFAULT_INVENTORY_SETTINGS,
-      ...jsonObject(row?.settings),
+      ...stored,
+      reconciliation: readReconciliation(stored, clinicDay(row?.updatedAt ?? new Date())),
       version: row?.version || 0,
     };
+    for (const key of LEGACY_COUNT_SETTINGS) delete value[key];
+    return value;
+  }
+  async grantsOf(user: { role: string; permissions: unknown }) {
+    const role = await this.prisma.role.findFirst({
+      where: { name: user.role as any },
+      select: { permissions: true },
+    });
+    return permissionGrants(
+      grantsForRole(user.role, [
+        ...parsePermissionList(user.permissions),
+        ...parsePermissionList(role?.permissions),
+      ]),
+    );
+  }
+  async countStaff(branchId: string) {
+    const users = await this.prisma.user.findMany({
+      where: { branchId, isActive: true },
+      select: { id: true, firstName: true, lastName: true, role: true, permissions: true },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+    const roles = new Map(
+      (await this.prisma.role.findMany({ where: { name: { in: [...new Set(users.map((user) => user.role))] as any } }, select: { name: true, permissions: true } })).map((role) => [role.name as string, role.permissions]),
+    );
+    return users
+      .filter((user) => permissionGrants(grantsForRole(user.role, [...parsePermissionList(user.permissions), ...parsePermissionList(roles.get(user.role))])).has(this.permissionFor('COUNT', true)))
+      .map((user) => ({ id: user.id, name: `${user.firstName} ${user.lastName}`.trim(), role: user.role }));
   }
   async saveSettings(actor: WorkflowActor, input: Record<string, any>) {
-    if (!APPROVERS.has(actor.role))
+    if (!INVENTORY_APPROVERS.has(actor.role))
       throw new ForbiddenException(
         'An inventory manager must configure automation and approvals',
       );
     const previous = await this.settings(actor);
     const value: Record<string, any> = { ...previous };
     for (const key of [
-      'auditEnabled',
       'autoMinMaxEnabled',
       'autoPoEnabled',
       'includeBounce',
       'includeRefill',
-      'negativeCountNeedsApproval',
     ])
       if (input[key] !== undefined) value[key] = input[key] === true;
     for (const key of [
-      'auditDailyCount',
       'lookbackDays',
       'minimumOrders',
       'minCoverDays',
@@ -207,26 +271,23 @@ export class InventoryWorkflowService {
     if (
       value.minCoverDays > value.maxCoverDays ||
       value.lookbackDays > 730 ||
-      value.maxCoverDays > 730 ||
-      value.auditDailyCount > 1000
+      value.maxCoverDays > 730
     )
-      throw new BadRequestException(
-        'Review target day ranges and daily count limit',
+      throw new BadRequestException('Review target day ranges');
+    if (input.reconciliation !== undefined) {
+      value.reconciliation = parseReconciliationInput(
+        input.reconciliation,
+        previous.reconciliation,
+        clinicDay(new Date()),
       );
-    if (input.auditAdjustmentMode !== undefined) {
-      if (!['APPROVAL', 'THRESHOLD'].includes(input.auditAdjustmentMode))
+      const staff = new Set((await this.countStaff(actor.branchId)).map((s) => s.id));
+      if (value.reconciliation.assigneeIds.some((id: string) => !staff.has(id)))
         throw new BadRequestException(
-          'Choose approval or threshold count adjustment mode',
+          'Each person who counts must be an active member of this branch with stock reconciliation access',
         );
-      value.auditAdjustmentMode = input.auditAdjustmentMode;
     }
-    if (input.approvalValue !== undefined)
-      value.approvalValue = amount(input.approvalValue, 'Approval value');
     if (input.ownerId !== undefined) value.ownerId = clean(input.ownerId);
-    if (
-      (value.autoMinMaxEnabled || value.autoPoEnabled || value.auditEnabled) &&
-      !value.ownerId
-    )
+    if ((value.autoMinMaxEnabled || value.autoPoEnabled) && !value.ownerId)
       throw new BadRequestException(
         'Select an automation owner before enabling it',
       );
@@ -304,6 +365,8 @@ export class InventoryWorkflowService {
     await this.authorize(actor, dto.kind, true);
     if (!clean(dto.requestKey) || !clean(dto.reference))
       throw new BadRequestException('Reference and request key are required');
+    if (!id && clean(dto.requestKey).startsWith('cycle:'))
+      throw new BadRequestException('Request keys starting with "cycle:" are reserved for planned stock counts');
     return this.transaction(async (tx) => {
       const old = id
         ? await tx.inventoryWorkflowDocument.findFirst({
@@ -311,6 +374,8 @@ export class InventoryWorkflowService {
           })
         : null;
       if (id && !old) throw new NotFoundException('Document not found');
+      if (old?.kind === 'COUNT')
+        throw new BadRequestException('Enter counted quantities from Stock counts › My counts');
       if (
         old &&
         (old.kind !== dto.kind || !['DRAFT', 'CHALLAN'].includes(old.status))
@@ -373,6 +438,8 @@ export class InventoryWorkflowService {
         dto.payload,
         old,
       );
+      if (!old && dto.kind === 'COUNT')
+        await this.refuseOpenCounts(tx, actor, payload.lines, await this.openCountHolders(tx, actor.branchId));
       if (
         old?.status === 'CHALLAN' &&
         (old.supplierId !== (dto.supplierId || null) ||
@@ -430,7 +497,7 @@ export class InventoryWorkflowService {
       return this.plain(saved);
     });
   }
-  private async normalizePayload(
+  async normalizePayload(
     tx: any,
     actor: WorkflowActor,
     kind: WorkflowKind,
@@ -582,6 +649,9 @@ export class InventoryWorkflowService {
             });
           l.physicalStock = count;
           l.systemStock = oldById.get(id)?.systemStock ?? item?.currentStock;
+          if (count !== undefined) l.capturedAt = new Date().toISOString();
+          const note = clean(line.note).slice(0, 300);
+          if (note) l.note = note;
         }
         if (kind === 'SALES_RETURN') {
           l.originalTerms = saleTerms || {
@@ -607,6 +677,7 @@ export class InventoryWorkflowService {
         return JSON.parse(JSON.stringify(l));
       },
     );
+    const date = clean(source.date);
     const payload: Record<string, any> = {
       lines,
       reason: clean(source.reason),
@@ -616,9 +687,14 @@ export class InventoryWorkflowService {
       doctor: clean(source.doctorName || source.doctor),
       doctorName: clean(source.doctorName || source.doctor),
       returnBase: clean(source.returnBase || source.valuationBasis) || 'PTR',
-      returnType: clean(source.returnType) || 'OTHER',
+      ...(kind === 'SUPPLIER_RETURN'
+        ? { returnReason: supplierReturnReason(source) ?? 'OTHER' }
+        : { returnType: clean(source.returnType) || 'OTHER' }),
+      ...(kind === 'CREDIT_NOTE'
+        ? { creditNoteNumber: creditNoteNumberOf(source.creditNoteNumber), creditNoteDate: clean(source.creditNoteDate) }
+        : {}),
       paymentMode: clean(source.paymentMode) || 'CASH',
-      date: clean(source.date) || new Date().toISOString().slice(0, 10),
+      date: date ? clinicDayOf(date) : clinicDay(new Date()),
       expectedDate: clean(source.expectedDate),
       priority: ['NORMAL', 'HIGH', 'URGENT'].includes(source.priority)
         ? source.priority
@@ -630,6 +706,13 @@ export class InventoryWorkflowService {
       refundMode: clean(source.refundMode) || 'CREDIT',
       sourceHoldId: clean(source.sourceHoldId),
       ...(source.calculation ? { calculation: source.calculation } : {}),
+      ...(kind === 'COUNT'
+        ? {
+            origin: old?.payload?.origin || 'ON_DEMAND',
+            assigneeId: old?.payload?.assigneeId || actor.id,
+            ...(old?.payload?.cycle ? { cycle: old.payload.cycle } : {}),
+          }
+        : {}),
     };
     if (
       ['COUNTER_SALE', 'QUOTATION'].includes(kind) &&
@@ -638,8 +721,10 @@ export class InventoryWorkflowService {
       throw new BadRequestException(
         'Choose pickup, delivery or in-clinic order type',
       );
-    if (!Number.isFinite(new Date(payload.date).getTime()))
-      throw new BadRequestException('Invalid document date');
+    if (!payload.date)
+      throw new BadRequestException(
+        'Document date must be a calendar day such as 2026-04-01',
+      );
     if (source.evidence)
       payload.evidence = clean(source.evidence).slice(0, 4000);
     return payload;
@@ -668,7 +753,7 @@ export class InventoryWorkflowService {
   async documents(actor: WorkflowActor, query: Record<string, any> = {}) {
     const perms = await this.permissions(actor);
     const kinds = WORKFLOW_KINDS.filter(
-      (k) => perms.has('*') || hasScopedPermission(perms, this.permissionFor(k, false)),
+      (k) => perms.has(this.permissionFor(k, false)),
     );
     const where: any = { branchId: actor.branchId, kind: { in: kinds } };
     if (query.kind) {
@@ -814,222 +899,431 @@ export class InventoryWorkflowService {
     dto: TransitionWorkflowDto,
   ): Promise<any> {
     const settings = await this.settings(actor);
-    return this.transaction(async (tx) => {
-      const doc = await tx.inventoryWorkflowDocument.findFirst({
-        where: { id, branchId: actor.branchId },
-      });
-      if (!doc) throw new NotFoundException('Document not found');
-      await this.authorize(actor, doc.kind, true);
-      if (doc.version !== dto.version)
-        throw new ConflictException(
-          'This document changed. Reload to confirm its current status.',
-        );
-      if (dto.action === 'RECOUNT') return this.restartCount(tx, actor, doc);
-      const p = doc.payload as any,
-        lines: WorkflowLine[] = p.lines;
-      if (
-        doc.kind === 'TARGET_REVIEW' &&
-        ['ACCEPT', 'POST'].includes(dto.action)
-      )
-        throw new BadRequestException(
-          'Review target proposal lines from Reorder target review',
-        );
-      if (dto.action === 'CREATE_PO' || dto.action === 'CONVERT_SALE')
-        return this.convert(tx, actor, doc, dto.action);
-      if (dto.action === 'REVERSE')
-        return this.reverse(tx, actor, doc, clean(dto.reason));
-      let next = doc.status;
-      if (dto.action === 'CANCEL') {
-        if (
-          !['DRAFT', 'AWAITING_APPROVAL', 'APPROVED', 'CHALLAN'].includes(
-            doc.status,
-          )
-        )
-          throw new BadRequestException(
-            'Posted documents need a linked reversal',
+    let creditNoteNumber = '';
+    try {
+      return await this.transaction(async (tx) => {
+        const doc = await tx.inventoryWorkflowDocument.findFirst({
+          where: { id, branchId: actor.branchId },
+        });
+        if (!doc) throw new NotFoundException('Document not found');
+        await this.authorize(actor, doc.kind, true);
+        if (doc.version !== dto.version)
+          throw new ConflictException(
+            'This document changed. Reload to confirm its current status.',
           );
-        if (
-          doc.kind === 'PURCHASE_ORDER' &&
-          (await tx.inventoryWorkflowDocument.count({
-            where: {
-              branchId: actor.branchId,
-              sourceId: doc.id,
-              status: { in: ['POSTED', 'CHALLAN'] },
-            },
-          }))
-        )
-          throw new BadRequestException(
-            'An order with receipts cannot be cancelled',
-          );
-        next = 'CANCELLED';
-      } else if (dto.action === 'REJECT') {
-        if (!['DRAFT', 'AWAITING_APPROVAL'].includes(doc.status))
-          throw new BadRequestException(
-            'Only proposals awaiting review can be rejected',
-          );
-        next = 'REJECTED';
-      } else if (dto.action === 'SUBMIT') {
-        if (doc.status !== 'DRAFT')
-          throw new BadRequestException('Only drafts can be submitted');
-        next = 'AWAITING_APPROVAL';
-      } else if (dto.action === 'APPROVE') {
-        if (!APPROVERS.has(actor.role))
-          throw new ForbiddenException('A manager must approve this document');
-        if (doc.status !== 'AWAITING_APPROVAL')
-          throw new BadRequestException('Document is not awaiting approval');
-        next = 'APPROVED';
-      } else if (dto.action === 'RELEASE') {
-        if (
-          !['HOLD', 'SALES_RETURN'].includes(doc.kind) ||
-          doc.status !== 'POSTED'
-        )
-          throw new BadRequestException(
-            'Only an active hold or quarantined return can be released',
-          );
-        next = 'RELEASED';
-      } else if (dto.action === 'CHALLAN') {
-        if (doc.kind !== 'SUPPLIER_RETURN' || doc.status !== 'DRAFT')
-          throw new BadRequestException(
-            'Only a draft supplier return can become a challan',
-          );
-        next = 'CHALLAN';
-      } else if (dto.action === 'POST' || dto.action === 'ACCEPT') {
-        if (!['DRAFT', 'APPROVED', 'CHALLAN'].includes(doc.status))
-          throw new BadRequestException('Document is not ready for posting');
-        if (
-          ['PURCHASE_ORDER', 'SHORTBOOK', 'QUOTATION', 'CORRECTION'].includes(
-            doc.kind,
-          )
-        )
-          throw new BadRequestException(
-            'Use the order/quotation action; this document does not post stock',
-          );
-        next = 'POSTED';
+        if (dto.action === 'RECOUNT') return this.restartCount(tx, actor, doc);
+        if (doc.kind === 'COUNT' && dto.action === 'CANCEL') {
+          if (doc.status !== 'DRAFT')
+            throw new BadRequestException('A signed count cannot be cancelled. A doctor or administrator rejects it from Stock counts › Approvals.');
+          if ((doc.payload?.assigneeId ?? doc.createdBy) !== actor.id && !COUNT_APPROVERS.has(actor.role))
+            throw new ForbiddenException('Only the person this count is assigned to, or a doctor or administrator, can cancel it.');
+        }
         if (
           doc.kind === 'COUNT' &&
-          doc.status !== 'APPROVED' &&
-          !APPROVERS.has(actor.role)
-        ) {
-          if (
-            lines.some(
-              (l) =>
-                l.physicalStock !== undefined &&
-                l.physicalStock !== (l.systemStock || 0) &&
-                (settings.auditAdjustmentMode === 'APPROVAL' ||
-                  (settings.negativeCountNeedsApproval &&
-                    l.physicalStock < (l.systemStock || 0)) ||
-                  Math.abs(l.physicalStock - (l.systemStock || 0)) *
-                    (l.unitPrice || 0) >=
-                    settings.approvalValue),
-            )
-          )
-            next = 'AWAITING_APPROVAL';
-        }
-      }
-      if (next === doc.status)
-        throw new BadRequestException('No valid transition requested');
-      if (!['CANCELLED', 'REJECTED', 'RELEASED'].includes(next))
-        await this.validatePosting(tx, actor, doc, settings);
-      if (doc.kind === 'SUPPLIER_RETURN' && next === 'POSTED')
-        await this.authorize(actor, 'CREDIT_NOTE', true);
-      const updated = await tx.inventoryWorkflowDocument.update({
-        where: { id, branchId: actor.branchId, version: dto.version },
+          (['APPROVE', 'REJECT', 'SUBMIT'].includes(dto.action) ||
+            (dto.action === 'POST' && doc.status !== 'APPROVED'))
+        )
+          throw new BadRequestException(
+            'A stock count is signed off by the person who counted it, then approved or rejected from Stock counts › Approvals',
+          );
+        creditNoteNumber = creditNoteNumberOf(doc.payload?.creditNoteNumber);
+        return this.move(tx, actor, doc, dto, settings);
+      });
+    } catch (error) {
+      if (isCreditNoteNumberClash(error)) throw this.duplicateCreditNote(creditNoteNumber);
+      throw error;
+    }
+  }
+  private async move(
+    tx: any,
+    actor: WorkflowActor,
+    doc: any,
+    dto: TransitionWorkflowDto,
+    settings: any,
+  ): Promise<any> {
+    const id = doc.id;
+    const p = doc.payload as any,
+      lines: WorkflowLine[] = p.lines;
+    if (
+      doc.kind === 'TARGET_REVIEW' &&
+      ['ACCEPT', 'POST'].includes(dto.action)
+    )
+      throw new BadRequestException(
+        'Review target proposal lines from Reorder target review',
+      );
+    if (dto.action === 'CREATE_PO' || dto.action === 'CONVERT_SALE')
+      return this.convert(tx, actor, doc, dto.action);
+    if (dto.action === 'REVERSE')
+      return this.reverse(tx, actor, doc, clean(dto.reason));
+    let next = doc.status;
+    if (dto.action === 'CANCEL') {
+      if (
+        !['DRAFT', 'AWAITING_APPROVAL', 'APPROVED', 'CHALLAN'].includes(
+          doc.status,
+        )
+      )
+        throw new BadRequestException(
+          'Posted documents need a linked reversal',
+        );
+      if (
+        doc.kind === 'PURCHASE_ORDER' &&
+        (await tx.inventoryWorkflowDocument.count({
+          where: {
+            branchId: actor.branchId,
+            sourceId: doc.id,
+            status: { in: ['POSTED', 'CHALLAN'] },
+          },
+        }))
+      )
+        throw new BadRequestException(
+          'An order with receipts cannot be cancelled',
+        );
+      next = 'CANCELLED';
+    } else if (dto.action === 'REJECT') {
+      if (!['DRAFT', 'AWAITING_APPROVAL'].includes(doc.status))
+        throw new BadRequestException(
+          'Only proposals awaiting review can be rejected',
+        );
+      next = 'REJECTED';
+    } else if (dto.action === 'SUBMIT') {
+      if (doc.status !== 'DRAFT')
+        throw new BadRequestException('Only drafts can be submitted');
+      next = 'AWAITING_APPROVAL';
+    } else if (dto.action === 'APPROVE') {
+      if (!INVENTORY_APPROVERS.has(actor.role))
+        throw new ForbiddenException('A manager must approve this document');
+      if (!mayApproveDocument(actor, doc))
+        throw new ForbiddenException(
+          'Another approver must approve a document you created',
+        );
+      if (doc.status !== 'AWAITING_APPROVAL')
+        throw new BadRequestException('Document is not awaiting approval');
+      next = 'APPROVED';
+    } else if (dto.action === 'RELEASE') {
+      if (
+        !['HOLD', 'SALES_RETURN'].includes(doc.kind) ||
+        doc.status !== 'POSTED'
+      )
+        throw new BadRequestException(
+          'Only an active hold or quarantined return can be released',
+        );
+      next = 'RELEASED';
+    } else if (dto.action === 'CHALLAN') {
+      if (doc.kind !== 'SUPPLIER_RETURN' || doc.status !== 'DRAFT')
+        throw new BadRequestException(
+          'Only a draft supplier return can become a challan',
+        );
+      next = 'CHALLAN';
+    } else if (dto.action === 'POST' || dto.action === 'ACCEPT') {
+      if (!['DRAFT', 'APPROVED', 'CHALLAN'].includes(doc.status))
+        throw new BadRequestException('Document is not ready for posting');
+      if (
+        ['PURCHASE_ORDER', 'SHORTBOOK', 'QUOTATION', 'CORRECTION'].includes(
+          doc.kind,
+        )
+      )
+        throw new BadRequestException(
+          'Use the order/quotation action; this document does not post stock',
+        );
+      next = 'POSTED';
+    }
+    if (next === doc.status)
+      throw new BadRequestException('No valid transition requested');
+    if (!['CANCELLED', 'REJECTED', 'RELEASED'].includes(next))
+      await this.validatePosting(tx, actor, doc, settings);
+    if (doc.kind === 'SUPPLIER_RETURN' && next === 'POSTED')
+      await this.authorize(actor, 'CREDIT_NOTE', true);
+    const updated = await tx.inventoryWorkflowDocument.update({
+      where: { id, branchId: actor.branchId, version: dto.version },
+      data: {
+        status: next,
+        version: { increment: 1 },
+        ...(dto.action === 'APPROVE' ? { approvedBy: actor.id } : {}),
+        ...(next === 'POSTED'
+          ? { postedAt: new Date(), postedBy: actor.id }
+          : {}),
+      },
+    });
+    if (next === 'RELEASED') await this.releaseHold(tx, actor, updated);
+    else if (
+      ['POSTED', 'CHALLAN'].includes(next) ||
+      (next === 'CANCELLED' && doc.status === 'CHALLAN')
+    )
+      await this.applyStockDocument(tx, actor, updated, doc.status);
+    if (
+      next === 'POSTED' &&
+      ['SUPPLIER_RETURN', 'CREDIT_NOTE'].includes(doc.kind)
+    )
+      await tx.inventorySupplierCredit.create({
         data: {
-          status: next,
-          version: { increment: 1 },
-          ...(dto.action === 'APPROVE' || (doc.kind === 'COUNT' && next === 'POSTED' && APPROVERS.has(actor.role)) ? { approvedBy: actor.id } : {}),
-          ...(next === 'POSTED'
-            ? { postedAt: new Date(), postedBy: actor.id }
+          branchId: actor.branchId,
+          documentId: id,
+          supplierGstin: doc.supplierGstin,
+          reference: doc.reference,
+          amount: doc.totalAmount,
+          ...(doc.kind === 'CREDIT_NOTE'
+            ? {
+                creditNoteNumber: p.creditNoteNumber,
+                creditNoteDate: new Date(`${p.creditNoteDate}T00:00:00.000Z`),
+                receivedAt: new Date(),
+                receivedById: actor.id,
+              }
             : {}),
         },
       });
-      if (next === 'RELEASED') await this.releaseHold(tx, actor, updated);
-      else if (
-        ['POSTED', 'CHALLAN'].includes(next) ||
-        (next === 'CANCELLED' && doc.status === 'CHALLAN')
-      )
-        await this.applyStockDocument(tx, actor, updated, doc.status);
-      if (
-        next === 'POSTED' &&
-        ['SUPPLIER_RETURN', 'CREDIT_NOTE'].includes(doc.kind)
-      )
-        await tx.inventorySupplierCredit.create({
-          data: {
-            branchId: actor.branchId,
-            documentId: id,
-            supplierGstin: doc.supplierGstin,
-            reference: doc.reference,
-            amount: doc.totalAmount,
+    if (next === 'POSTED' && doc.kind === 'TARGET_REVIEW') {
+      await this.applyTargets(tx, actor, updated, dto.lineIds);
+      await tx.inventoryWorkflowDocument.update({
+        where: { id },
+        data: {
+          payload: {
+            ...p,
+            acceptedLineIds: dto.lineIds || lines.map((l) => l.id),
           },
-        });
-      if (next === 'POSTED' && doc.kind === 'TARGET_REVIEW') {
-        await this.applyTargets(tx, actor, updated, dto.lineIds);
-        await tx.inventoryWorkflowDocument.update({
-          where: { id },
-          data: {
-            payload: {
-              ...p,
-              acceptedLineIds: dto.lineIds || lines.map((l) => l.id),
-            },
-          },
-        });
-      }
-      if (next === 'POSTED' && doc.kind === 'INWARD_CHALLAN' && doc.sourceId)
-        await this.updateOrderReceipt(tx, actor, doc.sourceId);
-      if (next === 'POSTED' && doc.kind === 'COUNT') {
-        for (const line of lines.filter((l) => l.physicalStock !== undefined)) {
-          const item = await tx.inventoryItem.findFirst({
-            where: { id: line.inventoryId, branchId: actor.branchId },
-          });
-          const ledgerCheckpoint = {
-            documentId: doc.id,
-            quantity: item.currentStock,
-            actorId: actor.id,
-            recordedAt: new Date().toISOString(),
-            coveredMovementIds: (await tx.stockTransaction.findMany({
-              where: { branchId: actor.branchId, itemId: item.id }, select: { id: true },
-            })).map((movement: any) => movement.id),
-          };
-          await tx.inventoryItem.update({
-            where: { id: item.id },
-            data: {
-              metadata: JSON.stringify({
-                ...jsonObject(item.metadata),
-                lastCountAt: new Date().toISOString(),
-                lastCountDocumentId: doc.id,
-                ledgerCheckpoint,
-              }),
-            },
-          });
-          await tx.inventoryAudit.create({
-            data: {
-              branchId: actor.branchId,
-              itemId: item.id,
-              auditorId: actor.id,
-              physicalStock: line.physicalStock,
-              systemStock: line.systemStock,
-              variance: line.physicalStock! - line.systemStock!,
-              status: 'ADJUSTED',
-              notes: JSON.stringify({
-                workflowDocumentId: doc.id,
-                ledgerCheckpoint,
-                reason: p.reason,
-              }),
-            },
-          });
-        }
-      }
-      await this.event(tx, updated, actor, dto.action, doc.status, {
-        reason: clean(dto.reason) || p.reason,
-        stockEffect: ['POSTED', 'CHALLAN'].includes(next),
+        },
       });
-      return this.plain(updated);
+    }
+    if (next === 'POSTED' && doc.kind === 'INWARD_CHALLAN' && doc.sourceId)
+      await this.updateOrderReceipt(tx, actor, doc.sourceId);
+    if (next === 'POSTED' && doc.kind === 'COUNT')
+      await this.recordCount(tx, actor, updated);
+    await this.event(tx, updated, actor, dto.action, doc.status, {
+      reason: clean(dto.reason) || p.reason,
+      stockEffect: ['POSTED', 'CHALLAN'].includes(next),
     });
+    return this.plain(updated);
+  }
+  private creditNoteInput(input: Record<string, any>): CreditNoteInput {
+    const number = creditNoteNumberOf(input?.number);
+    const date = clean(input?.date);
+    const amount = money(Number(input?.amount));
+    const version = Number(input?.version);
+    if (!clean(input?.requestKey) || clean(input?.requestKey).length > 150)
+      throw new BadRequestException('A request key is required');
+    if (!Number.isSafeInteger(version) || version < 1)
+      throw new BadRequestException('A document revision is required');
+    if (!number) throw new BadRequestException('Enter the credit note number');
+    if (number.length > CREDIT_NOTE_NUMBER_MAX)
+      throw new BadRequestException(`The credit note number can have at most ${CREDIT_NOTE_NUMBER_MAX} characters`);
+    if (!isCalendarDay(date))
+      throw new BadRequestException('Enter the credit note date as a calendar day');
+    if (date > clinicDay(new Date()))
+      throw new BadRequestException('The credit note date cannot be after today');
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1e10)
+      throw new BadRequestException('Enter the credit note amount in rupees, more than zero');
+    return { requestKey: clean(input.requestKey), version, number, date, amount };
+  }
+  private async validateStandaloneCreditNote(tx: any, actor: WorkflowActor, doc: any) {
+    const number = creditNoteNumberOf(doc.payload.creditNoteNumber);
+    const date = clean(doc.payload.creditNoteDate);
+    if (!number) throw new BadRequestException("Enter the credit note number from the distributor's note");
+    if (number.length > CREDIT_NOTE_NUMBER_MAX)
+      throw new BadRequestException(`The credit note number can have at most ${CREDIT_NOTE_NUMBER_MAX} characters`);
+    if (!isCalendarDay(date)) throw new BadRequestException('Enter the credit note date as a calendar day');
+    if (date > clinicDay(new Date())) throw new BadRequestException('The credit note date cannot be after today');
+    const creditDay = clinicDayOf(doc.payload.date) ?? clinicDay(doc.createdAt);
+    if (date < creditDay)
+      throw new BadRequestException(`The credit note date cannot be before the supplier credit date, ${displayDay(creditDay)}`);
+    const taken = await tx.inventorySupplierCredit.findFirst({
+      where: { branchId: actor.branchId, supplierGstin: doc.supplierGstin, creditNoteNumber: number, reversedAt: null },
+      select: { reference: true },
+    });
+    if (taken) throw this.duplicateCreditNote(number, taken.reference);
+  }
+  private creditNoteFields(note: CreditNoteInput, actor: WorkflowActor) {
+    return {
+      creditNoteNumber: note.number,
+      creditNoteDate: new Date(`${note.date}T00:00:00.000Z`),
+      receivedAt: new Date(),
+      receivedById: actor.id,
+    };
+  }
+  private creditNotePayload(doc: any, note: CreditNoteInput) {
+    return doc.kind === 'CREDIT_NOTE'
+      ? { payload: { ...doc.payload, creditNoteNumber: note.number, creditNoteDate: note.date } }
+      : {};
+  }
+  private creditNoteDetail(note: CreditNoteInput) {
+    return { number: note.number, date: note.date, amount: note.amount };
+  }
+  private duplicateCreditNote(number: string, reference?: string) {
+    return new ConflictException({
+      code: 'CREDIT_NOTE_DUPLICATE',
+      message: `Credit note ${number} is already recorded for this distributor${reference ? ` on return ${reference}` : ''}. Check the number on the distributor's credit note.`,
+    });
+  }
+  private async creditWithBalance(tx: any, documentId: string) {
+    const credit = await tx.inventorySupplierCredit.findUnique({
+      where: { documentId },
+      include: { allocations: { select: { amount: true, createdAt: true, reversedAt: true } } },
+    });
+    return credit ? { ...credit, balance: creditBalance(credit, EVERY_ALLOCATION) } : null;
+  }
+  private async creditNoteOutcome(tx: any, documentId: string) {
+    const [document, credit] = await Promise.all([
+      tx.inventoryWorkflowDocument.findUnique({ where: { id: documentId } }),
+      this.creditWithBalance(tx, documentId),
+    ]);
+    return {
+      document: this.plain(document),
+      credit: {
+        id: credit!.id,
+        number: credit!.creditNoteNumber,
+        date: credit!.creditNoteDate ? credit!.creditNoteDate.toISOString().slice(0, 10) : null,
+        ...credit!.balance,
+      },
+    };
+  }
+  async recordCreditNote(actor: WorkflowActor, id: string, input: Record<string, any>) {
+    const note = this.creditNoteInput(input);
+    const correction = input?.correct === true ? clean(input?.reason) : null;
+    if (correction === '') throw new BadRequestException('Enter why the credit note is being corrected');
+    if (correction && correction.length > 500) throw new BadRequestException('Keep the correction reason under 500 characters');
+    const settings = await this.settings(actor);
+    try {
+      return await this.transaction(async (tx) => {
+        const doc = await tx.inventoryWorkflowDocument.findFirst({
+          where: { id, branchId: actor.branchId },
+        });
+        if (!doc) throw new NotFoundException('Return not found');
+        if (!RETURN_KINDS.includes(doc.kind))
+          throw new BadRequestException('Credit notes are recorded against supplier returns and supplier credits');
+        await this.authorize(actor, doc.kind, true);
+        await this.authorize(actor, 'CREDIT_NOTE', true);
+        const replay = await tx.inventoryWorkflowEvent.findFirst({
+          where: {
+            documentId: doc.id,
+            action: { in: ['CREDIT_NOTE', 'CREDIT_NOTE_CORRECTED'] },
+            detail: { path: ['requestKey'], equals: note.requestKey },
+          },
+        });
+        if (replay) {
+          const same =
+            replay.action === (correction ? 'CREDIT_NOTE_CORRECTED' : 'CREDIT_NOTE') &&
+            isDeepStrictEqual(replay.detail?.after, this.creditNoteDetail(note)) &&
+            (replay.detail?.reason ?? null) === correction;
+          if (!same)
+            throw new ConflictException({
+              code: 'REQUEST_KEY_REUSED',
+              message: 'This request was already used for a different credit note. Close the dialog and start again.',
+            });
+          return this.creditNoteOutcome(tx, doc.id);
+        }
+        if (doc.version !== note.version)
+          throw new ConflictException(`This ${doc.kind === 'CREDIT_NOTE' ? 'supplier credit' : 'return'} changed. Reload to see its latest status.`);
+        const taken = await tx.inventorySupplierCredit.findFirst({
+          where: {
+            branchId: actor.branchId,
+            supplierGstin: doc.supplierGstin,
+            creditNoteNumber: note.number,
+            reversedAt: null,
+            documentId: { not: doc.id },
+          },
+          select: { reference: true },
+        });
+        if (taken) throw this.duplicateCreditNote(note.number, taken.reference);
+        const returnDay = clinicDayOf((doc.payload as any)?.date) ?? clinicDay(doc.createdAt);
+        if (note.date < returnDay)
+          throw new BadRequestException(
+            `The credit note date cannot be before the ${doc.kind === 'CREDIT_NOTE' ? 'supplier credit' : 'return'} date, ${displayDay(returnDay)}`,
+          );
+        if (correction) return this.correctCreditNote(tx, actor, doc, note, correction);
+        if (doc.kind === 'SUPPLIER_RETURN' && doc.status === 'CHALLAN') {
+          const posted = await this.move(tx, actor, doc, { action: 'POST', version: note.version }, settings);
+          return this.receiveCreditNote(tx, actor, posted, posted.status, note);
+        }
+        if (doc.status !== 'POSTED')
+          throw new BadRequestException(
+            doc.kind === 'CREDIT_NOTE'
+              ? 'Enter the credit note number and date on this supplier credit, then post it'
+              : 'Send the goods on a return challan before recording the credit note',
+          );
+        return this.receiveCreditNote(tx, actor, doc, doc.status, note);
+      });
+    } catch (error) {
+      if (isCreditNoteNumberClash(error)) throw this.duplicateCreditNote(note.number);
+      throw error;
+    }
+  }
+  private async receiveCreditNote(tx: any, actor: WorkflowActor, doc: any, fromStatus: string, note: CreditNoteInput) {
+    const credit = await this.creditWithBalance(tx, doc.id);
+    if (credit?.reversedAt) throw new BadRequestException('This return has no open supplier credit');
+    if (credit?.creditNoteNumber)
+      throw new ConflictException({
+        code: 'CREDIT_NOTE_RECORDED',
+        message: `Credit note ${credit.creditNoteNumber} is already recorded for this ${doc.kind === 'CREDIT_NOTE' ? 'supplier credit' : 'return'}.`,
+      });
+    const before = credit ? money(Number(credit.amount)) : null;
+    if (credit && credit.balance.applied > 0 && before !== note.amount)
+      throw new BadRequestException(
+        `Part of this credit is already set off against bills, so its amount stays ${rupees(before!)}. Enter the number and date only.`,
+      );
+    if (credit)
+      await tx.inventorySupplierCredit.update({
+        where: { id: credit.id, applied: credit.applied },
+        data: { amount: note.amount, ...this.creditNoteFields(note, actor) },
+      });
+    else
+      await tx.inventorySupplierCredit.create({
+        data: {
+          branchId: actor.branchId,
+          documentId: doc.id,
+          supplierGstin: doc.supplierGstin,
+          reference: doc.reference,
+          amount: note.amount,
+          ...this.creditNoteFields(note, actor),
+        },
+      });
+    const updated = await tx.inventoryWorkflowDocument.update({
+      where: { id: doc.id, version: doc.version },
+      data: { version: { increment: 1 }, ...this.creditNotePayload(doc, note) },
+    });
+    await this.event(tx, updated, actor, 'CREDIT_NOTE', fromStatus, {
+      requestKey: note.requestKey,
+      stockEffect: false,
+      before: { amount: before, number: null },
+      after: this.creditNoteDetail(note),
+    });
+    return this.creditNoteOutcome(tx, doc.id);
+  }
+  private async correctCreditNote(tx: any, actor: WorkflowActor, doc: any, note: CreditNoteInput, reason: string) {
+    const credit = doc.status === 'POSTED' ? await this.creditWithBalance(tx, doc.id) : null;
+    if (!credit || credit.reversedAt || !credit.creditNoteNumber)
+      throw new BadRequestException('Record the credit note before correcting it');
+    const before = {
+      number: credit.creditNoteNumber,
+      date: credit.creditNoteDate ? credit.creditNoteDate.toISOString().slice(0, 10) : null,
+      amount: money(Number(credit.amount)),
+    };
+    const applied = credit.balance.applied;
+    if (applied > 0 && before.amount !== note.amount)
+      throw new BadRequestException(
+        `${rupees(applied)} of this credit is already set off against bills, so its amount stays ${rupees(before.amount)}. Correct the number and date only.`,
+      );
+    if (before.number === note.number && before.date === note.date && before.amount === note.amount)
+      throw new BadRequestException('The credit note already reads this way. Change the number, date or amount to correct it.');
+    const updated = await tx.inventoryWorkflowDocument.update({
+      where: { id: doc.id, version: doc.version },
+      data: { version: { increment: 1 }, ...this.creditNotePayload(doc, note) },
+    });
+    await tx.inventorySupplierCredit.update({
+      where: { id: credit.id, applied: credit.applied },
+      data: { amount: note.amount, creditNoteNumber: note.number, creditNoteDate: new Date(`${note.date}T00:00:00.000Z`) },
+    });
+    await this.event(tx, updated, actor, 'CREDIT_NOTE_CORRECTED', doc.status, {
+      requestKey: note.requestKey,
+      reason,
+      stockEffect: false,
+      before,
+      after: this.creditNoteDetail(note),
+    });
+    return this.creditNoteOutcome(tx, doc.id);
   }
   /**
    * @cc [owner:nareshshah139,label:product] count-recovery-fresh-observation
-   * Restarting any supported COUNT state MUST create one linked draft per source version,
-   * capture current batch balances, discard all previous physical observations, and change no stock.
+   * Restarting a decided COUNT MUST create one linked draft per source version, capture current
+   * batch balances, discard all previous physical observations, and change no stock. A count still
+   * open on its batches is refused, so a batch is never on two undecided counts.
    */
   private async restartCount(tx: any, actor: WorkflowActor, doc: any) {
     if (doc.kind !== 'COUNT' || !['DRAFT', 'AWAITING_APPROVAL', 'APPROVED', 'POSTED', 'REJECTED', 'CANCELLED', 'REVERSED'].includes(doc.status))
@@ -1037,6 +1331,7 @@ export class InventoryWorkflowService {
     const requestKey = `recount:${doc.id}:${doc.version}`;
     const existing = await tx.inventoryWorkflowDocument.findUnique({ where: { branchId_requestKey: { branchId: actor.branchId, requestKey } } });
     if (existing) return this.plain(existing);
+    await this.refuseOpenCounts(tx, actor, doc.payload.lines, await this.openCountHolders(tx, actor.branchId));
     const payload = await this.normalizePayload(tx, actor, 'COUNT', {
       reason: doc.payload.reason,
       lines: doc.payload.lines.map((line: WorkflowLine) => ({ inventoryId: line.inventoryId, quantity: 0 })),
@@ -1048,6 +1343,401 @@ export class InventoryWorkflowService {
     } });
     await this.event(tx, created, actor, 'RECOUNT', null, { sourceId: doc.id, sourceVersion: doc.version, observationsDiscarded: true });
     return this.plain(created);
+  }
+  private async recordCount(tx: any, actor: WorkflowActor, doc: any) {
+    const p = doc.payload;
+    const auditorId = p.signOff?.by || actor.id;
+    for (const line of (p.lines as WorkflowLine[]).filter((l) => l.physicalStock !== undefined)) {
+      const item = await tx.inventoryItem.findFirst({
+        where: { id: line.inventoryId, branchId: actor.branchId },
+      });
+      const ledgerCheckpoint = {
+        documentId: doc.id,
+        quantity: item.currentStock,
+        actorId: actor.id,
+        recordedAt: new Date().toISOString(),
+        coveredMovementIds: (await tx.stockTransaction.findMany({
+          where: { branchId: actor.branchId, itemId: item.id }, select: { id: true },
+        })).map((movement: any) => movement.id),
+      };
+      await tx.inventoryItem.update({
+        where: { id: item.id },
+        data: {
+          metadata: JSON.stringify({
+            ...jsonObject(item.metadata),
+            lastCountAt: new Date().toISOString(),
+            lastCountDocumentId: doc.id,
+            ...(p.signOff?.at ? { lastSignedCountAt: p.signOff.at } : {}),
+            ledgerCheckpoint,
+          }),
+        },
+      });
+      await tx.inventoryAudit.create({
+        data: {
+          branchId: actor.branchId,
+          itemId: item.id,
+          auditorId,
+          physicalStock: line.physicalStock,
+          systemStock: line.systemStock,
+          variance: line.physicalStock! - line.systemStock!,
+          status: 'ADJUSTED',
+          notes: JSON.stringify({
+            workflowDocumentId: doc.id,
+            ledgerCheckpoint,
+            reason: p.decision?.reason || p.reason,
+            ...(p.decision ? { approvedBy: p.decision.by } : {}),
+            ...(line.note ? { note: line.note } : {}),
+          }),
+        },
+      });
+    }
+  }
+  private async openCount(tx: any, actor: WorkflowActor, id: string) {
+    const doc = await tx.inventoryWorkflowDocument.findFirst({
+      where: { id, branchId: actor.branchId },
+    });
+    if (!doc || doc.kind !== 'COUNT') throw new NotFoundException('Stock count not found');
+    return doc;
+  }
+  async openCountHolders(db: any, branchId: string, exceptId?: string) {
+    const open: OpenCount[] = await db.inventoryWorkflowDocument.findMany({
+      where: { branchId, kind: 'COUNT', status: { in: OPEN_COUNT } },
+      select: { id: true, status: true, reference: true, createdBy: true, payload: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const holders = new Map<string, OpenCount>();
+    for (const doc of open)
+      if (doc.id !== exceptId)
+        for (const line of doc.payload?.lines || []) if (!holders.has(line.inventoryId)) holders.set(line.inventoryId, doc);
+    return holders;
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] count-one-open-per-batch
+   * A batch MUST be on at most one undecided count. Starting or recounting a count on a batch that
+   * is on an unsigned or unapproved count is refused, naming that count, so two counts of one
+   * shelf can never both adjust its stock.
+   */
+  private async refuseOpenCounts(tx: any, actor: WorkflowActor, lines: Pick<WorkflowLine, 'inventoryId' | 'name' | 'batchNumber'>[], holders: Map<string, OpenCount>) {
+    const held = lines.filter((line) => holders.has(line.inventoryId));
+    if (!held.length) return;
+    const holder = holders.get(held[0].inventoryId)!;
+    const same = held.filter((line) => holders.get(line.inventoryId)!.id === holder.id).length;
+    const elsewhere = held.length - same;
+    const assigneeId = holder.payload?.assigneeId ?? holder.createdBy;
+    const person = assigneeId === actor.id ? null : await tx.user.findFirst({ where: { id: assigneeId }, select: { firstName: true, lastName: true } });
+    const name = person ? `${person.firstName} ${person.lastName}`.trim() : 'a former staff member';
+    const whose = assigneeId === actor.id ? 'your' : `${name}'s`;
+    const day = holder.payload?.date ? displayDay(holder.payload.date) : 'an earlier day';
+    const signed = holder.status === 'AWAITING_APPROVAL';
+    const subject = same > 1 ? `${batchLabel(held[0])}, and ${batches(same - 1)} are` : `${batchLabel(held[0])}, is`;
+    const others = elsewhere ? ` ${elsewhere} more ${elsewhere === 1 ? 'batch is' : 'batches are'} on other open counts.` : '';
+    const next = signed
+      ? 'Approve or reject that count first.'
+      : assigneeId === actor.id
+        ? `Count ${same > 1 ? 'them' : 'it'} there.`
+        : `Count ${same > 1 ? 'them' : 'it'} there, or ask ${name} to sign it off first.`;
+    throw new ConflictException({
+      code: 'COUNT_BATCH_OPEN',
+      message: `${subject} already on ${whose} count of ${day}, ${signed ? 'signed and waiting for approval' : 'not signed yet'}.${others} ${next}`,
+      openCounts: [...new Set(held.map((line) => holders.get(line.inventoryId)!))].map((doc) => ({ id: doc.id, reference: doc.reference })),
+      stockEffect: 'NONE',
+    });
+  }
+  private async countAssigneeOnly(tx: any, actor: WorkflowActor, doc: any) {
+    const assigneeId = doc.payload.assigneeId;
+    if (!assigneeId || assigneeId === actor.id) return;
+    const person = await tx.user.findFirst({ where: { id: assigneeId }, select: { firstName: true, lastName: true } });
+    throw new ForbiddenException(
+      `This count is assigned to ${person ? `${person.firstName} ${person.lastName}`.trim() : 'another person'}. Only they can enter and sign it off.`,
+    );
+  }
+  private async countLines(
+    tx: any,
+    actor: WorkflowActor,
+    doc: any,
+    input: unknown,
+    retyping: boolean,
+  ): Promise<{ lines: WorkflowLine[]; outdated: WorkflowLine[] }> {
+    const lines: WorkflowLine[] = doc.payload.lines || [];
+    if (input !== undefined && !Array.isArray(input)) throw new BadRequestException('Send the counted lines as a list');
+    const byId = new Map<string, any>();
+    for (const entry of (input as any[]) ?? []) {
+      const id = clean(entry?.id);
+      if (!lines.some((l) => l.id === id))
+        throw new BadRequestException('A counted line is not part of this count. Reload the count.');
+      byId.set(id, entry);
+    }
+    const items = await tx.inventoryItem.findMany({
+      where: { branchId: actor.branchId, id: { in: lines.map((l) => l.inventoryId) } },
+      select: { id: true, currentStock: true, metadata: true },
+    });
+    const stock = new Map<string, number>(items.map((i: any) => [i.id, i.currentStock]));
+    const marks = new Map<string, Record<string, any>>(items.map((i: any) => [i.id, jsonObject(i.metadata)]));
+    const outdated = (line: WorkflowLine) => observationOutdated(line, marks.get(line.inventoryId) ?? {}, doc.id);
+    const now = new Date().toISOString();
+    const next = lines.map((line) => {
+      const entry = byId.get(line.id);
+      if (!entry) return line;
+      const next: WorkflowLine = { ...line };
+      if ('physicalStock' in entry) {
+        const raw = entry.physicalStock;
+        const count = raw === '' || raw === null || raw === undefined ? undefined : Number(raw);
+        if (count !== undefined && (!Number.isSafeInteger(count) || count < 0))
+          throw new BadRequestException({
+            code: 'INVENTORY_INVALID_COUNT',
+            message: `${line.name || 'Selected batch'}: the counted quantity must be a whole number of at least 0.`,
+            stockEffect: 'NONE',
+            recovery: { action: 'CORRECT_FIELD', inventoryId: line.inventoryId, field: 'physicalStock' },
+          });
+        if (count !== line.physicalStock || (retyping && outdated(line))) {
+          next.systemStock = stock.get(line.inventoryId) ?? line.systemStock;
+          next.capturedAt = count === undefined ? undefined : now;
+        }
+        next.physicalStock = count;
+      }
+      if ('note' in entry) next.note = clean(entry.note).slice(0, 300) || undefined;
+      return JSON.parse(JSON.stringify(next));
+    });
+    return { lines: next, outdated: next.filter(outdated) };
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] count-progress-capture
+   * Saving counted quantities MUST capture the batch's stock at the moment each quantity is entered,
+   * change no stock, and accept only the assignee of an unsigned count.
+   */
+  async saveCountProgress(actor: WorkflowActor, id: string, input: Record<string, any>) {
+    await this.authorize(actor, 'COUNT', true);
+    return this.transaction(async (tx) => {
+      const doc = await this.openCount(tx, actor, id);
+      if (doc.status !== 'DRAFT')
+        throw new ConflictException('This count is already signed off. Reload to see the signed record.');
+      await this.countAssigneeOnly(tx, actor, doc);
+      if (doc.version !== Number(input?.version))
+        throw new ConflictException('This count changed in another window. Reload to see the latest counts.');
+      const { lines } = await this.countLines(tx, actor, doc, input.lines, true);
+      return this.plain(
+        await tx.inventoryWorkflowDocument.update({
+          where: { id: doc.id, branchId: actor.branchId, version: doc.version },
+          data: { payload: { ...doc.payload, lines }, version: { increment: 1 } },
+        }),
+      );
+    });
+  }
+  private async requestKeyFree(tx: any, actor: WorkflowActor, documentId: string, key: string) {
+    const elsewhere = await tx.inventoryWorkflowEvent.findFirst({
+      where: { branchId: actor.branchId, documentId: { not: documentId }, action: { in: ['SIGN_OFF', 'APPROVE', 'REJECT'] }, detail: { path: ['requestKey'], equals: key } },
+      select: { id: true },
+    });
+    if (elsewhere)
+      throw new ConflictException({ code: 'COUNT_REQUEST_KEY_REUSED', message: 'This request was already used for another stock count. Reload and try again.' });
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] count-sign-off-locks
+   * Sign-off MUST record who, when, every batch's system and counted quantity, the variance and any
+   * note, and lock the count. Every line must be counted and a difference needs a note. With no
+   * difference the count posts without changing stock; any difference waits for an approver.
+   * Replaying the same request key returns the signed record; the same key with other figures gets 409.
+   */
+  async signOffCount(actor: WorkflowActor, id: string, input: Record<string, any>) {
+    await this.authorize(actor, 'COUNT', true);
+    const key = clean(input?.requestKey);
+    if (!key || key.length > 150) throw new BadRequestException('A request key is required');
+    const note = clean(input?.note).slice(0, 1000);
+    const print = fingerprintOf({
+      note,
+      lines: (Array.isArray(input?.lines) ? input.lines : [])
+        .map((l: any) => [clean(l?.id), l?.physicalStock === '' || l?.physicalStock == null ? null : Number(l.physicalStock), clean(l?.note)])
+        .sort((a: any[], b: any[]) => String(a[0]).localeCompare(String(b[0]))),
+    });
+    return this.transaction(async (tx) => {
+      const doc = await this.openCount(tx, actor, id);
+      if (doc.payload.signOff?.requestKey === key) {
+        if (doc.payload.signOff.fingerprint !== print)
+          throw new ConflictException({ code: 'COUNT_REQUEST_KEY_REUSED', message: 'This sign-off was already recorded with different figures. Reload to see the signed record.' });
+        return this.plain(doc);
+      }
+      if (doc.status !== 'DRAFT')
+        throw new ConflictException('This count was already signed off. Reload to see the signed record.');
+      await this.countAssigneeOnly(tx, actor, doc);
+      await this.requestKeyFree(tx, actor, doc.id, key);
+      if (doc.version !== Number(input?.version))
+        throw new ConflictException('This count changed in another window. Reload to see the latest counts.');
+      const { lines, outdated } = await this.countLines(tx, actor, doc, input.lines, false);
+      const missing = lines.filter((l) => l.physicalStock === undefined);
+      if (missing.length)
+        throw new BadRequestException({
+          code: 'COUNT_INCOMPLETE',
+          message: `Count every item before signing off. Not counted yet: ${missing.slice(0, 3).map((l) => l.name).join(', ')}${missing.length > 3 ? ` and ${missing.length - 3} more` : ''}.`,
+          lineIds: missing.map((l) => l.id),
+        });
+      if (outdated.length)
+        throw new BadRequestException({
+          code: 'COUNT_RETYPE',
+          message: `Type these counts again before signing off: ${outdated.slice(0, 3).map((l) => l.name).join(', ')}${outdated.length > 3 ? ` and ${outdated.length - 3} more` : ''}. The system quantity they were compared with is out of date.`,
+          lineIds: outdated.map((l) => l.id),
+        });
+      const signedElsewhere = new Map([...(await this.openCountHolders(tx, actor.branchId, doc.id))].filter(([, holder]) => holder.status === 'AWAITING_APPROVAL'));
+      await this.refuseOpenCounts(tx, actor, lines, signedElsewhere);
+      const differing = lines.filter((l) => l.physicalStock !== l.systemStock);
+      if (differing.length && !note)
+        throw new BadRequestException({ code: 'COUNT_NOTE_REQUIRED', message: 'Add a note explaining the differences before signing off.' });
+      const at = new Date();
+      const next = differing.length ? 'AWAITING_APPROVAL' : 'POSTED';
+      const payload = { ...doc.payload, lines, signOff: { by: actor.id, at: at.toISOString(), note, requestKey: key, fingerprint: print } };
+      const updated = await tx.inventoryWorkflowDocument.update({
+        where: { id: doc.id, branchId: actor.branchId, version: doc.version },
+        data: {
+          payload,
+          status: next,
+          version: { increment: 1 },
+          ...(next === 'POSTED' ? { postedAt: at, postedBy: actor.id } : {}),
+        },
+      });
+      if (next === 'POSTED') await this.recordCount(tx, actor, updated);
+      await this.event(tx, updated, actor, 'SIGN_OFF', doc.status, {
+        requestKey: key,
+        note,
+        counted: lines.length,
+        differences: differing.map((l) => ({ lineId: l.id, inventoryId: l.inventoryId, systemStock: l.systemStock, physicalStock: l.physicalStock, note: l.note })),
+        stockEffect: false,
+      });
+      return this.plain(updated);
+    });
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] count-variance-approval
+   * Only an inventory approver decides a signed count's differences, never the person who signed it
+   * unless nobody else can, and then only after confirming. Approval applies each line's
+   * counted-minus-system difference to the batch's current stock, so sales after the count do not
+   * block it, and logs the reason and approver on the movement. Rejection changes no stock and leaves
+   * the batches uncounted for the cycle. Replaying the same request key returns the decision; the
+   * same key with another answer gets 409. A decrease larger than the stock left now is refused.
+   */
+  async decideCount(actor: WorkflowActor, id: string, decision: 'APPROVE' | 'REJECT', input: Record<string, any>) {
+    await this.authorize(actor, 'COUNT');
+    if (!COUNT_APPROVERS.has(actor.role))
+      throw new ForbiddenException('A doctor or an administrator decides stock count differences');
+    const key = clean(input?.requestKey);
+    if (!key || key.length > 150) throw new BadRequestException('A request key is required');
+    const reason = clean(input?.reason).slice(0, 500);
+    if (!reason)
+      throw new BadRequestException(decision === 'APPROVE' ? 'Give a reason for approving the stock change' : 'Give a reason for rejecting this count');
+    const print = fingerprintOf({ decision, reason, selfApproval: input?.selfApproval === true });
+    const settings = await this.settings(actor);
+    return this.transaction(async (tx) => {
+      const doc = await this.openCount(tx, actor, id);
+      if (doc.payload.decision?.requestKey === key) {
+        if (doc.payload.decision.fingerprint !== print)
+          throw new ConflictException({ code: 'COUNT_REQUEST_KEY_REUSED', message: 'This count was already decided with a different answer. Reload to see its current status.' });
+        return this.plain(doc);
+      }
+      if (doc.status !== 'AWAITING_APPROVAL')
+        throw new ConflictException('This count is no longer waiting for approval. Reload to see its current status.');
+      await this.requestKeyFree(tx, actor, doc.id, key);
+      if (doc.version !== Number(input?.version))
+        throw new ConflictException('This count changed in another window. Reload to see its current status.');
+      const signer = doc.payload.signOff?.by || doc.createdBy;
+      const self = signer === actor.id;
+      if (self) {
+        const others = await tx.user.findMany({
+          where: { branchId: actor.branchId, isActive: true, role: { in: [...COUNT_APPROVERS] }, id: { not: actor.id } },
+          select: { firstName: true, lastName: true },
+          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        });
+        if (others.length)
+          throw new ForbiddenException({
+            code: 'COUNT_SEPARATION_OF_DUTIES',
+            message: `You signed this count, so someone else decides it. Ask ${others.map((o: any) => `${o.firstName} ${o.lastName}`.trim()).join(' or ')}.`,
+          });
+        if (input?.selfApproval !== true)
+          throw new BadRequestException({
+            code: 'COUNT_SELF_APPROVAL_CONFIRM',
+            message: 'You are the only approver in this branch. Confirm that you are deciding your own count.',
+          });
+      }
+      const lines: WorkflowLine[] = doc.payload.lines || [];
+      if (decision === 'APPROVE') {
+        const items = await tx.inventoryItem.findMany({
+          where: { branchId: actor.branchId, id: { in: lines.map((l) => l.inventoryId) } },
+          select: { id: true, name: true, unit: true, currentStock: true, metadata: true },
+        });
+        const byId = new Map<string, any>(items.map((i: any) => [i.id, i]));
+        const superseded = lines.find((line) => byId.has(line.inventoryId) && observationOutdated(line, jsonObject(byId.get(line.inventoryId).metadata), doc.id, doc.payload.signOff?.at));
+        if (superseded)
+          throw new ConflictException({
+            code: 'COUNT_SUPERSEDED',
+            message: `${batchLabel(superseded)}, was counted again after this count and that count is already in the stock. Approving this one would apply the difference twice. Reject it instead.`,
+            stockEffect: 'NONE',
+          });
+        for (const line of lines) {
+          const item = byId.get(line.inventoryId);
+          const delta = (line.physicalStock ?? 0) - (line.systemStock ?? 0);
+          if (!item || item.currentStock + delta >= 0) continue;
+          throw new ConflictException({
+            code: 'COUNT_DELTA_BELOW_STOCK',
+            message: `${item.name}: the count found ${-delta} fewer than the system had, but only ${item.currentStock} ${String(item.unit || 'units').toLowerCase()} are left now. The count cannot be right. Reject it and ask for a fresh count.`,
+            stockEffect: 'NONE',
+          });
+        }
+      }
+      const at = new Date();
+      const payload = { ...doc.payload, decision: { decision, by: actor.id, at: at.toISOString(), reason, requestKey: key, fingerprint: print, selfApproval: self } };
+      const status = decision === 'APPROVE' ? 'POSTED' : 'REJECTED';
+      const updated = await tx.inventoryWorkflowDocument.update({
+        where: { id: doc.id, branchId: actor.branchId, version: doc.version },
+        data: {
+          payload,
+          status,
+          version: { increment: 1 },
+          approvedBy: actor.id,
+          ...(status === 'POSTED' ? { postedAt: at, postedBy: actor.id } : {}),
+        },
+      });
+      if (status === 'POSTED') {
+        await this.validatePosting(tx, actor, updated, settings);
+        await this.applyStockDocument(tx, actor, updated, doc.status);
+        await this.recordCount(tx, actor, updated);
+      }
+      await this.event(tx, updated, actor, decision, doc.status, {
+        requestKey: key,
+        reason,
+        selfApproval: self,
+        stockEffect: status === 'POSTED',
+        ...(status === 'POSTED'
+          ? { adjustments: lines.filter((l) => l.physicalStock !== l.systemStock).map((l) => ({ inventoryId: l.inventoryId, delta: l.physicalStock! - l.systemStock! })) }
+          : {}),
+      });
+      return this.plain(updated);
+    });
+  }
+  async createCycleCount(
+    tx: any,
+    assignee: WorkflowActor,
+    input: { requestKey: string; reference: string; cycleStart: string; day: string; inventoryIds: string[]; plannedBy: string },
+  ) {
+    const existing = await tx.inventoryWorkflowDocument.findUnique({
+      where: { branchId_requestKey: { branchId: assignee.branchId, requestKey: input.requestKey } },
+    });
+    if (existing) return null;
+    const payload = await this.normalizePayload(tx, assignee, 'COUNT', {
+      reason: 'Stock reconciliation cycle',
+      date: input.day,
+      lines: input.inventoryIds.map((inventoryId) => ({ inventoryId, quantity: 0 })),
+    });
+    const created = await tx.inventoryWorkflowDocument.create({
+      data: {
+        branchId: assignee.branchId,
+        kind: 'COUNT',
+        status: 'DRAFT',
+        reference: input.reference,
+        requestKey: input.requestKey,
+        createdBy: assignee.id,
+        payload: { ...payload, origin: 'CYCLE', assigneeId: assignee.id, cycle: { start: input.cycleStart, day: input.day } },
+        totalAmount: 0,
+      },
+    });
+    await this.event(tx, created, assignee, 'CREATE', null, { plannedBy: input.plannedBy, cycleStart: input.cycleStart });
+    return created;
   }
   /**
    * @cc [owner:nareshshah139,label:product;target] sales-return-original-batch
@@ -1086,6 +1776,7 @@ export class InventoryWorkflowService {
       throw new BadRequestException('Enter a reason before posting');
     if (new Date(p.date).getTime() > Date.now() + 86400000)
       throw new BadRequestException('Document date cannot be in the future');
+    if (doc.kind === 'CREDIT_NOTE') await this.validateStandaloneCreditNote(tx, actor, doc);
     if (
       doc.kind === 'COUNT' &&
       !lines.some((l) => l.physicalStock !== undefined)
@@ -1128,6 +1819,7 @@ export class InventoryWorkflowService {
       if (
         item &&
         doc.kind === 'COUNT' &&
+        !p.signOff &&
         line.physicalStock !== undefined &&
         line.systemStock !== item.currentStock
       )
@@ -1301,7 +1993,12 @@ export class InventoryWorkflowService {
         type: options.type || (delta > 0 ? 'RETURN' : 'DAMAGED'),
         unitPrice: line.unitPrice,
         reference: `WF-${doc.reference}`,
-        reason: doc.payload.reason,
+        reason:
+          doc.kind === 'SUPPLIER_RETURN'
+            ? returnMovementReason(doc.payload)
+            : doc.kind === 'COUNT' && doc.payload.decision
+              ? `Stock count approved: ${doc.payload.decision.reason}`
+              : doc.payload.reason,
         metadata: {
           workflowDocumentId: doc.id,
           workflowLineId: line.id,
@@ -1752,7 +2449,7 @@ export class InventoryWorkflowService {
     doc: any,
     reason: string,
   ) {
-    if (!APPROVERS.has(actor.role))
+    if (!INVENTORY_APPROVERS.has(actor.role))
       throw new ForbiddenException('A manager must reverse posted documents');
     if (!reason) throw new BadRequestException('A reversal reason is required');
     if (['CORRECTION', 'TARGET_REVIEW'].includes(doc.kind))
@@ -1815,12 +2512,10 @@ export class InventoryWorkflowService {
           'Reverse linked customer returns before reversing this sale',
         );
     }
-    const credit = await tx.inventorySupplierCredit.findUnique({
-      where: { documentId: doc.id },
-    });
-    if (credit && Number(credit.applied) > 0)
+    const credit = await this.creditWithBalance(tx, doc.id);
+    if (credit && credit.balance.applied > 0)
       throw new BadRequestException(
-        'Reverse credit allocations before reversing this return',
+        `${rupees(credit.balance.applied)} of this credit is set off against bills. Undo the set-off before reversing this return.`,
       );
     const previous = await tx.inventoryWorkflowEffect.findMany({
       where: { documentId: doc.id },

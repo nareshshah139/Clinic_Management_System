@@ -24,6 +24,7 @@ import {
   Pill,
   Receipt,
   Mic,
+  ShoppingBag,
 } from "lucide-react";
 
 type PharmacySidebarSection = "desk" | "counter" | "billing";
@@ -93,21 +94,27 @@ const navigation: NavigationItem[] = [
     href: "/dashboard/pharmacy?section=desk",
     icon: Pill,
     pharmacySection: "desk",
-    allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
+    allowedRoles: ["ADMIN", "DOCTOR", "PHARMACIST", "RECEPTION"],
   },
   {
     name: "Pharmacy Counter", section: "Pharmacy",
     href: "/dashboard/pharmacy?section=counter",
     icon: ClipboardCheck,
     pharmacySection: "counter",
-    allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
+    allowedRoles: ["ADMIN", "DOCTOR", "PHARMACIST", "RECEPTION"],
   },
   {
     name: "Pharmacy Billing", section: "Pharmacy",
     href: "/dashboard/pharmacy?section=billing",
     icon: Receipt,
     pharmacySection: "billing",
-    allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
+    allowedRoles: ["ADMIN", "DOCTOR", "PHARMACIST", "RECEPTION"],
+  },
+  {
+    name: "Sales", section: "Pharmacy",
+    href: "/dashboard/pharmacy/sales",
+    icon: ShoppingBag,
+    allowedRoles: ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"],
   },
   {
     name: "Inventory", section: "Pharmacy",
@@ -172,6 +179,7 @@ function getActivePharmacySection(
   if (!pathname.startsWith("/dashboard/pharmacy")) return null;
 
   if (pathname === "/dashboard/pharmacy/invoices") return "billing";
+  if (pathname.startsWith("/dashboard/pharmacy/sales")) return null;
 
   const requested =
     searchParams.get("section") || searchParams.get("tab") || "";

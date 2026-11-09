@@ -1,0 +1,294 @@
+{
+  "PHARMACIST": {
+    "approve": false,
+    "selfApprove": false,
+    "settings": false,
+    "itemWrite": true,
+    "itemCreate": true,
+    "supplierWrite": true,
+    "supplierUpdate": true,
+    "ledger": true,
+    "creditWrite": true,
+    "kinds": {
+      "OPENING_STOCK": {
+        "read": true,
+        "write": true
+      },
+      "SUPPLIER_RETURN": {
+        "read": true,
+        "write": true
+      },
+      "SALES_RETURN": {
+        "read": true,
+        "write": true
+      },
+      "LOSS": {
+        "read": true,
+        "write": true
+      },
+      "HOLD": {
+        "read": true,
+        "write": true
+      },
+      "COUNT": {
+        "read": true,
+        "write": true
+      },
+      "CORRECTION": {
+        "read": true,
+        "write": true
+      },
+      "SHORTBOOK": {
+        "read": true,
+        "write": true
+      },
+      "PURCHASE_ORDER": {
+        "read": true,
+        "write": true
+      },
+      "INWARD_CHALLAN": {
+        "read": true,
+        "write": true
+      },
+      "GATE_PASS": {
+        "read": true,
+        "write": true
+      },
+      "QUOTATION": {
+        "read": true,
+        "write": true
+      },
+      "COUNTER_SALE": {
+        "read": true,
+        "write": true
+      },
+      "CREDIT_NOTE": {
+        "read": true,
+        "write": true
+      },
+      "TARGET_REVIEW": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  "DOCTOR": {
+    "approve": true,
+    "selfApprove": false,
+    "settings": true,
+    "itemWrite": true,
+    "itemCreate": true,
+    "supplierWrite": true,
+    "supplierUpdate": true,
+    "ledger": true,
+    "creditWrite": true,
+    "kinds": {
+      "OPENING_STOCK": {
+        "read": true,
+        "write": true
+      },
+      "SUPPLIER_RETURN": {
+        "read": true,
+        "write": true
+      },
+      "SALES_RETURN": {
+        "read": true,
+        "write": true
+      },
+      "LOSS": {
+        "read": true,
+        "write": true
+      },
+      "HOLD": {
+        "read": true,
+        "write": true
+      },
+      "COUNT": {
+        "read": true,
+        "write": true
+      },
+      "CORRECTION": {
+        "read": true,
+        "write": true
+      },
+      "SHORTBOOK": {
+        "read": true,
+        "write": true
+      },
+      "PURCHASE_ORDER": {
+        "read": true,
+        "write": true
+      },
+      "INWARD_CHALLAN": {
+        "read": true,
+        "write": true
+      },
+      "GATE_PASS": {
+        "read": true,
+        "write": true
+      },
+      "QUOTATION": {
+        "read": true,
+        "write": true
+      },
+      "COUNTER_SALE": {
+        "read": true,
+        "write": true
+      },
+      "CREDIT_NOTE": {
+        "read": true,
+        "write": true
+      },
+      "TARGET_REVIEW": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  "ADMIN": {
+    "approve": true,
+    "selfApprove": true,
+    "settings": true,
+    "itemWrite": true,
+    "itemCreate": true,
+    "supplierWrite": true,
+    "supplierUpdate": true,
+    "ledger": true,
+    "creditWrite": true,
+    "kinds": {
+      "OPENING_STOCK": {
+        "read": true,
+        "write": true
+      },
+      "SUPPLIER_RETURN": {
+        "read": true,
+        "write": true
+      },
+      "SALES_RETURN": {
+        "read": true,
+        "write": true
+      },
+      "LOSS": {
+        "read": true,
+        "write": true
+      },
+      "HOLD": {
+        "read": true,
+        "write": true
+      },
+      "COUNT": {
+        "read": true,
+        "write": true
+      },
+      "CORRECTION": {
+        "read": true,
+        "write": true
+      },
+      "SHORTBOOK": {
+        "read": true,
+        "write": true
+      },
+      "PURCHASE_ORDER": {
+        "read": true,
+        "write": true
+      },
+      "INWARD_CHALLAN": {
+        "read": true,
+        "write": true
+      },
+      "GATE_PASS": {
+        "read": true,
+        "write": true
+      },
+      "QUOTATION": {
+        "read": true,
+        "write": true
+      },
+      "COUNTER_SALE": {
+        "read": true,
+        "write": true
+      },
+      "CREDIT_NOTE": {
+        "read": true,
+        "write": true
+      },
+      "TARGET_REVIEW": {
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  "RECEPTION": {
+    "approve": false,
+    "selfApprove": false,
+    "settings": false,
+    "itemWrite": true,
+    "itemCreate": true,
+    "supplierWrite": true,
+    "supplierUpdate": true,
+    "ledger": false,
+    "creditWrite": false,
+    "kinds": {
+      "OPENING_STOCK": {
+        "read": true,
+        "write": true
+      },
+      "SUPPLIER_RETURN": {
+        "read": true,
+        "write": true
+      },
+      "SALES_RETURN": {
+        "read": false,
+        "write": false
+      },
+      "LOSS": {
+        "read": true,
+        "write": true
+      },
+      "HOLD": {
+        "read": true,
+        "write": true
+      },
+      "COUNT": {
+        "read": true,
+        "write": false
+      },
+      "CORRECTION": {
+        "read": true,
+        "write": true
+      },
+      "SHORTBOOK": {
+        "read": true,
+        "write": true
+      },
+      "PURCHASE_ORDER": {
+        "read": true,
+        "write": true
+      },
+      "INWARD_CHALLAN": {
+        "read": true,
+        "write": true
+      },
+      "GATE_PASS": {
+        "read": true,
+        "write": true
+      },
+      "QUOTATION": {
+        "read": false,
+        "write": false
+      },
+      "COUNTER_SALE": {
+        "read": false,
+        "write": false
+      },
+      "CREDIT_NOTE": {
+        "read": false,
+        "write": false
+      },
+      "TARGET_REVIEW": {
+        "read": true,
+        "write": true
+      }
+    }
+  }
+}

@@ -1,4 +1,3 @@
-import { hasScopedPermission } from '../../shared/guards/scoped-permission';
 import { PurchaseImportRecovery, PurchaseImportFence, claimPurchaseImport, bindPurchaseImport, preparePurchaseWrite } from './purchase-import-recovery';
 import { checkedProductQuery, matchProductSearch, normalizeProductSearch, ocrProductSearchQuery, searchPackKey } from '../../shared/search/product-search';
 import { autocompleteDrugCatalog, findDrugSearchCandidates, loadReviewedProductAliases, searchableDrug, DrugSearchCandidate } from '../../shared/search/drug-search';
@@ -24,7 +23,9 @@ import { validate, ValidationError } from 'class-validator';
 import { extractWithCodexOAuth, purchaseOcrCodexConfig } from '../../shared/codex/codex-oauth';
 import sharp from 'sharp';
 import type { Express } from 'express';
+import { grantsForRole, parsePermissionList, permissionGrants } from '../../shared/access/permission-grants';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { clinicDayOf, clinicDayRange, clinicDayStart } from './register-utils';
 import {
   ConfirmPharmacyPurchaseMasterDto,
   CreatePharmacyPurchaseInvoiceDto,
@@ -109,20 +110,17 @@ export class PharmacyPurchaseInvoiceService {
 
   /**
    * @cc [owner:nareshshah139,label:security;product] purchase-scoped-grants
-   * Purchase capabilities MUST honor action wildcards within their exact permission scope.
+   * Purchase capabilities MUST use the shared permission matcher: a scoped wildcard grants its
+   * scope and everything nested under it, and a pharmacist holds the pharmacy and inventory scopes.
    */
   async capabilities(user: { id: string; role: string }) {
     const dbUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { role: true, permissions: true } });
     const role = dbUser?.role;
     const universal = user.role === 'OWNER' || role === 'ADMIN' || role === 'DOCTOR';
     const eligible = universal || ['RECEPTION', 'PHARMACIST'].includes(user.role);
-    const parse = (value: string | null | undefined): string[] => {
-      try { const parsed = JSON.parse(value || '[]'); return Array.isArray(parsed) ? parsed.filter(p => typeof p === 'string') : []; }
-      catch { return []; }
-    };
     const roleRecord = dbUser ? await this.prisma.role.findFirst({ where: { name: role }, select: { permissions: true } }) : null;
-    const permissions = new Set([...parse(dbUser?.permissions), ...parse(roleRecord?.permissions)]);
-    const has = (...keys: string[]) => eligible && (universal || keys.some(key => hasScopedPermission(permissions, key)));
+    const permissions = permissionGrants(grantsForRole(role, [...parsePermissionList(dbUser?.permissions), ...parsePermissionList(roleRecord?.permissions)]));
+    const has = (...keys: string[]) => eligible && (universal || keys.some(key => permissions.has(key)));
     const read = has('pharmacy:purchase-invoice:read', 'inventory:po:read');
     const create = has('pharmacy:purchase-invoice:create', 'inventory:po:create');
     const review = has('pharmacy:purchase-invoice:review', 'inventory:po:update');
@@ -1059,17 +1057,7 @@ export class PharmacyPurchaseInvoiceService {
   }
 
   purchaseRegisterWhere(query: QueryPharmacyPurchaseInvoiceDto, branchId: string) {
-    const startDate = query.startDate
-      ? this.parseDate(query.startDate, 'startDate')
-      : undefined;
-    const endDate = query.endDate
-      ? this.endOfDay(this.parseDate(query.endDate, 'endDate'))
-      : undefined;
-
-    if (startDate && endDate && startDate > endDate) {
-      throw new BadRequestException('startDate cannot be after endDate');
-    }
-
+    const invoiceDate = this.clinicInvoiceDates(query);
     const where: any = { branchId };
     if (query.search?.trim()) {
       const search = query.search.trim();
@@ -1082,13 +1070,28 @@ export class PharmacyPurchaseInvoiceService {
     }
     if (query.status) { where.status = query.status; }
     if (query.unposted === 'true') where.status = {notIn:['STOCK_COMMITTED','CANCELLED']};
-    if (startDate || endDate) {
-      where.invoiceDate = {};
-      if (startDate) where.invoiceDate.gte = startDate;
-      if (endDate) where.invoiceDate.lte = endDate;
-    }
+    if (invoiceDate) where.invoiceDate = invoiceDate;
 
     return where;
+  }
+
+  private clinicInvoiceDates(query: { startDate?: string; endDate?: string }) {
+    const day = (value: string | undefined, fieldName: string) => {
+      if (!value) return undefined;
+      const parsed = clinicDayOf(value);
+      if (!parsed) throw new BadRequestException(`${fieldName} must be a valid date`);
+      return parsed;
+    };
+    const from = day(query.startDate, 'startDate');
+    const to = day(query.endDate, 'endDate');
+    if (from && to && from > to) {
+      throw new BadRequestException('startDate cannot be after endDate');
+    }
+    if (!from && !to) return undefined;
+    return {
+      ...(from && { gte: clinicDayStart(from) }),
+      ...(to && { lt: clinicDayRange(to, to).lt }),
+    };
   }
 
   async findOne(id: string, branchId: string) {

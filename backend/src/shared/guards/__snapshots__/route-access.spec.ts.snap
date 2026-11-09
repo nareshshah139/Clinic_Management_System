@@ -101,6 +101,7 @@ GET /inventory/transactions | roles: ADMIN,PHARMACIST,RECEPTION | permissions: i
 GET /inventory/transactions/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:transaction:read
 GET /inventory/workspace/capabilities | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/credits | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /inventory/workspace/credits/set-off | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/documents | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/documents/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/documents/by-request/:requestKey | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -114,6 +115,10 @@ GET /inventory/workspace/owners | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPT
 GET /inventory/workspace/purchases/:id/actions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/purchases/:id/export | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/purchases/export | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /inventory/workspace/reconciliation | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /inventory/workspace/reconciliation/batches | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /inventory/workspace/reconciliation/counts | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /inventory/workspace/reconciliation/counts/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/replenishment/manual-targets | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/replenishment/monitor | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/replenishment/orders/:id/receipt | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -183,6 +188,10 @@ GET /pharmacy/purchase-ledger/aging | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR 
 GET /pharmacy/purchase-ledger/alerts | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:read
 GET /pharmacy/purchase-ledger/distributors | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:read
 GET /pharmacy/purchase-ledger/distributors/:gstin | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:read
+GET /pharmacy/purchase-register | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
+GET /pharmacy/purchase-register/position | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
+GET /pharmacy/purchase-returns-register | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
+GET /pharmacy/sales-register | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:invoice:read
 GET /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
 GET /pharmacy/trade-terms/distributors | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
 GET /prescriptions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -206,7 +215,7 @@ GET /prescriptions/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTIO
 GET /prescriptions/templates | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/templates/:templateId/versions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/translations | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
-GET /reports/alerts | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
+GET /reports/alerts | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST | permissions: -
 GET /reports/appointments | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/dashboard | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/doctors | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
@@ -255,6 +264,7 @@ PATCH /inventory/suppliers/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions
 PATCH /inventory/transactions/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:transaction:update
 PATCH /inventory/workspace/documents/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /inventory/workspace/purchases/:id/metadata | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+PATCH /inventory/workspace/reconciliation/counts/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /inventory/workspace/settings | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /inventory/workspace/stock/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /patients/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -317,7 +327,10 @@ POST /inventory/workspace/automation/run | roles: OWNER,ADMIN,MANAGER,DOCTOR,NUR
 POST /inventory/workspace/counts | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/credits/allocate | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/credits/allocations/:id/reverse | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /inventory/workspace/credits/set-off | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /inventory/workspace/credits/set-off/:id/reverse | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/documents | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /inventory/workspace/documents/:id/credit-note | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/documents/:id/resolve | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/documents/:id/transition | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/gmail/connect | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -328,6 +341,9 @@ POST /inventory/workspace/intake | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEP
 POST /inventory/workspace/intake/csv | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/movement-corrections | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/purchases/:id/originals | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /inventory/workspace/reconciliation/counts/:id/approve | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /inventory/workspace/reconciliation/counts/:id/reject | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /inventory/workspace/reconciliation/counts/:id/sign-off | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/replenishment/manual-targets | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/replenishment/orders/:id/cancel-remaining | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/replenishment/orders/:id/dispatch | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -382,9 +398,9 @@ POST /pharmacy/purchase-invoices/ocr/pages/import | roles: ADMIN,PHARMACIST,RECE
 POST /pharmacy/purchase-invoices/ocr/recover-delegated | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:create|inventory:po:create & pharmacy:purchase-invoice:read|inventory:po:read & pharmacy:purchase-invoice:review|inventory:po:update
 POST /pharmacy/purchase-invoices/ocr/recover-unlinked | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:create|inventory:po:create & pharmacy:purchase-invoice:read|inventory:po:read & pharmacy:purchase-invoice:review|inventory:po:update
 POST /pharmacy/purchase-invoices/suppliers | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:supplier:create & pharmacy:purchase-invoice:create|inventory:po:create
-POST /pharmacy/purchase-ledger/payments | roles: ADMIN,PHARMACIST,ACCOUNTANT | permissions: pharmacy:purchase-ledger:write
-POST /pharmacy/purchase-ledger/payments/:id/reallocate | roles: ADMIN,PHARMACIST,ACCOUNTANT | permissions: pharmacy:purchase-ledger:write
-POST /pharmacy/purchase-ledger/payments/:id/reverse | roles: ADMIN,PHARMACIST,ACCOUNTANT | permissions: pharmacy:purchase-ledger:write
+POST /pharmacy/purchase-ledger/payments | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:write
+POST /pharmacy/purchase-ledger/payments/:id/reallocate | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:write
+POST /pharmacy/purchase-ledger/payments/:id/reverse | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:write
 POST /pharmacy/trade-terms/lookup | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
 POST /prescriptions | roles: DOCTOR,ADMIN,OWNER | permissions: -
 POST /prescriptions/:id/pdf | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -

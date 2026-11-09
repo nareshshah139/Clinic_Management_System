@@ -85,20 +85,28 @@ describe('/inventory access control', () => {
     await calls.remove(app, 'receptionNoGrants').expect(403);
   });
 
-  it('lets a pharmacist read with only the read permission and nothing more', async () => {
-    await calls.read(app, 'pharmacistReader').expect(200);
-    await calls.stockChange(app, 'pharmacistReader').expect(403);
-    await calls.priceChange(app, 'pharmacistReader').expect(403);
-    await calls.remove(app, 'pharmacistReader').expect(403);
+  it('lets a pharmacist with no stored grants read, change stock and prices, and delete', async () => {
+    await calls.read(app, 'pharmacist').expect(200);
+    await calls.stockChange(app, 'pharmacist').expect(201);
+    await calls.priceChange(app, 'pharmacist').expect(200);
+    await calls.remove(app, 'pharmacist').expect(200);
+    await calls.removeSupplier(app, 'pharmacist').expect(200);
+  });
+
+  it('lets other staff read with only the read permission and nothing more', async () => {
+    await calls.read(app, 'receptionReader').expect(200);
+    await calls.stockChange(app, 'receptionReader').expect(403);
+    await calls.priceChange(app, 'receptionReader').expect(403);
+    await calls.remove(app, 'receptionReader').expect(403);
     expect(stock.createStockTransaction).not.toHaveBeenCalled();
   });
 
   it('keeps delete separate from stock and price changes', async () => {
-    await calls.stockChange(app, 'pharmacistStocker').expect(201);
-    await calls.priceChange(app, 'pharmacistStocker').expect(200);
-    await calls.remove(app, 'pharmacistStocker').expect(403);
-    await calls.remove(app, 'pharmacistDeleter').expect(200);
-    await calls.removeSupplier(app, 'pharmacistDeleter').expect(403);
+    await calls.stockChange(app, 'receptionStocker').expect(201);
+    await calls.priceChange(app, 'receptionStocker').expect(200);
+    await calls.remove(app, 'receptionStocker').expect(403);
+    await calls.remove(app, 'receptionDeleter').expect(200);
+    await calls.removeSupplier(app, 'receptionDeleter').expect(403);
   });
 
   it('rejects a request with no signed-in user', async () => {

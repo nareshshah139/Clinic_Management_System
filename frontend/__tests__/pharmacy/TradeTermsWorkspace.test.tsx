@@ -35,7 +35,7 @@ describe('TradeTermsWorkspace', () => {
     expect(Array.from(row.querySelectorAll('td')).map(cell => cell.textContent)).toEqual([
       'Dolo 650 Tablet', '10%', 'Buy 10 Get 1', '18 months', '22%', '₹24.50', 'Rep: Kiran', 'by Praneeta Rao on 07 Nov 2026',
     ]);
-    expect(screen.getByRole('note').textContent).toBe('Read-only. Only doctors can change terms.');
+    expect(screen.getByRole('note').textContent).toBe('Read-only. Doctors and admins can change terms.');
     expect(screen.queryByRole('button', { name: 'Add terms' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Edit terms/ })).toBeNull();
   });

@@ -70,6 +70,8 @@ model User {
   branch                     Branch             @relation(fields: [branchId], references: [id])
   visits                     Visit[]
   pharmacyInvoices           PharmacyInvoice[]  @relation("PharmacyInvoiceDoctor")
+  createdPharmacyInvoices    PharmacyInvoice[]  @relation("PharmacyInvoiceCreator")
+  receivedSupplierCredits    InventorySupplierCredit[] @relation("SupplierCreditReceiver")
   partnerDailySalesSubmitted PartnerDailySale[] @relation("PartnerDailySaleSubmittedBy")
   createdPackages            PharmacyPackage[]  @relation("PharmacyPackageCreator")
   whatsappTemplates          WhatsAppTemplate[]
@@ -1395,10 +1397,12 @@ model PharmacyInvoice {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   mutationVersion Int       @default(0)
+  createdById     String?
 
   // Relations
   patient      Patient               @relation(fields: [patientId], references: [id])
   doctor       User?                 @relation("PharmacyInvoiceDoctor", fields: [doctorId], references: [id])
+  createdBy    User?                 @relation("PharmacyInvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
   prescription Prescription?         @relation(fields: [prescriptionId], references: [id])
   branch       Branch                @relation(fields: [branchId], references: [id])
   items        PharmacyInvoiceItem[]
@@ -1412,6 +1416,7 @@ model PharmacyInvoice {
   @@index([paymentStatus])
   @@index([invoiceDate])
   @@index([createdAt])
+  @@index([createdById])
   @@index([prescriptionId, branchId], map: "pharmacy_invoices_prescription_branch_read_idx")
   @@map("pharmacy_invoices")
 }
@@ -1631,6 +1636,7 @@ model PharmacyPurchaseInvoice {
   @@unique([branchId, distributorGstin, invoiceNumber])
   @@unique([branchId, workflowReceiptId])
   @@index([branchId])
+  @@index([branchId, invoiceDate])
   @@index([distributorGstin])
   @@index([invoiceDate])
   @@index([goodsReceivedDate])
@@ -1824,8 +1830,14 @@ model InventorySupplierCredit {
   amount       Decimal @db.Decimal(16, 2)
   applied      Decimal @default(0) @db.Decimal(16, 2)
   createdAt    DateTime @default(now())
+  creditNoteNumber String?
+  creditNoteDate   DateTime? @db.Date
+  receivedAt       DateTime?
+  receivedById     String?
+  receivedBy       User? @relation("SupplierCreditReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
   allocations  InventoryCreditAllocation[]
 
+  // A number is unique per distributor among open credits only: a partial unique index Prisma cannot express, made in migration 20261107090000_supplier_credit_note_reuse.
   @@index([branchId, supplierGstin])
   @@map("inventory_supplier_credits")
 }
@@ -1842,11 +1854,27 @@ model InventoryCreditAllocation {
   reversedBy        String?
   reversalReason    String?
   createdAt         DateTime @default(now())
+  setOffId          String?
   credit            InventorySupplierCredit @relation(fields: [creditId], references: [id], onDelete: Restrict)
+  setOff            InventoryCreditSetOff? @relation(fields: [setOffId], references: [id], onDelete: Restrict)
 
   @@unique([branchId, requestKey])
   @@index([branchId, purchaseInvoiceId])
+  @@index([setOffId])
   @@map("inventory_credit_allocations")
+}
+
+model InventoryCreditSetOff {
+  id          String @id @default(cuid())
+  branchId    String
+  requestKey  String
+  fingerprint String
+  createdBy   String
+  createdAt   DateTime @default(now())
+  allocations InventoryCreditAllocation[]
+
+  @@unique([branchId, requestKey])
+  @@map("inventory_credit_set_offs")
 }
 
 model InventoryWorkflowSettings {

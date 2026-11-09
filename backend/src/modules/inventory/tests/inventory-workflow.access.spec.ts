@@ -7,6 +7,8 @@ import { InventoryWorkflowController } from '../inventory-workflow.controller';
 import { InventoryWorkflowScheduler } from '../inventory-workflow-scheduler.service';
 import { InventoryWorkflowService } from '../inventory-workflow.service';
 import { InventoryWorkspaceService } from '../inventory-workspace.service';
+import { InventoryReconciliationService } from '../reconciliation/inventory-reconciliation.service';
+import { PharmacySupplierCreditService } from '../../pharmacy/pharmacy-supplier-credit.service';
 import { accessApp } from './inventory-access-app';
 
 const base = '/inventory/workspace';
@@ -32,11 +34,13 @@ describe('/inventory/workspace access control', () => {
       { provide: InventoryWorkflowScheduler, useValue: {} },
       { provide: InventoryIntakeService, useValue: {} },
       { provide: InventoryLabelService, useValue: {} },
+      { provide: InventoryReconciliationService, useValue: {} },
+      { provide: PharmacySupplierCreditService, useValue: {} },
     ]);
   });
   afterAll(() => app.close());
 
-  it.each(['owner', 'admin', 'doctor'])(
+  it.each(['owner', 'admin', 'doctor', 'pharmacist'])(
     'lets %s read stock and change a batch',
     async (user) => {
       await read(user).expect(200);
@@ -62,14 +66,14 @@ describe('/inventory/workspace access control', () => {
   });
 
   it('lets a non-manager with the read permission read but not change stock', async () => {
-    await read('pharmacistReader').expect(200);
-    await batchChange('pharmacistReader').expect(403);
-    await bulkChange('pharmacistReader').expect(403);
+    await read('receptionReader').expect(200);
+    await batchChange('receptionReader').expect(403);
+    await bulkChange('receptionReader').expect(403);
   });
 
   it('lets a non-manager with the update permission change a batch', async () => {
-    await batchChange('pharmacistStocker').expect(200);
-    expect((await bulkChange('pharmacistStocker')).status).toBe(400);
+    await batchChange('receptionStocker').expect(200);
+    expect((await bulkChange('receptionStocker')).status).toBe(400);
   });
 
   it('refuses a token whose role differs from the stored role', async () => {
@@ -80,7 +84,7 @@ describe('/inventory/workspace access control', () => {
     await read('doctor').set('x-branch', 'other-branch').expect(403);
   });
 
-  it.each(['owner', 'admin', 'doctor', 'pharmacistStocker'])(
+  it.each(['owner', 'admin', 'doctor', 'receptionStocker'])(
     'offers no delete route to %s',
     async (user) => {
       await http().delete(`${base}/stock/item`).set('x-user', user).expect(404);

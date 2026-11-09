@@ -734,7 +734,7 @@ function ExpiryTable({
 
 /**
  * @cc [owner:nareshshah139,label:product] legacy-audit-ui-canonical-destination
- * The legacy audit section MUST link to canonical Counts & audit and MUST NOT expose an
+ * The legacy audit section MUST link to canonical Stock counts and MUST NOT expose an
  * adjustment form or call the retired direct stock-adjustment endpoint.
  */
 function LegacyAuditDestination() {
@@ -743,7 +743,7 @@ function LegacyAuditDestination() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ClipboardCheck className="size-5" />
-          Counts &amp; audit
+          Stock counts
         </CardTitle>
         <CardDescription>
           Enter physical counts, review variances and apply the required approval in the inventory workspace.
@@ -751,7 +751,7 @@ function LegacyAuditDestination() {
       </CardHeader>
       <CardContent>
         <Button asChild>
-          <a href="/dashboard/inventory?area=stock&view=COUNT">Open Counts &amp; audit</a>
+          <a href="/dashboard/inventory?area=stock&view=COUNT">Open Stock counts</a>
         </Button>
       </CardContent>
     </Card>

@@ -21,6 +21,7 @@ import {
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { InventoryWorkspaceService } from './inventory-workspace.service';
+import { InventoryReconciliationService } from './reconciliation/inventory-reconciliation.service';
 import {
   SaveWorkflowDocumentDto,
   TransitionWorkflowDto,
@@ -30,10 +31,11 @@ import {
  * @cc [owner:nareshshah139,label:security] inventory-workspace-access
  * Every /inventory/workspace route MUST admit only clinic staff roles and a signed-in user whose
  * token role and branch match the stored user. OWNER, ADMIN and DOCTOR hold every workspace
- * permission, but approving documents and correcting posted movements also need OWNER, ADMIN or
- * MANAGER, so DOCTOR is refused those two actions today. Other clinic staff MUST hold the
- * permission the service names for the action, so reading stock never allows a change and staff
- * with no grants MUST get 403. The controller MUST NOT expose a delete route.
+ * permission and PHARMACIST holds every inventory and pharmacy permission. Approving documents and
+ * correcting posted movements also need OWNER, ADMIN, MANAGER or DOCTOR, and deciding a stock count
+ * needs OWNER, ADMIN or DOCTOR. Other clinic staff MUST hold the permission the service names for
+ * the action, so reading stock never allows a change and staff with no grants MUST get 403. The
+ * controller MUST NOT expose a delete route.
  */
 @Controller('inventory/workspace')
 @Roles(...CLINIC_STAFF_ROLES)
@@ -46,6 +48,7 @@ export class InventoryWorkflowController {
     private readonly scheduler: InventoryWorkflowScheduler,
     private readonly intakeService: InventoryIntakeService,
     private readonly labels: InventoryLabelService,
+    private readonly reconciliation: InventoryReconciliationService,
   ) {}
   @Get('replenishment/manual-targets') manualTargets(
     @Request() r: any,
@@ -156,8 +159,12 @@ export class InventoryWorkflowController {
   @Get('capabilities') capabilities(@Request() r: any) {
     return this.workflow.capabilities(r.user);
   }
-  @Get('overview') overview(@Request() r: any) {
-    return this.workspace.overview(r.user);
+  @Get('overview') async overview(@Request() r: any) {
+    const [overview, reconciliation] = await Promise.all([
+      this.workspace.overview(r.user),
+      this.reconciliation.todayCards(r.user),
+    ]);
+    return { ...overview, reconciliation };
   }
   @Post('stock/bulk-location') bulkLocations(
     @Request() r: any,
@@ -235,6 +242,13 @@ export class InventoryWorkflowController {
   ) {
     return this.workflow.transition(r.user, id, b);
   }
+  @Post('documents/:id/credit-note') recordCreditNote(
+    @Request() r: any,
+    @Param('id') id: string,
+    @Body() b: Record<string, any>,
+  ) {
+    return this.workflow.recordCreditNote(r.user, id, b);
+  }
   @Get('intake') intakeList(@Request() r: any) {
     return this.workspace.intake(r.user);
   }
@@ -250,6 +264,22 @@ export class InventoryWorkflowController {
   ) {
     return this.workspace.allocateCredit(r.user, b);
   }
+  @Get('credits/set-off') setOffOptions(@Request() r: any, @Query() q: any) {
+    return this.workspace.setOffOptions(r.user, q);
+  }
+  @Post('credits/set-off') setOff(
+    @Request() r: any,
+    @Body() b: Record<string, any>,
+  ) {
+    return this.workspace.setOff(r.user, b);
+  }
+  @Post('credits/set-off/:id/reverse') reverseSetOff(
+    @Request() r: any,
+    @Param('id') id: string,
+    @Body() b: Record<string, any>,
+  ) {
+    return this.workspace.reverseSetOff(r.user, id, b.reason);
+  }
   @Post('credits/allocations/:id/reverse') reverseCredit(
     @Request() r: any,
     @Param('id') id: string,
@@ -259,6 +289,30 @@ export class InventoryWorkflowController {
   }
   @Post('counts') count(@Request() r: any, @Body() b: Record<string, any>) {
     return this.workspace.createCount(r.user, b);
+  }
+  @Get('reconciliation') reconciliationSummary(@Request() r: any) {
+    return this.reconciliation.summary(r.user);
+  }
+  @Get('reconciliation/batches') countPicker(@Request() r: any, @Query() q: any) {
+    return this.workspace.countPicker(r.user, q);
+  }
+  @Get('reconciliation/counts') reconciliationRegister(@Request() r: any, @Query() q: any) {
+    return this.reconciliation.register(r.user, q);
+  }
+  @Get('reconciliation/counts/:id') reconciliationCount(@Request() r: any, @Param('id') id: string) {
+    return this.reconciliation.detail(r.user, id);
+  }
+  @Patch('reconciliation/counts/:id') saveCountProgress(@Request() r: any, @Param('id') id: string, @Body() b: Record<string, any>) {
+    return this.reconciliation.saveProgress(r.user, id, b);
+  }
+  @Post('reconciliation/counts/:id/sign-off') signOffCount(@Request() r: any, @Param('id') id: string, @Body() b: Record<string, any>) {
+    return this.reconciliation.signOff(r.user, id, b);
+  }
+  @Post('reconciliation/counts/:id/approve') approveCount(@Request() r: any, @Param('id') id: string, @Body() b: Record<string, any>) {
+    return this.reconciliation.decide(r.user, id, 'APPROVE', b);
+  }
+  @Post('reconciliation/counts/:id/reject') rejectCount(@Request() r: any, @Param('id') id: string, @Body() b: Record<string, any>) {
+    return this.reconciliation.decide(r.user, id, 'REJECT', b);
   }
   @Post('targets/propose') targets(
     @Request() r: any,

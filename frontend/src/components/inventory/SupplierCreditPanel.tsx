@@ -4,12 +4,8 @@ import { displayClinicDate } from '@/lib/date-display';
 import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import {
-  fmtMoney,
-  inputClass,
-  requestKey,
-  workflowKinds,
-} from "./workspace-model";
+import { fmtMoney, workflowKinds } from "./workspace-model";
+import { SetOffCreditDialog } from "./purchase/SetOffCreditDialog";
 /**
  * @cc [owner:nareshshah139,label:product] supplier-credit-context-allocation
  * The shared credit panel MUST constrain bill choices to the credit supplier, preselect an explicit
@@ -32,8 +28,7 @@ export function SupplierCreditPanel({
   onChanged,
 }: any) {
   const [data, setData] = useState<any>(null),
-    [credit, setCredit] = useState<any>(null),
-    [form, setForm] = useState<any>({}),
+    [credit, setCredit] = useState<{ credit: any; anchor: HTMLElement } | null>(null),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const load = () => {
@@ -64,73 +59,26 @@ export function SupplierCreditPanel({
       )}
       {notice && <p role="status">{notice}</p>}
       {credit && (
-        <form
-          className="flex flex-wrap items-end gap-3 border p-4"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            try {
-              await apiClient.post("/inventory/workspace/credits/allocate", {
-                ...form,
-                creditId: credit.id,
-                amount: Number(form.amount),
-              });
-              setCredit(null);
-              setNotice(
-                "Credit allocated. The posted bill balance has been updated.",
-              );
-              load();
-              onChanged?.();
-            } catch (e: any) {
-              setError(e.message);
-            }
+        <SetOffCreditDialog
+          scope={{ creditId: credit.credit.id }}
+          distributorName={credit.credit.supplierGstin}
+          anchor={credit.anchor}
+          billId={purchaseInvoiceId || undefined}
+          onClose={() => setCredit(null)}
+          onDone={(_, total) => {
+            const anchor = credit.anchor;
+            setCredit(null);
+            setNotice(`Set off ${fmtMoney(total)} of credit ${credit.credit.creditNoteNumber || credit.credit.reference}. The bill balance has been updated.`);
+            load();
+            onChanged?.();
+            anchor.focus();
           }}
-        >
-          <label className="min-w-64 flex-1 text-sm">
-            Posted bill
-            <select
-              className={inputClass}
-              required
-              value={form.purchaseInvoiceId || ""}
-              onChange={(e) =>
-                setForm({ ...form, purchaseInvoiceId: e.target.value })
-              }
-            >
-              <option value="">Select a bill</option>
-              {data.invoices
-                .filter(
-                  (i: any) =>
-                    i.distributorGstin === credit.supplierGstin &&
-                    i.outstanding > 0,
-                )
-                .map((i: any) => (
-                  <option key={i.id} value={i.id}>
-                    {i.invoiceNumber} · due {fmtMoney(i.outstanding)}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="text-sm">
-            Amount
-            <input
-              type="number"
-              min="0.01"
-              max={credit.available}
-              step="0.01"
-              required
-              className={inputClass}
-              value={form.amount || ""}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            />
-          </label>
-          <Button>Allocate credit</Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setCredit(null)}
-          >
-            Cancel
-          </Button>
-        </form>
+          onStale={(failure) => {
+            setCredit(null);
+            setError(`${failure.title}. ${failure.description}`);
+            load();
+          }}
+        />
       )}
       <ul className="divide-y border-y">
         {data?.credits
@@ -157,7 +105,7 @@ export function SupplierCreditPanel({
                     }
                   }}
                 >
-                  <strong className="underline">{c.reference}</strong>
+                  <strong className="underline">{c.creditNoteNumber ? `${c.creditNoteNumber} · ${c.reference}` : c.reference}</strong>
                   <p className="text-sm text-muted-foreground">
                     {c.supplierGstin} ·{" "}
                     {c.reversedAt
@@ -165,19 +113,17 @@ export function SupplierCreditPanel({
                       : `Available ${fmtMoney(c.available)} of ${fmtMoney(c.amount)}`}
                   </p>
                 </button>
-                {canWrite && c.available > 0 && (
+                {canWrite && c.available > 0 && c.creditNoteNumber && (
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setCredit(c);
-                      setForm({
-                        requestKey: requestKey(),
-                        purchaseInvoiceId: purchaseInvoiceId || "",
-                      });
-                    }}
+                    aria-haspopup="dialog"
+                    onClick={(event) => setCredit({ credit: c, anchor: event.currentTarget })}
                   >
-                    Allocate to bill
+                    Set off against bills
                   </Button>
+                )}
+                {canWrite && c.available > 0 && !c.creditNoteNumber && (
+                  <span className="text-sm">Record the distributor’s credit note number to set this credit off.</span>
                 )}
               </div>
               {c.allocations.map((a: any) => (

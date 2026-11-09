@@ -78,3 +78,8 @@ it("closes a stale correction when refreshed payment data has changed", async ()
   expect(screen.queryByRole("button", { name: "Confirm reversal" })).not.toBeInTheDocument();
   expect(post).not.toHaveBeenCalled();
 });
+
+it("shows a payment recorded at the start of the clinic day on that day", () => {
+  show(true, [{ ...payment, paymentDate: "2026-10-19T18:30:00.000Z" }]);
+  expect(screen.getByText(/NEFT · 20 Oct 2026/)).toBeInTheDocument();
+});

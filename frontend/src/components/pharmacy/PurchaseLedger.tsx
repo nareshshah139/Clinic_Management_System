@@ -51,6 +51,8 @@ type DistributorSummary = {
   paid: number;
   creditApplied?: number;
   outstanding: number;
+  creditHeld: number;
+  netPayable: number;
   counts: {
     pending: number;
     partial: number;
@@ -370,10 +372,18 @@ export function PurchaseLedger({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Outstanding</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold">
-            {formatMoney(
-              summaries.reduce((sum, summary) => sum + summary.outstanding, 0),
-            )}
+          <CardContent>
+            <div className="text-2xl font-semibold">
+              {formatMoney(
+                summaries.reduce((sum, summary) => sum + summary.outstanding, 0),
+              )}
+            </div>
+            <div className="text-sm">
+              Net of credit held{" "}
+              {formatMoney(
+                summaries.reduce((sum, summary) => sum + summary.netPayable, 0),
+              )}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -419,6 +429,8 @@ export function PurchaseLedger({
                   <TableHead>Distributor</TableHead>
                   <TableHead className="text-right">Invoices</TableHead>
                   <TableHead className="text-right">Outstanding</TableHead>
+                  <TableHead className="text-right">Credit held</TableHead>
+                  <TableHead className="text-right">Net payable</TableHead>
                   <TableHead className="text-right">Overdue</TableHead>
                   <TableHead className="text-right">TCS Remaining</TableHead>
                 </TableRow>
@@ -454,8 +466,16 @@ export function PurchaseLedger({
                     <TableCell className="text-right">
                       {summary.invoiceCount}
                     </TableCell>
-                    <TableCell className="text-right font-medium">
+                    <TableCell className="text-right font-medium tabular-nums">
                       {formatMoney(summary.outstanding)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {summary.creditHeld > 0 ? `− ${formatMoney(summary.creditHeld)}` : formatMoney(0)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {summary.netPayable < 0
+                        ? `${formatMoney(-summary.netPayable)} in your favour`
+                        : formatMoney(summary.netPayable)}
                     </TableCell>
                     <TableCell className="text-right text-right tabular-nums">
                       {formatMoney(summary.overdue.amount)}
@@ -473,7 +493,7 @@ export function PurchaseLedger({
                 {summaries.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={7}
                       className="py-8 text-center text-sm text-gray-500"
                     >
                       No distributor ledger rows found.

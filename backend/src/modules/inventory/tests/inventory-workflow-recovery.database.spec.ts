@@ -89,8 +89,8 @@ databaseTests('Workflow recovery fences with PostgreSQL', () => {
     expect((await prisma.inventoryItem.findUniqueOrThrow({where:{id:itemId}})).currentStock).toBe(10);
   });
   it('requires actual-kind write permission to fence while retaining read-only lookup access', async () => {
-    const reader = await prisma.user.create({data:{email:`reader-${randomUUID()}@example.invalid`,password:'no-login',firstName:'Synthetic',lastName:'Recovery',role:'PHARMACIST',branchId:actor.branchId,permissions:JSON.stringify(['inventory:item:read'])}});
-    const readActor={id:reader.id,branchId:actor.branchId,role:'PHARMACIST'};
+    const reader = await prisma.user.create({data:{email:`reader-${randomUUID()}@example.invalid`,password:'no-login',firstName:'Synthetic',lastName:'Recovery',role:'RECEPTION',branchId:actor.branchId,permissions:JSON.stringify(['inventory:item:read'])}});
+    const readActor={id:reader.id,branchId:actor.branchId,role:'RECEPTION'};
     const found=await (recovery as any).documentByRequest(readActor,document.requestKey);
     expect(found.id).toBe(document.id);
     await expect((recovery as any).resolveOutcome(readActor,document.id,{version:1})).rejects.toThrow('inventory:transaction:create');

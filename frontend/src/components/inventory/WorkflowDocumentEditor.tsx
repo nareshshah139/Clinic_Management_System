@@ -1,5 +1,6 @@
 "use client";
 import { displayUtcDate, displayClinicDateTime } from '@/lib/date-display';
+import { getISTDateString } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import { useEffect, useRef, useState } from "react";
@@ -13,6 +14,10 @@ import {
 import { apiClient } from "@/lib/api";
 import { InventoryAction } from "./InventoryPresentation";
 import { workflowDocumentPresentation, type DocumentKnowledge, type DocumentReference } from "./workflow-document-state";
+import { RETURN_REASONS, RETURN_REASON_LABELS, returnChangeNote, returnReasonValue } from "./purchase/purchase-returns-model";
+import { RecordCreditNoteDialog } from "./purchase/RecordCreditNoteDialog";
+import { SetOffCreditDialog } from "./purchase/SetOffCreditDialog";
+import { DayField, isCalendarDay } from "./DayField";
 import { Button } from "@/components/ui/button";
 import {
   workflowKinds,
@@ -22,6 +27,8 @@ import {
   inputClass,
   downloadCsv,
 } from "./workspace-model";
+
+const DAY_TEXT_KINDS = ["SUPPLIER_RETURN", "CREDIT_NOTE"];
 
 type Props = {
   kind: string;
@@ -107,12 +114,12 @@ export function WorkflowDocumentEditor({
     [linkedSource, setLinkedSource] = useState<any>(null),
     [form, setForm] = useState<any>(() => ({
       kind,
-      reference: `${kind.replaceAll("_", "-")}-${new Date().toISOString().slice(0, 10)}`,
+      reference: `${kind.replaceAll("_", "-")}-${getISTDateString()}`,
       requestKey: requestKey(),
       supplierId: "",
       sourceId: "",
       payload: {
-        date: new Date().toISOString().slice(0, 10),
+        date: getISTDateString(),
         reason: "",
         lines: [],
         ...initial?.payload,
@@ -132,12 +139,17 @@ export function WorkflowDocumentEditor({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
+    [recording, setRecording] = useState<HTMLElement | null>(null),
+    [recordedCredit, setRecordedCredit] = useState<{ notice: string; id: string; available: number } | null>(null),
+    [settingOff, setSettingOff] = useState<HTMLElement | null>(null),
+    [undoableSetOff, setUndoableSetOff] = useState<{ notice: string; id: string } | null>(null),
     [reversal, setReversal] = useState(""),
     [showReverse, setShowReverse] = useState(false);
   const lock = useRef(false),
     feedback = useRef<HTMLDivElement>(null);
   const canWrite = !!capabilities?.kinds?.[kind]?.write;
-  const presentation = workflowDocumentPresentation(kind, knowledge, { write: canWrite, approve: !!capabilities?.approve });
+  const mayApprove = !!capabilities?.approve && (!!capabilities?.selfApprove || doc?.createdBy !== user?.id);
+  const presentation = workflowDocumentPresentation(kind, knowledge, { write: canWrite, approve: mayApprove });
   const editable = presentation.canEdit;
   const apply = (v: any) => {
     if (!v?.id || !Array.isArray(v.payload?.lines) || typeof v.version !== "number") throw new Error("The server returned an incomplete document. Check saved status before continuing.");
@@ -218,7 +230,7 @@ export function WorkflowDocumentEditor({
           } else apply(saved);
         } else if (recovered?.invalid || (recovered && (!validRecoveryForm(recovered.form) || (recovered.pending?.creation && !validRecoveryForm(recovered.pending.creation))))) {
           setKnowledge({ state: "unconfirmed", ref: { kind: "request", requestKey: "", creation: null }, operation: "create" });
-          setError("The browser recovery record cannot be read. Keep the original evidence and ask an inventory administrator to inspect the saved records and Counts & audit before another stock operation.");
+          setError("The browser recovery record cannot be read. Keep the original evidence and ask an inventory administrator to inspect the saved records and Stock counts before another stock operation.");
         } else if (recovered?.form) {
           setForm(recovered.form);
           if (recovered.pending || recovered.schemaVersion !== 2) {
@@ -444,7 +456,6 @@ export function WorkflowDocumentEditor({
         sourceLineId: source?.id || "",
         location: item.storageLocation || "",
         available: item.available,
-        systemStock: item.currentStock,
       },
     ]);
     setSearch("");
@@ -511,13 +522,19 @@ export function WorkflowDocumentEditor({
       if (generation === routeGeneration.current) setBusy(false);
     }
   };
-  /**
-   * @cc [owner:nareshshah139] fresh-count-navigation
-   * Starting a fresh count MUST use the saved document revision and open the returned attempt
-   * without first saving or copying the old physical measurements.
-   */
   const perform = async (action?: string) => {
     if (lock.current || !presentation.canMutate) return;
+    const badDay = editable && DAY_TEXT_KINDS.includes(kind)
+      ? [["date", "date"], ...(kind === "CREDIT_NOTE" ? [["creditNoteDate", "credit note date"]] : [])].find(
+          ([key]) => form.payload[key] && !isCalendarDay(form.payload[key]),
+        )
+      : undefined;
+    if (badDay) {
+      setNotice("");
+      setError(`Enter the ${badDay[1]} as dd/mm/yyyy.`);
+      feedback.current?.focus();
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError("");
@@ -527,7 +544,7 @@ export function WorkflowDocumentEditor({
     let saved = doc;
     let dispatched = false;
     try {
-      if (editable && action !== "CANCEL" && action !== "REVERSE" && action !== "RECOUNT") {
+      if (editable && action !== "CANCEL" && action !== "REVERSE") {
         markPending(doc ? "save" : "create", doc);
         dispatched = true;
         saved = doc
@@ -545,7 +562,7 @@ export function WorkflowDocumentEditor({
           ...(kind === "TARGET_REVIEW" ? { lineIds: selected } : {}),
         });
         if (generation !== routeGeneration.current) return;
-        if (["CREATE_PO", "CONVERT_SALE", "RECOUNT"].includes(action)) {
+        if (["CREATE_PO", "CONVERT_SALE"].includes(action)) {
           pendingRecovery.current = null;
           sessionStorage.removeItem(recoveryKey);
           onOpen(result.kind, result.id);
@@ -673,7 +690,7 @@ export function WorkflowDocumentEditor({
           return correction ? <Button variant="outline" onClick={() => onOpen("CORRECTION", correction)}>Open linked correction</Button> : null;
         })()}
         {doc?.kind === "PURCHASE_ORDER" && ["APPROVED", "PART_RECEIVED", "RECEIVED", "CANCELLED", "SENT"].includes(doc.status) && <a className="block underline" href={`?area=purchases&view=INWARD_CHALLAN&sourceId=${encodeURIComponent(doc.id)}`}>Review linked receipts</a>}
-        {(presentation.stockEffect === "unknown" || presentation.auditRecovery) && <a className="block underline" href="?area=stock&view=COUNT">Open Counts &amp; audit</a>}
+        {(presentation.stockEffect === "unknown" || presentation.auditRecovery) && <a className="block underline" href="?area=stock&view=COUNT">Open Stock counts</a>}
         {kind === "TARGET_REVIEW" && <a className="block underline" href="?area=reorder&view=TARGET_REVIEW">Open Reorder target review</a>}
         {(!canWrite || presentation.stockEffect === "unknown" || error) && (
           <label className="block text-sm">Recovery handoff
@@ -684,7 +701,7 @@ export function WorkflowDocumentEditor({
       {guard?.recovery && (
         <section aria-label="Recovery steps" className="space-y-2 rounded-md border p-4">
           {guard.stockEffect === "NONE" && <p>This rejected attempt made no stock change. Earlier recorded movements remain unchanged.</p>}
-          <p>{guard.recovery.action === "START_FRESH_COUNT" ? "Choose Start fresh count and physically recount using current balances." : guard.recovery.action === "CORRECT_FIELD" ? "Correct the identified count using the actual observed quantity. Do not change a truthful observation to bypass a stock guard." : "Inspect the linked batch and blocking records. Confirm a real release, loss or supplier return before starting a fresh physical count. Do not change a truthful observation to bypass a stock guard."}</p>
+          <p>{guard.recovery.action === "CORRECT_FIELD" ? "Correct the identified quantity. Do not change a truthful observation to bypass a stock guard." : "Inspect the linked batch and blocking records. Confirm a real release, loss or supplier return before starting a fresh physical count. Do not change a truthful observation to bypass a stock guard."}</p>
           {guard.recovery.inventoryId && <a className="underline" href={`?area=stock&view=list&item=${encodeURIComponent(guard.recovery.inventoryId)}`}>Inspect batch balance and holds</a>}
           {guard.recovery.sourceId && <Button variant="link" onClick={() => onOpen(guard.recovery.sourceKind || "HOLD", guard.recovery.sourceId)}>Open blocking source hold</Button>}
           {(guard.recovery.documents || []).map((entry: any) => <Button key={entry.id} variant="link" onClick={() => onOpen(entry.kind, entry.id)}>Open {entry.reference || entry.id}</Button>)}
@@ -720,12 +737,37 @@ export function WorkflowDocumentEditor({
           </p>
         )}
         {notice && (
-          <p
+          <div
             role="status"
-            className="rounded-md border border-green-600 bg-green-50 p-3 text-green-900"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-green-600 bg-green-50 p-3 text-green-900"
           >
-            {notice}
-          </p>
+            <p>{notice}</p>
+            {undoableSetOff?.notice === notice && (
+              <Button
+                variant="outline"
+                className="h-10"
+                disabled={busy}
+                onClick={async () => {
+                  const { id: setOffId } = undoableSetOff;
+                  setUndoableSetOff(null);
+                  try {
+                    await apiClient.post(`/inventory/workspace/credits/set-off/${encodeURIComponent(setOffId)}/reverse`, { reason: "Undone from the return document" });
+                    setNotice("Set-off undone. The credit is back with the distributor.");
+                  } catch (failure: any) {
+                    setError(failure?.status === 409 ? "This set-off was already undone." : `Could not undo the set-off. ${failure?.message ?? ""} You can reverse it from Payments & dues.`.trim());
+                  }
+                  feedback.current?.focus();
+                }}
+              >
+                Undo
+              </Button>
+            )}
+            {recordedCredit?.notice === notice && capabilities?.creditWrite && (
+              <Button aria-haspopup="dialog" className="h-10" onClick={(event) => setSettingOff(event.currentTarget)}>
+                Set off {fmtMoney(recordedCredit.available)} now
+              </Button>
+            )}
+          </div>
         )}
       </div>
       <fieldset
@@ -740,15 +782,19 @@ export function WorkflowDocumentEditor({
             onChange={(e) => setForm({ ...form, reference: e.target.value })}
           />
         </label>
-        <label className="text-sm">
-          Date
-          <input
-            type="date"
-            className={inputClass}
-            value={form.payload.date}
-            onChange={(e) => payload("date", e.target.value)}
-          />
-        </label>
+        {DAY_TEXT_KINDS.includes(kind) ? (
+          <DayField label="Date" value={form.payload.date || ""} onChange={(value) => payload("date", value)} />
+        ) : (
+          <label className="text-sm">
+            Date
+            <input
+              type="date"
+              className={inputClass}
+              value={form.payload.date}
+              onChange={(e) => payload("date", e.target.value)}
+            />
+          </label>
+        )}
         {[
           "SUPPLIER_RETURN",
           "INWARD_CHALLAN",
@@ -887,16 +933,15 @@ export function WorkflowDocumentEditor({
         {kind === "SUPPLIER_RETURN" && (
           <>
             <label className="text-sm">
-              Return type
+              Reason for return
               <select
                 className={inputClass}
-                value={form.payload.returnType || "OTHER"}
-                onChange={(e) => payload("returnType", e.target.value)}
+                value={returnReasonValue(form.payload.returnReason ?? form.payload.returnType)}
+                onChange={(e) => payload("returnReason", e.target.value)}
               >
-                <option value="EXPIRY">Expired / near expiry</option>
-                <option value="DAMAGE">Damage</option>
-                <option value="EXCESS">Excess stock</option>
-                <option value="OTHER">Other agreed return</option>
+                {RETURN_REASONS.map((reason) => (
+                  <option key={reason} value={reason}>{RETURN_REASON_LABELS[reason]}</option>
+                ))}
               </select>
             </label>
             <label className="text-sm">
@@ -912,6 +957,22 @@ export function WorkflowDocumentEditor({
                 <option value="AGREED_RATE">Agreed rate entered below</option>
               </select>
             </label>
+          </>
+        )}
+        {kind === "CREDIT_NOTE" && (
+          <>
+            <label className="text-sm">
+              Credit note no.
+              <input
+                className={inputClass + " uppercase"}
+                maxLength={50}
+                autoComplete="off"
+                value={form.payload.creditNoteNumber || ""}
+                onChange={(e) => payload("creditNoteNumber", e.target.value)}
+                placeholder="As printed on the distributor’s note"
+              />
+            </label>
+            <DayField label="Credit note date" value={form.payload.creditNoteDate || ""} onChange={(value) => payload("creditNoteDate", value)} />
           </>
         )}
         {kind === "QUOTATION" && (
@@ -954,13 +1015,13 @@ export function WorkflowDocumentEditor({
           </>
         )}
         <label className="text-sm sm:col-span-2">
-          Reason / notes
+          {kind === "SUPPLIER_RETURN" ? "Note (optional)" : "Reason / notes"}
           <input
             className={inputClass}
             value={form.payload.reason || ""}
             onChange={(e) => payload("reason", e.target.value)}
             placeholder={
-              ["COUNT", "LOSS", "HOLD", "SALES_RETURN"].includes(kind)
+              ["LOSS", "HOLD", "SALES_RETURN"].includes(kind)
                 ? "Required before posting"
                 : "Optional context"
             }
@@ -969,7 +1030,7 @@ export function WorkflowDocumentEditor({
       </fieldset>
       {editable &&
         canWrite &&
-        !["COUNT", "TARGET_REVIEW", "CORRECTION"].includes(kind) && (
+        !["TARGET_REVIEW", "CORRECTION"].includes(kind) && (
           <section className="space-y-2 print:hidden">
             {kind === "SALES_RETURN" ? (
               <div className="space-y-2">
@@ -1086,13 +1147,7 @@ export function WorkflowDocumentEditor({
             <tr>
               {kind === "TARGET_REVIEW" && <th className="p-3">Accept</th>}
               <th className="p-3">Product & batch</th>
-              {kind === "COUNT" ? (
-                <>
-                  <th className="p-3">System</th>
-                  <th className="p-3">Physical count</th>
-                  <th className="p-3">Difference</th>
-                </>
-              ) : kind === "TARGET_REVIEW" ? (
+              {kind === "TARGET_REVIEW" ? (
                 <>
                   <th className="p-3">Saved min / max</th>
                   <th className="p-3">Proposed min</th>
@@ -1167,37 +1222,7 @@ export function WorkflowDocumentEditor({
                       : ""}
                   </p>
                 </td>
-                {kind === "COUNT" ? (
-                  <>
-                    <td className="p-3">
-                      {l.systemStock} {l.unit}
-                    </td>
-                    <td className="p-3">
-                      <input
-                        aria-label={`Physical count ${index + 1}`}
-                        className={`${inputClass} w-28`}
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="Not counted"
-                        value={l.physicalStock ?? ""}
-                        disabled={!editable || busy}
-                        onChange={(e) =>
-                          updateLine(
-                            index,
-                            "physicalStock",
-                            e.target.value === "" ? "" : Number(e.target.value),
-                          )
-                        }
-                      />
-                    </td>
-                    <td className="p-3">
-                      {l.physicalStock == null || l.physicalStock === ""
-                        ? "Not counted"
-                        : Number(l.physicalStock) - l.systemStock}
-                    </td>
-                  </>
-                ) : kind === "TARGET_REVIEW" ? (
+                {kind === "TARGET_REVIEW" ? (
                   <>
                     <td className="p-3">
                       {l.beforeMin ?? "—"} / {l.beforeMax ?? "—"}
@@ -1374,11 +1399,6 @@ export function WorkflowDocumentEditor({
           >
             <Printer className="h-4 w-4" />
           </InventoryAction>
-          {kind === "COUNT" && canWrite && presentation.canMutate && (
-            <Button variant="outline" onClick={() => perform("RECOUNT")} disabled={busy}>
-              Start fresh count
-            </Button>
-          )}
           {["HOLD", "SALES_RETURN"].includes(kind) &&
             doc.status === "POSTED" &&
             doc.effects?.some((e: any) => e.heldDelta > 0) &&
@@ -1387,6 +1407,11 @@ export function WorkflowDocumentEditor({
                 Release held stock
               </Button>
             )}
+          {kind === "SUPPLIER_RETURN" && doc.status === "CHALLAN" && capabilities?.creditWrite && presentation.canMutate && (
+            <Button aria-haspopup="dialog" onClick={(event) => setRecording(event.currentTarget)} disabled={busy}>
+              Record credit note
+            </Button>
+          )}
           {kind === "INWARD_CHALLAN" && doc.status === "POSTED" && presentation.canMutate && (
             <Button onClick={() => onInvoice(doc)}>
               Create linked purchase bill
@@ -1427,6 +1452,71 @@ export function WorkflowDocumentEditor({
               </Button>
             )}
         </div>
+      )}
+      {recording && doc && (
+        <RecordCreditNoteDialog
+          row={{
+            id: doc.id,
+            kind: "SUPPLIER_RETURN",
+            version: doc.version,
+            returnRef: doc.reference,
+            returnDate: doc.payload?.date || getISTDateString(),
+            returnValue: Number(doc.totalAmount || 0),
+            sourceBillNo: linkedSource?.invoiceNumber ?? null,
+            credit: null,
+            creditNote: null,
+            distributor: { name: suppliers.find((supplier) => supplier.id === doc.supplierId)?.name || doc.supplierGstin || "the distributor" },
+          }}
+          anchor={recording}
+          onClose={() => setRecording(null)}
+          onRecorded={async (recorded) => {
+            setRecording(null);
+            apply(await apiClient.get<any>(`/inventory/workspace/documents/${doc.id}`));
+            const { credit } = recorded;
+            const message =
+              credit.available > 0.005
+                ? `Credit note ${credit.number} recorded: ${fmtMoney(credit.amount)}. Set it off against the distributor’s bills now, or later from Purchase bills › Returns.`
+                : `Credit note ${credit.number} recorded: ${fmtMoney(credit.amount)}.`;
+            setNotice(message);
+            if (credit.available > 0.005) setRecordedCredit({ notice: message, id: credit.id, available: credit.available });
+            feedback.current?.focus();
+          }}
+          onStale={async (failure) => {
+            setRecording(null);
+            const seen = doc.version;
+            try {
+              const latest = await apiClient.get<any>(`/inventory/workspace/documents/${doc.id}`);
+              apply(latest);
+              setError(`This return changed while you were recording: ${returnChangeNote(latest.events ?? [], seen, labelStatus(latest.status))}. ${failure.entry ?? ""}`.trim());
+            } catch {
+              setError(`This return changed while you were recording, and its latest state could not be loaded. Reload the page. ${failure.entry ?? ""}`.trim());
+            }
+            feedback.current?.focus();
+          }}
+        />
+      )}
+      {settingOff && doc && recordedCredit && (
+        <SetOffCreditDialog
+          scope={{ creditId: recordedCredit.id }}
+          distributorName={suppliers.find((supplier) => supplier.id === doc.supplierId)?.name || doc.supplierGstin || "the distributor"}
+          anchor={settingOff}
+          onClose={() => setSettingOff(null)}
+          onDone={(result, total) => {
+            setSettingOff(null);
+            setRecordedCredit(null);
+            const billNos = [...new Set(result.bills.map((bill) => bill.billNo))];
+            const message = `Set off ${fmtMoney(total)} against bill${billNos.length === 1 ? "" : "s"} ${billNos.join(", ")}.`;
+            setNotice(message);
+            setUndoableSetOff({ notice: message, id: result.setOffId });
+            feedback.current?.focus();
+          }}
+          onStale={(failure) => {
+            setSettingOff(null);
+            setRecordedCredit(null);
+            setError(`${failure.title}. ${failure.description}`);
+            feedback.current?.focus();
+          }}
+        />
       )}
       {showReverse && presentation.canMutate && (
         <div className="flex flex-wrap gap-3 rounded-md border p-4">

@@ -1,5 +1,5 @@
 import { PrismaClient, UserRole } from '@prisma/client';
-import { ROLE_PERMISSIONS } from '../src/shared/rbac/role-permissions';
+import { ROLE_PERMISSIONS } from '../src/shared/access/role-permissions';
 
 const prisma = new PrismaClient();
 

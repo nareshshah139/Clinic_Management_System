@@ -83,7 +83,7 @@ it('provides a batch reference and authorized colleague handoff for read-only re
   (apiClient.get as jest.Mock).mockResolvedValue({item,batches:[item],movements:[],history:[],purchases:[],holds:[],ledger:{status:'UNVERIFIED',checkpoint:null}});
   render(<WorkspaceStock {...props} capabilities={{kinds:{COUNT:{write:false}}}} itemId={item.id}/>);
   expect(await screen.findByText(/This batch is linked to more than one product/)).toBeInTheDocument();
-  expect(screen.getByText(/Ask a colleague with Counts & audit write access/)).toBeInTheDocument();
+  expect(screen.getByText(/Ask a colleague who can count stock/)).toBeInTheDocument();
   expect(screen.getByLabelText('Batch recovery reference')).toHaveValue('/dashboard/inventory?area=stock&view=list&item=stock');
   expect(screen.queryByRole('button',{name:'Count this batch'})).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'Ledger'}));

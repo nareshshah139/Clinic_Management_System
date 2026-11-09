@@ -1,6 +1,6 @@
 import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { ROLE_PERMISSIONS } from '../shared/rbac/role-permissions';
+import { ROLE_PERMISSIONS } from '../shared/access/role-permissions';
 
 /**
  * Idempotent seed script intended for production deploys.

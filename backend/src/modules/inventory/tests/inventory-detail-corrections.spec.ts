@@ -31,6 +31,7 @@ describe('saved batch corrections', () => {
         permissions: async () => new Set(['inventory:item:update']),
         transaction: (run: any) => run(tx),
       } as any,
+      {} as any,
     );
   });
   it('saves a verified batch/expiry with the actor, reason and old values, without moving stock', async () => {
@@ -108,6 +109,7 @@ describe('saved batch corrections', () => {
     service = new InventoryWorkspaceService(
       {} as any,
       { permissions: async () => new Set() } as any,
+      {} as any,
     );
     await expect(
       service.saveItem(actor, item.id, {

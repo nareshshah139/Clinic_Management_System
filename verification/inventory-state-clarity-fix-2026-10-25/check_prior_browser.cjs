@@ -14,7 +14,7 @@ function replaceOnce(before, after) {
   assert.equal(source.split(before).length, 2, `Runner adapter mismatch: ${before}`);
   source = source.replace(before, after);
 }
-replaceOnce('require("./registry.cjs")', JSON.stringify([{ id: 'stock', category: 'production-ui', checkpoints: ['stale-count', 'posted-count', 'fresh-count', 'missing-invoice', 'delegated-recovered', 'delegated-rejected'] }]));
+replaceOnce('require("./registry.cjs")', JSON.stringify([{ id: 'stock', category: 'production-ui', checkpoints: ['signed-count', 'approved-count', 'missing-invoice', 'delegated-recovered', 'delegated-rejected'] }]));
 replaceOnce('require("./scenarios.cjs")', `require(${JSON.stringify(path.join(__dirname, 'prior_browser_scenarios.cjs'))})`);
 replaceOnce('  const recoverySql = fs.readFileSync(path.join(root, "backend/prisma/migrations/20261024150000_unlinked_purchase_recovery/migration.sql"), "utf8");\n  for (const statement of recoverySql.split("-- statement-breakpoint")) {\n    if (/^\\s*CREATE (FUNCTION|TRIGGER) /.test(statement)) await owned.db.$executeRawUnsafe(statement);\n  }', `  await owned.db.$executeRawUnsafe('DROP TABLE "pharmacy_purchase_import_attempts"');
   const attemptSql = fs.readFileSync(path.join(root, 'backend/prisma/migrations/20261024120000_purchase_import_recovery/migration.sql'), 'utf8');
