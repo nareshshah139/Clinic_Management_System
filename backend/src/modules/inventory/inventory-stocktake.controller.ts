@@ -1,3 +1,5 @@
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { Body, Controller, Post, Request, UseGuards } from '@nestjs/common';
 import { IsBoolean, IsDateString, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
@@ -12,6 +14,7 @@ class ResolveBatchIdentityDto {
 }
 
 @Controller('inventory/workspace/stocktake')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 export class InventoryStocktakeController {
   constructor(private readonly identities: InventoryIdentityRecoveryService) {}

@@ -12,7 +12,7 @@ import { diagnosticValidationPipe } from '../../../shared/logging/http-observabi
 const row = (id: string, role: string) => ({
   id, role, branchId: 'branch', isActive: true, firstName: id, lastName: 'Synthetic', email: `${id}@example.test`,
   password: '$2b$10$synthetic-hash', resetToken: 'synthetic-reset', resetTokenExpiry: new Date(), googleRefreshToken: 'synthetic-refresh',
-  permissions: null, metadata: null, branch: { id: 'branch' },
+  permissions: null, metadata: role === 'DOCTOR' ? JSON.stringify({ whatsappAccessToken: 'synthetic-whatsapp-token', textSize: 'LARGE' }) : null, branch: { id: 'branch' },
 });
 
 const matches = (record: Record<string, unknown>, where: Record<string, unknown> = {}) =>
@@ -45,7 +45,7 @@ describe('/users access control', () => {
   const users: Record<string, ReturnType<typeof row>> = {
     owner: row('owner', 'OWNER'), admin: row('admin', 'ADMIN'), doctor: row('doctor', 'DOCTOR'),
     reception: row('reception', 'RECEPTION'), pharmacist: row('pharmacist', 'PHARMACIST'), nurse: row('nurse', 'NURSE'),
-    target: row('target', 'NURSE'),
+    target: row('target', 'NURSE'), lab: row('lab', 'LAB_TECH'),
   };
   const roleRecord = { id: 'role-admin', name: 'ADMIN', permissions: null };
   const branchRecord = { id: 'empty-branch', name: 'Empty' };
@@ -131,6 +131,15 @@ describe('/users access control', () => {
       expect(user).not.toHaveProperty('resetTokenExpiry');
       expect(user).not.toHaveProperty('googleRefreshToken');
     }
+  });
+
+  it('rejects a lab user and redacts doctor WhatsApp tokens from staff responses', async () => {
+    await request(app.getHttpServer()).get('/users').set(as('lab')).expect(403);
+    const list = await request(app.getHttpServer()).get('/users').set(as('reception')).expect(200);
+    const doctor = list.body.users.find((user: any) => user.id === 'doctor');
+    expect(doctor.metadata).toEqual({ textSize: 'LARGE' });
+    const one = await request(app.getHttpServer()).get('/users/doctor').set(as('reception')).expect(200);
+    expect(one.body.metadata).toEqual({ textSize: 'LARGE' });
   });
 
   describe.each(MANAGERS)('%s', (manager) => {

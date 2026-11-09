@@ -530,7 +530,7 @@ export default function BillingManagement() {
         quantity: item.qty || 1,
         unitPrice: item.unitPrice || 0,
         discount: item.discount || 0,
-        gstRate: item.gstRate ?? 18,
+        gstRate: item.gstRate ?? 0,
         total: item.total || (item.qty * item.unitPrice)
       })) || [{
         name: form.description || 'Service',

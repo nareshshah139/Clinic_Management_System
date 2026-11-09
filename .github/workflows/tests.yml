@@ -95,6 +95,7 @@ jobs:
           RESET_CODE_SCRIPT_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           PATIENT_MERGE_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           INVOICE_NUMBERS_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          BILLING_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           QUEUE_COVERAGE_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
         run: npm test -- --ci --runInBand
 

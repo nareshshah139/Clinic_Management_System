@@ -2,6 +2,7 @@ import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY, PermissionRequirement } from '../decorators/permissions.decorator';
 import { PrismaService } from '../database/prisma.service';
+import { hasScopedPermission } from './scoped-permission';
 
 /**
  * @cc [owner:nareshshah139,label:security] permission-gate
@@ -17,6 +18,11 @@ export class PermissionsGuard implements CanActivate {
     private readonly prisma: PrismaService,
   ) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security] scoped-permission-wildcards
+   * A grant ending in :* matches one nonempty action in the same scope, but MUST NOT match
+   * nested scopes or a bare wildcard; all permission requirement groups remain mandatory.
+   */
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredPermissions = this.reflector.getAllAndOverride<PermissionRequirement[]>(PERMISSIONS_KEY, [
       context.getHandler(),
@@ -92,14 +98,15 @@ export class PermissionsGuard implements CanActivate {
       rolePermissions = [];
     }
 
-    const effectivePermissions = Array.from(new Set([...(rolePermissions || []), ...(userPermissions || [])]));
+    const effectivePermissions = new Set([...(rolePermissions || []), ...(userPermissions || [])]);
+    const permits = (permission: string) => hasScopedPermission(effectivePermissions, permission);
 
     // Existing string entries retain all-of semantics. Alternatives are accepted
     // only when explicitly declared by that endpoint.
     return requiredPermissions.every((requirement) =>
       typeof requirement === 'string'
-        ? effectivePermissions.includes(requirement)
-        : requirement.some((permission) => effectivePermissions.includes(permission)),
+        ? permits(requirement)
+        : requirement.some(permits),
     );
   }
 }

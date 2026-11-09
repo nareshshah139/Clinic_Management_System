@@ -135,9 +135,9 @@ describe('billing invoice totals', () => {
     expect(data.total).toBeCloseTo(500 + 8000 + 1440, 6);
   });
 
-  it('defaults a missing GST rate to 18 percent', async () => {
+  it('adds no GST for a line without a rate, as for exempt clinic services', async () => {
     const data = await totalFor([{ qty: 1, unitPrice: 1000 }]);
-    expect(data.total).toBeCloseTo(1180, 6);
+    expect(data.total).toBeCloseTo(1000, 6);
   });
 
   it('keeps fractional paise from non-round amounts', async () => {

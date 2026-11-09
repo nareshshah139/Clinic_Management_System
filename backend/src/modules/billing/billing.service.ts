@@ -71,66 +71,7 @@ export class BillingService {
     // Calculate totals with overall discount
     const { subtotal, discount: calculatedDiscount, gstAmount, totalAmount } = this.calculateInvoiceTotals(items, discount || 0);
 
-    // Prepare services for items and build invoice items create payload
-    const invoiceItemsData = [] as Array<{ 
-      serviceId: string; 
-      name: string;
-      description?: string;
-      qty: number; 
-      unitPrice: number; 
-      discount: number;
-      gstRate: number; 
-      total: number;
-    }>;
-    
-    for (const it of items) {
-      const qty: number = (it.qty ?? it.quantity ?? 1) as number;
-      const unitPrice: number = Number(it.unitPrice ?? 0);
-      const itemDiscount: number = Number(it.discount ?? 0);
-      const gstRate: number = Number(it.gstRate ?? 0);
-      const name: string = (it.name || it.description || 'Service') as string;
-      const description: string = it.description || it.name || '';
-      
-      // Create a simple Service if not provided
-      let serviceId: string = it.serviceId as string;
-      if (!serviceId) {
-        console.log('🔧 Creating new service:', { name, unitPrice, gstRate, branchId });
-        try {
-          const createdService = await this.prisma.service.create({
-            data: {
-              name,
-              type: 'Consult',
-              taxable: gstRate > 0,
-              gstRate: gstRate,
-              priceMrp: unitPrice,
-              priceNet: unitPrice,
-              branchId,
-            },
-          });
-          serviceId = createdService.id;
-          console.log('✅ Service created:', serviceId);
-        } catch (serviceError) {
-          console.error('❌ Failed to create service:', serviceError);
-          throw new BadRequestException(`Failed to create service: ${serviceError.message}`);
-        }
-      }
-      
-      // Calculate item total with discount
-      const baseTotal = qty * unitPrice;
-      const itemDiscountAmount = (itemDiscount / 100) * baseTotal;
-      const itemTotal = baseTotal - itemDiscountAmount;
-      
-      invoiceItemsData.push({
-        serviceId,
-        name,
-        description,
-        qty,
-        unitPrice,
-        discount: itemDiscount,
-        gstRate,
-        total: itemTotal,
-      });
-    }
+    const invoiceItemsData = await this.buildInvoiceItems(items, branchId);
 
     const data: any = {
       patientId,
@@ -332,40 +273,32 @@ export class BillingService {
       updateData.hsn = updateInvoiceDto.hsn;
     }
 
-    // If items supplied, replace existing items and recompute totals
-    if (Array.isArray(updateInvoiceDto.items) && updateInvoiceDto.items.length > 0) {
-      // Remove old items, then add new ones
-      await this.prisma.invoiceItem.deleteMany({ where: { invoiceId: id } });
-
-      await this.prisma.invoiceItem.createMany({
-        data: updateInvoiceDto.items.map((it: any) => ({
-          invoiceId: id,
-          serviceId: it.serviceId,
-          qty: it.qty,
-          unitPrice: it.unitPrice,
-          gstRate: it.gstRate ?? 0,
-          total: it.qty * it.unitPrice,
-        })),
-      });
-
-      // Recompute totals
-      const { totalAmount } = this.calculateInvoiceTotals(updateInvoiceDto.items);
+    const replaceItems = Array.isArray(updateInvoiceDto.items) && updateInvoiceDto.items.length > 0;
+    if (updateInvoiceDto.discount !== undefined) {
+      updateData.discount = updateInvoiceDto.discount;
+    }
+    if (replaceItems || updateInvoiceDto.discount !== undefined) {
+      const items = replaceItems ? updateInvoiceDto.items! : invoice.items;
+      const { totalAmount } = this.calculateInvoiceTotals(items, updateInvoiceDto.discount ?? invoice.discount ?? 0);
       updateData.total = totalAmount;
-      // Keep received as-is, recompute balance
       updateData.balance = Math.max(totalAmount - invoice.received, 0);
     }
+    if (replaceItems) {
+      updateData.items = { create: await this.buildInvoiceItems(updateInvoiceDto.items!, branchId) };
+    }
 
-    const updated = await this.prisma.newInvoice.update({
-      where: { id },
-      data: updateData,
-      include: {
-        patient: { select: { id: true, name: true, phone: true } },
-        items: true,
-        payments: true,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      if (replaceItems) await tx.newInvoiceItem.deleteMany({ where: { invoiceId: id } });
+      return tx.newInvoice.update({
+        where: { id },
+        data: updateData,
+        include: {
+          patient: { select: { id: true, name: true, phone: true } },
+          items: true,
+          payments: true,
+        },
+      });
     });
-
-    return updated;
   }
 
   async cancelInvoice(id: string, branchId: string, _reason?: string) {
@@ -726,12 +659,76 @@ export class BillingService {
   }
 
   // Private helper methods
+  /** Builds new_invoice_items rows, creating an ad-hoc Service for any line without one. */
+  private async buildInvoiceItems(items: any[], branchId: string) {
+    const invoiceItemsData = [] as Array<{ 
+      serviceId: string; 
+      name: string;
+      description?: string;
+      qty: number; 
+      unitPrice: number; 
+      discount: number;
+      gstRate: number; 
+      total: number;
+    }>;
+    
+    for (const it of items) {
+      const qty: number = (it.qty ?? it.quantity ?? 1) as number;
+      const unitPrice: number = Number(it.unitPrice ?? 0);
+      const itemDiscount: number = Number(it.discount ?? 0);
+      const gstRate: number = Number(it.gstRate ?? 0);
+      const name: string = (it.name || it.description || 'Service') as string;
+      const description: string = it.description || it.name || '';
+      
+      // Create a simple Service if not provided
+      let serviceId: string = it.serviceId as string;
+      if (!serviceId) {
+        console.log('🔧 Creating new service:', { name, unitPrice, gstRate, branchId });
+        try {
+          const createdService = await this.prisma.service.create({
+            data: {
+              name,
+              type: 'Consult',
+              taxable: gstRate > 0,
+              gstRate: gstRate,
+              priceMrp: unitPrice,
+              priceNet: unitPrice,
+              branchId,
+            },
+          });
+          serviceId = createdService.id;
+          console.log('✅ Service created:', serviceId);
+        } catch (serviceError) {
+          console.error('❌ Failed to create service:', serviceError);
+          throw new BadRequestException(`Failed to create service: ${serviceError.message}`);
+        }
+      }
+      
+      // Calculate item total with discount
+      const baseTotal = qty * unitPrice;
+      const itemDiscountAmount = (itemDiscount / 100) * baseTotal;
+      const itemTotal = baseTotal - itemDiscountAmount;
+      
+      invoiceItemsData.push({
+        serviceId,
+        name,
+        description,
+        qty,
+        unitPrice,
+        discount: itemDiscount,
+        gstRate,
+        total: itemTotal,
+      });
+    }
+
+    return invoiceItemsData;
+  }
+
   /**
    * @cc [owner:nareshshah139,label:calculation] invoice-total-arithmetic
    * An invoice total MUST equal the line amounts after line discount percent, less the overall
    * discount percent, plus GST per line on the line-discounted amount (before the overall discount).
-   * A line gstRate of 0 MUST add no tax and only a missing rate MAY default to 18. Totals are
-   * not rounded to paise.
+   * A line with a gstRate of 0 or no gstRate MUST add no tax. Totals are not rounded to paise.
    */
   private calculateInvoiceTotals(items: any[], discount: number = 0) {
     const subtotal = items.reduce((sum, item) => {
@@ -747,7 +744,7 @@ export class BillingService {
       const itemTotal = (item.qty ?? item.quantity) * item.unitPrice;
       const itemDiscount = (item.discount || 0) * itemTotal / 100;
       const discountedItemTotal = itemTotal - itemDiscount;
-      const gstRate = item.gstRate ?? 18;
+      const gstRate = Number(item.gstRate ?? 0);
       return sum + (discountedItemTotal * gstRate / 100);
     }, 0);
 

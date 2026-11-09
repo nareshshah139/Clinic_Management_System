@@ -80,7 +80,7 @@ databaseTests('Per-doctor token queue on PostgreSQL', () => {
   it.each(['9:00-10:00', '10:30-10:00', '23:30-00:30', '09:30-09:30'])(
     'refuses to book %s, which could not be compared with the 09:00-10:00 booking',
     async (bad) => {
-      const date = '2099-03-08';
+      const date = '2099-04-08';
       await service.create({ patientId: 'patient', doctorId: 'doctor-b', date, slot: '09:00-10:00' } as any, 'branch')
         .catch(() => undefined);
       await expect(service.create({ patientId: 'patient', doctorId: 'doctor-b', date, slot: bad } as any, 'branch'))
@@ -91,7 +91,7 @@ databaseTests('Per-doctor token queue on PostgreSQL', () => {
   );
 
   it('refuses to reschedule onto an unpadded slot that hides a double booking', async () => {
-    const date = '2099-03-09';
+    const date = '2099-04-09';
     await service.create({ patientId: 'patient', doctorId: 'doctor-b', date, slot: '09:00-10:00' } as any, 'branch');
     const other = await service.create({ patientId: 'patient', doctorId: 'doctor-b', date, slot: '11:00-11:30' } as any, 'branch');
     await expect(service.reschedule(other.id, { date, slot: '9:15-9:45' } as any, 'branch'))
@@ -101,7 +101,7 @@ databaseTests('Per-doctor token queue on PostgreSQL', () => {
   });
 
   it('treats a stored unpadded slot as taking its time', async () => {
-    const date = '2099-03-10';
+    const date = '2099-04-10';
     await db.appointment.create({ data: { patientId: 'patient', doctorId: 'doctor-b', date: new Date(date), slot: '9:00-10:00', branchId: 'branch', tokenNumber: 1 } });
     await expect(service.create({ patientId: 'patient', doctorId: 'doctor-b', date, slot: '09:30-10:00' } as any, 'branch'))
       .rejects.toMatchObject({ status: 409 });
@@ -117,4 +117,24 @@ databaseTests('Per-doctor token queue on PostgreSQL', () => {
       service.create({ patientId: 'patient', doctorId, roomId: room.id, date: '2099-03-07', slot: '10:00-10:30' } as any, 'branch'))));
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
   }, 60000);
+  it('rejects a room edit and reactivation that would create a conflict', async () => {
+    const room = await db.room.create({ data: { name: 'Edit room', type: 'PROCEDURE', branchId: 'branch' } });
+    const first = await service.create({ patientId: 'patient', doctorId: 'doctor-a', roomId: room.id, date: '2099-03-08', slot: '10:00-10:30' } as any, 'branch');
+    const second = await service.create({ patientId: 'patient', doctorId: 'doctor-b', date: '2099-03-08', slot: '10:00-10:30' } as any, 'branch');
+    await expect(service.update(second.id, { roomId: room.id }, 'branch')).rejects.toMatchObject({ status: 409 });
+    await service.update(first.id, { status: 'CANCELLED' } as any, 'branch');
+    await service.update(second.id, { roomId: room.id }, 'branch');
+    await expect(service.update(first.id, { status: 'SCHEDULED' } as any, 'branch')).rejects.toMatchObject({ status: 409 });
+    const cleared = await service.update(second.id, { roomId: null } as any, 'branch');
+    expect(cleared.roomId).toBeNull();
+  });
+
+  it('serializes competing room edits for the same time', async () => {
+    const room = await db.room.create({ data: { name: 'Race room', type: 'PROCEDURE', branchId: 'branch' } });
+    const appointments = await Promise.all(['doctor-a', 'doctor-b'].map(doctorId => service.create({ patientId: 'patient', doctorId, date: '2099-03-09', slot: '11:00-11:30' } as any, 'branch')));
+    const results = await Promise.allSettled(appointments.map(apt => service.update(apt.id, { roomId: room.id }, 'branch')));
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter(r => r.status === 'rejected').every(r => (r as PromiseRejectedResult).reason?.status === 409)).toBe(true);
+  }, 60000);
+
 });

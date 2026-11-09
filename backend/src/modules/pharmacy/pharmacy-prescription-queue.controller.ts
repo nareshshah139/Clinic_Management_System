@@ -1,3 +1,5 @@
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { PHARMACY_OPERATIONS_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { Permissions } from '../../shared/decorators/permissions.decorator';
 import { IsInt, IsString, Min, MaxLength } from 'class-validator';
 
@@ -30,6 +32,7 @@ import { QueryPrescriptionQueueDto } from './dto/pharmacy-prescription-queue.dto
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('pharmacy/prescription-queue')
+@Roles(...PHARMACY_OPERATIONS_ROLES)
 export class PharmacyPrescriptionQueueController {
   constructor(
     private readonly queueService: PharmacyPrescriptionQueueService,

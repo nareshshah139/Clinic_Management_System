@@ -469,6 +469,10 @@ export class ApiClient {
     return this.put<import('./doctor-availability').DoctorAvailability>(`/doctor-availability/${doctorId}/hours`, { hours });
   }
 
+  async setDoctorBookingLimit(doctorId: string, maxBookingsPerSlot: number) {
+    return this.put<import('./doctor-availability').DoctorAvailability>(`/doctor-availability/${doctorId}/booking-limit`, { maxBookingsPerSlot });
+  }
+
   async getBranchHolidays(params?: { from?: string; to?: string }) {
     return this.get<import('./doctor-availability').TimeOff[]>('/doctor-availability/holidays', params);
   }

@@ -1,3 +1,4 @@
+import { Authenticated } from '../../shared/decorators/roles.decorator';
 import {
   Controller,
   Get,
@@ -108,6 +109,7 @@ export class AuditLogsController {
   }
 
   @Get('my-activity')
+  @Authenticated()
   @ApiOperation({ summary: 'Get current user activity logs' })
   @ApiResponse({ status: 200, description: 'User activity retrieved' })
   async getMyActivity(

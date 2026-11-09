@@ -1,3 +1,4 @@
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { Body, Controller, HttpException, HttpStatus, Post, Res, SetMetadata, Get, Request, Param } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
@@ -5,7 +6,7 @@ import { AuthService } from './auth.service';
 import { PasswordResetService } from './password-reset.service';
 import { ResetPasswordDto } from './dto/password-reset.dto';
 import { UserRole } from '@prisma/client';
-import { Roles } from '../../shared/decorators/roles.decorator';
+import { Authenticated, Roles } from '../../shared/decorators/roles.decorator';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -28,6 +29,7 @@ interface AuthenticatedRequest {
 
 @ApiTags('auth')
 @Controller('auth')
+@Roles(...CLINIC_STAFF_ROLES)
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -134,6 +136,7 @@ export class AuthController {
 
   // Return current authenticated user
   @Get('me')
+  @Authenticated()
   async me(@Request() req: any) {
     // Passport attaches whatever JwtStrategy.validate returns to req.user
     const u = req.user || {};

@@ -47,6 +47,18 @@ export interface DayAvailability {
 }
 
 export const MINUTES_PER_DAY = 24 * 60;
+export const MAX_BOOKINGS_PER_SLOT = 5;
+
+/**
+ * @cc [owner:nareshshah139,label:product] doctor-overbooking-limit
+ * A doctor's patients-per-slot limit MUST read as an integer in 1..MAX_BOOKINGS_PER_SLOT;
+ * any other stored value reads as 1, so a bad value can only make booking stricter.
+ */
+export function slotLimit(stored: unknown): number {
+  return typeof stored === 'number' && Number.isInteger(stored) && stored >= 1 && stored <= MAX_BOOKINGS_PER_SLOT
+    ? stored
+    : 1;
+}
 const IST_OFFSET_MINUTES = 5 * 60 + 30;
 const DEFAULT_START_HOUR = 9;
 const DEFAULT_END_HOUR = 18;

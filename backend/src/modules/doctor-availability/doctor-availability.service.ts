@@ -12,6 +12,7 @@ import {
   istDayStart,
   minutesToHhmm,
   parseWeeklyHoursInput,
+  slotLimit,
 } from './availability';
 import {
   loadDayAvailability,
@@ -21,6 +22,7 @@ import {
 import {
   CreateTimeOffDto,
   ReplaceWorkingHoursDto,
+  SetBookingLimitDto,
 } from './dto/doctor-availability.dto';
 
 export interface Actor {
@@ -61,12 +63,24 @@ export class DoctorAvailabilityService {
         end: minutesToHhmm(row.endMinute),
       })),
       timeOff,
+      maxBookingsPerSlot: slotLimit(doctor.maxBookingsPerSlot),
     };
   }
 
   async getDay(doctorId: string, branchId: string, date: string) {
     const doctor = await this.findDoctor(doctorId, branchId);
-    return loadDayAvailability(this.prisma, branchId, doctor, date);
+    const day = await loadDayAvailability(this.prisma, branchId, doctor, date);
+    return { ...day, maxBookingsPerSlot: slotLimit(doctor.maxBookingsPerSlot) };
+  }
+
+  async setBookingLimit(doctorId: string, dto: SetBookingLimitDto, actor: Actor) {
+    this.assertCanManage(actor, doctorId);
+    await this.findDoctor(doctorId, actor.branchId);
+    await this.prisma.user.update({
+      where: { id: doctorId },
+      data: { maxBookingsPerSlot: dto.maxBookingsPerSlot },
+    });
+    return this.getAvailability(doctorId, actor.branchId, {});
   }
 
   async listHolidays(branchId: string, range: { from?: string; to?: string }) {
@@ -181,7 +195,7 @@ export class DoctorAvailabilityService {
   private async findDoctor(doctorId: string, branchId: string) {
     const doctor = await this.prisma.user.findFirst({
       where: { id: doctorId, branchId, role: UserRole.DOCTOR },
-      select: { id: true, metadata: true },
+      select: { id: true, metadata: true, maxBookingsPerSlot: true },
     });
     if (!doctor) throw new NotFoundException('Doctor not found in this branch');
     return doctor;

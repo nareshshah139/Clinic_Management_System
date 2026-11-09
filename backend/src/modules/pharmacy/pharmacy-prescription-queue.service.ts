@@ -384,12 +384,20 @@ export class PharmacyPrescriptionQueueService {
    * READY_TO_BILL MUST reject empty tasks and current prescription lines with missing, pending
    * or unavailable reviews with BadRequestException and no changes; validation and writes MUST share the task lock.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product;reliability] dispense-requires-posted-bill
+   * Manual task updates MUST NOT mark a prescription dispensed; dispensing is derived
+   * from posted invoices so a task cannot bypass billing and stock posting.
+   */
   async updateTaskStatus(
     taskId: string,
     body: UpdateDispenseTaskStatusDto,
     branchId: string,
     userId: string,
   ) {
+    if (body.status === PharmacyDispenseTaskStatusDto.DISPENSED) {
+      throw new BadRequestException('Complete and post the pharmacy bill to record dispensing');
+    }
     return this.prisma.$transaction(async tx => {
       const service = new PharmacyPrescriptionQueueService(tx as PrismaService, this.drugService);
       return service.saveTaskStatus(taskId, body, branchId, userId);
@@ -885,7 +893,6 @@ export class PharmacyPrescriptionQueueService {
       [
         PharmacyDispenseTaskStatusDto.CANCELLED,
         PharmacyDispenseTaskStatusDto.PAID,
-        PharmacyDispenseTaskStatusDto.DISPENSED,
       ].includes(currentStatus as PharmacyDispenseTaskStatusDto)
     ) {
       return currentStatus;
@@ -893,6 +900,13 @@ export class PharmacyPrescriptionQueueService {
 
     if (derivedStatus === PrescriptionQueueStatus.DISPENSED) {
       return PharmacyDispenseTaskStatusDto.DISPENSED;
+    }
+
+    // Historical manual task states do not constitute a posted sale.
+    if (currentStatus === PharmacyDispenseTaskStatusDto.DISPENSED) {
+      return derivedStatus === PrescriptionQueueStatus.PARTIAL
+        ? PharmacyDispenseTaskStatusDto.PARTIALLY_FILLED
+        : PharmacyDispenseTaskStatusDto.QUEUED;
     }
 
     if (

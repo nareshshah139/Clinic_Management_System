@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { ExecutionContext, RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
-import { ROLES_KEY } from '../decorators/roles.decorator';
+import { AUTHENTICATED_KEY, ROLES_KEY } from '../decorators/roles.decorator';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { RolesGuard } from './roles.guard';
 import { PermissionsGuard } from './permissions.guard';
@@ -117,7 +117,20 @@ describe('route access across every controller', () => {
       if (read<boolean>('isPublic', route)) return `${route.key} | public`;
       const roles = read<string[]>(ROLES_KEY, route);
       const permissions = read<(string | string[])[]>(PERMISSIONS_KEY, route);
-      const roleText = roles?.length ? roles.join(',') : 'any signed-in user';
+      const methodRoles = reflector.get<string[]>(ROLES_KEY, route.handler);
+      const methodPermissions = reflector.get<unknown[]>(PERMISSIONS_KEY, route.handler);
+      const authenticated =
+        reflector.get<boolean>(AUTHENTICATED_KEY, route.handler) ??
+        (!methodRoles?.length && !methodPermissions?.length
+          ? reflector.get<boolean>(AUTHENTICATED_KEY, route.controller)
+          : false);
+      const roleText = authenticated
+        ? 'any signed-in user'
+        : roles?.length
+          ? roles.join(',')
+          : permissions?.length
+            ? 'permission holders'
+            : 'nobody (no access policy)';
       const permissionText = permissions?.length
         ? permissions
             .map((p) => (Array.isArray(p) ? p.join('|') : p))

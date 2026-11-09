@@ -1,3 +1,5 @@
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 import { Controller, Get, Post, Body, Query, Request, UseGuards, HttpStatus, HttpCode } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
@@ -42,6 +44,7 @@ interface AuthenticatedRequest {
 
 @ApiTags('Reports')
 @Controller('reports')
+@Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER, UserRole.DOCTOR)
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class ReportsController {

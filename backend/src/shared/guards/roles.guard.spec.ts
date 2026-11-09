@@ -1,14 +1,13 @@
-import { ExecutionContext } from '@nestjs/common';
+import { ExecutionContext, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '@prisma/client';
-import { Roles } from '../decorators/roles.decorator';
+import { Authenticated, Roles } from '../decorators/roles.decorator';
+import { Permissions } from '../decorators/permissions.decorator';
 import { RolesGuard } from './roles.guard';
 
 class Routes {
   @Roles(UserRole.RECEPTION) receptionOnly() {}
   @Roles(UserRole.PHARMACIST, UserRole.NURSE) clinicalStaff() {}
-  @Roles() emptyList() {}
-  open() {}
 }
 
 @Roles(UserRole.ACCOUNTANT)
@@ -68,15 +67,52 @@ describe('RolesGuard', () => {
     ).toBe(true);
   });
 
-  it('admits any authenticated user when no role list applies', () => {
-    expect(allows(Routes, 'open', { role: UserRole.PATIENT })).toBe(true);
-    expect(allows(Routes, 'emptyList', { role: UserRole.PATIENT })).toBe(true);
-  });
-
   it.each([undefined, null, {}, { role: '' }])(
     'denies a restricted route to user %p',
     (user) => {
       expect(allows(Routes, 'receptionOnly', user)).toBe(false);
     },
   );
+});
+
+describe('RolesGuard route declarations', () => {
+  class DeclaredRoutes {
+    unclassified() {}
+    @SetMetadata('isPublic', true) publicRoute() {}
+    @Authenticated() selfRoute() {}
+    @Roles(UserRole.RECEPTION) receptionRoute() {}
+    @Permissions('inventory:item:read') inventoryRoute() {}
+  }
+  const declaredGuard = new RolesGuard(new Reflector());
+  const declaredContext = (method: keyof DeclaredRoutes, role?: UserRole) => ({
+    getHandler: () => DeclaredRoutes.prototype[method], getClass: () => DeclaredRoutes,
+    switchToHttp: () => ({ getRequest: () => ({ user: role ? { role } : undefined }) }),
+  } as any);
+
+  it('denies undeclared routes even to privileged accounts', () => {
+    for (const role of Object.values(UserRole)) expect(declaredGuard.canActivate(declaredContext('unclassified', role))).toBe(false);
+  });
+  it('keeps public and explicitly authenticated routes distinct', () => {
+    expect(declaredGuard.canActivate(declaredContext('publicRoute'))).toBe(true);
+    expect(declaredGuard.canActivate(declaredContext('selfRoute'))).toBe(false);
+    expect(declaredGuard.canActivate(declaredContext('selfRoute', UserRole.PATIENT))).toBe(true);
+  });
+  it('passes permission declarations to the permission guard only for authenticated users', () => {
+    expect(declaredGuard.canActivate(declaredContext('inventoryRoute'))).toBe(false);
+    expect(declaredGuard.canActivate(declaredContext('inventoryRoute', UserRole.PHARMACIST))).toBe(true);
+  });
+  it('enforces declared role rules', () => {
+    expect(declaredGuard.canActivate(declaredContext('receptionRoute', UserRole.RECEPTION))).toBe(true);
+    expect(declaredGuard.canActivate(declaredContext('receptionRoute', UserRole.LAB_TECH))).toBe(false);
+  });
+
+  @Authenticated()
+  class SharedRoutes {
+    @Roles(UserRole.RECEPTION) restricted() {}
+  }
+  it('does not let a class-wide authenticated policy override a narrower method role', () => {
+    const ctx = { getHandler: () => SharedRoutes.prototype.restricted, getClass: () => SharedRoutes,
+      switchToHttp: () => ({ getRequest: () => ({ user: { role: UserRole.LAB_TECH } }) }) } as any;
+    expect(declaredGuard.canActivate(ctx)).toBe(false);
+  });
 });

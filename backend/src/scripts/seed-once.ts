@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { ROLE_PERMISSIONS } from '../shared/rbac/role-permissions';
 
 /**
  * Idempotent seed script intended for production deploys.
@@ -83,6 +84,21 @@ async function main(): Promise<void> {
 
     // eslint-disable-next-line no-console
     console.log('[seed-once] Ensured default users exist');
+
+    // PermissionsGuard reads role defaults from these rows; existing rows keep admin edits.
+    for (const [name, permissions] of Object.entries(ROLE_PERMISSIONS)) {
+      await prisma.role.upsert({
+        where: { name },
+        update: {},
+        create: {
+          name,
+          permissions: JSON.stringify(permissions),
+          isActive: true,
+        },
+      });
+    }
+    // eslint-disable-next-line no-console
+    console.log('[seed-once] Ensured default role permissions exist');
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('[seed-once] Error while seeding:', error);

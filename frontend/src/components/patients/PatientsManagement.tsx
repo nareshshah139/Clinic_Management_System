@@ -18,6 +18,8 @@ import { apiClient } from '@/lib/api';
 import { formatPatientName, filterRoomsByVisitType, calculateAge, formatAge } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { useOverbookConfirm } from '@/components/appointments/useOverbookConfirm';
+import { overbookFlag } from '@/lib/overbooking';
 import { ToastAction } from '@/components/ui/toast';
 import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta, VisitType, Room } from '@/lib/types';
 
@@ -51,6 +53,7 @@ interface PatientFormState {
 export default function PatientsManagement() {
   const router = useRouter();
   const { toast } = useToast();
+  const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [listLoading, setListLoading] = useState<boolean>(false);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
@@ -542,7 +545,7 @@ export default function PatientsManagement() {
         }
         if (availableSlots.length > 0) {
           const slot = availableSlots[0];
-          await apiClient.createAppointment({
+          const booked = await sendWithOverbookConfirm((allowOverbook) => apiClient.createAppointment({
             patientId,
             doctorId,
             date: dateStr,
@@ -551,7 +554,12 @@ export default function PatientsManagement() {
             source: 'WALK_IN',
             notes: 'Auto-booked next available slot for walk-in',
             ...(roomId ? { roomId } : {}),
-          });
+            ...overbookFlag(allowOverbook),
+          }));
+          if (!booked) {
+            toast({ title: 'Walk-in not booked', description: `${slot} on ${displayCalendarDate(dateStr)} was taken and you chose not to overbook it.` });
+            return;
+          }
           toast({
             title: 'Walk-in appointment booked',
             description: `Appointment scheduled for ${displayCalendarDate(dateStr)} at ${slot}`,
@@ -1027,7 +1035,7 @@ export default function PatientsManagement() {
             <div className="text-sm text-gray-600">{linkPortalTarget ? `Patient: ${formatPatientName(linkPortalTarget)}` : ''}</div>
             <div>
               <Label htmlFor="linkPortalEmail">Email</Label>
-              <Input id="linkPortalEmail" value={linkPortalEmail} onChange={(e) => setLinkPortalEmail(e.target.value)} placeholder="Enter email to link" />
+              <Input id="linkPortalEmail" value={linkPortalEmail} onChange={(e) => setLinkPortalEmail(e.target.value)} placeholder="Existing portal account email" />
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
@@ -1242,6 +1250,7 @@ export default function PatientsManagement() {
           )}
         </CardContent>
       </Card>
+      {overbookDialog}
     </div>
   );
 } 
