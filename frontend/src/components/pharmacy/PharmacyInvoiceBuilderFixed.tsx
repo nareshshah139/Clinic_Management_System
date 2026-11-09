@@ -1692,7 +1692,7 @@ export function PharmacyInvoiceBuilderFixed({
       grandTotal: invoiceCore?.totalAmount || 0,
     };
     const billDiscountLabel =
-      invoiceCore?.billDiscountKind === 'PERCENT' ? `Bill discount (${formatMoney(invoiceCore.billDiscountValue)}%)` : 'Bill discount';
+      invoiceCore?.billDiscountKind === 'PERCENT' ? `Bill discount (${Number(invoiceCore.billDiscountValue)}%)` : 'Bill discount';
     const invoiceNumberText = hasSavedInvoiceIdentity(invoice) ? invoiceCore?.invoiceNumber : 'Given when the bill is printed';
     const gstRows =
       isStandardPrintData && Array.isArray(invoice.gstSummary)
