@@ -309,7 +309,7 @@ async timeline(actor: WorkflowActor, q: Record<string, any> = {}) {
       this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId,OR:[{stockCommitReference:{in:movements.map(m=>m.reference).filter(Boolean)}},{invoiceNumber:{in:movements.map(m=>m.reference).filter(Boolean)}}]},select:{id:true,invoiceNumber:true,stockCommitReference:true,status:true}}),
       this.prisma.pharmacyInvoice.findMany({where:{branchId,invoiceNumber:{in:movements.filter(m=>m.reference?.startsWith('INV-')).map(m=>m.reference.slice(4))}},select:{id:true,invoiceNumber:true,status:true}}),
     ]);
-    const owners=new Map<string,any>();for(const m of movements){const e=effects.find(e=>e.transactionId===m.id),p=purchases.find(p=>p.stockCommitReference===m.reference||p.invoiceNumber===m.reference),sale=sales.find(s=>`INV-${s.invoiceNumber}`===m.reference);if(e)owners.set(m.id,{type:'workflow',...e.document});else if(p)owners.set(m.id,{type:'purchase',kind:'PURCHASE_INVOICE',id:p.id,status:p.status});else if(sale)owners.set(m.id,{type:'sale',kind:'PHARMACY_INVOICE',id:sale.id,status:sale.status});}return owners;
+    const owners=new Map<string,any>();for(const m of movements){const e=effects.find(e=>e.transactionId===m.id),p=purchases.find(p=>p.stockCommitReference===m.reference)??(m.type==='PURCHASE'?purchases.find(p=>p.invoiceNumber===m.reference):undefined),sale=sales.find(s=>`INV-${s.invoiceNumber}`===m.reference);if(e)owners.set(m.id,{type:'workflow',...e.document});else if(p)owners.set(m.id,{type:'purchase',kind:'PURCHASE_INVOICE',id:p.id,status:p.status});else if(sale)owners.set(m.id,{type:'sale',kind:'PHARMACY_INVOICE',id:sale.id,status:sale.status});}return owners;
   }
   /**
    * @cc [owner:nareshshah139,label:product] eligible-hold-source-balances
