@@ -1,14 +1,17 @@
-import { billHref, billPayload, draftProblem, legacyBillingRedirect, type BillFields } from '@/components/pharmacy/sales/sales-bill-model';
+import { billHref, billPayload, draftProblem, pharmacyBillingRedirect, type BillFields } from '@/components/pharmacy/sales/sales-bill-model';
+
+jest.mock('next/navigation', () => ({ redirect: jest.fn() }));
+jest.mock('@/app/dashboard/pharmacy/pharmacy-workspace', () => ({ PharmacyWorkspace: () => null }));
 
 const query = (search: string) => new URLSearchParams(search);
 
 it('sends every old Pharmacy Billing address to a Sales bill with the same prefill', () => {
   expect([
-    legacyBillingRedirect('/dashboard/pharmacy', query('section=billing&patientId=p-1&prescriptionId=rx 1&doctorId=d-1&visitId=v-1')),
-    legacyBillingRedirect('/dashboard/pharmacy', query('section=billing')),
-    legacyBillingRedirect('/dashboard/pharmacy', query('tab=invoices')),
-    legacyBillingRedirect('/dashboard/pharmacy', query('patientId=p-1&visitId=v-1')),
-    legacyBillingRedirect('/dashboard/pharmacy', query('section=counter&prescriptionId=rx-2')),
+    pharmacyBillingRedirect(query('section=billing&patientId=p-1&prescriptionId=rx 1&doctorId=d-1&visitId=v-1')),
+    pharmacyBillingRedirect(query('section=billing')),
+    pharmacyBillingRedirect(query('tab=invoices')),
+    pharmacyBillingRedirect(query('patientId=p-1&visitId=v-1')),
+    pharmacyBillingRedirect(query('section=counter&prescriptionId=rx-2')),
   ]).toEqual([
     '/dashboard/pharmacy/sales/bill?patientId=p-1&prescriptionId=rx+1&doctorId=d-1&visitId=v-1',
     '/dashboard/pharmacy/sales/bill',
@@ -18,13 +21,19 @@ it('sends every old Pharmacy Billing address to a Sales bill with the same prefi
   ]);
 });
 
-it('leaves Desk, Counter and other pages where they are', () => {
+it('leaves Desk and Counter where they are', () => {
   expect([
-    legacyBillingRedirect('/dashboard/pharmacy', query('')),
-    legacyBillingRedirect('/dashboard/pharmacy', query('section=desk')),
-    legacyBillingRedirect('/dashboard/pharmacy', query('section=counter')),
-    legacyBillingRedirect('/dashboard/pharmacy/sales', query('patientId=p-1')),
-  ]).toEqual([null, null, null, null]);
+    pharmacyBillingRedirect(query('')),
+    pharmacyBillingRedirect(query('section=desk')),
+    pharmacyBillingRedirect(query('section=counter')),
+  ]).toEqual([null, null, null]);
+});
+
+it('redirects the pharmacy page itself before rendering the old billing view', async () => {
+  const { default: PharmacyPage } = await import('@/app/dashboard/pharmacy/page');
+  const redirect = jest.requireMock('next/navigation').redirect as jest.Mock;
+  await PharmacyPage({ searchParams: Promise.resolve({ section: 'billing', prescriptionId: 'rx-9', patientId: 'p-9' }) });
+  expect(redirect.mock.calls).toEqual([['/dashboard/pharmacy/sales/bill?patientId=p-9&prescriptionId=rx-9']]);
 });
 
 it('links a draft by id alone, ignoring prefill', () => {

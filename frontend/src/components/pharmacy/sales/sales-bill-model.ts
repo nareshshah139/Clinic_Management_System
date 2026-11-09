@@ -111,8 +111,7 @@ const BILLING_SECTIONS = new Set(['billing', 'invoices', 'payments']);
  * The retired Pharmacy Billing address, with or without a section, MUST land on a new Sales bill
  * carrying the same patient, prescription, doctor and visit. Desk and Counter MUST stay put.
  */
-export function legacyBillingRedirect(pathname: string, params: Pick<URLSearchParams, 'get'>): string | null {
-  if (pathname !== '/dashboard/pharmacy') return null;
+export function pharmacyBillingRedirect(params: Pick<URLSearchParams, 'get'>): string | null {
   const section = params.get('section') || params.get('tab') || '';
   const prefill = prefillFrom(params);
   return BILLING_SECTIONS.has(section) || prefill ? billHref({ prefill }) : null;

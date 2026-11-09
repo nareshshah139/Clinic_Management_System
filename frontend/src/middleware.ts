@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { legacyBillingRedirect } from '@/components/pharmacy/sales/sales-bill-model';
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -21,8 +20,6 @@ export function middleware(req: NextRequest) {
       url.searchParams.set('next', original);
       return NextResponse.redirect(url);
     }
-    const billing = legacyBillingRedirect(pathname, req.nextUrl.searchParams);
-    if (billing) return NextResponse.redirect(new URL(billing, req.url));
   }
   return NextResponse.next();
 }
