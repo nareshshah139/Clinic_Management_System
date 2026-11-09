@@ -598,13 +598,18 @@ export function InventoryItemPage({ itemId, query, navigate, capabilities, onTas
 
 function LedgerReconciliation({ ledger, unit, batchNumbers }: { ledger: ItemLedger; unit: string; batchNumbers: Map<string, string> }) {
   const off = ledger.batches.filter((b) => b.matches !== true);
+  const breaks = ledger.rows.filter((row) => row.chainBreak).length;
+  const clean = ledger.matches && breaks === 0;
   return (
     <div className="space-y-2">
       <p className="flex flex-wrap items-center gap-2">
-        <ReviewStatus tone={ledger.matches ? "success" : "warning"}>{ledger.matches ? "Ledger matches stock on hand" : "Ledger does not match"}</ReviewStatus>
+        <ReviewStatus tone={clean ? "success" : "warning"}>
+          {clean ? "Ledger matches stock on hand" : ledger.matches ? "Matches only after unrecorded changes" : "Ledger does not match"}
+        </ReviewStatus>
         <span>
           Ledger closes at {ledger.closing == null ? "an unknown balance" : `${ledger.closing} ${unit}`}; stock on hand is {ledger.currentStock} {unit}.
         </span>
+        {breaks > 0 && <span>{breaks} {breaks === 1 ? "entry shows" : "entries show"} stock that changed without a ledger entry; marked below.</span>}
       </p>
       {off.length > 0 && (
         <ul role="alert" className="list-disc rounded-md border border-amber-600 bg-amber-50 p-3 pl-8 text-amber-900 dark:bg-amber-950 dark:text-amber-100">

@@ -105,6 +105,7 @@ it('opens a sibling after deleting the opened batch', async () => {
 it('runs the ledger across both batches, flags the out-of-ledger change and filters without recomputing closings', async () => {
   renderPage({ itemTab: 'ledger' });
   expect(await screen.findByText('Ledger closes at 8 STRIPS; stock on hand is 10 STRIPS.')).toBeInTheDocument();
+  expect(screen.getByText(/1 entry shows stock that changed without a ledger entry/)).toBeInTheDocument();
   expect(screen.getByRole('alert')).toHaveTextContent('Batch B2: ledger closes at 1 STRIPS; on hand 3 STRIPS.');
   const rows = () => [...document.querySelectorAll('tr[data-ledger-row]')].map(tr => {
     const cells = [...tr.querySelectorAll('td')].map(td => td.textContent);

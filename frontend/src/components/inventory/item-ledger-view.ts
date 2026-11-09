@@ -80,11 +80,13 @@ export function documentLabel(row: Pick<ItemLedgerRow, 'document' | 'reference'>
   return doc && 'number' in doc ? doc.number : row.reference;
 }
 
+const clinicDateTime = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' });
+
 export function ledgerCsvRows(rows: ItemLedgerRow[]) {
   return rows.map(row => ({
     Document: documentLabel(row) ?? '',
     Reference: row.reference ?? '',
-    EntryDate: row.at,
+    'Entry date (IST)': clinicDateTime.format(new Date(row.at)),
     Type: LEDGER_KIND_LABEL[row.kind],
     Channel: row.channelLabel,
     Batch: row.batchNumber ?? '',
