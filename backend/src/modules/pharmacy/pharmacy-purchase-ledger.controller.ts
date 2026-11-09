@@ -29,7 +29,7 @@ export class PharmacyPurchaseLedgerController {
   constructor(private readonly ledgerService: PharmacyPurchaseLedgerService) {}
 
   @Post('payments')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.ACCOUNTANT)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.ACCOUNTANT, UserRole.DOCTOR)
   @Permissions('pharmacy:purchase-ledger:write')
   @ApiOperation({
     summary: 'Record a distributor purchase payment with invoice allocations',
@@ -46,14 +46,14 @@ export class PharmacyPurchaseLedgerController {
   }
 
   @Post('payments/:id/reverse')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.ACCOUNTANT)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.ACCOUNTANT, UserRole.DOCTOR)
   @Permissions('pharmacy:purchase-ledger:write')
   reversePayment(@Param('id') id: string, @Body() dto: ReversePharmacyPurchasePaymentDto, @Request() req: any) {
     return this.ledgerService.reversePayment(id, dto, req.user.branchId, req.user.id);
   }
 
   @Post('payments/:id/reallocate')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.ACCOUNTANT)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.ACCOUNTANT, UserRole.DOCTOR)
   @Permissions('pharmacy:purchase-ledger:write')
   reallocatePayment(@Param('id') id: string, @Body() dto: ReallocatePharmacyPurchasePaymentDto, @Request() req: any) {
     return this.ledgerService.reallocatePayment(id, dto, req.user.branchId, req.user.id);

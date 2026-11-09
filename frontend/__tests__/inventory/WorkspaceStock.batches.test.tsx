@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { WorkspaceStock } from '@/components/inventory/WorkspaceStock';
 import { apiClient } from '@/lib/api';
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
@@ -83,9 +83,34 @@ it('provides a batch reference and authorized colleague handoff for read-only re
   (apiClient.get as jest.Mock).mockResolvedValue({item,batches:[item],movements:[],history:[],purchases:[],holds:[],ledger:{status:'UNVERIFIED',checkpoint:null}});
   render(<WorkspaceStock {...props} capabilities={{kinds:{COUNT:{write:false}}}} itemId={item.id}/>);
   expect(await screen.findByText(/This batch is linked to more than one product/)).toBeInTheDocument();
-  expect(screen.getByText(/Ask a colleague with Counts & audit write access/)).toBeInTheDocument();
+  expect(screen.getByText(/Ask a colleague who can count stock/)).toBeInTheDocument();
   expect(screen.getByLabelText('Batch recovery reference')).toHaveValue('/dashboard/inventory?area=stock&view=list&item=stock');
   expect(screen.queryByRole('button',{name:'Count this batch'})).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'Ledger'}));
   expect(screen.getByText(/Use the batch recovery reference above/)).toBeInTheDocument();
+});
+
+it('follows the server owner, not a matching bill number, for each ledger movement', async () => {
+  const item = { ...result.rows[0], metadata: {}, drugs: [] };
+  const movement = (id: string, type: string, delta: number, reference: string, owner: any) => ({
+    id, type, delta, closing: null, reason: null, reference, createdAt: '2026-11-01T10:00:00.000Z', owner, correctionAllowed: !owner,
+  });
+  const bill = { id: 'bill', invoiceNumber: '4512', stockCommitReference: 'PINV-4512-abcd1234', status: 'POSTED', items: [], documents: [] };
+  (apiClient.get as jest.Mock).mockResolvedValue({
+    item, batches: [item], history: [], purchases: [bill], holds: [], ledger: { status: 'UNVERIFIED', checkpoint: null },
+    movements: [
+      movement('typed-loss', 'DAMAGED', -2, '4512', null),
+      movement('receipt', 'PURCHASE', 10, 'PINV-4512-abcd1234', { type: 'purchase', kind: 'PURCHASE_INVOICE', id: 'bill', status: 'POSTED' }),
+    ],
+  });
+  render(<WorkspaceStock {...props} capabilities={{ ...props.capabilities, approve: true }} itemId={item.id} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Ledger' }));
+  expect(screen.queryByRole('button', { name: '4512' })).toBeNull();
+  const lossRow = screen.getByText('4512').closest('tr')!;
+  expect(within(lossRow).getByRole('button', { name: 'Correct' })).toBeInTheDocument();
+  expect(lossRow).not.toHaveTextContent('Open purchase correction');
+  const receiptRow = screen.getByRole('button', { name: 'PINV-4512-abcd1234' }).closest('tr')!;
+  fireEvent.click(screen.getByRole('button', { name: 'PINV-4512-abcd1234' }));
+  expect(props.onInvoice).toHaveBeenCalledWith('bill');
+  expect(receiptRow).toHaveTextContent('Open purchase correction');
 });

@@ -1,7 +1,9 @@
 import { PharmacyAgentService } from './pharmacy-agent.service';
+import { InventoryItemRequestService } from '../inventory/inventory-item-request.service';
 
 describe('PharmacyAgentService safety helpers', () => {
   const service = new PharmacyAgentService(
+    {} as any,
     {} as any,
     {} as any,
     {} as any,
@@ -154,6 +156,7 @@ describe('PharmacyAgentService safety helpers', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     ) as any;
 
     const result = await catalogService.executeDataRequest(
@@ -209,6 +212,7 @@ describe('PharmacyAgentService safety helpers', () => {
     };
     const threadedService = new PharmacyAgentService(
       prisma as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -312,6 +316,7 @@ describe('PharmacyAgentService safety helpers', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     ) as any;
 
     const result = await threadedService.listSessions({
@@ -365,6 +370,7 @@ describe('PharmacyAgentService safety helpers', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     ) as any;
 
     const archived = await threadedService.archiveSession('session-1', {
@@ -410,7 +416,7 @@ describe('PharmacyAgentService safety helpers', () => {
 });
 
 describe('Pharmacy proposal action authorization', () => {
-  function setup(canUpdate: boolean) {
+  function setup(canUpdate: boolean, role = 'MANAGER', stored = ['inventory:item:read', ...(canUpdate ? ['inventory:item:update'] : [])]) {
     const item = { id: 'item-1', updatedAt: new Date('2026-11-04T00:00:00.000Z'), storageLocation: 'Shelf A' };
     const action = { id:'action-1',actionType:'update_inventory_item',targetType:'inventory_item',targetId:item.id,expectedVersion:item.updatedAt,permissionRequired:'inventory:item:read',input:{storageLocation:'Shelf B'} };
     const proposal = {id:'proposal-1',branchId:'branch-1',sessionId:'session-1',status:'PENDING_REVIEW',actions:[action]};
@@ -419,23 +425,67 @@ describe('Pharmacy proposal action authorization', () => {
       pharmacyAgentProposalAction:{update:jest.fn().mockResolvedValue({})},
       pharmacyAgentAuditEvent:{create:jest.fn().mockResolvedValue({})},
       inventoryItem:{findFirst:jest.fn().mockResolvedValue(item)},
-      user:{findUnique:jest.fn().mockResolvedValue({role:'PHARMACIST',permissions:JSON.stringify(['inventory:item:read',...(canUpdate?['inventory:item:update']:[])])})},
+      user:{findUnique:jest.fn().mockResolvedValue({role,permissions:JSON.stringify(stored)})},
       role:{findFirst:jest.fn().mockResolvedValue({permissions:'[]'})},
     };
     const inventory = {updateInventoryItem:jest.fn(async (_id, input)=>{item.storageLocation=input.storageLocation;return {...item};})};
-    return {item,prisma,service:new PharmacyAgentService(prisma as any,{} as any,{} as any,{} as any,{} as any,inventory as any,{} as any)};
+    return {item,prisma,service:new PharmacyAgentService(prisma as any,{} as any,{} as any,{} as any,{} as any,inventory as any,{} as any,{} as any)};
   }
   it('rejects a proposal that substitutes read access for the required write permission', async () => {
     const {item,prisma,service}=setup(false);
-    await expect(service.applyProposal('proposal-1',{id:'operator',branchId:'branch-1',role:'PHARMACIST'})).rejects.toThrow('inventory:item:update');
+    await expect(service.applyProposal('proposal-1',{id:'operator',branchId:'branch-1',role:'MANAGER'})).rejects.toThrow('inventory:item:update');
     expect(item.storageLocation).toBe('Shelf A');
     expect(prisma.pharmacyAgentProposalAction.update).not.toHaveBeenCalled();
   });
   it('applies the same correction for an operator with the canonical write permission', async () => {
     const {item,service}=setup(true);
-    const result = await service.applyProposal('proposal-1',{id:'operator',branchId:'branch-1',role:'PHARMACIST'});
+    const result = await service.applyProposal('proposal-1',{id:'operator',branchId:'branch-1',role:'MANAGER'});
     expect(result.proposal.status).toBe('APPLIED');
     expect(item.storageLocation).toBe('Shelf B');
     expect(result.proposal.actions[0].permissionRequired).toBe('inventory:item:update');
+  });
+  it('applies it for a pharmacist with no stored permissions', async () => {
+    const {item,service}=setup(false,'PHARMACIST',[]);
+    const result = await service.applyProposal('proposal-1',{id:'operator',branchId:'branch-1',role:'PHARMACIST'});
+    expect([result.proposal.status, item.storageLocation]).toEqual(['APPLIED', 'Shelf B']);
+  });
+});
+
+describe('PharmacyAgentService new inventory items', () => {
+  function setup(role: string) {
+    const inventory = {
+      createInventoryItem: jest.fn().mockResolvedValue({ id: 'item-1', name: 'Zeta Gel' }),
+      assertItemIdentifiersFree: jest.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      inventoryItemRequest: {
+        create: jest.fn(async ({ data }) => ({ id: 'request-1', status: 'PENDING', ...data })),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      inventoryItem: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const requests = new InventoryItemRequestService(prisma as any, inventory as any);
+    const service = new PharmacyAgentService(
+      prisma as any, {} as any, {} as any, {} as any, {} as any, inventory as any, {} as any, requests,
+    ) as any;
+    const action = { actionType: 'create_inventory_item', input: { name: 'Zeta Gel', sku: 'ZG-1' } };
+    return { inventory, prisma, apply: () => service.applyAction(action, { id: 'u-1', branchId: 'branch-1', role }) };
+  }
+
+  it('queues a pharmacist-proposed item for doctor approval instead of creating it', async () => {
+    const { inventory, prisma, apply } = setup('PHARMACIST');
+    const result = await apply();
+    expect(result.status).toBe('PENDING_APPROVAL');
+    expect(result.request.itemName).toBe('Zeta Gel');
+    expect(prisma.inventoryItemRequest.create).toHaveBeenCalledTimes(1);
+    expect(inventory.createInventoryItem).not.toHaveBeenCalled();
+  });
+
+  it('creates the item directly when a doctor applies the proposal', async () => {
+    const { inventory, prisma, apply } = setup('DOCTOR');
+    const result = await apply();
+    expect(result).toEqual({ id: 'item-1', name: 'Zeta Gel' });
+    expect(inventory.createInventoryItem).toHaveBeenCalledWith({ name: 'Zeta Gel', sku: 'ZG-1' }, 'branch-1');
+    expect(prisma.inventoryItemRequest.create).not.toHaveBeenCalled();
   });
 });

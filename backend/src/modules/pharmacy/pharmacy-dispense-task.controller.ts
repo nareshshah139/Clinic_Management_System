@@ -1,3 +1,5 @@
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { PHARMACY_OPERATIONS_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import {
   Body,
   Controller,
@@ -26,6 +28,7 @@ import {
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('pharmacy/dispense-tasks')
+@Roles(...PHARMACY_OPERATIONS_ROLES)
 export class PharmacyDispenseTaskController {
   constructor(
     private readonly queueService: PharmacyPrescriptionQueueService,

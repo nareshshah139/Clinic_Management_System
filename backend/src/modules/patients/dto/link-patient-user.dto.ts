@@ -7,7 +7,7 @@ export class LinkPatientUserDto {
 
   @IsOptional()
   @IsEmail()
-  email?: string; // Create a new user if userId not provided
+  email?: string; // Link an existing patient account, or create one with the required fields
 
   @IsOptional()
   @IsString()

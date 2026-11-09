@@ -22,9 +22,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
-          curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
-            -H 'Accept: application/octet-stream' -H 'X-GitHub-Api-Version: 2022-11-28' \
-            https://api.github.com/repos/tlaplus/tlaplus/releases/assets/184694200 --output /tmp/tla2tools.jar
+          if ! curl --fail --location https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar --output /tmp/tla2tools.jar; then
+            curl --fail --location -H 'Accept: application/octet-stream' https://api.github.com/repos/tlaplus/tlaplus/releases/assets/184694200 --output /tmp/tla2tools.jar
+          fi
           echo '936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88  /tmp/tla2tools.jar' | sha256sum --check
       - name: Verify safety, recoverability, and negative controls
         env:

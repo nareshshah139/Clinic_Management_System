@@ -33,6 +33,8 @@ import type {
 } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 import { layoutDay } from './day-layout';
+import { useOverbookConfirm } from './useOverbookConfirm';
+import { overbookFlag } from '@/lib/overbooking';
 
 type StatusStyle = {
   label: string;
@@ -78,6 +80,8 @@ export interface DoctorDayCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
   disableSlotBooking?: boolean;
   selectedRoomName?: string;
+  /** Patients the doctor may see in one slot. 1 (the default) keeps every occupied tile closed. */
+  maxBookingsPerSlot?: number;
 }
 
 /**
@@ -120,9 +124,11 @@ function DoctorDayCalendarForSelection({
   },
   disableSlotBooking = false,
   selectedRoomName,
+  maxBookingsPerSlot = 1,
 }: DoctorDayCalendarProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
   const [schedule, setSchedule] = useState<AppointmentInSlot[]>([]);
   const [loading, setLoading] = useState<boolean>(Boolean(doctorId && date));
   const [error, setError] = useState<string | null>(null);
@@ -189,9 +195,36 @@ function DoctorDayCalendarForSelection({
     });
   }, [schedule, visitTypeFilter, roomFilter, scopedOptimisticAppointment]);
 
+  /**
+   * @cc [owner:nareshshah139,label:product] show-outside-hours-appointments
+   * The timeline MUST include valid appointments outside configured working hours without
+   * creating additional bookable slots or shifting the time gutter out of alignment.
+   */
+  const timelineBounds = useMemo(() => {
+    const workingStart = (timeSlotConfig.startHour ?? 9) * 60;
+    const workingEnd = (timeSlotConfig.endHour ?? 18) * 60;
+    let start = workingStart;
+    let end = workingEnd;
+    for (const apt of filteredSchedule) {
+      const match = /^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/.exec(apt.slot || '');
+      if (!match) continue;
+      const [, sh, sm, eh, em] = match.map(Number);
+      if (sh > 23 || sm > 59 || eh > 24 || em > 59 || (eh === 24 && em !== 0)) continue;
+      const from = sh * 60 + sm;
+      const to = eh * 60 + em;
+      if (to <= from) continue;
+      start = Math.min(start, from);
+      end = Math.max(end, to);
+    }
+    return { start, end, workingStart, workingEnd };
+  }, [filteredSchedule, timeSlotConfig.startHour, timeSlotConfig.endHour]);
+  const slotMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
+  const topPadding = `${80 * (timelineBounds.workingStart - timelineBounds.start) / slotMinutes / Math.max(1, baseGridSlots.length)}vh`;
+  const bottomPadding = `${80 * (timelineBounds.end - timelineBounds.workingEnd) / slotMinutes / Math.max(1, baseGridSlots.length)}vh`;
+
   const appointmentBlocks = useMemo(() => {
-    const dayStartMin = (timeSlotConfig.startHour ?? 9) * 60;
-    const dayEndMin = (timeSlotConfig.endHour ?? 18) * 60;
+    const dayStartMin = timelineBounds.start;
+    const dayEndMin = timelineBounds.end;
     const totalDayMin = Math.max(1, dayEndMin - dayStartMin);
     const spans = filteredSchedule.flatMap((apt, index) => {
       const [start, end] = (apt.slot || '').split('-');
@@ -208,7 +241,7 @@ function DoctorDayCalendarForSelection({
       topPct: ((span.startMin - dayStartMin) * 100) / totalDayMin,
       heightPct: ((span.endMin - span.startMin) * 100) / totalDayMin,
     }));
-  }, [filteredSchedule, timeSlotConfig.startHour, timeSlotConfig.endHour]);
+  }, [filteredSchedule, timelineBounds]);
 
   const queue = useMemo(() => filteredSchedule
     .filter(appointment => ![AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW].includes(appointment.status as AppointmentStatus))
@@ -468,7 +501,7 @@ function DoctorDayCalendarForSelection({
             )}
             <div className="flex">
               {/* Sticky left gutter with hour labels */}
-              <div className="w-14 sticky left-0 top-0 self-start z-10 bg-white/80 backdrop-blur-sm">
+              <div className="w-14 sticky left-0 top-0 self-start z-10 bg-white/80 backdrop-blur-sm" style={{ paddingTop: topPadding, paddingBottom: bottomPadding }}>
                 {baseGridSlots.map((slot) => {
                   const slotStart = slot.split('-')[0];
                   const isHourStart = slotStart.endsWith(':00');
@@ -484,7 +517,7 @@ function DoctorDayCalendarForSelection({
               {/* Main calendar grid */}
               <div
                 className="flex-1 grid grid-cols-1 gap-0"
-                style={{ position: 'relative', ...(showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : {}) }}
+                style={{ position: 'relative', paddingTop: topPadding, paddingBottom: bottomPadding, gridAutoRows: tileHeightCss, ...(showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : {}) }}
               >
             {appointmentBlocks.map(({ apt, key, start, end, topPct, heightPct, lane, laneCount }) => {
               const status = APPOINTMENT_STATUS_STYLE[apt.status] ?? APPOINTMENT_STATUS_STYLE[AppointmentStatus.SCHEDULED];
@@ -504,8 +537,8 @@ function DoctorDayCalendarForSelection({
                   style={{
                     top: `${topPct}%`,
                     height: `${heightPct}%`,
-                    left: `${(lane * 100) / laneCount}%`,
-                    width: `${100 / laneCount}%`,
+                    left: `${(lane * 100) / Math.max(laneCount, maxBookingsPerSlot)}%`,
+                    width: `${100 / Math.max(laneCount, maxBookingsPerSlot)}%`,
                     zIndex: 2,
                   }}
                 >
@@ -593,11 +626,12 @@ function DoctorDayCalendarForSelection({
               // Determine overlaps with any appointment
               const overlappingAppointments = filteredSchedule.filter(a => doTimeSlotsOverlap(a.slot, slot));
               const hasAny = overlappingAppointments.length > 0;
+              const full = overlappingAppointments.length >= maxBookingsPerSlot;
               const primary = overlappingAppointments[0];
               const past = isSlotInPast(slot, date);
               const isNewlyBooked = recentBookedSlot === slot || (primary?.slot === recentBookedSlot);
               const isBookingInProgress = bookingInProgress === slot;
-              const isDisabled = past || isBookingInProgress || hasAny || (!rescheduleTarget && disableSlotBooking);
+              const isDisabled = past || isBookingInProgress || full || (!rescheduleTarget && disableSlotBooking);
               const slotStart = slot.split('-')[0];
 
               // Hour divider: draw a subtle top line on HH:00 tiles
@@ -615,7 +649,7 @@ function DoctorDayCalendarForSelection({
                 if (!selecting || selectionStartIdx === null || selectionEndIdx === null) return false;
                 const lo = Math.min(selectionStartIdx, selectionEndIdx);
                 const hi = Math.max(selectionStartIdx, selectionEndIdx);
-                return idx >= lo && idx <= hi && !hasAny;
+                return idx >= lo && idx <= hi && !full;
               })();
 
               // Precompute tile boundaries in minutes for partial-fill overlays
@@ -639,13 +673,14 @@ function DoctorDayCalendarForSelection({
 
               // Flexible selection within a tile: allow booking in sub-segments (e.g., 15m) if space exists
               const FLEX_STEP_MIN = 15; // baseline flexible start granularity
+              // Same conservative count as the server: every booking overlapping the span takes a place.
+              const fits = (span: string) => filteredSchedule.filter(a => doTimeSlotsOverlap(a.slot, span)).length < maxBookingsPerSlot;
               const findFirstFreeStart = (requiredMinutes: number): number | null => {
                 const maxStart = tileEndMin - requiredMinutes;
                 for (let s = tileStartMin; s <= maxStart; s += FLEX_STEP_MIN) {
                   const e = s + requiredMinutes;
                   const candidate = `${minutesToHHMM(s)}-${minutesToHHMM(e)}`;
-                  const overlaps = filteredSchedule.some(a => doTimeSlotsOverlap(a.slot, candidate));
-                  if (!overlaps) return s;
+                  if (fits(candidate)) return s;
                 }
                 return null;
               };
@@ -681,7 +716,7 @@ function DoctorDayCalendarForSelection({
                     overflow: 'hidden',
                   }}
                   title={(() => {
-                    if (hasAny && primary) return `Long press to view details: ${formatPatientName(primary.patient ?? { name: 'Unknown' })} — ${primary.slot}`;
+                    if (full && primary) return `Long press to view details: ${formatPatientName(primary.patient ?? { name: 'Unknown' })} — ${primary.slot}`;
                     if (!past && freeStartMin !== null) {
                       const s = minutesToHHMM(freeStartMin);
                       const e = minutesToHHMM(freeStartMin + requiredMinutesForAction);
@@ -693,7 +728,7 @@ function DoctorDayCalendarForSelection({
                     if (e.button !== 0) return; // left-click only
                     
                     // Start long press timer for appointments
-                    if (hasAny && primary) {
+                    if (full && primary) {
                       const timer = setTimeout(() => {
                         setIsLongPressing(true);
                         setSelectedAppointment(primary);
@@ -704,7 +739,7 @@ function DoctorDayCalendarForSelection({
                     if (rescheduleTarget) return; // creation only
                     if (past) return;
                     if (disableSlotBooking) {
-                      if (!hasAny) {
+                      if (!full) {
                         toast({ variant: 'destructive', title: 'Patient required', description: 'Search and select a patient before booking a slot.' });
                       }
                       return;
@@ -726,7 +761,7 @@ function DoctorDayCalendarForSelection({
                   }}
                   onTouchStart={(e) => {
                     // Handle touch for mobile devices
-                    if (hasAny && primary) {
+                    if (full && primary) {
                       const timer = setTimeout(() => {
                         setIsLongPressing(true);
                         setSelectedAppointment(primary);
@@ -777,9 +812,7 @@ function DoctorDayCalendarForSelection({
                     const defaultMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
                     const endHH = (lo === hi) ? addMinutesToHHMM(startHH, defaultMinutes) : endSlot.split('-')[1];
                     const newSpan = `${startHH}-${endHH}`;
-                    // Validate overlap
-                    const overlaps = filteredSchedule.some(a => doTimeSlotsOverlap(a.slot, newSpan));
-                    if (overlaps) {
+                    if (!fits(newSpan)) {
                       // Fall back to flexible sub-segment booking within this tile if available
                       if (freeStartMin !== null) {
                         const s = minutesToHHMM(freeStartMin);
@@ -803,10 +836,10 @@ function DoctorDayCalendarForSelection({
                     onSelectSlot?.(newSpan);
                   }}
                 >
-                  {hasAny ? null : (
+                  {full ? null : (
                     <div
                       role="button"
-                      aria-label={rescheduleTarget ? `Move to ${slot}` : `Book ${slot}`}
+                      aria-label={`${rescheduleTarget ? `Move to ${slot}` : `Book ${slot}`}${hasAny ? `, ${overlappingAppointments.length} of ${maxBookingsPerSlot} booked` : ''}`}
                       onClick={async () => {
                         if (selecting) return;
                         if (past) return;
@@ -823,11 +856,13 @@ function DoctorDayCalendarForSelection({
                             : `${slotStart}-${addMinutesToHHMM(slotStart, dur)}`;
                           setRescheduleLoading(true);
                           try {
-                            await apiClient.rescheduleAppointment(rescheduleTarget.id, {
+                            const moved = await sendWithOverbookConfirm((allowOverbook) => apiClient.rescheduleAppointment(rescheduleTarget.id!, {
                               date,
                               slot: newSlot,
                               roomId: rescheduleTarget.room?.id,
-                            } as any);
+                              ...overbookFlag(allowOverbook),
+                            }));
+                            if (!moved) return;
                             toast({ variant: 'success', title: 'Appointment rescheduled', description: `${formatPatientName(rescheduleTarget.patient)} moved to ${newSlot}` });
                             setRescheduleTarget(null);
                             await fetchSchedule();
@@ -869,7 +904,13 @@ function DoctorDayCalendarForSelection({
                         backgroundColor: past ? '#ffffff' : (isBookingInProgress ? '#fbbf24' : '#ffffff'),
                         cursor: (past || (disableSlotBooking && !rescheduleTarget) || freeStartMin === null) ? 'not-allowed' : 'pointer'
                       }}
-                    />
+                    >
+                      {hasAny && (
+                        <span data-overbook-capacity className="pointer-events-none absolute right-1 top-0.5 rounded bg-amber-100 px-1 text-[10px] font-medium leading-4 text-amber-800">
+                          Overbook {overlappingAppointments.length}/{maxBookingsPerSlot}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               );
@@ -885,6 +926,8 @@ function DoctorDayCalendarForSelection({
           )}
         </CardContent>
       </Card>
+
+      {overbookDialog}
 
       {/* Appointment Details Dialog */}
       <Dialog open={!!selectedAppointment && !showCancelDialog} onOpenChange={(v: boolean) => { if (!v) setSelectedAppointment(null); }}>

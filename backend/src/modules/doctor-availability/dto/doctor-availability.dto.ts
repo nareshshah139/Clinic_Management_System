@@ -14,6 +14,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { TimeOffKind } from '@prisma/client';
+import { MAX_BOOKINGS_PER_SLOT } from '../availability';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/;
@@ -57,6 +58,13 @@ export class CreateTimeOffDto {
   @IsString()
   @MaxLength(200)
   reason?: string;
+}
+
+export class SetBookingLimitDto {
+  @IsInt()
+  @Min(1)
+  @Max(MAX_BOOKINGS_PER_SLOT)
+  maxBookingsPerSlot: number;
 }
 
 export class AvailabilityRangeDto {

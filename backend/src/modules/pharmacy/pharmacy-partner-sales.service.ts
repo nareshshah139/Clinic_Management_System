@@ -807,7 +807,7 @@ export class PharmacyPartnerSalesService {
 
   private getAccessContext(user: any): PartnerSalesAccess {
     const role = String(user?.role || '').toUpperCase();
-    const canViewAll = ['OWNER', 'ADMIN', 'PHARMACIST'].includes(role);
+    const canViewAll = ['OWNER', 'ADMIN', 'DOCTOR', 'PHARMACIST'].includes(role);
     const metadata = this.parseMetadata(user?.metadata);
     return {
       canViewAll,

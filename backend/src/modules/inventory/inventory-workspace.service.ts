@@ -4,18 +4,29 @@ import { reconcileInventoryLedger } from './inventory-ledger';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PharmacyPurchaseLedgerService } from '../pharmacy/pharmacy-purchase-ledger.service';
+import { PharmacyPurchaseRegisterService } from '../pharmacy/pharmacy-purchase-register.service';
+import { PharmacyPurchaseReturnsRegisterService } from '../pharmacy/pharmacy-purchase-returns-register.service';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
-import { WorkflowActor } from './inventory-workflow.types';
+import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
 import { inventoryProductName } from './inventory-names';
+import { displayDay } from './supplier-return';
+import { clinicDay, peopleById } from '../pharmacy/register-utils';
+import { PharmacySupplierCreditService } from '../pharmacy/pharmacy-supplier-credit.service';
+import { EVERY_ALLOCATION, creditBalance } from '../pharmacy/supplier-credit-balance';
+import { parseTimelineQuery, readInventoryTimeline } from './inventory-timeline';
 
 @Injectable()
 export class InventoryWorkspaceService {
-  constructor(private readonly prisma: PrismaService, private readonly workflow: InventoryWorkflowService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly workflow: InventoryWorkflowService,
+    private readonly supplierCredits: PharmacySupplierCreditService,
+  ) {}
   async require(actor: WorkflowActor, permission: string) {
     const p = await this.workflow.permissions(actor);
-    if (!p.has('*') && !p.has(permission)) throw new ForbiddenException(`This action requires ${permission}`);
+    if (!p.has(permission)) throw new ForbiddenException(`This action requires ${permission}`);
   }
   private present(item: any) {
     const metadata = jsonObject(item.metadata), priceBasis = metadata.purchaseInvoice?.priceBasis || metadata.priceBasis;
@@ -84,6 +95,11 @@ export class InventoryWorkspaceService {
       tx => readStockPage(tx, actor.branchId, q, item => this.present(item)),
       { isolationLevel: 'RepeatableRead', timeout: 30000 },
     );
+  }
+
+async timeline(actor: WorkflowActor, q: Record<string, any> = {}) {
+    await this.require(actor, 'inventory:transaction:read');
+    return readInventoryTimeline(this.prisma, actor.branchId, parseTimelineQuery(q));
   }
 
 /**
@@ -166,19 +182,20 @@ export class InventoryWorkspaceService {
    * allowed to read the approval queue, without pagination or catalog-size limits.
    */
   async overview(actor:WorkflowActor) {
-    const caps=await this.workflow.capabilities(actor),p=await this.workflow.permissions(actor),has=(x:string)=>p.has('*')||p.has(x);
+    const caps=await this.workflow.capabilities(actor),p=await this.workflow.permissions(actor),has=(x:string)=>p.has(x);
     const stock=has('inventory:item:read')?await this.stock(actor):null;
     const docs=(await this.workflow.documents(actor,{limit:100}));
     const active=await this.prisma.inventoryWorkflowDocument.groupBy({by:['kind','status'],where:{branchId:actor.branchId,kind:{in:Object.keys(caps.kinds).filter(k=>caps.kinds[k].read)}},_count:true});
     const purchases=has('inventory:po:read')?await this.prisma.pharmacyPurchaseInvoice.groupBy({by:['status'],where:{branchId:actor.branchId},_count:true}):[];
     const unlinked=has('inventory:po:read')?await this.prisma.pharmacyPurchaseInvoiceDocument.count({where:{branchId:actor.branchId,purchaseInvoiceId:null}}):0;
     const low=stock?await this.stock(actor,{stock:'LOW'}):null,expiring=stock?await this.stock(actor,{expiryMonths:'3'}):null;
-    const supplierAlerts=has('pharmacy:purchase-ledger:read')?await new PharmacyPurchaseLedgerService(this.prisma).getAlerts(actor.branchId):null;
+    const ledger=new PharmacyPurchaseLedgerService(this.prisma),supplierAlerts=has('pharmacy:purchase-ledger:read')?await ledger.getAlerts(actor.branchId):null;
     const supplierOverdue=supplierAlerts?{count:supplierAlerts.overdue.length,amount:money(supplierAlerts.overdue.reduce((n:number,r:any)=>n+r.outstanding,0)),asOf:supplierAlerts.asOfDate}:null;
-    const pendingPurchase=purchases.filter((g:any)=>!['STOCK_COMMITTED','CANCELLED'].includes(g.status)).reduce((n:number,g:any)=>n+g._count,0);
+    const pendingPurchase=has('inventory:po:read')?await new PharmacyPurchaseRegisterService(this.prisma,ledger).toReviewCount(actor):0;
+    const creditNotesAwaited=has('inventory:po:read')?await new PharmacyPurchaseReturnsRegisterService(this.prisma).awaitedCount(actor):null;
     const pendingEdits = ['OWNER','ADMIN','DOCTOR','PHARMACIST'].includes(actor.role) && has('pharmacy:drug:inventory-change:read')
       ? await this.prisma.drugInventoryChangeRequest.count({where:{branchId:actor.branchId,status:'PENDING'}}) : null;
-    return {pendingEdits,pendingPurchase,supplierOverdue,branchId:actor.branchId,asOf:new Date().toISOString(),lowStock:low?.total,expiring:expiring?.total,capabilities:caps,stock:stock?{total:stock.total,quality:stock.quality,valuation:stock.valuation}:null,queues:active,purchases,unlinked,recent:docs.rows.slice(0,8)};
+    return {pendingEdits,pendingPurchase,creditNotesAwaited,supplierOverdue,branchId:actor.branchId,asOf:new Date().toISOString(),lowStock:low?.total,expiring:expiring?.total,capabilities:caps,stock:stock?{total:stock.total,quality:stock.quality,valuation:stock.valuation}:null,queues:active,purchases,unlinked,recent:docs.rows.slice(0,8)};
   }
   async suppliers(actor:WorkflowActor){await this.require(actor,'inventory:item:read');return this.prisma.supplier.findMany({where:{branchId:actor.branchId},orderBy:{name:'asc'}});}
   async owners(actor:WorkflowActor){await this.workflow.permissions(actor);return this.prisma.user.findMany({where:{branchId:actor.branchId,isActive:true},select:{id:true,firstName:true,lastName:true,role:true},orderBy:{firstName:'asc'}});}
@@ -210,44 +227,86 @@ export class InventoryWorkspaceService {
   async credits(actor:WorkflowActor) {
     await this.require(actor,'pharmacy:purchase-ledger:read');
     const [credits,invoices]=await Promise.all([this.prisma.inventorySupplierCredit.findMany({where:{branchId:actor.branchId},include:{allocations:true},orderBy:{createdAt:'desc'}}),this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId:actor.branchId,status:'STOCK_COMMITTED'},include:{paymentAllocations:{where:{payment:{reversedAt:null}}}},orderBy:{invoiceDate:'desc'}})]);
-    return {credits:credits.map(c=>({...c,amount:Number(c.amount),applied:Number(c.applied),available:c.reversedAt?0:money(Number(c.amount)-Number(c.applied)),allocations:c.allocations.map(a=>({...a,amount:Number(a.amount)}))})),invoices:invoices.map(i=>({id:i.id,invoiceNumber:i.invoiceNumber,distributorGstin:i.distributorGstin,distributorName:i.distributorName,dueDate:i.dueDate,netPayable:i.netPayable,creditApplied:i.creditApplied,outstanding:money(i.netPayable-i.creditApplied-i.paymentAllocations.reduce((n,a)=>n+a.amount,0))}))};
+    return {credits:credits.map(c=>({...c,amount:Number(c.amount),applied:Number(c.applied),available:creditBalance(c,EVERY_ALLOCATION).available,allocations:c.allocations.map(a=>({...a,amount:Number(a.amount)}))})),invoices:invoices.map(i=>({id:i.id,invoiceNumber:i.invoiceNumber,distributorGstin:i.distributorGstin,distributorName:i.distributorName,dueDate:i.dueDate,netPayable:i.netPayable,creditApplied:i.creditApplied,outstanding:money(i.netPayable-i.creditApplied-i.paymentAllocations.reduce((n,a)=>n+a.amount,0))}))};
   }
   /**
    * @cc [owner:nareshshah139,label:product] credit-allocation-atomic
    * Credit allocation MUST atomically reduce one same-supplier posted bill and one available credit;
    * duplicate request keys, over-allocation and cross-branch records cannot create extra credit.
    */
-  async allocateCredit(actor:WorkflowActor,input:Record<string,any>) {
-    await this.require(actor,'pharmacy:purchase-ledger:write');
-    const value=money(Number(input.amount));if(!input.requestKey||!Number.isFinite(value)||value<=0)throw new BadRequestException('A positive amount and request key are required');
-    return this.workflow.transaction(async tx=>{
-      const exists=await tx.inventoryCreditAllocation.findUnique({where:{branchId_requestKey:{branchId:actor.branchId,requestKey:input.requestKey}}});if(exists)return exists;
-      const credit=await tx.inventorySupplierCredit.findFirst({where:{id:input.creditId,branchId:actor.branchId,reversedAt:null}});
-      const invoice=await tx.pharmacyPurchaseInvoice.findFirst({where:{id:input.purchaseInvoiceId,branchId:actor.branchId,status:'STOCK_COMMITTED'},include:{paymentAllocations:{where:{payment:{reversedAt:null}}}}});
-      if(!credit||!invoice||credit.supplierGstin!==invoice.distributorGstin)throw new BadRequestException('Select a posted bill for the same supplier GSTIN');
-      const outstanding=money(invoice.netPayable-invoice.creditApplied-invoice.paymentAllocations.reduce((n:number,a:any)=>n+a.amount,0));
-      if(value>money(Number(credit.amount)-Number(credit.applied))||value>outstanding)throw new BadRequestException('Amount exceeds available credit or bill balance');
-      await tx.inventorySupplierCredit.update({where:{id:credit.id,applied:credit.applied},data:{applied:{increment:value}}});
-      await tx.pharmacyPurchaseInvoice.update({where:{id:invoice.id,updatedAt:invoice.updatedAt},data:{creditApplied:{increment:value}}});
-      return tx.inventoryCreditAllocation.create({data:{branchId:actor.branchId,creditId:credit.id,purchaseInvoiceId:invoice.id,amount:value,requestKey:input.requestKey,createdBy:actor.id}});
-    });
+  async allocateCredit(actor: WorkflowActor, input: Record<string, any>) {
+    await this.require(actor, 'pharmacy:purchase-ledger:write');
+    return this.supplierCredits.allocate(actor, input);
   }
-  async reverseAllocation(actor:WorkflowActor,id:string,reason:string) {
-    await this.require(actor,'pharmacy:purchase-ledger:write');if(!reason?.trim())throw new BadRequestException('Enter a reversal reason');
-    return this.workflow.transaction(async tx=>{const a=await tx.inventoryCreditAllocation.findFirst({where:{id,branchId:actor.branchId}});if(!a)throw new NotFoundException('Allocation not found');if(a.reversedAt)return a;
-      await tx.inventorySupplierCredit.update({where:{id:a.creditId},data:{applied:{decrement:a.amount}}});
-      await tx.pharmacyPurchaseInvoice.update({where:{id:a.purchaseInvoiceId,branchId:actor.branchId},data:{creditApplied:{decrement:Number(a.amount)}}});
-      return tx.inventoryCreditAllocation.update({where:{id,reversedAt:null},data:{reversedAt:new Date(),reversedBy:actor.id,reversalReason:reason.trim()}});
-    });
+  async setOffOptions(actor: WorkflowActor, input: Record<string, any>) {
+    await this.require(actor, 'pharmacy:purchase-ledger:read');
+    return this.supplierCredits.setOffOptions(actor, input);
   }
+  async setOff(actor: WorkflowActor, input: Record<string, any>) {
+    await this.require(actor, 'pharmacy:purchase-ledger:write');
+    return this.supplierCredits.setOff(actor, input);
+  }
+  async reverseSetOff(actor: WorkflowActor, id: string, reason: string) {
+    await this.require(actor, 'pharmacy:purchase-ledger:write');
+    return this.supplierCredits.reverseSetOff(actor, id, reason);
+  }
+  async reverseAllocation(actor: WorkflowActor, id: string, reason: string) {
+    await this.require(actor, 'pharmacy:purchase-ledger:write');
+    return this.supplierCredits.reverseAllocation(actor, id, reason);
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] on-demand-count-picker
+   * The on-demand picker MUST find any batch by item name, batch or rack, zero stock included so a
+   * found box can be counted, saying how many matched when it shows fewer. A shelf lists every batch
+   * in stock there. Each batch on an undecided count says whose count it is on.
+   */
+  async countPicker(actor:WorkflowActor,q:Record<string,any>) {
+    await this.workflow.authorize(actor,'COUNT',true);
+    const text=String(q.q??'').trim(),location=String(q.location??'').trim();
+    const [shelves,holders]=await Promise.all([
+      this.prisma.inventoryItem.groupBy({by:['storageLocation'],where:{branchId:actor.branchId,currentStock:{gt:0}},_count:{_all:true}}),
+      this.workflow.openCountHolders(this.prisma,actor.branchId),
+    ]);
+    const places=new Map<string,{name:string;batches:number;top:number}>();
+    for(const shelf of shelves){const name=shelf.storageLocation?.trim();if(!name)continue;const key=name.toLowerCase(),seen=places.get(key),n=shelf._count._all;
+      places.set(key,{name:seen&&seen.top>=n?seen.name:name,top:Math.max(seen?.top??0,n),batches:(seen?.batches??0)+n});}
+    const locations=[...places.values()].map(({name,batches})=>({name,batches})).sort((a,b)=>a.name.localeCompare(b.name,'en',{numeric:true,sensitivity:'base'}));
+    const select={id:true,name:true,batchNumber:true,expiryDate:true,storageLocation:true,currentStock:true,unit:true};
+    let rows:any[]=[],total=0;
+    if(location){rows=await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,currentStock:{gt:0},storageLocation:{equals:location,mode:'insensitive'}},select,orderBy:[{name:'asc'},{batchNumber:'asc'}]});total=rows.length;}
+    else if(text.length>=2){const page=await this.stock(actor,{search:text,limit:20,page:1});rows=page.rows;total=page.total;}
+    const holding=rows.map(r=>holders.get(r.id)).filter(Boolean) as any[];
+    const people=await peopleById(this.prisma,holding.map(doc=>doc.payload?.assigneeId??doc.createdBy));
+    return {
+      batches:rows.map(r=>{const doc=holders.get(r.id);const by=doc?(doc.payload?.assigneeId??doc.createdBy):null;
+        return {id:r.id,name:r.name,batchNumber:r.batchNumber??'',expiryDate:r.expiryDate??null,storageLocation:r.storageLocation??null,currentStock:r.currentStock,unit:r.unit,
+          openCount:doc?{id:doc.id,day:doc.payload?.date??null,person:by===actor.id?null:(people.get(by)?.name??'a former staff member'),signed:doc.status==='AWAITING_APPROVAL'}:null};}),
+      total,
+      locations:text&&!location?locations.filter(l=>l.name.toLowerCase().includes(text.toLowerCase())):locations,
+    };
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] on-demand-count-scope
+   * Picked batches are counted as picked, zero stock included, and a picked batch already on an
+   * undecided count is refused by name. Counting everything matching a filter leaves batches on
+   * undecided counts out, and is refused only when nothing else is left.
+   */
   async createCount(actor:WorkflowActor,input:Record<string,any>) {
     await this.workflow.authorize(actor,'COUNT',true);
-    const query=await this.stock(actor,{...input.filters,limit:100,page:1});let items=[...query.rows];
-    for(let page=2;page<=query.totalPages;page++)items.push(...(await this.stock(actor,{...input.filters,limit:100,page})).rows);
-    if(input.itemIds?.length)items=items.filter(i=>input.itemIds.includes(i.id));
-    const settings=await this.workflow.settings(actor);if(input.daily)items=items.filter(i=>!i.metadata.lastCountAt||new Date(i.metadata.lastCountAt).toISOString().slice(0,10)!==new Date().toISOString().slice(0,10)).slice(0,settings.auditDailyCount);
-    if(!items.length)throw new BadRequestException('No matching batches to count');
-    return this.workflow.saveDocument(actor,{kind:'COUNT',reference:input.reference||`COUNT-${new Date().toISOString().slice(0,10)}`,requestKey:input.requestKey||randomUUID(),payload:{reason:'Physical stock verification',lines:items.map(i=>({inventoryId:i.id,quantity:0}))}});
+    const picked:string[]=Array.isArray(input.itemIds)?[...new Set<string>(input.itemIds.filter((id:unknown):id is string=>typeof id==='string'&&id!==''))]:[];
+    let ids:string[];
+    if(picked.length){
+      const found=new Set((await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,id:{in:picked}},select:{id:true}})).map(i=>i.id));
+      ids=picked.filter(id=>found.has(id));
+    }else{
+      const query=await this.stock(actor,{...input.filters,limit:100,page:1});const rows=[...query.rows];
+      for(let page=2;page<=query.totalPages;page++)rows.push(...(await this.stock(actor,{...input.filters,limit:100,page})).rows);
+      const holders=await this.workflow.openCountHolders(this.prisma,actor.branchId);
+      const free=rows.filter(i=>!holders.has(i.id));
+      ids=(free.length?free:rows).map(i=>i.id);
+    }
+    if(!ids.length)throw new BadRequestException('No matching batches to count');
+    return this.workflow.saveDocument(actor,{kind:'COUNT',reference:`Stock count ${displayDay(clinicDay(new Date()))} · on demand`,requestKey:input.requestKey||randomUUID(),payload:{reason:'On-demand stock count',lines:ids.map(inventoryId=>({inventoryId,quantity:0}))}});
   }
   async recommendTargets(actor:WorkflowActor,input:Record<string,any>={}) {
     await this.workflow.authorize(actor,'TARGET_REVIEW',true);const settings=await this.workflow.settings(actor);
@@ -302,7 +361,7 @@ export class InventoryWorkspaceService {
       this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId,OR:[{stockCommitReference:{in:movements.map(m=>m.reference).filter(Boolean)}},{invoiceNumber:{in:movements.map(m=>m.reference).filter(Boolean)}}]},select:{id:true,invoiceNumber:true,stockCommitReference:true,status:true}}),
       this.prisma.pharmacyInvoice.findMany({where:{branchId,invoiceNumber:{in:movements.filter(m=>m.reference?.startsWith('INV-')).map(m=>m.reference.slice(4))}},select:{id:true,invoiceNumber:true,status:true}}),
     ]);
-    const owners=new Map<string,any>();for(const m of movements){const e=effects.find(e=>e.transactionId===m.id),p=purchases.find(p=>p.stockCommitReference===m.reference||p.invoiceNumber===m.reference),sale=sales.find(s=>`INV-${s.invoiceNumber}`===m.reference);if(e)owners.set(m.id,{type:'workflow',...e.document});else if(p)owners.set(m.id,{type:'purchase',kind:'PURCHASE_INVOICE',id:p.id,status:p.status});else if(sale)owners.set(m.id,{type:'sale',kind:'PHARMACY_INVOICE',id:sale.id,status:sale.status});}return owners;
+    const owners=new Map<string,any>();for(const m of movements){const e=effects.find(e=>e.transactionId===m.id),p=purchases.find(p=>p.stockCommitReference===m.reference)??(m.type==='PURCHASE'?purchases.find(p=>p.invoiceNumber===m.reference):undefined),sale=sales.find(s=>`INV-${s.invoiceNumber}`===m.reference);if(e)owners.set(m.id,{type:'workflow',...e.document});else if(p)owners.set(m.id,{type:'purchase',kind:'PURCHASE_INVOICE',id:p.id,status:p.status});else if(sale)owners.set(m.id,{type:'sale',kind:'PHARMACY_INVOICE',id:sale.id,status:sale.status});}return owners;
   }
   /**
    * @cc [owner:nareshshah139,label:product] eligible-hold-source-balances
@@ -340,7 +399,7 @@ export class InventoryWorkspaceService {
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
   async correctMovement(actor:WorkflowActor,input:Record<string,any>) {
-    await this.require(actor,'inventory:adjustment:create');if(!['OWNER','ADMIN','MANAGER'].includes(actor.role))throw new ForbiddenException('A manager must correct a posted movement');
+    await this.require(actor,'inventory:adjustment:create');if(!INVENTORY_APPROVERS.has(actor.role))throw new ForbiddenException('A manager must correct a posted movement');
     if(!input.reason?.trim()||!input.requestKey)throw new BadRequestException('Reason and request key are required');
     return this.workflow.transaction(async tx=>{
       const duplicate=await tx.inventoryWorkflowDocument.findUnique({where:{branchId_requestKey:{branchId:actor.branchId,requestKey:input.requestKey}}});if(duplicate)return duplicate;

@@ -6,7 +6,7 @@ jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn().mockResolvedValue(nu
 
 it('routes old audit users to versioned Counts without exposing or submitting retired adjustments', async () => {
   render(<ComplianceCenter />);
-  const link = screen.getByRole('link', { name: 'Open Counts & audit' });
+  const link = screen.getByRole('link', { name: 'Open Stock counts' });
   expect(link).toHaveAttribute('href', '/dashboard/inventory?area=stock&view=COUNT');
   expect(screen.queryByRole('button', { name: 'Apply Adjustments' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Create Audit' })).not.toBeInTheDocument();

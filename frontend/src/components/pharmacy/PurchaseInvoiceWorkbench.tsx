@@ -40,6 +40,7 @@ import {
 } from "./PurchaseProductDetails";
 import { PurchaseManualMatchSearch } from "./PurchaseManualMatchSearch";
 import { PurchaseSupplierReview } from "./PurchaseSupplierReview";
+import { AgreedTermHint, AgreedTermsPanel, useAgreedTerms } from "./AgreedTerms";
 import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
 import { PurchaseReviewSummary } from "./PurchaseReviewSummary";
 import { ReviewStatus, ReviewLegend, reviewColors, type ReviewTone } from "@/components/ui/ReviewStatus";
@@ -1033,7 +1034,7 @@ export function PurchaseInvoiceWorkbench({
  */
 /**
  * @cc [owner:nareshshah139,label:product] historical-stock-recovery-guidance
- * Historical-stock holds with a confirmed unposted invoice status MUST offer Counts & audit
+ * Historical-stock holds with a confirmed unposted invoice status MUST offer Stock counts
  * and a copyable invoice handoff.
  * Guidance MUST retain stock uncertainty and distinguish physical reconciliation from supplier accounting.
  */
@@ -2065,7 +2066,7 @@ function PurchaseInvoiceEditor({
       setRejectedImportId(expectedId);
       setUnknownStockInvoiceId(result.invoiceId || 'unconfirmed-import');
       setError(null);
-      setNotice('Further intake rejected. Historical stock remains unverified. Use Counts & audit to reconcile physical inventory.');
+      setNotice('Further intake rejected. Historical stock remains unverified. Use Stock counts to reconcile physical inventory.');
       return true;
     }
     if (result.outcome === 'NO_STOCK_WRITTEN' && result.invoiceId === null) {
@@ -3048,6 +3049,12 @@ function PurchaseInvoiceEditor({
   const awaitingManualReview =
     !!activeInvoice && manualReviewCandidateId === activeInvoice.id;
   const catalogueRows = catalogue.state === 'assessed' && catalogueCurrent(catalogue.request) ? catalogue.rows : [];
+  const supplierGstin = !activeInvoice || editingSelectedInvoice ? header.distributorGstin : activeInvoice.distributorGstin;
+  const agreedTerms = useAgreedTerms(supplierGstin, lines.map((line, index) => {
+    const row = catalogueRows.find(candidate => candidate.localId === line.localId);
+    const catalogueDrugId = row && 'product' in row.resolution ? row.resolution.product.id : undefined;
+    return { productName: line.productName, drugId: masterStatuses[index]?.drug.id ?? catalogueDrugId };
+  }));
   const catalogueReady = catalogueRows.length === lines.length && catalogueRows.length > 0 && catalogueRows.every(row => row.resolution.state === 'ready');
   const catalogueBlockers = catalogueRows.filter(row => row.resolution.state !== 'ready');
   const catalogueChecks = stockAdded || activeInvoice?.status === 'CANCELLED' ? 0 : catalogueReady ? 0 : Math.max(1, catalogueBlockers.length);
@@ -3345,11 +3352,7 @@ function PurchaseInvoiceEditor({
             ? header.distributorName
             : activeInvoice.distributorName
         }
-        gstNumber={
-          !activeInvoice || editingSelectedInvoice
-            ? header.distributorGstin
-            : activeInvoice.distributorGstin
-        }
+        gstNumber={supplierGstin}
         canLoad={access.create || access.read}
         canSave={!!access.saveSupplier}
         canEdit={!!access.editSupplier}
@@ -3374,6 +3377,7 @@ function PurchaseInvoiceEditor({
             : undefined
         }
       />
+      {agreedTerms.supplier && <AgreedTermsPanel supplierName={agreedTerms.supplier.name} terms={agreedTerms.terms} />}
       {editingChecks && (
         <>
           <PurchaseOcrChecklist flags={currentHeaderFlags} checked={checkedOcr.header} values={header} />
@@ -3531,15 +3535,15 @@ function PurchaseInvoiceEditor({
         <p>Further intake rejected. Historical stock remains unverified; this does not mean no stock was posted.</p>
         <p className="break-all text-sm">Recovery reference: {rejectedImportId}</p>
         {sourceDocument && access.read && <OriginalDocumentLink document={sourceDocument} />}
-        <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Reconcile physical inventory in Counts &amp; audit</a>
+        <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Reconcile physical inventory in Stock counts</a>
         <p className="text-sm">Keep this invoice out of new intake. Verify physical quantities and product identities, then record an independent checkpoint. Supplier accounting remains separate.</p>
       </div>}
       {historicalStockHold && !stockAdded && !stockStatusUnknown && <section className="space-y-2" aria-label="Historical stock recovery">
         <p>This invoice may already be included in opening stock. Its historical stock outcome needs verification; do not add it as a new receipt.</p>
-        <p className="text-sm">Ask an inventory administrator to compare this bill with opening-stock records and verify a physical count in Counts &amp; audit. Supplier accounting remains separate.</p>
+        <p className="text-sm">Ask an inventory administrator to compare this bill with opening-stock records and verify a physical count in Stock counts. Supplier accounting remains separate.</p>
         <p className="break-all text-sm">Invoice reference: {activeInvoice?.invoiceNumber || activeInvoice?.id}</p>
         <div className="flex flex-wrap gap-2">
-          <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Open Counts &amp; audit</a>
+          <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Open Stock counts</a>
           <Button variant="outline" onClick={copyHandoff}>Copy historical stock handoff</Button>
         </div>
       </section>}
@@ -5155,6 +5159,7 @@ function PurchaseInvoiceEditor({
                               </span>
                             </div>
                                                           <div className="space-y-3 px-4 pb-4">
+                                <AgreedTermHint term={agreedTerms.termFor(index)} line={line} />
                                 {batchOpen && <label className="flex items-center gap-2 text-sm"><input data-purchase-local-controls type="checkbox" disabled={batchDisabled} checked={selectedRows.includes(line.localId)} onChange={event => selectBatchRows(event.target.checked ? [...currentSelectedRows, line.localId] : currentSelectedRows.filter(id => id !== line.localId))} />Select line {index + 1} for shared terms</label>}
                                 <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
 <Field id={`${line.localId}-product`} label="Product" value={line.productName} className="col-span-2" onChange={event => updateLine(line.localId, "productName", event.target.value)} />

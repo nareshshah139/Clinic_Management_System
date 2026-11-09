@@ -80,7 +80,7 @@ export function WorkspaceStock({
   onBack,
 }: Props) {
   const { user } = useDashboardUser();
-  const canSubmitEdits = ["OWNER", "ADMIN", "PHARMACIST"].includes(user?.role || "");
+  const canSubmitEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const [stockEdit, setStockEdit] = useState<{ item: any; field: 'price' | 'stock' } | null>(null);
   const stockQuery = stockPageQuery(query);
   const selectionScope = JSON.stringify(Object.entries(stockQuery)
@@ -357,7 +357,7 @@ export function WorkspaceStock({
               {!capabilities?.kinds?.COUNT?.write && (
                 <section className="space-y-2 rounded-md border p-4" aria-label="Batch recovery handoff">
                   {item.drugs?.length > 1 && <p>This batch is linked to more than one product. Its physical product must be verified before reconciliation.</p>}
-                  <p>Ask a colleague with Counts &amp; audit write access to open this batch, verify its product identity when needed, and record a fresh physical count. Viewing this batch or sharing this reference does not change stock.</p>
+                  <p>Ask a colleague who can count stock to open this batch, verify its product identity when needed, and record a fresh physical count. Viewing this batch or sharing this reference does not change stock.</p>
                   <label className="block">Batch recovery reference
                     <input className="mt-1 w-full rounded-md border p-2" readOnly value={`/dashboard/inventory?area=stock&view=list&item=${encodeURIComponent(item.id)}`} onFocus={event => event.currentTarget.select()} />
                   </label>
@@ -682,11 +682,8 @@ export function WorkspaceStock({
                                   const h = detail.history.find(
                                     (h: any) => h.transactionId === m.id,
                                   );
-                                  const p = detail.purchases.find(
-                                    (p: any) =>
-                                      p.stockCommitReference === m.reference ||
-                                      p.invoiceNumber === m.reference,
-                                  );
+                                  const p =
+                                    m.owner?.type === "purchase" ? m.owner : null;
                                   return h ? (
                                     <button
                                       className="underline"
@@ -730,12 +727,10 @@ export function WorkspaceStock({
                                     const h = detail.history.find(
                                         (h: any) => h.transactionId === m.id,
                                       ),
-                                      p = detail.purchases.find(
-                                        (p: any) =>
-                                          p.stockCommitReference ===
-                                            m.reference ||
-                                          p.invoiceNumber === m.reference,
-                                      );
+                                      p =
+                                        m.owner?.type === "purchase"
+                                          ? m.owner
+                                          : null;
                                     return h ? (
                                       <Button
                                         size="sm"
@@ -774,14 +769,6 @@ export function WorkspaceStock({
                                           }
                                         >
                                           Open source correction
-                                        </Button>
-                                      ) : m.owner?.type === "purchase" ? (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => onInvoice(m.owner.id)}
-                                        >
-                                          Open purchase correction
                                         </Button>
                                       ) : (
                                         <span>

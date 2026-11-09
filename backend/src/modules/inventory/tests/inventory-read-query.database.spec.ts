@@ -78,6 +78,7 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
     stock = new InventoryWorkspaceService(
       db as any,
       { permissions: async () => new Set(['inventory:item:read']) } as any,
+      {} as any,
     );
   }, 60000);
   afterAll(async () => {

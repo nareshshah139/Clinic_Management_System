@@ -16,6 +16,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { InventoryService } from './inventory.service';
 import { InventoryImportService } from './inventory-import.service';
+import { InventoryItemRequestService } from './inventory-item-request.service';
 import {
   CreateInventoryItemDto,
   UpdateInventoryItemDto,
@@ -56,26 +57,39 @@ interface AuthenticatedRequest {
   };
 }
 
+/**
+ * @cc [owner:nareshshah139,label:security] inventory-route-access
+ * Every /inventory route MUST require a signed-in user. OWNER, ADMIN and DOCTOR MUST pass every
+ * route, whether it reads stock, changes stock, prices or orders, or deletes. Other roles MUST be
+ * ADMIN, PHARMACIST or RECEPTION and MUST also hold the route's own permission, so a read grant
+ * never allows a stock change and a change grant never allows deleting an item, transaction,
+ * purchase order or supplier. NURSE, ACCOUNTANT, MANAGER and PATIENT MUST get 403 on every route.
+ */
 @Controller('inventory')
 @UseGuards(JwtAuthGuard)
 export class InventoryController {
   constructor(
     private readonly inventoryService: InventoryService,
     private readonly inventoryImportService: InventoryImportService,
+    private readonly itemRequestService: InventoryItemRequestService,
   ) {}
 
   // Inventory Item Management
   @Post('items')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:item:create')
-  createInventoryItem(
+  async createInventoryItem(
     @Body() createItemDto: CreateInventoryItemDto,
     @Request() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: any,
   ) {
-    return this.inventoryService.createInventoryItem(
+    const outcome = await this.itemRequestService.createOrRequest(
       createItemDto,
-      req.user.branchId,
+      req.user,
     );
+    if (outcome.created) return outcome.item;
+    res.status(202);
+    return { status: 'PENDING_APPROVAL', request: outcome.request };
   }
 
   @Get('imports/:id')

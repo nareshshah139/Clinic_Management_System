@@ -1,6 +1,6 @@
 "use client";
 
-import { displayUtcDate } from '@/lib/date-display';
+import { displayClinicDate } from '@/lib/date-display';
 
 import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api";
@@ -107,7 +107,7 @@ export function SupplierPaymentRecovery({ payments, invoices, canWrite, onChange
       {!payments.length && <p className="text-sm text-muted-foreground">No recorded payments for this supplier.</p>}
       {payments.map(payment => <div key={payment.id} className="flex flex-wrap items-start justify-between gap-3 rounded-md border p-3">
         <div className="min-w-0 text-sm">
-          <p className="font-medium">{money(payment.amount)} · {payment.mode} · {displayUtcDate(payment.paymentDate)}</p>
+          <p className="font-medium">{money(payment.amount)} · {payment.mode} · {displayClinicDate(payment.paymentDate)}</p>
           <p>{payment.allocations.map(row => `${row.invoiceNumber}: ${money(row.amount)}`).join(", ")}</p>
           {payment.reversedAt ? <p className="text-muted-foreground">Reversed · {payment.reversalReason}</p> : payment.replacesPaymentId ? <p className="text-muted-foreground">Replacement payment</p> : null}
         </div>

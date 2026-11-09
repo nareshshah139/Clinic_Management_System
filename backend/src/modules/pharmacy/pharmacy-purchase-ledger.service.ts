@@ -7,8 +7,9 @@ import {
 import { PrismaService } from '../../shared/database/prisma.service';
 import { createHash } from 'node:crypto';
 import { CreatePharmacyPurchasePaymentDto, ReversePharmacyPurchasePaymentDto, ReallocatePharmacyPurchasePaymentDto } from './dto/pharmacy-purchase-ledger.dto';
-
-type PurchasePaymentStatus = 'PENDING' | 'PARTIALLY_PAID' | 'PAID';
+import { MONEY_TOLERANCE, daysPastDue, invoiceOutstanding, invoiceSettled, paymentStatus, payableBalance, scheduledPayments, splitByEffectiveDate } from './purchase-payment-balance';
+import { clinicDay, clinicDayStart, isCalendarDay } from './register-utils';
+import { SUPPLIER_CREDIT_BALANCE_SELECT, creditHeldByDistributor } from './supplier-credit-balance';
 
 type LedgerInvoice = {
   id: string;
@@ -19,7 +20,7 @@ type LedgerInvoice = {
   invoiceDate: Date | string;
   dueDate?: Date | string | null;
   netPayable: number;
-  creditApplied?: number;
+  creditApplied?: number | null;
   tcsAmount?: number | null;
   status?: string;
   paymentAllocations?: {
@@ -39,7 +40,6 @@ type LedgerInvoice = {
 
 const TCS_THRESHOLD_AMOUNT = 5000000;
 const TCS_APPROACHING_RATIO = 0.9;
-const MONEY_TOLERANCE = 0.01;
 
 @Injectable()
 export class PharmacyPurchaseLedgerService {
@@ -76,14 +76,17 @@ export class PharmacyPurchaseLedgerService {
       );
     }
 
-    const requestFingerprint = this.paymentFingerprint(dto);
+    const paymentDate = isCalendarDay(dto.paymentDate) ? clinicDayStart(dto.paymentDate) : new Date(dto.paymentDate);
+    const requestFingerprint = this.paymentFingerprint({ ...dto, paymentDate });
     return this.transaction(async (tx: any) => {
       const existing = await tx.pharmacyPurchasePayment.findUnique({
         where: { branchId_requestKey: { branchId, requestKey: dto.requestKey.trim() } },
         include: { allocations: true },
       });
       if (existing) {
-        if ((existing.requestFingerprint || this.paymentFingerprint(existing)) !== requestFingerprint)
+        const stored = existing.requestFingerprint || this.paymentFingerprint(existing);
+        const legacy = isCalendarDay(dto.paymentDate) ? this.paymentFingerprint({ ...dto, paymentDate: new Date(dto.paymentDate) }) : null;
+        if (stored !== requestFingerprint && stored !== legacy)
           throw new ConflictException('This payment request key was used for different details. Reload the recorded payment.');
         return existing;
       }
@@ -97,7 +100,7 @@ export class PharmacyPurchaseLedgerService {
             id: { in: invoiceIds },
           },
           include: {
-            paymentAllocations: { where: { payment: { reversedAt: null } } },
+            paymentAllocations: { where: { payment: { reversedAt: null } }, include: { payment: { select: { paymentDate: true } } } },
           },
         });
 
@@ -106,6 +109,8 @@ export class PharmacyPurchaseLedgerService {
         distributorGstin,
         invoices,
         allocations,
+        paymentDate,
+        now: new Date(),
       });
       const invoiceById = new Map(
         invoices.map((invoice) => [invoice.id, invoice]),
@@ -118,7 +123,7 @@ export class PharmacyPurchaseLedgerService {
           requestFingerprint,
           distributorGstin,
           distributorName,
-          paymentDate: new Date(dto.paymentDate),
+          paymentDate,
           mode: dto.mode,
           paidBy,
           amount,
@@ -144,12 +149,8 @@ export class PharmacyPurchaseLedgerService {
         ...payment,
         allocations: payment.allocations.map((allocation: any) => {
           const invoice = allocation.purchaseInvoice;
-          const originalInvoice = invoiceById.get(allocation.purchaseInvoiceId);
-          const existingPaid = this.sumAllocations(
-            originalInvoice?.paymentAllocations,
-          );
-          const paidAfter = this.money(existingPaid + Number(originalInvoice?.creditApplied || 0) + allocation.amount);
-          const outstandingAfter = this.outstanding(invoice, paidAfter);
+          const paidAfter = this.money(invoiceSettled(invoiceById.get(allocation.purchaseInvoiceId)!) + allocation.amount);
+          const outstandingAfter = invoiceOutstanding(invoice, paidAfter);
 
           return {
             id: allocation.id,
@@ -159,7 +160,7 @@ export class PharmacyPurchaseLedgerService {
             invoiceTotal: this.money(invoice.netPayable),
             paidAfter,
             outstandingAfter,
-            paymentStatus: this.paymentStatus(invoice.netPayable, paidAfter),
+            paymentStatus: paymentStatus(invoice.netPayable, paidAfter),
           };
         }),
       };
@@ -229,9 +230,9 @@ export class PharmacyPurchaseLedgerService {
       if (allocations) {
         const invoices = await tx.pharmacyPurchaseInvoice.findMany({
           where: { branchId, id: { in: allocations.map(row => row.purchaseInvoiceId) } },
-          include: { paymentAllocations: { where: { payment: { reversedAt: null } } } },
+          include: { paymentAllocations: { where: { payment: { reversedAt: null } }, include: { payment: { select: { paymentDate: true } } } } },
         });
-        this.validateAllocationInvoices({ branchId, distributorGstin: original.distributorGstin, invoices, allocations });
+        this.validateAllocationInvoices({ branchId, distributorGstin: original.distributorGstin, invoices, allocations, now: new Date() });
         replacement = await tx.pharmacyPurchasePayment.create({
           data: {
             branchId, distributorGstin: original.distributorGstin, distributorName: original.distributorName,
@@ -280,24 +281,75 @@ export class PharmacyPurchaseLedgerService {
     }
   }
 
+  async creditHeld(branchId: string, asOfDate = new Date(), distributorGstins?: string[]) {
+    const credits = await (this.prisma as any).inventorySupplierCredit.findMany({
+      where: {
+        branchId,
+        creditNoteNumber: { not: null },
+        ...(distributorGstins ? { supplierGstin: { in: distributorGstins.map((gstin) => gstin.trim().toUpperCase()) } } : {}),
+      },
+      select: SUPPLIER_CREDIT_BALANCE_SELECT,
+    });
+    return creditHeldByDistributor(credits, asOfDate);
+  }
+
+  private async supplierNames(branchId: string, gstins: string[]) {
+    if (!gstins.length) return new Map<string, string>();
+    const suppliers = await (this.prisma as any).supplier.findMany({
+      where: { branchId, gstNumber: { in: gstins } },
+      select: { gstNumber: true, name: true },
+    });
+    return new Map<string, string>(suppliers.map((supplier: any) => [String(supplier.gstNumber).toUpperCase(), supplier.name]));
+  }
+
+  async distributorPosition(branchId: string, distributorGstin: string, asOfDate = new Date()) {
+    const gstin = distributorGstin.trim().toUpperCase();
+    const [invoices, held] = await Promise.all([
+      this.findLedgerInvoices(branchId, gstin, asOfDate),
+      this.creditHeld(branchId, asOfDate, [gstin]),
+    ]);
+    const outstanding = invoices.length
+      ? this.buildDistributorSummary(invoices, asOfDate, this.fiscalYearStart(asOfDate)).outstanding
+      : 0;
+    const creditHeld = held.get(gstin) ?? 0;
+    return {
+      gstin,
+      name: invoices[0]?.distributorName ?? (await this.supplierNames(branchId, [gstin])).get(gstin) ?? null,
+      outstanding,
+      creditHeld,
+      net: this.money(outstanding - creditHeld),
+    };
+  }
+
   async getDistributorSummaries(branchId: string, asOfDate = new Date()) {
-    const invoices = await this.findLedgerInvoices(branchId, undefined, asOfDate);
+    const [invoices, held] = await Promise.all([
+      this.findLedgerInvoices(branchId, undefined, asOfDate),
+      this.creditHeld(branchId, asOfDate),
+    ]);
     const groups = this.groupInvoicesByDistributor(invoices);
     const fiscalYearStart = this.fiscalYearStart(asOfDate);
+    const billed = new Set([...groups.values()].map((group) => group[0].distributorGstin.trim().toUpperCase()));
+    const creditOnly = [...held].filter(([gstin, amount]) => amount > 0 && !billed.has(gstin)).map(([gstin]) => gstin);
+    const names = await this.supplierNames(branchId, creditOnly);
 
     return {
       asOfDate: asOfDate.toISOString(),
       balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff less payment reversals recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       tcsThreshold: TCS_THRESHOLD_AMOUNT,
       distributors: Array.from(groups.values())
-        .map((groupInvoices) =>
-          this.buildDistributorSummary(
-            groupInvoices,
-            asOfDate,
-            fiscalYearStart,
-          ),
+        .map((groupInvoices) => {
+          const summary = this.buildDistributorSummary(groupInvoices, asOfDate, fiscalYearStart);
+          const creditHeld = held.get(summary.distributorGstin.trim().toUpperCase()) ?? 0;
+          return { ...summary, creditHeld, netPayable: this.money(summary.outstanding - creditHeld) };
+        })
+        .concat(
+          creditOnly.map((gstin) => {
+            const creditHeld = held.get(gstin)!;
+            const summary = this.buildDistributorSummary([], asOfDate, fiscalYearStart);
+            return { ...summary, distributorGstin: gstin, distributorName: names.get(gstin) ?? gstin, creditHeld, netPayable: this.money(-creditHeld) };
+          }),
         )
-        .sort((a, b) => b.outstanding - a.outstanding),
+        .sort((a, b) => b.outstanding - a.outstanding || b.creditHeld - a.creditHeld),
     };
   }
 
@@ -308,7 +360,8 @@ export class PharmacyPurchaseLedgerService {
   ) {
     const gstin = distributorGstin.trim().toUpperCase();
     const invoices = await this.findLedgerInvoices(branchId, gstin, asOfDate);
-    if (invoices.length === 0) {
+    const creditOnly = invoices.length === 0 && ((await this.creditHeld(branchId, asOfDate, [gstin])).get(gstin) ?? 0) > 0;
+    if (invoices.length === 0 && !creditOnly) {
       throw new NotFoundException('Distributor ledger not found');
     }
 
@@ -387,7 +440,7 @@ export class PharmacyPurchaseLedgerService {
 
     return {
       distributorGstin: gstin,
-      distributorName: invoices[0].distributorName,
+      distributorName: invoices[0]?.distributorName ?? (await this.supplierNames(branchId, [gstin])).get(gstin) ?? gstin,
       asOfDate: asOfDate.toISOString(),
       balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff less payment reversals recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       invoices: invoiceRows,
@@ -425,14 +478,13 @@ export class PharmacyPurchaseLedgerService {
     ];
 
     const invoices = await this.findLedgerInvoices(branchId, undefined, asOfDate);
+    const today = clinicDay(asOfDate);
     for (const invoice of invoices) {
       if (invoice.status !== 'STOCK_COMMITTED') throw new BadRequestException('Only posted purchase bills can receive payments');
-      const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = this.outstanding(invoice, paid);
+      const outstanding = invoiceOutstanding(invoice, invoiceSettled(invoice));
       if (outstanding <= 0) continue;
 
-      const anchorDate = new Date(invoice.dueDate || invoice.invoiceDate);
-      const days = Math.max(0, this.daysBetween(anchorDate, asOfDate));
+      const days = Math.max(0, daysPastDue(invoice.dueDate || invoice.invoiceDate, today));
       const bucket =
         days <= 30
           ? buckets[0]
@@ -472,30 +524,28 @@ export class PharmacyPurchaseLedgerService {
     const dueToday: any[] = [];
     const dueIn7Days: any[] = [];
     const overdue: any[] = [];
-    const todayStart = this.startOfDay(asOfDate);
-    const sevenDaysEnd = this.endOfDay(this.addDays(todayStart, 7));
+    const today = clinicDay(asOfDate);
 
     for (const invoice of invoices) {
-      const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = this.outstanding(invoice, paid);
+      const outstanding = invoiceOutstanding(invoice, invoiceSettled(invoice));
       if (outstanding <= MONEY_TOLERANCE || !invoice.dueDate) continue;
 
-      const dueDate = new Date(invoice.dueDate);
+      const days = daysPastDue(invoice.dueDate, today);
       const alertRow = {
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         distributorName: invoice.distributorName,
         distributorGstin: invoice.distributorGstin,
-        dueDate,
+        dueDate: new Date(invoice.dueDate),
         outstanding,
-        daysPastDue: this.daysBetween(dueDate, asOfDate),
+        daysPastDue: days,
       };
 
-      if (this.isSameDay(dueDate, todayStart)) {
+      if (days === 0) {
         dueToday.push(alertRow);
-      } else if (dueDate < todayStart) {
+      } else if (days > 0) {
         overdue.push(alertRow);
-      } else if (dueDate <= sevenDaysEnd) {
+      } else if (days >= -7) {
         dueIn7Days.push(alertRow);
       }
     }
@@ -562,6 +612,8 @@ export class PharmacyPurchaseLedgerService {
     distributorGstin: string;
     invoices: LedgerInvoice[];
     allocations: { purchaseInvoiceId: string; amount: number }[];
+    paymentDate?: Date;
+    now: Date;
   }) {
     const invoiceById = new Map(
       params.invoices.map((invoice) => [invoice.id, invoice]),
@@ -595,9 +647,16 @@ export class PharmacyPurchaseLedgerService {
         );
       }
 
-      const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = this.outstanding(invoice, paid);
-      if (Math.round(allocation.amount * 100) > Math.round(outstanding * 100)) {
+      if (params.paymentDate && clinicDay(params.paymentDate) < clinicDay(new Date(invoice.invoiceDate))) {
+        throw new BadRequestException(
+          `The payment date cannot be before the bill date for invoice ${invoice.invoiceNumber}`,
+        );
+      }
+
+      const { inEffect, scheduled } = splitByEffectiveDate(invoice.paymentAllocations || [], params.now);
+      const outstanding = invoiceOutstanding(invoice, invoiceSettled({ ...invoice, paymentAllocations: inEffect }));
+      const payable = payableBalance(outstanding, scheduledPayments(scheduled).scheduled);
+      if (Math.round(allocation.amount * 100) > Math.round(payable * 100)) {
         throw new BadRequestException(
           `Allocation exceeds outstanding balance for invoice ${invoice.invoiceNumber}`,
         );
@@ -660,16 +719,15 @@ export class PharmacyPurchaseLedgerService {
     let annualPurchaseTotal = 0;
     let tcsAmountTotal = 0;
     const paidCycleDays: number[] = [];
-    const todayStart = this.startOfDay(asOfDate);
-    const sevenDaysEnd = this.endOfDay(this.addDays(todayStart, 7));
+    const today = clinicDay(asOfDate);
 
     for (const invoice of invoices) {
       const invoiceAmount = this.money(invoice.netPayable);
-      const invoicePaid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-      const outstanding = this.outstanding(invoice, invoicePaid);
-      const status = this.paymentStatus(invoiceAmount, invoicePaid);
+      const invoicePaid = invoiceSettled(invoice);
+      const outstanding = invoiceOutstanding(invoice, invoicePaid);
+      const status = paymentStatus(invoiceAmount, invoicePaid);
       invoiceTotal = this.money(invoiceTotal + invoiceAmount);
-      paid = this.money(paid + this.sumAllocations(invoice.paymentAllocations));
+      paid = this.money(paid + invoiceSettled({ paymentAllocations: invoice.paymentAllocations }));
       credits = this.money(credits + Number(invoice.creditApplied || 0));
 
       if (status === 'PENDING') pendingCount += 1;
@@ -681,18 +739,18 @@ export class PharmacyPurchaseLedgerService {
           paidCycleDays.push(
             Math.max(
               0,
-              this.daysBetween(new Date(invoice.invoiceDate), lastPaymentDate),
+              daysPastDue(invoice.invoiceDate, clinicDay(lastPaymentDate)),
             ),
           );
         }
       }
 
       if (outstanding > MONEY_TOLERANCE && invoice.dueDate) {
-        const dueDate = new Date(invoice.dueDate);
-        if (dueDate < todayStart) {
+        const days = daysPastDue(invoice.dueDate, today);
+        if (days > 0) {
           overdueCount += 1;
           overdueAmount = this.money(overdueAmount + outstanding);
-        } else if (dueDate <= sevenDaysEnd) {
+        } else if (days >= -7) {
           dueSoonCount += 1;
           dueSoonAmount = this.money(dueSoonAmount + outstanding);
         }
@@ -706,8 +764,8 @@ export class PharmacyPurchaseLedgerService {
     }
 
     return {
-      distributorGstin: invoices[0].distributorGstin,
-      distributorName: invoices[0].distributorName,
+      distributorGstin: invoices[0]?.distributorGstin ?? '',
+      distributorName: invoices[0]?.distributorName ?? '',
       invoiceCount: invoices.length,
       invoiceTotal,
       paid,
@@ -745,21 +803,21 @@ export class PharmacyPurchaseLedgerService {
   }
 
   private invoiceLedgerRow(invoice: LedgerInvoice, asOfDate: Date) {
-    const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
-    const outstanding = this.outstanding(invoice, paid);
+    const paid = invoiceSettled(invoice);
+    const outstanding = invoiceOutstanding(invoice, paid);
     return {
       id: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
       invoiceDate: invoice.invoiceDate,
       dueDate: invoice.dueDate,
       netPayable: this.money(invoice.netPayable),
-      paid: this.sumAllocations(invoice.paymentAllocations),
+      paid: invoiceSettled({ paymentAllocations: invoice.paymentAllocations }),
       creditApplied: Number(invoice.creditApplied || 0),
       outstanding,
-      paymentStatus: this.paymentStatus(invoice.netPayable, paid),
+      paymentStatus: paymentStatus(invoice.netPayable, paid),
       daysPastDue:
         outstanding > MONEY_TOLERANCE && invoice.dueDate
-          ? this.daysBetween(new Date(invoice.dueDate), asOfDate)
+          ? daysPastDue(invoice.dueDate, clinicDay(asOfDate))
           : 0,
       payments: (invoice.paymentAllocations || []).map((allocation) => ({
         paymentId: allocation.payment?.id,
@@ -780,25 +838,6 @@ export class PharmacyPurchaseLedgerService {
     };
   }
 
-  private sumAllocations(allocations?: { amount: number }[]) {
-    return this.money(
-      (allocations || []).reduce(
-        (sum, allocation) => sum + Number(allocation.amount || 0),
-        0,
-      ),
-    );
-  }
-
-  private outstanding(invoice: { netPayable: number }, paid: number) {
-    return this.money(Math.max(Number(invoice.netPayable || 0) - paid, 0));
-  }
-
-  private paymentStatus(total: number, paid: number): PurchasePaymentStatus {
-    if (paid <= MONEY_TOLERANCE) return 'PENDING';
-    if (Number(total || 0) - paid <= MONEY_TOLERANCE) return 'PAID';
-    return 'PARTIALLY_PAID';
-  }
-
   private lastPaymentDate(invoice: LedgerInvoice) {
     const dates = (invoice.paymentAllocations || [])
       .map((allocation) => allocation.payment?.paymentDate)
@@ -809,39 +848,8 @@ export class PharmacyPurchaseLedgerService {
   }
 
   private fiscalYearStart(asOfDate: Date) {
-    const year =
-      asOfDate.getMonth() >= 3
-        ? asOfDate.getFullYear()
-        : asOfDate.getFullYear() - 1;
-    return new Date(year, 3, 1);
-  }
-
-  private startOfDay(date: Date) {
-    const next = new Date(date);
-    next.setHours(0, 0, 0, 0);
-    return next;
-  }
-
-  private endOfDay(date: Date) {
-    const next = new Date(date);
-    next.setHours(23, 59, 59, 999);
-    return next;
-  }
-
-  private addDays(date: Date, days: number) {
-    const next = new Date(date);
-    next.setDate(next.getDate() + days);
-    return next;
-  }
-
-  private isSameDay(a: Date, b: Date) {
-    return this.startOfDay(a).getTime() === this.startOfDay(b).getTime();
-  }
-
-  private daysBetween(start: Date, end: Date) {
-    const startTime = this.startOfDay(start).getTime();
-    const endTime = this.startOfDay(end).getTime();
-    return Math.floor((endTime - startTime) / 86400000);
+    const [year, month] = clinicDay(asOfDate).split('-').map(Number);
+    return clinicDayStart(`${month >= 4 ? year : year - 1}-04-01`);
   }
 
   private money(value: number) {

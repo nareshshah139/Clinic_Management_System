@@ -54,7 +54,7 @@ const statusNames: Record<string, string> = {
 /**
  * @cc [owner:nareshshah139] document-state-explanation
  * Known workflow states MUST explain their recorded stock effect and an available next action
- * or authorized handoff. A fresh count MUST preserve history and clear earlier observations.
+ * or authorized handoff.
  */
 export function workflowDocumentPresentation(kind: string, knowledge: DocumentKnowledge, authority: { write: boolean; approve?: boolean }): DocumentPresentation {
   const base = { canMutate: false, canEdit: false, primaryAction: null as string | null, primaryLabel: workflowKinds[kind]?.primary || 'Review document' };
@@ -72,23 +72,21 @@ export function workflowDocumentPresentation(kind: string, knowledge: DocumentKn
   }
   const result: DocumentPresentation = { ...base, heading: doc ? statusNames[status] : 'Unsaved draft', happened: '', stockEffect: 'recorded', stockExplanation: '', recovery: '', canMutate: authority.write, canEdit: authority.write && ['DRAFT', 'CHALLAN'].includes(status), checkLabel: null };
   if (authority.write && !['CORRECTION', 'TARGET_REVIEW'].includes(kind)) {
-    result.primaryAction = status === 'DRAFT' ? ({ SUPPLIER_RETURN: 'CHALLAN', PURCHASE_ORDER: 'SUBMIT', SHORTBOOK: 'CREATE_PO', QUOTATION: 'CONVERT_SALE' } as Record<string, string>)[kind] || 'POST' : status === 'CHALLAN' ? 'POST' : status === 'AWAITING_APPROVAL' && authority.approve ? 'APPROVE' : status === 'APPROVED' && kind !== 'PURCHASE_ORDER' ? ({ SHORTBOOK: 'CREATE_PO', QUOTATION: 'CONVERT_SALE' } as Record<string, string>)[kind] || 'POST' : null;
+    result.primaryAction = status === 'DRAFT' ? ({ SUPPLIER_RETURN: 'CHALLAN', PURCHASE_ORDER: 'SUBMIT', SHORTBOOK: 'CREATE_PO', QUOTATION: 'CONVERT_SALE' } as Record<string, string>)[kind] || 'POST' : status === 'AWAITING_APPROVAL' && authority.approve ? 'APPROVE' : status === 'APPROVED' && kind !== 'PURCHASE_ORDER' ? ({ SHORTBOOK: 'CREATE_PO', QUOTATION: 'CONVERT_SALE' } as Record<string, string>)[kind] || 'POST' : null;
   }
   const unchanged = (text: string) => { result.stockEffect = 'unchanged'; result.stockExplanation = text; };
-  const countRecovery = 'Start fresh count retains this record and its history, clears earlier observations, and uses current balances. Physically recount before submitting.';
   if (status === 'DRAFT') {
-    result.happened = kind === 'COUNT' ? 'This count is a draft. Submitting can apply the count immediately or may require approval under the saved inventory policy.' : 'This document is a draft. Review its details and the available recovery actions.';
+    result.happened = 'This document is a draft. Review its details and the available recovery actions.';
     unchanged('This draft has not changed stock.');
-    result.recovery = kind === 'COUNT' ? countRecovery : `Correct the draft, then choose ${result.primaryLabel}.`;
+    result.recovery = `Correct the draft, then choose ${result.primaryLabel}.`;
   } else if (status === 'AWAITING_APPROVAL') {
-    result.happened = 'This document is waiting for manager approval. Stock has not changed. Approval is required by the workflow or count variance policy.';
+    result.happened = 'This document is waiting for manager approval. Stock has not changed. Approval is required by the workflow.';
     unchanged('No stock effect has been posted by this document.');
     result.primaryLabel = 'Approve document';
-    result.recovery = authority.approve ? 'Choose Approve document or Reject proposal after checking the evidence.' : 'Ask a manager with approval permission to review this document. Approval alone does not apply a count.';
+    result.recovery = authority.approve ? 'Choose Approve document or Reject proposal after checking the evidence.' : 'Ask a manager with approval permission to review this document.';
   } else if (status === 'APPROVED') {
-    result.happened = kind === 'COUNT' ? 'This count is approved. Stock has not changed. Apply approved count updates the recorded quantities to the verified observations.' : 'This document is approved and ready for its next action.';
+    result.happened = 'This document is approved and ready for its next action.';
     unchanged('Approval itself has not changed stock.');
-    result.primaryLabel = kind === 'COUNT' ? 'Apply approved count' : result.primaryLabel;
     result.recovery = kind === 'PURCHASE_ORDER' ? 'Receive actual goods through an inward challan linked to this order.' : `Choose ${result.primaryLabel} when the evidence is complete.`;
   } else if (status === 'REJECTED') {
     result.happened = 'This proposal was rejected and did not change stock.';
@@ -96,7 +94,7 @@ export function workflowDocumentPresentation(kind: string, knowledge: DocumentKn
     const rejectedEvent = [...(doc?.events || [])].reverse().find((event: any) => event.toStatus === 'REJECTED' && (event.detail?.reason || event.reason));
     const reason = rejectedEvent?.detail?.reason || rejectedEvent?.reason;
     if (reason) result.happened += ` Reason: ${reason}`;
-    result.recovery = kind === 'COUNT' ? countRecovery : 'Review the rejection reason and create a corrected document from the document list.';
+    result.recovery = 'Review the rejection reason and create a corrected document from the document list.';
   } else if (status === 'CANCELLED') {
     const priorChallan = kind === 'SUPPLIER_RETURN';
     const demandOrOrder = ['PURCHASE_ORDER', 'SHORTBOOK'].includes(kind);
@@ -104,7 +102,7 @@ export function workflowDocumentPresentation(kind: string, knowledge: DocumentKn
     if (demandOrOrder) result.stockExplanation = 'Cancelling the remainder does not reverse goods already received. Review linked receipts before replacing the order.';
     else if (!priorChallan) unchanged('The cancelled document cannot be posted.');
     else result.stockExplanation = 'Earlier stock movements remain in the history. Check the saved compensation before starting another return.';
-    result.recovery = kind === 'COUNT' ? countRecovery : kind === 'SHORTBOOK' ? 'Open the linked purchase order and check its receipts before creating any replacement demand.' : kind === 'PURCHASE_ORDER' ? 'Review linked receipts and create a new order only for verified outstanding demand.' : 'Review the retained evidence, then create a new document if a corrected transaction is needed.';
+    result.recovery = kind === 'SHORTBOOK' ? 'Open the linked purchase order and check its receipts before creating any replacement demand.' : kind === 'PURCHASE_ORDER' ? 'Review linked receipts and create a new order only for verified outstanding demand.' : 'Review the retained evidence, then create a new document if a corrected transaction is needed.';
   } else if (status === 'REVERSED') {
     if (noStockKinds.has(kind)) {
       result.happened = kind === 'CREDIT_NOTE' ? 'The supplier credit was reversed. Its original accounting record and reversal remain in the history.' : 'The delivery record was reversed. Its original record and correction remain in the history.';
@@ -113,15 +111,15 @@ export function workflowDocumentPresentation(kind: string, knowledge: DocumentKn
       result.happened = 'A linked reversal compensated the original recorded effects. Both the original and compensation remain in the history.';
       result.stockExplanation = 'Reversal does not erase earlier stock movements. The saved stock effects show the quantities compensated.';
     }
-    result.recovery = kind === 'COUNT' ? countRecovery : 'Check the linked correction and current batch balance before creating a corrected transaction.';
+    result.recovery = 'Check the linked correction and current batch balance before creating a corrected transaction.';
   } else if (status === 'CHALLAN') {
     result.happened = 'Stock has already been sent back to the supplier on this return challan.';
     result.stockEffect = 'changed'; result.stockExplanation = 'Finalising the supplier credit does not return the same stock a second time.';
-    result.primaryLabel = 'Finalise supplier credit'; result.recovery = 'Choose Finalise supplier credit to record the credit, or Cancel document if the recorded return must be compensated.';
+    result.recovery = 'When the distributor’s credit note arrives, choose Record credit note and enter its number, date and amount. Cancel document only if the goods did not go back.';
   } else if (status === 'RELEASED') {
     result.happened = 'Held units were released for use. Release changed availability while physical quantity stayed unchanged by the release.';
     result.stockEffect = 'changed'; result.stockExplanation = 'The original receipt or hold remains in history; review current available and held quantities.';
-    result.recovery = kind === 'HOLD' ? 'Inspect the batch balance. Use Counts & audit with a colleague who has stock count permission if the physical quantity is wrong; create a new verified hold only for units that must still be blocked.' : 'Inspect the batch balance. Ask a manager to use Correct by reversal if the original customer return needs correction.';
+    result.recovery = kind === 'HOLD' ? 'Inspect the batch balance. Use Stock counts › Count an item with a colleague who can count stock if the physical quantity is wrong; create a new verified hold only for units that must still be blocked.' : 'Inspect the batch balance. Ask a manager to use Correct by reversal if the original customer return needs correction.';
     result.auditRecovery = kind === 'HOLD';
   } else if (status === 'PART_RECEIVED' || status === 'RECEIVED') {
     result.happened = kind === 'SHORTBOOK'
@@ -143,12 +141,7 @@ export function workflowDocumentPresentation(kind: string, knowledge: DocumentKn
   } else if (status === 'POSTED') {
     const effects: any[] = doc?.effects || [];
     const changes = effects.some(effect => Number(effect.quantityDelta ?? 0) !== 0 || Number(effect.heldDelta ?? 0) !== 0);
-    if (kind === 'COUNT') {
-      result.happened = changes ? 'Count applied. Recorded quantities were adjusted to the verified physical observations.' : Array.isArray(doc?.effects) ? 'Count verified. The saved checkpoint records the physical observations, including zero variance.' : 'Count applied. Read the saved stock effects to confirm any adjustment; effect details are unavailable in this response.';
-      result.stockEffect = changes ? 'changed' : 'recorded';
-      result.stockExplanation = 'The saved stock effects show any quantity adjustment. Earlier movements remain historical evidence.';
-      result.recovery = countRecovery;
-    } else if (noStockKinds.has(kind)) {
+    if (noStockKinds.has(kind)) {
       result.happened = kind === 'CREDIT_NOTE' ? 'Supplier credit was recorded and is available for allocation.' : kind === 'TARGET_REVIEW' ? 'Accepted reorder targets were saved.' : 'This record was posted.';
       unchanged('This document does not change physical stock.');
       result.recovery = 'Review the saved history. Use the linked workflow for any further stock or accounting action.';
@@ -160,13 +153,12 @@ export function workflowDocumentPresentation(kind: string, knowledge: DocumentKn
     }
   }
   if (kind === 'CORRECTION') {
-    result.recovery = 'Review the linked original and signed effects. Use Counts & audit with a colleague who has stock count permission if the physical quantity is wrong. This correction cannot itself be reversed from this screen.';
+    result.recovery = 'Review the linked original and signed effects. Use Stock counts › Count an item with a colleague who can count stock if the physical quantity is wrong. This correction cannot itself be reversed from this screen.';
     result.auditRecovery = true;
   }
   if (kind === 'TARGET_REVIEW') result.recovery = 'Open Reorder target review to review proposal lines and their saved values. This workflow does not change physical stock.';
   if (['DRAFT', 'APPROVED'].includes(status) && ['SHORTBOOK', 'QUOTATION'].includes(kind)) result.recovery += ` Conversion also requires ${kind === 'SHORTBOOK' ? 'purchase order' : 'counter sale'} write permission. If access is denied, share the recovery handoff with a colleague who has both workflow permissions.`;
   if (kind === 'PURCHASE_ORDER' && ['APPROVED', 'PART_RECEIVED', 'SENT'].includes(status)) result.recovery += ' Receiving requires inward challan write permission; share this order reference with an authorized colleague if that action is unavailable.';
-  if (kind === 'COUNT' && !result.recovery.includes('Start fresh count')) result.recovery += ` ${countRecovery}`;
-  if (!authority.write) result.recovery = `Ask a colleague with ${kind === 'COUNT' ? 'stock count' : 'this inventory workflow\'s write'} permission to perform the recovery. Share the recovery handoff below. ${result.recovery}`;
+  if (!authority.write) result.recovery = `Ask a colleague with this inventory workflow\'s write permission to perform the recovery. Share the recovery handoff below. ${result.recovery}`;
   return result;
 }

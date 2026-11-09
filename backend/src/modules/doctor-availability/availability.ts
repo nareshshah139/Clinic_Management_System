@@ -47,6 +47,18 @@ export interface DayAvailability {
 }
 
 export const MINUTES_PER_DAY = 24 * 60;
+export const MAX_BOOKINGS_PER_SLOT = 5;
+
+/**
+ * @cc [owner:nareshshah139,label:product] doctor-overbooking-limit
+ * A doctor's patients-per-slot limit MUST read as an integer in 1..MAX_BOOKINGS_PER_SLOT;
+ * any other stored value reads as 1, so a bad value can only make booking stricter.
+ */
+export function slotLimit(stored: unknown): number {
+  return typeof stored === 'number' && Number.isInteger(stored) && stored >= 1 && stored <= MAX_BOOKINGS_PER_SLOT
+    ? stored
+    : 1;
+}
 const IST_OFFSET_MINUTES = 5 * 60 + 30;
 const DEFAULT_START_HOUR = 9;
 const DEFAULT_END_HOUR = 18;
@@ -97,7 +109,12 @@ export function resolveDayAvailability(
   };
 }
 
-/** Time off that overlaps `slot` ("HH:MM-HH:MM", clinic time) on `date`. */
+/**
+ * @cc [owner:nareshshah139,label:product] time-off-slot-overlap
+ * A slot MUST count as blocked when time off overlaps it by any minute, including time off that
+ * starts inside it or covers it whole. Time off ending exactly when the slot starts, or starting
+ * exactly when it ends, MUST NOT block it. Booking and the slot list MUST agree on it.
+ */
 export function timeOffOverlappingSlot(
   date: string,
   slot: string,
@@ -142,7 +159,12 @@ export function parseWeeklyHoursInput(
   return { rows: sorted };
 }
 
-/** The UTC instant at which an IST calendar day starts. */
+/**
+ * @cc [owner:nareshshah139,label:calculation] ist-day-is-a-fixed-24-hour-window
+ * The clinic day for a YYYY-MM-DD date MUST start at 00:00 IST (18:30 UTC the previous day) and last
+ * exactly 24 hours, with no daylight-saving shift, so an instant at 18:29:59.999 UTC belongs to the
+ * previous clinic day and 18:30:00.000 UTC to the next.
+ */
 export function istDayStart(date: string): Date {
   return new Date(Date.parse(`${date}T00:00:00.000Z`) - IST_OFFSET_MINUTES * 60_000);
 }
@@ -151,7 +173,12 @@ export function istDayEnd(date: string): Date {
   return new Date(istDayStart(date).getTime() + MINUTES_PER_DAY * 60_000);
 }
 
-/** India observes no DST, so a fixed offset is exact. */
+/**
+ * @cc [owner:nareshshah139,label:calculation] ist-clock-maps-instants-to-clinic-date
+ * Any UTC instant MUST map to the clinic date and minutes-since-midnight in IST (UTC+5:30), and
+ * agree with ist-day-is-a-fixed-24-hour-window, so "today" and "now" for slot filtering never
+ * disagree with the day an appointment was booked on.
+ */
 export function istClock(now: Date): { date: string; minutes: number } {
   const shifted = new Date(now.getTime() + IST_OFFSET_MINUTES * 60_000);
   return {
@@ -191,6 +218,12 @@ export function overlaps(a: MinuteInterval, b: MinuteInterval): boolean {
   return a.start < b.end && b.start < a.end;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] time-off-is-clipped-to-the-ist-day
+ * Leave, holiday and blocked time MUST be cut to the IST day being booked, so time off that starts
+ * the evening before or ends the next morning (UTC dates differ from IST dates) blocks exactly the
+ * minutes it covers on that day and nothing on days it only touches. A partial minute rounds up.
+ */
 function clipTimeOffToDay(date: string, timeOff: TimeOffRow[]): BlockedInterval[] {
   const dayStart = istDayStart(date).getTime();
   const dayEnd = dayStart + MINUTES_PER_DAY * 60_000;

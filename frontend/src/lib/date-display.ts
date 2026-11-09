@@ -106,6 +106,14 @@ export function displayClinicDateTime(value: DateValue, fallback = '—'): strin
   return `${parts.date}, ${parts.time}`;
 }
 
+export function displayClinicDateTimeCompact(value: DateValue, today: string, fallback = '—'): string {
+  const parsed = instant(value);
+  if (!parsed) return fallback;
+  const parts = clinic(parsed);
+  const date = parts.date.endsWith(` ${today.slice(0, 4)}`) ? parts.date.slice(0, -5) : parts.date;
+  return `${date}, ${parts.time}`;
+}
+
 /**
  * @cc [owner:nareshshah139,label:product] clinic-event-time
  * Event times MUST use Asia/Kolkata and padded 12-hour time such as 02:30 pm.

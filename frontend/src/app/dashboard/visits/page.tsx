@@ -258,6 +258,9 @@ import { Badge } from '@/components/ui/badge';
 import { User, Users, Stethoscope, FileText, Calendar, Activity, ArrowLeft } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
+import { formatPatientName } from '@/lib/utils';
+import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
+import { useRecordById } from '@/components/visits/useRecordById';
 import type {
   Appointment,
   GetPatientsResponse,
@@ -271,6 +274,9 @@ import type {
 type AppointmentWithVisit = Appointment & { visit?: { id: string } | null };
 type DoctorSummary = UserSummary & { specialization?: string };
 type PatientMatch = Patient & { name?: string };
+
+const fetchPatientById = (id: string) => apiClient.getPatient(id);
+const fetchDoctorById = (id: string) => apiClient.getUser(id);
 
 const normalizePatientVisits = (payload: PatientVisitHistoryResponse): VisitTimelineEntry[] => {
   if (Array.isArray(payload)) {
@@ -501,6 +507,27 @@ function VisitsPageInner() {
     return [];
   }, []);
 
+  /**
+   * @cc [owner:nareshshah139,label:product] visits-doctor-pages
+   * The visit doctor picker MUST load every page of the branch doctor list; a failed page
+   * MUST fail the load rather than silently present a partial list.
+   */
+  const loadDoctors = useCallback(async () => {
+    const doctorsById = new Map<string, DoctorSummary>();
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const response = await apiClient.get<GetUsersResponse & { pagination?: { totalPages: number } }>(
+        '/users', { role: 'DOCTOR', page, limit: 100 },
+      );
+      extractDoctors(response).forEach((doctor) => doctorsById.set(doctor.id, doctor));
+      const count = response.pagination?.totalPages;
+      if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) totalPages = count;
+      page += 1;
+    } while (page <= totalPages);
+    return Array.from(doctorsById.values());
+  }, [extractDoctors]);
+
   const fetchAppointmentData = useCallback(async (appointmentId: string) => {
     try {
       const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
@@ -518,7 +545,7 @@ function VisitsPageInner() {
     try {
       const [patientsRes, usersRes] = await Promise.allSettled([
         apiClient.getPatients({ page: 1, limit: 1 }),
-        apiClient.get('/users', { role: 'DOCTOR', limit: 1 })
+        loadDoctors()
       ]);
 
       if (patientsRes.status === 'fulfilled') {
@@ -535,7 +562,7 @@ function VisitsPageInner() {
       }
 
       if (usersRes.status === 'fulfilled') {
-        const doctorsData = extractDoctors(usersRes.value);
+        const doctorsData = usersRes.value;
         setDoctors(doctorsData);
         if (doctorsData.length > 0) {
           const candidate = doctorsData[0]?.id;
@@ -558,7 +585,7 @@ function VisitsPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [extractDoctors, extractPatients, urlPatientId]);
+  }, [loadDoctors, extractPatients, urlPatientId]);
 
   useEffect(() => {
     void loadData();
@@ -670,15 +697,8 @@ function VisitsPageInner() {
     return permissions[currentUserRole as keyof typeof permissions] || permissions.DOCTOR;
   }, [currentUserRole]);
 
-  const selectedPatient = useMemo(
-    () => patients.find((p) => p.id === selectedPatientId) ?? null,
-    [patients, selectedPatientId]
-  );
-
-  const selectedDoctor = useMemo(
-    () => doctors.find((d) => d.id === selectedDoctorId) ?? null,
-    [doctors, selectedDoctorId]
-  );
+  const selectedPatient = useRecordById<PatientMatch>(selectedPatientId, fetchPatientById);
+  const selectedDoctor = useRecordById<DoctorSummary>(selectedDoctorId, fetchDoctorById);
 
   const startNewVisit = () => {
     if (selectedPatientId && selectedDoctorId) {
@@ -938,10 +958,11 @@ function VisitsPageInner() {
                         <div className="flex items-center justify-between">
                           <div>
                             <h4 className="text-sm font-medium text-gray-900">Ready to start visit</h4>
-                            <p className="text-xs text-gray-500 mt-1">
-                              Patient: {selectedPatient?.name ?? 'Unknown'} • 
-                              Doctor: Dr. {selectedDoctor?.firstName} {selectedDoctor?.lastName}
-                            </p>
+                            <VisitIdentityBar
+                              className="mt-1 !text-xs !text-gray-500"
+                              patient={selectedPatient}
+                              doctor={selectedDoctor}
+                            />
                           </div>
                           <Button onClick={startNewVisit}>
                             Start Visit Documentation
@@ -1061,9 +1082,9 @@ function VisitsPageInner() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 max-w-full">
+          <div className="flex flex-wrap items-center gap-2">
             <PageHeader title={<>Visit Documentation</>} />
             {appointmentData && (
               <Badge variant="secondary" className="bg-blue-100 text-blue-700">
@@ -1072,15 +1093,6 @@ function VisitsPageInner() {
               </Badge>
             )}
           </div>
-          <p className="text-sm text-gray-600">
-            Patient: {selectedPatient?.name ?? 'Unknown'} • 
-            Doctor: Dr. {selectedDoctor?.firstName} {selectedDoctor?.lastName}
-            {appointmentData && (
-              <span className="ml-2 text-blue-600">
-                • {appointmentData.slot} • {appointmentData.visitType}
-              </span>
-            )}
-          </p>
           {/* Minimal inline tracker for current patient */}
           {selectedPatientId && (
             <div className="mt-2">
@@ -1134,12 +1146,20 @@ function VisitsPageInner() {
         </div>
       </div>
 
+      <div className="sticky -top-4 z-30 -mx-4 md:-top-6 border-b bg-background px-4 py-2 md:-mx-6 md:px-6">
+        <VisitIdentityBar
+          patient={selectedPatient}
+          doctor={selectedDoctor}
+          appointment={appointmentData}
+        />
+      </div>
+
       <MedicalVisitForm
         key={`${selectedPatientId}:${urlVisitId || appointmentData?.id || "new"}`}
         patientId={selectedPatientId} 
         doctorId={selectedDoctorId}
         userRole={currentUserRole}
-        patientName={selectedPatient?.name || ''}
+        patientName={selectedPatient.status === 'ready' ? formatPatientName(selectedPatient.record) : ''}
         visitDate={new Date().toISOString()}
         appointmentId={appointmentData?.id}
         appointmentData={appointmentData}

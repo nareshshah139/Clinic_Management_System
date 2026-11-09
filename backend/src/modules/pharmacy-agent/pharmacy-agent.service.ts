@@ -23,7 +23,9 @@ import { DrugService } from '../pharmacy/drug.service';
 import { PharmacyPurchaseInvoiceService } from '../pharmacy/pharmacy-purchase-invoice.service';
 import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { InventoryItemRequestService } from '../inventory/inventory-item-request.service';
 import { ReportsService } from '../reports/reports.service';
+import { grantsForRole, parsePermissionList, permissionGranted } from '../../shared/access/permission-grants';
 import {
   CreatePharmacyAgentSessionDto,
   RejectPharmacyAgentProposalDto,
@@ -212,6 +214,7 @@ export class PharmacyAgentService implements OnModuleInit {
     private readonly prescriptionQueueService: PharmacyPrescriptionQueueService,
     private readonly inventoryService: InventoryService,
     private readonly reportsService: ReportsService,
+    private readonly itemRequestService: InventoryItemRequestService,
   ) {}
 
   async onModuleInit() {
@@ -1412,8 +1415,16 @@ export class PharmacyAgentService implements OnModuleInit {
         if (!action.targetId)
           throw new BadRequestException('targetId is required');
         return this.drugService.update(action.targetId, input, user.branchId);
-      case 'create_inventory_item':
-        return this.inventoryService.createInventoryItem(input, user.branchId);
+      case 'create_inventory_item': {
+        const outcome = await this.itemRequestService.createOrRequest(input, {
+          id: user.id,
+          branchId: user.branchId,
+          role: String(user.role),
+        });
+        return outcome.created
+          ? outcome.item
+          : { status: 'PENDING_APPROVAL', request: outcome.request };
+      }
       case 'update_inventory_item':
         if (!action.targetId)
           throw new BadRequestException('targetId is required');
@@ -1490,6 +1501,11 @@ export class PharmacyAgentService implements OnModuleInit {
     return map[targetType];
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security;product] agent-scoped-grants
+   * Agent permission checks MUST use the shared permission matcher, so a scoped wildcard grants
+   * its scope and everything nested under it, and nothing in a look-alike scope.
+   */
   private async hasPermission(user: AgentUser, permission?: string | null) {
     if (!permission) return true;
     if (
@@ -1505,25 +1521,17 @@ export class PharmacyAgentService implements OnModuleInit {
       select: { permissions: true, role: true },
     });
     if (!dbUser) return false;
-    const userPermissions = this.parsePermissions(dbUser.permissions);
     const role = await prisma.role.findFirst({
       where: { name: dbUser.role },
       select: { permissions: true },
     });
-    const rolePermissions = this.parsePermissions(role?.permissions);
-    return new Set([...rolePermissions, ...userPermissions]).has(permission);
-  }
-
-  private parsePermissions(value?: string | null): string[] {
-    if (!value) return [];
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed)
-        ? parsed.filter((item) => typeof item === 'string')
-        : [];
-    } catch {
-      return [];
-    }
+    return permissionGranted(
+      grantsForRole(dbUser.role, [
+        ...parsePermissionList(role?.permissions),
+        ...parsePermissionList(dbUser.permissions),
+      ]),
+      permission,
+    );
   }
 
   private detectAttachmentKind(file: Express.Multer.File) {

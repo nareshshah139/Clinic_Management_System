@@ -1,3 +1,5 @@
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { Controller, Get, Post, Query, Body, Param, Request, UseGuards, Res, Logger } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -12,6 +14,7 @@ interface AuthenticatedRequest {
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('google-calendar')
+@Roles(...CLINIC_STAFF_ROLES)
 export class GoogleCalendarController {
   private readonly logger = new Logger('GoogleCalendarController');
 

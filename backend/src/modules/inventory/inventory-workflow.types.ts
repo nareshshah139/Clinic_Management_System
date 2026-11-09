@@ -3,6 +3,12 @@ import { IsArray, IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } 
 export const WORKFLOW_KINDS = ['OPENING_STOCK', 'SUPPLIER_RETURN', 'SALES_RETURN', 'LOSS', 'HOLD', 'COUNT', 'CORRECTION', 'SHORTBOOK', 'PURCHASE_ORDER', 'INWARD_CHALLAN', 'GATE_PASS', 'QUOTATION', 'COUNTER_SALE', 'CREDIT_NOTE', 'TARGET_REVIEW'] as const;
 export type WorkflowKind = typeof WORKFLOW_KINDS[number];
 export type WorkflowActor = { id: string; branchId: string; role: string; permissions?: string | string[] };
+export const INVENTORY_APPROVERS: ReadonlySet<string> = new Set(['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR']);
+/** Stock count differences need a doctor's approval (CR-31); owners and admins may also decide. Managers approve other documents only. */
+export const COUNT_APPROVERS: ReadonlySet<string> = new Set(['OWNER', 'ADMIN', 'DOCTOR']);
+export const SELF_APPROVERS: ReadonlySet<string> = new Set(['OWNER', 'ADMIN', 'MANAGER']);
+export const mayApproveDocument = (actor: WorkflowActor, doc: { createdBy: string }) =>
+  INVENTORY_APPROVERS.has(actor.role) && (SELF_APPROVERS.has(actor.role) || doc.createdBy !== actor.id);
 export type WorkflowLine = {
   id: string; inventoryId: string; name?: string; batchNumber?: string; expiryDate?: string;
   unit?: string; quantity: number; freeQuantity?: number; unitPrice?: number; mrp?: number;
@@ -10,8 +16,10 @@ export type WorkflowLine = {
   physicalStock?: number; systemStock?: number; disposition?: 'RESTOCK' | 'QUARANTINE' | 'LOSS';
   minStockLevel?: number; maxStockLevel?: number; beforeMin?: number | null; beforeMax?: number | null;
   originalTerms?: Record<string,any>; fefoOverrideReason?:string;
-  manual?: boolean; location?: string; taxable?: number; tax?: number; total?: number;
+  manual?: boolean; location?: string; taxable?: number; tax?: number; total?: number; note?: string;
+  capturedAt?: string;
 };
+export const LEGACY_COUNT_SETTINGS = ['auditEnabled', 'auditDailyCount', 'auditAdjustmentMode', 'approvalValue', 'negativeCountNeedsApproval'] as const;
 export class SaveWorkflowDocumentDto {
   @IsIn(WORKFLOW_KINDS) kind: WorkflowKind;
   @IsString() @MaxLength(160) reference: string;
@@ -30,8 +38,6 @@ export class TransitionWorkflowDto {
   @IsOptional() @IsArray() @IsString({ each: true }) lineIds?: string[];
 }
 export const DEFAULT_INVENTORY_SETTINGS = {
-  auditEnabled: false, auditDailyCount: 10, auditAdjustmentMode: 'APPROVAL',
-  approvalValue: 5000, negativeCountNeedsApproval: true,
   autoMinMaxEnabled: false, lookbackDays: 60, minimumOrders: 1,
   minCoverDays: 10, maxCoverDays: 60, refreshDays: 7,
   includeBounce: false, includeRefill: true, excludedItemIds: [] as string[],

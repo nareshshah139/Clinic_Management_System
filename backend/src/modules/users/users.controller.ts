@@ -1,3 +1,4 @@
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Request, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MAX_SIGNATURE_BYTES } from './doctor-signature';
@@ -7,10 +8,15 @@ import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
-import { Roles } from '../../shared/decorators/roles.decorator';
+import { Authenticated, Roles } from '../../shared/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 
-/** Changing users, roles, permissions and branches is limited to clinic managers (RolesGuard also admits DOCTOR). */
+/**
+ * @cc [owner:nareshshah139,label:security] user-admin-writes-managers-only
+ * Creating, editing or deleting a user, changing a user's role, permissions or status, and every
+ * branch, permission and role write MUST succeed for OWNER, ADMIN and DOCTOR and MUST return 403
+ * without writing for every other role, including when the caller targets their own record.
+ */
 const MANAGE = [UserRole.OWNER, UserRole.ADMIN];
 
 interface AuthenticatedRequest {
@@ -22,10 +28,17 @@ interface AuthenticatedRequest {
 }
 
 @Controller('users')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security] me-assets-act-on-caller
+   * The /users/me signature and letterhead routes MUST change only the session caller's own asset;
+   * an id in the body or query MUST NOT redirect the write. A caller who is not an active DOCTOR
+   * MUST get 403 without a write.
+   */
   @Post('me/signature')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SIGNATURE_BYTES, files: 1 } }))
   uploadOwnSignature(@Request() req: AuthenticatedRequest, @UploadedFile() file?: Express.Multer.File) {
@@ -98,6 +111,7 @@ export class UsersController {
   }
 
   @Post(':id/change-password')
+  @Authenticated()
   changePassword(@Param('id') id: string, @Body() changePasswordDto: ChangePasswordDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.changePassword(id, changePasswordDto, req.user);
   }
@@ -105,6 +119,7 @@ export class UsersController {
 
 
   @Patch(':id/profile')
+  @Authenticated()
   updateProfile(@Param('id') id: string, @Body() updateProfileDto: UpdateProfileDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.updateProfile(id, updateProfileDto, req.user);
   }

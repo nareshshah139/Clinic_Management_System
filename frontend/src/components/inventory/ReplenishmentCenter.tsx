@@ -18,6 +18,7 @@ type Props = {
 };
 const emptyFilters = { search: '', from: '', to: '', status: '', gstin: '' };
 const api = '/inventory/workspace';
+const withoutCounts = ({ reconciliation: _counts, ...rest }: Record<string, any>) => rest;
 
 /**
  * @cc [owner:nareshshah139,label:product] replenishment-controls-authoritative-state
@@ -143,15 +144,12 @@ export function ReplenishmentCenter({ view, documentId, caps, onOpen, onCreate, 
       {!caps?.settings && <p className="text-sm">An inventory manager can change automation settings.</p>}
       <fieldset disabled={!caps?.settings || busy} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <label className="text-sm">Automation owner<select className={inputClass} value={settings.ownerId} onChange={e => field('ownerId', e.target.value)}><option value="">Select an active branch owner</option>{owners.map(o => <option key={o.id} value={o.id}>{o.firstName} {o.lastName} · {o.role}</option>)}</select></label>
-        {[['autoMinMaxEnabled', 'Automatic target proposals'], ['autoPoEnabled', 'Automatic PO drafts'], ['auditEnabled', 'Daily stock count']].map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings[key]} onChange={e => field(key, e.target.checked)}/>{label}: {settings[key] ? 'On' : 'Off'}</label>)}
-        {[['lookbackDays', 'Demand lookback (days)'], ['minimumOrders', 'Minimum order history'], ['minCoverDays', 'Min. cover (days)'], ['maxCoverDays', 'Max. cover (days)'], ['refreshDays', 'Target refresh (days)'], ['auditDailyCount', 'Batches per daily count']].map(([key, label]) => <label key={key} className="text-sm">{label}<input className={inputClass} type="number" min="1" step="1" value={settings[key]} onChange={e => field(key, e.target.value === '' ? '' : Number(e.target.value))}/></label>)}
-        <div><div className="flex items-center gap-1"><label htmlFor="inventory-count-policy" className="text-sm">Count policy</label><InventoryHelp label="Count policy">Managers can approve. Other staff follow this policy when posting a stock count.</InventoryHelp></div><select id="inventory-count-policy" className={inputClass} value={settings.auditAdjustmentMode} onChange={e => field('auditAdjustmentMode', e.target.value)}><option value="APPROVAL">Manager approval for every variance</option><option value="THRESHOLD">Approval based on variance rules</option></select></div>
-        <label className="text-sm">Approval threshold (₹)<input className={inputClass} type="number" min="0" step="0.01" value={settings.approvalValue} onChange={e => field('approvalValue', e.target.value === '' ? '' : Number(e.target.value))}/></label>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.negativeCountNeedsApproval} onChange={e => field('negativeCountNeedsApproval', e.target.checked)}/>Negative count variances require approval</label>
+        {[['autoMinMaxEnabled', 'Automatic target proposals'], ['autoPoEnabled', 'Automatic PO drafts']].map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings[key]} onChange={e => field(key, e.target.checked)}/>{label}: {settings[key] ? 'On' : 'Off'}</label>)}
+        {[['lookbackDays', 'Demand lookback (days)'], ['minimumOrders', 'Minimum order history'], ['minCoverDays', 'Min. cover (days)'], ['maxCoverDays', 'Max. cover (days)'], ['refreshDays', 'Target refresh (days)']].map(([key, label]) => <label key={key} className="text-sm">{label}<input className={inputClass} type="number" min="1" step="1" value={settings[key]} onChange={e => field(key, e.target.value === '' ? '' : Number(e.target.value))}/></label>)}
         {[['includeBounce', 'Include unfulfilled bounce quotations'], ['includeRefill', 'Include planned refill quotations']].map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings[key]} onChange={e => field(key, e.target.checked)}/>{label}</label>)}
       </fieldset>
-      <p className="text-sm">{settings.auditAdjustmentMode === 'APPROVAL' ? 'Every nonzero count variance requires a manager. The threshold and negative-variance rules apply only when the rule-based policy is selected.' : 'Approval is required when the variance value reaches the threshold, or a negative variance meets the selected rule.'}</p>
-      <div className="flex flex-wrap gap-3">{caps?.settings && <><Button disabled={busy} onClick={() => action(() => apiClient.patch(`${api}/settings`, settings), 'Automation settings saved.')}>Save settings</Button><Button variant="outline" disabled={busy} onClick={() => action(() => apiClient.post(`${api}/automation/run`, {}), 'Run recorded. Review the outcomes below.')}>Run saved settings</Button></>}</div>
+      <p className="text-sm">Stock count settings are in Stock › Stock counts › Settings.</p>
+      <div className="flex flex-wrap gap-3">{caps?.settings && <><Button disabled={busy} onClick={() => action(() => apiClient.patch(`${api}/settings`, withoutCounts(settings)), 'Automation settings saved.')}>Save settings</Button><Button variant="outline" disabled={busy} onClick={() => action(() => apiClient.post(`${api}/automation/run`, {}), 'Run recorded. Review the outcomes below.')}>Run saved settings</Button></>}</div>
       <p className="text-sm">{state.transport.message}</p>
       <RunHistory runs={state.runs} onOpen={onOpen}/>
     </> : view === 'monitor' && state ? <>

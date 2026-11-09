@@ -60,7 +60,10 @@ export class PharmacyInvoiceService {
     userId?: string,
   ) {
     return this.withInvoiceNumber(
-      (tx, invoiceNumber) => this.createDraft(tx, dto, branchId, invoiceNumber),
+      (tx, invoiceNumber) =>
+        this.createDraft(tx, dto, branchId, invoiceNumber, {
+          createdById: userId,
+        }),
       branchId,
     );
   }
@@ -113,6 +116,7 @@ export class PharmacyInvoiceService {
         {
           checkoutRequestKey: requestKey,
           checkoutPayloadHash: payloadHash,
+          createdById: userId,
         },
       );
       return this.transitionInvoice(
@@ -156,9 +160,11 @@ export class PharmacyInvoiceService {
     createInvoiceDto: CreatePharmacyInvoiceDto,
     branchId: string,
     invoiceNumber: string,
-    operation:
-      | { checkoutRequestKey: string; checkoutPayloadHash: string }
-      | Record<string, never> = {},
+    operation: {
+      checkoutRequestKey?: string;
+      checkoutPayloadHash?: string;
+      createdById?: string;
+    } = {},
   ) {
     this.validateInvoiceItemsInput(createInvoiceDto.items);
     // Validate patient exists

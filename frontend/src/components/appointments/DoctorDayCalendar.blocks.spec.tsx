@@ -114,6 +114,27 @@ describe('DoctorDayCalendar appointment blocks', () => {
     expect(await screen.findByRole('dialog')).toHaveTextContent('Ravi Kumar');
   });
 
+  it('shows appointments before and after working hours without adding booking slots', async () => {
+    renderDay([
+      appointment('early', '08:00-08:30', 'Early Patient', AppointmentStatus.SCHEDULED),
+      appointment('normal', '10:00-10:30', 'Normal Patient', AppointmentStatus.SCHEDULED),
+      appointment('late', '18:30-19:00', 'Late Patient', AppointmentStatus.SCHEDULED),
+    ]);
+    const early = (await screen.findByRole('button', { name: /^Early Patient, / })).closest('[data-appointment-block]') as HTMLElement;
+    const normal = screen.getByRole('button', { name: /^Normal Patient, / }).closest('[data-appointment-block]') as HTMLElement;
+    const late = screen.getByRole('button', { name: /^Late Patient, / }).closest('[data-appointment-block]') as HTMLElement;
+    expect(parseFloat(early.style.top)).toBe(0);
+    expect(parseFloat(normal.style.top)).toBeGreaterThan(0);
+    expect(parseFloat(late.style.top)).toBeLessThan(100);
+    const grid = early.parentElement as HTMLElement;
+    const gutter = grid.previousElementSibling as HTMLElement;
+    expect(parseFloat(grid.style.paddingTop)).toBeGreaterThan(0);
+    expect(grid.style.paddingTop).toBe(gutter.style.paddingTop);
+    expect(grid.style.paddingBottom).toBe(gutter.style.paddingBottom);
+    expect(screen.queryByRole('button', { name: 'Book 08:00-08:30' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Book 18:30-19:00' })).not.toBeInTheDocument();
+  });
+
   it('books the clicked empty slot', async () => {
     const onSelectSlot = renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.SCHEDULED)]);
     await screen.findByText('Ravi Kumar', calendarName);

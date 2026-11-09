@@ -1,29 +1,40 @@
 "use client";
-import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
+import { displayClinicDate } from '@/lib/date-display';
+import { getISTDateString } from '@/lib/utils';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import "./inventory-readability.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, RefreshCw, Plus, FileDown } from "lucide-react";
+import { ArrowLeft, ArrowRight, RefreshCw, Plus } from "lucide-react";
 import { InventoryAction } from "./InventoryPresentation";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import { useInventoryResource } from "./useInventoryResource";
-import { purchaseInvoiceStatusLabel } from "@/lib/purchase-invoice-review";
 import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
 import { PurchaseLedger } from "@/components/pharmacy/PurchaseLedger";
 import { ComplianceCenter } from "@/components/pharmacy/ComplianceCenter";
+import { DayWiseSummaryReport } from "@/components/pharmacy/DayWiseSummaryReport";
+import { ItemMarginReport } from "@/components/pharmacy/ItemMarginReport";
 import { DistributorAnalytics } from "@/components/pharmacy/DistributorAnalytics";
 import { PharmacyInventoryStarterImport } from "@/components/pharmacy/PharmacyInventoryStarterImport";
 import { PharmacyInvoiceList } from "@/components/pharmacy/PharmacyInvoiceList";
+import { TradeTermsWorkspace } from "@/components/pharmacy/TradeTermsWorkspace";
 import { SupplierCreditPanel } from "./SupplierCreditPanel";
 import { ReplenishmentCenter } from "./ReplenishmentCenter";
 import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
 import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
 import { WorkspaceStock } from "./WorkspaceStock";
-import { InventoryUpdates } from "./InventoryUpdates";
+import { PurchaseBills } from "./purchase/PurchaseBills";
+import { canRecordSupplierPayments } from "./purchase/purchase-register-model";
+import { StockCounts } from "./counts/StockCounts";
+import { splitText, type ReconciliationCards } from "./counts/count-model";
+import { Split } from "./counts/count-parts";
+import { InventoryApprovals } from "./InventoryApprovals";
+import { InventoryLedger } from "./InventoryLedger";
+import { usePendingItemRequestCount } from "./use-pending-item-requests";
+import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
   fmtMoney,
@@ -32,6 +43,7 @@ import {
   workflowKinds,
   labelStatus,
   downloadCsv,
+  returnDestination,
 } from "./workspace-model";
 
 const areas = [
@@ -44,23 +56,26 @@ const areas = [
 const menus: Record<string, string[][]> = {
   today: [],
   purchases: [
+    ["register", "Purchase bills"],
     ["intake", "Scan or enter bill"],
-    ["register", "Saved bills"],
     ["csv", "Import CSV"],
     ["gmail", "Gmail intake"],
     ["suppliers", "Suppliers"],
+    ["terms", "Terms of Trade"],
     ["ledger", "Payments & dues"],
     ["credits", "Credits & vouchers"],
     ["INWARD_CHALLAN", "Inward challans"],
     ["GATE_PASS", "Gate passes"],
     ["reports", "GST & monthly reports"],
+    ["daywise", "Day-wise summary"],
+    ["margin", "Item-wise margin"],
     ["analytics", "Purchase costs"],
   ],
   stock: [
     ["list", "Stock list"],
+    ["ledger", "Stock ledger"],
     ["approvals", "Approve corrections"],
-    ["COUNT", "Counts & audit"],
-    ["SUPPLIER_RETURN", "Supplier returns"],
+    ["COUNT", "Stock counts"],
     ["LOSS", "Loss & breakage"],
     ["HOLD", "Blocked stock"],
     ["CORRECTION", "Corrections"],
@@ -106,9 +121,20 @@ const menus: Record<string, string[][]> = {
  * Failed capability reads MUST hide stale access and expose an explicit retry. Refresh and
  * actor changes MUST fetch capabilities again; older responses cannot restore superseded access.
  */
+const REPORT_TASK_ROLES: Record<string, readonly string[]> = {
+  reports: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
+  daywise: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
+  margin: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
+};
+
 export function InventoryWorkspace() {
   const { user } = useDashboardUser();
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
+  const canSeeApprovals = canReadEdits || user?.role === "RECEPTION";
+  const taskVisible = ([id]: string[]) =>
+    id === "approvals" ? canSeeApprovals : !REPORT_TASK_ROLES[id] || REPORT_TASK_ROLES[id].includes(user?.role || "");
+  const pendingItems = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""));
+  const taskLabel = (id: string, label: string) => (id === "approvals" && pendingItems > 0 ? `${label} (${pendingItems})` : label);
   const params = useSearchParams(),
     router = useRouter(),
     path = usePathname(),
@@ -136,10 +162,11 @@ export function InventoryWorkspace() {
   );
   const origin = () => query.return || params.toString();
   const back = () => {
-    const destination = query.return;
-    if (destination) router.push(`${path}?${destination}`, { scroll: false });
+    const destination = returnDestination(query.return, path, window.location.origin);
+    if (destination) router.push(destination, { scroll: false });
     else
       navigate({
+        return: "",
         document: "",
         new: "",
         invoice: "",
@@ -222,10 +249,23 @@ export function InventoryWorkspace() {
     void loadPermissions();
     return () => { permissionRequest.current += 1; };
   }, [loadPermissions]);
-  const availableTasks = (menus[area] || []).filter(([id]) => id !== "approvals" || canReadEdits);
-  const primaryTasks = availableTasks.slice(0, 3);
-  const moreTasks = availableTasks.slice(3);
-  const switchTask = (id: string) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1" });
+  const availableTasks = (menus[area] || []).filter((task) => taskVisible(task)
+    && (task[0] !== "ledger" || area !== "purchases" || caps?.ledger)
+    && (task[0] !== "COUNT" || caps?.kinds?.COUNT?.read));
+  const primaryCount = area === "stock" ? 4 : 3;
+  const primaryTasks = availableTasks.slice(0, primaryCount);
+  const moreTasks = availableTasks.slice(primaryCount);
+  const switchTask = (id: string, extra: Record<string, string> = {}) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1", ...extra });
+  const purchaseRegisterParams = (next: URLSearchParams) => {
+    const merged = new URLSearchParams({ area: "purchases", view: "register" });
+    next.forEach((value, key) => merged.set(key, value));
+    if (merged.toString() !== window.location.search.slice(1)) router.replace(`${path}?${merged}`, { scroll: false });
+  };
+  const countRegisterParams = (tab: string, next: URLSearchParams) => {
+    const merged = new URLSearchParams({ area: "stock", view: "COUNT", tab });
+    next.forEach((value, key) => merged.set(key, value));
+    if (merged.toString() !== window.location.search.slice(1)) router.replace(`${path}?${merged}`, { scroll: false });
+  };
   const switchArea = (a: string) => {
     router.push(`${path}?area=${a}`, { scroll: false });
     setInitial(null);
@@ -282,13 +322,19 @@ export function InventoryWorkspace() {
               })
             }
           >
-            {menus[area].filter(([id]) => id !== "approvals" || canReadEdits).map(([id, label]) => (
+            {availableTasks.map(([id, label]) => (
               <option key={id} value={id}>
-                {label}
+                {taskLabel(id, label)}
               </option>
             ))}
           </select>
         </label>
+      )}
+      {area === "stock" && (
+        <button type="button" className="block text-left text-sm underline underline-offset-4 md:hidden"
+          onClick={() => router.push(`${path}?area=purchases&view=register&tab=returns`, { scroll: false })}>
+          Supplier returns are now in Purchase bills › Returns
+        </button>
       )}
       {menus[area]?.length > 0 && (
         <nav
@@ -297,12 +343,18 @@ export function InventoryWorkspace() {
         >
           {primaryTasks.map(([id, label]) => (
             <Button key={id} size="sm" variant={view === id ? "secondary" : "ghost"}
-              aria-current={view === id ? "page" : undefined} onClick={() => switchTask(id)}>{label}</Button>
+              aria-current={view === id ? "page" : undefined} onClick={() => switchTask(id)}>{taskLabel(id, label)}</Button>
           ))}
+          {area === "stock" && (
+            <button type="button" className="self-center rounded-sm px-2 text-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              onClick={() => router.push(`${path}?area=purchases&view=register&tab=returns`, { scroll: false })}>
+              Supplier returns are now in Purchase bills › Returns
+            </button>
+          )}
           {moreTasks.length > 0 && <select aria-label="More inventory tasks" className="max-w-64 rounded-md border bg-background px-3 py-2 text-sm"
             value={moreTasks.some(([id]) => id === view) ? view : ""} onChange={event => switchTask(event.target.value)}>
             <option value="" disabled>More tasks…</option>
-            {moreTasks.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            {moreTasks.map(([id, label]) => <option key={id} value={id}>{taskLabel(id, label)}</option>)}
           </select>}
         </nav>
       )}
@@ -333,8 +385,20 @@ export function InventoryWorkspace() {
               onInvoice={invoice}
             />
           )}
+          {area === "stock" && view === "COUNT" && (
+            <StockCounts searchParams={params} navigate={navigate} onRegisterParams={countRegisterParams} />
+          )}
+          {area === "stock" && view === "ledger" && (
+            <InventoryLedger
+              query={query}
+              navigate={navigate}
+              onDocument={open}
+              onInvoice={invoice}
+              onItem={(id) => navigate({ return: origin(), view: "list", item: id })}
+            />
+          )}
           {area === "stock" && view === "approvals" && (
-            canReadEdits ? <InventoryUpdates /> : <p role="alert">You do not have access to price/stock approvals.</p>
+            canSeeApprovals ? <InventoryApprovals canReadEdits={canReadEdits} pendingItems={pendingItems} /> : <p role="alert">You do not have access to price/stock approvals.</p>
           )}
           {area === "stock" && view === "opening" && (
             <>
@@ -382,10 +446,17 @@ export function InventoryWorkspace() {
             />
           )}
           {area === "purchases" && view === "register" && (
-            <PurchaseRegister
-              query={query}
-              navigate={navigate}
+            <PurchaseBills
+              searchParams={params}
+              onParamsChange={purchaseRegisterParams}
+              onTabChange={(next) => router.push(`${path}?${new URLSearchParams({ area: "purchases", view: "register", ...Object.fromEntries(next) })}`, { scroll: false })}
+              canSettle={canRecordSupplierPayments(caps, user?.role)}
               onOpen={invoice}
+              onOpenReturn={open}
+              onNewReturn={() => task("SUPPLIER_RETURN")}
+              onNew={() => navigate({ return: origin(), view: "intake", new: requestKey(), invoice: "", receipt: "", intake: "", document: "", item: "" })}
+              onLedger={caps.ledger ? (gstin?: string) => switchTask("ledger", { gstin: gstin ?? "" }) : null}
+              onSuppliers={() => switchTask("suppliers")}
             />
           )}
           {area === "purchases" && view === "suppliers" && (
@@ -396,6 +467,7 @@ export function InventoryWorkspace() {
               onBills={(gstin: string) => navigate({ view: "register", gstin })}
             />
           )}
+          {area === "purchases" && view === "terms" && <TradeTermsWorkspace />}
           {area === "purchases" &&
             view === "ledger" &&
             (caps.ledger ? (
@@ -423,12 +495,15 @@ export function InventoryWorkspace() {
           {area === "purchases" && view === "reports" && (
             <ComplianceCenter reportsOnly />
           )}
+          {area === "purchases" && view === "daywise" && <DayWiseSummaryReport />}
+          {area === "purchases" && view === "margin" && <ItemMarginReport />}
           {area === "purchases" && view === "analytics" && (
             <DistributorAnalytics />
           )}
           {area === "sales" && view === "history" && <PharmacyInvoiceList />}
 
           {view !== "TARGET_REVIEW" &&
+          view !== "COUNT" &&
           workflowKinds[view] &&
           (query.document || query.new || query.recoverRequest) ? (
             <WorkflowDocumentEditor
@@ -452,6 +527,7 @@ export function InventoryWorkspace() {
             />
           ) : (
             area !== "reorder" &&
+            view !== "COUNT" &&
             workflowKinds[view] && (
               <WorkflowRegister
                 key={view}
@@ -466,7 +542,7 @@ export function InventoryWorkspace() {
                     sourceId: doc.id,
                     supplierId: doc.supplierId,
                     payload: {
-                      date: new Date().toISOString().slice(0, 10),
+                      date: getISTDateString(),
                       reason: "Purchase order receipt",
                       lines: doc.payload.lines.map((l: any) => ({
                         ...l,
@@ -521,6 +597,40 @@ export function InventoryWorkspace() {
  * Acceptance: INV-02. Validation and open gaps:
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] reconciliation-today-cards
+ * Today MUST remind, never block: the signed-in counter's count due, an approver's queue with its
+ * net value, and a cycle that is short or behind for whoever configures it.
+ */
+const due = ({ counts, documentId }: NonNullable<ReconciliationCards["due"]>) =>
+  documentId ? "Open your count and sign off when every batch is counted." : `${counts} lists to count. Sign off each one when every batch is counted.`;
+export function reconciliationRows(cards: ReconciliationCards | null) {
+  if (!cards) return [];
+  const counts = { area: "stock", view: "COUNT" };
+  return [
+    ...(cards.due ? [{
+      label: "Stock count due today",
+      count: cards.due.items,
+      detail: due(cards.due),
+      note: due(cards.due),
+      target: cards.due.documentId ? { ...counts, document: cards.due.documentId } : counts,
+    }] : []),
+    ...(cards.approvals?.count ? [{
+      label: "Counts awaiting your approval",
+      count: cards.approvals.count,
+      detail: `${splitText(cards.approvals)}. Stock changes only when you approve.`,
+      note: <><Split figures={cards.approvals} />. Stock changes only when you approve.</>,
+      target: { ...counts, tab: "approvals" },
+    }] : []),
+    ...(cards.behind ? [{
+      label: "Batches not counted this cycle",
+      count: cards.behind.remaining,
+      detail: cards.behind.message,
+      note: cards.behind.message,
+      target: { ...counts, tab: "settings" },
+    }] : []),
+  ];
+}
 function WorkspaceToday({ navigate, open }: any) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState("");
@@ -582,15 +692,10 @@ function WorkspaceToday({ navigate, open }: any) {
     },
     {
       label: "Purchase invoices to review",
-      count:
-        data?.purchases
-          ?.filter(
-            (p: any) => !["STOCK_COMMITTED", "CANCELLED"].includes(p.status),
-          )
-          .reduce((n: number, p: any) => n + p._count, 0) || 0,
+      count: data?.pendingPurchase || 0,
       detail:
         "Open the invoice, resolve highlighted checks and confirm stock status.",
-      target: { area: "purchases", view: "register", status: "UNPOSTED" },
+      target: { area: "purchases", view: "register", pay: "NOT_POSTED" },
     },
     {
       label: "Original files awaiting intake",
@@ -598,18 +703,17 @@ function WorkspaceToday({ navigate, open }: any) {
       detail: "Continue from a retained photo or PDF.",
       target: { area: "purchases", view: "intake" },
     },
-    {
-      label: "Counts awaiting completion",
-      count: queue("COUNT"),
-      detail: "Enter physical counts or approve a reviewed variance.",
-      target: { area: "stock", view: "COUNT", status: "OPEN" },
-    },
-    {
-      label: "Supplier returns in progress",
-      count: queue("SUPPLIER_RETURN"),
-      detail: "Complete the challan and supplier credit.",
-      target: { area: "stock", view: "SUPPLIER_RETURN", status: "OPEN" },
-    },
+    ...reconciliationRows(data?.reconciliation ?? null),
+    ...(data?.creditNotesAwaited != null
+      ? [
+          {
+            label: "Credit notes awaited",
+            count: data.creditNotesAwaited,
+            detail: "Record the distributor’s credit note when it arrives.",
+            target: { area: "purchases", view: "register", tab: "returns", state: "AWAITED" },
+          },
+        ]
+      : []),
     {
       label: "Orders awaiting receipt",
       count: queue("PURCHASE_ORDER"),
@@ -667,6 +771,7 @@ function WorkspaceToday({ navigate, open }: any) {
                   </span>
                   <span className="flex-1">
                     <strong>{r.label}</strong>
+                    {"note" in r && r.note && <span className="mt-0.5 block text-sm">{r.note}</span>}
                   </span>
                   <ArrowRight className="h-5 w-5" />
                 </button>
@@ -718,211 +823,6 @@ function WorkspaceToday({ navigate, open }: any) {
     </section>
   );
 }
-/**
- * @cc [owner:nareshshah139,label:product;target] purchase-register-complete
- * The purchase register MUST allow retrieval of every authorized saved invoice and unfinished
- * upload, including records beyond the recent-preview limit, with status and source retained.
- * Acceptance: INV-18. Validation and open gaps:
- * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
- */
-function PurchaseRegister({ query, navigate, onOpen }: any) {
-  const q = new URLSearchParams({
-    page: query.page || "1", limit: "30",
-    ...(query.status === "UNPOSTED" ? { unposted: "true" } : query.status ? { status: query.status } : {}),
-    ...(query.from ? { startDate: query.from } : {}),
-    ...(query.to ? { endDate: query.to } : {}),
-    ...(query.gstin ? { distributorGstin: query.gstin } : {}),
-    ...(query.search ? { search: query.search } : {}),
-    ...(query.source ? { source: query.source } : {}),
-  });
-  const { data, error, status, reload } = useInventoryResource<any>("/pharmacy/purchase-invoices?" + q);
-  const loading = status === "loading";
-  return (
-    <section className="space-y-4">
-      <h2 className="text-2xl font-semibold">Purchase register</h2>
-      <div className="flex flex-wrap gap-3">
-        <label className="flex-1 text-sm">
-          Search
-          <input
-            placeholder="Invoice number or supplier"
-            className={inputClass}
-            value={query.search || ""}
-            onChange={(e) => navigate({ search: e.target.value, page: "1" })}
-          />
-        </label>
-        <label className="text-sm">
-          Source
-          <select
-            className={inputClass}
-            value={query.source || ""}
-            onChange={(e) => navigate({ source: e.target.value, page: "1" })}
-          >
-            <option value="">All sources</option>
-            {["MANUAL", "OCR", "CSV", "GMAIL"].map((v) => (
-              <option key={v}>{v}</option>
-            ))}
-          </select>
-        </label>
-        <InventoryAction
-          label="Export full purchase register"
-          className="self-end"
-          onClick={() =>
-            window.open(
-              "/api/inventory/workspace/purchases/export?" +
-                new URLSearchParams({
-                  format: "xlsx",
-                  ...(query.status === "UNPOSTED"
-                    ? { unposted: "true" }
-                    : query.status
-                      ? { status: query.status }
-                      : {}),
-                  ...(query.from ? { startDate: query.from } : {}),
-                  ...(query.to ? { endDate: query.to } : {}),
-                  ...(query.gstin ? { distributorGstin: query.gstin } : {}),
-                  ...(query.search ? { search: query.search } : {}),
-                  ...(query.source ? { source: query.source } : {}),
-                }),
-              "_blank",
-            )
-          }
-        >
-          <FileDown className="h-4 w-4" />
-        </InventoryAction>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="text-sm">
-          Status
-          <select
-            className={inputClass}
-            value={query.status || ""}
-            onChange={(e) => navigate({ status: e.target.value, page: "1" })}
-          >
-            <option value="">All</option>
-            {[
-              "UNPOSTED",
-              "DRAFT",
-              "OCR_REVIEW_REQUIRED",
-              "RECONCILIATION_FAILED",
-              "REVIEWED",
-              "STOCK_COMMITTED",
-              "CANCELLED",
-            ].map((s) => (
-              <option key={s} value={s}>{s === "UNPOSTED" ? "Stock not added" : s === "OCR_REVIEW_REQUIRED" ? "OCR checks needed" : s === "RECONCILIATION_FAILED" ? "Corrections or manual review needed" : purchaseInvoiceStatusLabel({ status: s })}</option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm">
-          Supplier GSTIN
-          <input
-            className={inputClass}
-            value={query.gstin || ""}
-            onChange={(e) =>
-              navigate({ gstin: e.target.value.toUpperCase(), page: "1" })
-            }
-          />
-        </label>
-        {["from", "to"].map((k) => (
-          <label key={k} className="text-sm">
-            {k === "from" ? "From date" : "To date"}
-            <input
-              type="date"
-              className={inputClass}
-              value={query[k] || ""}
-              onChange={(e) => navigate({ [k]: e.target.value, page: "1" })}
-            />
-          </label>
-        ))}
-      </div>
-      {error && <div role="alert"><p>{error}</p><Button variant="outline" onClick={() => void reload()}>Retry invoices</Button></div>}
-      <p role="status" className="text-sm">
-        {loading
-          ? "Loading invoices…"
-          : error
-            ? "Invoices unavailable"
-            : `${data?.pagination?.total ?? 0} invoices`}
-      </p>
-      <div className="overflow-x-auto rounded-md border">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-muted">
-            <tr>
-              {[
-                "Invoice",
-                "Supplier",
-                "Date",
-                "Status",
-                "Amount",
-                "Original",
-              ].map((t) => (
-                <th className="p-3" key={t}>
-                  {t}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {data && !data.data.length && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">No invoices match these filters.</td></tr>}
-            {data?.data.map((d: any) => (
-              <tr key={d.id}>
-                <td className="p-3">
-                  <button
-                    className="font-medium underline"
-                    onClick={() => onOpen(d.id)}
-                  >
-                    {d.invoiceNumber}
-                  </button>
-                </td>
-                <td className="p-3">
-                  {d.distributorName}
-                  <p className="text-xs text-muted-foreground">
-                    {d.distributorGstin}
-                  </p>
-                </td>
-                <td className="p-3">{displayUtcDate(d.invoiceDate)}</td>
-                <td className="p-3">
-                  {purchaseInvoiceStatusLabel(d)}
-                </td>
-                <td className="p-3 text-right tabular-nums">{fmtMoney(d.netPayable)}</td>
-                <td className="p-3">
-                  {d.documents?.map((f: any) => (
-                    <a
-                      key={f.id}
-                      href={`/api/pharmacy/purchase-invoices/documents/${f.id}`}
-                      className="block underline"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {f.fileName}
-                    </a>
-                  ))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex justify-between gap-3">
-        <Button
-          variant="outline"
-          disabled={loading || !(data?.pagination.page > 1)}
-          onClick={() => navigate({ page: String(data.pagination.page - 1) })}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          disabled={
-            loading ||
-            !data?.pagination ||
-            data.pagination.page >= data.pagination.pages
-          }
-          onClick={() => navigate({ page: String(data.pagination.page + 1) })}
-        >
-          Next
-        </Button>
-      </div>
-    </section>
-  );
-}
 function WorkflowRegister({
   kind,
   query,
@@ -944,12 +844,7 @@ function WorkflowRegister({
     setBusy(true);
     setError("");
     try {
-      const path =
-        kind === "COUNT"
-          ? "counts"
-          : kind === "SHORTBOOK"
-            ? "shortbook/refresh"
-            : "targets/propose";
+      const path = kind === "SHORTBOOK" ? "shortbook/refresh" : "targets/propose";
       const d = await apiClient.post<any>("/inventory/workspace/" + path, {
         requestKey: requestKey(),
       });
@@ -987,16 +882,12 @@ function WorkflowRegister({
         </div>
         {capabilities?.kinds?.[kind]?.write && (
           <div className="flex flex-wrap gap-2">
-            {["COUNT", "SHORTBOOK", "TARGET_REVIEW"].includes(kind) && (
+            {["SHORTBOOK", "TARGET_REVIEW"].includes(kind) && (
               <Button disabled={busy} onClick={generate}>
-                {kind === "COUNT"
-                  ? "Start stock count"
-                  : kind === "SHORTBOOK"
-                    ? "Add low-stock demand"
-                    : "Generate target proposal"}
+                {kind === "SHORTBOOK" ? "Add low-stock demand" : "Generate target proposal"}
               </Button>
             )}
-            {!["COUNT", "TARGET_REVIEW", "CORRECTION"].includes(kind) && (
+            {!["TARGET_REVIEW", "CORRECTION"].includes(kind) && (
               <Button
                 variant={kind === "SHORTBOOK" ? "outline" : "default"}
                 onClick={onNew}

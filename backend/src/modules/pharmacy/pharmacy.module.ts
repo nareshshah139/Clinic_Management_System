@@ -8,6 +8,7 @@ import { PharmacyInvoiceService } from './pharmacy-invoice.service';
 import { PharmacyPurchaseInvoiceController } from './pharmacy-purchase-invoice.controller';
 import { PharmacyPurchaseInvoiceService } from './pharmacy-purchase-invoice.service';
 import { PharmacyPurchaseLedgerController } from './pharmacy-purchase-ledger.controller';
+import { PharmacySupplierCreditService } from './pharmacy-supplier-credit.service';
 import { PharmacyPurchaseLedgerService } from './pharmacy-purchase-ledger.service';
 import { PharmacyPartnerSalesController } from './pharmacy-partner-sales.controller';
 import { PharmacyPartnerSalesService } from './pharmacy-partner-sales.service';
@@ -18,6 +19,14 @@ import { PharmacyPackageService } from './pharmacy-package.service';
 import { PharmacyDispenseTaskController } from './pharmacy-dispense-task.controller';
 import { PharmacyPrescriptionQueueController } from './pharmacy-prescription-queue.controller';
 import { PharmacyPrescriptionQueueService } from './pharmacy-prescription-queue.service';
+import { PharmacySalesRegisterController } from './pharmacy-sales-register.controller';
+import { PharmacySalesRegisterService } from './pharmacy-sales-register.service';
+import { PharmacyPurchaseRegisterController } from './pharmacy-purchase-register.controller';
+import { PharmacyPurchaseRegisterService } from './pharmacy-purchase-register.service';
+import { PharmacyPurchaseReturnsRegisterController } from './pharmacy-purchase-returns-register.controller';
+import { PharmacyPurchaseReturnsRegisterService } from './pharmacy-purchase-returns-register.service';
+import { PharmacyTradeTermsController } from './pharmacy-trade-terms.controller';
+import { PharmacyTradeTermsService } from './pharmacy-trade-terms.service';
 import { PrismaModule } from '../../shared/database/prisma.module';
 import { NumberingModule } from '../../shared/numbering/numbering.module';
 
@@ -34,6 +43,10 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacyPackageController,
     PharmacyDispenseTaskController,
     PharmacyPrescriptionQueueController,
+    PharmacySalesRegisterController,
+    PharmacyPurchaseRegisterController,
+    PharmacyPurchaseReturnsRegisterController,
+    PharmacyTradeTermsController,
   ],
   providers: [
     PharmacyService,
@@ -41,10 +54,15 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacyInvoiceService,
     PharmacyPurchaseInvoiceService,
     PharmacyPurchaseLedgerService,
+    PharmacySupplierCreditService,
     PharmacyPartnerSalesService,
     PharmacyComplianceService,
     PharmacyPackageService,
     PharmacyPrescriptionQueueService,
+    PharmacySalesRegisterService,
+    PharmacyPurchaseRegisterService,
+    PharmacyPurchaseReturnsRegisterService,
+    PharmacyTradeTermsService,
   ],
   exports: [
     PharmacyService,
@@ -52,6 +70,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacyInvoiceService,
     PharmacyPurchaseInvoiceService,
     PharmacyPurchaseLedgerService,
+    PharmacySupplierCreditService,
     PharmacyPartnerSalesService,
     PharmacyComplianceService,
     PharmacyPackageService,

@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { displayClinicDate } from '../../common/date-display';
 import { Prisma } from '@prisma/client';
 import { medicineRegimenDefaults } from './medicine-regimen-defaults';
@@ -458,6 +459,11 @@ export class PrescriptionsService {
    * MUST reject edits; cancellation MUST use the audited cancellation command.
    * Validity MUST be stored independently of the visit's review date.
    */
+  /**
+   * @cc [owner:nareshshah139,label:reliability] billed-prescription-items-immutable
+   * Prescription items linked to any pharmacy invoice MUST NOT be changed; unchanged items
+   * and other permitted clinical edits remain valid. The invoice check MUST hold the prescription lock.
+   */
   async updatePrescription(id: string, input: UpdatePrescriptionDto, branchId: string, actorId?: string) {
     const updated = await this.prisma.$transaction(async tx => {
       const prescription = await this.lockPrescription(tx, id, branchId);
@@ -470,6 +476,10 @@ export class PrescriptionsService {
       const data: Prisma.PrescriptionUpdateInput = {};
       if (input.items !== undefined) {
         if (!input.items?.length) throw new BadRequestException('At least one prescription item is required');
+        if (!isDeepStrictEqual(this.safeParse<unknown[]>(prescription.items, []), JSON.parse(JSON.stringify(input.items)))) {
+          const linkedInvoice = await tx.pharmacyInvoice.findFirst({ where: { prescriptionId: id, branchId }, select: { id: true } });
+          if (linkedInvoice) throw new ConflictException('This prescription has a pharmacy invoice and its medicines cannot be changed. Start a new visit for a new prescription.');
+        }
         data.items = JSON.stringify(input.items);
       }
       if (input.language !== undefined) data.language = input.language;

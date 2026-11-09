@@ -2,14 +2,15 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-li
 import { InventoryWorkspace } from '@/components/inventory/InventoryWorkspace';
 import { apiClient } from '@/lib/api';
 import { useInventoryResource } from '@/components/inventory/useInventoryResource';
-const mockRouter = {push:jest.fn(),refresh:jest.fn()};
+const mockRouter = {push:jest.fn(),replace:jest.fn(),refresh:jest.fn()};
 let mockQuery = 'area=stock&view=list';
 jest.mock('@/lib/api', () => ({apiClient:{get:jest.fn()}}));
 jest.mock('next/navigation', () => ({usePathname:()=>'/dashboard/inventory',useRouter:()=>mockRouter,useSearchParams:()=>new URLSearchParams(mockQuery)}));
-jest.mock('@/components/layout/dashboard-user-context', () => ({useDashboardUser:()=>({user:{id:'operator',branchId:'branch',role:'OWNER'}})}));
+let mockRole = 'OWNER';
+jest.mock('@/components/layout/dashboard-user-context', () => ({useDashboardUser:()=>({user:{id:'operator',branchId:'branch',role:mockRole}})}));
 jest.mock('@/components/inventory/WorkflowDocumentEditor', () => ({WorkflowDocumentEditor:({recoveryRequestKey,recoveryVersion,recoveryOperation,onBack}:any)=><div><p>Recover request {recoveryRequestKey || 'missing'}</p><p>Recovery version {recoveryVersion ?? 'missing'} operation {recoveryOperation || 'missing'}</p><button onClick={onBack}>Back from recovery</button></div>}));
 jest.mock('@/components/inventory/WorkspaceStock', () => ({WorkspaceStock:({capabilities}:any)=><p>Count access {capabilities.kinds.COUNT.write?'available':'unavailable'}</p>}));
-beforeEach(()=>{jest.clearAllMocks();mockQuery='area=stock&view=list';});
+beforeEach(()=>{jest.clearAllMocks();mockQuery='area=stock&view=list';mockRole='OWNER';});
 it('retries failed permissions from a named control and renders the recovered access',async()=>{
   (apiClient.get as jest.Mock).mockRejectedValueOnce(new Error('Network unavailable')).mockResolvedValue({kinds:{COUNT:{write:true}}});
   render(<InventoryWorkspace/>);
@@ -79,7 +80,6 @@ it.each(['', '0', '-1', '1.5', 'invalid'])('does not invent a pending revision f
 const emptyDocuments = { rows: [], total: 0, page: 1, totalPages: 1 };
 it.each([
   ['area=stock&view=LOSS', 'Loading records…', 'Retry records', emptyDocuments, 'No loss & breakage match these filters.'],
-  ['area=purchases&view=register', 'Loading invoices…', 'Retry invoices', {data:[],pagination:{total:0,page:1,pages:1}}, 'No invoices match these filters.'],
   ['area=purchases&view=suppliers', 'Loading suppliers…', 'Retry suppliers', [], 'No suppliers yet. Add a supplier to start recording purchases.'],
 ])('distinguishes loading, failed and recovered empty reads for %s', async (query, loading, retry, result, empty) => {
   mockQuery = query as string;
@@ -99,6 +99,24 @@ it.each([
   fireEvent.click(screen.getByRole('button', {name: retry as string}));
   expect(await screen.findByText(empty as string)).toBeInTheDocument();
   expect(screen.queryByText('Connection interrupted')).not.toBeInTheDocument();
+});
+
+it('shows purchase bills from the purchase register with their payment state', async () => {
+  mockQuery = 'area=purchases&view=register&gstin=36ABCDE1234F1Z5';
+  (apiClient.get as jest.Mock).mockImplementation(async (path: string) => path.includes('capabilities') ? {kinds:{}} : {
+    rows:[{id:'bill-1',srNo:1,billNo:'LIN-101',entryAt:'2026-10-01T05:00:00.000Z',billDate:'2026-10-01',entryBy:null,source:'MANUAL',
+      distributor:{name:'Linae Distributors',gstin:'36ABCDE1234F1Z5'},amount:1000,invoiceState:'POSTED',
+      documents:[],payment:{state:'DUE',paid:0,credit:0,outstanding:1000,scheduled:0,scheduledOn:null,payable:1000,partlyPaid:false,dueDate:null,overdueDays:0}}],
+    total:1,page:1,limit:50,totals:{amount:1000,outstanding:1000,count:1,excluded:{notPosted:0,cancelled:0}},entryByOptions:[],distributorOptions:[],
+  });
+  render(<InventoryWorkspace/>);
+  const table = await screen.findByRole('table', {name: 'Purchase bills'});
+  expect(table).toHaveTextContent('LIN-101');
+  expect(table).toHaveTextContent('₹1,000.00Due');
+  expect(screen.getByRole('button', {name: 'Purchase bills'})).toHaveAttribute('aria-current', 'page');
+  const reads = (apiClient.get as jest.Mock).mock.calls.map(([path, params]) => [path, params?.distributorGstin]).filter(([path]) => !path.includes('capabilities'));
+  expect(reads).toEqual([['/pharmacy/purchase-register', '36ABCDE1234F1Z5']]);
+  expect(screen.queryByText('Saved bills')).not.toBeInTheDocument();
 });
 
 it('never lets a late prior filter overwrite current workflow results', async () => {
@@ -130,4 +148,32 @@ it('reloads the current query when an older mutation retains its reload callback
   expect(view.result.current.status).toBe('ready');
   expect(view.result.current.data).toEqual({label:'/current-query'});
   expect((apiClient.get as jest.Mock).mock.calls.map(([url])=>url)).toEqual(['/old-query','/current-query','/current-query']);
+});
+
+it('returns to the Sales register a document was opened from, and refuses another site',async()=>{
+  (apiClient.get as jest.Mock).mockImplementation(async(path:string)=>path.includes('capabilities')?{kinds:{SALES_RETURN:{read:true,write:false}}}:{rows:[],total:0,totalPages:1});
+  mockQuery=`area=sales&view=SALES_RETURN&recoverRequest=k&return=${encodeURIComponent('/dashboard/pharmacy/sales?tab=returns&q=SR-1')}`;
+  const first = render(<InventoryWorkspace/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Back from recovery'}));
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales?tab=returns&q=SR-1',{scroll:false});
+  first.unmount();
+  mockQuery=`area=sales&view=SALES_RETURN&recoverRequest=k&return=${encodeURIComponent('//evil.example/x')}`;
+  render(<InventoryWorkspace/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Back from recovery'}));
+  expect(mockRouter.push).toHaveBeenLastCalledWith('/dashboard/inventory?area=sales&view=SALES_RETURN',{scroll:false});
+});
+
+it.each([
+  ['RECEPTION', []],
+  ['PHARMACIST', ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin']],
+  ['DOCTOR', ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin']],
+])('lists only the pharmacy reports the %s role can open', async (role, expected) => {
+  mockRole = role;
+  mockQuery = 'area=purchases&view=suppliers';
+  (apiClient.get as jest.Mock).mockResolvedValue({ kinds: {}, rows: [], total: 0, totalPages: 1 });
+  render(<InventoryWorkspace/>);
+  const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+  const reports = [...new Set(options)].filter((o) => ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin'].includes(o || ''));
+  expect(reports).toEqual(expected);
+  expect(options).toContain('Terms of Trade');
 });

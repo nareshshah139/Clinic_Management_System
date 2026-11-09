@@ -60,7 +60,7 @@ import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { DoctorTour } from '@/components/tours';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
-import { getErrorMessage } from '@/lib/utils';
+import { calculateAge, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { isUuid } from '@/lib/id';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
@@ -479,6 +479,12 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     } catch {}
   }, []);
   /** Applies a doctor's saved print layout (margins, offsets, design aids); the letterhead is resolved separately. */
+  /**
+   * @cc [owner:nareshshah139,label:product] doctor-print-layout-default
+   * Opening a visit MUST apply the visit doctor's saved print layout when one exists, so each
+   * doctor prints with their own margins without loading it by hand. Without a saved layout the
+   * existing browser settings stay in effect.
+   */
   const applyDoctorPrintLayout = useCallback((p: any) => {
     if (p.margins) {
       if (typeof p.margins.topPx === 'number') setPrintTopMarginPx(p.margins.topPx);
@@ -500,12 +506,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     }
   }, []);
 
-  /**
-   * @cc [owner:nareshshah139,label:product] doctor-print-layout-default
-   * Opening a visit MUST apply the visit doctor's saved print layout when one exists, so each
-   * doctor prints with their own margins without loading it by hand. Without a saved layout the
-   * existing browser settings stay in effect.
-   */
   useEffect(() => {
     if (!doctorId) return;
     let cancelled = false;
@@ -1735,21 +1735,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     <Badge variant="outline" className="max-w-full break-all whitespace-normal text-xs">ID: {patientId}</Badge>
                   </div>
                   <div className="text-sm text-gray-600">
-                    Age: {(() => {
-                      if ((patientDetails as any).age != null) return (patientDetails as any).age;
-                      if (!patientDetails.dob) return 'N/A';
-                      const dob = new Date(patientDetails.dob);
-                      const today = new Date();
-                      const isToday = 
-                        dob.getFullYear() === today.getFullYear() &&
-                        dob.getMonth() === today.getMonth() &&
-                        dob.getDate() === today.getDate();
-                      if (isToday) return 'N/A';
-                      const age = today.getFullYear() - dob.getFullYear();
-                      const monthDiff = today.getMonth() - dob.getMonth();
-                      const adjustedAge = (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) ? age - 1 : age;
-                      return adjustedAge >= 0 ? adjustedAge : 'N/A';
-                    })()} • {patientDetails.gender || 'N/A'}
+                    Age: {calculateAge(patientDetails) ?? 'N/A'} • {patientDetails.gender || 'N/A'}
                   </div>
                   <div className="text-sm text-gray-600">
                     Phone: {patientDetails.phone || 'N/A'}
@@ -2286,13 +2272,13 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between pt-2 border-t">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
                       <div className="text-xs text-gray-500">Selections and results are saved under Treatment Plan → Dermatology.</div>
-                      <div className="flex gap-2">
-                        <div className="flex flex-col gap-0.5">
+                      <div className="flex min-w-0 max-w-full flex-wrap gap-2">
+                        <div className="flex min-w-0 max-w-full flex-col gap-0.5">
                           <label className="text-sm">
                             <input
-                              type="file"
+                              type="file" className="w-full max-w-full"
                               accept="image/*,application/pdf"
                               onChange={async (e) => {
                                 const f = e.target.files?.[0];
@@ -2572,7 +2558,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                         </div>
                       </div>
                       <div className="md:col-span-3 border-t pt-3 mt-2">
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
                           <label className="text-sm font-medium">Design Aids</label>
                           <label className="flex items-center gap-2 text-sm">
                             <input type="checkbox" checked={designAidsEnabled} onChange={(e) => setDesignAidsEnabled(e.target.checked)} /> Enable

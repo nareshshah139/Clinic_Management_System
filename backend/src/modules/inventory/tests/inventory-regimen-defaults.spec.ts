@@ -34,7 +34,7 @@ it('persists and audits defaults in product details without changing stock', asy
   const original = { id: 'item', branchId: 'clinic', updatedAt: new Date(), currentStock: 10, heldStock: 0, metadata: '{}' };
   const tx = { inventoryItem: { findFirst: jest.fn().mockResolvedValue(original), update: jest.fn().mockImplementation(({ data }) => ({ ...original, ...data })) }, auditLog: { create: jest.fn() } };
   const workflow = { permissions: async () => new Set(['inventory:item:update']), transaction: async (work: any) => work(tx) };
-  const service = new InventoryWorkspaceService({} as any, workflow as any);
+  const service = new InventoryWorkspaceService({} as any, workflow as any, {} as any);
   const result = await service.saveItem({ id: 'user', branchId: 'clinic' } as any, 'item', { updatedAt: original.updatedAt.toISOString(), ...defaults });
   expect(result).toMatchObject({ ...defaults, currentStock: 10 });
   expect(tx.inventoryItem.update.mock.calls[0][0].data).not.toHaveProperty('currentStock');

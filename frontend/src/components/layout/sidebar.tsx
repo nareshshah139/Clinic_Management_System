@@ -6,6 +6,8 @@ import { Fragment, useMemo } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useDashboardUser } from "./dashboard-user-context";
+import { usePendingItemRequestCount } from "@/components/inventory/use-pending-item-requests";
+import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import type { LucideIcon } from "lucide-react";
 import {
   Calendar,
@@ -22,6 +24,7 @@ import {
   Pill,
   Receipt,
   Mic,
+  ShoppingBag,
 } from "lucide-react";
 
 type PharmacySidebarSection = "desk" | "counter" | "billing";
@@ -91,21 +94,27 @@ const navigation: NavigationItem[] = [
     href: "/dashboard/pharmacy?section=desk",
     icon: Pill,
     pharmacySection: "desk",
-    allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
+    allowedRoles: ["ADMIN", "DOCTOR", "PHARMACIST", "RECEPTION"],
   },
   {
     name: "Pharmacy Counter", section: "Pharmacy",
     href: "/dashboard/pharmacy?section=counter",
     icon: ClipboardCheck,
     pharmacySection: "counter",
-    allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
+    allowedRoles: ["ADMIN", "DOCTOR", "PHARMACIST", "RECEPTION"],
   },
   {
     name: "Pharmacy Billing", section: "Pharmacy",
     href: "/dashboard/pharmacy?section=billing",
     icon: Receipt,
     pharmacySection: "billing",
-    allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
+    allowedRoles: ["ADMIN", "DOCTOR", "PHARMACIST", "RECEPTION"],
+  },
+  {
+    name: "Sales", section: "Pharmacy",
+    href: "/dashboard/pharmacy/sales",
+    icon: ShoppingBag,
+    allowedRoles: ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"],
   },
   {
     name: "Inventory", section: "Pharmacy",
@@ -170,6 +179,7 @@ function getActivePharmacySection(
   if (!pathname.startsWith("/dashboard/pharmacy")) return null;
 
   if (pathname === "/dashboard/pharmacy/invoices") return "billing";
+  if (pathname.startsWith("/dashboard/pharmacy/sales")) return null;
 
   const requested =
     searchParams.get("section") || searchParams.get("tab") || "";
@@ -205,6 +215,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const searchParams = useSearchParams();
   const { user, logout, loading } = useDashboardUser();
   const role = user?.role;
+  const pendingItemRequests = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(role || ""));
 
   const navigationItems = useMemo(
     () => filterNavigationByRole(navigation, role),
@@ -275,6 +286,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 )}
               />
               {item.name}
+              {item.href === "/dashboard/inventory" && pendingItemRequests > 0 && (
+                <span className="ml-auto rounded-full bg-destructive px-2 text-xs font-semibold text-destructive-foreground" aria-label={`${pendingItemRequests} new item requests waiting for approval`}>
+                  {pendingItemRequests}
+                </span>
+              )}
             </Link>
             </Fragment>
           );

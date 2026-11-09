@@ -23,7 +23,14 @@ export async function loadWeeklyHours(
   return resolveWeeklyHours(rows, doctor.metadata);
 }
 
-/** The doctor's own time off plus branch-wide holidays overlapping [from, to). */
+/**
+ * @cc [owner:nareshshah139,label:product] time-off-scope-and-boundaries
+ * Slot listing, the day view and booking (see time-off-blocks-booking in the appointments
+ * service) MUST all read time off here, so a slot listed as free is never refused for time off.
+ * It MUST return only the named doctor's leave and blocked time plus that branch's holidays,
+ * never another doctor's or another branch's, and only rows overlapping [from, to); time off
+ * ending exactly at from MUST NOT be returned.
+ */
 export function loadTimeOff(
   db: Db,
   branchId: string,

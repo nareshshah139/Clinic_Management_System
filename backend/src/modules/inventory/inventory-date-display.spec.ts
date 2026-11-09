@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { InventoryLabelService } from './inventory-label.service';
 import { InventoryPurchaseActionsService } from './inventory-purchase-actions.service';
+import { permissionGrants } from '../../shared/access/permission-grants';
 
 const actor = { id: 'staff', branchId: 'clinic', role: 'OWNER' };
 const textOf = (pdf: Buffer) => {
@@ -27,7 +28,7 @@ it('prints a workflow label creation date in the clinic timezone', async () => {
 });
 
 const purchaseService = () => new InventoryPurchaseActionsService({} as any, {
-  permissions: async () => new Set(['*']),
+  permissions: async () => permissionGrants(['*']),
 } as any, { findOne: async () => ({
   id: 'purchase-1', invoiceNumber: 'P1', distributorName: 'Sample supplier', distributorGstin: '', status: 'DRAFT',
   invoiceDate: new Date('2026-11-30T00:00:00Z'), dueDate: new Date('2026-12-05T00:00:00Z'),

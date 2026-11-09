@@ -915,6 +915,11 @@ export class UsersService {
    * @cc [owner:nareshshah139,label:security] user-secrets-never-returned
    * User API responses MUST NOT include password hashes, reset tokens or Google refresh tokens.
    */
+  /**
+   * @cc [owner:nareshshah139,label:security] whatsapp-token-never-returned
+   * Formatted user responses MUST omit whatsappAccessToken from metadata while retaining
+   * other settings; malformed stored metadata MUST NOT expose its raw value.
+   */
   private formatUser({ password: _password, resetToken: _resetToken, resetTokenExpiry: _resetTokenExpiry, googleRefreshToken: _googleRefreshToken, ...user }: any) {
     let permissionsParsed: string[] | null = null;
     let metadataParsed: any = null;
@@ -924,6 +929,11 @@ export class UsersService {
     try {
       metadataParsed = user.metadata ? JSON.parse(user.metadata) : null;
     } catch {}
+    if (metadataParsed && typeof metadataParsed === 'object' && !Array.isArray(metadataParsed)) {
+      delete metadataParsed.whatsappAccessToken;
+    } else {
+      metadataParsed = null;
+    }
 
     return {
       ...user,

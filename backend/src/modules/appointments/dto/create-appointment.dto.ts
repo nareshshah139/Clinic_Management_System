@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsEnum,
   IsObject,
+  IsBoolean,
 } from 'class-validator';
 import { VisitType } from '@prisma/client';
 
@@ -46,6 +47,11 @@ export class CreateAppointmentDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, any>; // Additional scheduling data
+
+  /** Book into a slot that already has patients, up to the doctor's limit. Sent only after the user confirms. */
+  @IsOptional()
+  @IsBoolean()
+  allowOverbook?: boolean;
 }
 
 export class RescheduleAppointmentDto {
@@ -62,4 +68,8 @@ export class RescheduleAppointmentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  allowOverbook?: boolean;
 }

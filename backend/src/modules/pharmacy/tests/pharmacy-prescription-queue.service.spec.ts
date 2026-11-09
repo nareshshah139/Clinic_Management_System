@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { PharmacyPrescriptionQueueService } from '../pharmacy-prescription-queue.service';
 import { PrescriptionQueueStatus } from '../dto/pharmacy-prescription-queue.dto';
+import { PharmacyDispenseTaskStatusDto } from '../dto/pharmacy-dispense-task.dto';
 
 describe('PharmacyPrescriptionQueueService', () => {
   let service: PharmacyPrescriptionQueueService;
@@ -60,6 +61,21 @@ describe('PharmacyPrescriptionQueueService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('rejects a manual dispensed status before any write', async () => {
+    prisma.$transaction = jest.fn();
+    await expect(service.updateTaskStatus('task', { status: PharmacyDispenseTaskStatusDto.DISPENSED }, branchId, 'user'))
+      .rejects.toThrow('Complete and post the pharmacy bill');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('does not show a historical manual task as dispensed without a posted invoice', async () => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription());
+    prisma.pharmacyDispenseTask = { findFirst: jest.fn().mockResolvedValue({ id: 'task', status: 'DISPENSED', lines: [] }) };
+    const entry = await service.findOne('rx-1', branchId);
+    expect(entry.status).toBe(PrescriptionQueueStatus.PENDING);
+    expect(entry.dispenseStatus).not.toBe('DISPENSED');
   });
 
   it('marks unlinked prescriptions older than 24 hours as expired', async () => {

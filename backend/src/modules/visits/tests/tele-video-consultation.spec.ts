@@ -13,6 +13,7 @@ const validate = (body: unknown, metatype: any = CreateVisitDto) => pipe.transfo
 function fixture() {
   let visit: any = { id: 'v', patientId: 'p', doctorId: 'doctor', complaints: '[]', consultationType: person };
   const db: any = {
+    pharmacyInvoice: { findFirst: jest.fn().mockResolvedValue(null) },
     $queryRaw: jest.fn().mockResolvedValue([{ id: 'rx' }]),
     patient: { findFirst: jest.fn().mockResolvedValue({ id: 'p' }), updateMany: jest.fn() },
     user: { findFirst: jest.fn().mockResolvedValue({ id: 'doctor' }) },

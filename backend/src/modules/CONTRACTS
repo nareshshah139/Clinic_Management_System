@@ -1,0 +1,3 @@
+@cc [owner:nareshshah139,label:security] declared-clinic-staff-boundary
+Controllers declaring the clinic staff policy MUST deny patient and lab technician roles,
+except on routes explicitly declared public or authenticated and independently scoped.
