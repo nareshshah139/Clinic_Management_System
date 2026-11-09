@@ -40,3 +40,9 @@ model checker after every download and fail if the artifact is unavailable or di
 Every pull request and main push MUST run the pinned appointment overbooking model checker,
 verify the booking limit at limits 1 to 3, and require each broken variant (no lock, count
 outside the lock, ignored overbook flag) to fail as expected.
+
+@cc [owner:nareshshah139,label:verification] appointment-calendars-formal-gate
+Every pull request and main push MUST run the pinned appointment calendars model checker,
+verify the Scheduled and Confirmed calendars at limits 1 and 2, and require each broken
+variant (no target check, source-calendar count, count outside the lock, no compare-and-set,
+no idempotent retry) to fail as expected.
