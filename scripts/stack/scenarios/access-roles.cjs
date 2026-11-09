@@ -8,12 +8,12 @@ const { bootStack } = require("../boot.cjs");
 const out = path.resolve(__dirname, "../../../output/stack/access-roles");
 const GSTIN = "36ABCDE1234F1Z5";
 const DENIED = /Forbidden|don.t have access|do not have access|access denied|not allowed|not authori[sz]ed|insufficient permission/i;
-const PHARMACY_LINKS = ["Pharmacy Desk", "Pharmacy Counter", "Pharmacy Billing", "Sales", "Inventory"];
+const PHARMACY_LINKS = ["Pharmacy Desk", "Pharmacy Counter", "Sales", "Inventory"];
 
 const PAGES = [
   { name: "Pharmacy Desk", route: "/dashboard/pharmacy?section=desk", actions: [] },
   { name: "Pharmacy Counter", route: "/dashboard/pharmacy?section=counter", actions: [] },
-  { name: "Pharmacy Billing", route: "/dashboard/pharmacy?section=billing", actions: [] },
+  { name: "New sale bill", route: "/dashboard/pharmacy/sales/bill", actions: [["Save draft", (p) => p.getByRole("button", { name: "Save draft" })], ["Load prescriptions", (p) => p.getByRole("heading", { name: /Prescription/ })]] },
   { name: "Sales", route: "/dashboard/pharmacy/sales", actions: [["New sale", (p) => p.getByRole("button", { name: /New sale/ })]] },
   { name: "Purchase bills", route: "/dashboard/inventory?area=purchases&view=register", actions: [["Mark paid", (p) => p.getByRole("button", { name: "Mark bill LIN-1 paid" })]] },
   { name: "Payments & dues", route: `/dashboard/inventory?area=purchases&view=ledger&gstin=${GSTIN}`, actions: [["Purchase Ledger", (p) => p.getByRole("heading", { name: "Purchase Ledger" })]] },
@@ -154,7 +154,7 @@ async function visit(stack, context, who, target) {
         check(`${label}: no refused API call`, seen.refused.length === 0, seen.refused);
         check(`${label}: stays on the page`, !seen.url.includes("/login"), seen.url);
         for (const [action, offered] of Object.entries(seen.actions)) check(`${label}: ${action} offered`, offered, seen.actions);
-        if (target.name === "Pharmacy Desk") check(`${who}: sidebar lists every Pharmacy entry`, JSON.stringify(seen.links) === JSON.stringify(PHARMACY_LINKS), seen.links);
+        if (target.name === "Pharmacy Desk") check(`${who}: sidebar lists every Pharmacy entry, with Sales in place of Pharmacy Billing`, JSON.stringify(seen.links) === JSON.stringify(PHARMACY_LINKS), seen.links);
       }
       await context.close();
     }
