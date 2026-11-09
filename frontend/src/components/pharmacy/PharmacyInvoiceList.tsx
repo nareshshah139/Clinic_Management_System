@@ -23,8 +23,11 @@ import {
   FileText,
   DollarSign,
   CheckCircle,
+  Pencil,
 } from 'lucide-react';
+import Link from 'next/link';
 import { apiClient } from '@/lib/api';
+import { billHref } from './sales/sales-bill-model';
 import { downloadInvoicePdf } from '@/lib/download-invoice-pdf';
 import type {
   PharmacyInvoiceListResponse,
@@ -168,20 +171,6 @@ export function PharmacyInvoiceList() {
       alert('Failed to load invoice. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleConfirmInvoice = async (invoiceId: string) => {
-    if (!confirm('Confirm this invoice? This will mark it as finalized and include it in stock predictions.')) {
-      return;
-    }
-
-    try {
-      await apiClient.patch(`/pharmacy/invoices/${invoiceId}/status`, { status: 'CONFIRMED' });
-      await loadInvoices();
-    } catch (error: any) {
-      const message = error?.body?.message || error?.message || 'Failed to confirm invoice';
-      alert(`Error: ${message}`);
     }
   };
 
@@ -550,7 +539,7 @@ export function PharmacyInvoiceList() {
                       >
                         <Download className="h-4 w-4" />
                       </Button>
-                      {(pendingPaymentIds.includes(invoice.id) || (invoice.status !== 'CANCELLED' && (invoice.paymentStatus === 'PENDING' || invoice.paymentStatus === 'PARTIALLY_PAID'))) && (
+                      {(pendingPaymentIds.includes(invoice.id) || (invoice.status !== 'CANCELLED' && invoice.status !== 'DRAFT' && (invoice.paymentStatus === 'PENDING' || invoice.paymentStatus === 'PARTIALLY_PAID'))) && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -562,17 +551,11 @@ export function PharmacyInvoiceList() {
                         </Button>
                       )}
                       {invoice.status === 'DRAFT' && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleConfirmInvoice(invoice.id)}
-                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            title="Confirm Invoice"
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                          </Button>
-                        </>
+                        <Button asChild variant="ghost" size="sm" title="Continue in Sales">
+                          <Link href={billHref({ draft: invoice.id })} aria-label={`Continue draft ${invoice.invoiceNumber} in Sales`}>
+                            <Pencil className="h-4 w-4" />
+                          </Link>
+                        </Button>
                       )}
                       <Button
                         variant="ghost"

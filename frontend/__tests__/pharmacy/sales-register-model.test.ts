@@ -59,8 +59,8 @@ it('refuses WhatsApp for drafts, cancelled bills and unusable numbers', () => {
   expect(whatsappAction(row({ mobile: '12345' }), 'C')).toEqual({ reason: 'Mobile number is not a valid 10-digit number' });
 });
 
-it('opens drafts in the invoice list and workspace documents with a way back', () => {
-  expect(openHref(row({ state: 'DRAFT', billNo: null, reservedNo: 'PHI-2026-075' }), '/x')).toBe('/dashboard/pharmacy/invoices?search=PHI-2026-075');
+it('reopens drafts as Sales bills and opens workspace documents with a way back', () => {
+  expect(openHref(row({ state: 'DRAFT', billNo: null, reservedNo: 'PHI-2026-075', recordId: 'inv 7' }), '/x')).toBe('/dashboard/pharmacy/sales/bill?draft=inv+7');
   expect(openHref(row(), '/x')).toBeNull();
   expect(openHref(row({ source: 'COUNTER_SALE', recordId: 'cs 1' }), salesTabHref('sales', 'q=a&tab=returns'))).toBe(
     '/dashboard/inventory?area=sales&view=COUNTER_SALE&document=cs%201&return=%2Fdashboard%2Fpharmacy%2Fsales%3Fq%3Da',

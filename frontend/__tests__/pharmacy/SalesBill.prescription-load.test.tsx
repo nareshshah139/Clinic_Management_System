@@ -1,14 +1,25 @@
 import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import PharmacyPage from '@/app/dashboard/pharmacy/page';
+import SalesBillPage from '@/app/dashboard/pharmacy/sales/bill/page';
 import { apiClient } from '@/lib/api';
 
-const mockPush = jest.fn();
 const mockToast = jest.fn();
-const params = new URLSearchParams('section=billing');
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }), useSearchParams: () => params }));
-jest.mock('next/dynamic', () => () => () => null);
-jest.mock('@/components/pharmacy/PharmacyCounterCockpit', () => ({ PharmacyCounterCockpit: () => null }));
+const mockNav = { query: new URLSearchParams(), listeners: new Set<() => void>() };
+const mockGo = jest.fn((href: string) => {
+  mockNav.query = new URL(href, 'http://clinic.test').searchParams;
+  mockNav.listeners.forEach((listener) => listener());
+});
+jest.mock('next/navigation', () => {
+  const { useSyncExternalStore } = jest.requireActual('react');
+  const subscribe = (listener: () => void) => {
+    mockNav.listeners.add(listener);
+    return () => mockNav.listeners.delete(listener);
+  };
+  return {
+    useRouter: () => ({ push: mockGo, replace: mockGo }),
+    useSearchParams: () => useSyncExternalStore(subscribe, () => mockNav.query),
+  };
+});
 jest.mock('@/lib/api', () => ({ apiClient: {
   get: jest.fn(), getPatients: jest.fn(), getPatient: jest.fn(), getUsers: jest.fn(),
   getPrescription: jest.fn(), post: jest.fn(), patch: jest.fn(), getPharmacyInvoicePrintData: jest.fn(),
@@ -33,7 +44,7 @@ let saved = false;
 const scrollIntoView = jest.fn();
 
 beforeEach(() => {
-  jest.clearAllMocks(); sessionStorage.clear(); saved = false;
+  jest.clearAllMocks(); sessionStorage.clear(); saved = false; mockNav.query = new URLSearchParams();
   Element.prototype.scrollIntoView = scrollIntoView;
   api.getPatients.mockResolvedValue({ data: [patient, secondPatient] } as any);
   api.getPatient.mockImplementation(async id => id === patient.id ? patient : secondPatient as any);
@@ -65,7 +76,7 @@ async function loadPatient(name = patient.name) {
 }
 
 it('Load opens a visible bill with all four prescribed quantities and flags unavailable stock', async () => {
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   for (const name of names) expect(await screen.findByRole('heading', { name, level: 4 })).toBeInTheDocument();
   expect(screen.getByText('Out of stock')).toBeInTheDocument();
@@ -76,7 +87,7 @@ it('Load opens a visible bill with all four prescribed quantities and flags unav
 });
 
 it('retains an unmatched item, allows removal, and does not retain another patient’s medicines', async () => {
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
   await loadPatient(secondPatient.name);
@@ -89,7 +100,7 @@ it('retains an unmatched item, allows removal, and does not retain another patie
 });
 
 it('loads inside StrictMode when effects are mounted again', async () => {
-  render(<StrictMode><PharmacyPage /></StrictMode>);
+  render(<StrictMode><SalesBillPage /></StrictMode>);
   await loadPatient();
   expect(await screen.findByRole('heading', { name: names[0], level: 4 })).toBeInTheDocument();
   expect(screen.queryByText('Loading prescription data...')).not.toBeInTheDocument();
@@ -98,7 +109,7 @@ it('loads inside StrictMode when effects are mounted again', async () => {
 it('uses the inventory-matched ID even when search returns another medicine first', async () => {
   const get = api.get.getMockImplementation()!;
   api.get.mockImplementation(async (url, query) => url === '/drugs' ? { data: [{ ...drugs[0], id: 'wrong-drug', name: 'Wrong medicine' }, ...drugs] } as any : get(url, query));
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   expect(await screen.findByRole('heading', { name: names[0], level: 4 })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Wrong medicine' })).not.toBeInTheDocument();
@@ -114,7 +125,7 @@ it('fills the stock check billing quantity when an older prescription omitted ex
     ...item, prescribedQuantity: 14,
     billingQuantity: index === 3 ? { quantity: 1, unit: 'BOTTLES', review } : { quantity: 2, unit: 'STRIPS', review: null },
   })) } as any : get(url, query));
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
   expect(screen.getAllByLabelText('Quantity').map(input => (input as HTMLInputElement).value)).toEqual(['2', '2', '2', '1']);
@@ -129,7 +140,7 @@ it('retrying an inventory failure preserves removed lines and reviewed quantitie
     if (url === '/drugs/drug-0' && fail) throw new Error('Product read failed');
     return get(url, query);
   });
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
   fireEvent.click(screen.getByRole('button', { name: `Remove ${names[2]}` }));
@@ -148,7 +159,7 @@ it('keeps every line when an inventory lookup fails and exposes a retry', async 
     if (url.endsWith('/stock-check')) throw new Error('Inventory unavailable');
     return get(url, query);
   });
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   for (const name of names) expect(await screen.findByRole('heading', { name, level: 4 })).toBeInTheDocument();
   expect(screen.getAllByText('Inventory check failed')).toHaveLength(4);
@@ -160,7 +171,7 @@ it('keeps every line when an inventory lookup fails and exposes a retry', async 
 });
 
 it('substitutes an unmatched line with the chosen product and keeps its edited quantity', async () => {
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient(secondPatient.name);
   const heading = await screen.findByRole('heading', { name: 'Unmatched cream', level: 4 });
   const item = heading.closest('[data-invoice-item]') as HTMLElement;
@@ -185,7 +196,7 @@ it('ignores a late prescription response after switching patients', async () => 
   let resolveFirst!: (value: any) => void;
   const original = api.getPrescription.getMockImplementation()!;
   api.getPrescription.mockImplementation(id => id === 'rx-0' ? new Promise(resolve => { resolveFirst = resolve; }) : original(id));
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   const row = (await screen.findByText(patient.name)).closest('tr')!;
   fireEvent.click(within(row).getByRole('button', { name: 'Load' }));
   await waitFor(() => expect(api.getPrescription).toHaveBeenCalledWith('rx-0'));
@@ -198,7 +209,7 @@ it('ignores a late prescription response after switching patients', async () => 
 
 it('keeps a pending prescription visible and reports a failed confirmation', async () => {
   api.post.mockRejectedValue(new Error('Insufficient inventory stock'));
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
   fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
@@ -209,7 +220,7 @@ it('keeps a pending prescription visible and reports a failed confirmation', asy
 
 it('shows a visible load error and retries the same prescription', async () => {
   api.getPrescription.mockRejectedValueOnce(new Error('Prescription service unavailable'));
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   const row = (await screen.findByText(patient.name)).closest('tr')!;
   fireEvent.click(within(row).getByRole('button', { name: 'Load' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Prescription service unavailable');
@@ -218,7 +229,7 @@ it('shows a visible load error and retries the same prescription', async () => {
 });
 
 it('refreshes Pending after confirmation while preserving the prescription link in the saved bill', async () => {
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
   fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
@@ -228,7 +239,7 @@ it('refreshes Pending after confirmation while preserving the prescription link 
 });
 
 it('starts a new patient bill after prescription checkout without the previous context', async () => {
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
   fireEvent.change(screen.getByLabelText('Notes'), {
@@ -243,7 +254,7 @@ it('starts a new patient bill after prescription checkout without the previous c
   window.history.replaceState(
     {},
     '',
-    '/dashboard/pharmacy?section=billing&patientId=patient-trina&prescriptionId=rx-0&doctorId=doctor-1&visitId=visit-0'
+    '/dashboard/pharmacy/sales/bill?patientId=patient-trina&prescriptionId=rx-0&doctorId=doctor-1&visitId=visit-0'
   );
   fireEvent.click(screen.getByRole('button', { name: 'Start a new invoice' }));
   await waitFor(() =>
@@ -296,7 +307,7 @@ it('keeps billing edits with unchanged source lines on reorder and resets change
     if (url === '/drugs/drug-0' && fail) throw new Error('Temporary lookup failure');
     return get(url, query);
   });
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   const row = (name: string) => screen.getByRole('heading', { name, level: 4 }).closest('[data-invoice-item]') as HTMLElement;
   fireEvent.change(within(row(names[1])).getByLabelText('Quantity'), { target: { value: '2' } });
@@ -320,7 +331,7 @@ it.each(['2026-10-05T10:00:01.000Z', prescriptionVersion, undefined])('rejects r
     if (url.endsWith('/stock-check') && changed) return { items: [...stock].reverse().map(item => ({ ...item, prescriptionVersion: stockVersion })) } as any;
     return get(url, query);
   });
-  render(<PharmacyPage />);
+  render(<SalesBillPage />);
   await loadPatient();
   await screen.findByText(/Prescription loaded, but some inventory details/);
   expect(screen.getAllByText('Inventory check failed')).toHaveLength(4);

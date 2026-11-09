@@ -6,6 +6,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { billHref, type BillPrefill } from './sales/sales-bill-model';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -99,15 +100,9 @@ type StockCheckResponse = {
   items: StockCheckItem[];
 };
 
-type PharmacyBillingPrefill = {
-  patientId?: string;
-  prescriptionId?: string;
-  doctorId?: string;
-  visitId?: string;
-};
 
 type PrescriptionDispensingQueueProps = {
-  onOpenBilling?: (prefill: PharmacyBillingPrefill) => void;
+  onOpenBilling?: (prefill: BillPrefill) => void;
   openActionLabel?: string;
 };
 
@@ -479,18 +474,10 @@ function formatAge(hours: number) {
 
 
 function buildDispenseUrl(entry: QueueEntry) {
-  const params = new URLSearchParams({
-    section: 'billing',
-    patientId: entry.patient.id,
-    prescriptionId: entry.prescriptionId,
-    doctorId: entry.doctor.id,
-  });
-  if (entry.visitId) params.set('visitId', entry.visitId);
-
-  return `/dashboard/pharmacy?${params.toString()}`;
+  return billHref({ prefill: buildBillingPrefill(entry) });
 }
 
-function buildBillingPrefill(entry: QueueEntry): PharmacyBillingPrefill {
+function buildBillingPrefill(entry: QueueEntry): BillPrefill {
   return {
     patientId: entry.patient.id,
     prescriptionId: entry.prescriptionId,

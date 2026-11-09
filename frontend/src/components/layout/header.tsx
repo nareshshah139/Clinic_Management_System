@@ -39,6 +39,8 @@ import {
   type WhatsAppTemplateOption,
 } from '@/lib/whatsapp-settings';
 
+const DUE_SALES = '/dashboard/pharmacy/sales?pay=CREDIT';
+
 interface SearchResult {
   id: string;
   type: 'patient' | 'appointment' | 'user';
@@ -191,7 +193,7 @@ export function Header() {
           id: `inv-${inv.id}`,
           title: `Overdue Invoice ${inv.invoiceNo}`,
           description: `${inv.patient?.name || 'Patient'} • Due ${displayUtcDate(inv.dueDate)}`,
-          href: `/dashboard/pharmacy?section=billing`,
+          href: DUE_SALES,
           variant: 'warning',
         }));
         pushMany(apptItems, 4);
@@ -224,14 +226,14 @@ export function Header() {
           id: `pay-${p.id}`,
           title: `Pending ${formatCurrency(p.amount)} (${p.mode})`,
           description: `Invoice ${p.invoice?.invoiceNo || ''} • ${formatRelative(p.createdAt)}`,
-          href: `/dashboard/pharmacy?section=billing`,
+          href: DUE_SALES,
           variant: 'warning',
         }));
         const invItems: NotificationItem[] = (overdue || []).map((inv: any) => ({
           id: `inv-${inv.id}`,
           title: `Overdue Invoice ${inv.invoiceNo}`,
           description: `${inv.patient?.name || 'Patient'} • Due ${displayUtcDate(inv.dueDate)}`,
-          href: `/dashboard/pharmacy?section=billing`,
+          href: DUE_SALES,
           variant: 'destructive',
         }));
         pushMany(payItems, 5);
@@ -248,7 +250,7 @@ export function Header() {
             id: 'summary-overdue',
             title: `${counts.overdueInvoices} overdue invoice${counts.overdueInvoices === 1 ? '' : 's'}`,
             description: 'Billing attention needed',
-            href: '/dashboard/pharmacy?section=billing',
+            href: DUE_SALES,
             variant: 'destructive',
           });
         }
@@ -257,7 +259,7 @@ export function Header() {
             id: 'summary-pending',
             title: `${counts.pendingPayments} pending payment${counts.pendingPayments === 1 ? '' : 's'}`,
             description: 'Reconciliation required',
-            href: '/dashboard/pharmacy?section=billing',
+            href: DUE_SALES,
             variant: 'warning',
           });
         }

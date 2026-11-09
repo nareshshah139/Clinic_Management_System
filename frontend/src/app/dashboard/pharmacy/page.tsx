@@ -7,7 +7,6 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PharmacyInvoiceBuilderFixed } from '@/components/pharmacy/PharmacyInvoiceBuilderFixed';
 import { PackageBrowser } from '@/components/pharmacy/PackageBrowser';
 import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCreator';
 import { PrescriptionDispensingQueue } from '@/components/pharmacy/PrescriptionDispensingQueue';
@@ -31,6 +30,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { billHref, type BillPrefill } from '@/components/pharmacy/sales/sales-bill-model';
 
 const AgenticPharmacyDock = dynamic(
   () =>
@@ -43,13 +43,7 @@ const AgenticPharmacyDock = dynamic(
   },
 );
 
-type PharmacySideTab = 'desk' | 'counter' | 'billing';
-type PharmacyBillingPrefill = {
-  patientId?: string;
-  prescriptionId?: string;
-  doctorId?: string;
-  visitId?: string;
-};
+type PharmacySideTab = 'desk' | 'counter';
 
 interface PharmacyDashboardData {
   todaySales?: number;
@@ -79,33 +73,9 @@ function PharmacyPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [dash, setDash] = useState<PharmacyDashboardData | null>(null);
   const [dashReloadKey, setDashReloadKey] = useState<number>(0);
-  const [pharmacyTab, setPharmacyTab] = useState<PharmacySideTab>('desk');
-  const [prefill, setPrefill] = useState<PharmacyBillingPrefill | null>(null);
   const [isAgentDockOpen, setIsAgentDockOpen] = useState(false);
-
-  useEffect(() => {
-    const requestedTab = searchParams.get('section') || searchParams.get('tab') || '';
-    const patientId = searchParams.get('patientId') || undefined;
-    const prescriptionId = searchParams.get('prescriptionId') || undefined;
-    const doctorId = searchParams.get('doctorId') || undefined;
-    const visitId = searchParams.get('visitId') || undefined;
-    let nextTab: PharmacySideTab = 'desk';
-
-    if (requestedTab === 'desk' || requestedTab === 'counter' || requestedTab === 'billing') {
-      nextTab = requestedTab;
-    } else if (requestedTab === 'invoices' || requestedTab === 'payments') {
-      nextTab = 'billing';
-    }
-
-    if (patientId || prescriptionId || doctorId || visitId) {
-      setPrefill({ patientId, prescriptionId, doctorId, visitId });
-      nextTab = 'billing';
-    } else {
-      setPrefill(null);
-    }
-
-    setPharmacyTab(nextTab);
-  }, [searchParams]);
+  const requestedTab = searchParams.get('section') || searchParams.get('tab');
+  const pharmacyTab: PharmacySideTab = requestedTab === 'counter' ? 'counter' : 'desk';
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -176,26 +146,17 @@ function PharmacyPageContent() {
     });
   };
 
-  const openPharmacyTab = (tab: PharmacySideTab, billingPrefill?: PharmacyBillingPrefill) => {
-    if (billingPrefill) {
-      setPrefill(billingPrefill);
-    }
-    setPharmacyTab(tab);
-    const params = new URLSearchParams();
-    params.set('section', tab);
-    if (billingPrefill?.patientId) params.set('patientId', billingPrefill.patientId);
-    if (billingPrefill?.prescriptionId) params.set('prescriptionId', billingPrefill.prescriptionId);
-    if (billingPrefill?.doctorId) params.set('doctorId', billingPrefill.doctorId);
-    if (billingPrefill?.visitId) params.set('visitId', billingPrefill.visitId);
-    router.push(`/dashboard/pharmacy?${params.toString()}`, { scroll: false });
-    if (!billingPrefill) focusWorkbench();
+  const openPharmacyTab = (tab: PharmacySideTab) => {
+    router.push(`/dashboard/pharmacy?section=${tab}`, { scroll: false });
+    focusWorkbench();
   };
+  const openBill = (prefill?: BillPrefill) => router.push(billHref({ prefill }));
 
   return (
     <main className="flex-1 bg-[#eef4f8] p-2 md:p-3">
       <div ref={pharmacyWorkspaceRef} className="mx-auto max-w-[1560px] scroll-mt-3">
         <div className="space-y-3">
-          {pharmacyTab !== 'desk' && <PageHeader title={pharmacyTab === 'counter' ? 'Pharmacy Counter' : 'Pharmacy Billing'} />}
+          {pharmacyTab === 'counter' && <PageHeader title="Pharmacy Counter" />}
           {pharmacyTab === 'desk' ? (
             <PharmacyDeskPanel
               todaySales={todaySales}
@@ -208,7 +169,7 @@ function PharmacyPageContent() {
               isAgentDockOpen={isAgentDockOpen}
               onOpenAgent={() => setIsAgentDockOpen(true)}
               onOpenCounter={() => openPharmacyTab('counter')}
-              onOpenBilling={() => openPharmacyTab('billing')}
+              onOpenSale={() => openBill()}
               onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control')}
               onOpenInvoices={() => router.push('/dashboard/pharmacy/invoices')}
               onOpenDrugs={() => router.push('/dashboard/pharmacy/drugs')}
@@ -217,21 +178,12 @@ function PharmacyPageContent() {
 
           {pharmacyTab === 'counter' ? (
             <PharmacyCounterPanel
-              prefill={prefill}
-              onOpenBilling={(billingPrefill) => openPharmacyTab('billing', billingPrefill)}
+              onOpenBilling={openBill}
               onOpenPartnerSync={() => openPharmacyTab('desk')}
               onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control&section=shelf')}
             />
           ) : null}
 
-          {pharmacyTab === 'billing' ? (
-            <PharmacyBillingPanel
-              prefill={prefill}
-              onLoadPrescription={(billingPrefill) =>
-                openPharmacyTab('billing', billingPrefill)
-              }
-            />
-          ) : null}
         </div>
       </div>
     </main>
@@ -255,7 +207,7 @@ function PharmacyDeskPanel({
   isAgentDockOpen,
   onOpenAgent,
   onOpenCounter,
-  onOpenBilling,
+  onOpenSale,
   onOpenInventoryControl,
   onOpenInvoices,
   onOpenDrugs,
@@ -270,7 +222,7 @@ function PharmacyDeskPanel({
   isAgentDockOpen: boolean;
   onOpenAgent: () => void;
   onOpenCounter: () => void;
-  onOpenBilling: () => void;
+  onOpenSale: () => void;
   onOpenInventoryControl: () => void;
   onOpenInvoices: () => void;
   onOpenDrugs: () => void;
@@ -363,9 +315,9 @@ function PharmacyDeskPanel({
           />
           <QuickAction
             icon={<Receipt className="h-4 w-4" />}
-            title="Pharmacy Billing"
-            detail="Invoice and payment"
-            onClick={onOpenBilling}
+            title="New sale"
+            detail="Bill a prescription or walk-in"
+            onClick={onOpenSale}
           />
           <QuickAction
             icon={<Package className="h-4 w-4" />}
@@ -391,20 +343,17 @@ function PharmacyDeskPanel({
 }
 
 function PharmacyCounterPanel({
-  prefill,
   onOpenBilling,
   onOpenPartnerSync,
   onOpenInventoryControl,
 }: {
-  prefill?: PharmacyBillingPrefill | null;
-  onOpenBilling: (prefill?: PharmacyBillingPrefill) => void;
+  onOpenBilling: (prefill?: BillPrefill) => void;
   onOpenPartnerSync: () => void;
   onOpenInventoryControl: () => void;
 }) {
   return (
     <div className="space-y-3">
       <PharmacyCounterCockpit
-        prefill={prefill}
         onOpenBilling={onOpenBilling}
         onOpenQueue={() => undefined}
         onOpenPartnerSync={onOpenPartnerSync}
@@ -414,7 +363,7 @@ function PharmacyCounterPanel({
       <section className="space-y-3">
         <WorkbenchHeader
           title="Prescription Queue"
-          detail="Review visit prescriptions and send approved medicines into Pharmacy Billing."
+          detail="Review visit prescriptions and send approved medicines into a Sales bill."
         />
         <PrescriptionDispensingQueue
           onOpenBilling={onOpenBilling}
@@ -422,52 +371,6 @@ function PharmacyCounterPanel({
         />
       </section>
     </div>
-  );
-}
-
-/**
- * @cc [owner:nareshshah139,label:product] prescription-load-visible-draft
- * Loading a prescription MUST bring its bill into view. Switching prescriptions MUST
- * create a separate draft so medicines and billing details from another patient cannot carry over.
- */
-function PharmacyBillingPanel({
-  prefill,
-  onLoadPrescription,
-}: {
-  prefill?: PharmacyBillingPrefill | null;
-  onLoadPrescription: (prefill: PharmacyBillingPrefill) => void;
-}) {
-  const billRef = useRef<HTMLDivElement>(null);
-  const [loadAttempt, setLoadAttempt] = useState(0);
-  useEffect(() => {
-    if (!prefill?.prescriptionId && !prefill?.visitId) return;
-    const frame = requestAnimationFrame(() => {
-      billRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      billRef.current?.focus({ preventScroll: true });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [prefill?.prescriptionId, prefill?.visitId, loadAttempt]);
-
-  return (
-    <section className="space-y-3">
-      <WorkbenchHeader
-        title="Pharmacy Billing"
-        detail="Visit drugs auto-load as a draft; pharmacist review is required before label, invoice, payment, and stock deduction."
-      />
-      <PrescriptionDispensingQueue
-        onOpenBilling={(selected) => {
-          onLoadPrescription(selected);
-          setLoadAttempt(attempt => attempt + 1);
-        }}
-        openActionLabel="Load"
-      />
-      <div ref={billRef} role="region" aria-label="Prescription bill" tabIndex={-1} className="scroll-mt-4">
-        <PharmacyInvoiceBuilderFixed
-          key={`${prefill?.prescriptionId || prefill?.visitId || 'manual'}:${loadAttempt}`}
-          prefill={prefill || undefined}
-        />
-      </div>
-    </section>
   );
 }
 
@@ -527,7 +430,7 @@ function PharmacyGuide() {
         {
           title: 'Billing',
           items: [
-            'Create GST pharmacy invoices from the Billing & GST tab',
+            'Create GST pharmacy bills from Sales > New sale, or save one as a draft to finish later',
             'Use payment modes such as cash, UPI, card, or insurance',
             'Confirmed invoices deduct stock and keep patient records linked',
           ],

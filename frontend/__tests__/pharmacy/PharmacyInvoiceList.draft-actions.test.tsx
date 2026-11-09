@@ -4,7 +4,7 @@ import { apiClient } from '@/lib/api';
 
 jest.mock('@/lib/api', () => ({ apiClient: { getPharmacyInvoices: jest.fn(), get: jest.fn() } }));
 
-it('offers only actions that work on a draft sale', async () => {
+it('sends a draft sale to Sales to finish, without confirming or taking payment from the list', async () => {
   const draft = {
     id: 'draft-1', invoiceNumber: 'SALE-9', invoiceDate: '2026-11-05T06:00:00.000Z',
     createdAt: '2026-11-05T06:00:00.000Z', status: 'DRAFT', paymentStatus: 'PENDING',
@@ -13,8 +13,7 @@ it('offers only actions that work on a draft sale', async () => {
   };
   (apiClient.getPharmacyInvoices as jest.Mock).mockResolvedValue({ data: [draft], pagination: { page: 1, limit: 10, total: 1, pages: 1 } });
   render(<PharmacyInvoiceList />);
-  expect(await screen.findByTitle('Confirm Invoice')).toBeInTheDocument();
+  expect(await screen.findByRole('link', { name: 'Continue draft SALE-9 in Sales' })).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill?draft=draft-1');
   expect(screen.getByTitle('Delete Invoice')).toBeInTheDocument();
-  // No sales screen can open a draft for editing, so an Edit button would do nothing.
-  expect(screen.queryByTitle('Edit Invoice')).not.toBeInTheDocument();
+  expect([screen.queryByTitle('Confirm Invoice'), screen.queryByTitle('Mark as Paid')]).toEqual([null, null]);
 });

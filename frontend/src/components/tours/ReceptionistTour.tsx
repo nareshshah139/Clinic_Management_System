@@ -290,7 +290,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               <li><strong>Appointments:</strong> Schedule and manage patient appointments</li>
               <li><strong>Patients:</strong> Register and manage patient records</li>
               <li><strong>Rooms:</strong> Check room availability</li>
-              <li><strong>Pharmacy Billing:</strong> Process pharmacy invoices and payments</li>
             </ul>
           </div>
         `,
@@ -981,7 +980,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-2">
             <h3 class="text-lg font-semibold">Pharmacy Workflows</h3>
-            <p>Use Pharmacy Desk, Pharmacy Counter, and Pharmacy Billing from the main sidebar.</p>
+            <p>Use Pharmacy Desk and Pharmacy Counter from the main sidebar.</p>
           </div>
         `,
       },
@@ -998,14 +997,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
           <div class="space-y-2">
             <h4 class="font-semibold">Pharmacy Counter</h4>
             <p>Review prescriptions, check stock, handle substitutions, and send approved work into billing.</p>
-          </div>
-        `,
-      },
-      {
-        intro: `
-          <div class="space-y-2">
-            <h4 class="font-semibold">Pharmacy Billing</h4>
-            <p>Create pharmacy invoices, collect payment, and print or save invoice PDFs.</p>
           </div>
         `,
       },
@@ -1026,7 +1017,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <li>Rooms</li>
             <li>Pharmacy Desk</li>
             <li>Pharmacy Counter</li>
-            <li>Pharmacy Billing</li>
           </ul>
           <p class="mt-2">Navigate to any of these pages and click the help button to start the tour!</p>
         </div>

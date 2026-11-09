@@ -22,12 +22,11 @@ import {
   MapPin,
   Activity,
   Pill,
-  Receipt,
   Mic,
   ShoppingBag,
 } from "lucide-react";
 
-type PharmacySidebarSection = "desk" | "counter" | "billing";
+type PharmacySidebarSection = "desk" | "counter";
 
 type NavigationItem = {
   name: string;
@@ -104,13 +103,6 @@ const navigation: NavigationItem[] = [
     allowedRoles: ["ADMIN", "DOCTOR", "PHARMACIST", "RECEPTION"],
   },
   {
-    name: "Pharmacy Billing", section: "Pharmacy",
-    href: "/dashboard/pharmacy?section=billing",
-    icon: Receipt,
-    pharmacySection: "billing",
-    allowedRoles: ["ADMIN", "DOCTOR", "PHARMACIST", "RECEPTION"],
-  },
-  {
     name: "Sales", section: "Pharmacy",
     href: "/dashboard/pharmacy/sales",
     icon: ShoppingBag,
@@ -174,35 +166,11 @@ const filterNavigationByRole = (
 
 function getActivePharmacySection(
   pathname: string,
-  searchParams: Pick<URLSearchParams, "get" | "has">,
+  searchParams: Pick<URLSearchParams, "get">,
 ): PharmacySidebarSection | null {
-  if (!pathname.startsWith("/dashboard/pharmacy")) return null;
-
-  if (pathname === "/dashboard/pharmacy/invoices") return "billing";
-  if (pathname.startsWith("/dashboard/pharmacy/sales")) return null;
-
-  const requested =
-    searchParams.get("section") || searchParams.get("tab") || "";
-  if (
-    requested === "desk" ||
-    requested === "counter" ||
-    requested === "billing"
-  ) {
-    return requested;
-  }
-
-  if (requested === "invoices" || requested === "payments") return "billing";
-
-  if (
-    searchParams.has("patientId") ||
-    searchParams.has("prescriptionId") ||
-    searchParams.has("doctorId") ||
-    searchParams.has("visitId")
-  ) {
-    return "billing";
-  }
-
-  return "desk";
+  if (pathname !== "/dashboard/pharmacy") return null;
+  const requested = searchParams.get("section") || searchParams.get("tab");
+  return requested === "counter" ? "counter" : "desk";
 }
 
 /**

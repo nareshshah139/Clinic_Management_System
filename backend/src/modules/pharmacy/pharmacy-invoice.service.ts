@@ -660,11 +660,22 @@ export class PharmacyInvoiceService {
                 select: {
                   id: true,
                   name: true,
+                  description: true,
+                  instructions: true,
                   category: true,
                   subcategory: true,
                   packagePrice: true,
                   originalPrice: true,
                   discountPercent: true,
+                  items: {
+                    select: {
+                      id: true,
+                      drugId: true,
+                      quantity: true,
+                      sequence: true,
+                      drug: { select: { id: true, name: true } },
+                    },
+                  },
                 },
               },
             },

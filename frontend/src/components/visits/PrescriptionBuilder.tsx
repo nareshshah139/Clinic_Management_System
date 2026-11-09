@@ -34,6 +34,7 @@ import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
+import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -5582,7 +5583,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <Button
                     variant="outline"
                     onClick={() => {
-                      const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&doctorId=${encodeURIComponent(doctorId)}${visitId ? `&visitId=${encodeURIComponent(visitId)}` : ''}`;
+                      const url = billHref({ prefill: { patientId, doctorId, visitId: visitId || undefined } });
                       window.location.href = url;
                     }}
                   >
@@ -6892,7 +6893,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     setConfirmPharmacy({ open: false, prescriptionId: '', summary: null });
                     return;
                   }
-                  const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(confirmPharmacy.prescriptionId)}&doctorId=${encodeURIComponent(doctorId)}`;
+                  const url = billHref({ prefill: { patientId, prescriptionId: confirmPharmacy.prescriptionId, doctorId } });
                   window.location.href = url;
                 }}
               >
