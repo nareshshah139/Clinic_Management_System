@@ -7,6 +7,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useDashboardUser } from "./dashboard-user-context";
 import { usePendingItemRequestCount } from "@/components/inventory/use-pending-item-requests";
+import { PHARMACY_REPORT_ROLES } from "@/components/pharmacy/pharmacy-report-catalog";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -24,6 +25,7 @@ import {
   Pill,
   Mic,
   ShoppingBag,
+  FileBarChart,
 } from "lucide-react";
 
 type PharmacySidebarSection = "desk" | "counter";
@@ -113,6 +115,12 @@ const navigation: NavigationItem[] = [
     href: "/dashboard/inventory",
     icon: Package,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "RECEPTION"],
+  },
+  {
+    name: "Pharmacy Report", section: "Pharmacy",
+    href: "/dashboard/pharmacy/reports",
+    icon: FileBarChart,
+    allowedRoles: [...PHARMACY_REPORT_ROLES],
   },
   {
     name: "Reports", section: "Admin",

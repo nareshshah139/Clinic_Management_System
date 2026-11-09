@@ -163,17 +163,23 @@ it('returns to the Sales register a document was opened from, and refuses anothe
   expect(mockRouter.push).toHaveBeenLastCalledWith('/dashboard/inventory?area=sales&view=SALES_RETURN',{scroll:false});
 });
 
-it.each([
-  ['RECEPTION', []],
-  ['PHARMACIST', ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin']],
-  ['DOCTOR', ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin']],
-])('lists only the pharmacy reports the %s role can open', async (role, expected) => {
+it.each(['RECEPTION', 'PHARMACIST', 'DOCTOR', 'OWNER'])('keeps the pharmacy reports out of the Purchases menu for %s', async (role) => {
   mockRole = role;
   mockQuery = 'area=purchases&view=suppliers';
   (apiClient.get as jest.Mock).mockResolvedValue({ kinds: {}, rows: [], total: 0, totalPages: 1 });
   render(<InventoryWorkspace/>);
   const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
-  const reports = [...new Set(options)].filter((o) => ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin'].includes(o || ''));
-  expect(reports).toEqual(expected);
   expect(options).toContain('Terms of Trade');
+  expect(options.filter((o) => /report|summary|margin/i.test(o || ''))).toEqual([]);
+});
+
+it.each([
+  ['reports', 'gst-summary'],
+  ['daywise', 'day-wise-summary'],
+  ['margin', 'item-margin'],
+])('sends the old Purchases view=%s link to the Pharmacy Report page', async (view, report) => {
+  mockQuery = `area=purchases&view=${view}`;
+  (apiClient.get as jest.Mock).mockResolvedValue({ kinds: {}, rows: [], total: 0, totalPages: 1 });
+  render(<InventoryWorkspace/>);
+  await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith(`/dashboard/pharmacy/reports?report=${report}`, { scroll: false }));
 });

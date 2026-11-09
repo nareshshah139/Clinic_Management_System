@@ -14,9 +14,6 @@ import { apiClient } from "@/lib/api";
 import { useInventoryResource } from "./useInventoryResource";
 import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
 import { PurchaseLedger } from "@/components/pharmacy/PurchaseLedger";
-import { ComplianceCenter } from "@/components/pharmacy/ComplianceCenter";
-import { DayWiseSummaryReport } from "@/components/pharmacy/DayWiseSummaryReport";
-import { ItemMarginReport } from "@/components/pharmacy/ItemMarginReport";
 import { DistributorAnalytics } from "@/components/pharmacy/DistributorAnalytics";
 import { PharmacyInventoryStarterImport } from "@/components/pharmacy/PharmacyInventoryStarterImport";
 import { PharmacyInvoiceList } from "@/components/pharmacy/PharmacyInvoiceList";
@@ -66,9 +63,6 @@ const menus: Record<string, string[][]> = {
     ["credits", "Credits & vouchers"],
     ["INWARD_CHALLAN", "Inward challans"],
     ["GATE_PASS", "Gate passes"],
-    ["reports", "GST & monthly reports"],
-    ["daywise", "Day-wise summary"],
-    ["margin", "Item-wise margin"],
     ["analytics", "Purchase costs"],
   ],
   stock: [
@@ -121,18 +115,19 @@ const menus: Record<string, string[][]> = {
  * Failed capability reads MUST hide stale access and expose an explicit retry. Refresh and
  * actor changes MUST fetch capabilities again; older responses cannot restore superseded access.
  */
-const REPORT_TASK_ROLES: Record<string, readonly string[]> = {
-  reports: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
-  daywise: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
-  margin: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
-};
+/**
+ * @cc [owner:nareshshah139,label:product] pharmacy-reports-own-menu
+ * GST, monthly, day-wise and item-wise margin reports MUST be opened from the Pharmacy Report menu
+ * item, not from an inventory task. Old inventory links to them MUST land on the matching report there.
+ */
+const MOVED_REPORT_VIEWS: Record<string, string> = { reports: "gst-summary", daywise: "day-wise-summary", margin: "item-margin" };
 
 export function InventoryWorkspace() {
   const { user } = useDashboardUser();
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const canSeeApprovals = canReadEdits || user?.role === "RECEPTION";
   const taskVisible = ([id]: string[]) =>
-    id === "approvals" ? canSeeApprovals : !REPORT_TASK_ROLES[id] || REPORT_TASK_ROLES[id].includes(user?.role || "");
+    id === "approvals" ? canSeeApprovals : true;
   const pendingItems = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""));
   const taskLabel = (id: string, label: string) => (id === "approvals" && pendingItems > 0 ? `${label} (${pendingItems})` : label);
   const params = useSearchParams(),
@@ -249,6 +244,10 @@ export function InventoryWorkspace() {
     void loadPermissions();
     return () => { permissionRequest.current += 1; };
   }, [loadPermissions]);
+  const movedReport = area === "purchases" ? MOVED_REPORT_VIEWS[view] : undefined;
+  useEffect(() => {
+    if (movedReport) router.replace(`/dashboard/pharmacy/reports?report=${movedReport}`, { scroll: false });
+  }, [movedReport, router]);
   const availableTasks = (menus[area] || []).filter((task) => taskVisible(task)
     && (task[0] !== "ledger" || area !== "purchases" || caps?.ledger)
     && (task[0] !== "COUNT" || caps?.kinds?.COUNT?.read));
@@ -492,11 +491,6 @@ export function InventoryWorkspace() {
             ) : (
               <p>Supplier credits require purchase-ledger permission.</p>
             ))}
-          {area === "purchases" && view === "reports" && (
-            <ComplianceCenter reportsOnly />
-          )}
-          {area === "purchases" && view === "daywise" && <DayWiseSummaryReport />}
-          {area === "purchases" && view === "margin" && <ItemMarginReport />}
           {area === "purchases" && view === "analytics" && (
             <DistributorAnalytics />
           )}

@@ -179,9 +179,13 @@ function SummaryMetric({
 
 
 
-export function ComplianceCenter({
-  reportsOnly = false,
-}: { reportsOnly?: boolean } = {}) {
+export type ComplianceReportId = "gst-summary" | "monthly-report";
+
+/** With `report`, renders only that report and loads only its data; without it, the whole compliance center. */
+export function ComplianceCenter({ report }: { report?: ComplianceReportId } = {}) {
+  const showGst = !report || report === "gst-summary";
+  const showMonthly = !report || report === "monthly-report";
+  const showExpiry = !report;
   const [gstStartDate, setGstStartDate] = useState(defaultStartDate);
   const [gstEndDate, setGstEndDate] = useState(() => toDateInput(new Date()));
   const [month, setMonth] = useState(currentMonth);
@@ -251,10 +255,10 @@ export function ComplianceCenter({
   }, [expiryWindow, setBusy]);
 
   useEffect(() => {
-    void loadGstSummary();
-    void loadMonthlyReport();
-    void loadExpiryReturns();
-  }, [loadExpiryReturns, loadGstSummary, loadMonthlyReport]);
+    if (showGst) void loadGstSummary();
+    if (showMonthly) void loadMonthlyReport();
+    if (showExpiry) void loadExpiryReturns();
+  }, [loadExpiryReturns, loadGstSummary, loadMonthlyReport, showExpiry, showGst, showMonthly]);
 
   const gstNetTone = useMemo(
     () => ((gstSummary?.netPayable || 0) >= 0 ? "warn" : "good"),
@@ -264,16 +268,16 @@ export function ComplianceCenter({
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-normal">
-            Pharmacy Compliance
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {reportsOnly
-              ? "Posted GST and monthly reports for the current branch"
-              : "GST, monthly reports, expiry returns, and reviewed inventory counts"}
-          </p>
-        </div>
+        {!report && (
+          <div>
+            <h2 className="text-2xl font-semibold tracking-normal">
+              Pharmacy Compliance
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              GST, monthly reports, expiry returns, and reviewed inventory counts
+            </p>
+          </div>
+        )}
         {error ? (
           <p
             role="alert"
@@ -284,238 +288,242 @@ export function ComplianceCenter({
         ) : null}
       </div>
 
-      <Card>
-        <CardHeader className="gap-2">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <CardTitle className="flex items-center gap-2">
-                <Scale className="size-5" />
-                GST Summary
-              </CardTitle>
-              <CardDescription>
-                Input credit and output tax by slab
-              </CardDescription>
+      {showGst && (
+        <Card>
+          <CardHeader className="gap-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-2">
+                  <Scale className="size-5" />
+                  GST Summary
+                </CardTitle>
+                <CardDescription>
+                  Input credit and output tax by slab
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                onClick={loadGstSummary}
+                disabled={loading.gst}
+              >
+                {loading.gst ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
+                Refresh
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              onClick={loadGstSummary}
-              disabled={loading.gst}
-            >
-              {loading.gst ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
-              Refresh
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="gst-start-date">Start date</Label>
-              <Input
-                id="gst-start-date"
-                type="date"
-                value={gstStartDate}
-                onChange={(event) => setGstStartDate(event.target.value)}
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="gst-start-date">Start date</Label>
+                <Input
+                  id="gst-start-date"
+                  type="date"
+                  value={gstStartDate}
+                  onChange={(event) => setGstStartDate(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gst-end-date">End date</Label>
+                <Input
+                  id="gst-end-date"
+                  type="date"
+                  value={gstEndDate}
+                  onChange={(event) => setGstEndDate(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <SummaryMetric
+                label="Input GST"
+                value={
+                  gstSummary
+                    ? currency.format(gstSummary.purchaseInputGst || 0)
+                    : loading.gst
+                      ? "Loading…"
+                      : "Unavailable"
+                }
+              />
+              <SummaryMetric
+                label="Output GST"
+                value={
+                  gstSummary
+                    ? currency.format(gstSummary.salesOutputGst || 0)
+                    : loading.gst
+                      ? "Loading…"
+                      : "Unavailable"
+                }
+              />
+              <SummaryMetric
+                label="Net payable"
+                value={
+                  gstSummary
+                    ? currency.format(gstSummary.netPayable || 0)
+                    : loading.gst
+                      ? "Loading…"
+                      : "Unavailable"
+                }
+                tone={gstNetTone}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="gst-end-date">End date</Label>
-              <Input
-                id="gst-end-date"
-                type="date"
-                value={gstEndDate}
-                onChange={(event) => setGstEndDate(event.target.value)}
-              />
-            </div>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <SummaryMetric
-              label="Input GST"
-              value={
-                gstSummary
-                  ? currency.format(gstSummary.purchaseInputGst || 0)
-                  : loading.gst
-                    ? "Loading…"
-                    : "Unavailable"
-              }
-            />
-            <SummaryMetric
-              label="Output GST"
-              value={
-                gstSummary
-                  ? currency.format(gstSummary.salesOutputGst || 0)
-                  : loading.gst
-                    ? "Loading…"
-                    : "Unavailable"
-              }
-            />
-            <SummaryMetric
-              label="Net payable"
-              value={
-                gstSummary
-                  ? currency.format(gstSummary.netPayable || 0)
-                  : loading.gst
-                    ? "Loading…"
-                    : "Unavailable"
-              }
-              tone={gstNetTone}
-            />
-          </div>
-          {gstSummary && (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <SlabTable
-                title="Purchase Slabs"
-                slabs={gstSummary?.purchases.slabs || []}
-              />
-              <SlabTable
-                title="Sales Slabs"
-                slabs={gstSummary?.sales.slabs || []}
-              />
-            </div>
-          )}
-          {gstSummary && (
-            <ReportRecords title="GST source records" report={gstSummary} />
-          )}
-        </CardContent>
-      </Card>
+            {gstSummary && (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <SlabTable
+                  title="Purchase Slabs"
+                  slabs={gstSummary?.purchases.slabs || []}
+                />
+                <SlabTable
+                  title="Sales Slabs"
+                  slabs={gstSummary?.sales.slabs || []}
+                />
+              </div>
+            )}
+            {gstSummary && (
+              <ReportRecords title="GST source records" report={gstSummary} />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-      <Card>
-        <CardHeader className="gap-2">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="size-5" />
-                Monthly Report
-              </CardTitle>
-              <CardDescription>
-                Procurement, sales, stock value, and P&L
-              </CardDescription>
+      {showMonthly && (
+        <Card>
+          <CardHeader className="gap-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="size-5" />
+                  Monthly Report
+                </CardTitle>
+                <CardDescription>
+                  Procurement, sales, stock value, and P&L
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                onClick={loadMonthlyReport}
+                disabled={loading.monthly}
+              >
+                {loading.monthly ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
+                Refresh
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              onClick={loadMonthlyReport}
-              disabled={loading.monthly}
-            >
-              {loading.monthly ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
-              Refresh
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="max-w-xs space-y-2">
-            <Label htmlFor="report-month">Month</Label>
-            <Input
-              id="report-month"
-              type="month"
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
-            />
-          </div>
-          <div className="grid gap-3 md:grid-cols-4">
-            <SummaryMetric
-              label="Procurement"
-              value={
-                monthlyReport
-                  ? currency.format(monthlyReport.procurement.netPayable || 0)
-                  : loading.monthly
-                    ? "Loading…"
-                    : "Unavailable"
-              }
-            />
-            <SummaryMetric
-              label="Sales"
-              value={
-                monthlyReport
-                  ? currency.format(monthlyReport.sales.totalAmount || 0)
-                  : loading.monthly
-                    ? "Loading…"
-                    : "Unavailable"
-              }
-            />
-            <SummaryMetric
-              label="Gross profit"
-              value={
-                monthlyReport
-                  ? currency.format(
-                      monthlyReport.profitAndLoss.grossProfit || 0,
-                    )
-                  : loading.monthly
-                    ? "Loading…"
-                    : "Unavailable"
-              }
-              tone={
-                (monthlyReport?.profitAndLoss.grossProfit || 0) >= 0
-                  ? "good"
-                  : "warn"
-              }
-            />
-            <SummaryMetric
-              label="Stock at cost"
-              value={
-                monthlyReport
-                  ? currency.format(monthlyReport.stockValue.atCost || 0)
-                  : loading.monthly
-                    ? "Loading…"
-                    : "Unavailable"
-              }
-            />
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <SummaryMetric
-              label="Write-off"
-              value={
-                monthlyReport
-                  ? currency.format(
-                      monthlyReport.profitAndLoss.expiredDamagedWriteOff || 0,
-                    )
-                  : loading.monthly
-                    ? "Loading…"
-                    : "Unavailable"
-              }
-              tone="warn"
-            />
-            <SummaryMetric
-              label="Stock at MRP"
-              value={
-                monthlyReport
-                  ? currency.format(monthlyReport.stockValue.atMrp || 0)
-                  : loading.monthly
-                    ? "Loading…"
-                    : "Unavailable"
-              }
-            />
-            <SummaryMetric
-              label="Margin"
-              value={
-                monthlyReport
-                  ? `${number.format(monthlyReport.profitAndLoss.grossMarginPercent || 0)}%`
-                  : "Unavailable"
-              }
-            />
-          </div>
-          {monthlyReport && (
-            <>
-              <p className="text-sm text-muted-foreground">
-                Stock valuation is the current snapshot. Historical cost is
-                unknown for{" "}
-                {(monthlyReport.profitAndLoss.unknownCostMovementCount || 0) +
-                  (monthlyReport.profitAndLoss.unknownCostAdjustmentCount ||
-                    0)}{" "}
-                movements / adjustments; these costs are excluded from
-                known-cost totals.
-              </p>
-              <DistributorTable
-                rows={monthlyReport.distributorPerformance || []}
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="max-w-xs space-y-2">
+              <Label htmlFor="report-month">Month</Label>
+              <Input
+                id="report-month"
+                type="month"
+                value={month}
+                onChange={(event) => setMonth(event.target.value)}
               />
-              <ReportRecords
-                title="Monthly source records"
-                report={monthlyReport}
+            </div>
+            <div className="grid gap-3 md:grid-cols-4">
+              <SummaryMetric
+                label="Procurement"
+                value={
+                  monthlyReport
+                    ? currency.format(monthlyReport.procurement.netPayable || 0)
+                    : loading.monthly
+                      ? "Loading…"
+                      : "Unavailable"
+                }
               />
-            </>
-          )}
-        </CardContent>
-      </Card>
+              <SummaryMetric
+                label="Sales"
+                value={
+                  monthlyReport
+                    ? currency.format(monthlyReport.sales.totalAmount || 0)
+                    : loading.monthly
+                      ? "Loading…"
+                      : "Unavailable"
+                }
+              />
+              <SummaryMetric
+                label="Gross profit"
+                value={
+                  monthlyReport
+                    ? currency.format(
+                        monthlyReport.profitAndLoss.grossProfit || 0,
+                      )
+                    : loading.monthly
+                      ? "Loading…"
+                      : "Unavailable"
+                }
+                tone={
+                  (monthlyReport?.profitAndLoss.grossProfit || 0) >= 0
+                    ? "good"
+                    : "warn"
+                }
+              />
+              <SummaryMetric
+                label="Stock at cost"
+                value={
+                  monthlyReport
+                    ? currency.format(monthlyReport.stockValue.atCost || 0)
+                    : loading.monthly
+                      ? "Loading…"
+                      : "Unavailable"
+                }
+              />
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <SummaryMetric
+                label="Write-off"
+                value={
+                  monthlyReport
+                    ? currency.format(
+                        monthlyReport.profitAndLoss.expiredDamagedWriteOff || 0,
+                      )
+                    : loading.monthly
+                      ? "Loading…"
+                      : "Unavailable"
+                }
+                tone="warn"
+              />
+              <SummaryMetric
+                label="Stock at MRP"
+                value={
+                  monthlyReport
+                    ? currency.format(monthlyReport.stockValue.atMrp || 0)
+                    : loading.monthly
+                      ? "Loading…"
+                      : "Unavailable"
+                }
+              />
+              <SummaryMetric
+                label="Margin"
+                value={
+                  monthlyReport
+                    ? `${number.format(monthlyReport.profitAndLoss.grossMarginPercent || 0)}%`
+                    : "Unavailable"
+                }
+              />
+            </div>
+            {monthlyReport && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Stock valuation is the current snapshot. Historical cost is
+                  unknown for{" "}
+                  {(monthlyReport.profitAndLoss.unknownCostMovementCount || 0) +
+                    (monthlyReport.profitAndLoss.unknownCostAdjustmentCount ||
+                      0)}{" "}
+                  movements / adjustments; these costs are excluded from
+                  known-cost totals.
+                </p>
+                <DistributorTable
+                  rows={monthlyReport.distributorPerformance || []}
+                />
+                <ReportRecords
+                  title="Monthly source records"
+                  report={monthlyReport}
+                />
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-      {!reportsOnly && (
+      {showExpiry && (
         <>
           <Card>
             <CardHeader className="gap-2">
