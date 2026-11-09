@@ -31,6 +31,11 @@ export interface Actor {
   role: string;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:validation] time-off-range-validation
+ * Time off MUST end after it starts and MUST NOT span more than 366 days; either failure MUST
+ * return 400 and store nothing.
+ */
 const MAX_TIME_OFF_DAYS = 366;
 
 @Injectable()
@@ -90,6 +95,12 @@ export class DoctorAvailabilityService {
     });
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] doctor-hours-edit-access
+   * OWNER and ADMIN MUST be able to replace the working hours of any doctor in their branch and a
+   * DOCTOR only their own; anyone else MUST get 403. A doctor of another branch MUST get 404. An
+   * empty, overlapping or malformed shift list MUST get 400 and leave the stored hours unchanged.
+   */
   async replaceHours(
     doctorId: string,
     dto: ReplaceWorkingHoursDto,
@@ -117,6 +128,13 @@ export class DoctorAvailabilityService {
     return this.getAvailability(doctorId, actor.branchId, {});
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] time-off-edit-access
+   * OWNER and ADMIN MUST be able to add leave or blocked time for any doctor in their branch and a
+   * DOCTOR only for themselves; anyone else MUST get 403. A branch holiday (kind HOLIDAY, with or
+   * without a doctor) MUST be added by OWNER or ADMIN only, so a DOCTOR gets 403. Leave or blocked
+   * time without a doctor MUST get 400, and a doctor of another branch MUST get 404.
+   */
   async createTimeOff(dto: CreateTimeOffDto, actor: Actor) {
     const startsAt = new Date(dto.startsAt);
     const endsAt = new Date(dto.endsAt);
@@ -154,6 +172,12 @@ export class DoctorAvailabilityService {
     });
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] time-off-delete-access
+   * Removing leave or blocked time follows the rule for adding it: OWNER and ADMIN for any doctor
+   * in their branch, a DOCTOR only their own. A branch holiday MUST be removed by OWNER or ADMIN
+   * only. Time off of another branch MUST get 404 and stay stored.
+   */
   async deleteTimeOff(id: string, actor: Actor) {
     const row = await this.prisma.doctorTimeOff.findFirst({
       where: { id, branchId: actor.branchId },

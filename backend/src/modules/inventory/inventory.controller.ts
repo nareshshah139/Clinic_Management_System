@@ -57,6 +57,14 @@ interface AuthenticatedRequest {
   };
 }
 
+/**
+ * @cc [owner:nareshshah139,label:security] inventory-route-access
+ * Every /inventory route MUST require a signed-in user. OWNER, ADMIN and DOCTOR MUST pass every
+ * route, whether it reads stock, changes stock, prices or orders, or deletes. Other roles MUST be
+ * ADMIN, PHARMACIST or RECEPTION and MUST also hold the route's own permission, so a read grant
+ * never allows a stock change and a change grant never allows deleting an item, transaction,
+ * purchase order or supplier. NURSE, ACCOUNTANT, MANAGER and PATIENT MUST get 403 on every route.
+ */
 @Controller('inventory')
 @UseGuards(JwtAuthGuard)
 export class InventoryController {

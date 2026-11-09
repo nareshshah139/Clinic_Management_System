@@ -682,11 +682,8 @@ export function WorkspaceStock({
                                   const h = detail.history.find(
                                     (h: any) => h.transactionId === m.id,
                                   );
-                                  const p = detail.purchases.find(
-                                    (p: any) =>
-                                      p.stockCommitReference === m.reference ||
-                                      p.invoiceNumber === m.reference,
-                                  );
+                                  const p =
+                                    m.owner?.type === "purchase" ? m.owner : null;
                                   return h ? (
                                     <button
                                       className="underline"
@@ -730,12 +727,10 @@ export function WorkspaceStock({
                                     const h = detail.history.find(
                                         (h: any) => h.transactionId === m.id,
                                       ),
-                                      p = detail.purchases.find(
-                                        (p: any) =>
-                                          p.stockCommitReference ===
-                                            m.reference ||
-                                          p.invoiceNumber === m.reference,
-                                      );
+                                      p =
+                                        m.owner?.type === "purchase"
+                                          ? m.owner
+                                          : null;
                                     return h ? (
                                       <Button
                                         size="sm"
@@ -774,14 +769,6 @@ export function WorkspaceStock({
                                           }
                                         >
                                           Open source correction
-                                        </Button>
-                                      ) : m.owner?.type === "purchase" ? (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => onInvoice(m.owner.id)}
-                                        >
-                                          Open purchase correction
                                         </Button>
                                       ) : (
                                         <span>

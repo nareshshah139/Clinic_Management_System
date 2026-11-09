@@ -4,10 +4,42 @@ import { Observable, of } from 'rxjs';
 import { tap, map } from 'rxjs/operators';
 import { PrismaService } from '../database/prisma.service';
 
+/**
+ * @cc [owner:nareshshah139,label:integrity] idempotent-write-replay
+ * A POST, PUT, PATCH or DELETE that repeats a stored Idempotency-Key for the same user, resource id
+ * and method MUST answer with the first response's status and body and MUST NOT run the handler
+ * again. A write that failed MUST NOT be stored, so its retry runs the handler.
+ */
+/**
+ * @cc [owner:nareshshah139,label:security] idempotency-keys-scoped-per-user
+ * A stored response MUST replay only to the authenticated user who created it: another user sending
+ * the same key runs the handler and gets their own response.
+ */
+/**
+ * @cc [owner:nareshshah139,label:integrity] idempotency-skips-reads-and-keyless-writes
+ * GET requests and writes without a non-blank Idempotency-Key MUST run the handler every time and
+ * MUST NOT read or write the idempotency store.
+ */
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:reliability] idempotency-store-fails-open
+   * Deliberate fail-open: when the idempotency store cannot be read or written, the write MUST still
+   * run and return its normal response, and a later retry runs the handler again.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:integrity;target] idempotency-concurrent-first-requests
+   * Two overlapping first requests with one key MUST run the handler once. Today both miss the store
+   * before either response is saved, so a client retry during a slow save can write twice.
+   * This is a target obligation, not a pass claim.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:security;target] idempotency-anonymous-keys-unscoped
+   * Requests without an authenticated user MUST NOT replay each other's responses. Today they all
+   * share an empty user id. This is a target obligation, not a pass claim.
+   */
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const http = context.switchToHttp();
     const req = http.getRequest<Request>();

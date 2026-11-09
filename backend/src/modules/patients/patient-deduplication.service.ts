@@ -19,6 +19,12 @@ type MergeSummary = {
   visitsRenumbered: number;
 };
 
+/**
+ * The lock lasts only as long as this transaction, so the timeout must outlast any real run;
+ * Prisma's 5-second default would end the lock mid-run and let a second run overlap.
+ */
+const MERGE_RUN_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class PatientDeduplicationService {
   private readonly logger = new Logger(PatientDeduplicationService.name);
@@ -34,19 +40,45 @@ export class PatientDeduplicationService {
     await this.runDuplicatePatientMergeJob();
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:reliability] merge-runs-one-at-a-time
+   * A run MUST skip, reading and writing no patient rows, while another process holds the merge
+   * advisory lock.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:reliability] merge-lock-released-after-run
+   * The merge lock MUST be held only by one transaction that spans the run, so Postgres releases it
+   * when the run ends, fails or loses its connection, and the next run in any process can proceed.
+   * A run that outlives the 24-hour transaction timeout loses the lock; that MUST be logged.
+   */
   async runDuplicatePatientMergeJob(): Promise<MergeSummary> {
-    const locked = await this.acquireAdvisoryLock();
-    if (!locked) {
-      this.logger.debug('Skipping duplicate patient merge job because another instance holds the advisory lock.');
-      return {
-        skipped: true,
-        duplicateGroupsFound: 0,
-        duplicateGroupsMerged: 0,
-        patientsArchived: 0,
-        visitsRenumbered: 0,
-      };
-    }
+    return this.prisma.$transaction(
+      async (lockTx) => {
+        const rows = await lockTx.$queryRaw<Array<{ locked: boolean }>>`
+          SELECT pg_try_advisory_xact_lock(${this.advisoryLockKey}) AS locked
+        `;
+        if (!rows[0]?.locked) {
+          this.logger.debug('Skipping duplicate patient merge job because another instance holds the advisory lock.');
+          return {
+            skipped: true,
+            duplicateGroupsFound: 0,
+            duplicateGroupsMerged: 0,
+            patientsArchived: 0,
+            visitsRenumbered: 0,
+          };
+        }
+        return this.mergeAllDuplicateGroups();
+      },
+      { timeout: MERGE_RUN_TIMEOUT_MS },
+    ).catch((error: unknown) => {
+      if ((error as { code?: string })?.code === 'P2028') {
+        this.logger.error('Duplicate patient merge job outlived its lock transaction, so another run may have overlapped it.');
+      }
+      throw error;
+    });
+  }
 
+  private async mergeAllDuplicateGroups(): Promise<MergeSummary> {
     try {
       const candidates = await this.prisma.patient.findMany({
         where: { isArchived: false },
@@ -98,11 +130,14 @@ export class PatientDeduplicationService {
     } catch (error) {
       this.logger.error('Automatic duplicate patient merge job failed.', error instanceof Error ? error.stack : undefined);
       throw error;
-    } finally {
-      await this.releaseAdvisoryLock();
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:atomicity] merge-group-all-or-nothing
+   * Each duplicate group MUST merge in one transaction: if any step fails, no linked row moves,
+   * no patient is archived or patched, no visit is renumbered, and the run rejects with that error.
+   */
   private async mergeDuplicateGroup(groupIds: string[]): Promise<{ archivedPatients: number; visitsRenumbered: number }> {
     return this.prisma.$transaction(async (tx) => {
       const patients = await tx.patient.findMany({
@@ -131,6 +166,17 @@ export class PatientDeduplicationService {
     });
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:integrity] merge-repoints-patient-relations
+   * Every row of every model with a foreign key to Patient MUST move from the archived duplicate to
+   * the kept patient, and rows of other patients MUST NOT move. A new patient-linked model MUST be
+   * repointed here or added to the reviewed exclusions in patient-merge.coverage.spec.ts.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:integrity;target] merge-repoints-unlinked-patient-ids
+   * Rows that store a patientId without a Prisma relation (PharmacyDispenseTask) MUST also move to
+   * the kept patient. This is a target obligation, not a pass claim.
+   */
   private async mergePatientIntoCanonical(
     tx: Prisma.TransactionClient,
     canonical: Patient,
@@ -190,6 +236,11 @@ export class PatientDeduplicationService {
     return canonical;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:integrity] merge-renumbers-kept-visits
+   * After a merge the kept patient's visits MUST carry scribeJson visitNumber 1..n with no gaps or
+   * repeats, ordered by appointment date, then creation time, keeping the other scribeJson fields.
+   */
   private async renumberVisitsForPatient(tx: Prisma.TransactionClient, patientId: string): Promise<number> {
     const visits = await tx.visit.findMany({
       where: { patientId },
@@ -351,22 +402,5 @@ export class PatientDeduplicationService {
       // ignore malformed legacy JSON; we replace it with a safe object
     }
     return {};
-  }
-
-  private async acquireAdvisoryLock(): Promise<boolean> {
-    const rows = await this.prisma.$queryRaw<Array<{ locked: boolean }>>`
-      SELECT pg_try_advisory_lock(${this.advisoryLockKey}) AS locked
-    `;
-    return Boolean(rows[0]?.locked);
-  }
-
-  private async releaseAdvisoryLock(): Promise<void> {
-    try {
-      await this.prisma.$queryRaw`
-        SELECT pg_advisory_unlock(${this.advisoryLockKey})
-      `;
-    } catch (error) {
-      this.logger.warn('Failed to release advisory lock for duplicate patient merge job.');
-    }
   }
 }

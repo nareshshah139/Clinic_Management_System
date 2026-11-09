@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ALLOWED_ORIGINS } from './shared/cors-origins';
+import { CORS_OPTIONS } from './shared/cors-origins';
 import { Logger } from '@nestjs/common';
 import { ExpressAdapter, type NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -28,13 +28,7 @@ async function bootstrap() {
     );
     installHttpObservability(app);
     configureRequestBody(app);
-    app.enableCors({
-      origin: ALLOWED_ORIGINS,
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id', 'X-Request-Attempt'],
-      exposedHeaders: ['X-Request-Id', 'Retry-After'],
-    });
+    app.enableCors(CORS_OPTIONS);
     app.useGlobalPipes(diagnosticValidationPipe());
 
     // Serve uploads
@@ -68,13 +62,7 @@ async function bootstrap() {
   );
   installHttpObservability(app);
   configureRequestBody(app);
-  app.enableCors({
-    origin: ALLOWED_ORIGINS,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id', 'X-Request-Attempt'],
-    exposedHeaders: ['X-Request-Id', 'Retry-After'],
-  });
+  app.enableCors(CORS_OPTIONS);
   app.useGlobalPipes(diagnosticValidationPipe());
   app.enableShutdownHooks();
 

@@ -27,6 +27,16 @@ import {
   TransitionWorkflowDto,
 } from './inventory-workflow.types';
 
+/**
+ * @cc [owner:nareshshah139,label:security] inventory-workspace-access
+ * Every /inventory/workspace route MUST admit only clinic staff roles and a signed-in user whose
+ * token role and branch match the stored user. OWNER, ADMIN and DOCTOR hold every workspace
+ * permission and PHARMACIST holds every inventory and pharmacy permission. Approving documents and
+ * correcting posted movements also need OWNER, ADMIN, MANAGER or DOCTOR, and deciding a stock count
+ * needs OWNER, ADMIN or DOCTOR. Other clinic staff MUST hold the permission the service names for
+ * the action, so reading stock never allows a change and staff with no grants MUST get 403. The
+ * controller MUST NOT expose a delete route.
+ */
 @Controller('inventory/workspace')
 @Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)

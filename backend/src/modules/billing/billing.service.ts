@@ -306,6 +306,12 @@ export class BillingService {
     throw new BadRequestException('Invoice cancellation is not supported in the current schema');
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:calculation;security] payment-balance-application
+   * A payment MUST add its amount to the invoice received and set balance to total minus received,
+   * never below 0, so partial payments leave the remainder and full payment settles at 0. The
+   * invoice MUST belong to the authenticated branch, otherwise nothing is written.
+   */
   async processPayment(paymentDto: PaymentDto, branchId: string) {
     const { invoiceId, amount, method, reference, gateway } = paymentDto as any;
 
@@ -356,6 +362,19 @@ export class BillingService {
     return confirmed;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:calculation;security] refund-bounds
+   * A refund MUST target a COMPLETED, non-refund payment in the authenticated branch and MUST be
+   * above 0, at most the payment amount, and at most what the invoice still holds as received.
+   * Any other request MUST fail with nothing written. A valid refund MUST add a negative payment
+   * and lower received and raise balance by that amount.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:calculation;target] refund-total-per-payment
+   * The refunds of one payment MUST NOT add up to more than that payment, and two concurrent refunds
+   * MUST NOT both pass the received cap. Today refund rows carry no link to their payment and the
+   * cap is read outside a transaction, so neither holds. This is a target obligation, not a pass claim.
+   */
   async processRefund(refundDto: RefundDto, branchId: string) {
     const { paymentId, amount, reason, notes, gatewayResponse } = refundDto as any;
 
@@ -383,6 +402,10 @@ export class BillingService {
 
     if (amount > payment.amount) {
       throw new BadRequestException('Refund amount exceeds original payment amount');
+    }
+
+    if (amount > (payment.invoice?.received ?? 0)) {
+      throw new BadRequestException('Refund amount exceeds the amount still received on the invoice');
     }
 
     // Represent refund as a negative payment (cash refund)
@@ -467,6 +490,11 @@ export class BillingService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] payment-listing-branch-scope
+   * Payment listings and the payment summary MUST only include payments on invoices of patients in
+   * the authenticated branch, including when filtered by a patient id from another branch.
+   */
   async findAllPayments(query: QueryPaymentsDto, branchId: string) {
     const {
       invoiceId,
@@ -506,7 +534,7 @@ export class BillingService {
     }
 
     if (patientId) {
-      where.invoice = { patientId };
+      where.invoice = { patient: { id: patientId, branchId } };
     }
 
     const [payments, total] = await Promise.all([
@@ -550,7 +578,7 @@ export class BillingService {
     }
 
     if (method) where.mode = method;
-    if (patientId) where.invoice = { patientId };
+    if (patientId) where.invoice = { patient: { id: patientId, branchId } };
 
     const [sumAgg, count, methodBreakdown, dailyBreakdown] = await Promise.all([
       this.prisma.newPayment.aggregate({ where, _sum: { amount: true } }),
@@ -696,6 +724,13 @@ export class BillingService {
     return invoiceItemsData;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:calculation] invoice-total-arithmetic
+   * An invoice total MUST equal the line amounts after line discount percent, less the overall
+   * discount percent, plus GST per line on the line-discounted amount (before the overall discount).
+   * A line with a gstRate of 0 or no gstRate MUST add no tax here; note that the HTTP DTOs default
+   * an omitted gstRate to 18 before it reaches this method. Totals are not rounded to paise.
+   */
   private calculateInvoiceTotals(items: any[], discount: number = 0) {
     const subtotal = items.reduce((sum, item) => {
       const itemTotal = (item.qty ?? item.quantity) * item.unitPrice;
