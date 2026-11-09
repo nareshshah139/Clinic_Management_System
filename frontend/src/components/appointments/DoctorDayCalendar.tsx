@@ -98,10 +98,6 @@ export default function DoctorDayCalendar(props: DoctorDayCalendarProps) {
  * Saved appointments MUST expose their full details and actions through the INFO control.
  */
 /**
- * @cc [owner:nareshshah139,label:product] appointment-queue
- * The queue lists the selected doctor's active, filtered appointments in time order and excludes cancelled, completed, and no-show appointments.
- */
-/**
  * @cc [owner:nareshshah139,label:product] optimistic-overlap
  * An optimistic appointment does not hide another appointment solely because they share a time slot.
  */
@@ -242,10 +238,6 @@ function DoctorDayCalendarForSelection({
       heightPct: ((span.endMin - span.startMin) * 100) / totalDayMin,
     }));
   }, [filteredSchedule, timelineBounds]);
-
-  const queue = useMemo(() => filteredSchedule
-    .filter(appointment => ![AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW].includes(appointment.status as AppointmentStatus))
-    .sort((a, b) => a.slot.localeCompare(b.slot)), [filteredSchedule]);
 
   const showLoadingOverlay = loading && (schedule.length > 0 || !!scopedOptimisticAppointment);
 
@@ -447,26 +439,6 @@ function DoctorDayCalendarForSelection({
     <>
       <Card>
         <CardContent className="p-4">
-          <section aria-labelledby="patient-queue-title" aria-busy={loading} className="mb-5 space-y-2">
-            <h2 id="patient-queue-title" className="font-semibold">Patient queue</h2>
-            <p className="text-sm text-gray-700">Active appointments for {date}, in scheduled time order.</p>
-            {queue.length === 0 ? <p className="text-sm text-gray-700">No active appointments for these filters.</p> : (
-              <ul className="divide-y rounded-md border">
-                {queue.map(appointment => (
-                  <li key={appointment.id || appointment.slot} className="flex flex-wrap items-center justify-between gap-2 p-3">
-                    <div className="min-w-0">
-                      <span className="font-medium">{formatPatientName(appointment.patient)}</span>
-                      <span className="ml-2 text-sm text-gray-700">{appointment.slot} · {String(appointment.status).replaceAll('_', ' ')}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" disabled={loading || appointment.id?.startsWith('optimistic-')} onClick={() => setSelectedAppointment(appointment)} aria-label={`View appointment for ${formatPatientName(appointment.patient)}`}>Details</Button>
-                      <Button size="sm" disabled={loading || appointment.id?.startsWith('optimistic-')} onClick={() => handleStartVisit(appointment)} aria-label={`${appointment.visit?.id ? 'Continue' : 'Start'} visit for ${formatPatientName(appointment.patient)}`}>{appointment.visit?.id ? 'Continue visit' : 'Start visit'}</Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
           {(visitTypeFilter !== 'ALL' || roomFilter !== 'ALL') && (
             <div className="mb-4 p-3 bg-blue-50 rounded-lg">
               <div className="text-sm text-blue-700">
