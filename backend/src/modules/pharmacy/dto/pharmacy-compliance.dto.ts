@@ -6,6 +6,8 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -28,6 +30,38 @@ export class PharmacyGstSummaryQueryDto {
   @ApiProperty({ example: '2026-04-30' })
   @IsDateString()
   endDate: string;
+}
+
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export enum PharmacyDayWiseTypeDto {
+  SALES = 'SALES',
+  PURCHASE = 'PURCHASE',
+}
+
+export class PharmacyClinicPeriodQueryDto {
+  @ApiProperty({ example: '2026-11-01', description: 'First clinic day (Asia/Kolkata), inclusive' })
+  @Matches(CALENDAR_DATE, { message: 'startDate must be YYYY-MM-DD' })
+  startDate: string;
+
+  @ApiProperty({ example: '2026-11-30', description: 'Last clinic day (Asia/Kolkata), inclusive' })
+  @Matches(CALENDAR_DATE, { message: 'endDate must be YYYY-MM-DD' })
+  endDate: string;
+}
+
+export class PharmacyDayWiseQueryDto extends PharmacyClinicPeriodQueryDto {
+  @ApiPropertyOptional({ enum: PharmacyDayWiseTypeDto, default: PharmacyDayWiseTypeDto.SALES })
+  @IsOptional()
+  @IsEnum(PharmacyDayWiseTypeDto)
+  type: PharmacyDayWiseTypeDto = PharmacyDayWiseTypeDto.SALES;
+}
+
+export class PharmacyItemMarginQueryDto extends PharmacyClinicPeriodQueryDto {
+  @ApiPropertyOptional({ example: 'adapalene', description: 'Matches item name, category or manufacturer' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
 }
 
 export class PharmacyMonthlyReportQueryDto {

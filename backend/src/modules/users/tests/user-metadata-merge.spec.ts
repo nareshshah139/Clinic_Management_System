@@ -9,6 +9,11 @@ describe('mergeMetadata', () => {
     });
   });
 
+  it('retains a hidden WhatsApp token when another setting is saved', () => {
+    expect(mergeMetadata('{"whatsappAccessToken":"secret","textSize":"LARGE"}', { textSize: 'NORMAL' }))
+      .toEqual({ whatsappAccessToken: 'secret', textSize: 'NORMAL' });
+  });
+
   it('replaces a whole key rather than deep-merging it', () => {
     expect(mergeMetadata(stored, { rxPrintProfile: { margins: { topPx: 200 } } }).rxPrintProfile).toEqual({ margins: { topPx: 200 } });
   });

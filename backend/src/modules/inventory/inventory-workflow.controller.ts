@@ -1,3 +1,5 @@
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { InventoryReplenishmentService } from './inventory-replenishment.service';
 import { InventoryLabelService } from './inventory-label.service';
 import { Res } from '@nestjs/common';
@@ -26,6 +28,7 @@ import {
 } from './inventory-workflow.types';
 
 @Controller('inventory/workspace')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 export class InventoryWorkflowController {
   constructor(
@@ -158,6 +161,9 @@ export class InventoryWorkflowController {
     @Body() b: Record<string, any>,
   ) {
     return this.workspace.bulkLocations(r.user, b);
+  }
+  @Get('timeline') timeline(@Request() r: any, @Query() q: any) {
+    return this.workspace.timeline(r.user, q);
   }
   @Get('stock') stock(@Request() r: any, @Query() q: any) {
     return this.workspace.stock(r.user, q);

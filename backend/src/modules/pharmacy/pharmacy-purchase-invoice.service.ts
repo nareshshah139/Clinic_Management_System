@@ -108,6 +108,11 @@ export class PharmacyPurchaseInvoiceService {
 
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security;product] purchase-scoped-grants
+   * Purchase capabilities MUST use the shared permission matcher: a scoped wildcard grants its
+   * scope and everything nested under it, and a pharmacist holds the pharmacy and inventory scopes.
+   */
   async capabilities(user: { id: string; role: string }) {
     const dbUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { role: true, permissions: true } });
     const role = dbUser?.role;

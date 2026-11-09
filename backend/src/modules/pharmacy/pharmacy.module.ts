@@ -25,6 +25,8 @@ import { PharmacyPurchaseRegisterController } from './pharmacy-purchase-register
 import { PharmacyPurchaseRegisterService } from './pharmacy-purchase-register.service';
 import { PharmacyPurchaseReturnsRegisterController } from './pharmacy-purchase-returns-register.controller';
 import { PharmacyPurchaseReturnsRegisterService } from './pharmacy-purchase-returns-register.service';
+import { PharmacyTradeTermsController } from './pharmacy-trade-terms.controller';
+import { PharmacyTradeTermsService } from './pharmacy-trade-terms.service';
 import { PrismaModule } from '../../shared/database/prisma.module';
 import { NumberingModule } from '../../shared/numbering/numbering.module';
 
@@ -44,6 +46,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacySalesRegisterController,
     PharmacyPurchaseRegisterController,
     PharmacyPurchaseReturnsRegisterController,
+    PharmacyTradeTermsController,
   ],
   providers: [
     PharmacyService,
@@ -59,6 +62,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacySalesRegisterService,
     PharmacyPurchaseRegisterService,
     PharmacyPurchaseReturnsRegisterService,
+    PharmacyTradeTermsService,
   ],
   exports: [
     PharmacyService,

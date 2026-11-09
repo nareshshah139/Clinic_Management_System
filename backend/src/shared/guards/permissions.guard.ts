@@ -11,6 +11,12 @@ export class PermissionsGuard implements CanActivate {
     private readonly prisma: PrismaService,
   ) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security] scoped-permission-wildcards
+   * A grant ending in :* matches its scope and every permission nested under it at a segment
+   * boundary. A stored bare wildcard MUST NOT act as a bypass for roles outside OWNER, ADMIN and
+   * DOCTOR, and all permission requirement groups remain mandatory.
+   */
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredPermissions = this.reflector.getAllAndOverride<PermissionRequirement[]>(PERMISSIONS_KEY, [
       context.getHandler(),

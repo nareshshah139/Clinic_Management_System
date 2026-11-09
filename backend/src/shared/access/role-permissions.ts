@@ -22,6 +22,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<UserRole, readonly string[]>> = {
     'pharmacy:drug:dosageForms',
     'pharmacy:drug:inventory-change:read',
     'pharmacy:drug:inventory-change:approve',
+    'inventory:item:approve',
     'pharmacy:invoice:read',
     'visits:*',
   ],
@@ -80,6 +81,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<UserRole, readonly string[]>> = {
     'billing:payment:read',
     'billing:revenue:read',
     'billing:statistics:read',
+    'pharmacy:compliance:read',
   ],
   PHARMACIST: [
     'inventory:item:*',

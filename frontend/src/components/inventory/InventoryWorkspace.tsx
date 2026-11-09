@@ -15,9 +15,12 @@ import { useInventoryResource } from "./useInventoryResource";
 import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
 import { PurchaseLedger } from "@/components/pharmacy/PurchaseLedger";
 import { ComplianceCenter } from "@/components/pharmacy/ComplianceCenter";
+import { DayWiseSummaryReport } from "@/components/pharmacy/DayWiseSummaryReport";
+import { ItemMarginReport } from "@/components/pharmacy/ItemMarginReport";
 import { DistributorAnalytics } from "@/components/pharmacy/DistributorAnalytics";
 import { PharmacyInventoryStarterImport } from "@/components/pharmacy/PharmacyInventoryStarterImport";
 import { PharmacyInvoiceList } from "@/components/pharmacy/PharmacyInvoiceList";
+import { TradeTermsWorkspace } from "@/components/pharmacy/TradeTermsWorkspace";
 import { SupplierCreditPanel } from "./SupplierCreditPanel";
 import { ReplenishmentCenter } from "./ReplenishmentCenter";
 import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
@@ -25,10 +28,13 @@ import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
 import { WorkspaceStock } from "./WorkspaceStock";
 import { PurchaseBills } from "./purchase/PurchaseBills";
 import { canRecordSupplierPayments } from "./purchase/purchase-register-model";
-import { InventoryUpdates } from "./InventoryUpdates";
 import { StockCounts } from "./counts/StockCounts";
 import { splitText, type ReconciliationCards } from "./counts/count-model";
 import { Split } from "./counts/count-parts";
+import { InventoryApprovals } from "./InventoryApprovals";
+import { InventoryLedger } from "./InventoryLedger";
+import { usePendingItemRequestCount } from "./use-pending-item-requests";
+import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
   fmtMoney,
@@ -55,15 +61,19 @@ const menus: Record<string, string[][]> = {
     ["csv", "Import CSV"],
     ["gmail", "Gmail intake"],
     ["suppliers", "Suppliers"],
+    ["terms", "Terms of Trade"],
     ["ledger", "Payments & dues"],
     ["credits", "Credits & vouchers"],
     ["INWARD_CHALLAN", "Inward challans"],
     ["GATE_PASS", "Gate passes"],
     ["reports", "GST & monthly reports"],
+    ["daywise", "Day-wise summary"],
+    ["margin", "Item-wise margin"],
     ["analytics", "Purchase costs"],
   ],
   stock: [
     ["list", "Stock list"],
+    ["ledger", "Stock ledger"],
     ["approvals", "Approve corrections"],
     ["COUNT", "Stock counts"],
     ["LOSS", "Loss & breakage"],
@@ -111,9 +121,20 @@ const menus: Record<string, string[][]> = {
  * Failed capability reads MUST hide stale access and expose an explicit retry. Refresh and
  * actor changes MUST fetch capabilities again; older responses cannot restore superseded access.
  */
+const REPORT_TASK_ROLES: Record<string, readonly string[]> = {
+  reports: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
+  daywise: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
+  margin: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
+};
+
 export function InventoryWorkspace() {
   const { user } = useDashboardUser();
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
+  const canSeeApprovals = canReadEdits || user?.role === "RECEPTION";
+  const taskVisible = ([id]: string[]) =>
+    id === "approvals" ? canSeeApprovals : !REPORT_TASK_ROLES[id] || REPORT_TASK_ROLES[id].includes(user?.role || "");
+  const pendingItems = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""));
+  const taskLabel = (id: string, label: string) => (id === "approvals" && pendingItems > 0 ? `${label} (${pendingItems})` : label);
   const params = useSearchParams(),
     router = useRouter(),
     path = usePathname(),
@@ -228,9 +249,12 @@ export function InventoryWorkspace() {
     void loadPermissions();
     return () => { permissionRequest.current += 1; };
   }, [loadPermissions]);
-  const availableTasks = (menus[area] || []).filter(([id]) => (id !== "approvals" || canReadEdits) && (id !== "ledger" || caps?.ledger) && (id !== "COUNT" || caps?.kinds?.COUNT?.read));
-  const primaryTasks = availableTasks.slice(0, 3);
-  const moreTasks = availableTasks.slice(3);
+  const availableTasks = (menus[area] || []).filter((task) => taskVisible(task)
+    && (task[0] !== "ledger" || area !== "purchases" || caps?.ledger)
+    && (task[0] !== "COUNT" || caps?.kinds?.COUNT?.read));
+  const primaryCount = area === "stock" ? 4 : 3;
+  const primaryTasks = availableTasks.slice(0, primaryCount);
+  const moreTasks = availableTasks.slice(primaryCount);
   const switchTask = (id: string, extra: Record<string, string> = {}) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1", ...extra });
   const purchaseRegisterParams = (next: URLSearchParams) => {
     const merged = new URLSearchParams({ area: "purchases", view: "register" });
@@ -300,7 +324,7 @@ export function InventoryWorkspace() {
           >
             {availableTasks.map(([id, label]) => (
               <option key={id} value={id}>
-                {label}
+                {taskLabel(id, label)}
               </option>
             ))}
           </select>
@@ -319,7 +343,7 @@ export function InventoryWorkspace() {
         >
           {primaryTasks.map(([id, label]) => (
             <Button key={id} size="sm" variant={view === id ? "secondary" : "ghost"}
-              aria-current={view === id ? "page" : undefined} onClick={() => switchTask(id)}>{label}</Button>
+              aria-current={view === id ? "page" : undefined} onClick={() => switchTask(id)}>{taskLabel(id, label)}</Button>
           ))}
           {area === "stock" && (
             <button type="button" className="self-center rounded-sm px-2 text-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -330,7 +354,7 @@ export function InventoryWorkspace() {
           {moreTasks.length > 0 && <select aria-label="More inventory tasks" className="max-w-64 rounded-md border bg-background px-3 py-2 text-sm"
             value={moreTasks.some(([id]) => id === view) ? view : ""} onChange={event => switchTask(event.target.value)}>
             <option value="" disabled>More tasks…</option>
-            {moreTasks.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            {moreTasks.map(([id, label]) => <option key={id} value={id}>{taskLabel(id, label)}</option>)}
           </select>}
         </nav>
       )}
@@ -364,8 +388,17 @@ export function InventoryWorkspace() {
           {area === "stock" && view === "COUNT" && (
             <StockCounts searchParams={params} navigate={navigate} onRegisterParams={countRegisterParams} />
           )}
+          {area === "stock" && view === "ledger" && (
+            <InventoryLedger
+              query={query}
+              navigate={navigate}
+              onDocument={open}
+              onInvoice={invoice}
+              onItem={(id) => navigate({ return: origin(), view: "list", item: id })}
+            />
+          )}
           {area === "stock" && view === "approvals" && (
-            canReadEdits ? <InventoryUpdates /> : <p role="alert">You do not have access to price/stock approvals.</p>
+            canSeeApprovals ? <InventoryApprovals canReadEdits={canReadEdits} pendingItems={pendingItems} /> : <p role="alert">You do not have access to price/stock approvals.</p>
           )}
           {area === "stock" && view === "opening" && (
             <>
@@ -434,6 +467,7 @@ export function InventoryWorkspace() {
               onBills={(gstin: string) => navigate({ view: "register", gstin })}
             />
           )}
+          {area === "purchases" && view === "terms" && <TradeTermsWorkspace />}
           {area === "purchases" &&
             view === "ledger" &&
             (caps.ledger ? (
@@ -461,6 +495,8 @@ export function InventoryWorkspace() {
           {area === "purchases" && view === "reports" && (
             <ComplianceCenter reportsOnly />
           )}
+          {area === "purchases" && view === "daywise" && <DayWiseSummaryReport />}
+          {area === "purchases" && view === "margin" && <ItemMarginReport />}
           {area === "purchases" && view === "analytics" && (
             <DistributorAnalytics />
           )}

@@ -168,6 +168,25 @@ databaseTests('Doctor availability against PostgreSQL', () => {
     expect(await slots(otherDoctor)).toHaveLength(18);
   });
 
+  it('lets the doctor or an admin set the patients-per-slot limit, and booking follows it', async () => {
+    const limitUrl = `/doctor-availability/${otherDoctor.id}/booking-limit`;
+    expect((await http(otherDoctor).get(`/doctor-availability/${otherDoctor.id}`).expect(200)).body.maxBookingsPerSlot).toBe(1);
+    await http(legacyDoctor).put(limitUrl).send({ maxBookingsPerSlot: 2 }).expect(403);
+    for (const bad of [0, 6, 2.5, '2', null]) await http(otherDoctor).put(limitUrl).send({ maxBookingsPerSlot: bad }).expect(400);
+    expect((await http(otherDoctor).put(limitUrl).send({ maxBookingsPerSlot: 2 }).expect(200)).body.maxBookingsPerSlot).toBe(2);
+    expect((await http(otherDoctor).get(`/doctor-availability/${otherDoctor.id}/day?date=${DATE}`).expect(200)).body.maxBookingsPerSlot).toBe(2);
+
+    const overbook = () => appointments.create({ patientId: patient.id, doctorId: otherDoctor.id, date: DATE, slot: '12:00-12:30', allowOverbook: true }, branchId);
+    await book(otherDoctor, '12:00-12:30');
+    await expect(book(otherDoctor, '12:00-12:30')).rejects.toMatchObject({ status: 409, response: { overbook: { allowed: true, booked: 1, limit: 2 } } });
+    await overbook();
+
+    // Lowering the limit refuses new overbooking but keeps the patients already booked.
+    await http(adminUser).put(limitUrl).send({ maxBookingsPerSlot: 1 }).expect(200);
+    await expect(overbook()).rejects.toMatchObject({ status: 409, response: { overbook: { allowed: false, booked: 2, limit: 1 } } });
+    expect(await db.appointment.count({ where: { doctorId: otherDoctor.id } })).toBe(2);
+  });
+
   it('requires a doctor for leave and keeps reads branch-scoped to doctors', async () => {
     await http(adminUser).post('/doctor-availability/time-off')
       .send({ kind: 'LEAVE', startsAt: ist(DATE, '00:00'), endsAt: ist(NEXT, '00:00') }).expect(400);

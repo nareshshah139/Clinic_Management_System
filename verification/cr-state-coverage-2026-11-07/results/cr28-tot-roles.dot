@@ -1,0 +1,28 @@
+digraph "cr28-tot-roles" {
+  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-28 Terms of Trade: reader vs editor views and API authorization\nstates 10/10 (100%) · transitions 11/11 (100%)", pad=0.3, nodesep=0.45, ranksep=0.7];
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, penwidth=1.6];
+  edge [fontname="Helvetica", fontsize=9, penwidth=1.4, arrowsize=0.7];
+  __start [shape=point, width=0.15, label=""];
+  __start -> "DoctorList";
+  "DoctorList" [label="Doctor: distributor list with Add terms", fillcolor="#d1fadf", color="#039855"];
+  "DoctorDetail" [label="Doctor: terms with Edit/Delete", fillcolor="#d1fadf", color="#039855"];
+  "AdminList" [label="Admin: list with Add terms", fillcolor="#d1fadf", color="#039855"];
+  "ReceptionList" [label="Reception: list, read-only note", fillcolor="#d1fadf", color="#039855"];
+  "ReceptionDetail" [label="Reception: terms, no controls", fillcolor="#d1fadf", color="#039855"];
+  "PharmacistList" [label="Pharmacist: list, read-only note", fillcolor="#d1fadf", color="#039855"];
+  "PharmacistDetail" [label="Pharmacist: terms, no controls", fillcolor="#d1fadf", color="#039855"];
+  "ReceptionWriteDenied" [label="Reception API write: 403, DB unchanged", fillcolor="#d1fadf", color="#039855"];
+  "PharmacistWriteDenied" [label="Pharmacist API write: 403, DB unchanged", fillcolor="#d1fadf", color="#039855"];
+  "NoTokenDenied" [label="No token: 401, DB unchanged", fillcolor="#d1fadf", color="#039855", peripheries=2];
+  "DoctorList" -> "DoctorDetail" [label="openDistributor", color="#039855", fontcolor="#039855", style=solid];
+  "DoctorList" -> "AdminList" [label="asAdmin", color="#039855", fontcolor="#039855", style=solid];
+  "DoctorList" -> "ReceptionList" [label="asReception", color="#039855", fontcolor="#039855", style=solid];
+  "DoctorList" -> "PharmacistList" [label="asPharmacist", color="#039855", fontcolor="#039855", style=solid];
+  "DoctorDetail" -> "ReceptionList" [label="asReception", color="#039855", fontcolor="#039855", style=solid];
+  "ReceptionList" -> "ReceptionDetail" [label="openDistributor ×2", color="#039855", fontcolor="#039855", style=solid];
+  "PharmacistList" -> "PharmacistDetail" [label="openDistributor", color="#039855", fontcolor="#039855", style=solid];
+  "ReceptionDetail" -> "ReceptionWriteDenied" [label="apiWrite", color="#039855", fontcolor="#039855", style=solid];
+  "PharmacistDetail" -> "PharmacistWriteDenied" [label="apiWrite", color="#039855", fontcolor="#039855", style=solid];
+  "ReceptionDetail" -> "DoctorList" [label="asDoctor", color="#039855", fontcolor="#039855", style=solid];
+  "ReceptionWriteDenied" -> "NoTokenDenied" [label="apiWriteNoToken", color="#039855", fontcolor="#039855", style=solid];
+}

@@ -15,6 +15,7 @@ import { displayDay } from './supplier-return';
 import { clinicDay, peopleById } from '../pharmacy/register-utils';
 import { PharmacySupplierCreditService } from '../pharmacy/pharmacy-supplier-credit.service';
 import { EVERY_ALLOCATION, creditBalance } from '../pharmacy/supplier-credit-balance';
+import { parseTimelineQuery, readInventoryTimeline } from './inventory-timeline';
 
 @Injectable()
 export class InventoryWorkspaceService {
@@ -94,6 +95,11 @@ export class InventoryWorkspaceService {
       tx => readStockPage(tx, actor.branchId, q, item => this.present(item)),
       { isolationLevel: 'RepeatableRead', timeout: 30000 },
     );
+  }
+
+async timeline(actor: WorkflowActor, q: Record<string, any> = {}) {
+    await this.require(actor, 'inventory:transaction:read');
+    return readInventoryTimeline(this.prisma, actor.branchId, parseTimelineQuery(q));
   }
 
 /**

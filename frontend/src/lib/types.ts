@@ -111,6 +111,7 @@ export interface AppointmentInSlot {
   visit?: { id: string; status?: string | null };
   isFollowUp?: boolean;
   notes?: string;
+  tokenNumber?: number;
 }
 
 // Available Slots
@@ -257,6 +258,7 @@ export interface RescheduleAppointmentPayload {
   slot: string;
   roomId?: string;
   notes?: string;
+  allowOverbook?: boolean;
 }
 
 // Create Appointment DTO

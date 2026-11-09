@@ -1,5 +1,7 @@
 'use client';
 
+import { downloadInvoicePdf } from '@/lib/download-invoice-pdf';
+
 import { displayClinicDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -133,6 +135,8 @@ interface InvoiceItem {
   stockStatus?: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK' | 'CHECK_FAILED';
   availableStock?: number;
   substituted?: boolean;
+  quantityReview?: string;
+  quantityConfirmed?: boolean;
 }
 
 type CheckoutAttempt = {
@@ -161,6 +165,11 @@ type PrescriptionStockItem = {
   prescriptionVersion?: string;
   inventoryItemId?: string;
   prescribedQuantity?: number | null;
+  billingQuantity?: {
+    quantity: number;
+    unit: string | null;
+    review: { reason: string; message: string } | null;
+  };
   drugName: string;
   matchedDrug: Pick<Drug, 'id' | 'name'> | null;
   stockStatus: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK';
@@ -524,6 +533,8 @@ export function PharmacyInvoiceBuilderFixed({
               const substituted = existingItem?.substituted === true;
               const reviewedDrug = substituted ? existingItem.drug : drug;
               const sameProduct = Boolean(existingItem?.drugId && existingItem.drugId === reviewedDrug?.id);
+              const filledQuantity = firstPositiveNumber(item.quantity, item.prescribedQuantity, item.totalQuantity, item.qty, stock?.billingQuantity?.quantity) || 1;
+              const keepQuantity = Boolean(existingItem && (existingItem.quantityConfirmed || substituted || !stock));
 
               const invoiceItem: InvoiceItem = {
                 id: invoiceItemId,
@@ -540,7 +551,9 @@ export function PharmacyInvoiceBuilderFixed({
                       existingItem?.drug?.manufacturerName ?? '',
                     packSizeLabel: existingItem?.drug?.packSizeLabel ?? '',
                   },
-                quantity: existingItem?.quantity ?? (firstPositiveNumber(item.quantity, item.prescribedQuantity, item.totalQuantity, item.qty, stock?.prescribedQuantity) || 1),
+                quantity: keepQuantity ? existingItem!.quantity : filledQuantity,
+                quantityReview: keepQuantity ? existingItem!.quantityReview : stock?.billingQuantity?.review?.message,
+                quantityConfirmed: existingItem?.quantityConfirmed,
                 unitPrice: sameProduct ? existingItem!.unitPrice : getDrugUnitPrice(reviewedDrug),
                 discountPercent: existingItem?.discountPercent ?? 0,
                 taxPercent: sameProduct ? existingItem!.taxPercent : getDrugGstRate(reviewedDrug),
@@ -1071,13 +1084,19 @@ export function PharmacyInvoiceBuilderFixed({
   ) => {
     const updatedItems = items.map((item) => {
       if (item.id === itemId) {
-        const updatedItem = { ...item, quantity: Math.max(1, quantity) };
+        const updatedItem = { ...item, quantity: Math.max(1, quantity), quantityReview: undefined, quantityConfirmed: true };
         calculateItemTotal(updatedItem);
         return updatedItem;
       }
       return item;
     });
     setItems(updatedItems);
+  };
+
+  const clearQuantityReview = (itemId: string) => {
+    setItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, quantityReview: undefined, quantityConfirmed: true } : item)),
+    );
   };
 
   const updateItemUnitPrice = (itemId: string, unitPrice: number) => {
@@ -1886,42 +1905,10 @@ export function PharmacyInvoiceBuilderFixed({
     }
 
     setSavingPdf(true);
-    let wrapper: HTMLDivElement | null = null;
     try {
       const invoiceCore = getPrintPreviewInvoiceCore();
       const invoiceNumber = invoiceCore?.invoiceNumber || 'draft';
-      const source = frameDocument.body.cloneNode(true) as HTMLElement;
-      source.querySelectorAll('.no-print').forEach((element) => {
-        element.remove();
-      });
-
-      const styles = Array.from(frameDocument.querySelectorAll('style'))
-        .map((style) => style.textContent || '')
-        .join('\n');
-      wrapper = document.createElement('div');
-      wrapper.style.position = 'fixed';
-      wrapper.style.left = '-10000px';
-      wrapper.style.top = '0';
-      wrapper.style.width = '210mm';
-
-      const styleElement = document.createElement('style');
-      styleElement.textContent = styles;
-      wrapper.appendChild(styleElement);
-      wrapper.appendChild(source);
-      document.body.appendChild(wrapper);
-
-      const { default: html2pdf } = await import('html2pdf.js');
-      await html2pdf()
-        .set({
-          margin: 0,
-          filename: `pharmacy-invoice-${invoiceNumber}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'] },
-        })
-        .from(wrapper)
-        .save();
+      await downloadInvoicePdf(frameDocument, invoiceNumber);
 
       toast({
         title: 'PDF ready',
@@ -1935,7 +1922,6 @@ export function PharmacyInvoiceBuilderFixed({
         variant: 'destructive',
       });
     } finally {
-      wrapper?.remove();
       setSavingPdf(false);
     }
   };
@@ -2474,6 +2460,23 @@ export function PharmacyInvoiceBuilderFixed({
                                 {item.drug.packSizeLabel}
                               </p>
                             )}
+                            {item.quantityReview && (
+                              <div
+                                role="status"
+                                className="mt-2 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
+                              >
+                                <span className="flex-1">{item.quantityReview}</span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 border-amber-300 px-2 text-xs"
+                                  onClick={() => clearQuantityReview(item.id)}
+                                >
+                                  Confirm
+                                </Button>
+                              </div>
+                            )}
                             {item.prescribedDrugName && item.prescribedDrugName !== item.drug?.name && (
                               <p className="text-sm text-blue-700">Prescribed: {item.prescribedDrugName}</p>
                             )}
@@ -2878,7 +2881,7 @@ export function PharmacyInvoiceBuilderFixed({
     </Card>
 
     <Dialog open={printPreviewOpen} onOpenChange={setPrintPreviewOpen}>
-      <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
+      <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] max-h-none p-0 overflow-hidden rounded-none border-0">
         <DialogHeader className="sr-only">
           <DialogTitle>Pharmacy Invoice Preview</DialogTitle>
         </DialogHeader>

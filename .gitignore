@@ -66,4 +66,5 @@ prod-backup*.list
 /output/diagnostics/recovery-e2e/
 output/stack/
 .claude/worktrees/
-output/pdf/
+
+/output/pdf/

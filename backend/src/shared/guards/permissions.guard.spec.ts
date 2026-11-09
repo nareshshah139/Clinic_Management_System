@@ -13,6 +13,8 @@ class PermissionRoutes {
   @Permissions([]) emptyAlternatives() {}
   @Permissions('pharmacy:invoice:read') invoiceRead() {}
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.ACCOUNTANT) @Permissions('pharmacy:purchase-ledger:write') ledgerWrite() {}
+  @Permissions('inventory:item:read') inventoryRead() {}
+  @Permissions('pharmacy:drug:inventory-change:approve') nestedApproval() {}
 }
 
 describe('PermissionsGuard requirement groups', () => {
@@ -71,5 +73,12 @@ describe('PermissionsGuard requirement groups', () => {
   });
   it('keeps supplier payments closed to reception at the role guard', () => {
     expect(new RolesGuard(new Reflector()).canActivate(context('ledgerWrite', 'RECEPTION'))).toBe(false);
+  });
+  it('matches a seeded scoped wildcard by scope, not by a look-alike scope name', async () => {
+    expect(await check('inventoryRead', [], ['inventory:item:*'])).toBe(true);
+    expect(await check('inventoryRead', ['inventory:items:*'])).toBe(false);
+    expect(await check('inventoryRead', ['inventory:*'])).toBe(true);
+    expect(await check('nestedApproval', ['pharmacy:drug:*'])).toBe(true);
+    expect(await check('nestedApproval', ['pharmacy:drug:inventory-change:read'])).toBe(false);
   });
 });

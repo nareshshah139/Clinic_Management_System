@@ -112,6 +112,11 @@ const amount = (v: unknown, name: string, fallback = 0) => {
 export class InventoryWorkflowService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security] inventory-privileged-bypass
+   * Only OWNER, ADMIN, and DOCTOR receive the global bypass. A stored bare wildcard MUST NOT
+   * grant another role unrestricted inventory access.
+   */
   async permissions(actor: WorkflowActor): Promise<PermissionGrants> {
     if (!actor.id || !actor.branchId)
       throw new ForbiddenException('Authenticated branch and user required');

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
+import { usePrefilledPatient } from './usePrefilledPatient';
 import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/lib/doctor-availability';
 import { useToast } from '@/hooks/use-toast';
 import { createCleanupTimeouts, getISTDateString, formatPatientName } from '@/lib/utils';
@@ -17,6 +18,8 @@ import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle, Info } from 'lucide-react';
 import { AppointmentStatus } from '@cms/shared-types';
+import { useOverbookConfirm } from './useOverbookConfirm';
+import { overbookFlag } from '@/lib/overbooking';
 
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -49,6 +52,7 @@ export default function AppointmentsCalendar({
   hideHeaderControls,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
+  const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
   const [slotConfig, setSlotConfig] = useState<TimeSlotConfig>(timeSlotConfig);
   const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
@@ -95,11 +99,7 @@ export default function AppointmentsCalendar({
     void fetchRooms();
   }, []);
 
-  useEffect(() => {
-    if (prefillPatientId) {
-      setSelectedPatientId(prefillPatientId);
-    }
-  }, [prefillPatientId]);
+  usePrefilledPatient(prefillPatientId, selectedPatientId, setSelectedPatientId, setSelectedPatient);
 
   // Keep local slot config in sync with prop defaults
   useEffect(() => {
@@ -295,6 +295,10 @@ export default function AppointmentsCalendar({
   };
 
   const handleBookingRequest = (slot: string) => {
+    if (!selectedPatient || selectedPatient.id !== selectedPatientId) {
+      toast({ variant: 'destructive', title: 'Patient required', description: 'Select a patient before booking.' });
+      return;
+    }
     const pid = selectedPatientId?.trim();
     if (!pid) {
       toast({
@@ -355,7 +359,7 @@ export default function AppointmentsCalendar({
       
       setOptimisticAppointment(optimisticAppt);
       
-      const created: any = await apiClient.createAppointment({ 
+      const created: any = await sendWithOverbookConfirm((allowOverbook) => apiClient.createAppointment({
         doctorId, 
         patientId: selectedPatientId, 
         date, 
@@ -363,7 +367,12 @@ export default function AppointmentsCalendar({
         visitType: appointmentData.visitType,
         roomId: appointmentData.roomId,
         notes: appointmentData.notes,
-      });
+        ...overbookFlag(allowOverbook),
+      }));
+      if (!created) {
+        setOptimisticAppointment(null);
+        return;
+      }
       
       // Clear optimistic appointment and refresh with real data
       setOptimisticAppointment(null);
@@ -697,9 +706,10 @@ export default function AppointmentsCalendar({
             bookingInProgress={loading ? pendingBookingSlot : undefined}
             optimisticAppointment={optimisticAppointment || undefined}
             onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
-            disableSlotBooking={!selectedPatientId}
+            disableSlotBooking={!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId}
             selectedRoomName={selectedRoom?.name}
             timeSlotConfig={{ ...slotConfig, stepMinutes: Math.max(10, gridMinutes) }}
+            maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}
           />
         </CardContent>
       </Card>
@@ -714,6 +724,8 @@ export default function AppointmentsCalendar({
         onConfirm={handleBookingConfirm}
         onCancel={handleBookingCancel}
       />
+
+      {overbookDialog}
 
       <PatientQuickCreateDialog
         open={quickCreateOpen}

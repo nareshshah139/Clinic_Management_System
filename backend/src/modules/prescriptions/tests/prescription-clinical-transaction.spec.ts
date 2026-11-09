@@ -8,6 +8,7 @@ function database(fail = false) {
   const client = (state: any): any => ({
     $queryRaw: jest.fn().mockResolvedValue([{ id: 'rx' }]),
     patient: { findFirst: jest.fn().mockResolvedValue({ id: 'p' }) },
+    pharmacyInvoice: { findFirst: jest.fn(async () => state.invoice ?? null) },
     user: { findFirst: jest.fn().mockResolvedValue({ id: 'd' }) },
     visit: { findFirst: jest.fn(async () => state.visit), update: jest.fn(async ({ data }) => (state.visit = { ...state.visit, ...data })) },
     prescription: { findUnique: jest.fn(async () => state.prescriptions[0] ? { status: 'ACTIVE', refills: [], ...state.prescriptions[0] } : null), findFirst: jest.fn(async () => state.prescriptions[0] || null), update: jest.fn(async ({ data }) => { if (fail) throw new Error('Synthetic update failure'); state.prescriptions[0] = { ...state.prescriptions[0], ...data }; return state.prescriptions[0]; }), create: jest.fn(async ({ data }) => { if (fail) throw new Error('Synthetic insert failure'); const rx = { id: 'rx', ...data }; state.prescriptions.push(rx); return rx; }) },
@@ -59,6 +60,23 @@ describe('Prescription clinical transaction', () => {
     expect(db.$transaction).not.toHaveBeenCalled();
     expect(state().prescriptions).toHaveLength(0);
   });
+  it('rejects changing medicines once a pharmacy invoice exists without changing clinical data', async () => {
+    const { db, state } = database();
+    state().prescriptions.push({ id: 'rx', visitId: 'v', items: JSON.stringify(payload.items) });
+    state().invoice = { id: 'invoice' };
+    await expect(new PrescriptionsService(db, {} as any).updatePrescription('rx', { items: [{ ...payload.items[0], drugName: 'Replacement' }], clinicalData: payload.clinicalData } as any, 'branch')).rejects.toThrow('medicines cannot be changed');
+    expect(JSON.parse(state().prescriptions[0].items)[0].drugName).toBe('Synthetic');
+    expect(JSON.parse(state().visit.history)).toEqual({ pastHistory: 'Preserve existing' });
+  });
+
+  it('permits saving unchanged medicine items with a linked invoice', async () => {
+    const { db, state } = database();
+    const input = await new ValidationPipe({ transform: true, whitelist: true }).transform({ items: payload.items }, { type: 'body', metatype: UpdatePrescriptionDto });
+    state().prescriptions.push({ id: 'rx', visitId: 'v', items: JSON.stringify(input.items) });
+    state().invoice = { id: 'invoice' };
+    await expect(new PrescriptionsService(db, {} as any).updatePrescription('rx', input, 'branch')).resolves.toMatchObject({ id: 'rx' });
+  });
+
   it('updates an existing prescription using real schema fields and retains visit history', async () => {
     const { db, state } = database();
     state().prescriptions.push({ id: 'rx', visitId: 'v', items: '[]', visit: { id: 'v', patient: { id: 'p' }, doctor: { id: 'd' } } });

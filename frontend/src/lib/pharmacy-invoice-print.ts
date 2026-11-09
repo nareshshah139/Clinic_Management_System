@@ -24,6 +24,10 @@ type PrintDocument = {
 
 const ENTITIES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
+/**
+ * @cc [owner:nareshshah139,label:security] escape-invoice-print-fields
+ * Invoice and patient text MUST be escaped before it is inserted into print or PDF HTML.
+ */
 export function escapeHtml(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ENTITIES[char]);
 }
