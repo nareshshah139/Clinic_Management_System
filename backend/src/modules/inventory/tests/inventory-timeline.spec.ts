@@ -29,7 +29,7 @@ function prisma(rows = movements) {
     inventoryWorkflowEffect: { findMany: async () => [] },
     inventoryWorkflowDocument: { findMany: async () => [{ id: 'doc-loss', kind: 'LOSS', reference: 'LOSS-9', status: 'POSTED' }] },
     pharmacyPurchaseInvoice: { findMany: async () => [
-      { id: 'pi1', invoiceNumber: '778', stockCommitReference: 'PINV-778-abcd1234', status: 'POSTED', distributorName: 'Medline Distributors' },
+      { id: 'pi1', invoiceNumber: '778', stockCommitReference: 'PINV-778-abcd1234' as string | null, status: 'POSTED', distributorName: 'Medline Distributors' },
     ] },
     pharmacyInvoice: { findMany: async () => [
       { id: 'si1', invoiceNumber: 'PH-1', status: 'PAID', prescriptionId: 'rx-1', billingName: 'Ravi Kumar' },
