@@ -10,6 +10,7 @@ export type UnitCost = { perUnit: number; gstRate: number };
  */
 export type MarginLine = {
   productKey: string;
+  kind: 'SALE' | 'RETURN';
   quantity: number;
   salesAmount: number;
   outputGst: number;
@@ -28,6 +29,8 @@ export type MarginBatch = {
   currentStock: number;
   gstRate: number | null;
   createdAt: Date;
+  tags: string | null;
+  type: string;
   drugs: { id: string; name: string; manufacturerName: string; packSizeLabel: string; category: string | null }[];
 };
 
@@ -40,6 +43,8 @@ export type MarginProduct = {
   stock: number;
   mrp: number | null;
   itemId: string | null;
+  tags: string[];
+  itemType: string | null;
 };
 
 export type MarginRow = MarginProduct & {
@@ -54,7 +59,65 @@ export type MarginRow = MarginProduct & {
   unknownCost: { lineCount: number; quantity: number; salesAmount: number };
 };
 
+export const MARGIN_TYPES = ['NET', 'SALES', 'RETURNS'] as const;
+export const MARGIN_SEARCH_FIELDS = ['ALL', 'NAME', 'CATEGORY', 'MANUFACTURER'] as const;
+export const MARGIN_COST_STATUSES = ['ALL', 'MISSING_COST', 'LOSS'] as const;
+export const MARGIN_ITEM_TYPES = ['MEDICINE', 'EQUIPMENT', 'SUPPLY', 'CONSUMABLE'] as const;
+
+export type MarginType = (typeof MARGIN_TYPES)[number];
+export type MarginSearchField = (typeof MARGIN_SEARCH_FIELDS)[number];
+export type MarginCostStatus = (typeof MARGIN_COST_STATUSES)[number];
+export type MarginItemType = (typeof MARGIN_ITEM_TYPES)[number];
+
+export type MarginFilters = {
+  type: MarginType;
+  search?: string;
+  searchField: MarginSearchField;
+  tag?: string;
+  category?: string;
+  manufacturer?: string;
+  itemType?: MarginItemType;
+  costStatus: MarginCostStatus;
+};
+
+export const DEFAULT_MARGIN_FILTERS: MarginFilters = { type: 'NET', searchField: 'ALL', costStatus: 'ALL' };
+
+export type MarginOptions = { tags: string[]; categories: string[]; manufacturers: string[]; itemTypes: string[] };
+
+/** Trims the text filters and drops empty ones, so an empty box means no filter. */
+export function marginFiltersFrom(query: Partial<Record<keyof MarginFilters, string | undefined>>): MarginFilters {
+  const text = (value: string | undefined) => value?.trim().replace(/\s+/g, ' ') || undefined;
+  return {
+    type: (query.type as MarginType) ?? DEFAULT_MARGIN_FILTERS.type,
+    searchField: (query.searchField as MarginSearchField) ?? DEFAULT_MARGIN_FILTERS.searchField,
+    costStatus: (query.costStatus as MarginCostStatus) ?? DEFAULT_MARGIN_FILTERS.costStatus,
+    itemType: query.itemType as MarginItemType | undefined,
+    search: text(query.search),
+    tag: text(query.tag),
+    category: text(query.category),
+    manufacturer: text(query.manufacturer),
+  };
+}
+
 const normalize = (value: string | null | undefined) => (value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** Item tags are stored as a JSON array of strings; older rows hold a comma-separated list. */
+export function parseTags(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  let list: unknown;
+  try {
+    list = JSON.parse(raw);
+  } catch {
+    list = raw.split(',');
+  }
+  return Array.isArray(list) ? list.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean) : [];
+}
+
+function uniqueByNormalized(values: Iterable<string>) {
+  const seen = new Map<string, string>();
+  for (const value of values) if (!seen.has(normalize(value))) seen.set(normalize(value), value.trim());
+  return Array.from(seen.values());
+}
 
 export function unitLabel(batch: Pick<MarginBatch, 'packSize' | 'packUnit' | 'unit'>, packSizeLabel?: string) {
   if (batch.packSize && batch.packUnit?.trim()) return `${batch.packSize} ${batch.packUnit.trim()}`;
@@ -77,6 +140,8 @@ export function productCatalog(batches: MarginBatch[]): Map<string, MarginProduc
     const latest = [...group].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id))[0];
     const drug = latest.drugs.length === 1 ? latest.drugs[0] : null;
     catalog.set(key, {
+      tags: uniqueByNormalized(group.flatMap((batch) => parseTags(batch.tags))),
+      itemType: latest.type,
       key,
       name: drug?.name || latest.name,
       category: latest.category || drug?.category || null,
@@ -119,24 +184,67 @@ function marginRow(product: MarginProduct, lines: MarginLine[]): MarginRow {
 const byMarginDesc = (a: MarginRow, b: MarginRow) =>
   (b.profitPercent ?? -Infinity) - (a.profitPercent ?? -Infinity) || (b.profit ?? 0) - (a.profit ?? 0) || a.name.localeCompare(b.name);
 
+const LINE_KINDS_BY_TYPE: Record<MarginType, readonly MarginLine['kind'][]> = {
+  NET: ['SALE', 'RETURN'],
+  SALES: ['SALE'],
+  RETURNS: ['RETURN'],
+};
+
+const SEARCH_FIELDS: Record<MarginSearchField, (row: MarginRow) => (string | null)[]> = {
+  ALL: (row) => [row.name, row.category, row.manufacturer],
+  NAME: (row) => [row.name],
+  CATEGORY: (row) => [row.category],
+  MANUFACTURER: (row) => [row.manufacturer],
+};
+
+function rowMatches(row: MarginRow, filters: MarginFilters) {
+  const needle = normalize(filters.search);
+  const tag = normalize(filters.tag);
+  const category = normalize(filters.category);
+  const manufacturer = normalize(filters.manufacturer);
+  return (
+    (!needle || SEARCH_FIELDS[filters.searchField](row).some((value) => normalize(value).includes(needle))) &&
+    (!tag || row.tags.some((value) => normalize(value) === tag)) &&
+    (!category || normalize(row.category) === category) &&
+    (!manufacturer || normalize(row.manufacturer) === manufacturer) &&
+    (!filters.itemType || row.itemType === filters.itemType) &&
+    (filters.costStatus === 'ALL' ||
+      (filters.costStatus === 'MISSING_COST' ? row.unknownCost.lineCount > 0 : (row.profit ?? 0) < 0))
+  );
+}
+
+const sortedUnique = (values: Iterable<string>) => uniqueByNormalized(values).sort((a, b) => a.localeCompare(b));
+
+export function marginOptions(rows: MarginRow[]): MarginOptions {
+  return {
+    tags: sortedUnique(rows.flatMap((row) => row.tags)),
+    categories: sortedUnique(rows.flatMap((row) => (row.category ? [row.category] : []))),
+    manufacturers: sortedUnique(rows.flatMap((row) => (row.manufacturer ? [row.manufacturer] : []))),
+    itemTypes: sortedUnique(rows.flatMap((row) => (row.itemType ? [row.itemType] : []))),
+  };
+}
+
 export function buildItemMarginReport(input: {
   lines: MarginLine[];
   catalog: Map<string, MarginProduct>;
   fallbackProducts: Map<string, MarginProduct>;
-  search?: string;
+  filters?: Partial<MarginFilters>;
 }) {
+  const filters: MarginFilters = { ...DEFAULT_MARGIN_FILTERS, ...input.filters };
   const linesByProduct = new Map<string, MarginLine[]>();
-  for (const line of input.lines) linesByProduct.set(line.productKey, [...(linesByProduct.get(line.productKey) || []), line]);
+  for (const line of input.lines) {
+    if (!LINE_KINDS_BY_TYPE[filters.type].includes(line.kind)) continue;
+    linesByProduct.set(line.productKey, [...(linesByProduct.get(line.productKey) || []), line]);
+  }
 
-  const needle = normalize(input.search);
-  const rows = Array.from(linesByProduct, ([key, lines]) => marginRow(input.catalog.get(key) || input.fallbackProducts.get(key)!, lines))
-    .filter((row) => !needle || [row.name, row.category, row.manufacturer].some((value) => normalize(value).includes(needle)))
-    .sort(byMarginDesc);
+  const periodRows = Array.from(linesByProduct, ([key, lines]) => marginRow(input.catalog.get(key) || input.fallbackProducts.get(key)!, lines));
+  const rows = periodRows.filter((row) => rowMatches(row, filters)).sort(byMarginDesc);
 
   const sum = (pick: (row: MarginRow) => number | null) => money(rows.reduce((total, row) => total + (pick(row) ?? 0), 0));
   const profit = sum((row) => row.profit);
   return {
     rows,
+    options: marginOptions(periodRows),
     totals: {
       salesAmount: sum((row) => row.salesAmount),
       purchase: sum((row) => row.purchase),
@@ -197,7 +305,7 @@ function unitCost(perUnit: unknown, gstRate: unknown): UnitCost | null {
 }
 
 const product = (key: string, name: string, extra: Partial<MarginProduct> = {}): MarginProduct => ({
-  key, name, category: null, unitLabel: '', manufacturer: null, stock: 0, mrp: null, itemId: null, ...extra,
+  key, name, category: null, unitLabel: '', manufacturer: null, stock: 0, mrp: null, itemId: null, tags: [], itemType: null, ...extra,
 });
 
 /**
@@ -241,6 +349,7 @@ export function marginLinesFrom(input: {
         const tax = movement.quantity * Number(notes.saleTerms.taxPerUnit || 0);
         lines.push({
           productKey: key,
+          kind: 'SALE',
           quantity: movement.quantity,
           salesAmount: movement.quantity * notes.saleTerms.taxablePerUnit + tax,
           outputGst: tax,
@@ -256,7 +365,7 @@ export function marginLinesFrom(input: {
           ? product(key, item.drug.name, { manufacturer: item.drug.manufacturerName, unitLabel: item.drug.packSizeLabel, category: item.drug.category })
           : product(key, item.package?.name || 'Package'));
       }
-      lines.push({ productKey: key, quantity: item.quantity, salesAmount: Number(item.totalAmount), outputGst: Number(item.taxAmount || 0), cost: null });
+      lines.push({ productKey: key, kind: 'SALE', quantity: item.quantity, salesAmount: Number(item.totalAmount), outputGst: Number(item.taxAmount || 0), cost: null });
     }
   }
 
@@ -270,6 +379,7 @@ export function marginLinesFrom(input: {
         : docMovements.find((movement) => jsonObject(movement.notes).workflowLineId === line.id);
       lines.push({
         productKey: key,
+        kind: doc.kind === 'SALES_RETURN' ? 'RETURN' : 'SALE',
         quantity: sign * (line.quantity + (line.freeQuantity || 0)),
         salesAmount: sign * Number(line.total || 0),
         outputGst: sign * Number(line.tax || 0),

@@ -167,6 +167,106 @@ export function dayWiseCsvRows(report: DayWiseReport): Record<string, string | n
   ];
 }
 
+export const MARGIN_TYPES = ["NET", "SALES", "RETURNS"] as const;
+export const MARGIN_SEARCH_FIELDS = ["ALL", "NAME", "CATEGORY", "MANUFACTURER"] as const;
+export const MARGIN_COST_STATUSES = ["ALL", "MISSING_COST", "LOSS"] as const;
+export const MARGIN_ITEM_TYPES = ["MEDICINE", "EQUIPMENT", "SUPPLY", "CONSUMABLE"] as const;
+export type MarginType = (typeof MARGIN_TYPES)[number];
+export type MarginSearchField = (typeof MARGIN_SEARCH_FIELDS)[number];
+export type MarginCostStatus = (typeof MARGIN_COST_STATUSES)[number];
+export type MarginItemType = (typeof MARGIN_ITEM_TYPES)[number];
+
+export const MARGIN_TYPE_LABELS: Record<MarginType, string> = { NET: "Net sales", SALES: "Sales only", RETURNS: "Returns only" };
+export const MARGIN_SEARCH_FIELD_LABELS: Record<MarginSearchField, string> = { ALL: "All fields", NAME: "Item name", CATEGORY: "Category", MANUFACTURER: "Manufacturer" };
+export const MARGIN_COST_STATUS_LABELS: Record<MarginCostStatus, string> = { ALL: "All", MISSING_COST: "Missing cost", LOSS: "Loss-making" };
+export const MARGIN_ITEM_TYPE_LABELS: Record<MarginItemType, string> = { MEDICINE: "Medicine", EQUIPMENT: "Equipment", SUPPLY: "Supply", CONSUMABLE: "Consumable" };
+
+/** Empty strings mean "no filter" so a field can be bound straight to its input. */
+export type MarginFilters = {
+  type: MarginType;
+  search: string;
+  searchField: MarginSearchField;
+  tag: string;
+  category: string;
+  manufacturer: string;
+  itemType: MarginItemType | "";
+  costStatus: MarginCostStatus;
+};
+
+export const DEFAULT_MARGIN_FILTERS: MarginFilters = {
+  type: "NET", search: "", searchField: "ALL", tag: "", category: "", manufacturer: "", itemType: "", costStatus: "ALL",
+};
+
+export type MarginOptions = { tags: string[]; categories: string[]; manufacturers: string[]; itemTypes: string[] };
+
+const oneOf = <T extends string>(allowed: readonly T[], value: string | null, fallback: T): T =>
+  allowed.includes(value as T) ? (value as T) : fallback;
+
+/** Reads the filters back from the page URL; an unknown value falls back to the default instead of failing the page. */
+export function marginFiltersFromParams(params: Pick<URLSearchParams, "get">): MarginFilters {
+  return {
+    type: oneOf(MARGIN_TYPES, params.get("type"), "NET"),
+    searchField: oneOf(MARGIN_SEARCH_FIELDS, params.get("field"), "ALL"),
+    costStatus: oneOf(MARGIN_COST_STATUSES, params.get("cost"), "ALL"),
+    itemType: oneOf(["", ...MARGIN_ITEM_TYPES], params.get("itemType"), ""),
+    search: (params.get("q") || "").slice(0, 100),
+    tag: (params.get("tag") || "").slice(0, 100),
+    category: (params.get("category") || "").slice(0, 100),
+    manufacturer: (params.get("manufacturer") || "").slice(0, 100),
+  };
+}
+
+const PARAM_KEYS: Record<keyof MarginFilters, string> = {
+  type: "type", search: "q", searchField: "field", tag: "tag", category: "category", manufacturer: "manufacturer", itemType: "itemType", costStatus: "cost",
+};
+
+/** The URL parameters for the filters that differ from their defaults. */
+export function marginFilterParams(filters: MarginFilters): Record<string, string> {
+  const params: Record<string, string> = {};
+  for (const key of Object.keys(PARAM_KEYS) as (keyof MarginFilters)[]) {
+    const value = filters[key].trim();
+    if (value && value !== DEFAULT_MARGIN_FILTERS[key]) params[PARAM_KEYS[key]] = value;
+  }
+  return params;
+}
+export const MARGIN_FILTER_PARAM_KEYS = Object.values(PARAM_KEYS);
+
+/** The API query for the filters that are set. */
+export function marginQuery(startDate: string, endDate: string, filters: MarginFilters): Record<string, string> {
+  const query: Record<string, string> = { startDate, endDate };
+  for (const key of Object.keys(PARAM_KEYS) as (keyof MarginFilters)[]) {
+    const value = filters[key].trim();
+    if (value) query[key] = value;
+  }
+  return query;
+}
+
+/** Filters kept in the More Filters panel; the Type, Tags and search controls sit on the toolbar. */
+export const MORE_FILTER_KEYS = ["category", "manufacturer", "itemType", "costStatus"] as const;
+
+export const activeMoreFilterCount = (filters: MarginFilters) =>
+  MORE_FILTER_KEYS.filter((key) => filters[key] !== DEFAULT_MARGIN_FILTERS[key]).length;
+
+export const hasActiveFilters = (filters: MarginFilters) =>
+  (Object.keys(DEFAULT_MARGIN_FILTERS) as (keyof MarginFilters)[]).some((key) => filters[key].trim() !== DEFAULT_MARGIN_FILTERS[key]);
+
+/** One "Label: value" per filter that is set, in toolbar order. */
+export function describeMarginFilters(filters: MarginFilters): string[][] {
+  const out: string[][] = [["Type", MARGIN_TYPE_LABELS[filters.type]]];
+  if (filters.search.trim()) out.push(["Search", `${filters.search.trim()} (${MARGIN_SEARCH_FIELD_LABELS[filters.searchField]})`]);
+  if (filters.tag) out.push(["Tag", filters.tag]);
+  if (filters.category) out.push(["Category", filters.category]);
+  if (filters.manufacturer) out.push(["Manufacturer", filters.manufacturer]);
+  if (filters.itemType) out.push(["Item type", MARGIN_ITEM_TYPE_LABELS[filters.itemType]]);
+  if (filters.costStatus !== "ALL") out.push(["Cost status", MARGIN_COST_STATUS_LABELS[filters.costStatus]]);
+  return out;
+}
+
+export const marginCsvPreface = (report: Pick<ItemMarginReport, "period">, filters: MarginFilters): string[][] => [
+  ["Item-wise margin", `${report.period.startDate} to ${report.period.endDate}`],
+  ...describeMarginFilters(filters),
+];
+
 export type MarginRow = {
   key: string;
   name: string;
@@ -176,6 +276,8 @@ export type MarginRow = {
   stock: number;
   mrp: number | null;
   itemId: string | null;
+  tags: string[];
+  itemType: string | null;
   saleQuantity: number;
   averageSalePrice: number | null;
   salesAmount: number;
@@ -190,6 +292,7 @@ export type MarginRow = {
 export type ItemMarginReport = {
   period: { startDate: string; endDate: string; timeZone: string };
   search: string | null;
+  options: MarginOptions;
   rows: MarginRow[];
   totals: {
     salesAmount: number;
