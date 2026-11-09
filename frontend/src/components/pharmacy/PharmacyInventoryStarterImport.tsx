@@ -1,6 +1,6 @@
 "use client";
 
-import { displayUtcDate } from '@/lib/date-display';
+import { displayClinicDateTime, displayUtcDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { useRef, useState } from "react";
 import {
@@ -20,56 +20,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { apiClient } from "@/lib/api";
+import {
+  importStage,
+  validateImportSummary,
+  type InventoryImportSummary,
+} from "@/lib/inventory-imports";
+import { personName } from "@/lib/inventory-item-requests";
 import { getErrorMessage } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 interface PharmacyInventoryStarterImportProps {
   className?: string;
   compact?: boolean;
-}
-
-interface InventoryImportSummary {
-  importId?: string;
-  totalRows: number;
-  created: number;
-  updated: number;
-  skipped: number;
-  drugsCreated: number;
-  stockAdjusted: number;
-  retryableRows?: number;
-  pendingRows?: number;
-  reconciliationRequired?: number;
-  errors: Array<{ row: number; message: string }>;
-}
-
-function validateImportSummary(
-  value: unknown,
-  expectedId?: string,
-): InventoryImportSummary {
-  const summary = value as InventoryImportSummary | null;
-  const counts = [
-    "totalRows",
-    "created",
-    "updated",
-    "skipped",
-    "drugsCreated",
-    "stockAdjusted",
-  ] as const;
-  if (
-    !summary ||
-    typeof summary !== "object" ||
-    counts.some((key) => !Number.isInteger(summary[key]) || summary[key] < 0) ||
-    (expectedId && summary.importId !== expectedId) ||
-    summary.created + summary.updated + summary.skipped !== summary.totalRows ||
-    !Array.isArray(summary.errors) ||
-    summary.errors.some(
-      (error) =>
-        !Number.isInteger(error.row) || typeof error.message !== "string",
-    )
-  ) {
-    throw new Error("The server did not confirm the import outcome.");
-  }
-  return summary;
 }
 
 const requiredColumns = [
@@ -178,16 +140,23 @@ export function PharmacyInventoryStarterImport({
       validateImportSummary(response);
       setSummary(response);
       window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
-      toast({
-        variant: response.skipped > 0 ? "destructive" : "default",
-        title:
-          response.created + response.updated === 0
-            ? "No inventory rows imported"
-            : response.skipped > 0
-              ? "Inventory imported with errors"
-              : "Inventory import finished",
-        description: `${response.created} created, ${response.updated} updated, ${response.skipped} skipped.`,
-      });
+      toast(
+        importStage(response) === "awaiting-approval"
+          ? {
+              title: "Sent to a doctor for approval",
+              description: "No stock changes until it is approved.",
+            }
+          : {
+              variant: response.skipped > 0 ? "destructive" : "default",
+              title:
+                response.created + response.updated === 0
+                  ? "No inventory rows imported"
+                  : response.skipped > 0
+                    ? "Inventory imported with errors"
+                    : "Inventory import finished",
+              description: `${response.created} created, ${response.updated} updated, ${response.skipped} skipped.`,
+            },
+      );
     } catch (error) {
       toast({
         variant: "destructive",
@@ -218,12 +187,7 @@ export function PharmacyInventoryStarterImport({
       validateImportSummary(result, summary.importId);
       setSummary(result);
       window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
-      toast({
-        title: result.skipped
-          ? "Some rows still need attention"
-          : "Import complete",
-        description: `${result.created} created, ${result.updated} updated, ${result.skipped} remaining.`,
-      });
+      toast(recoveryToast(result));
     } catch (error) {
       toast({
         variant: "destructive",
@@ -411,7 +375,7 @@ export function PharmacyInventoryStarterImport({
                 <ImportMetric label="Updated" value={summary.updated} />
                 <ImportMetric label="Skipped" value={summary.skipped} />
               </div>
-              <ImportErrors
+              <ImportOutcome
                 summary={summary}
                 busy={isUploading}
                 onRetry={() => recoverImport(true)}
@@ -570,7 +534,7 @@ export function PharmacyInventoryStarterImport({
                 <ImportMetric label="Skipped" value={summary.skipped} />
               </div>
 
-              <ImportErrors
+              <ImportOutcome
                 summary={summary}
                 busy={isUploading}
                 onRetry={() => recoverImport(true)}
@@ -584,6 +548,95 @@ export function PharmacyInventoryStarterImport({
   );
 }
 
+function recoveryToast(result: InventoryImportSummary) {
+  const stage = importStage(result);
+  if (stage === "awaiting-approval")
+    return {
+      title: "Still waiting for a doctor's approval",
+      description: "No stock changes until it is approved.",
+    };
+  if (stage === "rejected")
+    return {
+      variant: "destructive" as const,
+      title: "Import rejected",
+      description: result.approval?.note ?? "",
+    };
+  return {
+    title: result.skipped ? "Some rows still need attention" : "Import complete",
+    description: `${result.created} created, ${result.updated} updated, ${result.skipped} remaining.`,
+  };
+}
+
+interface ImportOutcomeProps {
+  summary: InventoryImportSummary;
+  busy: boolean;
+  onRetry: () => void;
+  onCheck: () => void;
+}
+
+function ImportOutcome(props: ImportOutcomeProps) {
+  const { summary } = props;
+  const stage = importStage(summary);
+  if (stage !== "results") return <ImportApprovalNotice {...props} />;
+  const reviewer = summary.approval?.status === "APPROVED" ? summary.approval : null;
+  return (
+    <>
+      {reviewer && (
+        <p className="mt-3 text-sm text-slate-700">
+          Approved by {personName(reviewer.reviewedBy) || "a doctor"}
+          {reviewer.reviewedAt ? ` · ${displayClinicDateTime(reviewer.reviewedAt)}` : ""}
+        </p>
+      )}
+      <ImportErrors {...props} />
+    </>
+  );
+}
+
+function ImportApprovalNotice({ summary, busy, onCheck }: ImportOutcomeProps) {
+  const approval = summary.approval!;
+  const rejected = importStage(summary) === "rejected";
+  return (
+    <div
+      role={rejected ? "alert" : "status"}
+      className={`mt-3 rounded-md border p-3 text-sm ${
+        rejected
+          ? "border-red-200 bg-red-50 text-red-900"
+          : "border-sky-200 bg-sky-50 text-sky-900"
+      }`}
+    >
+      {rejected ? (
+        <>
+          <p className="font-medium">This import was rejected: {approval.note}</p>
+          <p className="mt-1">
+            Rejected by {personName(approval.reviewedBy) || "a doctor"}
+            {approval.reviewedAt ? ` · ${displayClinicDateTime(approval.reviewedAt)}` : ""}.
+            No stock was changed. Upload the workbook again to send it back for approval.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="font-medium">
+            Sent to a doctor for approval. No stock changes until it is approved.
+          </p>
+          <p className="mt-1">
+            {summary.totalRows} {summary.totalRows === 1 ? "row is" : "rows are"} waiting for review.
+          </p>
+        </>
+      )}
+      {summary.importId && (
+        <>
+          <div className="mt-3">
+            <Button type="button" size="sm" variant="outline" onClick={onCheck} disabled={busy}>
+              Check import outcome
+            </Button>
+          </div>
+          <p className="mt-2 break-all text-xs">Import reference: {summary.importId}</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ImportMetric({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md bg-gray-50 px-3 py-2">
@@ -593,17 +646,7 @@ function ImportMetric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ImportErrors({
-  summary,
-  busy,
-  onRetry,
-  onCheck,
-}: {
-  summary: InventoryImportSummary;
-  busy: boolean;
-  onRetry: () => void;
-  onCheck: () => void;
-}) {
+function ImportErrors({ summary, busy, onRetry, onCheck }: ImportOutcomeProps) {
   if (summary.errors.length === 0) return null;
   return (
     <div

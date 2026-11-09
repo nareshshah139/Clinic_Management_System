@@ -12,6 +12,8 @@ jest.mock('@/lib/api', () => ({
     getInventoryItemRequests: jest.fn(),
     approveInventoryItemRequest: jest.fn(),
     rejectInventoryItemRequest: jest.fn(),
+    getPendingInventoryImports: jest.fn(async () => []),
+    getReviewedInventoryImports: jest.fn(async () => []),
   },
 }));
 

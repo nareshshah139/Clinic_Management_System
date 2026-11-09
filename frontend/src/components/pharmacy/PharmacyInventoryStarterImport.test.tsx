@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PharmacyInventoryStarterImport } from "./PharmacyInventoryStarterImport";
 import { apiClient } from "@/lib/api";
 
@@ -211,4 +211,92 @@ it("preserves the previous summary when a retry response does not confirm the im
   expect(
     screen.getByRole("button", { name: "Check import outcome" }),
   ).toBeEnabled();
+});
+
+const praneeta = { id: "doc-1", firstName: "Praneeta", lastName: "Rao" };
+const heldSummary = (status: string, extra: Record<string, unknown> = {}) => ({
+  importId: "held-ref",
+  totalRows: 2,
+  created: 0,
+  updated: 0,
+  skipped: 2,
+  drugsCreated: 0,
+  stockAdjusted: 0,
+  pendingRows: 2,
+  errors: [
+    { row: 2, message: "This row has not finished." },
+    { row: 3, message: "This row has not finished." },
+  ],
+  approval: { status, requestedBy: null, reviewedBy: null, reviewedAt: null, note: null },
+  ...extra,
+});
+const confirmUpload = async (layout: { compact?: boolean } = {}) => {
+  const { container } = render(<PharmacyInventoryStarterImport {...layout} />);
+  fireEvent.change(container.querySelector("input[type=file]")!, {
+    target: { files: [new File(["test"], "stock.xlsx")] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /^Preview import$/i }));
+  fireEvent.click(await screen.findByRole("button", { name: /confirm opening import/i }));
+};
+
+it.each([{ compact: true }, {}])(
+  "tells staff the file went to a doctor and offers no retry while it waits (%j)",
+  async (layout) => {
+    (apiClient.importInventoryStarterExcel as jest.Mock).mockResolvedValue({
+      status: "PENDING_APPROVAL",
+      ...heldSummary("PENDING"),
+    });
+    await confirmUpload(layout);
+    const results = await screen.findByRole("region", { name: "Opening stock import results" });
+    expect(within(results).getByRole("status")).toHaveTextContent(
+      "Sent to a doctor for approval. No stock changes until it is approved.2 rows are waiting for review.Check import outcomeImport reference: held-ref",
+    );
+    expect(within(results).queryByRole("button", { name: /Retry failed rows|Resume unfinished rows/ })).toBeNull();
+    expect(toast.mock.calls).toEqual([[{ title: "Sent to a doctor for approval", description: "No stock changes until it is approved." }]]);
+  },
+);
+
+it("shows the normal results with retry once a doctor approved the file", async () => {
+  (apiClient.importInventoryStarterExcel as jest.Mock).mockResolvedValue({
+    status: "PENDING_APPROVAL",
+    ...heldSummary("PENDING"),
+  });
+  (apiClient.getInventoryImportOutcome as jest.Mock).mockResolvedValue(
+    heldSummary("APPROVED", {
+      created: 1,
+      skipped: 1,
+      pendingRows: 0,
+      retryableRows: 1,
+      errors: [{ row: 3, message: "Could not save this row (P2028)." }],
+      approval: { status: "APPROVED", requestedBy: null, reviewedBy: praneeta, reviewedAt: null, note: null },
+    }),
+  );
+  await confirmUpload();
+  fireEvent.click(await screen.findByRole("button", { name: "Check import outcome" }));
+  expect(await screen.findByText("Row 3: Could not save this row (P2028).")).toBeInTheDocument();
+  expect(screen.getByText("Approved by Praneeta Rao")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Retry failed rows" })).toBeEnabled();
+  expect(apiClient.getInventoryImportOutcome).toHaveBeenCalledWith("held-ref");
+});
+
+it("shows the doctor's rejection note when staff check a rejected file", async () => {
+  (apiClient.importInventoryStarterExcel as jest.Mock).mockResolvedValue({
+    status: "PENDING_APPROVAL",
+    ...heldSummary("PENDING"),
+  });
+  (apiClient.getInventoryImportOutcome as jest.Mock).mockResolvedValue(
+    heldSummary("REJECTED", {
+      approval: { status: "REJECTED", requestedBy: null, reviewedBy: praneeta, reviewedAt: null, note: "Counts are from last year" },
+    }),
+  );
+  await confirmUpload({ compact: true });
+  fireEvent.click(await screen.findByRole("button", { name: "Check import outcome" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("This import was rejected: Counts are from last year");
+  expect(alert).toHaveTextContent("Rejected by Praneeta Rao. No stock was changed.");
+  expect(toast).toHaveBeenLastCalledWith({
+    variant: "destructive",
+    title: "Import rejected",
+    description: "Counts are from last year",
+  });
 });
