@@ -728,7 +728,8 @@ export class BillingService {
    * @cc [owner:nareshshah139,label:calculation] invoice-total-arithmetic
    * An invoice total MUST equal the line amounts after line discount percent, less the overall
    * discount percent, plus GST per line on the line-discounted amount (before the overall discount).
-   * A line with a gstRate of 0 or no gstRate MUST add no tax. Totals are not rounded to paise.
+   * A line with a gstRate of 0 or no gstRate MUST add no tax here; note that the HTTP DTOs default
+   * an omitted gstRate to 18 before it reaches this method. Totals are not rounded to paise.
    */
   private calculateInvoiceTotals(items: any[], discount: number = 0) {
     const subtotal = items.reduce((sum, item) => {
