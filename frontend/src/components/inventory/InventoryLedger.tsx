@@ -74,7 +74,7 @@ function documentLabel(doc: LedgerDocument): string {
   switch (doc.type) {
     case "PURCHASE_INVOICE": return `Purchase bill ${doc.number}`;
     case "PHARMACY_INVOICE": return `${doc.prescriptionId ? "Rx bill" : "Bill"} ${doc.number}`;
-    case "WORKFLOW": return `${workflowKinds[doc.kind]?.label || doc.kind} ${doc.number}`;
+    case "WORKFLOW": return doc.kind === "COUNT" ? doc.number : `${workflowKinds[doc.kind]?.label || doc.kind} ${doc.number}`;
     case "IMPORT": return doc.row ? `Import row ${doc.row}` : "Excel import";
     case "APPROVAL": return "Approved change request";
     case "PARTNER_SALE": return "Partner sales sync";

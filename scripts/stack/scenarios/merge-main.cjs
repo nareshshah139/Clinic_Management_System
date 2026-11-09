@@ -225,7 +225,19 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       const text = clean(await movements.innerText());
       check("#70 Stock ledger shows the CR-31 count approval", /Stock count/.test(text) && text.includes(counted), true);
       check("#70 Stock ledger shows the CR-27 supplier return", /Supplier return/.test(text) && text.includes("RET-A"), true);
+      check("#70 Stock ledger names a count once", /Stock counts Stock count/.test(text), false);
       await shot(page, "admin-stock-ledger-1440");
+      await movements.getByRole("button", { name: /^Stock count / }).first().click();
+      await page.locator("#count-record-title").waitFor({ timeout: 60000 });
+      check("the ledger's count link opens that count's record", new URL(page.url()).searchParams.get("view"), "COUNT");
+      await shot(page, "admin-ledger-count-link-1440");
+      await page.goBack();
+      await movements.waitFor({ timeout: 60000 });
+      await movements.getByRole("button", { name: /RET-A/ }).first().click();
+      await page.waitForFunction(() => new URL(location.href).searchParams.get("view") === "SUPPLIER_RETURN", null, { timeout: 60000 });
+      await page.getByText("RET-A").first().waitFor({ timeout: 60000 });
+      check("the ledger's supplier return link opens the return", new URL(page.url()).searchParams.get("area"), "purchases");
+      await shot(page, "admin-ledger-return-link-1440");
       check("admin stock ledger: no console error or refused call", [seen.errors, seen.refused], [[], []]);
       await context.close();
     }
@@ -242,7 +254,7 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       }
       await settle(page);
       check(`${who} Terms of Trade ${canEdit ? "offers Add terms" : "is read-only"}`,
-        [await page.getByRole("button", { name: "Add terms" }).count() > 0, await page.getByText("Read-only. Only doctors can change terms.").count() > 0],
+        [await page.getByRole("button", { name: "Add terms" }).count() > 0, await page.getByText("Read-only. Doctors and admins can change terms.").count() > 0],
         [canEdit, !canEdit]);
       check(`${who} Terms of Trade lists the agreed term`, await page.getByRole("table", { name: "Agreed terms" }).getByText("Synthetic Cream").count() > 0, true);
       await shot(page, `${who}-terms-of-trade-1280`);
