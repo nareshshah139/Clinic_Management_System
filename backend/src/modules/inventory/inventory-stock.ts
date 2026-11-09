@@ -1,3 +1,4 @@
+import { UserRole } from '@prisma/client';
 import {
   BadRequestException,
   ConflictException,
@@ -30,6 +31,8 @@ export function stockStatus(item: any, quantity = item.currentStock) {
     ? 'LOW_STOCK'
     : 'IN_STOCK';
 }
+export const BATCH_DELETE_ROLES: readonly UserRole[] = [UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION];
+
 /**
  * @cc [owner:nareshshah139,label:product] batch-delete-guard
  * A batch MAY be deleted only when it holds no physical or held units, has no workflow history

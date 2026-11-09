@@ -1,3 +1,4 @@
+import { roleMeetsRoles } from '../../shared/guards/roles.guard';
 import {
   BadRequestException,
   ConflictException,
@@ -23,6 +24,7 @@ import {
   WorkflowLine,
 } from './inventory-workflow.types';
 import {
+  BATCH_DELETE_ROLES,
   jsonObject,
   money,
   movementDelta,
@@ -153,7 +155,7 @@ export class InventoryWorkflowService {
       selfApprove: SELF_APPROVERS.has(actor.role),
       settings: INVENTORY_APPROVERS.has(actor.role),
       itemWrite: has('inventory:item:update'),
-      itemDelete: has('inventory:item:delete'),
+      itemDelete: has('inventory:item:delete') && roleMeetsRoles(actor.role, BATCH_DELETE_ROLES),
       itemCreate: has('inventory:item:create'),
       supplierWrite: has('inventory:supplier:create'),
       supplierUpdate: has('inventory:supplier:update'),
