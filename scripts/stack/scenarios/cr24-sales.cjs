@@ -980,13 +980,11 @@ function makeCheck(t) {
     await popup.waitForFunction(() => document.body && document.body.innerText.includes("PHI-2026-072"), null, { timeout: 30000 });
     s.ok("View Invoice popup renders bill", true);
     await popup.close();
-    popupPromise = context.waitForEvent("page", { timeout: 30000 });
+    const pagesBefore = context.pages().length;
+    const downloadPromise = page.waitForEvent("download", { timeout: 60000 });
     await page.locator('button[title="Download Invoice"]').first().click();
-    popup = await popupPromise;
-    await popup.waitForFunction(() => document.body && document.body.innerText.includes("PHI-2026-072"), null, { timeout: 30000 });
-    await popup.waitForTimeout(1200);
-    s.check("Download Invoice triggers window.print in popup", await popup.evaluate(() => window.__printCalls).catch(() => null), 1);
-    await popup.close();
+    const download = await downloadPromise;
+    s.check("Download Invoice saves a PDF without a pop-up", [download.suggestedFilename(), context.pages().length], ["pharmacy-invoice-PHI-2026-072.pdf", pagesBefore]);
   });
 
   await scenario("13", "no-horizontal-scroll-1280-1440", async (s) => {
