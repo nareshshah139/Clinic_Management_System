@@ -1,0 +1,647 @@
+import { PrismaClient } from '@prisma/client';
+import { ConflictException, BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import * as XLSX from 'xlsx';
+import { PharmacyComplianceService } from '../pharmacy-compliance.service';
+import { PharmacyReportsService } from '../pharmacy-reports.service';
+import type { PharmacyReportQueryDto } from '../dto/pharmacy-reports.dto';
+
+const databaseTests = process.env.PHARMACY_REPORTS_TEST_DATABASE_URL
+  ? describe
+  : describe.skip;
+
+/**
+ * CR-33 Pharmacy Report against a real PostgreSQL schema: the clinic-day boundary in Asia/Kolkata,
+ * posted-only scope, branch isolation, the cash-count sequence under a race, the downloads, and the
+ * migration applied twice onto a schema that did not have the table.
+ */
+databaseTests('Pharmacy Report on PostgreSQL', () => {
+  const schema = `pharmacy_reports_${randomUUID().replaceAll('-', '')}`;
+  let admin: PrismaClient;
+  let db: PrismaClient;
+  let fixtures: string;
+  let created = false;
+  let reports: PharmacyReportsService;
+  const actor = { branchId: 'branch', id: 'asha', role: 'PHARMACIST' };
+  const q = (
+    from: string,
+    to = from,
+    extra: Partial<PharmacyReportQueryDto> = {},
+  ) => ({ from, to, ...extra }) as PharmacyReportQueryDto;
+
+  beforeAll(async () => {
+    const url = new URL(process.env.PHARMACY_REPORTS_TEST_DATABASE_URL!);
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
+      throw new Error('Database tests require local PostgreSQL');
+    url.searchParams.set('schema', 'public');
+    admin = new PrismaClient({ datasourceUrl: url.toString() });
+    await admin.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
+    created = true;
+    url.searchParams.set('schema', schema);
+    fixtures = mkdtempSync(path.join(tmpdir(), 'pharmacy-reports-'));
+    const before = readFileSync(path.resolve('prisma/schema.prisma'), 'utf8')
+      .replace(
+        /\/\/\/[^\n]*\n\/\/\/[^\n]*\nmodel PharmacyCashCount \{[\s\S]*?\n\}\n/,
+        '',
+      )
+      .replace(/^\s*pharmacyCashCounts\s.*\n/m, '');
+    expect(before).not.toContain('PharmacyCashCount');
+    writeFileSync(path.join(fixtures, 'before.prisma'), before);
+    const prisma = (...args: string[]) =>
+      execFileSync(
+        process.execPath,
+        [require.resolve('prisma/build/index.js'), ...args],
+        {
+          stdio: 'pipe',
+          env: {
+            ...process.env,
+            DATABASE_URL: url.toString(),
+            PRISMA_GENERATE_SKIP_AUTOINSTALL: '1',
+          },
+        },
+      );
+    prisma(
+      'db',
+      'push',
+      '--skip-generate',
+      '--schema',
+      path.join(fixtures, 'before.prisma'),
+    );
+    for (let run = 0; run < 2; run++)
+      prisma(
+        'db',
+        'execute',
+        '--url',
+        url.toString(),
+        '--file',
+        path.resolve(
+          'prisma/migrations/20261109150000_pharmacy_cash_counts/migration.sql',
+        ),
+      );
+    db = new PrismaClient({ datasourceUrl: url.toString() });
+
+    await db.branch.create({
+      data: {
+        id: 'branch',
+        name: 'Linaé Skin Clinic',
+        address: 'Synthetic',
+        state: 'Telangana',
+        gstNumber: '36ABCDE1234F1Z5',
+      },
+    });
+    await db.branch.create({
+      data: { id: 'other-branch', name: 'Other Clinic', address: 'Synthetic' },
+    });
+    await db.user.create({
+      data: {
+        id: 'asha',
+        firstName: 'Asha',
+        lastName: 'Rao',
+        email: 'asha@example.test',
+        password: 'x',
+        role: 'PHARMACIST',
+        branchId: 'branch',
+      },
+    });
+    await db.user.create({
+      data: {
+        id: 'doc',
+        firstName: 'Praneeta',
+        lastName: 'Jain',
+        email: 'doc@example.test',
+        password: 'x',
+        role: 'DOCTOR',
+        branchId: 'branch',
+      },
+    });
+    for (const branchId of ['branch', 'other-branch'])
+      await db.patient.create({
+        data: {
+          id: `patient-${branchId}`,
+          name: 'Meera Shah',
+          gender: 'F',
+          phone: '9876543210',
+          branchId,
+        },
+      });
+    await db.drug.create({
+      data: {
+        id: 'drug',
+        name: 'Adapalene Gel 15 Gm',
+        price: 100,
+        manufacturerName: 'Synthetic',
+        packSizeLabel: '15 gm',
+        branchId: 'branch',
+      },
+    });
+    await db.inventoryItem.create({
+      data: {
+        id: 'batch',
+        branchId: 'branch',
+        name: 'Adapalene Gel 15 Gm',
+        type: 'MEDICINE',
+        costPrice: 60,
+        sellingPrice: 100,
+        unit: 'TUBES',
+        currentStock: 10,
+        stockStatus: 'IN_STOCK',
+        hsnCode: '30049099',
+        gstRate: 12,
+        expiryDate: new Date('2099-01-01'),
+      },
+    });
+
+    // 2 x 100 at 12%: taxable 200, GST 24, total 224.
+    const line = {
+      drugId: 'drug',
+      inventoryItemId: 'batch',
+      quantity: 2,
+      unitPrice: 100,
+      discountAmount: 0,
+      taxPercent: 12,
+      taxAmount: 24,
+      totalAmount: 224,
+    };
+    const invoice = async (
+      id: string,
+      status: any,
+      invoiceDate: string,
+      payments: { method: any; amount: number; paymentDate: string }[],
+      branchId = 'branch',
+      total = 224,
+    ) =>
+      db.pharmacyInvoice.create({
+        data: {
+          id,
+          invoiceNumber: id,
+          patientId: `patient-${branchId}`,
+          doctorId: branchId === 'branch' ? 'doc' : undefined,
+          branchId,
+          subtotal: 200,
+          taxAmount: 24,
+          totalAmount: total,
+          paymentMethod: 'CASH',
+          billingName: 'Meera Shah',
+          billingPhone: '9876543210',
+          status,
+          invoiceDate: new Date(invoiceDate),
+          createdAt: new Date(invoiceDate),
+          items: {
+            create: [
+              {
+                ...line,
+                ...(branchId === 'branch'
+                  ? {}
+                  : { inventoryItemId: null, drugId: null, itemType: 'DRUG' }),
+                totalAmount: total,
+              },
+            ],
+          },
+          payments: {
+            create: payments.map((p) => ({
+              ...p,
+              status: 'COMPLETED' as const,
+              paymentDate: new Date(p.paymentDate),
+            })),
+          },
+        },
+      });
+    await invoice('PHI-2026-536', 'CONFIRMED', '2026-11-05T05:00:00Z', [
+      { method: 'CASH', amount: 224, paymentDate: '2026-11-05T05:01:00Z' },
+    ]);
+    await invoice('PHI-2026-537', 'CANCELLED', '2026-11-05T06:00:00Z', []);
+    // 00:10 on 6 Nov in Asia/Kolkata, though still 5 Nov in UTC.
+    await invoice('PHI-2026-538', 'CONFIRMED', '2026-11-05T18:40:00Z', [
+      { method: 'CARD', amount: 224, paymentDate: '2026-11-05T18:41:00Z' },
+    ]);
+    await invoice('PHI-2026-530', 'COMPLETED', '2026-11-03T05:00:00Z', [
+      { method: 'UPI', amount: 224, paymentDate: '2026-11-05T09:00:00Z' },
+    ]);
+    await invoice('PHI-2026-539', 'DRAFT', '2026-11-05T07:00:00Z', []);
+    await invoice(
+      'OTHER-1',
+      'CONFIRMED',
+      '2026-11-05T05:00:00Z',
+      [{ method: 'CASH', amount: 999, paymentDate: '2026-11-05T05:00:00Z' }],
+      'other-branch',
+      999,
+    );
+
+    const wfLine = {
+      inventoryId: 'batch',
+      name: 'Adapalene Gel 15 Gm',
+      unit: 'TUBES',
+      quantity: 1,
+      unitPrice: 100,
+      taxable: 100,
+      tax: 12,
+      total: 112,
+      gstRate: 12,
+    };
+    const workflow = (
+      id: string,
+      kind: string,
+      status: string,
+      payload: object,
+      extra: object = {},
+    ) =>
+      db.inventoryWorkflowDocument.create({
+        data: {
+          id,
+          branchId: 'branch',
+          kind,
+          status,
+          reference: id,
+          payload: { lines: [wfLine], ...payload },
+          totalAmount: 112,
+          requestKey: id,
+          createdBy: 'asha',
+          createdAt: new Date('2026-11-05T08:00:00Z'),
+          ...extra,
+        },
+      });
+    await workflow('CS-1', 'COUNTER_SALE', 'POSTED', {
+      date: '2026-11-05',
+      paymentMode: 'CARD',
+      customerName: 'Walk-in',
+      doctorName: 'Dr. Visiting',
+    });
+    await workflow('CS-DRAFT', 'COUNTER_SALE', 'DRAFT', {
+      date: '2026-11-05',
+      paymentMode: 'CASH',
+    });
+    await workflow('RET-1', 'SALES_RETURN', 'POSTED', {
+      date: '2026-11-05',
+      refundMode: 'CASH',
+      customerName: 'Meera Shah',
+    });
+    await workflow(
+      'SR-1',
+      'SUPPLIER_RETURN',
+      'POSTED',
+      { date: '2026-11-05' },
+      { supplierGstin: '36AAAAA0000A1Z5' },
+    );
+
+    const purchase = (id: string, status: any) =>
+      db.pharmacyPurchaseInvoice.create({
+        data: {
+          id,
+          branchId: 'branch',
+          distributorName: 'Sri Sai Pharma',
+          distributorGstin: '36AAAAA0000A1Z5',
+          distributorDlNo: 'DL',
+          invoiceNumber: id,
+          invoiceDate: new Date('2026-11-05T04:00:00Z'),
+          createdAt: new Date('2026-11-05T04:30:00Z'),
+          billType: 'CREDIT',
+          doctorNameOrRegNo: 'x',
+          status,
+          grossAmount: 1000,
+          taxableAmount: 1000,
+          totalGst: 120,
+          netPayable: 1120.4,
+          items: {
+            create: [
+              {
+                lineNumber: 1,
+                productName: 'Adapalene Gel 15 Gm',
+                manufacturer: 'Synthetic',
+                packSize: '15',
+                packUnitType: 'TUBE',
+                hsnCode: '30049099',
+                batchNumber: 'B1',
+                expiryMonth: 1,
+                expiryYear: 2099,
+                quantityPurchased: 20,
+                mrp: 150,
+                discountPercent: 0,
+                purchaseRate: 50,
+                taxableAmount: 1000,
+                cgstPercent: 6,
+                sgstPercent: 6,
+                gstAmount: 120,
+                lineTotal: 1120,
+              },
+            ],
+          },
+        },
+      });
+    await purchase('SUP-101', 'STOCK_COMMITTED');
+    await purchase('SUP-DRAFT', 'DRAFT');
+
+    reports = new PharmacyReportsService(
+      db as any,
+      new PharmacyComplianceService(db as any),
+    );
+  }, 120_000);
+
+  afterAll(async () => {
+    await db?.$disconnect();
+    if (created)
+      await admin.$executeRawUnsafe(`DROP SCHEMA "${schema}" CASCADE`);
+    await admin?.$disconnect();
+    if (fixtures) rmSync(fixtures, { recursive: true, force: true });
+  });
+
+  const rowsOf = (report: any, sectionId?: string) =>
+    (sectionId
+      ? report.sections.find((s: any) => s.id === sectionId)
+      : report.sections[0]
+    ).rows.map((r: any) => r.cells);
+
+  it('lists posted bills and counter sales of the clinic day only, from this branch only', async () => {
+    const report = await reports.report(
+      'sales-register',
+      q('2026-11-05'),
+      actor,
+    );
+    expect(rowsOf(report).map((r: any) => r.billNo)).toEqual([
+      'PHI-2026-536',
+      'CS-1',
+    ]);
+    expect(report.headline!.value).toBe(336);
+    const next = await reports.report('sales-register', q('2026-11-06'), actor);
+    expect(rowsOf(next).map((r: any) => r.billNo)).toEqual(['PHI-2026-538']);
+  });
+
+  it('nets the customer return when asked for all documents', async () => {
+    const report = await reports.report(
+      'sales-register',
+      q('2026-11-05', '2026-11-05', { type: 'ALL' }),
+      actor,
+    );
+    expect(rowsOf(report).map((r: any) => [r.billNo, r.total])).toEqual([
+      ['PHI-2026-536', 224],
+      ['CS-1', 112],
+      ['RET-1 (return)', -112],
+    ]);
+    expect(report.headline!.value).toBe(224);
+  });
+
+  it('builds Purchase Bills and the Purchase Register from stock-committed bills, with supplier returns negative', async () => {
+    const bills = await reports.report(
+      'purchase-bills',
+      q('2026-11-01', '2026-11-30'),
+      actor,
+    );
+    expect(
+      rowsOf(bills).map((r: any) => [
+        r.billNo,
+        r['r12.taxable'],
+        r['r12.cgst'],
+      ]),
+    ).toEqual([
+      ['SUP-101', 1000, 60],
+      ['SR-1 (supplier return)', -100, -6],
+    ]);
+    const register = await reports.report(
+      'purchase-register',
+      q('2026-11-01', '2026-11-30'),
+      actor,
+    );
+    expect(rowsOf(register)[0]).toMatchObject({
+      billNo: 'SUP-101',
+      taxable: 1000,
+      tax: 120,
+      other: 0.4,
+      billAmount: 1120.4,
+    });
+  });
+
+  it('reports GSTR-1 as B2C at the clinic’s state, with HSN and the cancelled bill in Table 13', async () => {
+    const report = await reports.report('gstr-1', q('2026-11-05'), actor);
+    expect(rowsOf(report, 'b2cs')).toEqual([
+      {
+        type: 'OE',
+        place: '36-Telangana',
+        rate: 12,
+        taxable: 200,
+        cgst: 12,
+        sgst: 12,
+        cess: 0,
+      },
+    ]);
+    expect(rowsOf(report, 'hsn')[0]).toMatchObject({
+      hsn: '30049099',
+      quantity: 2,
+      taxable: 200,
+    });
+    expect(rowsOf(report, 'docs')).toEqual(
+      expect.arrayContaining([
+        {
+          nature: 'Invoices for outward supply',
+          from: 'PHI-2026-536',
+          to: 'PHI-2026-537',
+          total: 2,
+          cancelled: 1,
+          net: 1,
+        },
+      ]),
+    );
+  });
+
+  it('sets GSTR-3B output tax off against ITC from the supplier bills', async () => {
+    const report: any = await reports.report('gstr-3b', q('2026-11-05'), actor);
+    const outward = Object.fromEntries(
+      report.sections[0].rows.map((r: any) => [r.key, r.cells]),
+    );
+    expect(outward['3.1a']).toMatchObject({ taxable: 200, cgst: 12, sgst: 12 });
+    expect(outward['4a5']).toMatchObject({ cgst: 54, sgst: 54 });
+    const payment = Object.fromEntries(
+      report.sections[1].rows.map((r: any) => [r.key, r.cells]),
+    );
+    expect(payment.cash).toMatchObject({ cgst: 0, sgst: 0 });
+    expect(payment.carry).toMatchObject({ cgst: 42, sgst: 42 });
+  });
+
+  it('reconciles the day’s collection by mode across bills, earlier bills, counter sales and refunds', async () => {
+    const report = await reports.dailyCollection('2026-11-05', actor);
+    const modes = Object.fromEntries(
+      report.collection.modes.map((m) => [m.mode, m]),
+    );
+    expect(modes.CASH).toMatchObject({
+      onTodaysBills: 224,
+      refunds: 112,
+      expected: 112,
+    });
+    expect(modes.UPI).toMatchObject({ onEarlierBills: 224, expected: 224 });
+    // The card payment at 00:11 on 6 Nov belongs to the next clinic day.
+    expect(modes.CARD).toMatchObject({
+      onTodaysBills: 0,
+      counterSales: 112,
+      expected: 112,
+    });
+    expect(report.collection.billing).toMatchObject({
+      billCount: 1,
+      billed: 224,
+      counterSales: 112,
+      dueAtDayEnd: 0,
+    });
+    expect(report.collection.status).toBe('NOT_COUNTED');
+    expect(report.canRecordCount).toBe(true);
+  });
+
+  it('appends counts by sequence and refuses a stale or racing count without overwriting', async () => {
+    const day = '2026-11-05';
+    const first = await reports.recordCount(
+      day,
+      {
+        counted: { CASH: 100, UPI: '224', CARD: 112 },
+        basedOnSequence: 0,
+        note: 'Drawer short',
+      },
+      actor,
+    );
+    expect(first.collection).toMatchObject({
+      countedTotal: 436,
+      difference: -12,
+      status: 'SHORT',
+    });
+    expect(first.collection.count).toMatchObject({
+      sequence: 1,
+      note: 'Drawer short',
+      countedBy: { name: 'Asha Rao' },
+    });
+
+    await expect(
+      reports.recordCount(
+        day,
+        { counted: { CASH: 112 }, basedOnSequence: 0 },
+        actor,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    const racers = await Promise.allSettled([
+      reports.recordCount(
+        day,
+        { counted: { CASH: 112, UPI: 224, CARD: 112 }, basedOnSequence: 1 },
+        actor,
+      ),
+      reports.recordCount(
+        day,
+        { counted: { CASH: 111, UPI: 224, CARD: 112 }, basedOnSequence: 1 },
+        actor,
+      ),
+    ]);
+    expect(racers.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(
+      (racers.find((r) => r.status === 'rejected') as PromiseRejectedResult)
+        .reason,
+    ).toBeInstanceOf(ConflictException);
+
+    const stored = await db.pharmacyCashCount.findMany({
+      where: { branchId: 'branch', day },
+      orderBy: { sequence: 'asc' },
+    });
+    expect(stored.map((c) => c.sequence)).toEqual([1, 2]);
+    const latest = await reports.dailyCollection(day, actor);
+    expect(latest.collection.history.map((c) => c.sequence)).toEqual([2, 1]);
+  });
+
+  it('rejects a count for a day not yet started, an unknown mode, a negative amount or an empty count', async () => {
+    const now = new Date('2026-11-05T12:00:00Z');
+    await expect(
+      reports.recordCount(
+        '2026-11-06',
+        { counted: { CASH: 1 }, basedOnSequence: 0 },
+        actor,
+        now,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      reports.recordCount(
+        '2026-11-04',
+        { counted: { CHEQUE: 1 }, basedOnSequence: 0 },
+        actor,
+        now,
+      ),
+    ).rejects.toThrow('Unknown payment mode');
+    await expect(
+      reports.recordCount(
+        '2026-11-04',
+        { counted: { CASH: -1 }, basedOnSequence: 0 },
+        actor,
+        now,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      reports.recordCount(
+        '2026-11-04',
+        { counted: { CASH: '' }, basedOnSequence: 0 },
+        actor,
+        now,
+      ),
+    ).rejects.toThrow('at least one');
+    expect(
+      await db.pharmacyCashCount.count({ where: { day: '2026-11-04' } }),
+    ).toBe(0);
+  });
+
+  it('downloads carry the same figures as the screen', async () => {
+    const screen = await reports.report(
+      'sales-register',
+      q('2026-11-05'),
+      actor,
+    );
+    const csv = (
+      await reports.file('sales-register', q('2026-11-05'), actor, 'csv')
+    ).data.toString('utf8');
+    expect(csv.split('\r\n')[1]).toBe(
+      'Total,,,,300.00,0.00,300.00,0.00,18.00,18.00,0.00,336.00',
+    );
+    const book = XLSX.read(
+      (await reports.file('sales-register', q('2026-11-05'), actor, 'xlsx'))
+        .data,
+      { type: 'buffer' },
+    );
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(
+      book.Sheets[book.SheetNames[0]],
+      { header: 1, blankrows: false },
+    );
+    expect((rows[3] as unknown[]).at(-1)).toBe(screen.headline!.value);
+    const pdf = await reports.file('gstr-1', q('2026-11-05'), actor, 'pdf');
+    expect(pdf.data.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(pdf.fileName).toBe('gstr-1-2026-11-05-to-2026-11-05.pdf');
+  });
+
+  it('serves the day-wise, margin, doctor-wise and expiring-stock reports in the same shape', async () => {
+    const dayWise = await reports.report(
+      'day-wise-summary',
+      q('2026-11-04', '2026-11-05'),
+      actor,
+    );
+    expect(rowsOf(dayWise).map((r: any) => [r.date, r.count])).toEqual([
+      ['2026-11-04', 0],
+      ['2026-11-05', 1],
+    ]);
+    const doctors = await reports.report(
+      'doctor-wise-sales',
+      q('2026-11-05'),
+      actor,
+    );
+    // The customer return names no doctor, so it nets off under No doctor recorded, listed last.
+    expect(rowsOf(doctors).map((r: any) => [r.doctor, r.total])).toEqual([
+      ['Praneeta Jain', 224],
+      ['Dr. Visiting', 112],
+      ['No doctor recorded', -112],
+    ]);
+    const margin = await reports.report('item-margin', q('2026-11-05'), actor);
+    expect(margin.tiles.map((t) => t.label)).toEqual([
+      'Total Sale Amount',
+      'Total Purchase',
+      'Total Net GST',
+      'Total Profit',
+    ]);
+    const expiring = await reports.report(
+      'expiring-stock',
+      q('2026-11-05', '2026-11-05', { window: 'expired' }),
+      actor,
+    );
+    expect(expiring.sections[0].rows).toEqual([]);
+  });
+});

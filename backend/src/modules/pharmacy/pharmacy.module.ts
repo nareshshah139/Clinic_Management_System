@@ -14,6 +14,8 @@ import { PharmacyPartnerSalesController } from './pharmacy-partner-sales.control
 import { PharmacyPartnerSalesService } from './pharmacy-partner-sales.service';
 import { PharmacyComplianceController } from './pharmacy-compliance.controller';
 import { PharmacyComplianceService } from './pharmacy-compliance.service';
+import { PharmacyReportsController } from './pharmacy-reports.controller';
+import { PharmacyReportsService } from './pharmacy-reports.service';
 import { PharmacyPackageController } from './pharmacy-package.controller';
 import { PharmacyPackageService } from './pharmacy-package.service';
 import { PharmacyDispenseTaskController } from './pharmacy-dispense-task.controller';
@@ -40,6 +42,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacyPurchaseLedgerController,
     PharmacyPartnerSalesController,
     PharmacyComplianceController,
+    PharmacyReportsController,
     PharmacyPackageController,
     PharmacyDispenseTaskController,
     PharmacyPrescriptionQueueController,
@@ -57,6 +60,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacySupplierCreditService,
     PharmacyPartnerSalesService,
     PharmacyComplianceService,
+    PharmacyReportsService,
     PharmacyPackageService,
     PharmacyPrescriptionQueueService,
     PharmacySalesRegisterService,
