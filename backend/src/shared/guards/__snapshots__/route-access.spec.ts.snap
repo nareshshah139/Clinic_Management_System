@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`route access across every controller matches the reviewed access matrix 1`] = `
 "DELETE /appointments/:id | roles: ADMIN,RECEPTION | permissions: appointments:delete
