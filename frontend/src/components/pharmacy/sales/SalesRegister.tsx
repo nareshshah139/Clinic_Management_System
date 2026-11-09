@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, type MouseEvent } from 'react';
-import { MessageCircle, Plus, Printer } from 'lucide-react';
+import { MessageCircle, Percent, Plus, Printer } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { displayCalendarDate } from '@/lib/date-display';
 import { formatDisplayDay } from '@/lib/date-ranges';
@@ -32,6 +32,7 @@ import {
   SOURCE_FILTER_LABELS,
   STATE_LABELS,
   displayMobile,
+  editDiscountAction,
   excludedNote,
   footerSummary,
   newEntryHref,
@@ -57,24 +58,6 @@ const MODE_BADGE: Partial<Record<PaymentMode, string>> = {
 };
 const badgeText = 'whitespace-nowrap px-1.5 py-0.5 text-xs font-semibold';
 
-async function openInvoice(id: string) {
-  const view = window.open('', '_blank');
-  if (!view) {
-    toast({ variant: 'destructive', title: 'Pop-up blocked', description: 'Allow pop-ups for this site to open bills.' });
-    return;
-  }
-  view.document.write('<p style="font-family:sans-serif;padding:24px">Loading bill…</p>');
-  try {
-    const invoice = await apiClient.get(`/pharmacy/invoices/${encodeURIComponent(id)}`);
-    view.document.open();
-    view.document.write(renderPharmacyInvoiceHtml(invoice));
-    view.document.close();
-  } catch {
-    view.close();
-    toast({ variant: 'destructive', title: 'Could not open the bill', description: 'Check your connection and try again.' });
-  }
-}
-
 async function printRow(row: SalesRegisterRow, clinic: ClinicIdentity | null) {
   try {
     const id = encodeURIComponent(row.recordId);
@@ -89,12 +72,22 @@ async function printRow(row: SalesRegisterRow, clinic: ClinicIdentity | null) {
 }
 
 function PaymentCell({ row, register }: { row: SalesRegisterRow; register: Register }) {
-  if (!row.paymentModes.length && row.due <= 0) return <span aria-label="None">—</span>;
+  if (!row.paymentModes.length && row.due <= 0 && row.refundDue <= 0) return <span aria-label="None">—</span>;
   return (
     <div className="flex flex-wrap items-center gap-1">
       {row.due > 0 && (
         <Badge variant="destructive" className={cn(badgeText, 'bg-destructive-text text-white dark:bg-destructive')}>
           Due {formatRupees(row.due)}
+        </Badge>
+      )}
+      {row.refundDue > 0 && (
+        <Badge variant="warning" className={badgeText}>
+          Refund due {formatRupees(row.refundDue)}
+        </Badge>
+      )}
+      {row.refunded > 0 && (
+        <Badge variant="neutral" className={badgeText}>
+          Refunded {formatRupees(row.refunded)}
         </Badge>
       )}
       {row.paymentModes.map((mode) => (
@@ -139,11 +132,7 @@ export function SalesRegister({
   const failed = load.status === 'error';
 
   const startNew = () => router.push(newEntryHref(register, returnTo, requestKey()));
-  const openRow = (row: SalesRegisterRow) => {
-    const href = openHref(row, returnTo);
-    if (href) router.push(href);
-    else void openInvoice(row.recordId);
-  };
+  const openRow = (row: SalesRegisterRow) => router.push(openHref(row, returnTo));
 
   const billName = (row: SalesRegisterRow) => row.billNo ?? `draft ${copy.one} for ${row.patientName ?? 'walk-in customer'}`;
   const setFilter = (key: FilterKey) => (value: string) => dispatch({ type: 'filter', key, value });
@@ -154,24 +143,18 @@ export function SalesRegister({
   }
 
   const billCell = (row: SalesRegisterRow) => {
-    const href = openHref(row, returnTo);
     const label = row.billNo ?? <Badge variant="warning" className={badgeText}>Draft</Badge>;
     const linkClass =
       'whitespace-nowrap rounded-sm text-left font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
     const stop = (event: MouseEvent) => event.stopPropagation();
     return (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        {href ? (
-          <Link href={href} onClick={stop} aria-label={`Open ${billName(row)}`} className={linkClass}>{label}</Link>
-        ) : (
-          <button type="button" onClick={(event) => { stop(event); openRow(row); }} aria-label={`Open ${billName(row)}`} className={linkClass}>
-            {label}
-          </button>
-        )}
+        <Link href={openHref(row, returnTo)} onClick={stop} aria-label={`Open ${billName(row)}`} className={linkClass}>{label}</Link>
         {row.state === 'DRAFT' && row.reservedNo && (
           <span className="text-xs text-muted-foreground">{row.reservedNo} not final</span>
         )}
         {row.source === 'COUNTER_SALE' && <Badge variant="info" className={badgeText}>Counter sale</Badge>}
+        {row.revisedAt && <Badge variant="info" className={badgeText}>Revised</Badge>}
         {row.state === 'CANCELLED' && <Badge variant="danger" className={badgeText}>Cancelled</Badge>}
       </div>
     );
@@ -179,9 +162,19 @@ export function SalesRegister({
 
   const actionsCell = (row: SalesRegisterRow) => {
     const whatsapp = whatsappAction(row, clinic?.name ?? '');
+    const editDiscount = editDiscountAction(row);
     const name = billName(row);
     return (
       <div className="inline-flex">
+        {register === 'sales' && (
+          <RowAction
+            icon={Percent}
+            label={`Edit discount on ${name}`}
+            hint="Edit discount"
+            reason={'reason' in editDiscount ? editDiscount.reason : null}
+            onClick={'href' in editDiscount ? () => router.push(editDiscount.href) : undefined}
+          />
+        )}
         <RowAction icon={Printer} label={`Print ${name}`} hint="Print" reason={printBlockedReason(row)} onClick={() => void printRow(row, clinic)} />
         <RowAction
           icon={MessageCircle}

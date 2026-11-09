@@ -1,5 +1,6 @@
 import {
   displayMobile,
+  editDiscountAction,
   excludedNote,
   localMobile,
   openHref,
@@ -25,6 +26,9 @@ const row = (overrides: Partial<SalesRegisterRow> = {}): SalesRegisterRow => ({
   amount: 4554.64,
   paymentModes: [],
   due: 0,
+  refundDue: 0,
+  refunded: 0,
+  revisedAt: null,
   linkedBillNos: [],
   ...overrides,
 });
@@ -59,9 +63,9 @@ it('refuses WhatsApp for drafts, cancelled bills and unusable numbers', () => {
   expect(whatsappAction(row({ mobile: '12345' }), 'C')).toEqual({ reason: 'Mobile number is not a valid 10-digit number' });
 });
 
-it('reopens drafts as Sales bills and opens workspace documents with a way back', () => {
+it('reopens drafts as Sales bills, opens finished bills in Sales and workspace documents with a way back', () => {
   expect(openHref(row({ state: 'DRAFT', billNo: null, reservedNo: 'PHI-2026-075', recordId: 'inv 7' }), '/x')).toBe('/dashboard/pharmacy/sales/bill?draft=inv+7');
-  expect(openHref(row(), '/x')).toBeNull();
+  expect(openHref(row({ recordId: 'inv 8' }), '/x')).toBe('/dashboard/pharmacy/sales/bill?bill=inv+8');
   expect(openHref(row({ source: 'COUNTER_SALE', recordId: 'cs 1' }), salesTabHref('sales', 'q=a&tab=returns'))).toBe(
     '/dashboard/inventory?area=sales&view=COUNTER_SALE&document=cs%201&return=%2Fdashboard%2Fpharmacy%2Fsales%3Fq%3Da',
   );
@@ -72,4 +76,22 @@ it('says what the total leaves out and shortens staff names', () => {
   expect(excludedNote({ drafts: 3, cancelled: 1 })).toBe('3 drafts and 1 cancelled not included');
   expect(excludedNote({ drafts: 0, cancelled: 0 })).toBe('');
   expect([shortName('Anil Deshmukh'), shortName(' Priya  Lakshmi Menon '), shortName('Ravi')]).toEqual(['Anil D.', 'Priya M.', 'Ravi']);
+});
+
+it('offers Edit discount only on finished pharmacy bills and says why elsewhere', () => {
+  expect(
+    [
+      row({ recordId: 'inv 8' }),
+      row({ state: 'DRAFT', billNo: null }),
+      row({ state: 'CANCELLED' }),
+      row({ source: 'COUNTER_SALE' }),
+      row({ source: 'SALES_RETURN' }),
+    ].map(editDiscountAction),
+  ).toEqual([
+    { href: '/dashboard/pharmacy/sales/bill?bill=inv+8&edit=discount' },
+    { reason: 'Open the draft to change its discount' },
+    { reason: 'Cancelled bills cannot change' },
+    { reason: 'Counter sales are corrected in Inventory' },
+    { reason: 'Returns have no discount to edit' },
+  ]);
 });

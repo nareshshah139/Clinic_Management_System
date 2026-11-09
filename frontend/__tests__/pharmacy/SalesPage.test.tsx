@@ -27,6 +27,9 @@ const row = (overrides: Partial<SalesRegisterRow>): SalesRegisterRow => ({
   amount: 1234.5,
   paymentModes: ['UPI'],
   due: 0,
+  refundDue: 0,
+  refunded: 0,
+  revisedAt: null,
   linkedBillNos: [],
   ...overrides,
 });
@@ -382,4 +385,28 @@ it('dims the footer total while a new page of results is loading so old totals n
   finish(response({ totals: { amount: 99, count: 3, collected: null, excluded: { drafts: 0, cancelled: 0 } } }));
   expect(await screen.findByText('Total Amount ₹99.00 · 3 bills')).toBeInTheDocument();
   expect(status).toHaveAttribute('aria-busy', 'false');
+});
+
+it('opens a finished bill in Sales, marks revised bills and their refund, and offers Edit discount there', async () => {
+  get.mockResolvedValue(
+    response({
+      rows: [
+        row({ amount: 282.68, paymentModes: ['CASH'], refundDue: 45.07, revisedAt: '2026-11-05T10:00:00.000Z' }),
+        row({ id: 'PHARMACY_BILL:inv-15', recordId: 'inv-15', billNo: 'PHI-2026-015', paymentModes: ['CASH'], refunded: 12.5, revisedAt: '2026-11-05T11:00:00.000Z' }),
+        row({ id: 'PHARMACY_BILL:d', recordId: 'd', billNo: null, state: 'DRAFT', paymentModes: [] }),
+      ],
+    }),
+  );
+  render(<SalesPage />);
+  const open = await screen.findByRole('link', { name: 'Open PHI-2026-014' });
+  expect(open).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill?bill=inv-14');
+  const first = open.closest('tr') as HTMLElement;
+  expect([
+    within(first).getByText('Revised'),
+    within(first).getByText('Refund due ₹45.07'),
+    screen.getByText('Refunded ₹12.50'),
+  ].every(Boolean)).toBe(true);
+  fireEvent.click(within(first).getByRole('button', { name: 'Edit discount on PHI-2026-014' }));
+  expect(mockPush).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales/bill?bill=inv-14&edit=discount');
+  expect(screen.getByRole('button', { name: 'Edit discount on draft bill for Meera Shah' })).toHaveAttribute('aria-disabled', 'true');
 });

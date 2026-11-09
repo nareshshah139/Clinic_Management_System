@@ -36,6 +36,9 @@ export type SalesRegisterRow = {
   amount: number;
   paymentModes: PaymentMode[];
   due: number;
+  refundDue: number;
+  refunded: number;
+  revisedAt: string | null;
   linkedBillNos: string[];
 };
 
@@ -196,10 +199,17 @@ export function printBlockedReason(row: SalesRegisterRow): string | null {
   return row.state === 'FINAL' ? null : BLOCKED_REASON[row.state](one);
 }
 
-export function openHref(row: SalesRegisterRow, returnTo: string): string | null {
-  if (row.source === 'PHARMACY_BILL') return row.state === 'DRAFT' ? billHref({ draft: row.recordId }) : null;
+export function openHref(row: SalesRegisterRow, returnTo: string): string {
+  if (row.source === 'PHARMACY_BILL') return row.state === 'DRAFT' ? billHref({ draft: row.recordId }) : billHref({ bill: row.recordId });
   const view = row.source === 'SALES_RETURN' ? 'SALES_RETURN' : 'COUNTER_SALE';
   return `/dashboard/inventory?area=sales&view=${view}&document=${encodeURIComponent(row.recordId)}&return=${encodeURIComponent(returnTo)}`;
+}
+
+export function editDiscountAction(row: SalesRegisterRow): { href: string } | { reason: string } {
+  if (row.source !== 'PHARMACY_BILL') return { reason: row.source === 'COUNTER_SALE' ? 'Counter sales are corrected in Inventory' : 'Returns have no discount to edit' };
+  if (row.state === 'DRAFT') return { reason: 'Open the draft to change its discount' };
+  if (row.state === 'CANCELLED') return { reason: 'Cancelled bills cannot change' };
+  return { href: billHref({ bill: row.recordId, edit: 'discount' }) };
 }
 
 export function newEntryHref(register: Register, returnTo: string, key: string) {
