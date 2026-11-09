@@ -8,6 +8,13 @@ Existing blank-field guards, translations, date formatting, and the explicit
 Follow-up page break remain in place. Review Date and Follow-up remain separate
 rows.
 
+## Examination is not printed — decided 09/11/2026
+
+The CR-08 request lists Examination among the blocks to print inline. The clinic
+has since confirmed that examination details are for the doctor only, so the
+printout leaves them out in both layouts. CR-08 is complete without them. Do not
+add Examination to the printout.
+
 ## Verification — 2026-09-27
 
 - Chromium ran the actual local editor and Paged.js preview with every API

@@ -17,7 +17,7 @@ CR-08's other blocks already printed inline on `main` before this change. That c
 
 ## Not included
 
-- **Examination.** CR-08 lists Examination, but the print layout has no Examination block in either layout, so there is nothing to put inline. Printing examination findings would be a new feature.
+- **Examination.** CR-08 lists Examination, but examination details are for the doctor only and never print, in either layout. The clinic confirmed this on 09/11/2026, so CR-08 is complete without it. Do not add Examination to the printout.
 - **Review Date and Follow-up on one line.** CR-08 marks this as optional. The target prescription fits on one page without it.
 - **The server-generated PDF.** `POST /prescriptions/:id/pdf`, and sharing with `includePdf`, use a separate pdfkit layout in `backend/src/modules/prescriptions/prescriptions.service.ts`. That layout has no space-optimized mode and prints only medicines and a signature. This change does not touch it.
 
