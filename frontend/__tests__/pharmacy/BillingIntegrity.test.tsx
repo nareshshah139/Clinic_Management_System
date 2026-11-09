@@ -226,10 +226,6 @@ it("reuses the original payment after a lost response even when reloaded balance
 it.each(["prescription", "visit", "patient", "initial"])(
   "ignores a late %s load after starting a new invoice",
   async (source) => {
-    sessionStorage.setItem(
-      "pharmacy-checkout-attempt-v1",
-      JSON.stringify({ ...pending, confirmed: true })
-    );
     const oldPatient = {
       id: "patient-old",
       name: "Previous Patient",
@@ -291,6 +287,14 @@ it.each(["prescription", "visit", "patient", "initial"])(
       (apiClient.getPatients as jest.Mock).mockImplementation(startLoad);
       response = { data: [oldPatient] };
     }
+    sessionStorage.setItem(
+      "pharmacy-checkout-attempt-v1",
+      JSON.stringify({
+        ...pending,
+        confirmed: true,
+        context: JSON.stringify([prefill.patientId, prefill.prescriptionId, prefill.doctorId, prefill.visitId]),
+      })
+    );
     render(<PharmacyInvoiceBuilderFixed prefill={prefill} />);
     await waitFor(() => expect(started).toBe(true));
     fireEvent.click(

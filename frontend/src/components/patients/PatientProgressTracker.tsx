@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Stethoscope, FileText, Pill, Receipt } from 'lucide-react';
 import Link from 'next/link';
+import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
 
 type StepStatus = 'done' | 'active' | 'pending';
 
@@ -208,7 +209,7 @@ export default function PatientProgressTracker({ patientId, compact = false, var
     if (variant === 'mini') return null;
     if (!latestVisit?.id) return null;
     return (
-      <Link href={`/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}${latestVisit?.id ? `&visitId=${encodeURIComponent(latestVisit.id)}` : ''}`}>
+      <Link href={billHref({ prefill: { patientId, visitId: latestVisit.id } })}>
         <Button variant="outline" size={compact ? 'sm' : 'default'}>{hasRecentInvoice ? 'Invoices' : 'Bill'}</Button>
       </Link>
     );

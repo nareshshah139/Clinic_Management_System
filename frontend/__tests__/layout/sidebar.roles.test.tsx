@@ -13,16 +13,16 @@ const pharmacyLinks = () => {
   return links.map((link) => link.textContent).filter((name) => ['Pharmacy Desk', 'Pharmacy Counter', 'Pharmacy Billing', 'Sales', 'Inventory'].includes(name || ''));
 };
 
-it.each(['PHARMACIST', 'DOCTOR', 'ADMIN'])('shows %s every Pharmacy entry', (role) => {
+it.each(['PHARMACIST', 'DOCTOR', 'ADMIN'])('shows %s every Pharmacy entry, with Sales in place of Pharmacy Billing', (role) => {
   mockRole = role;
-  expect(pharmacyLinks()).toEqual(['Pharmacy Desk', 'Pharmacy Counter', 'Pharmacy Billing', 'Sales', 'Inventory']);
+  expect(pharmacyLinks()).toEqual(['Pharmacy Desk', 'Pharmacy Counter', 'Sales', 'Inventory']);
 });
 
 it.each([
-  ['RECEPTION', ['Pharmacy Desk', 'Pharmacy Counter', 'Pharmacy Billing', 'Inventory']],
+  ['RECEPTION', ['Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],
   ['MANAGER', ['Inventory']],
   ['NURSE', []],
-])('leaves %s with the Pharmacy entries it already had', (role, expected) => {
+])('leaves %s with its other Pharmacy entries', (role, expected) => {
   mockRole = role;
   expect(pharmacyLinks()).toEqual(expected);
 });

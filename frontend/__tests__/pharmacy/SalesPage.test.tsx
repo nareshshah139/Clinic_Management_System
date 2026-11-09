@@ -127,12 +127,12 @@ it('combines search, payment and more filters, counts only applied ones, and kee
   expect(panel().queryByLabelText('State')).not.toBeInTheDocument();
 });
 
-it('sends a draft bill to the invoice list that can finish it, and blocks print and WhatsApp with a reason', async () => {
+it('reopens a draft bill in Sales, and blocks print and WhatsApp with a reason', async () => {
   get.mockResolvedValue(response({ rows: [row({ id: 'PHARMACY_BILL:d', recordId: 'd', billNo: null, reservedNo: 'PHI-2026-075', state: 'DRAFT', paymentModes: [] })] }));
   render(<SalesPage />);
   const open = await screen.findByRole('link', { name: 'Open draft bill for Meera Shah' });
   expect(open).toHaveTextContent('Draft');
-  expect(open).toHaveAttribute('href', '/dashboard/pharmacy/invoices?search=PHI-2026-075');
+  expect(open).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill?draft=d');
   expect(screen.getByText('PHI-2026-075 not final')).toBeInTheDocument();
 
   const print = screen.getByRole('button', { name: 'Print draft bill for Meera Shah' });
@@ -230,6 +230,13 @@ it('opens Returns from the URL with an Against bill column and links that come b
 
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Sales' }));
   expect(mockPush).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales', { scroll: false });
+});
+
+it('starts a new sale as a bill inside Sales', async () => {
+  get.mockResolvedValue(response());
+  render(<SalesPage />);
+  fireEvent.click(await screen.findByRole('button', { name: /New sale/ }));
+  expect(mockPush).toHaveBeenCalledWith('/dashboard/pharmacy/sales/bill');
 });
 
 it('pins the total of every matching final bill and what it leaves out', async () => {

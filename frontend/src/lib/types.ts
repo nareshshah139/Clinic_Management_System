@@ -372,6 +372,7 @@ export interface PharmacyInvoiceSummary {
   paymentMethod: PharmacyPaymentMethod;
   paymentStatus: PharmacyPaymentStatus;
   status: PharmacyInvoiceStatus;
+  mutationVersion: number;
   billingName: string;
   billingPhone: string;
   invoiceDate: string;

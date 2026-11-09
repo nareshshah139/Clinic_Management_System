@@ -53,6 +53,17 @@ import { apiClient } from '@/lib/api';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
+import {
+  billPayload,
+  draftProblem,
+  draftRefusal,
+  type BillFields,
+  type BillPrefill,
+  type BillSession,
+  type DraftRefusal,
+  type DraftSession,
+  type SavedDraft,
+} from './sales/sales-bill-model';
 
 interface Drug {
   id: string;
@@ -141,23 +152,13 @@ interface InvoiceItem {
 
 type CheckoutAttempt = {
   requestKey: string;
-  payload: {
-    patientId: string;
-    doctorId: string;
-    prescriptionId: string;
-    paymentMethod: string;
-    billingName: string;
-    billingPhone: string;
-    billingAddress: string;
-    billingCity: string;
-    billingState: string;
-    billingPincode: string;
-    notes: string;
-    items: Array<Pick<InvoiceItem, 'drugId' | 'inventoryItemId' | 'packageId' | 'itemType' | 'quantity' | 'unitPrice' | 'discountPercent' | 'taxPercent' | 'dosage' | 'frequency' | 'duration' | 'instructions'>>;
-  };
+  payload: ReturnType<typeof billPayload> & { draftId?: string; draftVersion?: number };
   previewItems: InvoiceItem[];
   confirmed: boolean;
+  context?: string;
 };
+
+const BLANK_BILL = JSON.stringify([undefined, undefined, undefined, undefined]);
 
 const checkoutStorageKey = 'pharmacy-checkout-attempt-v1';
 
@@ -195,15 +196,73 @@ const getDrugGstRate = (drug?: Partial<Drug> | null): number | null => {
     ? rate : null;
 };
 
+const calculateItemTotal = (item: InvoiceItem) => {
+  const subtotal = item.quantity * item.unitPrice;
+  item.discountAmount = (subtotal * item.discountPercent) / 100;
+  const discountedAmount = subtotal - item.discountAmount;
+  // Unresolved GST is displayed as pending and cannot be submitted.
+  item.taxAmount = (discountedAmount * (item.taxPercent ?? 0)) / 100;
+  item.totalAmount = discountedAmount + item.taxAmount;
+};
+
+const EMPTY_FIELDS: BillFields = {
+  patientId: '',
+  doctorId: '',
+  prescriptionId: '',
+  paymentMethod: 'CASH',
+  billingName: '',
+  billingPhone: '',
+  billingAddress: '',
+  billingCity: '',
+  billingState: '',
+  billingPincode: '',
+  notes: '',
+};
+
+function savedLines(draft: SavedDraft): InvoiceItem[] {
+  return draft.lines.map((line) => {
+    const item: InvoiceItem = {
+      id: `saved_${line.id}`,
+      itemType: line.itemType,
+      drugId: line.drugId ?? undefined,
+      inventoryItemId: line.inventoryItemId ?? undefined,
+      packageId: line.packageId ?? undefined,
+      drug: line.drug ? { ...line.drug, price: line.unitPrice, manufacturerName: line.drug.manufacturerName ?? '', packSizeLabel: line.drug.packSizeLabel ?? '' } : undefined,
+      package: line.package ? ({ ...line.package, subcategory: line.package.subcategory ?? undefined, description: line.package.description ?? undefined, instructions: line.package.instructions ?? undefined, items: line.package.items ?? [] } as unknown as PharmacyPackage) : undefined,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      discountPercent: line.discountPercent,
+      taxPercent: line.taxPercent,
+      discountAmount: 0,
+      taxAmount: 0,
+      totalAmount: 0,
+      dosage: line.dosage ?? undefined,
+      frequency: line.frequency ?? undefined,
+      duration: line.duration ?? undefined,
+      instructions: line.instructions ?? undefined,
+      quantityConfirmed: true,
+    };
+    calculateItemTotal(item);
+    return item;
+  });
+}
+
+const doctorName = (doctor: Pick<Doctor, 'firstName' | 'lastName'>) => `Dr. ${doctor.firstName} ${doctor.lastName}`.trim();
+
 export function PharmacyInvoiceBuilderFixed({
   prefill: suppliedPrefill,
+  draft,
+  onDraftSaved,
+  onDiscarded,
+  onReloadDraft,
+  onDone,
 }: {
-  prefill?: {
-    patientId?: string;
-    prescriptionId?: string;
-    doctorId?: string;
-    visitId?: string;
-  };
+  prefill?: BillPrefill;
+  draft?: SavedDraft;
+  onDraftSaved?: (session: DraftSession) => void;
+  onDiscarded?: (session: DraftSession) => void;
+  onReloadDraft?: () => void;
+  onDone?: () => void;
 }) {
   const incomingPrefillKey = JSON.stringify([
     suppliedPrefill?.patientId,
@@ -224,12 +283,20 @@ export function PharmacyInvoiceBuilderFixed({
   const [checkoutAttempt, setCheckoutAttempt] = useState<CheckoutAttempt | null>(null);
   const checkoutAttemptRef = useRef<CheckoutAttempt | null>(null);
   const checkoutInFlight = useRef(false);
+  /**
+   * @cc [owner:nareshshah139,label:product] finished-checkout-stays-with-its-bill
+   * A pending checkout MUST be offered for reconciliation on any bill. A confirmed checkout MUST only be
+   * shown again when the same bill is reopened, never on a blank new sale, another prescription or another draft.
+   */
+  const billContext = useRef(draft ? `draft:${draft.session.id}` : incomingPrefillKey).current;
   useEffect(() => {
     const saved = sessionStorage.getItem(checkoutStorageKey);
     if (saved) {
       try {
         const attempt = JSON.parse(saved) as CheckoutAttempt;
-        if (attempt.requestKey && attempt.payload?.items && attempt.previewItems) {
+        const finishedElsewhere = attempt.confirmed && (attempt.context !== billContext || billContext === BLANK_BILL);
+        if (finishedElsewhere) sessionStorage.removeItem(checkoutStorageKey);
+        else if (attempt.requestKey && attempt.payload?.items && attempt.previewItems) {
           checkoutAttemptRef.current = attempt;
           setCheckoutAttempt(attempt);
         }
@@ -237,18 +304,34 @@ export function PharmacyInvoiceBuilderFixed({
         toast({ title: 'Checkout recovery failed', description: 'Stored checkout could not be read. Check the invoice list before creating another sale.', variant: 'destructive' });
       }
     }
-  }, [toast]);
+  }, [toast, billContext]);
+  const [session, setSession] = useState<BillSession>(draft?.session ?? { kind: 'new' });
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(() =>
+    draft ? JSON.stringify(billPayload(draft.fields, savedLines(draft))) : null,
+  );
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [refusal, setRefusal] = useState<DraftRefusal | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const refusalRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!refusal) return;
+    refusalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    refusalRef.current?.focus({ preventScroll: true });
+  }, [refusal]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const patientsAllRef = useRef<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [packages, setPackages] = useState<PharmacyPackage[]>([]);
   const [searchResults, setSearchResults] = useState<Drug[]>([]);
-  const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [items, setItems] = useState<InvoiceItem[]>(() => (draft ? savedLines(draft) : []));
   const [prescriptionData, setPrescriptionData] = useState<any>(null);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(draft?.patient ?? null);
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(draft?.doctor ?? null);
+  const [patientSearchQuery, setPatientSearchQuery] = useState(() =>
+    draft?.patient ? `${draft.patient.name}${draft.patient.phone ? ` (${draft.patient.phone})` : ''}` : '',
+  );
   const [drugSearchQuery, setDrugSearchQuery] = useState('');
   const [showPatientSearchResults, setShowPatientSearchResults] =
     useState(false);
@@ -271,22 +354,14 @@ export function PharmacyInvoiceBuilderFixed({
   // Refs for click-outside handling
   const patientSearchRef = useRef<HTMLDivElement>(null);
   const drugSearchRef = useRef<HTMLDivElement>(null);
-  const invoiceItemsRef = useRef<InvoiceItem[]>([]);
+  const invoiceItemsRef = useRef<InvoiceItem[]>(items);
   const printPreviewFrameRef = useRef<HTMLIFrameElement>(null);
 
-  // Invoice state
-  const [invoiceData, setInvoiceData] = useState({
+  const [invoiceData, setInvoiceData] = useState<BillFields>(() => draft?.fields ?? {
+    ...EMPTY_FIELDS,
     patientId: prefill?.patientId || '',
     doctorId: prefill?.doctorId || '',
     prescriptionId: prefill?.prescriptionId || '',
-    paymentMethod: 'CASH',
-    billingName: '',
-    billingPhone: '',
-    billingAddress: '',
-    billingCity: '',
-    billingState: '',
-    billingPincode: '',
-    notes: '',
   });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -698,6 +773,21 @@ export function PharmacyInvoiceBuilderFixed({
     invoiceItemsRef.current = items;
   }, [items]);
 
+  const draftPrescriptionId = draft?.fields.prescriptionId;
+  useEffect(() => {
+    if (!draftPrescriptionId) return;
+    const contextVersion = billingContextVersion.current;
+    apiClient.getPrescription(draftPrescriptionId).then(
+      (prescription) => {
+        if (contextVersion === billingContextVersion.current) setPrescriptionData(prescription);
+      },
+      (error) => {
+        if (contextVersion !== billingContextVersion.current) return;
+        setPrefillError(`Could not load the linked prescription: ${getErrorMessage(error)}. Reload the draft to retry.`);
+      },
+    );
+  }, [draftPrescriptionId]);
+
   // Debounced server-side patient autocomplete
   useEffect(() => {
     const q = patientSearchQuery.trim();
@@ -1068,15 +1158,6 @@ export function PharmacyInvoiceBuilderFixed({
     }
   };
 
-  const calculateItemTotal = (item: InvoiceItem) => {
-    const subtotal = item.quantity * item.unitPrice;
-    item.discountAmount = (subtotal * item.discountPercent) / 100;
-    const discountedAmount = subtotal - item.discountAmount;
-    // Unresolved GST is displayed as pending and cannot be submitted.
-    item.taxAmount = (discountedAmount * (item.taxPercent ?? 0)) / 100;
-    item.totalAmount = discountedAmount + item.taxAmount;
-  };
-
   const updateItemQuantity = (
     itemId: string,
     quantity: number,
@@ -1266,33 +1347,11 @@ export function PharmacyInvoiceBuilderFixed({
     checkoutInFlight.current = true;
     let attempt: CheckoutAttempt | null = null;
     try {
-      console.log('🔍 Starting invoice creation...');
-      console.log('🔍 Current invoice data:', invoiceData);
-      console.log('🔍 Current items:', items);
       setLoading(true);
 
-      const invoiceItems = validItems
-        .filter((it) =>
-          it.itemType === 'DRUG' ? Boolean(it.drugId) : Boolean(it.packageId)
-        )
-        .map((item) => ({
-          drugId: item.drugId,
-          inventoryItemId: item.inventoryItemId,
-          packageId: item.packageId,
-          itemType: item.itemType,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discountPercent: item.discountPercent,
-          taxPercent: item.taxPercent,
-          dosage: item.dosage,
-          frequency: item.frequency,
-          duration: item.duration,
-          instructions: item.instructions,
-        }));
-
       const invoicePayload = {
-        ...invoiceData,
-        items: invoiceItems,
+        ...billPayload(invoiceData, validItems),
+        ...(session.kind === 'draft' ? { draftId: session.id, draftVersion: session.version } : {}),
       };
 
       const previous = checkoutAttemptRef.current;
@@ -1304,6 +1363,7 @@ export function PharmacyInvoiceBuilderFixed({
         payload: invoicePayload,
         previewItems: validItems,
         confirmed: false,
+        context: billContext,
       });
       sessionStorage.setItem(checkoutStorageKey, JSON.stringify(attempt));
       checkoutAttemptRef.current = attempt;
@@ -1360,10 +1420,16 @@ export function PharmacyInvoiceBuilderFixed({
 
       return printableInvoice;
     } catch (error: any) {
-      if (attempt && !attempt.confirmed && [400, 404].includes(error?.status)) {
+      const draftRefused = attempt?.payload.draftId ? draftRefusal(error, 'This draft can no longer be finished.') : null;
+      if (attempt && !attempt.confirmed && ([400, 404].includes(error?.status) || draftRefused)) {
         sessionStorage.removeItem(checkoutStorageKey);
         checkoutAttemptRef.current = null;
         setCheckoutAttempt(null);
+      }
+      if (draftRefused) {
+        setRefusal(draftRefused);
+        setPrintPreviewOpen(false);
+        return null;
       }
       const message = getErrorMessage(error);
       const status = error?.status;
@@ -1388,6 +1454,57 @@ export function PharmacyInvoiceBuilderFixed({
       setLoading(false);
     }
     return null;
+  };
+
+  /**
+   * @cc [owner:nareshshah139,label:product] draft-save-reopen
+   * Save draft MUST store the patient, doctor, prescription link, payment method, billing details,
+   * notes and every line without moving stock. A save MUST name the version it was edited from;
+   * a refusal MUST be shown with a way to reload, never retried over the other change.
+   */
+  const saveDraft = async () => {
+    const problem = draftProblem(invoiceData, items);
+    if (problem) {
+      toast({ title: 'Draft not saved', description: problem, variant: 'destructive' });
+      return;
+    }
+    const payload = billPayload(invoiceData, items);
+    setSavingDraft(true);
+    try {
+      const saved = session.kind === 'draft'
+        ? await apiClient.updatePharmacyInvoice(session.id, { ...payload, expectedVersion: session.version })
+        : await apiClient.post('/pharmacy/invoices', payload);
+      const { id, mutationVersion, invoiceNumber } = saved as { id: string; mutationVersion: number; invoiceNumber: string };
+      const next: DraftSession = { kind: 'draft', id, version: mutationVersion, number: invoiceNumber };
+      setSession(next);
+      setSavedSnapshot(JSON.stringify(payload));
+      onDraftSaved?.(next);
+      toast({ title: 'Draft saved', description: `${invoiceData.billingName || 'This bill'} is in Sales as a draft. Open it from the Draft row to finish it.` });
+    } catch (error) {
+      const refused = draftRefusal(error, 'This draft can no longer be saved.');
+      if (refused) setRefusal(refused);
+      else toast({ title: 'Draft not saved', description: getErrorMessage(error), variant: 'destructive' });
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const discardDraft = async () => {
+    if (session.kind !== 'draft') return;
+    setDiscarding(true);
+    try {
+      await apiClient.delete(`/pharmacy/invoices/${encodeURIComponent(session.id)}?version=${session.version}`);
+      setDiscardOpen(false);
+      toast({ title: 'Draft discarded', description: `${session.number} for ${invoiceData.billingName || 'this patient'} was removed. No stock moved.` });
+      onDiscarded?.(session);
+    } catch (error) {
+      setDiscardOpen(false);
+      const refused = draftRefusal(error, 'This draft can no longer be discarded.');
+      if (refused) setRefusal(refused);
+      else toast({ title: 'Draft not discarded', description: getErrorMessage(error), variant: 'destructive' });
+    } finally {
+      setDiscarding(false);
+    }
   };
 
   const buildDraftPreviewInvoice = () => ({
@@ -1928,6 +2045,13 @@ export function PharmacyInvoiceBuilderFixed({
 
   const { subtotal, totalDiscount, totalTax, grandTotal } =
     calculateInvoiceTotals();
+  const draftChanged = savedSnapshot !== JSON.stringify(billPayload(invoiceData, items));
+  const leaveFinishedBill = () => {
+    sessionStorage.removeItem(checkoutStorageKey);
+    checkoutAttemptRef.current = null;
+    setCheckoutAttempt(null);
+    onDone?.();
+  };
   const hasUnresolvedGst = items.some(item => item.taxPercent === null);
   const previewInvoiceCore = getPrintPreviewInvoiceCore();
   const previewPatient = getPrintPreviewPatient();
@@ -1956,19 +2080,10 @@ export function PharmacyInvoiceBuilderFixed({
     sessionStorage.removeItem(checkoutStorageKey);
     checkoutAttemptRef.current = null;
     setCheckoutAttempt(null);
-    setInvoiceData({
-      patientId: '',
-      doctorId: '',
-      prescriptionId: '',
-      paymentMethod: 'CASH',
-      billingName: '',
-      billingPhone: '',
-      billingAddress: '',
-      billingCity: '',
-      billingState: '',
-      billingPincode: '',
-      notes: '',
-    });
+    setSession({ kind: 'new' });
+    setSavedSnapshot(null);
+    setRefusal(null);
+    setInvoiceData(EMPTY_FIELDS);
     invoiceItemsRef.current = [];
     setItems([]);
     setPrescriptionData(null);
@@ -1992,7 +2107,7 @@ export function PharmacyInvoiceBuilderFixed({
     lastPrefilledVisitIdRef.current = null;
     removedPrescriptionIdsRef.current.clear();
     const url = new URL(window.location.href);
-    for (const key of ['patientId', 'doctorId', 'prescriptionId', 'visitId'])
+    for (const key of ['patientId', 'doctorId', 'prescriptionId', 'visitId', 'draft'])
       url.searchParams.delete(key);
     window.history.replaceState(
       window.history.state,
@@ -2014,9 +2129,11 @@ export function PharmacyInvoiceBuilderFixed({
           <p>
             <strong>Prescription ID:</strong> {prescriptionData.id}
           </p>
-          <p>
-            <strong>Items from prescription:</strong> {prescriptionItems.length}
-          </p>
+          {prescriptionItems.length > 0 && (
+            <p>
+              <strong>Items from prescription:</strong> {prescriptionItems.length}
+            </p>
+          )}
           {prescriptionItems.filter(item => !item.drugId).map(item => <div key={item.id} className="mt-2">
             {item.prescribedDrugName}: link inventory before billing. <PrescriptionInventoryLink prescriptionId={prescriptionData.id} lineIndex={item.prescriptionLineIndex!} prescriptionVersion={item.prescriptionVersion} name={item.prescribedDrugName || ''} onLinked={() => loadPrescriptionData(prescriptionData.id)} />
           </div>)}
@@ -2032,13 +2149,22 @@ export function PharmacyInvoiceBuilderFixed({
   return (
     <>
     <Card>
+      {refusal && (
+        <div ref={refusalRef} tabIndex={-1} role="alert" className="m-4 flex scroll-mt-4 flex-wrap items-center gap-3 rounded-md border border-destructive-border bg-destructive-soft p-3 text-sm text-destructive-text outline-none">
+          <p className="min-w-0 flex-1">{refusal.message} Your changes on this screen were not saved.</p>
+          {onReloadDraft && <Button variant="outline" onClick={onReloadDraft}>Reload draft</Button>}
+        </div>
+      )}
       {checkoutAttempt && (
         <div role="status" className="m-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm">
           <p>{checkoutAttempt.confirmed ? 'This checkout is confirmed. Reopen it for another copy.' : `A checkout for ${checkoutAttempt.payload.billingName} needs confirmation. Retry it before starting another sale.`}</p>
-          <Button variant="outline" disabled={loading} onClick={() => void createAndConfirmInvoice(checkoutAttempt.previewItems, 'ORIGINAL', checkoutAttempt)}>
-            {checkoutAttempt.confirmed ? 'Reopen confirmed invoice' : 'Retry pending checkout'}
-          </Button>
-          {checkoutAttempt.confirmed && <Button variant="ghost" disabled={loading} onClick={startNewInvoice}>Start a new invoice</Button>}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button variant="outline" disabled={loading} onClick={() => void createAndConfirmInvoice(checkoutAttempt.previewItems, 'ORIGINAL', checkoutAttempt)}>
+              {checkoutAttempt.confirmed ? 'Reopen confirmed invoice' : 'Retry pending checkout'}
+            </Button>
+            {checkoutAttempt.confirmed && <Button variant="ghost" disabled={loading} onClick={startNewInvoice}>Start a new invoice</Button>}
+            {checkoutAttempt.confirmed && onDone && <Button variant="ghost" disabled={loading} onClick={leaveFinishedBill}>Back to Sales</Button>}
+          </div>
         </div>
       )}
       {loadingPrescription && (
@@ -2055,9 +2181,16 @@ export function PharmacyInvoiceBuilderFixed({
       {renderPrescriptionHeader()}
 
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex flex-wrap items-center gap-2">
           <Pill className="h-5 w-5" />
-          New Pharmacy Invoice with Packages
+          {session.kind === 'draft' ? (
+            <>
+              <Badge variant="warning">Draft</Badge>
+              <span>{session.number} not final</span>
+            </>
+          ) : (
+            'New bill'
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -2404,9 +2537,9 @@ export function PharmacyInvoiceBuilderFixed({
                   <div className="space-y-4">
                     {items.map((item) => (
                       <Card key={item.id} data-invoice-item={item.id} className="p-4">
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
+                        <div className="flex justify-between items-start gap-2 mb-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
                               {isPrescriptionItem(item.id) && (
                                 <span
                                   className="text-blue-600 text-lg"
@@ -2514,7 +2647,7 @@ export function PharmacyInvoiceBuilderFixed({
                               </div>
                             )}
                           </div>
-                          <div className="flex gap-1">
+                          <div className="flex shrink-0 flex-wrap justify-end gap-1">
                             {item.itemType === 'DRUG' && (
                               <Button variant="outline" size="sm" aria-label={`Substitute ${item.drug?.name}`}
                                 onClick={() => {
@@ -2874,11 +3007,60 @@ export function PharmacyInvoiceBuilderFixed({
               <p className="text-xs text-gray-500 text-center">
                 {items.length} items • {hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)} total`}
               </p>
+              {!checkoutAttempt && (
+                <div className="space-y-2 border-t pt-3">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => void saveDraft()}
+                    disabled={savingDraft || loading || discarding}
+                  >
+                    {savingDraft ? <Spinner className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+                    {savingDraft ? 'Saving draft…' : 'Save draft'}
+                  </Button>
+                  <p role="status" className="text-center text-xs text-muted-foreground">
+                    {session.kind === 'new'
+                      ? 'Saves the bill to Sales without moving stock or taking payment.'
+                      : draftChanged
+                        ? 'Unsaved changes'
+                        : `All changes saved to draft ${session.number}`}
+                  </p>
+                  {session.kind === 'draft' && (
+                    <Button
+                      variant="ghost"
+                      className="w-full text-destructive-text hover:text-destructive-text"
+                      onClick={() => setDiscardOpen(true)}
+                      disabled={savingDraft || loading || discarding}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Discard draft
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </CardContent>
     </Card>
+
+    <Dialog open={discardOpen} onOpenChange={(open: boolean) => !discarding && setDiscardOpen(open)}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Discard this draft?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {session.kind === 'draft' ? session.number : 'This draft'} for {invoiceData.billingName || 'this patient'} will be removed from Sales.
+          Nothing was sold, so stock and payments are unchanged. This cannot be undone.
+        </p>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={() => setDiscardOpen(false)} disabled={discarding}>Keep draft</Button>
+          <Button variant="destructive" onClick={() => void discardDraft()} disabled={discarding}>
+            {discarding ? 'Discarding…' : 'Discard draft'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
 
     <Dialog open={printPreviewOpen} onOpenChange={setPrintPreviewOpen}>
       <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] max-h-none p-0 overflow-hidden rounded-none border-0">

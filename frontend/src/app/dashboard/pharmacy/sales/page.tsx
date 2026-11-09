@@ -4,10 +4,10 @@ import { Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/ui/page-header';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { requestKey } from '@/components/inventory/workspace-model';
+import { SalesHeader } from '@/components/pharmacy/sales/SalesHeader';
 import { SalesRegister } from '@/components/pharmacy/sales/SalesRegister';
 import { REGISTERS, REGISTER_COPY, newEntryHref, salesTabHref, type Register } from '@/components/pharmacy/sales/sales-register-model';
 
@@ -31,22 +31,14 @@ function SalesPageContent() {
   return (
     <Tabs value={tab} onValueChange={(value: string) => router.push(salesTabHref(value as Register, params.current[value as Register]), { scroll: false })}>
       <div className="flex min-w-0 flex-col gap-3">
-        <PageHeader
-          title="Sales"
-          className="items-center justify-start gap-x-6 gap-y-3"
-          actions={
-            <>
-              <TabsList aria-label="Sales registers">
-                <TabsTrigger value="sales" className="min-h-10 px-4 text-sm">Sales</TabsTrigger>
-                <TabsTrigger value="returns" className="min-h-10 px-4 text-sm">Returns</TabsTrigger>
-              </TabsList>
-              <Button
-                className="h-10 text-sm"
-                onClick={() => router.push(newEntryHref(tab, salesTabHref(tab, params.current[tab]), requestKey()))}
-              >
-                <Plus aria-hidden="true" /> {REGISTER_COPY[tab].newLabel}
-              </Button>
-            </>
+        <SalesHeader
+          action={
+            <Button
+              className="h-10 text-sm"
+              onClick={() => router.push(newEntryHref(tab, salesTabHref(tab, params.current[tab]), requestKey()))}
+            >
+              <Plus aria-hidden="true" /> {REGISTER_COPY[tab].newLabel}
+            </Button>
           }
         />
         {REGISTERS.map((register) => (

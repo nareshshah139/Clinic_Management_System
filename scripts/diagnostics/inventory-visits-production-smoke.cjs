@@ -78,13 +78,10 @@ async function main() {
     const stock = await db.inventoryItem.findUniqueOrThrow({ where: { id: item.id } });
     assert.equal(stock.currentStock, 8);
     assert.equal(stock.heldStock, 2);
-    const payment = { amount: 60, method: 'CASH', requestKey: randomUUID() };
-    const receipt = await ok(request('pharmacist', 'POST', `/pharmacy/invoices/${invoice.id}/payments`, payment));
-    entities.add(receipt.id);
-    assert.equal((await ok(request('pharmacist', 'POST', `/pharmacy/invoices/${invoice.id}/payments`, payment))).id, receipt.id);
-    const paid = await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: invoice.id } });
-    assert.equal(paid.paidAmount, 60);
-    assert.equal(paid.balanceAmount, 40);
+    const paid = await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { payments: true } });
+    for (const receipt of paid.payments) entities.add(receipt.id);
+    assert.deepEqual([paid.paidAmount, paid.balanceAmount, paid.paymentStatus, paid.payments.map(receipt => [receipt.amount, receipt.method])], [100, 0, 'COMPLETED', [[100, 'CASH']]]);
+    assert.equal((await request('pharmacist', 'POST', `/pharmacy/invoices/${invoice.id}/payments`, { amount: 60, method: 'CASH', requestKey: randomUUID() })).status, 400);
     report.checks.push('Checkout and payment retries produce one invoice, one sale and one receipt');
     const queueBefore = await db.pharmacyDispenseTask.findMany({ where: { branchId } });
     const queue = await ok(request('pharmacist', 'GET', '/pharmacy/prescription-queue?limit=1'));

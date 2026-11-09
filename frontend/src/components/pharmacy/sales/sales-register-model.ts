@@ -1,6 +1,7 @@
 import { formatDisplayDay, isDay } from '@/lib/date-ranges';
 import { formatRupees, type ClinicIdentity } from '@/lib/pharmacy-invoice-print';
 import type { RegisterQuery, RegisterQueryConfig } from '@/components/register/register-query';
+import { billHref } from './sales-bill-model';
 
 export const REGISTERS = ['sales', 'returns'] as const;
 export const SALE_SOURCES = ['PHARMACY_BILL', 'COUNTER_SALE', 'SALES_RETURN'] as const;
@@ -196,16 +197,12 @@ export function printBlockedReason(row: SalesRegisterRow): string | null {
 }
 
 export function openHref(row: SalesRegisterRow, returnTo: string): string | null {
-  if (row.source === 'PHARMACY_BILL') {
-    if (row.state !== 'DRAFT') return null;
-    const search = row.reservedNo ?? row.patientName ?? '';
-    return `/dashboard/pharmacy/invoices${search ? `?search=${encodeURIComponent(search)}` : ''}`;
-  }
+  if (row.source === 'PHARMACY_BILL') return row.state === 'DRAFT' ? billHref({ draft: row.recordId }) : null;
   const view = row.source === 'SALES_RETURN' ? 'SALES_RETURN' : 'COUNTER_SALE';
   return `/dashboard/inventory?area=sales&view=${view}&document=${encodeURIComponent(row.recordId)}&return=${encodeURIComponent(returnTo)}`;
 }
 
 export function newEntryHref(register: Register, returnTo: string, key: string) {
-  if (register === 'sales') return '/dashboard/pharmacy?section=billing';
+  if (register === 'sales') return billHref();
   return `/dashboard/inventory?area=sales&view=SALES_RETURN&new=${key}&return=${encodeURIComponent(returnTo)}`;
 }

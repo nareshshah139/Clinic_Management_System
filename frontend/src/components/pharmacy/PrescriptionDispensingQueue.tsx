@@ -6,6 +6,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { billHref, type BillPrefill } from './sales/sales-bill-model';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -99,15 +100,9 @@ type StockCheckResponse = {
   items: StockCheckItem[];
 };
 
-type PharmacyBillingPrefill = {
-  patientId?: string;
-  prescriptionId?: string;
-  doctorId?: string;
-  visitId?: string;
-};
 
 type PrescriptionDispensingQueueProps = {
-  onOpenBilling?: (prefill: PharmacyBillingPrefill) => void;
+  onOpenBilling?: (prefill: BillPrefill) => void;
   openActionLabel?: string;
 };
 
@@ -272,7 +267,7 @@ export function PrescriptionDispensingQueue({
             {error}
           </div>
         ) : null}
-        <Table>
+        <Table className="min-w-[56rem]">
           <TableHeader>
             <TableRow>
               <TableHead>Patient</TableHead>
@@ -280,7 +275,7 @@ export function PrescriptionDispensingQueue({
               <TableHead>Medication</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Stock</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="sticky right-0 bg-muted text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -352,7 +347,7 @@ export function PrescriptionDispensingQueue({
                       prescriptionId={entry.prescriptionId} onLinked={loadQueue} canLink={entry.dispensingEligible !== false}
                     />}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="sticky right-0 w-px bg-card">
                     <div className="flex justify-end gap-2">
                       <Button
                         variant="outline"
@@ -364,10 +359,11 @@ export function PrescriptionDispensingQueue({
                         {refreshingId === entry.prescriptionId ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
                       </Button>
                       {entry.dispensingEligible === false ? (
-                        <Button size="sm" disabled>{openActionLabel}</Button>
+                        <Button size="sm" className="whitespace-nowrap [overflow-wrap:normal]" disabled>{openActionLabel}</Button>
                       ) : onOpenBilling ? (
                         <Button
                           size="sm"
+                          className="whitespace-nowrap [overflow-wrap:normal]"
                           onClick={() => onOpenBilling(buildBillingPrefill(entry))}
                         >
                           <ExternalLink />
@@ -479,18 +475,10 @@ function formatAge(hours: number) {
 
 
 function buildDispenseUrl(entry: QueueEntry) {
-  const params = new URLSearchParams({
-    section: 'billing',
-    patientId: entry.patient.id,
-    prescriptionId: entry.prescriptionId,
-    doctorId: entry.doctor.id,
-  });
-  if (entry.visitId) params.set('visitId', entry.visitId);
-
-  return `/dashboard/pharmacy?${params.toString()}`;
+  return billHref({ prefill: buildBillingPrefill(entry) });
 }
 
-function buildBillingPrefill(entry: QueueEntry): PharmacyBillingPrefill {
+function buildBillingPrefill(entry: QueueEntry): BillPrefill {
   return {
     patientId: entry.patient.id,
     prescriptionId: entry.prescriptionId,

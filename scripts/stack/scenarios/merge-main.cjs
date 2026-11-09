@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, "../../..");
 const out = process.env.MERGE_SHOTS || path.join(root, "output/stack/merge-main");
 const GSTIN = "36ABCDE1234F1Z5";
 const ROLES = ["pharmacist", "doctor", "admin"];
-const PHARMACY_LINKS = ["Pharmacy Desk", "Pharmacy Counter", "Pharmacy Billing", "Sales", "Inventory"];
+const PHARMACY_LINKS = ["Pharmacy Desk", "Pharmacy Counter", "Sales", "Inventory"];
 const DESKTOP = { width: 1280, height: 800 };
 const WIDE = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
@@ -138,6 +138,8 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       check(`${who} sidebar lists every Pharmacy entry`, PHARMACY_LINKS.filter((name) => links.some((link) => link.startsWith(name))), PHARMACY_LINKS);
       const purchaseNav = page.getByRole("navigation", { name: "purchases tasks" });
       await purchaseNav.locator("option", { hasText: "Payments & dues" }).waitFor({ state: "attached", timeout: 120000 }).catch(() => {});
+      await settle(page);
+      await purchaseNav.locator("option", { hasText: "Payments & dues" }).waitFor({ state: "attached", timeout: 60000 }).catch(() => {});
       const tasks = (await purchaseNav.locator("button, option").allInnerTexts()).map(clean);
       check(`${who} Purchases holds Purchase bills, Terms of Trade, Day-wise summary, Item-wise margin and Payments & dues`,
         ["Purchase bills", "Terms of Trade", "Day-wise summary", "Item-wise margin", "Payments & dues"].filter((t) => tasks.includes(t)),
@@ -269,14 +271,13 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       await link.waitFor({ timeout: 120000 });
       await shot(page, "pharmacist-sales-register-draft-1440");
       await link.click();
-      await page.waitForURL(/\/dashboard\/pharmacy\/invoices\?search=/, { timeout: 120000 });
-      await page.getByText("PH-DRAFT-1").first().waitFor({ timeout: 120000 });
+      await page.waitForURL(`**/dashboard/pharmacy/sales/bill?draft=${sale.id}`, { timeout: 120000 });
+      await page.getByText("PH-DRAFT-1 not final").first().waitFor({ timeout: 120000 });
       await settle(page);
-      const card = page.locator("text=PH-DRAFT-1").first().locator("xpath=ancestor::*[.//button][1]");
-      const actions = (await card.getByRole("button").allInnerTexts()).map(clean).filter(Boolean);
-      console.log(`NOTE draft actions offered: ${JSON.stringify(actions)}`);
-      check("the Sales register draft link lands on the draft with no Edit button", [await page.getByText("PH-DRAFT-1").count() > 0, actions.includes("Edit")], [true, false]);
-      await shot(page, "pharmacist-draft-in-invoice-list-1440");
+      check("the Sales register draft link reopens the draft in Sales, ready to save or discard", [
+        await page.getByRole("button", { name: "Save draft" }).count(), await page.getByRole("button", { name: "Discard draft" }).count(), await page.getByLabel("Billing Name *").inputValue(),
+      ], [1, 1, "Kiran Bhatt"]);
+      await shot(page, "pharmacist-draft-reopened-in-sales-1440");
       check("sales draft link: no console error or refused call", [seen.errors, seen.refused], [[], []]);
       await context.close();
     }
