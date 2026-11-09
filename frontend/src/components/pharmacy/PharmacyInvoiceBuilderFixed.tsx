@@ -303,6 +303,12 @@ export function PharmacyInvoiceBuilderFixed({
   const [refusal, setRefusal] = useState<DraftRefusal | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  const refusalRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!refusal) return;
+    refusalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    refusalRef.current?.focus({ preventScroll: true });
+  }, [refusal]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const patientsAllRef = useRef<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -2133,7 +2139,7 @@ export function PharmacyInvoiceBuilderFixed({
     <>
     <Card>
       {refusal && (
-        <div role="alert" className="m-4 flex flex-wrap items-center gap-3 rounded-md border border-destructive-border bg-destructive-soft p-3 text-sm text-destructive-text">
+        <div ref={refusalRef} tabIndex={-1} role="alert" className="m-4 flex scroll-mt-4 flex-wrap items-center gap-3 rounded-md border border-destructive-border bg-destructive-soft p-3 text-sm text-destructive-text outline-none">
           <p className="min-w-0 flex-1">{refusal.message} Your changes on this screen were not saved.</p>
           {onReloadDraft && <Button variant="outline" onClick={onReloadDraft}>Reload draft</Button>}
         </div>
@@ -2520,9 +2526,9 @@ export function PharmacyInvoiceBuilderFixed({
                   <div className="space-y-4">
                     {items.map((item) => (
                       <Card key={item.id} data-invoice-item={item.id} className="p-4">
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
+                        <div className="flex justify-between items-start gap-2 mb-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
                               {isPrescriptionItem(item.id) && (
                                 <span
                                   className="text-blue-600 text-lg"
@@ -2630,7 +2636,7 @@ export function PharmacyInvoiceBuilderFixed({
                               </div>
                             )}
                           </div>
-                          <div className="flex gap-1">
+                          <div className="flex shrink-0 flex-wrap justify-end gap-1">
                             {item.itemType === 'DRUG' && (
                               <Button variant="outline" size="sm" aria-label={`Substitute ${item.drug?.name}`}
                                 onClick={() => {

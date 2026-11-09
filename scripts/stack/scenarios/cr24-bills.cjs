@@ -84,12 +84,38 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       await page.locator("main").first().waitFor({ state: "attached", timeout: 240000 });
     };
     const settle = (page) => page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+    const clickTo = async (page, target, url) => {
+      for (let attempt = 0; ; attempt++) {
+        await settle(page);
+        await target.click();
+        try {
+          return await page.waitForURL(url, { timeout: attempt < 2 ? 60000 : 240000 });
+        } catch (error) {
+          if (attempt >= 2) throw error;
+          console.log(`  retrying a click that did not navigate to ${url}`);
+        }
+      }
+    };
     const overflow = (page) =>
       page.evaluate(() => {
         const main = document.querySelector("main");
         return Math.max(document.scrollingElement.scrollWidth - window.innerWidth, main ? main.scrollWidth - main.clientWidth : 0);
       });
-    const shot = (page, name) => page.screenshot({ path: path.join(out, `${name}.png`), fullPage: true });
+    const shot = async (page, name) => {
+      const viewport = page.viewportSize();
+      const height = await page.evaluate(() => Math.max(document.querySelector("main")?.scrollHeight ?? 0, document.documentElement.scrollHeight) + 80);
+      await page.setViewportSize({ width: viewport.width, height: Math.min(Math.max(height, viewport.height), 12000) });
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: path.join(out, `${name}.png`), fullPage: true });
+      await page.setViewportSize(viewport);
+    };
+    const offenders = (page) =>
+      page.evaluate(() =>
+        [...document.querySelectorAll("main *")]
+          .filter((el) => el.getClientRects().length && el.getBoundingClientRect().right > window.innerWidth + 0.5)
+          .slice(-6)
+          .map((el) => `${el.tagName}.${String(el.className).slice(0, 80)} right=${Math.round(el.getBoundingClientRect().right)} text=${(el.innerText || "").slice(0, 40)}`),
+      );
     const line = (page, name) => page.locator("[data-invoice-item]").filter({ has: page.getByRole("heading", { name, level: 4, exact: true }) });
     const lineHeadings = async (page) => (await page.locator("[data-invoice-item] h4").allInnerTexts()).map(clean);
     const quantities = async (page) => page.locator("[data-invoice-item]").evaluateAll((items) => items.map((item) => item.querySelector('input[id^="quantity-"]').value));
@@ -116,8 +142,13 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
     const closePreview = (page) => page.getByRole("button", { name: "Close", exact: true }).first().click();
     const saleRow = (page, name) => page.locator('[role="tabpanel"]:visible tbody tr').filter({ hasText: name });
     const sidebarLinks = async (page, narrow) => {
-      if (narrow) await page.getByRole("button", { name: "Open clinic navigation" }).click();
       const nav = page.getByRole("navigation", { name: "Main navigation" }).last();
+      for (let attempt = 0; narrow; attempt++) {
+        await settle(page);
+        await page.getByRole("button", { name: "Open clinic navigation" }).click();
+        const opened = await nav.getByRole("link", { name: /^Inventory/ }).waitFor({ timeout: 30000 }).then(() => true, () => false);
+        if (opened || attempt >= 3) break;
+      }
       await nav.getByRole("link", { name: /^Inventory/ }).waitFor({ timeout: 120000 });
       const links = (await nav.getByRole("link").allInnerTexts()).map(clean);
       if (narrow) await page.keyboard.press("Escape");
@@ -137,8 +168,7 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await go(page, "/dashboard/pharmacy/sales");
         const links = await sidebarLinks(page, narrow);
         check(`${tag} sidebar has Sales and no Pharmacy Billing`, [links.includes("Sales"), links.some((l) => l.startsWith("Pharmacy Billing"))], [true, false]);
-        await page.getByRole("button", { name: /New sale/ }).click();
-        await page.waitForURL("**/dashboard/pharmacy/sales/bill", { timeout: 240000 });
+        await clickTo(page, page.locator("main header").getByRole("button", { name: /New sale/ }), "**/dashboard/pharmacy/sales/bill");
         const queueRow = page.locator("tbody tr").filter({ hasText: rxPatient.name });
         await queueRow.first().waitFor({ timeout: 120000 });
         check(`${tag} New sale opens a bill inside Sales with its Sales|Returns header`, [
@@ -154,6 +184,7 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await line(page, GEL).waitFor({ timeout: 120000 });
         check(`${tag} Load fills the prescription's two medicines`, [await lineHeadings(page), await quantities(page)], [[CREAM, GEL], ["1", "1"]]);
         check(`${tag} loaded prescription bill: no page overflow`, await overflow(page), 0);
+        if (await overflow(page)) console.log(`  wide elements: ${JSON.stringify(await offenders(page))}`);
         await shot(page, `${tag}-02-prescription-loaded`);
         await finish(page);
         await closePreview(page);
@@ -164,14 +195,12 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         check(`${tag} the prescription leaves Pending on screen and in the queue`, [await queueRow.count(), pending.data.some((e) => e.prescriptionId === rx.id)], [0, false]);
         await shot(page, `${tag}-03-prescription-finished`);
 
-        await page.getByRole("button", { name: "Back to Sales" }).click();
-        await page.waitForURL(/\/dashboard\/pharmacy\/sales$/, { timeout: 120000 });
+        await clickTo(page, page.getByRole("button", { name: "Back to Sales" }), /\/dashboard\/pharmacy\/sales$/);
         await saleRow(page, rxPatient.name).first().waitFor({ timeout: 120000 });
         check(`${tag} the finished prescription bill shows its number in Sales`, clean(await saleRow(page, rxPatient.name).first().locator("td").first().innerText()), rxBill.invoiceNumber);
 
         const draftPatient = await patient();
-        await page.getByRole("button", { name: /New sale/ }).click();
-        await page.waitForURL("**/dashboard/pharmacy/sales/bill", { timeout: 120000 });
+        await clickTo(page, page.locator("main header").getByRole("button", { name: /New sale/ }), "**/dashboard/pharmacy/sales/bill");
         await pickPatient(page, draftPatient);
         await addDrug(page, TABLET);
         await addDrug(page, GEL);
@@ -188,14 +217,12 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         check(`${tag} the saved draft stays open with its reserved number`, [new URL(page.url()).searchParams.get("draft"), await page.getByText(`${draft.invoiceNumber} not final`).count()], [draft.id, 1]);
         await shot(page, `${tag}-04-draft-saved`);
 
-        await page.getByRole("link", { name: "Back to Sales" }).click();
-        await page.waitForURL(/\/dashboard\/pharmacy\/sales$/, { timeout: 120000 });
+        await clickTo(page, page.getByRole("link", { name: "Back to Sales" }), /\/dashboard\/pharmacy\/sales$/);
         await saleRow(page, draftPatient.name).first().waitFor({ timeout: 120000 });
         const draftCell = clean(await saleRow(page, draftPatient.name).first().locator("td").first().innerText());
         check(`${tag} the draft is a Draft row in Sales`, draftCell, `Draft ${draft.invoiceNumber} not final`);
         await shot(page, `${tag}-05-sales-draft-row`);
-        await saleRow(page, draftPatient.name).first().getByRole("link", { name: /Open draft bill/ }).click();
-        await page.waitForURL(`**/sales/bill?draft=${draft.id}`, { timeout: 120000 });
+        await clickTo(page, saleRow(page, draftPatient.name).first().getByRole("link", { name: /Open draft bill/ }), `**/sales/bill?draft=${draft.id}`);
         await line(page, GEL).waitFor({ timeout: 120000 });
         check(`${tag} reopening restores patient, every line, discount and notes`, [
           await page.getByLabel("Patient *").inputValue(), await lineHeadings(page), await quantities(page),
@@ -214,15 +241,13 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
           [finished.status, finished.invoiceNumber, finished.items.map((i) => i.quantity), delta(beforeFinish, await stocks()), await salesCount(draft.invoiceNumber), await db.pharmacyInvoice.count({ where: { patientId: draftPatient.id } })],
           ["CONFIRMED", draft.invoiceNumber, [4, 1], { [CREAM]: 0, [GEL]: -1, [TABLET]: -4 }, 2, 1]);
         await shot(page, `${tag}-07-draft-finished`);
-        await page.getByRole("button", { name: "Back to Sales" }).click();
-        await page.waitForURL(/\/dashboard\/pharmacy\/sales$/, { timeout: 120000 });
+        await clickTo(page, page.getByRole("button", { name: "Back to Sales" }), /\/dashboard\/pharmacy\/sales$/);
         await saleRow(page, draftPatient.name).first().waitFor({ timeout: 120000 });
         check(`${tag} the Sales row now carries the bill number`, clean(await saleRow(page, draftPatient.name).first().locator("td").first().innerText()), draft.invoiceNumber);
         await shot(page, `${tag}-08-sales-after-finish`);
 
         const discardPatient = await patient();
-        await page.getByRole("button", { name: /New sale/ }).click();
-        await page.waitForURL("**/dashboard/pharmacy/sales/bill", { timeout: 120000 });
+        await clickTo(page, page.locator("main header").getByRole("button", { name: /New sale/ }), "**/dashboard/pharmacy/sales/bill");
         await pickPatient(page, discardPatient);
         await addDrug(page, CREAM);
         await page.getByRole("button", { name: "Save draft" }).click();
@@ -260,7 +285,11 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await tabB.page.getByRole("button", { name: "Save draft" }).click();
         const refusal = tabB.page.getByRole("alert").filter({ hasText: "Your changes on this screen were not saved." });
         await refusal.waitFor({ timeout: 60000 });
-        check(`${tag} a stale save in a second tab is refused in plain words`, clean(await refusal.innerText()).startsWith(STALE), true);
+        await tabB.page.waitForTimeout(800);
+        check(`${tag} a stale save in a second tab is refused in plain words, in view`, [
+          clean(await refusal.innerText()).startsWith(STALE),
+          await refusal.evaluate((el) => { const box = el.getBoundingClientRect(); return box.top >= 0 && box.bottom <= window.innerHeight; }),
+        ], [true, true]);
         check(`${tag} the refused save changed nothing`, [(await invoiceFor({ id: shared.id })).items.map((i) => i.quantity), (await invoiceFor({ id: shared.id })).notes], [[1], "From the front desk"]);
         await shot(tabB.page, `${tag}-10-second-tab-refused`);
         await tabB.page.getByRole("button", { name: "Reload draft" }).click();

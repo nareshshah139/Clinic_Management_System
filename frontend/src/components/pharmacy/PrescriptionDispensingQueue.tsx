@@ -267,7 +267,7 @@ export function PrescriptionDispensingQueue({
             {error}
           </div>
         ) : null}
-        <Table>
+        <Table className="min-w-[56rem]">
           <TableHeader>
             <TableRow>
               <TableHead>Patient</TableHead>
@@ -275,7 +275,7 @@ export function PrescriptionDispensingQueue({
               <TableHead>Medication</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Stock</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="sticky right-0 bg-muted text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -347,7 +347,7 @@ export function PrescriptionDispensingQueue({
                       prescriptionId={entry.prescriptionId} onLinked={loadQueue} canLink={entry.dispensingEligible !== false}
                     />}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="sticky right-0 bg-card">
                     <div className="flex justify-end gap-2">
                       <Button
                         variant="outline"
