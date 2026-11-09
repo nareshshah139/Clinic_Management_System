@@ -24,10 +24,13 @@ it('saves optional defaults when adding inventory and resets them after saving',
 });
 it('loads, edits and clears defaults on a legacy consumable linked to a medicine', async () => {
   const item = { id: 'item', type: 'CONSUMABLE', name: 'Cream', metadata: {}, drugs: [{ id: 'cream' }], unit: 'TUBES', currentStock: 10, updatedAt: '2026-09-27', ...defaults };
-  (apiClient.get as jest.Mock).mockResolvedValue({ item, batches: [], capabilities: {}, purchases: [], sales: [], ledger: [] });
+  (apiClient.get as jest.Mock).mockResolvedValue({
+    item, batches: [item], product: { batchIds: [item.id], physical: 10, held: 0, available: 10 },
+    itemLedger: { rows: [], closing: 0, currentStock: 10, matches: false, batches: [] }, history: [], purchases: [], holds: [], ledger: { status: 'UNVERIFIED', checkpoint: null },
+  });
   (apiClient.patch as jest.Mock).mockResolvedValue({});
   render(<WorkspaceStock query={{}} itemId="item" capabilities={{ itemWrite: true }} navigate={jest.fn()} onTask={jest.fn()} onDocument={jest.fn()} onInvoice={jest.fn()} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Edit product details' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit item' }));
   fireEvent.click(screen.getByText('More details: tax, stock limits & codes'));
   expect(screen.getByLabelText('Default duration', { exact: true })).toHaveValue(3);
   fireEvent.change(screen.getByLabelText('Default duration', { exact: true }), { target: { value: '' } });
