@@ -1,0 +1,2 @@
+@cc [owner:nareshshah139,label:accessibility] descriptive-route-titles
+Dashboard routes provide descriptive document titles. Patient detail titles do not disclose patient identifiers.

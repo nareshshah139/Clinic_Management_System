@@ -18,7 +18,7 @@ import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, G
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle, Info } from 'lucide-react';
-import DoctorDayCalendar from './DoctorDayCalendar';
+import DoctorDayCalendar, { type ScopedAppointment } from './DoctorDayCalendar';
 import { useOverbookConfirm } from './useOverbookConfirm';
 import { overbookFlag } from '@/lib/overbooking';
 import { AppointmentStatus } from '@cms/shared-types';
@@ -40,6 +40,10 @@ interface AppointmentSchedulerProps {
   hideHeaderControls?: boolean;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] optimistic-appointment-scope
+ * A booking response cannot display its optimistic appointment under a different doctor or date.
+ */
 export default function AppointmentScheduler({ 
   timeSlotConfig,
   prefillPatientId,
@@ -66,7 +70,7 @@ export default function AppointmentScheduler({
   const [rooms, setRooms] = useState<{ id: string; name: string; type: string }[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentInSlot | null>(null);
   const [bookingDetails, setBookingDetails] = useState<any | null>(null);
-  const [optimisticAppointment, setOptimisticAppointment] = useState<AppointmentInSlot | undefined>(undefined);
+  const [optimisticAppointment, setOptimisticAppointment] = useState<ScopedAppointment | undefined>(undefined);
   const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [isBooking, setIsBooking] = useState<boolean>(false);
   const [bookingSlot, setBookingSlot] = useState<string>('');
@@ -360,7 +364,7 @@ export default function AppointmentScheduler({
       
       setAppointments(prev => [...prev, newAppt]);
       setAppointmentsBySlot(prev => ({ ...prev, [pendingBookingSlot]: newAppt }));
-      setOptimisticAppointment(newAppt);
+      setOptimisticAppointment({ doctorId, date, appointment: newAppt });
       
       setRecentBookedSlot(finalSlot);
       setBookingDetails(created);
@@ -790,7 +794,7 @@ export default function AppointmentScheduler({
         onAppointmentUpdate={() => setRefreshKey((prev) => prev + 1)}
         timeSlotConfig={slotConfig}
         disableSlotBooking={(!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId) && !rescheduleContext}
-        optimisticAppointment={optimisticAppointment}
+        optimisticAppointment={optimisticAppointment?.doctorId === doctorId && optimisticAppointment.date === date ? optimisticAppointment : undefined}
         maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}
       />
 
@@ -828,4 +832,4 @@ export default function AppointmentScheduler({
       />
     </>
   );
-} 
+}

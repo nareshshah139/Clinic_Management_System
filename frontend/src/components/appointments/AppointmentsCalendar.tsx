@@ -12,7 +12,7 @@ import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/li
 import { useToast } from '@/hooks/use-toast';
 import { createCleanupTimeouts, getISTDateString, formatPatientName } from '@/lib/utils';
 import type { User, Patient, TimeSlotConfig, AppointmentInSlot } from '@/lib/types';
-import DoctorDayCalendar from '@/components/appointments/DoctorDayCalendar';
+import DoctorDayCalendar, { type ScopedAppointment } from '@/components/appointments/DoctorDayCalendar';
 import { Badge } from '@/components/ui/badge';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
@@ -38,6 +38,10 @@ interface AppointmentsCalendarProps {
  * @cc [owner:nareshshah139,label:accessibility] appointment-booking-success-feedback
  * A successful booking MUST display its patient and slot details using the success palette
  * and expose the confirmation as a status announcement.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] optimistic-appointment-scope
+ * An optimistic booking appears only for the doctor and date for which it was submitted.
  */
 export default function AppointmentsCalendar({
   timeSlotConfig = {
@@ -74,7 +78,7 @@ export default function AppointmentsCalendar({
     [rooms, roomFilter]
   );
   const [refreshKey, setRefreshKey] = useState<number>(0);
-  const [optimisticAppointment, setOptimisticAppointment] = useState<AppointmentInSlot | null>(null);
+  const [optimisticAppointment, setOptimisticAppointment] = useState<ScopedAppointment | null>(null);
   const [gridMinutes, setGridMinutes] = useState<number>(timeSlotConfig.stepMinutes ?? 30);
   const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(null);
@@ -357,7 +361,7 @@ export default function AppointmentsCalendar({
         notes: appointmentData.notes,
       };
       
-      setOptimisticAppointment(optimisticAppt);
+      setOptimisticAppointment({ doctorId, date, appointment: optimisticAppt });
       
       const created: any = await sendWithOverbookConfirm((allowOverbook) => apiClient.createAppointment({
         doctorId, 
@@ -704,7 +708,7 @@ export default function AppointmentsCalendar({
             onSelectSlot={handleBookingRequest}
             refreshKey={refreshKey}
             bookingInProgress={loading ? pendingBookingSlot : undefined}
-            optimisticAppointment={optimisticAppointment || undefined}
+            optimisticAppointment={optimisticAppointment?.doctorId === doctorId && optimisticAppointment.date === date ? optimisticAppointment : undefined}
             onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
             disableSlotBooking={!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId}
             selectedRoomName={selectedRoom?.name}
@@ -748,4 +752,4 @@ export default function AppointmentsCalendar({
       />
     </>
   );
-} 
+}
