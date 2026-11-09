@@ -347,7 +347,7 @@ export function PrescriptionDispensingQueue({
                       prescriptionId={entry.prescriptionId} onLinked={loadQueue} canLink={entry.dispensingEligible !== false}
                     />}
                   </TableCell>
-                  <TableCell className="sticky right-0 bg-card">
+                  <TableCell className="sticky right-0 w-px bg-card">
                     <div className="flex justify-end gap-2">
                       <Button
                         variant="outline"
@@ -359,10 +359,11 @@ export function PrescriptionDispensingQueue({
                         {refreshingId === entry.prescriptionId ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
                       </Button>
                       {entry.dispensingEligible === false ? (
-                        <Button size="sm" disabled>{openActionLabel}</Button>
+                        <Button size="sm" className="whitespace-nowrap [overflow-wrap:normal]" disabled>{openActionLabel}</Button>
                       ) : onOpenBilling ? (
                         <Button
                           size="sm"
+                          className="whitespace-nowrap [overflow-wrap:normal]"
                           onClick={() => onOpenBilling(buildBillingPrefill(entry))}
                         >
                           <ExternalLink />
