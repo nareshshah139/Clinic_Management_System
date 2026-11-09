@@ -184,7 +184,6 @@ async timeline(actor: WorkflowActor, q: Record<string, any> = {}) {
       product:{batchIds,physical:batches.reduce((n,b)=>n+b.currentStock,0),held:batches.reduce((n,b)=>n+b.heldStock,0),available:batches.reduce((n,b)=>n+b.currentStock-b.heldStock,0)},
       openingBalance:null,
       ledger: { ...ledger, movements: undefined },
-      movements:ledger.movements.map(m=>({...m,owner:owners.get(m.id)||null,correctionAllowed:correctionAllowed(m)})),
       itemLedger:itemLedgerRows(batches,movements,sources,owners,correctionAllowed),
       history:effects.map(e=>({...e,document:{...e.document,totalAmount:Number(e.document.totalAmount)}})),purchases};
   }
