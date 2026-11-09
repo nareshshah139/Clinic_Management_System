@@ -99,7 +99,7 @@ function EditDiscountDialog({ bill, open, onOpenChange, onSaved, onReload }: {
     <Dialog open={open} onOpenChange={(next: boolean) => !saving && onOpenChange(next)}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Edit discount on {bill.invoiceNumber}</DialogTitle>
+          <DialogTitle className="pr-6">Edit discount on {bill.invoiceNumber}</DialogTitle>
           <DialogDescription>Only discounts change. Items, quantities, batches and stock stay as billed, and the bill keeps its number.</DialogDescription>
         </DialogHeader>
         {refusal && (
@@ -204,7 +204,7 @@ function RecordRefundDialog({ bill, amount, open, onOpenChange, onSaved }: {
     <Dialog open={open} onOpenChange={(next: boolean) => !saving && onOpenChange(next)}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Record refund of {formatRupees(amount)}</DialogTitle>
+          <DialogTitle className="pr-6">Record refund of {formatRupees(amount)}</DialogTitle>
           <DialogDescription>
             {bill.billingName || 'The patient'} paid more than the revised total of {bill.invoiceNumber}. Record the money you hand back.
           </DialogDescription>
