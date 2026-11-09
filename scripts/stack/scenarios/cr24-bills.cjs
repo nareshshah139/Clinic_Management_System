@@ -197,7 +197,9 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
 
         await clickTo(page, page.getByRole("button", { name: "Back to Sales" }), /\/dashboard\/pharmacy\/sales$/);
         await saleRow(page, rxPatient.name).first().waitFor({ timeout: 120000 });
-        check(`${tag} the finished prescription bill shows its number in Sales`, clean(await saleRow(page, rxPatient.name).first().locator("td").first().innerText()), rxBill.invoiceNumber);
+        check(`${tag} the finished prescription bill shows its number and its Cash payment in Sales, nothing due`, [
+          clean(await saleRow(page, rxPatient.name).first().locator("td").first().innerText()), clean(await saleRow(page, rxPatient.name).first().locator("td").nth(-2).innerText()),
+        ], [rxBill.invoiceNumber, "Cash"]);
 
         const draftPatient = await patient();
         await clickTo(page, page.locator("main header").getByRole("button", { name: /New sale/ }), "**/dashboard/pharmacy/sales/bill");
@@ -243,7 +245,10 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await shot(page, `${tag}-07-draft-finished`);
         await clickTo(page, page.getByRole("button", { name: "Back to Sales" }), /\/dashboard\/pharmacy\/sales$/);
         await saleRow(page, draftPatient.name).first().waitFor({ timeout: 120000 });
-        check(`${tag} the Sales row now carries the bill number`, clean(await saleRow(page, draftPatient.name).first().locator("td").first().innerText()), draft.invoiceNumber);
+        check(`${tag} the Sales row now carries the bill number and its payment`, [
+          clean(await saleRow(page, draftPatient.name).first().locator("td").first().innerText()), clean(await saleRow(page, draftPatient.name).first().locator("td").nth(-2).innerText()),
+          (await db.pharmacyPayment.findMany({ where: { invoiceId: draft.id }, select: { amount: true, method: true } })).map((p) => [p.amount, p.method]),
+        ], [draft.invoiceNumber, "Cash", [[finished.totalAmount, "CASH"]]]);
         await shot(page, `${tag}-08-sales-after-finish`);
 
         const discardPatient = await patient();

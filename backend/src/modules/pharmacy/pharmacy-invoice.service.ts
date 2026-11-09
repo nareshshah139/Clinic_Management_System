@@ -109,13 +109,14 @@ export class PharmacyInvoiceService {
           createdById: userId,
         },
       );
-      return this.transitionInvoice(
+      await this.transitionInvoice(
         tx,
         invoice.id,
         'CONFIRMED',
         branchId,
         userId,
       );
+      return this.collectCheckoutPayment(tx, invoice.id, requestKey);
     }, branchId);
   }
 
@@ -157,13 +158,14 @@ export class PharmacyInvoiceService {
                 checkoutPayloadHash: payloadHash,
               },
             );
-            return this.transitionInvoice(
+            await this.transitionInvoice(
               tx,
               draftId!,
               'CONFIRMED',
               branchId,
               userId,
             );
+            return this.collectCheckoutPayment(tx, draftId!, requestKey);
           },
           { timeout: 15000, isolationLevel: 'Serializable' },
         );
@@ -174,6 +176,46 @@ export class PharmacyInvoiceService {
     throw new ConflictException(
       'Invoice or stock changed concurrently. Retry this request with the same key.',
     );
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] checkout-collects-payment
+   * A finished bill MUST record one completed payment of its total in the bill's payment method
+   * within the checkout transaction, leaving no balance due. A checkout replay MUST NOT collect again.
+   */
+  private async collectCheckoutPayment(
+    tx: Prisma.TransactionClient,
+    id: string,
+    requestKey: string,
+  ) {
+    const invoice = await tx.pharmacyInvoice.findUniqueOrThrow({
+      where: { id },
+    });
+    const amount = money(invoice.totalAmount);
+    if (amount > 0)
+      await tx.pharmacyPayment.create({
+        data: {
+          invoiceId: id,
+          requestKey: `checkout:${requestKey}`,
+          amount,
+          method: invoice.paymentMethod,
+          status: 'COMPLETED',
+        },
+      });
+    return tx.pharmacyInvoice.update({
+      where: { id },
+      data: {
+        paidAmount: amount,
+        balanceAmount: 0,
+        paymentStatus: 'COMPLETED',
+        mutationVersion: { increment: 1 },
+      },
+      include: {
+        items: { include: { drug: true, package: true } },
+        patient: true,
+        doctor: true,
+      },
+    });
   }
 
   private async checkoutReplay(

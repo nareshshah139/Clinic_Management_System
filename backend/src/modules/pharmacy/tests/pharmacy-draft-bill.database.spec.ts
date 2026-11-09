@@ -267,9 +267,11 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
         row.billNo,
         row.reservedNo,
         row.state,
+        row.paymentModes,
+        row.due,
       ]);
     expect(await registerRow()).toEqual([
-      [draft.id, null, draft.invoiceNumber, 'DRAFT'],
+      [draft.id, null, draft.invoiceNumber, 'DRAFT', [], 0],
     ]);
 
     const finish = {
@@ -285,7 +287,19 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
       finished.invoiceNumber,
       finished.status,
       finished.mutationVersion,
-    ]).toEqual([draft.id, draft.invoiceNumber, 'CONFIRMED', 3]);
+    ]).toEqual([draft.id, draft.invoiceNumber, 'CONFIRMED', 4]);
+    expect([
+      finished.paymentStatus,
+      finished.balanceAmount,
+      await db.pharmacyPayment.findMany({
+        where: { invoiceId: draft.id },
+        select: { amount: true, method: true, status: true },
+      }),
+    ]).toEqual([
+      'COMPLETED',
+      0,
+      [{ amount: 457.3, method: 'UPI', status: 'COMPLETED' }],
+    ]);
     expect(await stock()).toEqual({
       'cream-batch': 6,
       'shampoo-batch': 2,
@@ -305,12 +319,15 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
       'tablet-batch': 4,
     });
     expect(await registerRow()).toEqual([
-      [draft.id, draft.invoiceNumber, null, 'FINAL'],
+      [draft.id, draft.invoiceNumber, null, 'FINAL', ['UPI'], 0],
     ]);
+    expect(
+      await db.pharmacyPayment.count({ where: { invoiceId: draft.id } }),
+    ).toBe(1);
 
     expect([
       await failure(
-        invoices.update(draft.id, { ...bill, expectedVersion: 3 }, 'branch'),
+        invoices.update(draft.id, { ...bill, expectedVersion: 4 }, 'branch'),
       ),
       await failure(
         invoices.checkout(
@@ -319,7 +336,7 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
           'asha',
         ),
       ),
-      await failure(invoices.remove(draft.id, 'branch', 3)),
+      await failure(invoices.remove(draft.id, 'branch', 4)),
     ]).toEqual([
       '409: This bill was already finished. It can no longer be edited.',
       '409: This bill was already finished. It can no longer be edited.',

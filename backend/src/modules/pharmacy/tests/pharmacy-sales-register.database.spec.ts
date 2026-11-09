@@ -231,14 +231,9 @@ databaseTests('Sales register on PostgreSQL', () => {
   it('names who entered each bill, shows what was paid and owed, links returns to their bills and totals only posted sales', async () => {
     const draft = await invoices.create(bill, 'branch', 'asha');
     const sold = await invoices.checkout(
-      { ...bill, requestKey: 'sales-register-1' },
+      { ...bill, paymentMethod: 'UPI', requestKey: 'sales-register-1' },
       'branch',
       'ravi',
-    );
-    await invoices.addPayment(
-      sold.id,
-      { requestKey: 'sales-register-pay-1', amount: 60, method: 'UPI' },
-      'branch',
     );
     const document = (id: string, data: Record<string, unknown>) =>
       db.inventoryWorkflowDocument.create({
@@ -319,7 +314,7 @@ databaseTests('Sales register on PostgreSQL', () => {
     ).toEqual({
       'CS-ENTERED-EARLY': ['Ravi Synthetic', ['CARD'], 0],
       'CS-IN-RANGE': ['Ravi Synthetic', ['UPI'], 0],
-      [sold.invoiceNumber]: ['Ravi Synthetic', ['UPI'], 40],
+      [sold.invoiceNumber]: ['Ravi Synthetic', ['UPI'], 0],
       'LEGACY-1': ['Asha Synthetic', [], 100],
       'LEGACY-UNSOLD': [null, [], 100],
       'draft true': ['Asha Synthetic', [], 0],
@@ -342,7 +337,7 @@ databaseTests('Sales register on PostgreSQL', () => {
         address: 'Synthetic, Pune',
         gstin: '27ABCDE1234F1Z5',
       },
-      85,
+      125,
       [draft.id],
       [['SR-1', [sold.invoiceNumber], ['CASH']]],
     ]);
