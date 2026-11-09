@@ -85,6 +85,8 @@ model User {
   tradeTermsUpdated             PharmacyTradeTerm[]          @relation("PharmacyTradeTermUpdatedBy")
   inventoryItemRequestsMade     InventoryItemRequest[]       @relation("InventoryItemRequestedBy")
   inventoryItemRequestsReviewed InventoryItemRequest[]       @relation("InventoryItemReviewedBy")
+  inventoryImportsRequested     InventoryMigration[]         @relation("InventoryImportRequestedBy")
+  inventoryImportsReviewed      InventoryMigration[]         @relation("InventoryImportReviewedBy")
 
   // Back-relations
   createdPrescriptionTemplates PrescriptionTemplate[]
@@ -2090,6 +2092,13 @@ enum InventoryItemRequestStatus {
   REJECTED
 }
 
+enum InventoryImportApproval {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum TimeOffKind {
   LEAVE
   HOLIDAY
@@ -2581,9 +2590,17 @@ model InventoryMigration {
   processingUntil DateTime?
   rowTrackingVersion Int @default(0)
   legacyResult Json?
+  approval InventoryImportApproval @default(NOT_REQUIRED)
+  requestedById String?
+  reviewedById String?
+  reviewedAt DateTime?
+  reviewNote String?
+  requestedBy User? @relation("InventoryImportRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy User? @relation("InventoryImportReviewedBy", fields: [reviewedById], references: [id])
   rows InventoryMigrationRow[]
   createdAt DateTime @default(now())
   @@unique([branchId,sha256])
+  @@index([branchId, approval])
   @@map("inventory_migrations")
 }
 
