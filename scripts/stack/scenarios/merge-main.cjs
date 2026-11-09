@@ -138,6 +138,8 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       check(`${who} sidebar lists every Pharmacy entry`, PHARMACY_LINKS.filter((name) => links.some((link) => link.startsWith(name))), PHARMACY_LINKS);
       const purchaseNav = page.getByRole("navigation", { name: "purchases tasks" });
       await purchaseNav.locator("option", { hasText: "Payments & dues" }).waitFor({ state: "attached", timeout: 120000 }).catch(() => {});
+      await settle(page);
+      await purchaseNav.locator("option", { hasText: "Payments & dues" }).waitFor({ state: "attached", timeout: 60000 }).catch(() => {});
       const tasks = (await purchaseNav.locator("button, option").allInnerTexts()).map(clean);
       check(`${who} Purchases holds Purchase bills, Terms of Trade, Day-wise summary, Item-wise margin and Payments & dues`,
         ["Purchase bills", "Terms of Trade", "Day-wise summary", "Item-wise margin", "Payments & dues"].filter((t) => tasks.includes(t)),
