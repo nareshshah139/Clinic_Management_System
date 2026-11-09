@@ -39,6 +39,13 @@ interface AuthenticatedRequest {
   };
 }
 
+/**
+ * @cc [owner:nareshshah139,label:security] billing-route-roles
+ * Every billing route MUST require authentication. RECEPTION MUST be admitted only to invoice
+ * create, list, read and outstanding and to payment create, confirm and list; PHARMACIST,
+ * ACCOUNTANT and PATIENT MUST be forbidden everywhere. OWNER, ADMIN and DOCTOR MUST be admitted
+ * to every route through the role guard and MUST NOT be locked out by a role list.
+ */
 @ApiTags('Billing')
 @Controller('billing')
 @UseGuards(JwtAuthGuard)
@@ -174,6 +181,12 @@ export class BillingController {
   }
 
   // Refund endpoints
+  /**
+   * @cc [owner:nareshshah139,label:security] refund-route-roles
+   * Refunds move money out, so POST /billing/refunds MUST be listed ADMIN only: RECEPTION and every
+   * other non-manager role MUST be forbidden before the service runs. OWNER, ADMIN and DOCTOR
+   * pass through the role guard today and MUST NOT be blocked by this route.
+   */
   @Post('refunds')
   @Roles(UserRole.ADMIN)
   @Permissions('billing:refund:create')

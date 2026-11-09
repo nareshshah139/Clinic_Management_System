@@ -2,10 +2,14 @@ import { PrismaClient } from '@prisma/client';
 import { PasswordResetService } from '../modules/auth/password-reset.service';
 
 /**
- * Server-operator fallback when no manager can sign in to issue a code (for example the only
- * OWNER is locked out). Run on the server: npm run reset-code -- someone@clinic.example
+ * @cc [owner:nareshshah139,label:security] operator-reset-code-active-only
+ * Without an email argument the script MUST exit 1 with usage before opening a database
+ * connection. It MUST issue a code only for an active user whose email matches ignoring case and
+ * surrounding spaces, store only the code's hash and audit it as server-script; any other email
+ * MUST exit 1 without changing a user.
  */
 async function main() {
+  // Server-operator fallback when no manager can sign in, e.g. the only OWNER is locked out.
   const email = process.argv[2];
   if (!email) {
     console.error('Usage: npm run reset-code -- <user email>');

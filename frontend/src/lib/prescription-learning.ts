@@ -340,6 +340,12 @@ function drugNamesMatch(left: unknown, right: unknown): boolean {
   return a === b || a.includes(b) || b.includes(a);
 }
 
+/**
+ * @cc [owner:nareshshah139,label:integrity] suggested-items-never-alias-caller-data
+ * Prescription items returned in a suggestion MUST be copies of the supplied records, so editing a
+ * suggested item (dose, frequency) never changes the patient history or prescription list it was
+ * learned from, and building a suggestion MUST NOT mutate its inputs.
+ */
 function normalizeItems(value: unknown): Array<Record<string, unknown>> {
   return asArray(value)
     .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
@@ -421,6 +427,13 @@ function mergeInvestigations(records: FlatPlanRecord[]): string[] {
   return picked.length ? picked : (records[0]?.investigations || []);
 }
 
+/**
+ * @cc [owner:nareshshah139,label:safety] patient-history-plans-are-patient-scoped-and-attributed
+ * A plan learned from patient history MUST come only from the supplied patientVisits, MUST skip the
+ * visit being edited, and MUST describe a visit by another doctor as the patient's history rather
+ * than as this doctor's own plan, so no other patient's or doctor's prescriptions are presented as
+ * the current doctor's.
+ */
 function buildPatientRecord(
   visit: Record<string, unknown>,
   diagnosis: string,
@@ -733,6 +746,14 @@ function rankMedicationCandidate(candidate: FlatMedicationRecord): number {
   return candidate.confidence + sourceBias;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:safety] plan-suggested-only-for-a-matching-diagnosis
+ * A plan MUST be suggested only when the typed diagnosis is at least 3 characters and matches the
+ * source record's diagnosis above the similarity threshold, so a different condition's drugs are
+ * never prefilled; otherwise it MUST return null. Suggested items MUST come only from the supplied
+ * patient visits, doctor prescriptions or templates. The caller supplies doctor-scoped
+ * prescriptions and a bounded patient history; this function stores nothing.
+ */
 export function buildLearnedPrescriptionPlan(input: {
   diagnosis: string;
   patientVisits?: unknown[];
@@ -810,6 +831,13 @@ export function buildLearnedPrescriptionPlan(input: {
   };
 }
 
+/**
+ * @cc [owner:nareshshah139,label:safety;target] suggested-sig-belongs-to-the-typed-drug
+ * A suggested dose, frequency and duration MUST be learned only from entries of the typed drug and
+ * the same diagnosis, never from a different drug whose name merely contains it, and MUST return
+ * null for a short drug name or diagnosis. This is a target obligation, not a pass claim: drug
+ * names match by substring in both directions, so Cetirizine receives the sig of Levocetirizine.
+ */
 export function buildLearnedMedicationSuggestion(input: {
   drugName: string;
   diagnosis: string;

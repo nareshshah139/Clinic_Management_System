@@ -46,15 +46,15 @@ const PRINT_LINE_SPACING_OPTIONS: Array<{ value: PrintLineSpacing; label: string
   { value: 'tight', label: 'Tight' },
 ];
 
+// Continuation pages start about one line lower than page 1 so they breathe
+// under the letterhead. Paged.js gives them this much extra bottom margin so
+// the nudge never pushes text into the real bottom margin.
 /**
  * @cc [owner:nareshshah139,label:product] continuation-pages-keep-bottom-margin
  * Continuation pages MAY be moved down to clear the letterhead, and a printer
  * profile MAY move content down, but no printed line MAY end inside the bottom
  * margin. Pagination MUST reserve the space these moves take.
  */
-// Continuation pages start about one line lower than page 1 so they breathe
-// under the letterhead. Paged.js gives them this much extra bottom margin so
-// the nudge never pushes text into the real bottom margin.
 const CONTINUATION_NUDGE_PX = 36;
 const CONTINUATION_RESERVE_PX = 48;
 const PRINT_PX_PER_MM = 96 / 25.4;

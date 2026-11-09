@@ -4,6 +4,12 @@ import { AUTHENTICATED_KEY, ROLES_KEY } from '../decorators/roles.decorator';
 import { PERMISSIONS_KEY, PermissionRequirement } from '../decorators/permissions.decorator';
 import { UserRole } from '@prisma/client';
 
+/**
+ * @cc [owner:nareshshah139,label:security] manager-roles-pass-role-gate
+ * OWNER, ADMIN and DOCTOR MUST pass every Roles() list, so a role list can never lock a
+ * clinic manager or doctor out; other roles MUST be listed, and a request without a user role
+ * MUST be denied on a role-listed route.
+ */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}

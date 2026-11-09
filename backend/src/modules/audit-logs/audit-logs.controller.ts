@@ -26,6 +26,13 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
+/**
+ * @cc [owner:nareshshah139,label:security] audit-log-route-roles
+ * Audit log routes are read-only. List, statistics, export, user and single-entry reads MUST list
+ * ADMIN and OWNER, the entity history read also DOCTOR, and my-activity MUST admit any
+ * authenticated user but only ever return that user's own entries. The role guard admits
+ * DOCTOR to every route today, which this contract does not remove; other roles MUST be refused.
+ */
 @ApiTags('Audit Logs')
 @Controller('audit-logs')
 @UseGuards(JwtAuthGuard)

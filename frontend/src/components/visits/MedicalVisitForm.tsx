@@ -475,6 +475,12 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     } catch {}
   }, []);
   /** Applies a doctor's saved print layout (margins, offsets, design aids); the letterhead is resolved separately. */
+  /**
+   * @cc [owner:nareshshah139,label:product] doctor-print-layout-default
+   * Opening a visit MUST apply the visit doctor's saved print layout when one exists, so each
+   * doctor prints with their own margins without loading it by hand. Without a saved layout the
+   * existing browser settings stay in effect.
+   */
   const applyDoctorPrintLayout = useCallback((p: any) => {
     if (p.margins) {
       if (typeof p.margins.topPx === 'number') setPrintTopMarginPx(p.margins.topPx);
@@ -496,12 +502,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     }
   }, []);
 
-  /**
-   * @cc [owner:nareshshah139,label:product] doctor-print-layout-default
-   * Opening a visit MUST apply the visit doctor's saved print layout when one exists, so each
-   * doctor prints with their own margins without loading it by hand. Without a saved layout the
-   * existing browser settings stay in effect.
-   */
   useEffect(() => {
     if (!doctorId) return;
     let cancelled = false;

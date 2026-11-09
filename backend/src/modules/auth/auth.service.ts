@@ -11,6 +11,18 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security] sign-in-active-users-only
+   * Only an ACTIVE user with isActive set and the right password MAY sign in; a suspended, inactive,
+   * pending or switched-off account MUST get 403 even with the right password. The returned user
+   * MUST NOT contain the password hash.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:security;target] sign-in-hides-account-existence
+   * A failed sign-in MUST NOT reveal whether the account exists or its status to a caller without
+   * the right password. Today an unknown account gets 404 and a refused status gets 403 before the
+   * password is checked, while a wrong password gets 401. This is a target obligation, not a pass claim.
+   */
   async validateUser(identifier: string, password: string): Promise<any> {
     const trimmedIdentifier = identifier?.trim();
     if (!trimmedIdentifier) {
@@ -69,6 +81,10 @@ export class AuthService {
     return result;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] token-claims-minimal
+   * The signed token MUST carry only the user's id (sub), email, role and branchId.
+   */
   async login(user: any) {
     const payload = {
       email: user.email,
