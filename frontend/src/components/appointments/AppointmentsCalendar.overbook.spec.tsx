@@ -12,7 +12,7 @@ jest.mock('@/hooks/use-toast', () => ({
 jest.mock('@/lib/api', () => ({
   apiClient: {
     getDoctorSchedule: jest.fn().mockResolvedValue({
-      appointments: [{ id: 'a1', slot: '11:00-11:30', status: 'SCHEDULED', visitType: 'OPD', patient: { name: 'Ravi Kumar' } }],
+      appointments: [{ id: 'a1', slot: '11:00-11:30', status: 'SCHEDULED', calendar: 'SCHEDULED', visitType: 'OPD', patient: { name: 'Ravi Kumar' } }],
     }),
     getDoctorDay: jest.fn().mockResolvedValue({
       date: '2099-01-01', weekday: 4, source: 'configured', working: [{ start: 540, end: 1080 }],
@@ -40,7 +40,8 @@ const conflict = (overbook: object) => Object.assign(new Error('Scheduling confl
 async function bookIntoOccupiedSlot() {
   const user = userEvent.setup();
   render(<AppointmentsCalendar prefillPatientId="p1" controlledDoctorId="d1" controlledDate="2099-01-01" hideHeaderControls />);
-  await user.click(await screen.findByRole('button', { name: 'Book 11:00-11:30, 1 of 2 booked' }));
+  const scheduled = within(await screen.findByRole('region', { name: 'Scheduled' }));
+  await user.click(await scheduled.findByRole('button', { name: 'Book 11:00-11:30, 1 of 2 booked' }));
   await user.click(await screen.findByText('Confirm Booking'));
   return user;
 }

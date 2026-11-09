@@ -4,61 +4,32 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Badge, badgeVariants } from '@/components/ui/badge';
-import type { VariantProps } from 'class-variance-authority';
-import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
+import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { X, FileText, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   generateTimeSlots,
-  isSlotInPast,
   getErrorMessage,
   formatPatientName,
-  createCleanupTimeouts,
-  doTimeSlotsOverlap,
   getISTDateString,
-  hhmmToMinutes,
-  minutesToHHMM,
-    addMinutesToHHMM,
-    getSlotDurationMinutes,
+  getSlotDurationMinutes,
   calculateAge,
+  isConflictError,
 } from '@/lib/utils';
 import type {
   AppointmentInSlot,
+  AppointmentCalendar,
   TimeSlotConfig,
   GetDoctorScheduleResponse,
   Appointment
 } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
-import { layoutDay } from './day-layout';
 import { useOverbookConfirm } from './useOverbookConfirm';
 import { overbookFlag } from '@/lib/overbooking';
-
-type StatusStyle = {
-  label: string;
-  badgeVariant: NonNullable<VariantProps<typeof badgeVariants>['variant']>;
-  accentClassName: string;
-  muted: boolean;
-  strikeName: boolean;
-};
-
-const APPOINTMENT_STATUS_STYLE: Record<AppointmentStatus, StatusStyle> = {
-  [AppointmentStatus.SCHEDULED]: { label: 'Scheduled', badgeVariant: 'neutral', accentClassName: 'border-l-slate-400', muted: false, strikeName: false },
-  [AppointmentStatus.CONFIRMED]: { label: 'Confirmed', badgeVariant: 'info', accentClassName: 'border-l-sky-500', muted: false, strikeName: false },
-  [AppointmentStatus.CHECKED_IN]: { label: 'Checked in', badgeVariant: 'warning', accentClassName: 'border-l-amber-500', muted: false, strikeName: false },
-  [AppointmentStatus.IN_PROGRESS]: { label: 'In progress', badgeVariant: 'success', accentClassName: 'border-l-emerald-500', muted: false, strikeName: false },
-  [AppointmentStatus.COMPLETED]: { label: 'Completed', badgeVariant: 'neutral', accentClassName: 'border-l-slate-300', muted: true, strikeName: false },
-  [AppointmentStatus.NO_SHOW]: { label: 'No-show', badgeVariant: 'danger', accentClassName: 'border-l-red-500', muted: true, strikeName: true },
-  [AppointmentStatus.CANCELLED]: { label: 'Cancelled', badgeVariant: 'danger', accentClassName: 'border-l-red-300', muted: true, strikeName: true },
-};
-
-const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> = {
-  OPD: { current: 'rgba(219, 234, 254, 0.95)', past: 'rgba(239, 246, 255, 0.95)' },
-  PROCEDURE: { current: 'rgba(237, 233, 254, 0.95)', past: 'rgba(245, 237, 254, 0.95)' },
-  TELEMED: { current: 'rgba(243, 244, 246, 0.95)', past: 'rgba(249, 250, 251, 0.95)' },
-};
+import { CALENDARS, CALENDAR_ORDER, type SlotChoice } from './appointment-calendars';
+import CalendarColumn, { type SlotAction } from './CalendarColumn';
 
 /**
  * @cc [owner:nareshshah139,label:product] optimistic-booking-origin
@@ -72,17 +43,20 @@ export interface DoctorDayCalendarProps {
   recentBookedSlot?: string;
   visitTypeFilter?: string;
   roomFilter?: string;
-  onSelectSlot?: (slot: string) => void;
+  onSelectSlot?: (slot: string, calendar: AppointmentCalendar) => void;
   refreshKey?: number;
-  bookingInProgress?: string;
+  bookingInProgress?: SlotChoice;
   optimisticAppointment?: ScopedAppointment;
   onAppointmentUpdate?: () => void;
   timeSlotConfig?: TimeSlotConfig;
   disableSlotBooking?: boolean;
   selectedRoomName?: string;
-  /** Patients the doctor may see in one slot. 1 (the default) keeps every occupied tile closed. */
+  /** Patients the doctor may see in one slot of one calendar. 1 (the default) keeps every occupied tile closed. */
   maxBookingsPerSlot?: number;
 }
+
+/** Reschedule mode. `refused` is set when a confirm or move back found its time taken, and limits the move to that calendar. */
+type Move = { appointment: AppointmentInSlot; refused?: SlotChoice };
 
 /**
  * @cc [owner:nareshshah139,label:product] schedule-selection-isolation
@@ -93,22 +67,24 @@ export default function DoctorDayCalendar(props: DoctorDayCalendarProps) {
 }
 
 /**
- * @cc [owner:nareshshah139,label:product] appointment-details-access
- * Appointment facts MUST remain inline on calendar cards; hovering MUST NOT open a details preview.
- * Saved appointments MUST expose their full details and actions through the INFO control.
- */
-/**
- * @cc [owner:nareshshah139,label:product] appointment-queue
- * The queue lists the selected doctor's active, filtered appointments in time order and excludes cancelled, completed, and no-show appointments.
- */
-/**
  * @cc [owner:nareshshah139,label:product] optimistic-overlap
  * An optimistic appointment does not hide another appointment solely because they share a time slot.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] scheduled-and-confirmed-calendars
+ * The day shows the Scheduled and Confirmed calendars side by side over one time gutter. Each
+ * appointment appears only in the column its `calendar` field names, and a free time books or
+ * moves into that column's calendar, counting only that column's appointments.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] confirm-keeps-time
+ * Confirm and Move to Scheduled keep the appointment's date and slot. When that time is taken in
+ * the target calendar and not overbooked, the user lands in reschedule mode limited to that calendar.
+ */
 function DoctorDayCalendarForSelection({
-  doctorId, 
-  date, 
-  recentBookedSlot, 
+  doctorId,
+  date,
+  recentBookedSlot,
   visitTypeFilter = 'ALL',
   roomFilter = 'ALL',
   onSelectSlot,
@@ -136,30 +112,21 @@ function DoctorDayCalendarForSelection({
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentInSlot | null>(null);
   const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState<boolean>(false);
-  const [rescheduleTarget, setRescheduleTarget] = useState<AppointmentInSlot | null>(null);
-  const [rescheduleLoading, setRescheduleLoading] = useState<boolean>(false);
-  // Drag-to-select state for creating appointments
-  const [selecting, setSelecting] = useState<boolean>(false);
-  const [selectionStartIdx, setSelectionStartIdx] = useState<number | null>(null);
-  const [selectionEndIdx, setSelectionEndIdx] = useState<number | null>(null);
-  // Long press state for appointment details
-  const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
-  const [isLongPressing, setIsLongPressing] = useState<boolean>(false);
+  const [move, setMove] = useState<Move | null>(null);
+  const [placing, setPlacing] = useState<boolean>(false);
 
-  // Use selected grid size (stepMinutes) to control tiles per hour
+  const slotMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
   const baseGridSlots = useMemo(() => generateTimeSlots({
     startHour: timeSlotConfig.startHour,
     endHour: timeSlotConfig.endHour,
-    stepMinutes: Math.max(5, timeSlotConfig.stepMinutes || 10),
+    stepMinutes: slotMinutes,
     timezone: timeSlotConfig.timezone,
-  }), [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.stepMinutes, timeSlotConfig.timezone]);
+  }), [timeSlotConfig.startHour, timeSlotConfig.endHour, slotMinutes, timeSlotConfig.timezone]);
   // Tile height so the entire day grid fits in ~80% of the viewport
-  const tileHeightCss = useMemo(() => `calc(80vh / ${Math.max(1, baseGridSlots.length)})`, [baseGridSlots.length]);
-  const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
+  const tileHeightCss = `calc(80vh / ${Math.max(1, baseGridSlots.length)})`;
   const roomFilterLabel = roomFilter !== 'ALL' ? (selectedRoomName ?? 'Unknown Room') : undefined;
 
-  // Compute 'now' data in calendar timezone (defaults to Asia/Kolkata)
-  const isToday = useMemo(() => date === getISTDateString(), [date]);
+  const isToday = date === getISTDateString();
   const scopedOptimisticAppointment = optimisticAppointment?.doctorId === doctorId && optimisticAppointment.date === date
     ? optimisticAppointment.appointment
     : undefined;
@@ -174,20 +141,19 @@ function DoctorDayCalendarForSelection({
     }
   }, [timeSlotConfig.timezone]);
 
-  // Filter appointments based on status, visitType and room filters
   const filteredSchedule = useMemo(() => {
     let appointments = schedule.filter(a => a.status !== AppointmentStatus.CANCELLED);
-    
+
     if (scopedOptimisticAppointment) {
       const visitTypeMatch = visitTypeFilter === 'ALL' || scopedOptimisticAppointment.visitType === visitTypeFilter;
       const roomMatch = roomFilter === 'ALL' || scopedOptimisticAppointment.room?.id === roomFilter;
-      
+
       if (visitTypeMatch && roomMatch) {
         appointments = appointments.filter(apt => apt.id !== scopedOptimisticAppointment.id);
         appointments.push(scopedOptimisticAppointment);
       }
     }
-    
+
     return appointments.filter(apt => {
       const visitTypeMatch = visitTypeFilter === 'ALL' || apt.visitType === visitTypeFilter;
       const roomMatch = roomFilter === 'ALL' || apt.room?.id === roomFilter;
@@ -195,12 +161,17 @@ function DoctorDayCalendarForSelection({
     });
   }, [schedule, visitTypeFilter, roomFilter, scopedOptimisticAppointment]);
 
+  const columns = useMemo(
+    () => CALENDAR_ORDER.map(calendar => ({ calendar, appointments: filteredSchedule.filter(a => a.calendar === calendar) })),
+    [filteredSchedule],
+  );
+
   /**
    * @cc [owner:nareshshah139,label:product] show-outside-hours-appointments
    * The timeline MUST include valid appointments outside configured working hours without
    * creating additional bookable slots or shifting the time gutter out of alignment.
    */
-  const timelineBounds = useMemo(() => {
+  const timeline = useMemo(() => {
     const workingStart = (timeSlotConfig.startHour ?? 9) * 60;
     const workingEnd = (timeSlotConfig.endHour ?? 18) * 60;
     let start = workingStart;
@@ -216,36 +187,9 @@ function DoctorDayCalendarForSelection({
       start = Math.min(start, from);
       end = Math.max(end, to);
     }
-    return { start, end, workingStart, workingEnd };
-  }, [filteredSchedule, timeSlotConfig.startHour, timeSlotConfig.endHour]);
-  const slotMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
-  const topPadding = `${80 * (timelineBounds.workingStart - timelineBounds.start) / slotMinutes / Math.max(1, baseGridSlots.length)}vh`;
-  const bottomPadding = `${80 * (timelineBounds.end - timelineBounds.workingEnd) / slotMinutes / Math.max(1, baseGridSlots.length)}vh`;
-
-  const appointmentBlocks = useMemo(() => {
-    const dayStartMin = timelineBounds.start;
-    const dayEndMin = timelineBounds.end;
-    const totalDayMin = Math.max(1, dayEndMin - dayStartMin);
-    const spans = filteredSchedule.flatMap((apt, index) => {
-      const [start, end] = (apt.slot || '').split('-');
-      if (!start || !end) return [];
-      const startMin = Math.max(dayStartMin, Math.min(hhmmToMinutes(start), dayEndMin));
-      const endMin = Math.max(dayStartMin, Math.min(hhmmToMinutes(end), dayEndMin));
-      if (endMin <= startMin) return [];
-      return [{ apt, key: apt.id || `${apt.slot}#${index}`, start, end, startMin, endMin }];
-    });
-    const lanes = layoutDay(spans.map(({ key, startMin, endMin }) => ({ id: key, startMin, endMin })));
-    return spans.map((span) => ({
-      ...span,
-      ...lanes.get(span.key)!,
-      topPct: ((span.startMin - dayStartMin) * 100) / totalDayMin,
-      heightPct: ((span.endMin - span.startMin) * 100) / totalDayMin,
-    }));
-  }, [filteredSchedule, timelineBounds]);
-
-  const queue = useMemo(() => filteredSchedule
-    .filter(appointment => ![AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW].includes(appointment.status as AppointmentStatus))
-    .sort((a, b) => a.slot.localeCompare(b.slot)), [filteredSchedule]);
+    const vh = (minutes: number) => `${80 * minutes / slotMinutes / Math.max(1, baseGridSlots.length)}vh`;
+    return { start, end, topPadding: vh(workingStart - start), bottomPadding: vh(end - workingEnd) };
+  }, [filteredSchedule, timeSlotConfig.startHour, timeSlotConfig.endHour, slotMinutes, baseGridSlots.length]);
 
   const showLoadingOverlay = loading && (schedule.length > 0 || !!scopedOptimisticAppointment);
 
@@ -255,29 +199,25 @@ function DoctorDayCalendarForSelection({
       setLoading(false);
       return;
     }
-    
+
     try {
       setLoading(true);
       setError(null);
-      
-      const res: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
 
-      // Map backend appointments to slot-wise entries with proper type safety
-      const sourceAppointments: Appointment[] = Array.isArray(res?.appointments) ? res.appointments : [];
-      
+      const res: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
+      const sourceAppointments = Array.isArray(res?.appointments) ? res.appointments : [];
+
       // Enrich appointments with patient details (age, gender, visit history)
       const items: AppointmentInSlot[] = await Promise.all(
         sourceAppointments
           .filter((a: Appointment) => (a.status as AppointmentStatus) !== AppointmentStatus.CANCELLED)
-          .map(async (a: Appointment) => {
+          .map(async (a) => {
             let patientDetails: any = null;
             let isFollowUp = false;
-            
-            // Fetch full patient details to get gender, dob, and visit history
+
             if (a.patient?.id) {
               try {
                 patientDetails = await apiClient.getPatient(a.patient.id);
-                // Check if patient has previous visits (follow-up)
                 if (patientDetails) {
                   try {
                     const visitHistory: any = await apiClient.getPatientVisitHistory(a.patient.id);
@@ -291,15 +231,15 @@ function DoctorDayCalendarForSelection({
                 console.warn('Failed to fetch patient details:', err);
               }
             }
-            
+
             const age = (patientDetails as any)?.age != null
               ? (patientDetails as any).age
               : patientDetails?.dob ? calculateAge(patientDetails.dob) : undefined;
-            
+
             return {
               slot: a.slot,
-              patient: a.patient ? { 
-                id: a.patient.id, 
+              patient: a.patient ? {
+                id: a.patient.id,
                 name: formatPatientName(a.patient),
                 phone: a.patient.phone,
                 email: a.patient.email,
@@ -312,6 +252,7 @@ function DoctorDayCalendarForSelection({
               room: a.room,
               id: a.id,
               status: (a.status as AppointmentStatus) || AppointmentStatus.SCHEDULED,
+              calendar: a.calendar,
               visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
               isFollowUp,
               notes: (a as any).notes ?? undefined,
@@ -319,7 +260,7 @@ function DoctorDayCalendarForSelection({
             };
           })
       );
-      
+
       if (request === scheduleRequest.current) setSchedule(items);
     } catch (e) {
       if (request !== scheduleRequest.current) return;
@@ -341,25 +282,9 @@ function DoctorDayCalendarForSelection({
     return () => { scheduleRequest.current += 1; };
   }, [fetchSchedule, refreshKey]);
 
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      cleanupTimeouts.clearAll();
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-      }
-    };
-  }, [cleanupTimeouts, longPressTimer]);
-
-  const blockBackground = (apt: AppointmentInSlot) => {
-    if (apt.status === AppointmentStatus.COMPLETED) return 'rgba(226, 232, 240, 0.95)';
-    const tone = VISIT_TYPE_BACKGROUND[apt.visitType] ?? VISIT_TYPE_BACKGROUND.OPD;
-    return isSlotInPast(apt.slot, date) ? tone.past : tone.current;
-  };
-
   const handleCancelAppointment = async (appointment: AppointmentInSlot) => {
     if (!appointment.id || appointment.id.startsWith('optimistic-')) return;
-    
+
     setCancellingAppointment(appointment.id);
     setSelectedAppointment(appointment);
     setShowCancelDialog(true);
@@ -367,25 +292,21 @@ function DoctorDayCalendarForSelection({
 
   const confirmCancelAppointment = async () => {
     if (!cancellingAppointment) return;
-    
+
     const appointmentIdToCancel = cancellingAppointment;
-    
+
     try {
       await apiClient.deleteAppointment(appointmentIdToCancel);
-      
+
       toast({
         variant: "success",
         title: "Appointment Cancelled",
         description: "The appointment has been successfully cancelled.",
       });
-      
-      // Refresh the schedule
+
       await fetchSchedule();
-      
-      // Notify parent component
       onAppointmentUpdate?.();
-      
-      // Close dialogs
+
       setShowCancelDialog(false);
       setSelectedAppointment(null);
       setCancellingAppointment(null);
@@ -404,8 +325,7 @@ function DoctorDayCalendarForSelection({
 
   const handleStartVisit = (appointment: AppointmentInSlot) => {
     if (!appointment.patient?.id || !appointment.id || appointment.id.startsWith('optimistic-')) return;
-    
-    // Navigate to visits page with appointment data
+
     const searchParams = new URLSearchParams({
       patientId: appointment.patient.id,
       appointmentId: appointment.id,
@@ -418,6 +338,63 @@ function DoctorDayCalendarForSelection({
     }
 
     router.push(`/dashboard/visits?${searchParams.toString()}`);
+  };
+
+  const place = async (appointment: AppointmentInSlot, target: SlotChoice): Promise<'placed' | 'declined'> => {
+    const moved = await sendWithOverbookConfirm((allowOverbook) => apiClient.rescheduleAppointment(appointment.id, {
+      date,
+      slot: target.slot,
+      roomId: appointment.room?.id,
+      calendar: target.calendar,
+      ...overbookFlag(allowOverbook),
+    }));
+    if (!moved) return 'declined';
+    toast({
+      variant: 'success',
+      title: target.calendar === appointment.calendar ? 'Appointment rescheduled' : CALENDARS[target.calendar].arrivedTitle,
+      description: `${formatPatientName(appointment.patient)} is now at ${target.slot} in ${CALENDARS[target.calendar].title}.`,
+    });
+    await fetchSchedule();
+    onAppointmentUpdate?.();
+    return 'placed';
+  };
+
+  const moveAtSameTime = async (appointment: AppointmentInSlot, calendar: AppointmentCalendar) => {
+    if (placing) return;
+    const target = { slot: appointment.slot, calendar };
+    setPlacing(true);
+    try {
+      const outcome = await place(appointment, target);
+      setSelectedAppointment(null);
+      if (outcome === 'declined') setMove({ appointment, refused: target });
+    } catch (e) {
+      if (isConflictError(e)) {
+        setSelectedAppointment(null);
+        setMove({ appointment, refused: target });
+      } else {
+        toast({ variant: 'destructive', title: `Could not move ${formatPatientName(appointment.patient)}`, description: getErrorMessage(e) });
+      }
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const moveInto = async (target: SlotChoice) => {
+    if (!move || placing) return;
+    setPlacing(true);
+    try {
+      if (await place(move.appointment, target) === 'placed') setMove(null);
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Failed to reschedule', description: getErrorMessage(e) });
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const slotActionFor = (calendar: AppointmentCalendar): SlotAction => {
+    if (!move) return { kind: 'book', patientMissing: disableSlotBooking };
+    if (move.refused && move.refused.calendar !== calendar) return { kind: 'none' };
+    return { kind: 'move', minutes: Math.max(1, getSlotDurationMinutes(move.appointment.slot)) };
   };
 
   if (loading && schedule.length === 0) {
@@ -443,30 +420,13 @@ function DoctorDayCalendarForSelection({
     );
   }
 
+  const selectedMove = selectedAppointment ? CALENDARS[selectedAppointment.calendar].move : null;
+  const offersMove = !!selectedAppointment && selectedAppointment.status === selectedMove?.offeredWhile;
+
   return (
     <>
       <Card>
-        <CardContent className="p-4">
-          <section aria-labelledby="patient-queue-title" aria-busy={loading} className="mb-5 space-y-2">
-            <h2 id="patient-queue-title" className="font-semibold">Patient queue</h2>
-            <p className="text-sm text-gray-700">Active appointments for {date}, in scheduled time order.</p>
-            {queue.length === 0 ? <p className="text-sm text-gray-700">No active appointments for these filters.</p> : (
-              <ul className="divide-y rounded-md border">
-                {queue.map(appointment => (
-                  <li key={appointment.id || appointment.slot} className="flex flex-wrap items-center justify-between gap-2 p-3">
-                    <div className="min-w-0">
-                      <span className="font-medium">{formatPatientName(appointment.patient)}</span>
-                      <span className="ml-2 text-sm text-gray-700">{appointment.slot} · {String(appointment.status).replaceAll('_', ' ')}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" disabled={loading || appointment.id?.startsWith('optimistic-')} onClick={() => setSelectedAppointment(appointment)} aria-label={`View appointment for ${formatPatientName(appointment.patient)}`}>Details</Button>
-                      <Button size="sm" disabled={loading || appointment.id?.startsWith('optimistic-')} onClick={() => handleStartVisit(appointment)} aria-label={`${appointment.visit?.id ? 'Continue' : 'Start'} visit for ${formatPatientName(appointment.patient)}`}>{appointment.visit?.id ? 'Continue visit' : 'Start visit'}</Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+        <CardContent className="p-3 sm:p-4">
           {(visitTypeFilter !== 'ALL' || roomFilter !== 'ALL') && (
             <div className="mb-4 p-3 bg-blue-50 rounded-lg">
               <div className="text-sm text-blue-700">
@@ -480,15 +440,23 @@ function DoctorDayCalendarForSelection({
               </div>
             </div>
           )}
-          
+
           <div className="relative" aria-busy={loading}>
-            {rescheduleTarget && (
-              <div className="mb-3 flex items-start justify-between rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+            {move && (
+              <div role="status" className="sticky top-0 z-20 mb-3 flex items-start justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
                 <div>
-                  <div className="font-medium text-amber-800">Rescheduling {formatPatientName(rescheduleTarget.patient)}</div>
-                  <div className="text-amber-700">Click a free time to move this appointment to {date}.</div>
+                  <div className="font-medium text-amber-800">
+                    {move.refused
+                      ? `Moving ${formatPatientName(move.appointment.patient)} to ${CALENDARS[move.refused.calendar].title}`
+                      : `Rescheduling ${formatPatientName(move.appointment.patient)}`}
+                  </div>
+                  <div className="text-amber-700">
+                    {move.refused
+                      ? `${move.refused.slot} is taken in ${CALENDARS[move.refused.calendar].title}. Click a free time in the ${CALENDARS[move.refused.calendar].title} calendar.`
+                      : 'Click a free time in either calendar to move this appointment there.'}
+                  </div>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => setRescheduleTarget(null)} disabled={rescheduleLoading}>
+                <Button size="sm" variant="ghost" className="shrink-0" onClick={() => setMove(null)} disabled={placing}>
                   Cancel
                 </Button>
               </div>
@@ -499,426 +467,46 @@ function DoctorDayCalendarForSelection({
                 <span className="mt-2 text-sm font-medium text-blue-700">Refreshing schedule…</span>
               </div>
             )}
-            <div className="flex">
-              {/* Sticky left gutter with hour labels */}
-              <div className="w-14 sticky left-0 top-0 self-start z-10 bg-white/80 backdrop-blur-sm" style={{ paddingTop: topPadding, paddingBottom: bottomPadding }}>
+            <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_minmax(0,1fr)] grid-rows-[auto_auto] gap-x-1.5 gap-y-1 sm:grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-3">
+              <div data-time-gutter aria-hidden="true" className="col-start-1 row-start-2" style={{ paddingTop: timeline.topPadding, paddingBottom: timeline.bottomPadding }}>
                 {baseGridSlots.map((slot) => {
                   const slotStart = slot.split('-')[0];
-                  const isHourStart = slotStart.endsWith(':00');
                   return (
                     <div key={`gutter-${slot}`} style={{ height: tileHeightCss }} className="flex items-start justify-end pr-1">
-                      {isHourStart && (
+                      {slotStart.endsWith(':00') && (
                         <span className="text-[10px] leading-none text-gray-400">{slotStart}</span>
                       )}
                     </div>
                   );
                 })}
               </div>
-              {/* Main calendar grid */}
-              <div
-                className="flex-1 grid grid-cols-1 gap-0"
-                style={{ position: 'relative', paddingTop: topPadding, paddingBottom: bottomPadding, gridAutoRows: tileHeightCss, ...(showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : {}) }}
-              >
-            {appointmentBlocks.map(({ apt, key, start, end, topPct, heightPct, lane, laneCount }) => {
-              const status = APPOINTMENT_STATUS_STYLE[apt.status] ?? APPOINTMENT_STATUS_STYLE[AppointmentStatus.SCHEDULED];
-              const patientName = formatPatientName(apt.patient ?? { name: 'Unknown' });
-              const isOptimistic = apt.id?.startsWith('optimistic-');
-              const accessibleName = [
-                apt.tokenNumber != null ? `Token ${apt.tokenNumber}` : null,
-                patientName,
-                `${start}-${end}`,
-                status.label,
-              ].filter(Boolean).join(', ');
-              return (
-                <div
-                  key={key}
-                  data-appointment-block={apt.id || apt.slot}
-                  className="@container group absolute p-px"
-                  style={{
-                    top: `${topPct}%`,
-                    height: `${heightPct}%`,
-                    left: `${(lane * 100) / Math.max(laneCount, maxBookingsPerSlot)}%`,
-                    width: `${100 / Math.max(laneCount, maxBookingsPerSlot)}%`,
-                    zIndex: 2,
-                  }}
-                >
-                  <button
-                    type="button"
-                    aria-label={accessibleName}
-                    title={accessibleName}
-                    onClick={() => setSelectedAppointment(apt)}
-                    disabled={isOptimistic}
-                    className={`@container flex h-full w-full items-start overflow-hidden rounded-md border-l-[3px] px-1.5 py-0.5 text-left leading-tight shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${status.accentClassName} ${apt.slot === recentBookedSlot ? 'ring-2 ring-green-500/60' : ''}`}
-                    style={{
-                      backgroundColor: blockBackground(apt),
-                      fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))',
-                    }}
-                  >
-                    <span className={`flex w-full min-w-0 items-center gap-1.5 whitespace-nowrap ${status.muted ? 'text-gray-500' : 'text-gray-900'}`}>
-                      {apt.tokenNumber != null && (
-                        <span className="shrink-0 font-semibold text-gray-500">#{apt.tokenNumber}</span>
-                      )}
-                      <span data-appointment-time className="hidden shrink-0 font-bold text-blue-700 @min-[14rem]:inline">{`${start}-${end}`}</span>
-                      <span
-                        data-patient-name
-                        className={`min-w-0 flex-auto truncate font-semibold ${status.strikeName ? 'line-through' : ''}`}
-                      >
-                        {patientName}
-                      </span>
-                      <span className="hidden min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden @min-[24rem]:flex">
-                        {apt.visitType === 'PROCEDURE' && apt.notes && (
-                          <span className="truncate font-medium text-purple-700">({apt.notes})</span>
-                        )}
-                        {apt.isFollowUp && <span className="font-semibold text-amber-600">FOLLOW-UP</span>}
-                        <span className="font-medium text-purple-600">{apt.visitType || 'OPD'}</span>
-                        {apt.patient?.age !== undefined && <span className="text-gray-600">{apt.patient.age}y</span>}
-                        {apt.patient?.gender && <span className="rounded bg-gray-100 px-1 text-gray-600">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
-                        {apt.room?.name && <span className="truncate font-medium text-green-600">{apt.room.name}</span>}
-                      </span>
-                      <Badge variant={status.badgeVariant} className="hidden shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] leading-4 @min-[9rem]:inline-flex">
-                        {status.label}
-                      </Badge>
-                    </span>
-                  </button>
-
-                  <div data-appointment-actions className="pointer-events-none absolute right-1 top-0.5 hidden gap-1 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 @min-[16rem]:flex">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedAppointment(apt);
-                      }}
-                      className="bg-gray-500 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                      title="View Appointment Details"
-                      disabled={isOptimistic}
-                    >
-                      INFO
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRescheduleTarget(apt);
-                      }}
-                      className="bg-amber-700 hover:bg-amber-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                      title="Reschedule Appointment"
-                      disabled={isOptimistic}
-                    >
-                      RESCHED
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStartVisit(apt);
-                      }}
-                      className="bg-blue-700 hover:bg-blue-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                      title={apt.visit?.id ? 'Continue Visit' : 'Start Visit'}
-                      disabled={isOptimistic}
-                    >
-                      {apt.visit?.id ? 'CONT' : 'START'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            {baseGridSlots.map((slot, idx) => {
-              // Determine overlaps with any appointment
-              const overlappingAppointments = filteredSchedule.filter(a => doTimeSlotsOverlap(a.slot, slot));
-              const hasAny = overlappingAppointments.length > 0;
-              const full = overlappingAppointments.length >= maxBookingsPerSlot;
-              const primary = overlappingAppointments[0];
-              const past = isSlotInPast(slot, date);
-              const isNewlyBooked = recentBookedSlot === slot || (primary?.slot === recentBookedSlot);
-              const isBookingInProgress = bookingInProgress === slot;
-              const isDisabled = past || isBookingInProgress || full || (!rescheduleTarget && disableSlotBooking);
-              const slotStart = slot.split('-')[0];
-
-              // Hour divider: draw a subtle top line on HH:00 tiles
-              const isHourStart = slotStart.endsWith(':00');
-              // Now line: highlight current 10-min tile for today
-              const showNowLine = (() => {
-                if (!isToday || !nowHHMM) return false;
-                const [s, e] = slot.split('-');
-                const n = hhmmToMinutes(nowHHMM);
-                return n >= hhmmToMinutes(s) && n < hhmmToMinutes(e);
-              })();
-
-              // Selection preview highlighting (only on free tiles)
-              const inSelectionPreview = (() => {
-                if (!selecting || selectionStartIdx === null || selectionEndIdx === null) return false;
-                const lo = Math.min(selectionStartIdx, selectionEndIdx);
-                const hi = Math.max(selectionStartIdx, selectionEndIdx);
-                return idx >= lo && idx <= hi && !full;
-              })();
-
-              // Precompute tile boundaries in minutes for partial-fill overlays
-              const [tileStartStr, tileEndStr] = slot.split('-');
-              const tileStartMin = hhmmToMinutes(tileStartStr);
-              const tileEndMin = hhmmToMinutes(tileEndStr);
-              const crossesTop = hasAny && overlappingAppointments.some((apt) => {
-                const [as, ae] = apt.slot.split('-');
-                const aptStart = hhmmToMinutes(as);
-                const aptEnd = hhmmToMinutes(ae);
-                return aptStart < tileStartMin && aptEnd > tileStartMin;
-              });
-              const crossesBottom = hasAny && overlappingAppointments.some((apt) => {
-                const [as, ae] = apt.slot.split('-');
-                const aptStart = hhmmToMinutes(as);
-                const aptEnd = hhmmToMinutes(ae);
-                return aptStart < tileEndMin && aptEnd > tileEndMin;
-              });
-              // Compute base border color once; avoid shorthand borderColor conflicts with per-side overrides
-              const baseBorderColor = isBookingInProgress ? '#f59e0b' : (past ? '#d1d5db' : '#e5e7eb');
-
-              // Flexible selection within a tile: allow booking in sub-segments (e.g., 15m) if space exists
-              const FLEX_STEP_MIN = 15; // baseline flexible start granularity
-              // Same conservative count as the server: every booking overlapping the span takes a place.
-              const fits = (span: string) => filteredSchedule.filter(a => doTimeSlotsOverlap(a.slot, span)).length < maxBookingsPerSlot;
-              const findFirstFreeStart = (requiredMinutes: number): number | null => {
-                const maxStart = tileEndMin - requiredMinutes;
-                for (let s = tileStartMin; s <= maxStart; s += FLEX_STEP_MIN) {
-                  const e = s + requiredMinutes;
-                  const candidate = `${minutesToHHMM(s)}-${minutesToHHMM(e)}`;
-                  if (fits(candidate)) return s;
-                }
-                return null;
-              };
-              // For booking (not reschedule), require FLEX_STEP_MIN free; for reschedule, require original duration
-              const requiredMinutesForAction = rescheduleTarget ? Math.max(1, getSlotDurationMinutes(rescheduleTarget.slot)) : FLEX_STEP_MIN;
-              const freeStartMin = findFirstFreeStart(requiredMinutesForAction);
-
-              return (
-                <div 
-                  key={slot} 
-                  className={`border rounded-none ${hasAny ? 'p-0' : 'p-1'} flex flex-col gap-1 transition-all duration-200 relative`}
-                  style={{
-                    backgroundColor: (() => {
-                      if (isBookingInProgress) return '#fbbf24';
-                      return past ? '#f3f4f6' : (inSelectionPreview ? '#fef3c7' : 'white');
-                    })(),
-                    // Per-side border colors to avoid shorthand conflicts
-                    borderTopColor: hasAny && crossesTop ? 'transparent' : baseBorderColor,
-                    borderBottomColor: hasAny && crossesBottom ? 'transparent' : baseBorderColor,
-                    borderLeftColor: baseBorderColor,
-                    borderRightColor: baseBorderColor,
-                    opacity: past && !hasAny ? 0.6 : 1,
-                    boxShadow: (() => {
-                      const parts: string[] = [];
-                      if (isNewlyBooked) parts.push('0 0 0 2px rgba(34, 197, 94, 0.3)');
-                      else if (isBookingInProgress) parts.push('0 0 0 2px rgba(251, 191, 36, 0.3)');
-                      if (showNowLine) parts.push('inset 0 2px 0 #ef4444');
-                      else if (isHourStart && !(hasAny && crossesTop)) parts.push('inset 0 1px 0 #e5e7eb');
-                      return parts.length ? parts.join(', ') : 'none';
-                    })(),
-                    height: tileHeightCss,
-                    pointerEvents: past ? 'none' : undefined,
-                    overflow: 'hidden',
-                  }}
-                  title={(() => {
-                    if (full && primary) return `Long press to view details: ${formatPatientName(primary.patient ?? { name: 'Unknown' })} — ${primary.slot}`;
-                    if (!past && freeStartMin !== null) {
-                      const s = minutesToHHMM(freeStartMin);
-                      const e = minutesToHHMM(freeStartMin + requiredMinutesForAction);
-                      return `Book ${s}-${e}`;
-                    }
-                    return undefined;
-                  })()}
-                  onMouseDown={(e) => {
-                    if (e.button !== 0) return; // left-click only
-                    
-                    // Start long press timer for appointments
-                    if (full && primary) {
-                      const timer = setTimeout(() => {
-                        setIsLongPressing(true);
-                        setSelectedAppointment(primary);
-                      }, 500); // 500ms for long press
-                      setLongPressTimer(timer);
-                    }
-                    
-                    if (rescheduleTarget) return; // creation only
-                    if (past) return;
-                    if (disableSlotBooking) {
-                      if (!full) {
-                        toast({ variant: 'destructive', title: 'Patient required', description: 'Search and select a patient before booking a slot.' });
-                      }
-                      return;
-                    }
-                    setSelecting(true);
-                    setSelectionStartIdx(idx);
-                    setSelectionEndIdx(idx);
-                  }}
-                  onMouseEnter={() => {
-                    if (!selecting) return;
-                    setSelectionEndIdx(idx);
-                  }}
-                  onMouseLeave={() => {
-                    // Cancel long press if mouse leaves
-                    if (longPressTimer) {
-                      clearTimeout(longPressTimer);
-                      setLongPressTimer(null);
-                    }
-                  }}
-                  onTouchStart={(e) => {
-                    // Handle touch for mobile devices
-                    if (full && primary) {
-                      const timer = setTimeout(() => {
-                        setIsLongPressing(true);
-                        setSelectedAppointment(primary);
-                      }, 500);
-                      setLongPressTimer(timer);
-                    }
-                  }}
-                  onTouchEnd={() => {
-                    // Clear long press timer on touch end
-                    if (longPressTimer) {
-                      clearTimeout(longPressTimer);
-                      setLongPressTimer(null);
-                    }
-                    if (isLongPressing) {
-                      setIsLongPressing(false);
-                    }
-                  }}
-                  onTouchCancel={() => {
-                    // Cancel long press if touch is cancelled
-                    if (longPressTimer) {
-                      clearTimeout(longPressTimer);
-                      setLongPressTimer(null);
-                    }
-                    setIsLongPressing(false);
-                  }}
-                  onMouseUp={() => {
-                    // Clear long press timer
-                    if (longPressTimer) {
-                      clearTimeout(longPressTimer);
-                      setLongPressTimer(null);
-                    }
-                    
-                    // If it was a long press, don't process as selection
-                    if (isLongPressing) {
-                      setIsLongPressing(false);
-                      return;
-                    }
-                    
-                    if (!selecting) return;
-                    const startIdx = selectionStartIdx ?? idx;
-                    const endIdx = selectionEndIdx ?? idx;
-                    const lo = Math.min(startIdx, endIdx);
-                    const hi = Math.max(startIdx, endIdx);
-                    const startSlot = baseGridSlots[lo];
-                    const endSlot = baseGridSlots[hi];
-                    const startHH = startSlot.split('-')[0];
-                    // If single-tile click, default to grid stepMinutes span
-                    const defaultMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
-                    const endHH = (lo === hi) ? addMinutesToHHMM(startHH, defaultMinutes) : endSlot.split('-')[1];
-                    const newSpan = `${startHH}-${endHH}`;
-                    if (!fits(newSpan)) {
-                      // Fall back to flexible sub-segment booking within this tile if available
-                      if (freeStartMin !== null) {
-                        const s = minutesToHHMM(freeStartMin);
-                        const e = minutesToHHMM(freeStartMin + FLEX_STEP_MIN);
-                        setSelecting(false);
-                        setSelectionStartIdx(null);
-                        setSelectionEndIdx(null);
-                        onSelectSlot?.(`${s}-${e}`);
-                        return;
-                      } else {
-                        toast({ variant: 'destructive', title: 'Overlaps existing appointment', description: 'Please select a free time range.' });
-                        setSelecting(false);
-                        setSelectionStartIdx(null);
-                        setSelectionEndIdx(null);
-                        return;
-                      }
-                    }
-                    setSelecting(false);
-                    setSelectionStartIdx(null);
-                    setSelectionEndIdx(null);
-                    onSelectSlot?.(newSpan);
-                  }}
-                >
-                  {full ? null : (
-                    <div
-                      role="button"
-                      aria-label={`${rescheduleTarget ? `Move to ${slot}` : `Book ${slot}`}${hasAny ? `, ${overlappingAppointments.length} of ${maxBookingsPerSlot} booked` : ''}`}
-                      onClick={async () => {
-                        if (selecting) return;
-                        if (past) return;
-                        if (disableSlotBooking && !rescheduleTarget) {
-                          toast({ variant: 'destructive', title: 'Patient required', description: 'Search and select a patient before booking a slot.' });
-                          return;
-                        }
-                        if (rescheduleTarget && rescheduleTarget.id) {
-                          const dur = Math.max(1, getSlotDurationMinutes(rescheduleTarget.slot));
-                          // Flexible reschedule: try to place within this tile's first free sub-range
-                          const targetStartMin = findFirstFreeStart(dur);
-                          const newSlot = targetStartMin !== null
-                            ? `${minutesToHHMM(targetStartMin)}-${minutesToHHMM(targetStartMin + dur)}`
-                            : `${slotStart}-${addMinutesToHHMM(slotStart, dur)}`;
-                          setRescheduleLoading(true);
-                          try {
-                            const moved = await sendWithOverbookConfirm((allowOverbook) => apiClient.rescheduleAppointment(rescheduleTarget.id!, {
-                              date,
-                              slot: newSlot,
-                              roomId: rescheduleTarget.room?.id,
-                              ...overbookFlag(allowOverbook),
-                            }));
-                            if (!moved) return;
-                            toast({ variant: 'success', title: 'Appointment rescheduled', description: `${formatPatientName(rescheduleTarget.patient)} moved to ${newSlot}` });
-                            setRescheduleTarget(null);
-                            await fetchSchedule();
-                            onAppointmentUpdate?.();
-                          } catch (e) {
-                            const msg = getErrorMessage(e);
-                            toast({ variant: 'destructive', title: 'Failed to reschedule', description: msg });
-                          } finally {
-                            setRescheduleLoading(false);
-                          }
-                          return;
-                        }
-                        // Flexible booking within tile
-                        if (freeStartMin !== null) {
-                          const s = minutesToHHMM(freeStartMin);
-                          const e = minutesToHHMM(freeStartMin + FLEX_STEP_MIN);
-                          onSelectSlot?.(`${s}-${e}`);
-                        }
-                      }}
-                      title={rescheduleTarget
-                        ? (() => {
-                            const dur = Math.max(1, getSlotDurationMinutes(rescheduleTarget?.slot || '00:00-00:10'));
-                            const start = findFirstFreeStart(dur);
-                            const s = start !== null ? minutesToHHMM(start) : slotStart;
-                            const e = addMinutesToHHMM(s, dur);
-                            return `Move to ${s}-${e}`;
-                          })()
-                        : (() => {
-                            if (freeStartMin !== null) {
-                              const s = minutesToHHMM(freeStartMin);
-                              const e = minutesToHHMM(freeStartMin + FLEX_STEP_MIN);
-                              return `Book ${s}-${e}`;
-                            }
-                            return `Book`;
-                          })()
-                      }
-                      style={{
-                        height: '1.75rem',
-                        backgroundColor: past ? '#ffffff' : (isBookingInProgress ? '#fbbf24' : '#ffffff'),
-                        cursor: (past || (disableSlotBooking && !rescheduleTarget) || freeStartMin === null) ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      {hasAny && (
-                        <span data-overbook-capacity className="pointer-events-none absolute right-1 top-0.5 rounded bg-amber-100 px-1 text-[10px] font-medium leading-4 text-amber-800">
-                          Overbook {overlappingAppointments.length}/{maxBookingsPerSlot}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-              </div>
+              {columns.map(({ calendar, appointments }, index) => (
+                <CalendarColumn
+                  key={calendar}
+                  calendar={calendar}
+                  column={index + 2}
+                  appointments={appointments}
+                  date={date}
+                  slots={baseGridSlots}
+                  stepMinutes={slotMinutes}
+                  tileHeight={tileHeightCss}
+                  timeline={timeline}
+                  nowHHMM={isToday && nowHHMM ? nowHHMM : null}
+                  recentBookedSlot={recentBookedSlot}
+                  bookingInProgress={bookingInProgress?.calendar === calendar ? bookingInProgress.slot : undefined}
+                  maxBookingsPerSlot={maxBookingsPerSlot}
+                  slotAction={slotActionFor(calendar)}
+                  busy={showLoadingOverlay}
+                  onOpen={setSelectedAppointment}
+                  onReschedule={(appointment) => setMove({ appointment })}
+                  onStartVisit={handleStartVisit}
+                  onBook={(slot) => onSelectSlot?.(slot, calendar)}
+                  onMove={(slot) => void moveInto({ slot, calendar })}
+                />
+              ))}
             </div>
           </div>
-          
+
           {filteredSchedule.length === 0 && schedule.length > 0 && (
             <div className="text-center text-gray-500 mt-4 p-4">
               No appointments match the current filters.
@@ -929,7 +517,6 @@ function DoctorDayCalendarForSelection({
 
       {overbookDialog}
 
-      {/* Appointment Details Dialog */}
       <Dialog open={!!selectedAppointment && !showCancelDialog} onOpenChange={(v: boolean) => { if (!v) setSelectedAppointment(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -939,9 +526,15 @@ function DoctorDayCalendarForSelection({
             <div className="space-y-3 text-sm">
               <div><span className="text-gray-600">Date:</span> {date}</div>
               <div><span className="text-gray-600">Slot:</span> {selectedAppointment.slot}</div>
+              <div><span className="text-gray-600">Calendar:</span> {CALENDARS[selectedAppointment.calendar].title}</div>
               <div><span className="text-gray-600">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
               {selectedAppointment.patient?.phone && (
-                <div><span className="text-gray-600">Phone:</span> {selectedAppointment.patient.phone}</div>
+                <div>
+                  <span className="text-gray-600">Phone:</span>{' '}
+                  <a href={`tel:${selectedAppointment.patient.phone.replace(/[^\d+]/g, '')}`} className="font-medium text-blue-700 underline underline-offset-2">
+                    {selectedAppointment.patient.phone}
+                  </a>
+                </div>
               )}
               {selectedAppointment.patient?.email && (
                 <div><span className="text-gray-600">Email:</span> {selectedAppointment.patient.email}</div>
@@ -976,20 +569,21 @@ function DoctorDayCalendarForSelection({
               )}
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-wrap">
             <Button variant="outline" onClick={() => setSelectedAppointment(null)}>
               Close
             </Button>
             {selectedAppointment && !selectedAppointment.id?.startsWith('optimistic-') && (
               <>
-                <Button onClick={() => handleStartVisit(selectedAppointment)}>
+                <Button variant={offersMove && selectedMove?.primary ? 'outline' : 'default'} onClick={() => handleStartVisit(selectedAppointment)} disabled={placing}>
                   <FileText className="h-4 w-4 mr-2" />
                   Start Visit
                 </Button>
                 <Button
                   variant="outline"
+                  disabled={placing}
                   onClick={() => {
-                    setRescheduleTarget(selectedAppointment);
+                    setMove({ appointment: selectedAppointment });
                     setSelectedAppointment(null);
                   }}
                 >
@@ -997,11 +591,21 @@ function DoctorDayCalendarForSelection({
                 </Button>
                 <Button
                   variant="destructive"
+                  disabled={placing}
                   onClick={() => handleCancelAppointment(selectedAppointment)}
                 >
                   <X className="h-4 w-4 mr-2" />
                   Cancel Appointment
                 </Button>
+                {offersMove && selectedMove && (
+                  <Button
+                    variant={selectedMove.primary ? 'default' : 'outline'}
+                    disabled={placing}
+                    onClick={() => void moveAtSameTime(selectedAppointment, selectedMove.to)}
+                  >
+                    {placing ? selectedMove.busyLabel : selectedMove.label}
+                  </Button>
+                )}
               </>
             )}
           </DialogFooter>

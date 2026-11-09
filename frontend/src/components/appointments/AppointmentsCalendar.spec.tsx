@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AppointmentsCalendar from './AppointmentsCalendar';
 
@@ -29,36 +29,30 @@ jest.mock('./AppointmentBookingDialog', () => ({
   ),
 }));
 
+async function bookIn(column: 'Scheduled' | 'Confirmed', slot: string) {
+  const user = userEvent.setup();
+  render(<AppointmentsCalendar prefillPatientId="p1" controlledDoctorId="d1" controlledDate="2099-01-01" hideHeaderControls />);
+  await screen.findByText(/Selected: Synthetic Patient/);
+  await user.click(await within(await screen.findByRole('region', { name: column })).findByRole('button', { name: `Book ${slot}` }));
+  await user.click(await screen.findByText('Confirm Booking'));
+}
+
 describe('AppointmentsCalendar booking flow', () => {
-  it('books when clicking a free slot and confirming', async () => {
-    const user = userEvent.setup();
+  beforeEach(() => createAppointment.mockClear());
 
-    render(
-      <AppointmentsCalendar
-        prefillPatientId="p1"
-        controlledDoctorId="d1"
-        controlledDate="2099-01-01"
-        hideHeaderControls
-      />
-    );
+  it('books a free time in the Scheduled column into the Scheduled calendar', async () => {
+    await bookIn('Scheduled', '10:00-10:30');
+    await waitFor(() => expect(createAppointment).toHaveBeenCalledTimes(1));
+    expect(createAppointment.mock.calls[0][0]).toEqual({
+      doctorId: 'd1', patientId: 'p1', date: '2099-01-01', slot: '10:00-10:15', visitType: 'OPD', roomId: undefined, notes: undefined, calendar: 'SCHEDULED',
+    });
+  });
 
-    // Wait for doctor selection effect to run
-    await waitFor(() => expect(screen.getByText('Doctor Calendar')).toBeInTheDocument());
-
-    await screen.findByText(/Selected: Synthetic Patient/);
-
-    // There should be free tiles; pick the first book button by regex Book HH:MM-HH:MM
-    const tiles = await screen.findAllByRole('button', { name: /Book \d{2}:\d{2}-\d{2}:\d{2}/i });
-    await user.click(tiles[0]);
-
-    const confirm = await screen.findByText('Confirm Booking');
-    await user.click(confirm);
-
-    await waitFor(() => expect(createAppointment).toHaveBeenCalled());
-    expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({
-      doctorId: 'd1',
-      patientId: 'p1',
-      date: '2099-01-01',
-    }));
+  it('books a free time in the Confirmed column into the Confirmed calendar and says so', async () => {
+    createAppointment.mockResolvedValueOnce({ id: 'apt-2', slot: '14:00-14:15', patient: { name: 'Synthetic Patient' } });
+    await bookIn('Confirmed', '14:00-14:30');
+    await waitFor(() => expect(createAppointment).toHaveBeenCalledTimes(1));
+    expect(createAppointment.mock.calls[0][0]).toMatchObject({ slot: '14:00-14:15', calendar: 'CONFIRMED' });
+    expect((await screen.findByText('Appointment Successfully Booked!')).parentElement).toHaveTextContent('Synthetic Patient scheduled for 14:00-14:15 in the Confirmed calendar');
   });
 });
