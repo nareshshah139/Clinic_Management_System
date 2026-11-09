@@ -24,6 +24,7 @@ import {
   Pill,
   Mic,
   ShoppingBag,
+  FileBarChart,
 } from "lucide-react";
 
 type PharmacySidebarSection = "desk" | "counter";
@@ -113,6 +114,12 @@ const navigation: NavigationItem[] = [
     href: "/dashboard/inventory",
     icon: Package,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "RECEPTION"],
+  },
+  {
+    name: "Pharmacy Report", section: "Pharmacy",
+    href: "/dashboard/pharmacy/reports",
+    icon: FileBarChart,
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "ACCOUNTANT"],
   },
   {
     name: "Reports", section: "Admin",

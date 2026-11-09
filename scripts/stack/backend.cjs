@@ -18,7 +18,15 @@ req("ts-node").register({
 req("iconv-lite/encodings");
 const source = (name) => require(path.join(root, "backend/src", name));
 const { NestFactory } = req("@nestjs/core");
-const { ExpressAdapter } = req("@nestjs/platform-express");
+// Resolve the adapter as the backend source does, so a workspace install that keeps it under
+// backend/node_modules still shares the one @nestjs/core the app modules load.
+const { ExpressAdapter } = (() => {
+  try {
+    return req("@nestjs/platform-express");
+  } catch {
+    return createRequire(path.join(root, "backend/src/main.ts"))("@nestjs/platform-express");
+  }
+})();
 const { AppModule } = source("app.module");
 const { diagnosticValidationPipe, installHttpObservability } = source(
   "shared/logging/http-observability",
