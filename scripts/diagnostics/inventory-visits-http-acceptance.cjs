@@ -114,12 +114,17 @@ async function main() {
     const after = await db.inventoryItem.findUniqueOrThrow({ where: { id: f.inventoryItemId } });
     assert.equal(after.currentStock, before.currentStock - 2);
     assert.equal(after.heldStock, before.heldStock);
+    const paid = await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: invoice.id }, include: { payments: true } });
+    assert.deepEqual([paid.paidAmount, paid.balanceAmount, paid.paymentStatus, paid.payments.map(payment => [payment.amount, payment.method])], [100, 0, 'COMPLETED', [[100, 'CASH']]]);
+    assert.equal((await request('pharmacist', 'POST', `/pharmacy/invoices/${invoice.id}/payments`, { amount: 60, method: 'CASH', requestKey: key() })).status, 400);
     const altered = await request('pharmacist', 'POST', '/pharmacy/invoices/checkout', { ...payload, notes: 'different payload' });
     assert.equal(altered.status, 409);
     assert.equal((await request('pharmacist', 'PATCH', `/pharmacy/invoices/${invoice.id}/status`, { status: 'CANCELLED' })).status, 400);
     assert.equal((await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: invoice.id } })).status, 'CONFIRMED');
   });
   await check('Competing payments and lost-response retries preserve authoritative balance', async () => {
+    const invoice = await ok(request('pharmacist', 'POST', '/pharmacy/invoices/checkout', { ...invoicePayload(), paymentMethod: 'INSURANCE', requestKey: key() }));
+    assert.deepEqual([invoice.paidAmount, invoice.balanceAmount], [0, 100]);
     const payloads = [{ amount: 60, method: 'CASH', requestKey: key() }, { amount: 60, method: 'CASH', requestKey: key() }];
     const results = await Promise.all(payloads.map(payload => request('pharmacist', 'POST', `/pharmacy/invoices/${invoice.id}/payments`, payload)));
     assert.equal(results.filter(result => result.status === 201).length, 1);

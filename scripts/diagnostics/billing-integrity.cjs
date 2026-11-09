@@ -120,10 +120,11 @@ const probe = async (name, fn) => {
     });
     return { item, drug };
   };
-  const invoiceFixture = async (quantity = 1) => {
+  const invoiceFixture = async (quantity = 1, status = "DRAFT") => {
     const s = await stockFixture();
     const invoice = await db.pharmacyInvoice.create({
       data: {
+        status,
         invoiceNumber: "PSTACK-" + randomUUID(),
         patientId: patient.id,
         doctorId: doctor.id,
@@ -312,11 +313,14 @@ const probe = async (name, fn) => {
           command === "edit"
             ? billing.update(
                 s.invoice.id,
-                { items: [{ ...payloadFor(s).items[0], quantity: 10 }] },
+                {
+                  items: [{ ...payloadFor(s).items[0], quantity: 10 }],
+                  expectedVersion: 0,
+                },
                 branch.id,
               )
-            : billing.remove(s.invoice.id, branch.id);
-        const rejection = assert.rejects(mutation, /Only draft invoices/);
+            : billing.remove(s.invoice.id, branch.id, 0);
+        const rejection = assert.rejects(mutation, /already finished/);
         paused.release();
         await Promise.all([confirmation, rejection]);
         const saved = await db.pharmacyInvoice.findUnique({
@@ -341,7 +345,10 @@ const probe = async (name, fn) => {
       const paused = pauseAfterInvoiceLock();
       const edit = paused.service.update(
         s.invoice.id,
-        { items: [{ ...payloadFor(s).items[0], quantity: 10 }] },
+        {
+          items: [{ ...payloadFor(s).items[0], quantity: 10 }],
+          expectedVersion: 0,
+        },
         branch.id,
       );
       await paused.locked;
@@ -369,7 +376,7 @@ const probe = async (name, fn) => {
   );
 
   await probe("Concurrent 80 payments on 100 cannot overcollect", async () => {
-    const s = await invoiceFixture(5);
+    const s = await invoiceFixture(5, "CONFIRMED");
     const outcomes = await Promise.allSettled([
       billing.addPayment(
         s.invoice.id,
@@ -408,7 +415,7 @@ const probe = async (name, fn) => {
   await probe(
     "Duplicate payment returns one receipt and changed payload conflicts",
     async () => {
-      const s = await invoiceFixture(5);
+      const s = await invoiceFixture(5, "CONFIRMED");
       const payment = { requestKey: randomUUID(), amount: 80, method: "CASH" };
       const [a, b] = await Promise.all([
         billing.addPayment(s.invoice.id, payment, branch.id),
@@ -441,32 +448,64 @@ const probe = async (name, fn) => {
       assert.equal(saved.paidAmount, 100);
       assert.equal(saved.balanceAmount, 0);
       assert.equal(saved.paymentStatus, "COMPLETED");
+      return { receipts: 2, actualPayments: 100, balance: 0 };
+    },
+  );
+
+  await probe(
+    "A draft refuses payment, and a receipt taken before Sales still guards it",
+    async () => {
+      const s = await invoiceFixture(5);
       await assert.rejects(
-        () => billing.remove(s.invoice.id, branch.id),
+        () =>
+          billing.addPayment(
+            s.invoice.id,
+            { requestKey: randomUUID(), amount: 80, method: "CASH" },
+            branch.id,
+          ),
+        /Finish the bill in Sales before taking payment/,
+      );
+      await db.pharmacyPayment.create({
+        data: {
+          invoiceId: s.invoice.id,
+          amount: 80,
+          method: "CASH",
+          status: "COMPLETED",
+        },
+      });
+      await assert.rejects(
+        () => billing.remove(s.invoice.id, branch.id, 0),
         /received payments/,
       );
       await assert.rejects(
         () =>
-          billing.update(s.invoice.id, { paymentStatus: "PENDING" }, branch.id),
+          billing.update(
+            s.invoice.id,
+            { paymentStatus: "PENDING", expectedVersion: 0 },
+            branch.id,
+          ),
         /recorded payments/,
       );
       await assert.rejects(
         () =>
           billing.update(
             s.invoice.id,
-            { items: [{ ...payloadFor(s).items[0], quantity: 1 }] },
+            {
+              items: [{ ...payloadFor(s).items[0], quantity: 1 }],
+              expectedVersion: 0,
+            },
             branch.id,
           ),
         /lower than payments/,
       );
-      return { receipts: 2, actualPayments: 100, balance: 0 };
+      return { refusedDraftPayment: true, legacyReceipt: 80, deleted: false };
     },
   );
 
   await probe(
     "Failure while recomputing balance rolls back the payment insert",
     async () => {
-      const s = await invoiceFixture(5);
+      const s = await invoiceFixture(5, "CONFIRMED");
       const proxy = new Proxy(db, {
         get(target, key) {
           if (key === "$transaction")
@@ -672,7 +711,7 @@ const probe = async (name, fn) => {
           () =>
             billing.update(
               existing.invoice.id,
-              { prescriptionId: rx.id },
+              { prescriptionId: rx.id, expectedVersion: 0 },
               branch.id,
             ),
           /prescription|visit/i,
@@ -923,7 +962,12 @@ const probe = async (name, fn) => {
         },
       });
       await assert.rejects(
-        () => billing.update(invoice.id, { patientId: another.id }, branch.id),
+        () =>
+          billing.update(
+            invoice.id,
+            { patientId: another.id, expectedVersion: invoice.mutationVersion },
+            branch.id,
+          ),
         /selected patient/,
       );
       assert.equal(
