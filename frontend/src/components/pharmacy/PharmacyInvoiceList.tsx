@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
+import { getErrorMessage } from '@/lib/utils';
 import { billHref } from './sales/sales-bill-model';
 import { downloadInvoicePdf } from '@/lib/download-invoice-pdf';
 import type {
@@ -174,16 +175,17 @@ export function PharmacyInvoiceList() {
     }
   };
 
-  const handleDeleteInvoice = async (invoiceId: string) => {
+  const handleDeleteInvoice = async (invoice: PharmacyInvoiceSummary) => {
     if (!confirm('Are you sure you want to delete this invoice?')) return;
 
     try {
-      await apiClient.delete(`/pharmacy/invoices/${invoiceId}`);
+      await apiClient.delete(`/pharmacy/invoices/${encodeURIComponent(invoice.id)}?version=${invoice.mutationVersion}`);
       await loadInvoices();
       alert('Invoice deleted successfully');
     } catch (error) {
       console.error('Failed to delete invoice:', error);
-      alert('Failed to delete invoice. Please try again.');
+      await loadInvoices();
+      alert(getErrorMessage(error));
     }
   };
 
@@ -560,7 +562,7 @@ export function PharmacyInvoiceList() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDeleteInvoice(invoice.id)}
+                        onClick={() => handleDeleteInvoice(invoice)}
                         className="text-red-500 hover:text-red-700"
                         title="Delete Invoice"
                       >
