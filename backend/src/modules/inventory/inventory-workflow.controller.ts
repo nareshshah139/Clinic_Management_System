@@ -165,6 +165,9 @@ export class InventoryWorkflowController {
   ) {
     return this.workspace.bulkLocations(r.user, b);
   }
+  @Get('timeline') timeline(@Request() r: any, @Query() q: any) {
+    return this.workspace.timeline(r.user, q);
+  }
   @Get('stock') stock(@Request() r: any, @Query() q: any) {
     return this.workspace.stock(r.user, q);
   }

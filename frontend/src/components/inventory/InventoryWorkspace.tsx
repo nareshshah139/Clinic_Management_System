@@ -27,6 +27,7 @@ import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
 import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
 import { WorkspaceStock } from "./WorkspaceStock";
 import { InventoryApprovals } from "./InventoryApprovals";
+import { InventoryLedger } from "./InventoryLedger";
 import { usePendingItemRequestCount } from "./use-pending-item-requests";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
@@ -66,6 +67,7 @@ const menus: Record<string, string[][]> = {
   ],
   stock: [
     ["list", "Stock list"],
+    ["ledger", "Stock ledger"],
     ["approvals", "Approve corrections"],
     ["COUNT", "Counts & audit"],
     ["SUPPLIER_RETURN", "Supplier returns"],
@@ -350,6 +352,15 @@ export function InventoryWorkspace() {
               onTask={task}
               onDocument={open}
               onInvoice={invoice}
+            />
+          )}
+          {area === "stock" && view === "ledger" && (
+            <InventoryLedger
+              query={query}
+              navigate={navigate}
+              onDocument={open}
+              onInvoice={invoice}
+              onItem={(id) => navigate({ return: origin(), view: "list", item: id })}
             />
           )}
           {area === "stock" && view === "approvals" && (

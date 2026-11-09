@@ -1062,6 +1062,7 @@ model StockTransaction {
   user        User            @relation(fields: [userId], references: [id])
 
   @@unique([branchId, operationId, operationRowId])
+  @@index([branchId, createdAt(sort: Desc), id(sort: Desc)], map: "stock_transactions_branch_created_timeline_idx")
   @@map("stock_transactions")
 }
 

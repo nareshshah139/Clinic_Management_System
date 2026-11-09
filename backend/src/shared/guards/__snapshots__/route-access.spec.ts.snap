@@ -124,6 +124,7 @@ GET /inventory/workspace/settings | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECE
 GET /inventory/workspace/stock | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/stock/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/suppliers | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /inventory/workspace/timeline | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /patients | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /patients/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /patients/:id/next-appointment | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
