@@ -46,6 +46,7 @@ import {
   type PharmacyPaymentStatus as PharmacyPaymentStatusType,
   type PharmacyPaymentMethod as PharmacyPaymentMethodType,
 } from '@/lib/api-enums';
+import { billNumberLabel } from '@/lib/bill-number';
 import { renderPharmacyInvoiceHtml } from '@/lib/pharmacy-invoice-print';
 
 type StatusFilter = PharmacyInvoiceStatusType | 'all';
@@ -480,7 +481,7 @@ export function PharmacyInvoiceList() {
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-lg">{invoice.invoiceNumber}</h3>
+                        <h3 className="font-semibold text-lg">{billNumberLabel(invoice)}</h3>
                         <StatusBadge domain="invoice" status={invoice.status} />
                         <StatusBadge domain="invoice" status={invoice.paymentStatus} />
                       </div>
@@ -525,22 +526,26 @@ export function PharmacyInvoiceList() {
                     </div>
                     
                     <div className="flex gap-2 ml-4">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleViewInvoice(invoice.id)}
-                        title="View Invoice"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDownloadInvoice(invoice.id)}
-                        title="Download Invoice"
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
+                      {invoice.status !== 'DRAFT' && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewInvoice(invoice.id)}
+                            title="View Invoice"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownloadInvoice(invoice.id)}
+                            title="Download Invoice"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                       {(pendingPaymentIds.includes(invoice.id) || (invoice.status !== 'CANCELLED' && invoice.status !== 'DRAFT' && (invoice.paymentStatus === 'PENDING' || invoice.paymentStatus === 'PARTIALLY_PAID'))) && (
                         <Button
                           variant="ghost"
@@ -554,7 +559,7 @@ export function PharmacyInvoiceList() {
                       )}
                       {invoice.status === 'DRAFT' && (
                         <Button asChild variant="ghost" size="sm" title="Continue in Sales">
-                          <Link href={billHref({ draft: invoice.id })} aria-label={`Continue draft ${invoice.invoiceNumber} in Sales`}>
+                          <Link href={billHref({ draft: invoice.id })} aria-label={`Continue the draft for ${invoice.patient.name} in Sales`}>
                             <Pencil className="h-4 w-4" />
                           </Link>
                         </Button>

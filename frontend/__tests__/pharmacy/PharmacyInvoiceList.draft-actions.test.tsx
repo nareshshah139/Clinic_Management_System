@@ -20,9 +20,16 @@ beforeEach(() => {
 
 it('sends a draft sale to Sales to finish, without confirming or taking payment from the list', async () => {
   render(<PharmacyInvoiceList />);
-  expect(await screen.findByRole('link', { name: 'Continue draft SALE-9 in Sales' })).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill?draft=draft-1');
+  expect(await screen.findByRole('link', { name: 'Continue the draft for Sample Patient in Sales' })).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill?draft=draft-1');
   expect(screen.getByTitle('Delete Invoice')).toBeInTheDocument();
-  expect([screen.queryByTitle('Confirm Invoice'), screen.queryByTitle('Mark as Paid')]).toEqual([null, null]);
+  expect(screen.getByRole('heading', { name: 'Draft', level: 3 })).toBeInTheDocument();
+  expect([
+    screen.queryByTitle('Confirm Invoice'),
+    screen.queryByTitle('Mark as Paid'),
+    screen.queryByTitle('View Invoice'),
+    screen.queryByTitle('Download Invoice'),
+    screen.queryByText('SALE-9'),
+  ]).toEqual([null, null, null, null, null]);
 });
 
 it('deletes a draft only at the version the list showed, and shows the plain refusal when it changed', async () => {

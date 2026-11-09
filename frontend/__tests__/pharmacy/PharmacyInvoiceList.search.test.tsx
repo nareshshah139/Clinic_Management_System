@@ -8,7 +8,7 @@ jest.mock('@/lib/api', () => ({ apiClient: { getPharmacyInvoices: jest.fn(), get
 
 const older = {
   id: 'draft-1', invoiceNumber: 'PHI-2026-075', invoiceDate: '2026-10-02T04:00:00.000Z',
-  createdAt: '2026-10-02T04:00:00.000Z', status: 'DRAFT', paymentStatus: 'PENDING',
+  createdAt: '2026-10-02T04:00:00.000Z', status: 'CONFIRMED', paymentStatus: 'PENDING',
   paymentMethod: 'CASH', patient: { name: 'Meera Shah' }, billingName: 'Meera Shah',
   billingPhone: '', items: [], subtotal: 100, totalAmount: 100, discountAmount: 0, taxAmount: 0,
 };

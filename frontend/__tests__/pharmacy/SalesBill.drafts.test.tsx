@@ -80,7 +80,7 @@ it('saves a new bill as a draft without remounting, then saves changes against t
   api.post.mockResolvedValueOnce({ id: 'd-1', invoiceNumber: 'PH-7', mutationVersion: 0 } as any);
   fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
 
-  expect(await screen.findByText('All changes saved to draft PH-7')).toBeInTheDocument();
+  expect(await screen.findByText('All changes saved to the draft')).toBeInTheDocument();
   expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices', expect.objectContaining({
     patientId: 'patient-1', billingName: 'Meera Shah', billingPhone: '9876543210', paymentMethod: 'CASH',
     items: [expect.objectContaining({ drugId: 'drug-1', quantity: 1, unitPrice: 50 })],
@@ -93,7 +93,7 @@ it('saves a new bill as a draft without remounting, then saves changes against t
   expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
   api.updatePharmacyInvoice.mockResolvedValueOnce({ id: 'd-1', invoiceNumber: 'PH-7', mutationVersion: 1 } as any);
   fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
-  await screen.findByText('All changes saved to draft PH-7');
+  await screen.findByText('All changes saved to the draft');
   expect(api.updatePharmacyInvoice).toHaveBeenCalledWith('d-1', expect.objectContaining({
     expectedVersion: 0, items: [expect.objectContaining({ drugId: 'drug-1', quantity: 3 })],
   }));
@@ -113,7 +113,7 @@ it('reopens a draft with every line restored and finishes that same bill', async
   expect(within(creamLine).getByDisplayValue('10')).toBeInTheDocument();
   expect(within(creamLine).getByDisplayValue('thin layer')).toBeInTheDocument();
   expect(screen.getByText('PH-7 not final')).toBeInTheDocument();
-  expect(screen.getByText('All changes saved to draft PH-7')).toBeInTheDocument();
+  expect(screen.getByText('All changes saved to the draft')).toBeInTheDocument();
   expect(screen.queryByRole('table')).not.toBeInTheDocument();
 
   fireEvent.change(within(creamLine).getByLabelText('Quantity'), { target: { value: '4' } });
@@ -179,7 +179,7 @@ it('discards a draft only after confirming and returns to Sales', async () => {
   open('draft=d-1');
   fireEvent.click(await screen.findByRole('button', { name: 'Discard draft' }));
   const dialog = await screen.findByRole('dialog', { name: 'Discard this draft?' });
-  expect(dialog).toHaveTextContent('PH-7 for Meera Shah will be removed from Sales.');
+  expect(dialog).toHaveTextContent('Draft PH-7 for Meera Shah will be removed from Sales.');
   expect(api.delete).not.toHaveBeenCalled();
   api.delete.mockResolvedValueOnce({ message: 'Invoice deleted successfully' } as any);
   fireEvent.click(within(dialog).getByRole('button', { name: 'Discard draft' }));
@@ -188,7 +188,7 @@ it('discards a draft only after confirming and returns to Sales', async () => {
 });
 
 it.each([
-  ['a finished bill', () => ({ ...invoice, status: 'CONFIRMED' }), 'This bill is already finished', 'Bill PH-7 was finished, so it can no longer be edited.'],
+  ['a finished bill', () => ({ ...invoice, status: 'CONFIRMED', payments: [], revisions: [] }), 'Bill PH-7', 'This draft was finished as bill PH-7, so it can no longer be edited as a draft.'],
   ['a discarded draft', () => { throw conflict(404, 'Invoice not found'); }, 'This draft no longer exists', 'It was discarded, or the link is out of date.'],
 ])('explains %s instead of opening an editor', async (_, answer, title, detail) => {
   const get = api.get.getMockImplementation()!;
@@ -213,4 +213,31 @@ it('keeps a finished checkout with its own bill and still offers a pending one a
   sessionStorage.setItem('pharmacy-checkout-attempt-v1', attempt(false));
   open('draft=d-1');
   expect(await screen.findByText('A checkout for Meera Shah needs confirmation. Retry it before starting another sale.')).toBeInTheDocument();
+});
+
+it('keeps a bill discount with the draft, shows it before tax and refuses one larger than the bill', async () => {
+  invoice = { ...invoice, billDiscountKind: 'PERCENT', billDiscountValue: 10 };
+  open('draft=d-1');
+  await lineFor(cream.name);
+  const summary = screen.getByText('Invoice Summary').closest('.space-y-6 > *') as HTMLElement;
+  expect(screen.getByLabelText('Bill discount')).toHaveValue(10);
+  expect(screen.getByRole('button', { name: 'Percent' })).toHaveAttribute('aria-pressed', 'true');
+  expect(within(summary).getByText('Bill discount (10%):').nextSibling).toHaveTextContent('-₹12.00');
+  expect(within(summary).getByText('Total:').nextSibling).toHaveTextContent('₹119.07');
+  expect(screen.getByText('All changes saved to the draft')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Rupees' }));
+  fireEvent.change(screen.getByLabelText('Bill discount'), { target: { value: '500' } });
+  expect(await screen.findByText('Bill discount ₹500.00 is more than the bill after item discounts (₹120.00).')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+  expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Draft not saved', description: 'Bill discount ₹500.00 is more than the bill after item discounts (₹120.00).' }));
+  expect(api.updatePharmacyInvoice).not.toHaveBeenCalled();
+
+  fireEvent.change(screen.getByLabelText('Bill discount'), { target: { value: '20' } });
+  expect(within(summary).getByText('Total:').nextSibling).toHaveTextContent('₹110.25');
+  api.updatePharmacyInvoice.mockResolvedValueOnce({ id: 'd-1', invoiceNumber: 'DRAFT-1f2e', mutationVersion: 4 } as any);
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+  await waitFor(() => expect(api.updatePharmacyInvoice).toHaveBeenCalledWith('d-1', expect.objectContaining({ expectedVersion: 3, billDiscount: { kind: 'AMOUNT', value: 20 } })));
+  expect(await screen.findByText('Gets its bill number when finished')).toBeInTheDocument();
+  expect(screen.queryByText(/DRAFT-1f2e/)).not.toBeInTheDocument();
 });
