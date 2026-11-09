@@ -166,7 +166,7 @@ function PharmacyReports() {
             <CategoryList reports={results} activeId={open?.id ?? null} onNavigate={() => setRailOpen(false)} />
           </nav>
         </aside>
-        <main className="min-w-0 space-y-4">
+        <section aria-label="Report" className="min-w-0 space-y-4">
           {open ? (
             <>
               <Link href="/dashboard/pharmacy/reports" className="inline-flex min-h-10 items-center gap-1 text-sm text-primary underline-offset-4 hover:underline">
@@ -177,7 +177,7 @@ function PharmacyReports() {
           ) : (
             <Landing query={query} results={results} />
           )}
-        </main>
+        </section>
       </div>
     </div>
   );
