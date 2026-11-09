@@ -54,6 +54,19 @@ describe('inventory timeline ledger', () => {
     expect(byId['unknown-inv'].source).toMatchObject({ channel: 'PHARMACY_BILL', document: null });
   });
 
+  it('does not attribute a non-purchase movement to a bill that shares its reference', async () => {
+    const db = prisma([
+      movement('typed-loss', 1, { type: 'DAMAGED', quantity: 2, quantityDelta: -2, reference: '4512' }),
+      movement('legacy-receipt', 2, { type: 'PURCHASE', quantity: 5, quantityDelta: 5, reference: '4512' }),
+    ]);
+    db.pharmacyPurchaseInvoice.findMany = async () => [
+      { id: 'draft', invoiceNumber: '4512', stockCommitReference: null, status: 'DRAFT', distributorName: 'Acme Pharma' },
+    ];
+    const { rows } = await read({}, db);
+    expect(rows.find(r => r.id === 'typed-loss')!.source).toMatchObject({ channel: 'MANUAL', document: null });
+    expect(rows.find(r => r.id === 'legacy-receipt')!.source).toMatchObject({ channel: 'PURCHASE_INVOICE', document: { id: 'draft' } });
+  });
+
   it('records the signed change and recorded balance, newest first', async () => {
     const { rows } = await read();
     const rx = rows.find(r => r.id === 'rx')!;

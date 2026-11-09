@@ -59,7 +59,8 @@ type SaleRef = { id: string; invoiceNumber: string; status: string; prescription
 type DocRef = { id: string; kind: string; reference: string; status: string };
 export type SourceContext = {
   workflowByMovement: Map<string, DocRef>;
-  purchaseByReference: Map<string, PurchaseRef>;
+  purchaseByCommitReference: Map<string, PurchaseRef>;
+  purchaseByInvoiceNumber: Map<string, PurchaseRef>;
   saleByNumber: Map<string, SaleRef>;
 };
 
@@ -71,8 +72,9 @@ const source = (channel: LedgerChannel, document: LedgerDocument | null = null, 
  * @cc [owner:nareshshah139,label:product] inventory-timeline-source-attribution
  * Every stock movement MUST resolve to exactly one ledger channel. A posted inventory document
  * owns its movement before any reference prefix; a pharmacy bill linked to a prescription MUST be
- * reported as prescription dispensing. Unrecognised references MUST fall back to manual entry,
- * never to a guessed invoice or prescription.
+ * reported as prescription dispensing. A bare supplier invoice number identifies a purchase only
+ * on a PURCHASE movement. Unrecognised references MUST fall back to manual entry, never to a
+ * guessed invoice or prescription.
  */
 export function classifyMovement(m: Movement, ctx: SourceContext): LedgerSource {
   const ref = m.reference || '';
@@ -80,7 +82,7 @@ export function classifyMovement(m: Movement, ctx: SourceContext): LedgerSource 
   if (doc)
     return source(WORKFLOW_CHANNEL[doc.kind] || 'INVENTORY_DOCUMENT',
       { type: 'WORKFLOW', id: doc.id, kind: doc.kind, number: doc.reference, status: doc.status }, m.customer || m.supplier);
-  const purchase = ref ? ctx.purchaseByReference.get(ref) : undefined;
+  const purchase = ref ? ctx.purchaseByCommitReference.get(ref) ?? (m.type === 'PURCHASE' ? ctx.purchaseByInvoiceNumber.get(ref) : undefined) : undefined;
   if (purchase)
     return source('PURCHASE_INVOICE',
       { type: 'PURCHASE_INVOICE', id: purchase.id, number: purchase.invoiceNumber, status: purchase.status }, purchase.distributorName);
@@ -139,12 +141,13 @@ export async function loadSourceContext(prisma: any, branchId: string, movements
     const doc = docsById.get(docId);
     if (doc && !workflowByMovement.has(movementId)) workflowByMovement.set(movementId, doc);
   }
-  const purchaseByReference = new Map<string, PurchaseRef>();
+  const purchaseByCommitReference = new Map<string, PurchaseRef>();
+  const purchaseByInvoiceNumber = new Map<string, PurchaseRef>();
   for (const p of purchases as PurchaseRef[]) {
-    if (p.stockCommitReference) purchaseByReference.set(p.stockCommitReference, p);
-    if (!purchaseByReference.has(p.invoiceNumber)) purchaseByReference.set(p.invoiceNumber, p);
+    if (p.stockCommitReference) purchaseByCommitReference.set(p.stockCommitReference, p);
+    purchaseByInvoiceNumber.set(p.invoiceNumber, p);
   }
-  return { workflowByMovement, purchaseByReference, saleByNumber: new Map((sales as SaleRef[]).map(s => [s.invoiceNumber, s])) };
+  return { workflowByMovement, purchaseByCommitReference, purchaseByInvoiceNumber, saleByNumber: new Map((sales as SaleRef[]).map(s => [s.invoiceNumber, s])) };
 }
 
 const MAX_RANGE_DAYS = 366;
