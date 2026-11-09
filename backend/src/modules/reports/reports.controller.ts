@@ -212,10 +212,11 @@ export class ReportsController {
   }
 
   @Get('alerts')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER, UserRole.DOCTOR, UserRole.PHARMACIST)
   @ApiOperation({ summary: 'Get system alerts and notifications' })
   @ApiResponse({ status: 200, description: 'System alerts retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getSystemAlerts(@Request() req: AuthenticatedRequest): Promise<any> {
-    return this.reportsService.getSystemAlerts(req.user.branchId);
+    return this.reportsService.getSystemAlerts(req.user.branchId, req.user.role);
   }
 }

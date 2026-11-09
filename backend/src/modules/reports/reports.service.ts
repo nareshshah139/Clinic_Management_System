@@ -1106,13 +1106,19 @@ export class ReportsService {
   }
 
   // SYSTEM ALERTS
-  async getSystemAlerts(branchId: string): Promise<any> {
+  /**
+   * @cc [owner:nareshshah139,label:security] pharmacist-stock-alerts
+   * A pharmacist MUST receive only the stock alerts (low stock and expiry), never invoices,
+   * payments or appointments.
+   */
+  async getSystemAlerts(branchId: string, role?: string): Promise<any> {
+    const stockOnly = role === 'PHARMACIST';
     const now = new Date();
     const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const in48Hours = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
     const [overdueInvoices, lowStockAlerts, expiryAlerts, pendingPaymentsList, upcomingAppointments] = await Promise.all([
-      this.prisma.newInvoice.findMany({
+      stockOnly ? [] : this.prisma.newInvoice.findMany({
         where: { branchId, status: 'OVERDUE' },
         select: { id: true, invoiceNo: true, total: true, dueDate: true, patient: { select: { id: true, name: true } } },
         orderBy: { dueDate: 'asc' },
@@ -1130,7 +1136,7 @@ export class ReportsService {
         orderBy: { expiryDate: 'asc' },
         take: 10,
       }),
-      this.prisma.newPayment.findMany({
+      stockOnly ? [] : this.prisma.newPayment.findMany({
         where: { 
           reconStatus: 'PENDING',
           invoice: { branchId }
@@ -1139,7 +1145,7 @@ export class ReportsService {
         orderBy: { createdAt: 'desc' },
         take: 10,
       }),
-      this.prisma.appointment.findMany({
+      stockOnly ? [] : this.prisma.appointment.findMany({
         where: { branchId, date: { gt: now, lt: in48Hours }, status: { notIn: ['CANCELLED'] } },
         select: { 
           id: true, 
