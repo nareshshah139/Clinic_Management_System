@@ -376,11 +376,11 @@ export function InventoryItemPage({ itemId, query, navigate, capabilities, onTas
                     <tbody className="divide-y">
                       {visibleBatches.map((b: any) => (
                         <tr key={b.id} className={batchRowClass(b)}>
-                          <th scope="row" className="p-3 text-left font-normal">
+                          <th scope="row" className="min-w-44 p-3 text-left font-normal">
                             <span className="block font-medium">{b.batchNumber || "No batch"}</span>
                             <ReviewStatus tone={batchReviewTone(b)}>{batchState(b)}</ReviewStatus>
                           </th>
-                          <td className={numberCell}>
+                          <td className={`${numberCell} whitespace-nowrap`}>
                             {b.currentStock} {b.unit}
                             {b.heldStock > 0 && <span className="block text-sm text-muted-foreground">({b.heldStock} held)</span>}
                           </td>
@@ -393,13 +393,15 @@ export function InventoryItemPage({ itemId, query, navigate, capabilities, onTas
                           <td className={numberCell}>{known(byMrp(b), fmtMoney)}</td>
                           <td className={numberCell}>{known(byPtr(b), fmtMoney)}</td>
                           <td className={numberCell}>{known(b.gstRate, (v) => `${v}%`)}</td>
-                          <td className="p-3">
-                            <div className="flex flex-wrap gap-2">
+                          <td className="min-w-72 p-3">
+                            <div className="flex items-center gap-2 [&>*]:shrink-0">
                               {b.id !== item.id && <Button size="sm" variant="outline" onClick={() => navigate({ item: b.id })}>Open</Button>}
                               {capabilities?.itemWrite && (
                                 <Button size="sm" variant="outline" onClick={() => setEdit({ batchId: b.id, value: editValue(b) })}>Edit</Button>
                               )}
-                              <Button size="sm" variant="outline" onClick={() => window.open(`/api/inventory/workspace/labels/${b.id}`, "_blank")}>Print label</Button>
+                              <InventoryAction label={`Print label for batch ${b.batchNumber || "without number"}`} onClick={() => window.open(`/api/inventory/workspace/labels/${b.id}`, "_blank")}>
+                                <Printer className="h-4 w-4" />
+                              </InventoryAction>
                               {capabilities?.itemDelete && (
                                 <Button
                                   size="sm"
@@ -414,7 +416,7 @@ export function InventoryItemPage({ itemId, query, navigate, capabilities, onTas
                               )}
                             </div>
                             {capabilities?.itemDelete && !b.deletable && (
-                              <p id={`delete-blocked-${b.id}`} className="mt-1 text-sm text-muted-foreground">{b.deleteBlockedReason}</p>
+                              <p id={`delete-blocked-${b.id}`} className="mt-1 max-w-64 text-sm text-muted-foreground">{b.deleteBlockedReason}</p>
                             )}
                           </td>
                         </tr>
