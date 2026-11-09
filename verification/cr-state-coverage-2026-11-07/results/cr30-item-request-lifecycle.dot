@@ -1,5 +1,5 @@
 digraph "cr30-item-request-lifecycle" {
-  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-30 New item request: staff request -> doctor approve/reject -> inventory\nstates 26/26 (100%) · transitions 32/32 (100%)", pad=0.3, nodesep=0.45, ranksep=0.7];
+  graph [rankdir=LR, fontname="Helvetica", fontsize=13, labelloc=t, label="CR-30 New item request: staff request -> doctor approve/reject -> inventory\nstates 33/33 (100%) · transitions 39/39 (100%)", pad=0.3, nodesep=0.45, ranksep=0.7];
   node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, penwidth=1.6];
   edge [fontname="Helvetica", fontsize=9, penwidth=1.4, arrowsize=0.7];
   __start [shape=point, width=0.15, label=""];
@@ -25,8 +25,22 @@ item absent while pending", fillcolor="#d1fadf", color="#039855"];
 Waiting for doctor", fillcolor="#d1fadf", color="#039855"];
   "StaffApproveForbidden" [label="Staff calls approve API
 403, still PENDING", fillcolor="#d1fadf", color="#039855"];
-  "StaffImportCreatesDirectly" [label="Staff opening-stock import
-creates items directly (outside CR-30)", fillcolor="#d1fadf", color="#039855"];
+  "StaffImportPending" [label="Staff opening-stock import
+sent for approval, 0 items", fillcolor="#d1fadf", color="#039855"];
+  "DoctorSeesPendingImport" [label="Doctor 'Opening stock imports'
+rows previewed, badge counts it", fillcolor="#d1fadf", color="#039855"];
+  "ImportRejectDialog" [label="Reject import dialog
+no note: Reject disabled", fillcolor="#d1fadf", color="#039855"];
+  "DoctorRejectedImport" [label="Doctor: import Rejected with note
+0 items, badge -1", fillcolor="#d1fadf", color="#039855"];
+  "StaffSeesImportRejected" [label="Staff 'My opening stock imports'
+Rejected + note, 0 items", fillcolor="#d1fadf", color="#039855", peripheries=2];
+  "DoctorApprovedImport" [label="Doctor: import Approved
+item exists with stock, badge -1", fillcolor="#d1fadf", color="#039855"];
+  "StaffStockHasImported" [label="Staff stock search
+imported item present", fillcolor="#d1fadf", color="#039855", peripheries=2];
+  "DoctorImportCreatesDirectly" [label="Doctor's own opening import
+runs immediately, no approval", fillcolor="#d1fadf", color="#039855", peripheries=2];
   "PharmacistSubmitted" [label="Pharmacist add -> sent for approval", fillcolor="#d1fadf", color="#039855", peripheries=2];
   "DoctorStockPending" [label="Doctor stock search
 item absent, badge = pending", fillcolor="#d1fadf", color="#039855"];
@@ -68,7 +82,14 @@ no request, 1 item", fillcolor="#d1fadf", color="#039855", peripheries=2];
   "StaffRequestsPending" -> "StaffRequestsPending" [label="reload", color="#039855", fontcolor="#039855", style=solid];
   "StaffRequestsPending" -> "StaffApproveForbidden" [label="staffApproveViaApi", color="#039855", fontcolor="#039855", style=solid];
   "StaffApproveForbidden" -> "StaffRequestsPending" [label="reload", color="#039855", fontcolor="#039855", style=solid];
-  "StaffStock" -> "StaffImportCreatesDirectly" [label="staffImportExcel", color="#039855", fontcolor="#039855", style=solid];
+  "StaffStock" -> "StaffImportPending" [label="staffImportExcel ×2", color="#039855", fontcolor="#039855", style=solid];
+  "StaffImportPending" -> "DoctorSeesPendingImport" [label="doctorReviewsImport ×2", color="#039855", fontcolor="#039855", style=solid];
+  "DoctorSeesPendingImport" -> "ImportRejectDialog" [label="clickRejectImport", color="#039855", fontcolor="#039855", style=solid];
+  "ImportRejectDialog" -> "DoctorRejectedImport" [label="confirmImportReject", color="#039855", fontcolor="#039855", style=solid];
+  "DoctorRejectedImport" -> "StaffSeesImportRejected" [label="staffOpensMyImports", color="#039855", fontcolor="#039855", style=solid];
+  "DoctorSeesPendingImport" -> "DoctorApprovedImport" [label="approveImport", color="#039855", fontcolor="#039855", style=solid];
+  "DoctorApprovedImport" -> "StaffStockHasImported" [label="staffLoginAndSearch", color="#039855", fontcolor="#039855", style=solid];
+  "StaffStock" -> "DoctorImportCreatesDirectly" [label="doctorImportsExcel", color="#039855", fontcolor="#039855", style=solid];
   "StaffStock" -> "PharmacistSubmitted" [label="pharmacistSubmits", color="#039855", fontcolor="#039855", style=solid];
   "StaffStock" -> "DoctorAddedDirect" [label="doctorAddsDirect", color="#039855", fontcolor="#039855", style=solid];
   "StaffRequestsPending" -> "DoctorStockPending" [label="doctorLoginAndSearch ×5", color="#039855", fontcolor="#039855", style=solid];

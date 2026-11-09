@@ -1,7 +1,8 @@
 "use strict";
 
 // CR-30: a new item enters inventory only after a doctor approves it.
-// Lifecycle of one item request across staff, doctor and second-doctor sessions.
+// Lifecycle of one item request across staff, doctor and second-doctor sessions,
+// and of a staff opening-stock (Excel) import, which waits for the same approval.
 // Env: DB_URL or DATABASE_NAME (+ PGHOST/PGPORT/PGUSER), BASE_URL, API_URL.
 
 const fs = require("node:fs");
@@ -43,7 +44,23 @@ const requestRows = (name) =>
       return { id, status, note, reviewer, requester, itemId };
     });
 const pendingCount = () =>
-  Number(sql(`select count(*) from inventory_item_requests where "branchId" = ${lit(BRANCH)} and status = 'PENDING'`));
+  Number(
+    sql(`select (select count(*) from inventory_item_requests where "branchId" = ${lit(BRANCH)} and status = 'PENDING')
+              + (select count(*) from inventory_migrations where "branchId" = ${lit(BRANCH)} and approval = 'PENDING')`),
+  );
+const importRow = (fileName) => {
+  const line = sql(`select m.approval, coalesce(m."reviewNote",''), coalesce(q.email,''), coalesce(r.email,'')
+       from inventory_migrations m left join users q on q.id = m."requestedById" left join users r on r.id = m."reviewedById"
+       where m."fileName" = ${lit(fileName)}`);
+  if (!line) return null;
+  const [approval, note, requester, reviewer] = line.split("|");
+  return { approval, note, requester, reviewer };
+};
+const stockOf = (name) => Number(sql(`select coalesce(sum("currentStock"),0) from inventory_items where name = ${lit(name)}`));
+const drugCount = (name) => Number(sql(`select count(*) from drugs where name = ${lit(name)}`));
+const movementUsers = (name) =>
+  sql(`select string_agg(u.email, ',') from stock_transactions t join inventory_items i on i.id = t."itemId" join users u on u.id = t."userId" where i.name = ${lit(name)}`);
+const IMPORT_PENDING = "Sent to a doctor for approval. No stock changes until it is approved.";
 
 // ---------- auth ----------
 async function login(apiUrl, email) {
@@ -146,6 +163,20 @@ async function openApprovals(ctx) {
 
 // CSS, not getByRole: while a review dialog is open the list behind it is aria-hidden.
 const card = (ctx, name) => ctx.page.locator("li").filter({ has: ctx.page.locator(`h3:text-is(${JSON.stringify(name)})`) });
+const importCard = (ctx) => ctx.page.locator("li").filter({ has: ctx.page.locator(`h4:text-is(${JSON.stringify(ctx.vars.importFile)})`) });
+const importsSection = (page) => page.locator('section[aria-labelledby="opening-import-approvals"]');
+
+async function uploadOpening(ctx) {
+  const { page } = ctx;
+  const file = ctx.shared.makeXlsx(ctx.vars.name);
+  ctx.vars.importFile = path.basename(file);
+  await page.goto(`${ctx.baseUrl}/dashboard/inventory?area=stock&view=opening`);
+  await page.getByRole("heading", { name: "Opening stock import" }).waitFor({ timeout: 60_000 });
+  await page.locator('input[type="file"]').first().setInputFiles(file);
+  await page.getByRole("button", { name: "Preview import" }).click();
+  await page.getByRole("button", { name: "Confirm opening import" }).click({ timeout: 30_000 });
+  await page.getByRole("region", { name: "Opening stock import results" }).waitFor({ timeout: 30_000 }).catch(() => {});
+}
 const sidebarBadge = (page) => page.locator('a[href="/dashboard/inventory"] span[aria-label$="waiting for approval"]');
 
 async function fillAddForm(page, fields) {
@@ -208,7 +239,14 @@ const model = {
     StaffStockPending: { label: "Staff stock search\nitem absent while pending" },
     StaffRequestsPending: { label: "Staff 'My item requests'\nWaiting for doctor" },
     StaffApproveForbidden: { label: "Staff calls approve API\n403, still PENDING" },
-    StaffImportCreatesDirectly: { label: "Staff opening-stock import\ncreates items directly (outside CR-30)" },
+    StaffImportPending: { label: "Staff opening-stock import\nsent for approval, 0 items" },
+    DoctorSeesPendingImport: { label: "Doctor 'Opening stock imports'\nrows previewed, badge counts it" },
+    ImportRejectDialog: { label: "Reject import dialog\nno note: Reject disabled" },
+    DoctorRejectedImport: { label: "Doctor: import Rejected with note\n0 items, badge -1" },
+    StaffSeesImportRejected: { label: "Staff 'My opening stock imports'\nRejected + note, 0 items", terminal: true },
+    DoctorApprovedImport: { label: "Doctor: import Approved\nitem exists with stock, badge -1" },
+    StaffStockHasImported: { label: "Staff stock search\nimported item present", terminal: true },
+    DoctorImportCreatesDirectly: { label: "Doctor's own opening import\nruns immediately, no approval", terminal: true },
     PharmacistSubmitted: { label: "Pharmacist add -> sent for approval", terminal: true },
     DoctorStockPending: { label: "Doctor stock search\nitem absent, badge = pending" },
     DoctorNewItemsPending: { label: "Doctor 'New items' tab\nrequest with all details" },
@@ -238,7 +276,14 @@ const model = {
     { from: "StaffRequestsPending", event: "reload", to: "StaffRequestsPending" },
     { from: "StaffRequestsPending", event: "staffApproveViaApi", to: "StaffApproveForbidden" },
     { from: "StaffApproveForbidden", event: "reload", to: "StaffRequestsPending" },
-    { from: "StaffStock", event: "staffImportExcel", to: "StaffImportCreatesDirectly" },
+    { from: "StaffStock", event: "staffImportExcel", to: "StaffImportPending" },
+    { from: "StaffImportPending", event: "doctorReviewsImport", to: "DoctorSeesPendingImport" },
+    { from: "DoctorSeesPendingImport", event: "clickRejectImport", to: "ImportRejectDialog" },
+    { from: "ImportRejectDialog", event: "confirmImportReject", to: "DoctorRejectedImport" },
+    { from: "DoctorRejectedImport", event: "staffOpensMyImports", to: "StaffSeesImportRejected" },
+    { from: "DoctorSeesPendingImport", event: "approveImport", to: "DoctorApprovedImport" },
+    { from: "DoctorApprovedImport", event: "staffLoginAndSearch", to: "StaffStockHasImported" },
+    { from: "StaffStock", event: "doctorImportsExcel", to: "DoctorImportCreatesDirectly" },
     { from: "StaffStock", event: "pharmacistSubmits", to: "PharmacistSubmitted" },
     { from: "StaffStock", event: "doctorAddsDirect", to: "DoctorAddedDirect" },
     { from: "StaffRequestsPending", event: "doctorLoginAndSearch", to: "DoctorStockPending" },
@@ -369,13 +414,46 @@ const driver = {
       ctx.vars.lastApi = { status: r.status(), body: await r.json().catch(() => null) };
     },
     staffImportExcel: async (ctx) => {
-      const { page } = ctx;
-      await page.goto(`${ctx.baseUrl}/dashboard/inventory?area=stock&view=opening`);
-      await page.getByRole("heading", { name: "Opening stock import" }).waitFor({ timeout: 60_000 });
-      await page.locator('input[type="file"]').first().setInputFiles(ctx.shared.makeXlsx(ctx.vars.name));
-      await page.getByRole("button", { name: "Preview import" }).click();
-      await page.getByRole("button", { name: "Confirm opening import" }).click({ timeout: 30_000 });
-      await until(async () => itemCount(ctx.vars.name) > 0 || (await page.getByText("Import failed").count()) > 0, 30_000);
+      ctx.vars.pendingBefore = pendingCount();
+      await uploadOpening(ctx);
+      await ctx.page.getByText(IMPORT_PENDING).first().waitFor({ timeout: 30_000 }).catch(() => {});
+    },
+    doctorReviewsImport: async (ctx) => {
+      await as(ctx, "doctor");
+      await openStock(ctx);
+      await openApprovals(ctx);
+      await importCard(ctx).waitFor({ timeout: 30_000 }).catch(() => {});
+    },
+    clickRejectImport: async (ctx) => {
+      ctx.vars.pendingAtReview = pendingCount();
+      await importCard(ctx).getByRole("button", { name: "Reject import" }).click();
+      await ctx.page.getByRole("dialog").waitFor();
+      await ctx.page.getByRole("dialog").locator("textarea").fill("   ");
+    },
+    confirmImportReject: async (ctx) => {
+      const d = ctx.page.getByRole("dialog");
+      await d.locator("textarea").fill(ctx.vars.note);
+      await d.getByRole("button", { name: "Reject" }).click();
+      await d.waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
+    },
+    staffOpensMyImports: async (ctx) => {
+      await as(ctx, "staff");
+      await openStock(ctx);
+      await openApprovals(ctx);
+      await importsSection(ctx.page).getByText(/Loading imports/).waitFor({ state: "detached", timeout: 30_000 }).catch(() => {});
+    },
+    approveImport: async (ctx) => {
+      ctx.vars.pendingAtReview = pendingCount();
+      await importCard(ctx).getByRole("button", { name: "Approve import" }).click();
+      const d = ctx.page.getByRole("dialog");
+      await d.getByRole("button", { name: "Approve" }).click();
+      await d.waitFor({ state: "detached", timeout: 30_000 }).catch(() => {});
+    },
+    doctorImportsExcel: async (ctx) => {
+      ctx.vars.pendingBefore = pendingCount();
+      await as(ctx, "doctor");
+      await uploadOpening(ctx);
+      await until(async () => itemCount(ctx.vars.name) > 0 || (await ctx.page.getByText("Import failed").count()) > 0, 30_000);
     },
     pharmacistSubmits: async (ctx) => {
       await as(ctx, "pharmacist");
@@ -555,10 +633,84 @@ const driver = {
       check(requestRows(ctx.vars.name)[0]?.status === "PENDING", "DB: request still PENDING");
       check(itemCount(ctx.vars.name) === 0, "DB: 0 items");
     },
-    StaffImportCreatesDirectly: async (ctx, check) => {
+    StaffImportPending: async (ctx, check) => {
+      const results = ctx.page.getByRole("region", { name: "Opening stock import results" });
+      check((await results.getByRole("status").getByText(IMPORT_PENDING).count()) === 1, `staff sees "${IMPORT_PENDING}"`);
+      check((await results.getByRole("button", { name: "Check import outcome" }).count()) === 1, "staff can check the import outcome");
+      check((await results.getByRole("button", { name: /Retry failed rows|Resume unfinished rows/ }).count()) === 0, "no retry or resume while waiting");
+      const imp = importRow(ctx.vars.importFile);
+      check(imp?.approval === "PENDING" && imp.requester === ACCOUNTS.staff, `DB: import PENDING, requested by reception (${JSON.stringify(imp)})`);
+      check(itemCount(ctx.vars.name) === 0, "DB: 0 inventory items while the import waits");
+      check(drugCount(ctx.vars.name) === 0, "DB: 0 drugs while the import waits");
+      check(requestRows(ctx.vars.name).length === 0, "DB: no item request; the import itself waits");
+      check(pendingCount() === ctx.vars.pendingBefore + 1, "DB: branch pending count +1 (import counted)");
+      await staffDoesNotSeeBadge(ctx, check);
+    },
+    DoctorSeesPendingImport: async (ctx, check) => {
+      const { page } = ctx;
+      const n = pendingCount();
+      const tab = page.getByRole("tab", { name: /New items/ });
+      check((await until(async () => (await tab.locator(`[aria-label="${n} pending"]`).count()) === 1)), `New items tab badge counts the import (${n})`);
+      await checkBadge(ctx, check);
+      const c = importCard(ctx);
+      check((await until(async () => (await c.count()) === 1)), "import card present under Opening stock imports");
+      check((await c.getByText("Waiting for doctor", { exact: true }).count()) === 1, "import status Waiting for doctor");
+      check((await c.getByText(`Requested by ${ctx.shared.sessions.staff.name}`).count()) === 1, "shows the requester");
+      const cells = await c.locator("tbody tr").first().locator("td").allTextContents();
+      check(JSON.stringify(cells) === JSON.stringify(["2", ctx.vars.name, "IMP1", "20", "New batch", ""]), `row preview: product, batch, qty, New batch (${JSON.stringify(cells)})`);
+      check((await c.getByRole("button", { name: "Approve import" }).count()) === 1, "Approve import button");
+      check((await c.getByRole("button", { name: "Reject import" }).count()) === 1, "Reject import button");
+      check(itemCount(ctx.vars.name) === 0, "DB: 0 items before review");
+    },
+    ImportRejectDialog: async (ctx, check) => {
+      const d = ctx.page.getByRole("dialog");
+      check(await d.getByRole("heading", { name: "Reject opening stock import" }).isVisible(), "Reject opening stock import dialog");
+      check(await d.getByRole("button", { name: "Reject" }).isDisabled(), "Reject disabled with a blank note");
+      check(importRow(ctx.vars.importFile)?.approval === "PENDING", "DB: import still PENDING");
+    },
+    DoctorRejectedImport: async (ctx, check) => {
+      const c = importCard(ctx);
+      const ok = await until(async () => (await c.getByText("Rejected", { exact: true }).count()) === 1);
+      check(ok, "import card moves to history as Rejected");
+      check((await c.getByText(`Rejected by ${ctx.shared.sessions.doctor.name}`).count()) === 1, "Rejected by the doctor");
+      check((await c.getByText(ctx.vars.note).count()) === 1, "rejection note shown");
+      const imp = importRow(ctx.vars.importFile);
+      check(imp?.approval === "REJECTED" && imp.note === ctx.vars.note && imp.reviewer === ACCOUNTS.doctor, "DB: import REJECTED with note and reviewer");
+      check(itemCount(ctx.vars.name) === 0 && drugCount(ctx.vars.name) === 0, "DB: no item or drug created");
+      await checkBadge(ctx, check, { expectPending: ctx.vars.pendingAtReview - 1 });
+    },
+    StaffSeesImportRejected: async (ctx, check) => {
+      const section = importsSection(ctx.page);
+      check(await section.getByRole("heading", { name: "My opening stock imports" }).isVisible(), "staff 'My opening stock imports'");
+      const c = importCard(ctx);
+      check((await until(async () => (await c.getByText("Rejected", { exact: true }).count()) === 1)), "staff sees the import Rejected");
+      check((await c.getByText(ctx.vars.note).count()) === 1, "staff sees the note");
+      check((await section.getByRole("button", { name: "Approve import" }).count()) === 0, "staff has no Approve import button");
+      check(itemCount(ctx.vars.name) === 0, "DB: 0 items");
+    },
+    DoctorApprovedImport: async (ctx, check) => {
+      const c = importCard(ctx);
+      const ok = await until(async () => (await c.getByText("Approved", { exact: true }).count()) === 1, 30_000);
+      check(ok, "import card moves to history as Approved");
+      check((await c.getByText(`Approved by ${ctx.shared.sessions.doctor.name}`).count()) === 1, "Approved by the doctor");
+      const imp = importRow(ctx.vars.importFile);
+      check(imp?.approval === "APPROVED" && imp.reviewer === ACCOUNTS.doctor, "DB: import APPROVED by the doctor");
+      check(itemCount(ctx.vars.name) === 1 && stockOf(ctx.vars.name) === 20, `DB: exactly 1 item with opening stock 20 (got ${itemCount(ctx.vars.name)}/${stockOf(ctx.vars.name)})`);
+      check(movementUsers(ctx.vars.name) === ACCOUNTS.doctor, "DB: the opening stock movement is recorded under the doctor");
+      await checkBadge(ctx, check, { expectPending: ctx.vars.pendingAtReview - 1 });
+    },
+    StaffStockHasImported: async (ctx, check) => {
+      check((await stockRow(ctx, ctx.vars.name).count()) === 1, "staff stock search: imported item present after approval");
+      check(stockOf(ctx.vars.name) === 20, "DB: stock 20");
+    },
+    DoctorImportCreatesDirectly: async (ctx, check) => {
+      const results = ctx.page.getByRole("region", { name: "Opening stock import results" });
+      check((await results.getByText(IMPORT_PENDING).count()) === 0, "no approval message for the doctor's own import");
       check((await ctx.page.getByText("Import failed").count()) === 0, "no 'Import failed' toast");
-      check(itemCount(ctx.vars.name) === 1, "DB: the imported item exists without an approval request");
-      check(requestRows(ctx.vars.name).length === 0, "DB: no approval request for the imported item");
+      const imp = importRow(ctx.vars.importFile);
+      check(imp?.approval === "NOT_REQUIRED" && imp.requester === "", `DB: import NOT_REQUIRED, nobody asked (${JSON.stringify(imp)})`);
+      check(itemCount(ctx.vars.name) === 1 && stockOf(ctx.vars.name) === 20, "DB: item exists with stock 20 immediately");
+      check(pendingCount() === ctx.vars.pendingBefore, "DB: pending count unchanged");
     },
     PharmacistSubmitted: async (ctx, check) => {
       const d = ctx.page.getByRole("dialog");

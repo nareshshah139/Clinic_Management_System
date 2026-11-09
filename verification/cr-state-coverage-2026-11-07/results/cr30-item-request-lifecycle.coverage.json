@@ -1,16 +1,16 @@
 {
   "model": "cr30-item-request-lifecycle",
   "title": "CR-30 New item request: staff request -> doctor approve/reject -> inventory",
-  "startedAt": "2026-11-08T10:16:36.837Z",
-  "finishedAt": "2026-11-08T10:17:45.163Z",
+  "startedAt": "2026-11-09T08:26:09.555Z",
+  "finishedAt": "2026-11-09T08:27:35.279Z",
   "states": {
-    "total": 26,
-    "passed": 26,
+    "total": 33,
+    "passed": 33,
     "failed": 0
   },
   "transitions": {
-    "total": 32,
-    "passed": 32,
+    "total": 39,
+    "passed": 39,
     "failed": 0
   },
   "uncovered": [],
@@ -334,7 +334,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-1yodbg (got CR30-SKU-1yodbg)"
+              "message": "detail SKU = CR30-SKU-1lkdzy (got CR30-SKU-1lkdzy)"
             },
             {
               "ok": true,
@@ -460,7 +460,11 @@
       "path": 2,
       "ok": true,
       "events": [
-        "StaffStock --staffImportExcel--> StaffImportCreatesDirectly"
+        "StaffStock --staffImportExcel--> StaffImportPending",
+        "StaffImportPending --doctorReviewsImport--> DoctorSeesPendingImport",
+        "DoctorSeesPendingImport --clickRejectImport--> ImportRejectDialog",
+        "ImportRejectDialog --confirmImportReject--> DoctorRejectedImport",
+        "DoctorRejectedImport --staffOpensMyImports--> StaffSeesImportRejected"
       ],
       "assertions": [
         {
@@ -490,20 +494,164 @@
           ]
         },
         {
-          "state": "StaffImportCreatesDirectly",
+          "state": "StaffImportPending",
           "ok": true,
           "checks": [
             {
               "ok": true,
-              "message": "no 'Import failed' toast"
+              "message": "staff sees \"Sent to a doctor for approval. No stock changes until it is approved.\""
             },
             {
               "ok": true,
-              "message": "DB: the imported item exists without an approval request"
+              "message": "staff can check the import outcome"
             },
             {
               "ok": true,
-              "message": "DB: no approval request for the imported item"
+              "message": "no retry or resume while waiting"
+            },
+            {
+              "ok": true,
+              "message": "DB: import PENDING, requested by reception ({\"approval\":\"PENDING\",\"note\":\"\",\"requester\":\"reception@clinic.test\",\"reviewer\":\"\"})"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items while the import waits"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 drugs while the import waits"
+            },
+            {
+              "ok": true,
+              "message": "DB: no item request; the import itself waits"
+            },
+            {
+              "ok": true,
+              "message": "DB: branch pending count +1 (import counted)"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "DoctorSeesPendingImport",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "New items tab badge counts the import (1)"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 1 (DB pending count)"
+            },
+            {
+              "ok": true,
+              "message": "import card present under Opening stock imports"
+            },
+            {
+              "ok": true,
+              "message": "import status Waiting for doctor"
+            },
+            {
+              "ok": true,
+              "message": "shows the requester"
+            },
+            {
+              "ok": true,
+              "message": "row preview: product, batch, qty, New batch ([\"2\",\"CR30 Nebulex 26dqgu\",\"IMP1\",\"20\",\"New batch\",\"\"])"
+            },
+            {
+              "ok": true,
+              "message": "Approve import button"
+            },
+            {
+              "ok": true,
+              "message": "Reject import button"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items before review"
+            }
+          ]
+        },
+        {
+          "state": "ImportRejectDialog",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "Reject opening stock import dialog"
+            },
+            {
+              "ok": true,
+              "message": "Reject disabled with a blank note"
+            },
+            {
+              "ok": true,
+              "message": "DB: import still PENDING"
+            }
+          ]
+        },
+        {
+          "state": "DoctorRejectedImport",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "import card moves to history as Rejected"
+            },
+            {
+              "ok": true,
+              "message": "Rejected by the doctor"
+            },
+            {
+              "ok": true,
+              "message": "rejection note shown"
+            },
+            {
+              "ok": true,
+              "message": "DB: import REJECTED with note and reviewer"
+            },
+            {
+              "ok": true,
+              "message": "DB: no item or drug created"
+            },
+            {
+              "ok": true,
+              "message": "DB pending count is 0 (got 0)"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge absent when nothing is pending"
+            }
+          ]
+        },
+        {
+          "state": "StaffSeesImportRejected",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff 'My opening stock imports'"
+            },
+            {
+              "ok": true,
+              "message": "staff sees the import Rejected"
+            },
+            {
+              "ok": true,
+              "message": "staff sees the note"
+            },
+            {
+              "ok": true,
+              "message": "staff has no Approve import button"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items"
             }
           ]
         }
@@ -511,6 +659,67 @@
     },
     {
       "path": 3,
+      "ok": true,
+      "events": [
+        "StaffStock --doctorImportsExcel--> DoctorImportCreatesDirectly"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "DoctorImportCreatesDirectly",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "no approval message for the doctor's own import"
+            },
+            {
+              "ok": true,
+              "message": "no 'Import failed' toast"
+            },
+            {
+              "ok": true,
+              "message": "DB: import NOT_REQUIRED, nobody asked ({\"approval\":\"NOT_REQUIRED\",\"note\":\"\",\"requester\":\"\",\"reviewer\":\"\"})"
+            },
+            {
+              "ok": true,
+              "message": "DB: item exists with stock 20 immediately"
+            },
+            {
+              "ok": true,
+              "message": "DB: pending count unchanged"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 4,
       "ok": true,
       "events": [
         "StaffStock --pharmacistSubmits--> PharmacistSubmitted"
@@ -563,7 +772,7 @@
       ]
     },
     {
-      "path": 4,
+      "path": 5,
       "ok": true,
       "events": [
         "StaffStock --doctorAddsDirect--> DoctorAddedDirect"
@@ -620,7 +829,7 @@
       ]
     },
     {
-      "path": 5,
+      "path": 6,
       "ok": true,
       "events": [
         "StaffStock --openAdd--> StaffAddForm",
@@ -825,7 +1034,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-5za911 (got CR30-SKU-5za911)"
+              "message": "detail SKU = CR30-SKU-650g6h (got CR30-SKU-650g6h)"
             },
             {
               "ok": true,
@@ -937,7 +1146,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-5za911 (got CR30-SKU-5za911)"
+              "message": "detail SKU = CR30-SKU-650g6h (got CR30-SKU-650g6h)"
             },
             {
               "ok": true,
@@ -1037,7 +1246,7 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-5za911|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-650g6h|42.5|55)"
             },
             {
               "ok": true,
@@ -1075,7 +1284,7 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-5za911|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-650g6h|42.5|55)"
             },
             {
               "ok": true,
@@ -1128,7 +1337,7 @@
       ]
     },
     {
-      "path": 6,
+      "path": 7,
       "ok": true,
       "events": [
         "StaffStock --openAdd--> StaffAddForm",
@@ -1199,7 +1408,7 @@
             },
             {
               "ok": true,
-              "message": "notice names the existing item CR30 Existing mw7ogol4"
+              "message": "notice names the existing item CR30 Existing mw8zyhlw"
             },
             {
               "ok": true,
@@ -1278,7 +1487,177 @@
       ]
     },
     {
-      "path": 7,
+      "path": 8,
+      "ok": true,
+      "events": [
+        "StaffStock --staffImportExcel--> StaffImportPending",
+        "StaffImportPending --doctorReviewsImport--> DoctorSeesPendingImport",
+        "DoctorSeesPendingImport --approveImport--> DoctorApprovedImport",
+        "DoctorApprovedImport --staffLoginAndSearch--> StaffStockHasImported"
+      ],
+      "assertions": [
+        {
+          "state": "StaffStock",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees Add batch"
+            },
+            {
+              "ok": true,
+              "message": "stock search has no row for the new item"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items with this name"
+            },
+            {
+              "ok": true,
+              "message": "DB: no request for this name yet"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "StaffImportPending",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff sees \"Sent to a doctor for approval. No stock changes until it is approved.\""
+            },
+            {
+              "ok": true,
+              "message": "staff can check the import outcome"
+            },
+            {
+              "ok": true,
+              "message": "no retry or resume while waiting"
+            },
+            {
+              "ok": true,
+              "message": "DB: import PENDING, requested by reception ({\"approval\":\"PENDING\",\"note\":\"\",\"requester\":\"reception@clinic.test\",\"reviewer\":\"\"})"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 inventory items while the import waits"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 drugs while the import waits"
+            },
+            {
+              "ok": true,
+              "message": "DB: no item request; the import itself waits"
+            },
+            {
+              "ok": true,
+              "message": "DB: branch pending count +1 (import counted)"
+            },
+            {
+              "ok": true,
+              "message": "staff sidebar shows no approval badge"
+            }
+          ]
+        },
+        {
+          "state": "DoctorSeesPendingImport",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "New items tab badge counts the import (5)"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 5 (DB pending count)"
+            },
+            {
+              "ok": true,
+              "message": "import card present under Opening stock imports"
+            },
+            {
+              "ok": true,
+              "message": "import status Waiting for doctor"
+            },
+            {
+              "ok": true,
+              "message": "shows the requester"
+            },
+            {
+              "ok": true,
+              "message": "row preview: product, batch, qty, New batch ([\"2\",\"CR30 Nebulex 8xfdwg\",\"IMP1\",\"20\",\"New batch\",\"\"])"
+            },
+            {
+              "ok": true,
+              "message": "Approve import button"
+            },
+            {
+              "ok": true,
+              "message": "Reject import button"
+            },
+            {
+              "ok": true,
+              "message": "DB: 0 items before review"
+            }
+          ]
+        },
+        {
+          "state": "DoctorApprovedImport",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "import card moves to history as Approved"
+            },
+            {
+              "ok": true,
+              "message": "Approved by the doctor"
+            },
+            {
+              "ok": true,
+              "message": "DB: import APPROVED by the doctor"
+            },
+            {
+              "ok": true,
+              "message": "DB: exactly 1 item with opening stock 20 (got 1/20)"
+            },
+            {
+              "ok": true,
+              "message": "DB: the opening stock movement is recorded under the doctor"
+            },
+            {
+              "ok": true,
+              "message": "DB pending count is 4 (got 4)"
+            },
+            {
+              "ok": true,
+              "message": "sidebar Inventory badge shows 4 (DB pending count)"
+            }
+          ]
+        },
+        {
+          "state": "StaffStockHasImported",
+          "ok": true,
+          "checks": [
+            {
+              "ok": true,
+              "message": "staff stock search: imported item present after approval"
+            },
+            {
+              "ok": true,
+              "message": "DB: stock 20"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": 9,
       "ok": true,
       "events": [
         "StaffStock --openAdd--> StaffAddForm",
@@ -1477,7 +1856,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-7a85sk (got CR30-SKU-7a85sk)"
+              "message": "detail SKU = CR30-SKU-9u9ro8 (got CR30-SKU-9u9ro8)"
             },
             {
               "ok": true,
@@ -1577,7 +1956,7 @@
             },
             {
               "ok": true,
-              "message": "DB item carries proposed SKU/prices (CR30-SKU-7a85sk|42.5|55)"
+              "message": "DB item carries proposed SKU/prices (CR30-SKU-9u9ro8|42.5|55)"
             },
             {
               "ok": true,
@@ -1592,7 +1971,7 @@
       ]
     },
     {
-      "path": 8,
+      "path": 10,
       "ok": true,
       "events": [
         "StaffStock --openAdd--> StaffAddForm",
@@ -1792,7 +2171,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-8ftonb (got CR30-SKU-8ftonb)"
+              "message": "detail SKU = CR30-SKU-10cufht (got CR30-SKU-10cufht)"
             },
             {
               "ok": true,
@@ -1925,7 +2304,7 @@
       ]
     },
     {
-      "path": 9,
+      "path": 11,
       "ok": true,
       "events": [
         "StaffStock --openAdd--> StaffAddForm",
@@ -2126,7 +2505,7 @@
             },
             {
               "ok": true,
-              "message": "detail SKU = CR30-SKU-9iwzhd (got CR30-SKU-9iwzhd)"
+              "message": "detail SKU = CR30-SKU-11dobg0 (got CR30-SKU-11dobg0)"
             },
             {
               "ok": true,
