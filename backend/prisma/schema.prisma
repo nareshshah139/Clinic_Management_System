@@ -152,6 +152,7 @@ model Branch {
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
   tradeTerms                  PharmacyTradeTerm[]
   inventoryItemRequests       InventoryItemRequest[]
+  pharmacyCashCounts          PharmacyCashCount[]
 
   // Back-relations
   prescriptionTemplates    PrescriptionTemplate[]
@@ -1750,6 +1751,25 @@ model PharmacyPurchasePayment {
 
 // Operational documents share a versioned lifecycle; their lines retain the
 // exact item/batch/unit/price snapshots used for each stock or financial effect.
+/// CR-33 daily collection: what staff counted for a clinic day, per payment mode. Append-only; each
+/// recount supersedes the previous one by sequence, so the history of corrections is kept.
+model PharmacyCashCount {
+  id          String   @id @default(cuid())
+  branchId    String
+  /// Clinic calendar day (Asia/Kolkata), YYYY-MM-DD.
+  day         String   @db.VarChar(10)
+  sequence    Int
+  counted     Json
+  note        String?
+  countedById String
+  createdAt   DateTime @default(now())
+  branch      Branch   @relation(fields: [branchId], references: [id])
+
+  @@unique([branchId, day, sequence])
+  @@index([branchId, day])
+  @@map("pharmacy_cash_counts")
+}
+
 model InventoryWorkflowDocument {
   id                String   @id @default(cuid())
   branchId          String

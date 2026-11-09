@@ -4,6 +4,7 @@ import { getISTDateString } from '@/lib/utils';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import "./inventory-readability.css";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, RefreshCw, Plus } from "lucide-react";
@@ -14,9 +15,6 @@ import { apiClient } from "@/lib/api";
 import { useInventoryResource } from "./useInventoryResource";
 import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
 import { PurchaseLedger } from "@/components/pharmacy/PurchaseLedger";
-import { ComplianceCenter } from "@/components/pharmacy/ComplianceCenter";
-import { DayWiseSummaryReport } from "@/components/pharmacy/DayWiseSummaryReport";
-import { ItemMarginReport } from "@/components/pharmacy/ItemMarginReport";
 import { DistributorAnalytics } from "@/components/pharmacy/DistributorAnalytics";
 import { PharmacyInventoryStarterImport } from "@/components/pharmacy/PharmacyInventoryStarterImport";
 import { PharmacyInvoiceList } from "@/components/pharmacy/PharmacyInvoiceList";
@@ -66,9 +64,6 @@ const menus: Record<string, string[][]> = {
     ["credits", "Credits & vouchers"],
     ["INWARD_CHALLAN", "Inward challans"],
     ["GATE_PASS", "Gate passes"],
-    ["reports", "GST & monthly reports"],
-    ["daywise", "Day-wise summary"],
-    ["margin", "Item-wise margin"],
     ["analytics", "Purchase costs"],
   ],
   stock: [
@@ -121,18 +116,18 @@ const menus: Record<string, string[][]> = {
  * Failed capability reads MUST hide stale access and expose an explicit retry. Refresh and
  * actor changes MUST fetch capabilities again; older responses cannot restore superseded access.
  */
-const REPORT_TASK_ROLES: Record<string, readonly string[]> = {
-  reports: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
-  daywise: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
-  margin: ["OWNER", "ADMIN", "ACCOUNTANT", "PHARMACIST", "DOCTOR"],
+/** Reports moved to Pharmacy Report (CR-33); old Inventory links land on the same report there. */
+const MOVED_REPORTS: Record<string, string> = {
+  reports: "/dashboard/pharmacy/reports?report=gst-summary",
+  daywise: "/dashboard/pharmacy/reports?report=day-wise-summary",
+  margin: "/dashboard/pharmacy/reports?report=item-margin",
 };
 
 export function InventoryWorkspace() {
   const { user } = useDashboardUser();
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const canSeeApprovals = canReadEdits || user?.role === "RECEPTION";
-  const taskVisible = ([id]: string[]) =>
-    id === "approvals" ? canSeeApprovals : !REPORT_TASK_ROLES[id] || REPORT_TASK_ROLES[id].includes(user?.role || "");
+  const taskVisible = ([id]: string[]) => id !== "approvals" || canSeeApprovals;
   const pendingItems = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""));
   const taskLabel = (id: string, label: string) => (id === "approvals" && pendingItems > 0 ? `${label} (${pendingItems})` : label);
   const params = useSearchParams(),
@@ -492,11 +487,7 @@ export function InventoryWorkspace() {
             ) : (
               <p>Supplier credits require purchase-ledger permission.</p>
             ))}
-          {area === "purchases" && view === "reports" && (
-            <ComplianceCenter reportsOnly />
-          )}
-          {area === "purchases" && view === "daywise" && <DayWiseSummaryReport />}
-          {area === "purchases" && view === "margin" && <ItemMarginReport />}
+          {area === "purchases" && MOVED_REPORTS[view] && <MovedReport href={MOVED_REPORTS[view]} />}
           {area === "purchases" && view === "analytics" && (
             <DistributorAnalytics />
           )}
@@ -1173,5 +1164,17 @@ function SupplierWorkspace({ canCreate, canUpdate, onAccount, onBills }: any) {
         ))}
       </ul>
     </section>
+  );
+}
+
+function MovedReport({ href }: { href: string }) {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(href);
+  }, [href, router]);
+  return (
+    <p className="text-base">
+      This report is now under <Link href={href} className="font-medium underline">Pharmacy Report</Link>. Opening it…
+    </p>
   );
 }

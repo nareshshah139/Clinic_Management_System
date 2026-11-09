@@ -36,7 +36,7 @@ export class PharmacyComplianceController {
   constructor(private readonly complianceService: PharmacyComplianceService) {}
 
   @Get('gst-summary')
-  @Roles('OWNER' as any, 'ADMIN' as any, 'ACCOUNTANT' as any, 'PHARMACIST' as any)
+  @Roles('OWNER' as any, 'ADMIN' as any, 'MANAGER' as any, 'ACCOUNTANT' as any, 'PHARMACIST' as any, 'DOCTOR' as any)
   @Permissions('pharmacy:compliance:read')
   @ApiOperation({ summary: 'Get pharmacy GST input/output summary' })
   @ApiResponse({ status: 200, description: 'GST summary generated' })
@@ -48,7 +48,7 @@ export class PharmacyComplianceController {
   }
 
   @Get('monthly-report')
-  @Roles('OWNER' as any, 'ADMIN' as any, 'ACCOUNTANT' as any, 'PHARMACIST' as any)
+  @Roles('OWNER' as any, 'ADMIN' as any, 'MANAGER' as any, 'ACCOUNTANT' as any, 'PHARMACIST' as any, 'DOCTOR' as any)
   @Permissions('pharmacy:compliance:read')
   @ApiOperation({ summary: 'Get monthly pharmacy compliance and P&L report' })
   @ApiResponse({ status: 200, description: 'Monthly report generated' })
@@ -60,7 +60,7 @@ export class PharmacyComplianceController {
   }
 
   @Get('day-wise-summary')
-  @Roles('OWNER' as any, 'ADMIN' as any, 'ACCOUNTANT' as any, 'PHARMACIST' as any, 'DOCTOR' as any)
+  @Roles('OWNER' as any, 'ADMIN' as any, 'MANAGER' as any, 'ACCOUNTANT' as any, 'PHARMACIST' as any, 'DOCTOR' as any)
   @Permissions('pharmacy:compliance:read')
   @ApiOperation({ summary: 'One row per clinic day: bill-number range and GST slab split' })
   @ApiResponse({ status: 200, description: 'Day-wise summary generated' })
@@ -69,7 +69,7 @@ export class PharmacyComplianceController {
   }
 
   @Get('item-margin')
-  @Roles('OWNER' as any, 'ADMIN' as any, 'ACCOUNTANT' as any, 'PHARMACIST' as any, 'DOCTOR' as any)
+  @Roles('OWNER' as any, 'ADMIN' as any, 'MANAGER' as any, 'ACCOUNTANT' as any, 'PHARMACIST' as any, 'DOCTOR' as any)
   @Permissions('pharmacy:compliance:read')
   @ApiOperation({ summary: 'Sales, cost of goods sold, net GST and profit per item' })
   @ApiResponse({ status: 200, description: 'Item-wise margin generated' })

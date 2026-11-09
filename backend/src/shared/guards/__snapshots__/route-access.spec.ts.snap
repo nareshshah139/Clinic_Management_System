@@ -141,11 +141,11 @@ GET /pharmacy/agent/sessions | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissi
 GET /pharmacy/agent/sessions/:sessionId | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use
 GET /pharmacy/agent/sessions/:sessionId/proposals | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use
 GET /pharmacy/agent/status | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use
-GET /pharmacy/compliance/day-wise-summary | roles: OWNER,ADMIN,ACCOUNTANT,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:read
+GET /pharmacy/compliance/day-wise-summary | roles: OWNER,ADMIN,MANAGER,ACCOUNTANT,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:read
 GET /pharmacy/compliance/expiry-returns | roles: OWNER,ADMIN,PHARMACIST | permissions: pharmacy:compliance:read
-GET /pharmacy/compliance/gst-summary | roles: OWNER,ADMIN,ACCOUNTANT,PHARMACIST | permissions: pharmacy:compliance:read
-GET /pharmacy/compliance/item-margin | roles: OWNER,ADMIN,ACCOUNTANT,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:read
-GET /pharmacy/compliance/monthly-report | roles: OWNER,ADMIN,ACCOUNTANT,PHARMACIST | permissions: pharmacy:compliance:read
+GET /pharmacy/compliance/gst-summary | roles: OWNER,ADMIN,MANAGER,ACCOUNTANT,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:read
+GET /pharmacy/compliance/item-margin | roles: OWNER,ADMIN,MANAGER,ACCOUNTANT,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:read
+GET /pharmacy/compliance/monthly-report | roles: OWNER,ADMIN,MANAGER,ACCOUNTANT,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:read
 GET /pharmacy/dashboard | roles: ADMIN,PHARMACIST | permissions: pharmacy:dashboard:read
 GET /pharmacy/dashboard/alerts | roles: ADMIN,PHARMACIST | permissions: pharmacy:dashboard:alerts:read
 GET /pharmacy/dashboard/recent-invoices | roles: ADMIN,PHARMACIST | permissions: pharmacy:dashboard:recentInvoices:read
@@ -191,6 +191,7 @@ GET /pharmacy/purchase-ledger/distributors/:gstin | roles: ADMIN,PHARMACIST,ACCO
 GET /pharmacy/purchase-register | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
 GET /pharmacy/purchase-register/position | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
 GET /pharmacy/purchase-returns-register | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
+GET /pharmacy/reports/:reportId | roles: OWNER,ADMIN,MANAGER,ACCOUNTANT,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:read
 GET /pharmacy/sales-register | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:invoice:read
 GET /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
 GET /pharmacy/trade-terms/distributors | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
@@ -401,6 +402,7 @@ POST /pharmacy/purchase-invoices/suppliers | roles: ADMIN,PHARMACIST,RECEPTION |
 POST /pharmacy/purchase-ledger/payments | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:write
 POST /pharmacy/purchase-ledger/payments/:id/reallocate | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:write
 POST /pharmacy/purchase-ledger/payments/:id/reverse | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:write
+POST /pharmacy/reports/daily-collection/:day/counts | roles: OWNER,ADMIN,MANAGER,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:audit
 POST /pharmacy/trade-terms/lookup | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
 POST /prescriptions | roles: DOCTOR,ADMIN,OWNER | permissions: -
 POST /prescriptions/:id/pdf | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -

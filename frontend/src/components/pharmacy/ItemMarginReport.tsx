@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, FileDown, TrendingUp, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, TrendingUp, TriangleAlert } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { displayCalendarDate } from "@/lib/date-display";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSkeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { downloadCsv } from "@/components/inventory/workspace-model";
+import { reportById } from "./reports/report-catalog";
+import { ExportMenu } from "./reports/ReportToolbar";
 import { cn } from "@/lib/utils";
 import { ReportInfoTip } from "./ReportInfoTip";
 import {
@@ -25,7 +26,6 @@ import {
   formatPercent,
   formatRupees,
   reportErrorHint,
-  marginCsvRows,
   nextMarginSort,
   sortMarginRows,
   useReport,
@@ -54,6 +54,8 @@ const TILE_HELP = {
   netGst: "Sum of the Net GST column.",
   profit: "Sum of the Profit column. The % is total Profit ÷ total taxable sale value of the rows with a recorded cost × 100.",
 };
+
+const MARGIN = reportById("item-margin")!;
 
 const marginIsEmpty = (report: Report) => report.rows.length === 0;
 
@@ -163,6 +165,7 @@ export function ItemMarginReport() {
 
   const rows = useMemo(() => (state.status === "loaded" ? sortMarginRows(state.data.rows, sort) : []), [sort, state]);
   const totals = state.status === "loaded" ? state.data.totals : null;
+  const loaded = state.status === "loaded" || state.status === "empty" ? state.data : null;
 
   return (
     <Card>
@@ -194,19 +197,15 @@ export function ItemMarginReport() {
             <Input id="margin-search" type="search" maxLength={100} placeholder="Item, category or manufacturer" value={search} onChange={(event) => setSearch(event.target.value)} />
           </div>
           <Button type="submit" disabled={state.status === "loading"}>Go</Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={state.status !== "loaded"}
-            onClick={() => {
-              if (state.status !== "loaded") return;
-              const { period } = state.data;
-              downloadCsv(`item-margin-${period.startDate}-to-${period.endDate}.csv`, marginCsvRows(state.data, rows));
+          <ExportMenu
+            entry={MARGIN}
+            params={{
+              from: loaded?.period.startDate ?? startDate,
+              to: loaded?.period.endDate ?? endDate,
+              q: loaded?.search ?? undefined,
             }}
-          >
-            <FileDown className="size-4" aria-hidden="true" />
-            Download
-          </Button>
+            disabled={!loaded}
+          />
         </form>
       </CardHeader>
       <CardContent className="space-y-4">

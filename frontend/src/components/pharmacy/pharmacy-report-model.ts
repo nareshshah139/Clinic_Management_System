@@ -141,32 +141,6 @@ export function billCell(row: Pick<DayWiseRow, "noBills" | "bills">, type: DayWi
 
 export const slabLabel = (slabPercent: number) => `${slabPercent}%`;
 
-export function dayWiseCsvRows(report: DayWiseReport): Record<string, string | number>[] {
-  const cells = (slabs: GstSlab[], total: GstAmounts, amount: number) => {
-    const out: Record<string, number> = { "CESS Base": 0, "CESS SGST": 0, "CESS CGST": 0, "CESS IGST": 0 };
-    for (const slab of slabs) {
-      const label = slabLabel(slab.slabPercent);
-      out[`${label} Base`] = slab.taxableAmount;
-      out[`${label} SGST`] = slab.sgst;
-      out[`${label} CGST`] = slab.cgst;
-      out[`${label} IGST`] = slab.igst;
-    }
-    return { ...out, "Total Base": total.taxableAmount, "Total SGST": total.sgst, "Total CGST": total.cgst, "Total IGST": total.igst, "Total Amount": amount };
-  };
-  return [
-    ...report.rows.map((row) => {
-      const cell = billCell(row, report.type);
-      return {
-        "Bill Date": row.date,
-        "Bill No.": [cell.primary, cell.gap, cell.extras].filter(Boolean).join(" · "),
-        "Bill Count": row.bills.billCount,
-        ...cells(row.slabs, row.total, row.amount),
-      };
-    }),
-    { "Bill Date": "Total", "Bill No.": "", "Bill Count": report.totals.billCount, ...cells(report.totals.slabs, report.totals.total, report.totals.amount) },
-  ];
-}
-
 export type MarginRow = {
   key: string;
   name: string;
@@ -222,42 +196,3 @@ export const nextMarginSort = (current: MarginSort, key: MarginSortKey): MarginS
   current.key === key
     ? { key, direction: current.direction === "desc" ? "asc" : "desc" }
     : { key, direction: ["name", "category", "unitLabel", "manufacturer"].includes(key) ? "asc" : "desc" };
-
-export function marginCsvRows(report: ItemMarginReport, rows: MarginRow[]): Record<string, string | number | null>[] {
-  return [
-    ...rows.map((row) => ({
-      "Item Name": row.name,
-      Category: row.category,
-      Unit: row.unitLabel,
-      Manufacturer: row.manufacturer,
-      "Sale Qty": row.saleQuantity,
-      "Average Sale Price": row.averageSalePrice,
-      Stock: row.stock,
-      MRP: row.mrp,
-      "Sales Amt": row.salesAmount,
-      Purchase: row.purchase,
-      "Net GST": row.netGst,
-      "Profit": row.profit,
-      "Profit %": row.profitPercent,
-      "Lines Without Cost": row.unknownCost.lineCount,
-      "Sales Without Cost": row.unknownCost.salesAmount,
-    })),
-    {
-      "Item Name": "Total",
-      Category: null,
-      Unit: null,
-      Manufacturer: null,
-      "Sale Qty": null,
-      "Average Sale Price": null,
-      Stock: null,
-      MRP: null,
-      "Sales Amt": report.totals.salesAmount,
-      Purchase: report.totals.purchase,
-      "Net GST": report.totals.netGst,
-      "Profit": report.totals.profit,
-      "Profit %": report.totals.profitPercent,
-      "Lines Without Cost": report.totals.unknownCost.lineCount,
-      "Sales Without Cost": report.totals.unknownCost.salesAmount,
-    },
-  ];
-}
