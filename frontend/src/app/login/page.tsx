@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { Spinner } from '@/components/ui/spinner';
 import { useState, Suspense } from 'react';
 import { Switch } from '@/components/ui/switch';
@@ -11,6 +12,19 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api';
+
+/**
+ * @cc [owner:nareshshah139,label:security] login-local-redirect
+ * Post-login destinations MUST be local absolute paths; missing or unsafe values fall back to
+ * /dashboard, and local query strings and fragments remain intact.
+ */
+function loginDestination(next: string | null): string {
+  if (!next || !next.startsWith('/') || next.startsWith('//') ||
+      /[\\\u0000-\u001f\u007f]/.test(next) || /^\/(?:%2f|%5c)/i.test(next)) {
+    return '/dashboard';
+  }
+  return next;
+}
 
 function LoginPageInner() {
   const { brandedEnabled, toggleBranded, loading: brandedLoading } = useBrandedMode();
@@ -32,8 +46,7 @@ function LoginPageInner() {
       setLoading(true);
       setError(null);
       await apiClient.login(trimmedIdentifier, password);
-      const next = search.get('next') || '/dashboard';
-      router.replace(next);
+      router.replace(loginDestination(search.get('next')));
     } catch (e: any) {
       setError(e?.message || 'Login failed');
     } finally {
@@ -102,6 +115,7 @@ function LoginPageInner() {
               {loading ? 'Signing in…' : 'Sign in'}
             </Button>
             <p className="text-xs text-gray-500 text-center">Use your registered phone number or email with your password.</p>
+            <p className="text-sm text-center text-gray-600">Forgot password? Ask your clinic admin for a reset code, then <Link href="/reset-password" className="text-blue-700 underline underline-offset-2">enter your reset code</Link>.</p>
           </form>
         </CardContent>
       </Card>
@@ -115,4 +129,4 @@ export default function LoginPage() {
       <LoginPageInner />
     </Suspense>
   );
-} 
+}

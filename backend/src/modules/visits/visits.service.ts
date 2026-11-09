@@ -136,6 +136,8 @@ export class VisitsService {
           throw new ConflictException('Visit already exists for this appointment');
         }
       }
+      // A patient's first doctor becomes their primary doctor unless one is already assigned.
+      await tx.patient.updateMany({ where: { id: patientId, branchId, primaryDoctorId: null }, data: { primaryDoctorId: doctorId } });
       const createdVisit = await tx.visit.create({
         data: {
           ...consultation,

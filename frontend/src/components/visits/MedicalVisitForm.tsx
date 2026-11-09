@@ -4,7 +4,8 @@ import { displayCalendarDate, displayClinicTime } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PRESCRIPTION_LETTERHEAD_URL, PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, prescriptionLetterheadUrl } from '@/lib/prescription-letterhead';
+import { PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, printBackgroundKey, savedPrintBackground } from '@/lib/prescription-letterhead';
+import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -59,7 +60,7 @@ import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { DoctorTour } from '@/components/tours';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
-import { getErrorMessage } from '@/lib/utils';
+import { calculateAge, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { isUuid } from '@/lib/id';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
@@ -405,7 +406,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   // Print customization (moved from PrescriptionBuilder)
-  const [printBgUrl, setPrintBgUrl] = useState<string>(PRESCRIPTION_LETTERHEAD_URL);
+  // Custom background override; empty means the doctor's own letterhead.
+  const [printBgUrl, setPrintBgUrl] = useState<string>('');
   const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(PRESCRIPTION_TOP_MARGIN_PX);
   const [printLeftMarginPx, setPrintLeftMarginPx] = useState<number>(45);
   const [printRightMarginPx, setPrintRightMarginPx] = useState<number>(45);
@@ -432,7 +434,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   // Persist customization locally so users keep their letterhead and layout
   useEffect(() => {
     try {
-      const bg = localStorage.getItem('rx_print_bg_url');
       const top = localStorage.getItem('rx_margin_top_px');
       const left = localStorage.getItem('rx_margin_left_px');
       const right = localStorage.getItem('rx_margin_right_px');
@@ -452,7 +453,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       const frames = localStorage.getItem('rx_frames_enabled');
       const headerMm = localStorage.getItem('rx_header_mm');
       const footerMm = localStorage.getItem('rx_footer_mm');
-      if (bg) setPrintBgUrl(prescriptionLetterheadUrl(bg));
       if (top) setPrintTopMarginPx(Number(top));
       if (left) setPrintLeftMarginPx(Number(left));
       if (right) setPrintRightMarginPx(Number(right));
@@ -474,7 +474,61 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       if (footerMm) setFooterHeightMm(Number(footerMm));
     } catch {}
   }, []);
-  useEffect(() => { try { localStorage.setItem('rx_print_bg_url', printBgUrl || ''); } catch {} }, [printBgUrl]);
+  /** Applies a doctor's saved print layout (margins, offsets, design aids); the letterhead is resolved separately. */
+  const applyDoctorPrintLayout = useCallback((p: any) => {
+    if (p.margins) {
+      if (typeof p.margins.topPx === 'number') setPrintTopMarginPx(p.margins.topPx);
+      if (typeof p.margins.leftPx === 'number') setPrintLeftMarginPx(p.margins.leftPx);
+      if (typeof p.margins.rightPx === 'number') setPrintRightMarginPx(p.margins.rightPx);
+      if (typeof p.margins.bottomPx === 'number') setPrintBottomMarginPx(p.margins.bottomPx);
+    }
+    if (p.contentOffset) {
+      if (typeof p.contentOffset.xPx === 'number') setContentOffsetXPx(p.contentOffset.xPx);
+      if (typeof p.contentOffset.yPx === 'number') setContentOffsetYPx(p.contentOffset.yPx);
+    }
+    if (p.designAids) {
+      if (typeof p.designAids.enabled === 'boolean') setDesignAidsEnabled(p.designAids.enabled);
+      if (typeof p.designAids.showGrid === 'boolean') setDesignShowGrid(p.designAids.showGrid);
+      if (typeof p.designAids.showRulers === 'boolean') setDesignShowRulers(p.designAids.showRulers);
+      if (typeof p.designAids.snapToGrid === 'boolean') setDesignSnapToGrid(p.designAids.snapToGrid);
+      if (typeof p.designAids.gridSizePx === 'number') setDesignGridSizePx(p.designAids.gridSizePx);
+      if (typeof p.designAids.nudgeStepPx === 'number') setDesignNudgeStepPx(p.designAids.nudgeStepPx);
+    }
+  }, []);
+
+  /**
+   * @cc [owner:nareshshah139,label:product] doctor-print-layout-default
+   * Opening a visit MUST apply the visit doctor's saved print layout when one exists, so each
+   * doctor prints with their own margins without loading it by hand. Without a saved layout the
+   * existing browser settings stay in effect.
+   */
+  useEffect(() => {
+    if (!doctorId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const u = await apiClient.get(`/users/${encodeURIComponent(doctorId)}`) as any;
+        const p = (u && (u.metadata || u?.user?.metadata)?.rxPrintProfile) || u?.rxPrintProfile;
+        if (!cancelled && p) applyDoctorPrintLayout(p);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [doctorId, applyDoctorPrintLayout]);
+
+  // The background override is kept per doctor so one doctor's choice never prints on another's prescriptions.
+  const { letterhead: doctorLetterhead, loading: doctorLetterheadLoading } = useDoctorLetterhead(doctorId);
+  const printBgLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (doctorLetterheadLoading) return;
+    let saved = '';
+    try { saved = savedPrintBackground(localStorage, doctorId, doctorLetterhead?.source); } catch {}
+    setPrintBgUrl(saved);
+    printBgLoadedFor.current = doctorId;
+  }, [doctorId, doctorLetterhead?.source, doctorLetterheadLoading]);
+  useEffect(() => {
+    if (printBgLoadedFor.current !== doctorId) return;
+    try { localStorage.setItem(printBackgroundKey(doctorId), printBgUrl || ''); } catch {}
+  }, [doctorId, printBgUrl]);
   useEffect(() => { try { localStorage.setItem('rx_margin_top_px', String(printTopMarginPx)); } catch {} }, [printTopMarginPx]);
   useEffect(() => { try { localStorage.setItem('rx_margin_left_px', String(printLeftMarginPx)); } catch {} }, [printLeftMarginPx]);
   useEffect(() => { try { localStorage.setItem('rx_margin_right_px', String(printRightMarginPx)); } catch {} }, [printRightMarginPx]);
@@ -1655,10 +1709,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   };
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col gap-6 lg:flex-row">
       {/* Patient Context Sidebar */}
       {showPatientContext && (
-        <div className="w-80 space-y-4">
+        <div className="w-full space-y-4 lg:w-80 lg:shrink-0">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -1677,21 +1731,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     <Badge variant="outline" className="text-xs">ID: {patientId}</Badge>
                   </div>
                   <div className="text-sm text-gray-600">
-                    Age: {(() => {
-                      if ((patientDetails as any).age != null) return (patientDetails as any).age;
-                      if (!patientDetails.dob) return 'N/A';
-                      const dob = new Date(patientDetails.dob);
-                      const today = new Date();
-                      const isToday = 
-                        dob.getFullYear() === today.getFullYear() &&
-                        dob.getMonth() === today.getMonth() &&
-                        dob.getDate() === today.getDate();
-                      if (isToday) return 'N/A';
-                      const age = today.getFullYear() - dob.getFullYear();
-                      const monthDiff = today.getMonth() - dob.getMonth();
-                      const adjustedAge = (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) ? age - 1 : age;
-                      return adjustedAge >= 0 ? adjustedAge : 'N/A';
-                    })()} • {patientDetails.gender || 'N/A'}
+                    Age: {calculateAge(patientDetails) ?? 'N/A'} • {patientDetails.gender || 'N/A'}
                   </div>
                   <div className="text-sm text-gray-600">
                     Phone: {patientDetails.phone || 'N/A'}
@@ -1770,7 +1810,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       )}
       
       {/* Main Content */}
-      <div className={`flex-1 space-y-6 ${showPatientContext ? '' : 'max-w-none'}`}>
+      <div className={`min-w-0 flex-1 space-y-6 ${showPatientContext ? '' : 'max-w-none'}`}>
         {!showPatientContext && (
           <Button variant="outline" size="sm" onClick={() => setShowPatientContext(true)} className="mb-4">
             <User className="h-4 w-4 mr-2" />
@@ -1793,9 +1833,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       {/* Visit Header */}
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex flex-wrap items-center gap-2">
                 <Clock className="h-5 w-5" />
                 Visit #{currentVisitNumber}
                 <Badge variant={visitStatus === 'COMPLETED' ? 'default' : visitStatus === 'IN_PROGRESS' ? 'secondary' : 'outline'}>
@@ -1812,7 +1852,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                 Medical Visit Documentation • Role: {userRole} • Progress: {getProgress()}%
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{photoCount} Photos</Badge>
               <div className="w-20 bg-gray-200 rounded-full h-2">
                 <div 
@@ -2228,13 +2268,13 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between pt-2 border-t">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
                       <div className="text-xs text-gray-500">Selections and results are saved under Treatment Plan → Dermatology.</div>
-                      <div className="flex gap-2">
-                        <div className="flex flex-col gap-0.5">
+                      <div className="flex min-w-0 max-w-full flex-wrap gap-2">
+                        <div className="flex min-w-0 max-w-full flex-col gap-0.5">
                           <label className="text-sm">
                             <input
-                              type="file"
+                              type="file" className="w-full max-w-full"
                               accept="image/*,application/pdf"
                               onChange={async (e) => {
                                 const f = e.target.files?.[0];
@@ -2420,6 +2460,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div className="md:col-span-2 space-y-2">
                         <label className="text-sm text-gray-700">Print Background Image URL (optional)</label>
+                        <p className="text-xs text-gray-500">Leave empty to print on the doctor&apos;s own letterhead. Doctors upload theirs in Settings.</p>
                         <Input placeholder="https://.../letterhead.png" value={printBgUrl} onChange={(e) => setPrintBgUrl(e.target.value)} />
                         <div className="flex items-center gap-2 text-sm">
                           <input
@@ -2513,7 +2554,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                         </div>
                       </div>
                       <div className="md:col-span-3 border-t pt-3 mt-2">
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
                           <label className="text-sm font-medium">Design Aids</label>
                           <label className="flex items-center gap-2 text-sm">
                             <input type="checkbox" checked={designAidsEnabled} onChange={(e) => setDesignAidsEnabled(e.target.checked)} /> Enable
@@ -2589,24 +2630,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                                   const p = (u && (u.metadata || u?.user?.metadata)?.rxPrintProfile) || (u?.rxPrintProfile);
                                   if (!p) { toast({ title: 'No profile found', description: 'Save a profile first' }); return; }
                                   if (p.printBgUrl) setPrintBgUrl(p.printBgUrl);
-                                  if (p.margins) {
-                                    if (typeof p.margins.topPx === 'number') setPrintTopMarginPx(p.margins.topPx);
-                                    if (typeof p.margins.leftPx === 'number') setPrintLeftMarginPx(p.margins.leftPx);
-                                    if (typeof p.margins.rightPx === 'number') setPrintRightMarginPx(p.margins.rightPx);
-                                    if (typeof p.margins.bottomPx === 'number') setPrintBottomMarginPx(p.margins.bottomPx);
-                                  }
-                                  if (p.contentOffset) {
-                                    if (typeof p.contentOffset.xPx === 'number') setContentOffsetXPx(p.contentOffset.xPx);
-                                    if (typeof p.contentOffset.yPx === 'number') setContentOffsetYPx(p.contentOffset.yPx);
-                                  }
-                                  if (p.designAids) {
-                                    if (typeof p.designAids.enabled === 'boolean') setDesignAidsEnabled(p.designAids.enabled);
-                                    if (typeof p.designAids.showGrid === 'boolean') setDesignShowGrid(p.designAids.showGrid);
-                                    if (typeof p.designAids.showRulers === 'boolean') setDesignShowRulers(p.designAids.showRulers);
-                                    if (typeof p.designAids.snapToGrid === 'boolean') setDesignSnapToGrid(p.designAids.snapToGrid);
-                                    if (typeof p.designAids.gridSizePx === 'number') setDesignGridSizePx(p.designAids.gridSizePx);
-                                    if (typeof p.designAids.nudgeStepPx === 'number') setDesignNudgeStepPx(p.designAids.nudgeStepPx);
-                                  }
+                                  applyDoctorPrintLayout(p);
                                   toast({ variant: 'success', title: 'Loaded', description: 'Doctor profile applied' });
                                 } catch (e) {
                                   console.error('Load profile failed', e);

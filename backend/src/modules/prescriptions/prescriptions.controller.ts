@@ -1,3 +1,4 @@
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Controller,
@@ -46,6 +47,7 @@ interface AuthenticatedRequest {
 }
 
 @Controller('prescriptions')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 export class PrescriptionsController {
   constructor(private readonly prescriptionsService: PrescriptionsService) {}
@@ -343,8 +345,9 @@ export class PrescriptionsController {
   @Get('printer-profiles')
   listPrinterProfiles(
     @Request() req: AuthenticatedRequest,
+    @Query('doctorId') doctorId?: string,
   ) {
-    return this.prescriptionsService.listPrinterProfiles(req.user.branchId, req.user.id);
+    return this.prescriptionsService.listPrinterProfiles(req.user.branchId, req.user.id, doctorId?.trim() || undefined);
   }
 
   @Post('printer-profiles')

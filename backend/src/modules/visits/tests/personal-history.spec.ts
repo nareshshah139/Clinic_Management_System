@@ -6,7 +6,7 @@ import { ConsultationType } from '../consultation';
 function fixture() {
   const visits: any[] = [];
   const db: any = {
-    patient: { findFirst: jest.fn(async ({ where }) => where.id === 'patient' && where.branchId === 'branch' ? { id: 'patient' } : null) },
+    patient: { findFirst: jest.fn(async ({ where }) => where.id === 'patient' && where.branchId === 'branch' ? { id: 'patient' } : null), updateMany: jest.fn() },
     user: { findFirst: jest.fn().mockResolvedValue({ id: 'doctor' }) },
     visit: {
       findFirst: jest.fn(async ({ where }) => where.id

@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { ALLOWED_ORIGINS } from './shared/cors-origins';
 import { Logger } from '@nestjs/common';
 import { ExpressAdapter, type NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -28,11 +29,7 @@ async function bootstrap() {
     installHttpObservability(app);
     configureRequestBody(app);
     app.enableCors({
-      origin: [
-        /^http:\/\/localhost:(3000|3001|3002)$/,
-        /^https:\/\/.*\.railway\.app$/,
-        /^https:\/\/.*\.up\.railway\.app$/,
-      ],
+      origin: ALLOWED_ORIGINS,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id', 'X-Request-Attempt'],
@@ -72,11 +69,7 @@ async function bootstrap() {
   installHttpObservability(app);
   configureRequestBody(app);
   app.enableCors({
-    origin: [
-      /^http:\/\/localhost:(3000|3001|3002)$/,
-      /^https:\/\/.*\.railway\.app$/,
-      /^https:\/\/.*\.up\.railway\.app$/,
-    ],
+    origin: ALLOWED_ORIGINS,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id', 'X-Request-Attempt'],

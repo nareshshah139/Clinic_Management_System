@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
+import { usePrefilledPatient } from './usePrefilledPatient';
+import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/lib/doctor-availability';
 import { useToast } from '@/hooks/use-toast';
 import { createCleanupTimeouts, getISTDateString, formatPatientName } from '@/lib/utils';
 import type { User, Patient, TimeSlotConfig, AppointmentInSlot } from '@/lib/types';
@@ -16,6 +18,8 @@ import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle, Info } from 'lucide-react';
 import { AppointmentStatus } from '@cms/shared-types';
+import { useOverbookConfirm } from './useOverbookConfirm';
+import { overbookFlag } from '@/lib/overbooking';
 
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -48,6 +52,7 @@ export default function AppointmentsCalendar({
   hideHeaderControls,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
+  const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
   const [slotConfig, setSlotConfig] = useState<TimeSlotConfig>(timeSlotConfig);
   const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
@@ -94,11 +99,7 @@ export default function AppointmentsCalendar({
     void fetchRooms();
   }, []);
 
-  useEffect(() => {
-    if (prefillPatientId) {
-      setSelectedPatientId(prefillPatientId);
-    }
-  }, [prefillPatientId]);
+  usePrefilledPatient(prefillPatientId, selectedPatientId, setSelectedPatientId, setSelectedPatient);
 
   // Keep local slot config in sync with prop defaults
   useEffect(() => {
@@ -117,31 +118,18 @@ export default function AppointmentsCalendar({
   }, [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.stepMinutes, timeSlotConfig.timezone]);
 
   // Apply doctor working hours when doctor/date changes (mirrors AppointmentScheduler behavior)
+  const [doctorDay, setDoctorDay] = useState<DoctorDay | null>(null);
   useEffect(() => {
+    let cancelled = false;
     const applyHours = async () => {
-      if (!doctorId || !date) return;
-      try {
-        const res: any = await apiClient.getUser(doctorId);
-        const meta = (res?.metadata && typeof res.metadata === 'object') ? res.metadata : (res?.metadata ? JSON.parse(res.metadata) : {});
-        const wh = meta?.workingHours;
-        if (!wh) return;
-        const tz = 'Asia/Kolkata';
-        const noonUtc = new Date(`${date}T12:00:00.000Z`);
-        const localNoon = new Date(noonUtc.toLocaleString('en-US', { timeZone: tz }));
-        const dayKey = ['sun','mon','tue','wed','thu','fri','sat'][localNoon.getDay()];
-        const byDay = wh?.byDay?.[dayKey] || {};
-        const startHour = Number.isInteger(byDay?.startHour) ? byDay.startHour : wh?.startHour;
-        const endHour = Number.isInteger(byDay?.endHour) ? byDay.endHour : wh?.endHour;
-        setSlotConfig((prev) => ({
-          ...prev,
-          ...(Number.isInteger(startHour) ? { startHour } : {}),
-          ...(Number.isInteger(endHour) ? { endHour } : {}),
-        }));
-      } catch (error) {
-        console.error('Failed to apply working hours', error);
-      }
+      const day = doctorId && date ? await loadDoctorDay(doctorId, date) : null;
+      if (cancelled) return;
+      setDoctorDay(day);
+      const hours = gridHoursFor(day);
+      if (hours) setSlotConfig((prev) => ({ ...prev, ...hours }));
     };
     void applyHours();
+    return () => { cancelled = true; };
   }, [doctorId, date]);
 
   // Keep grid dropdown aligned if stepMinutes changes
@@ -307,6 +295,10 @@ export default function AppointmentsCalendar({
   };
 
   const handleBookingRequest = (slot: string) => {
+    if (!selectedPatient || selectedPatient.id !== selectedPatientId) {
+      toast({ variant: 'destructive', title: 'Patient required', description: 'Select a patient before booking.' });
+      return;
+    }
     const pid = selectedPatientId?.trim();
     if (!pid) {
       toast({
@@ -367,7 +359,7 @@ export default function AppointmentsCalendar({
       
       setOptimisticAppointment(optimisticAppt);
       
-      const created: any = await apiClient.createAppointment({ 
+      const created: any = await sendWithOverbookConfirm((allowOverbook) => apiClient.createAppointment({
         doctorId, 
         patientId: selectedPatientId, 
         date, 
@@ -375,7 +367,12 @@ export default function AppointmentsCalendar({
         visitType: appointmentData.visitType,
         roomId: appointmentData.roomId,
         notes: appointmentData.notes,
-      });
+        ...overbookFlag(allowOverbook),
+      }));
+      if (!created) {
+        setOptimisticAppointment(null);
+        return;
+      }
       
       // Clear optimistic appointment and refresh with real data
       setOptimisticAppointment(null);
@@ -488,7 +485,7 @@ export default function AppointmentsCalendar({
 
           {/* Doctor-specific Google Calendar status */}
           {googleConfigured !== false && doctorId && !doctorGoogleStatus.connected && googleStatus.connected && (
-            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>
                 {currentDoctorName}&apos;s Google Calendar is not connected. Appointments won&apos;t sync to their calendar.
@@ -497,7 +494,7 @@ export default function AppointmentsCalendar({
             </div>
           )}
           {googleConfigured !== false && doctorId && doctorGoogleStatus.connected && (
-            <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700">
+            <div className="flex items-center gap-2 rounded border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700">
               <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
@@ -581,14 +578,14 @@ export default function AppointmentsCalendar({
           )}
 
           {!selectedPatientId && patientSearch && (
-            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <AlertCircle className="h-4 w-4" />
               <span>Select a patient from the list or add them as new before booking.</span>
             </div>
           )}
 
           {patientSearch && patients.length > 0 && (
-            <div className="max-h-40 overflow-auto border rounded-md">
+            <div className="max-h-40 overflow-auto border rounded">
               {patients.map((p) => (
                 <div
                   key={p.id}
@@ -609,7 +606,7 @@ export default function AppointmentsCalendar({
           )}
 
           {patientSearch && patients.length === 0 && !selectedPatientId && !searchingPatients && (
-            <div className="rounded-md border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+            <div className="rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
               <div className="flex items-center justify-between">
                 <span>No matching patients found.</span>
                 <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
@@ -625,39 +622,39 @@ export default function AppointmentsCalendar({
           )}
 
           {/* Legend */}
-          <div className="border rounded-md p-3 bg-gray-50">
+          <div className="border rounded p-3 bg-gray-50">
             <h3 className="font-semibold mb-2">Legend</h3>
             <div className="flex flex-wrap gap-4 items-center">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-consultation)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(219, 234, 254, 0.95)' }} />
                 <span className="text-sm">OPD</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-procedure)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(237, 233, 254, 0.95)' }} />
                 <span className="text-sm">Procedure</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-telemedicine)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(243, 244, 246, 0.95)' }} />
                 <span className="text-sm">Telemedicine</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-completed)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(226, 232, 240, 0.95)' }} />
                 <span className="text-sm">Completed</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-consultation-past)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(239, 246, 255, 0.95)' }} />
                 <span className="text-sm">Past (OPD)</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-procedure-past)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(245, 237, 254, 0.95)' }} />
                 <span className="text-sm">Past (Procedure)</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--success)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#22c55e' }} />
                 <span className="text-sm">Newly Booked</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--warning-soft)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#fbbf24' }} />
                 <span className="text-sm">Booking In Progress</span>
               </div>
             </div>
@@ -665,18 +662,23 @@ export default function AppointmentsCalendar({
 
           {!!bookingDetails && (
             <div 
-              className="rounded-md border border-green-500 bg-green-50 p-4 text-sm text-green-700"
+              className="p-4 rounded-r text-sm shadow-sm"
               role="status"
+              style={{
+                backgroundColor: '#f0fdf4',
+                borderLeft: '4px solid #22c55e',
+                color: '#15803d'
+              }}
             >
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5" style={{ color: '#22c55e' }} viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                 </div>
                 <div className="ml-3">
                   <p className="font-medium">Appointment Successfully Booked!</p>
-                  <p>
+                  <p style={{ color: '#16a34a' }}>
                     {bookingDetails.patient?.name || `${selectedPatient?.firstName ?? ''} ${selectedPatient?.lastName ?? ''}`.trim()} 
                     {' '} scheduled for {bookingDetails.slot}
                     {bookingDetails.room && ` in ${bookingDetails.room.name}`}
@@ -684,6 +686,12 @@ export default function AppointmentsCalendar({
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {doctorDay && doctorDay.blocked.length > 0 && (
+            <div role="status" className="p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
+              Not bookable: {doctorDay.blocked.map(describeBlock).join('; ')}
             </div>
           )}
 
@@ -698,9 +706,10 @@ export default function AppointmentsCalendar({
             bookingInProgress={loading ? pendingBookingSlot : undefined}
             optimisticAppointment={optimisticAppointment || undefined}
             onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
-            disableSlotBooking={!selectedPatientId}
+            disableSlotBooking={!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId}
             selectedRoomName={selectedRoom?.name}
             timeSlotConfig={{ ...slotConfig, stepMinutes: Math.max(10, gridMinutes) }}
+            maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}
           />
         </CardContent>
       </Card>
@@ -715,6 +724,8 @@ export default function AppointmentsCalendar({
         onConfirm={handleBookingConfirm}
         onCancel={handleBookingCancel}
       />
+
+      {overbookDialog}
 
       <PatientQuickCreateDialog
         open={quickCreateOpen}

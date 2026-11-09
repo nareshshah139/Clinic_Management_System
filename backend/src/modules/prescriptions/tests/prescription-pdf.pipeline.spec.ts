@@ -27,6 +27,7 @@ describe('Prescription -> saved readback -> PDF pipeline', () => {
   };
   const hydrate = (s: any) => s.rx ? { ...s.rx, visit: { ...s.visit, patient, doctor } } : null;
   const client = (getState: () => any): any => ({
+    pharmacyInvoice: { findFirst: async () => null },
     $queryRaw: async () => [{ id: 'pipeline-rx' }],
     patient: { findFirst: async ({ where }: any) => where.id === patient.id && where.branchId === patient.branchId ? patient : null },
     user: { findFirst: async ({ where }: any) => where.id === doctor.id ? doctor : null },

@@ -947,14 +947,6 @@ function ActiveDispenseColumn({
               >
                 Paid
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onUpdateStatus('DISPENSED')}
-                disabled={savingTask || activeEntry?.dispensingEligible === false}
-              >
-                Dispense
-              </Button>
               <Button size="sm" onClick={onOpenBilling} disabled={savingTask || activeEntry?.dispensingEligible === false}>
                 <Receipt className="mr-2 h-4 w-4" />
                 Open bill

@@ -10,6 +10,13 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { Prisma } from '@prisma/client';
 import { generatePatientCode } from '../../shared/ids/patient-code.util';
 
+/**
+ * @cc [owner:nareshshah139,label:security] portal-user-safe-fields
+ * Patient responses MUST expose only portal account identity and status, never credentials,
+ * permissions, or private account metadata.
+ */
+const portalUserSelect = { id: true, firstName: true, lastName: true, email: true, phone: true, role: true, status: true } as const;
+
 @Injectable()
 export class PatientsService {
   constructor(private prisma: PrismaService, private usersService: UsersService, private notifications: NotificationsService) {}
@@ -62,9 +69,17 @@ export class PatientsService {
     return new Date(now.getFullYear() - age, 0, 1);
   }
 
-  async create(createPatientDto: CreatePatientDto, branchId: string) {
+  /**
+   * @cc [owner:nareshshah139,label:product] patient-primary-doctor
+   * A patient's primary doctor MUST be an active doctor in the patient's branch, or none.
+   * A doctor who registers a patient without choosing one becomes the primary doctor;
+   * other staff leave it empty, and the patient's first visit assigns that visit's doctor.
+   */
+  async create(createPatientDto: CreatePatientDto, branchId: string, creator?: { id: string; role: string }) {
     const normalizedPhone = this.normalizePhone(createPatientDto.phone);
-    const { dob: dobStr, age, ...rest } = createPatientDto;
+    const { dob: dobStr, age, primaryDoctorId: requestedDoctorId, ...rest } = createPatientDto;
+    const primaryDoctorId = await this.resolvePrimaryDoctor(
+      requestedDoctorId !== undefined ? requestedDoctorId : creator?.role === 'DOCTOR' ? creator.id : null, branchId);
 
     let dob: Date | null = null;
     let resolvedAge: number | null = age != null ? age : null;
@@ -89,8 +104,19 @@ export class PatientsService {
         branchId,
         dob,
         age: resolvedAge,
+        primaryDoctorId,
       }),
     );
+  }
+
+  private async resolvePrimaryDoctor(doctorId: string | null | undefined, branchId: string): Promise<string | null> {
+    if (!doctorId) return null;
+    const doctor = await this.prisma.user.findFirst({
+      where: { id: doctorId, branchId, role: 'DOCTOR', isActive: true },
+      select: { id: true },
+    });
+    if (!doctor) throw new BadRequestException('Primary doctor must be an active doctor in this branch');
+    return doctor.id;
   }
 
   /**
@@ -99,10 +125,10 @@ export class PatientsService {
    * or their total count. Recent registration or an undeleted visit may qualify.
    */
   async findAll(
-    options: { page: number; limit: number; search?: string; gender?: string; consultationType?: string; dateRange?: string },
+    options: { page: number; limit: number; search?: string; gender?: string; consultationType?: string; dateRange?: string; primaryDoctorId?: string },
     branchId: string,
   ) {
-    const { page, limit, search, gender, consultationType, dateRange } = options;
+    const { page, limit, search, gender, consultationType, dateRange, primaryDoctorId } = options;
     const skip = (page - 1) * limit;
 
     // Optimize search by requiring minimum 2 characters and using more efficient queries
@@ -169,6 +195,7 @@ export class PatientsService {
       isArchived: false,
       ...(genderVariants ? { gender: { in: genderVariants } } : {}),
       ...(consultationType ? { consultationType } : {}),
+      ...(primaryDoctorId ? { primaryDoctorId } : {}),
       ...(andConditions.length > 0 ? { AND: andConditions } : {}),
     } as any;
 
@@ -196,13 +223,15 @@ export class PatientsService {
           consultationType: true,
           createdAt: true,
           updatedAt: true,
+          primaryDoctor: { select: { id: true, firstName: true, lastName: true } },
+          visits: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, createdAt: true } },
         },
       }),
       this.prisma.patient.count({ where }),
     ]);
 
     return {
-      data: patients,
+      data: patients.map(({ visits, ...patient }) => ({ ...patient, lastVisitAt: visits[0]?.createdAt ?? null })),
       meta: {
         page,
         limit,
@@ -237,6 +266,8 @@ export class PatientsService {
         emergencyContact: true,
         allergies: true,
         photoUrl: true,
+        primaryDoctorId: true,
+        primaryDoctor: { select: { id: true, firstName: true, lastName: true } },
         referralSource: true,
         secondaryPhone: true,
         maritalStatus: true,
@@ -260,7 +291,7 @@ export class PatientsService {
           orderBy: { createdAt: 'desc' },
           take: 5,
         },
-        portalUser: true,
+        portalUser: { select: portalUserSelect },
       },
     });
     if (!patient) throw new NotFoundException('Patient not found');
@@ -317,8 +348,11 @@ export class PatientsService {
   async update(id: string, updatePatientDto: UpdatePatientDto, branchId: string) {
     await this.findOne(id, branchId);
 
-    const { dob, age, phone, ...rest } = updatePatientDto as any;
+    const { dob, age, phone, primaryDoctorId, ...rest } = updatePatientDto as any;
     const updateData: any = { ...rest };
+    if (primaryDoctorId !== undefined) {
+      updateData.primaryDoctorId = await this.resolvePrimaryDoctor(primaryDoctorId, branchId);
+    }
 
     if (age != null) {
       updateData.age = age;
@@ -373,6 +407,11 @@ export class PatientsService {
     return { message: 'Patient restored' };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security;product] link-existing-portal-account
+   * Email-only linking MUST resolve exactly one existing patient account in the same branch.
+   * A linked patient or account MUST NOT be reassigned, including under concurrent requests.
+   */
   async linkUser(patientId: string, dto: LinkPatientUserDto, branchId: string) {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId } });
     if (!patient) throw new NotFoundException('Patient not found');
@@ -382,6 +421,16 @@ export class PatientsService {
     }
 
     let userIdToLink: string | undefined = dto.userId;
+
+    if (!userIdToLink && dto.email && !dto.password && !dto.firstName && !dto.lastName) {
+      const matches = await this.prisma.user.findMany({
+        where: { branchId, role: UserRole.PATIENT, email: { equals: dto.email.trim(), mode: 'insensitive' } },
+        select: { id: true }, take: 2,
+      });
+      if (matches.length === 0) throw new NotFoundException('No patient portal account with this email exists in this branch');
+      if (matches.length !== 1) throw new ConflictException('Multiple portal accounts match this email; use an account ID');
+      userIdToLink = matches[0].id;
+    }
 
     if (!userIdToLink) {
       // Validate minimal fields for creating a patient portal user
@@ -403,7 +452,8 @@ export class PatientsService {
         branchId,
       );
       userIdToLink = created.id;
-    } else {
+    }
+    {
       // Ensure the existing user is valid and of PATIENT role
       const existing = await this.prisma.user.findFirst({ where: { id: userIdToLink, branchId } });
       if (!existing) throw new NotFoundException('User not found in this branch');
@@ -416,13 +466,19 @@ export class PatientsService {
       if (alreadyLinked) throw new ConflictException('This user is already linked to another patient');
     }
 
-    const updated = await this.prisma.patient.update({
-      where: { id: patientId },
-      data: { portalUserId: userIdToLink },
-      include: { portalUser: true },
-    });
-
-    return updated;
+    try {
+      const changed = await this.prisma.patient.updateMany({
+        where: { id: patientId, branchId, portalUserId: null },
+        data: { portalUserId: userIdToLink },
+      });
+      if (changed.count !== 1) throw new ConflictException('Patient is already linked to a user');
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('This user is already linked to another patient');
+      }
+      throw error;
+    }
+    return this.prisma.patient.findFirstOrThrow({ where: { id: patientId, branchId }, include: { portalUser: { select: portalUserSelect } } });
   }
 
   async unlinkUser(patientId: string, branchId: string) {
@@ -432,14 +488,14 @@ export class PatientsService {
     return this.prisma.patient.update({
       where: { id: patientId },
       data: { portalUserId: null },
-      include: { portalUser: true },
+      include: { portalUser: { select: portalUserSelect } },
     });
   }
 
   async getPortalUser(patientId: string, branchId: string) {
     const patient = await this.prisma.patient.findFirst({
       where: { id: patientId, branchId },
-      include: { portalUser: true },
+      include: { portalUser: { select: portalUserSelect } },
     });
     if (!patient) throw new NotFoundException('Patient not found');
     return patient.portalUser;

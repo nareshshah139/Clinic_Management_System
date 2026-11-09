@@ -17,6 +17,9 @@ import type {
   InventoryItem,
   RescheduleAppointmentPayload,
 } from './types';
+import type { InventoryItemRequest, InventoryItemRequestStatus, PendingApprovalResponse } from './inventory-item-requests';
+
+export type DoctorLetterhead = { id: string; url: string; source: 'uploaded' | 'bundled' };
 
 export class ApiClient {
   private baseURL: string;
@@ -68,6 +71,14 @@ export class ApiClient {
   }
 
   // Auth
+  async issueResetCode(userId: string) {
+    return this.post<{ code: string; expiresAt: string }>(`/auth/users/${encodeURIComponent(userId)}/reset-code`, {});
+  }
+
+  async resetPassword(code: string, password: string, confirmPassword: string) {
+    return this.post<{ message: string }>('/auth/reset-password', { code, password, confirmPassword });
+  }
+
   async login(identifier: string, password: string) {
     // Server sets HttpOnly cookie via Set-Cookie. Do not persist token client-side.
     return this.post<{ access_token?: string; user: any }>(`/auth/login`, { identifier, password });
@@ -333,6 +344,13 @@ export class ApiClient {
     }, { retryUnsafe: Boolean(opts?.idempotencyKey) });
   }
 
+  async put<T>(endpoint: string, data: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   async delete<T>(endpoint: string): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'DELETE',
@@ -420,6 +438,52 @@ export class ApiClient {
 
   async getRooms() {
     return this.get<import('./types').GetRoomsResponse>('/appointments/rooms');
+  }
+
+  // Clinic investigations
+  async getClinicInvestigations() {
+    return this.get<Array<{ id: string; name: string }>>('/clinic-investigations');
+  }
+
+  async createClinicInvestigation(data: { name: string }) {
+    return this.post<{ id: string; name: string }>('/clinic-investigations', data);
+  }
+
+  async renameClinicInvestigation(id: string, name: string) {
+    return this.patch<{ id: string; name: string }>(`/clinic-investigations/${id}`, { name });
+  }
+
+  async deleteClinicInvestigation(id: string) {
+    return this.delete<{ id: string }>(`/clinic-investigations/${id}`);
+  }
+
+  // Doctor availability
+  async getDoctorAvailability(doctorId: string, params?: { from?: string; to?: string }) {
+    return this.get<import('./doctor-availability').DoctorAvailability>(`/doctor-availability/${doctorId}`, params);
+  }
+
+  async getDoctorDay(doctorId: string, date: string) {
+    return this.get<import('./doctor-availability').DoctorDay>(`/doctor-availability/${doctorId}/day`, { date });
+  }
+
+  async replaceDoctorHours(doctorId: string, hours: import('./doctor-availability').WeeklyShift[]) {
+    return this.put<import('./doctor-availability').DoctorAvailability>(`/doctor-availability/${doctorId}/hours`, { hours });
+  }
+
+  async setDoctorBookingLimit(doctorId: string, maxBookingsPerSlot: number) {
+    return this.put<import('./doctor-availability').DoctorAvailability>(`/doctor-availability/${doctorId}/booking-limit`, { maxBookingsPerSlot });
+  }
+
+  async getBranchHolidays(params?: { from?: string; to?: string }) {
+    return this.get<import('./doctor-availability').TimeOff[]>('/doctor-availability/holidays', params);
+  }
+
+  async createTimeOff(body: import('./doctor-availability').NewTimeOff) {
+    return this.post<import('./doctor-availability').TimeOff>('/doctor-availability/time-off', body);
+  }
+
+  async deleteTimeOff(id: string) {
+    return this.delete<{ deleted: boolean; id: string }>(`/doctor-availability/time-off/${id}`);
   }
 
   async getAllRooms() {
@@ -658,7 +722,7 @@ export class ApiClient {
   }
 
   async createInventoryItem(data: Record<string, unknown>) {
-    return this.post('/inventory/items', data);
+    return this.post<InventoryItem | PendingApprovalResponse>('/inventory/items', data);
   }
 
   async updateInventoryItem(id: string, data: Record<string, unknown>) {
@@ -748,6 +812,22 @@ export class ApiClient {
     );
   }
 
+  async getInventoryItemRequests(status?: InventoryItemRequestStatus) {
+    return this.get<InventoryItemRequest[]>('/inventory/item-requests', { status });
+  }
+
+  async getInventoryItemRequestPendingCount() {
+    return this.get<{ count: number }>('/inventory/item-requests/pending-count');
+  }
+
+  async approveInventoryItemRequest(id: string) {
+    return this.post<InventoryItemRequest>(`/inventory/item-requests/${id}/approve`, {});
+  }
+
+  async rejectInventoryItemRequest(id: string, note: string) {
+    return this.post<InventoryItemRequest>(`/inventory/item-requests/${id}/reject`, { note });
+  }
+
   // Reports
   async getRevenueReport(params: Record<string, unknown>) {
     return this.get('/reports/revenue', params);
@@ -802,6 +882,20 @@ export class ApiClient {
 
   async removeOwnSignature() {
     return this.delete('/users/me/signature');
+  }
+
+  async getDoctorLetterhead(doctorId: string) {
+    return this.get<{ letterhead: DoctorLetterhead | null }>(`/users/${encodeURIComponent(doctorId)}/letterhead`);
+  }
+
+  async uploadOwnLetterhead(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.request<{ letterhead: DoctorLetterhead }>('/users/me/letterhead', { method: 'POST', body: formData });
+  }
+
+  async removeOwnLetterhead() {
+    return this.delete('/users/me/letterhead');
   }
 
   async deleteUser(id: string) {
@@ -954,8 +1048,9 @@ export class ApiClient {
   }
 
   // Printer Profiles
-  async getPrinterProfiles() {
-    return this.get('/prescriptions/printer-profiles');
+  /** Profiles visible for printing this doctor's prescriptions; `appliesByDefault` marks the one to preselect. */
+  async getPrinterProfiles(doctorId?: string) {
+    return this.get('/prescriptions/printer-profiles', doctorId ? { doctorId } : undefined);
   }
 
   async upsertPrinterProfile(data: { id?: string; name: string; paperPreset?: string; topMarginPx?: number; leftMarginPx?: number; rightMarginPx?: number; bottomMarginPx?: number; contentOffsetXPx?: number; contentOffsetYPx?: number; grayscale?: boolean; bleedSafeMm?: number; metadata?: unknown; isDefault?: boolean }) {

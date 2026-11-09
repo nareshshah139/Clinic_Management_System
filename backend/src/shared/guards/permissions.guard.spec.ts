@@ -7,6 +7,8 @@ class PermissionRoutes {
   @Permissions('first', 'second') all() {}
   @Permissions(['first', 'alternative'], 'second') alternatives() {}
   @Permissions([]) emptyAlternatives() {}
+  @Permissions('inventory:item:read') inventoryRead() {}
+  @Permissions('pharmacy:drug:inventory-change:approve') nestedApproval() {}
 }
 
 describe('PermissionsGuard requirement groups', () => {
@@ -39,5 +41,11 @@ describe('PermissionsGuard requirement groups', () => {
   it('fails closed on an empty alternative group or ungranted wildcard', async () => {
     expect(await check('emptyAlternatives', ['*'])).toBe(false);
     expect(await check('all', ['*'])).toBe(false);
+  });
+  it('accepts the seeded scoped wildcard for one action only', async () => {
+    expect(await check('inventoryRead', [], ['inventory:item:*'])).toBe(true);
+    expect(await check('inventoryRead', ['inventory:items:*'])).toBe(false);
+    expect(await check('inventoryRead', ['inventory:*'])).toBe(false);
+    expect(await check('nestedApproval', ['pharmacy:drug:*'])).toBe(false);
   });
 });

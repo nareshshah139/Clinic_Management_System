@@ -28,6 +28,7 @@ describe('AppointmentsService WhatsApp flow', () => {
 
   const makePrisma = () => {
     const txAppointment = {
+      findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn().mockResolvedValue({ tokenNumber: 0 }),
       create: jest.fn().mockImplementation(async ({ data }) => ({
         ...data,
@@ -57,12 +58,15 @@ describe('AppointmentsService WhatsApp flow', () => {
         }),
       },
       room: { findFirst: jest.fn() },
+      doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
+      doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
       appointment: {
         findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
       },
       $transaction: jest.fn().mockImplementation(async (cb: any) =>
         cb({
+          $executeRaw: jest.fn(),
           appointment: txAppointment,
         }),
       ),

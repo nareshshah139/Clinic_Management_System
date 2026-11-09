@@ -68,6 +68,14 @@ jobs:
           VISIT_LIFECYCLE_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           INVENTORY_WORKFLOW_RECOVERY_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           INVENTORY_API_BOUNDARIES_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          APPOINTMENT_TOKEN_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          PRIMARY_DOCTOR_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          DOCTOR_AVAILABILITY_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          CLINIC_INVESTIGATIONS_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          PASSWORD_RESET_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          BILLING_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          REPORTS_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          QUEUE_COVERAGE_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
         run: npm test -- --ci --runInBand
 
       - name: Verify inventory state presentations and recovery proofs
@@ -77,3 +85,4 @@ jobs:
           node verification/inventory-state-clarity-fix-2026-10-25/check_presentations.cjs
           /tmp/inventory-proof/bin/python verification/inventory-state-clarity-fix-2026-10-25/check_knowledge.py
           /tmp/inventory-proof/bin/python verification/inventory-state-clarity-fix-2026-10-25/check_model.py
+          /tmp/inventory-proof/bin/python verification/queue-selling-unit-coverage-2026-11-06/check_coverage.py

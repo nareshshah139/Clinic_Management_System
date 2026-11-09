@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from '../users.controller';
 import { UsersService } from '../users.service';
-import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from '../dto/user.dto';
+import { CreateUserDto, UpdateUserDto, ChangePasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from '../dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from '../dto/query-user.dto';
 import { UserRole, UserStatus } from '@prisma/client';
 
@@ -17,8 +17,6 @@ describe('UsersController', () => {
       updateUser: jest.fn(),
       deleteUser: jest.fn(),
       changePassword: jest.fn(),
-      resetPassword: jest.fn(),
-      setPassword: jest.fn(),
       updateProfile: jest.fn(),
       assignRole: jest.fn(),
       updatePermissions: jest.fn(),
@@ -173,42 +171,10 @@ describe('UsersController', () => {
       const result = await controller.changePassword('user-123', changePasswordDto, mockRequest as any);
 
       expect(result).toEqual({ message: 'Password changed successfully' });
-      expect(mockUsersService.changePassword).toHaveBeenCalledWith('user-123', changePasswordDto, 'branch-123');
+      expect(mockUsersService.changePassword).toHaveBeenCalledWith('user-123', changePasswordDto, mockRequest.user);
     });
 
-    it('should reset password', async () => {
-      const resetPasswordDto: ResetPasswordDto = {
-        email: 'john@example.com',
-      };
 
-      mockUsersService.resetPassword.mockResolvedValue({
-        message: 'Password reset token generated',
-        resetToken: 'reset-token',
-      });
-
-      const result = await controller.resetPassword(resetPasswordDto);
-
-      expect(result).toEqual({
-        message: 'Password reset token generated',
-        resetToken: 'reset-token',
-      });
-      expect(mockUsersService.resetPassword).toHaveBeenCalledWith(resetPasswordDto);
-    });
-
-    it('should set password', async () => {
-      const setPasswordDto: SetPasswordDto = {
-        password: 'newPassword',
-        confirmPassword: 'newPassword',
-        resetToken: 'reset-token',
-      };
-
-      mockUsersService.setPassword.mockResolvedValue({ message: 'Password set successfully' });
-
-      const result = await controller.setPassword(setPasswordDto);
-
-      expect(result).toEqual({ message: 'Password set successfully' });
-      expect(mockUsersService.setPassword).toHaveBeenCalledWith(setPasswordDto);
-    });
 
     it('should update profile', async () => {
       const updateProfileDto: UpdateProfileDto = {
@@ -224,7 +190,7 @@ describe('UsersController', () => {
       const result = await controller.updateProfile('user-123', updateProfileDto, mockRequest as any);
 
       expect(result).toEqual(updatedUser);
-      expect(mockUsersService.updateProfile).toHaveBeenCalledWith('user-123', updateProfileDto, 'branch-123');
+      expect(mockUsersService.updateProfile).toHaveBeenCalledWith('user-123', updateProfileDto, mockRequest.user);
     });
 
     it('should assign role', async () => {

@@ -29,7 +29,7 @@ jest.mock('@/lib/api', () => ({
     getDoctorSignature: jest.fn().mockResolvedValue({ signature: null }),
     getPatientVisitHistory: jest.fn().mockResolvedValue({ visits: [] }),
     getPrinterProfiles: jest.fn().mockResolvedValue([
-      { id: 'prof-1', name: 'Default', isDefault: true, topMarginPx: 170, bottomMarginPx: 45, leftMarginPx: 45, rightMarginPx: 45 },
+      { id: 'prof-1', name: 'Default', isDefault: true, appliesByDefault: true, topMarginPx: 170, bottomMarginPx: 45, leftMarginPx: 45, rightMarginPx: 45 },
     ]),
     getPrescriptionTemplates: jest.fn().mockResolvedValue({ templates: [] }),
     getPrescriptionPrintEvents: jest.fn().mockResolvedValue({ totals: {} }),
@@ -306,7 +306,16 @@ async function settlePreviewPagination() {
   });
 }
 
+const doctorLetterheads: Record<string, { id: string; url: string; source: 'uploaded' | 'bundled' }> = {
+  d1: { id: 'default:d1', url: '/prescription-letterhead-praneeta.jpg', source: 'bundled' },
+  'd-own': { id: 'lh-own', url: 'data:image/jpeg;base64,T1dO', source: 'uploaded' },
+};
+
 describe('PrescriptionBuilder - Paged.js margin wiring', () => {
+  beforeEach(() => {
+    jest.spyOn(apiClient, 'getDoctorLetterhead').mockImplementation(async (doctorId: string) => ({ letterhead: doctorLetterheads[doctorId] ?? null }));
+  });
+
   it('migrates the legacy letterhead and keeps saved printer margins clear of its header and footer', async () => {
     render(<PrescriptionBuilder patientId="letterhead-proof" doctorId="d1" printBgUrl="/letterhead.png" printTopMarginPx={150} printBottomMarginPx={45} />);
     await openPreview();
@@ -319,6 +328,21 @@ describe('PrescriptionBuilder - Paged.js margin wiring', () => {
     const pages = document.querySelectorAll('#pagedjs-container .pagedjs_page_content');
     expect(pages.length).toBe(2);
     pages.forEach(page => expect((page as HTMLElement).style.transform).toBe('translate(0px, 0px)'));
+  });
+
+  it.each([
+    ['a doctor without a letterhead prints on plain paper', 'd-none', 'none'],
+    ['a doctor with an uploaded letterhead prints on their own', 'd-own', "url('data:image/jpeg;base64,T1dO')"],
+  ])('never prints another doctor on Dr. Praneeta Jain\'s letterhead: %s', async (_name, doctorId, background) => {
+    // A stale browser-wide override from before per-doctor letterheads must not leak her letterhead.
+    render(<PrescriptionBuilder patientId={`letterhead-${doctorId}`} doctorId={doctorId} printBgUrl="/prescription-letterhead-praneeta.jpg" printTopMarginPx={150} printBottomMarginPx={45} />);
+    await openPreview();
+    await settlePreviewPagination();
+    const styles = Array.from(document.querySelectorAll('style')).map(style => style.textContent).join('\n');
+    expect(styles).not.toContain('prescription-letterhead-praneeta.jpg');
+    expect(styles).toContain(`background-image: ${background}`);
+    // Her letterhead's 200px header clearance applies only to her letterhead.
+    expect(lastPagedCssText).toContain(`margin-top: ${pxToMm(150)}mm`);
   });
 
   it('preserves explicit custom letterheads and their margins', async () => {

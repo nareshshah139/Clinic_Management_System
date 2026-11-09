@@ -13,6 +13,7 @@ type PrismaServiceMock = {
   $queryRaw: jest.Mock;
   patient: {
     findFirst: jest.Mock;
+    updateMany: jest.Mock;
   };
   user: {
     findFirst: jest.Mock;
@@ -46,6 +47,7 @@ const createPrismaMock = (): PrismaServiceMock => ({
   ]),
   patient: {
     findFirst: jest.fn(),
+    updateMany: jest.fn(),
   },
   user: {
     findFirst: jest.fn(),

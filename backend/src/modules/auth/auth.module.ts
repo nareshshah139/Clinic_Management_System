@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { PasswordResetService } from './password-reset.service';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   controllers: [AuthController],
   providers: [
     AuthService,
+    PasswordResetService,
     JwtStrategy,
     {
       provide: 'APP_GUARD',

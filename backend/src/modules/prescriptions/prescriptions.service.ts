@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { displayClinicDate } from '../../common/date-display';
 import { Prisma } from '@prisma/client';
 import { medicineRegimenDefaults } from './medicine-regimen-defaults';
@@ -7,6 +8,9 @@ import { ConsultationType, TELE_VIDEO_DISCLAIMER } from '../visits/consultation'
 import { VisitsService } from '../visits/visits.service';
 import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional, ForbiddenException } from '@nestjs/common';
 import { readDoctorSignature } from '../users/doctor-signature';
+
+/** Assets only their doctor may change, through the /users/me endpoints. */
+const DOCTOR_OWNED_ASSET_TYPES: readonly string[] = ['SIGNATURE', 'LETTERHEAD'];
 import { PrismaService } from '../../shared/database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
@@ -455,6 +459,11 @@ export class PrescriptionsService {
    * MUST reject edits; cancellation MUST use the audited cancellation command.
    * Validity MUST be stored independently of the visit's review date.
    */
+  /**
+   * @cc [owner:nareshshah139,label:reliability] billed-prescription-items-immutable
+   * Prescription items linked to any pharmacy invoice MUST NOT be changed; unchanged items
+   * and other permitted clinical edits remain valid. The invoice check MUST hold the prescription lock.
+   */
   async updatePrescription(id: string, input: UpdatePrescriptionDto, branchId: string, actorId?: string) {
     const updated = await this.prisma.$transaction(async tx => {
       const prescription = await this.lockPrescription(tx, id, branchId);
@@ -467,6 +476,10 @@ export class PrescriptionsService {
       const data: Prisma.PrescriptionUpdateInput = {};
       if (input.items !== undefined) {
         if (!input.items?.length) throw new BadRequestException('At least one prescription item is required');
+        if (!isDeepStrictEqual(this.safeParse<unknown[]>(prescription.items, []), JSON.parse(JSON.stringify(input.items)))) {
+          const linkedInvoice = await tx.pharmacyInvoice.findFirst({ where: { prescriptionId: id, branchId }, select: { id: true } });
+          if (linkedInvoice) throw new ConflictException('This prescription has a pharmacy invoice and its medicines cannot be changed. Start a new visit for a new prescription.');
+        }
         data.items = JSON.stringify(input.items);
       }
       if (input.language !== undefined) data.language = input.language;
@@ -1233,8 +1246,8 @@ export class PrescriptionsService {
     // including by changing an existing signature's type to LOGO or STAMP.
     const existing = body.id ? await this.prisma.clinicAsset.findFirst({ where: { id: body.id, branchId } }) : null;
     if (body.id && !existing) throw new NotFoundException('Asset not found');
-    if (body.type === 'SIGNATURE' || existing?.type === 'SIGNATURE') {
-      throw new ForbiddenException('Change your signature from your own doctor settings.');
+    if (DOCTOR_OWNED_ASSET_TYPES.includes(body.type) || DOCTOR_OWNED_ASSET_TYPES.includes(existing?.type as string)) {
+      throw new ForbiddenException('Change your signature or letterhead from your own doctor settings.');
     }
     const data = {
       branchId,
@@ -1258,17 +1271,35 @@ export class PrescriptionsService {
   async deleteClinicAsset(branchId: string, id: string) {
     const asset = await this.prisma.clinicAsset.findFirst({ where: { id, branchId } });
     if (!asset) throw new NotFoundException('Asset not found');
-    if (asset.type === 'SIGNATURE') throw new ForbiddenException('Remove your signature from your own doctor settings.');
+    if (DOCTOR_OWNED_ASSET_TYPES.includes(asset.type)) throw new ForbiddenException('Remove your signature or letterhead from your own doctor settings.');
     await this.prisma.clinicAsset.delete({ where: { id } });
     return { id };
   }
 
   // PRINTER PROFILES
-  async listPrinterProfiles(branchId: string, ownerId?: string) {
-    return this.prisma.printerProfile.findMany({
-      where: { branchId, OR: [{ ownerId: null }, ownerId ? { ownerId } : undefined].filter(Boolean) as any },
-      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+  /**
+   * @cc [owner:nareshshah139,label:product] doctor-printer-profile-default
+   * The printer profile applied by default MUST follow the prescribing doctor: that doctor's
+   * own default first, else a clinic default (no owner, or owned by non-doctor staff), else none.
+   * One doctor's default MUST NOT apply to another doctor's prescriptions.
+   */
+  async listPrinterProfiles(branchId: string, userId?: string, doctorId?: string) {
+    const ownerIds = [...new Set([userId, doctorId].filter((id): id is string => !!id))];
+    const profiles = await this.prisma.printerProfile.findMany({
+      // Profiles saved by non-doctor staff are clinic printer calibrations, shared with everyone.
+      where: { branchId, OR: [{ ownerId: null }, { owner: { role: { not: 'DOCTOR' } } }, ...(ownerIds.length ? [{ ownerId: { in: ownerIds } }] : [])] },
+      include: { owner: { select: { role: true } } },
+      orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }, { createdAt: 'desc' }],
     });
+    const forDoctor = doctorId ?? userId;
+    const isClinicDefault = (p: (typeof profiles)[number]) => p.isDefault && (!p.ownerId || p.owner?.role !== 'DOCTOR');
+    const applied = profiles.find(p => p.isDefault && p.ownerId === forDoctor && p.owner?.role === 'DOCTOR') ?? profiles.find(isClinicDefault);
+    return profiles.map(({ owner, ...profile }) => ({ ...profile, appliesByDefault: profile.id === applied?.id }));
+  }
+
+  /** Defaults are kept per owner, so each doctor and the clinic can each have one. */
+  private clearOtherDefaults(branchId: string, ownerId: string | null, keepId: string) {
+    return this.prisma.printerProfile.updateMany({ where: { branchId, ownerId, NOT: { id: keepId } }, data: { isDefault: false } });
   }
 
   async upsertPrinterProfile(
@@ -1294,18 +1325,18 @@ export class PrescriptionsService {
     } as any;
     if (body.id) {
       const updated = await this.prisma.printerProfile.update({ where: { id: body.id }, data });
-      if (data.isDefault) await this.prisma.printerProfile.updateMany({ where: { branchId, NOT: { id: updated.id } }, data: { isDefault: false } });
+      if (data.isDefault) await this.clearOtherDefaults(branchId, updated.ownerId, updated.id);
       return updated;
     }
     const created = await this.prisma.printerProfile.create({ data });
-    if (data.isDefault) await this.prisma.printerProfile.updateMany({ where: { branchId, NOT: { id: created.id } }, data: { isDefault: false } });
+    if (data.isDefault) await this.clearOtherDefaults(branchId, created.ownerId, created.id);
     return created;
   }
 
   async setDefaultPrinterProfile(branchId: string, ownerId: string, id: string) {
     const profile = await this.prisma.printerProfile.findFirst({ where: { id, branchId } });
     if (!profile) throw new NotFoundException('Printer profile not found');
-    await this.prisma.printerProfile.updateMany({ where: { branchId }, data: { isDefault: false } });
+    await this.clearOtherDefaults(branchId, profile.ownerId, id);
     return this.prisma.printerProfile.update({ where: { id }, data: { isDefault: true } });
   }
 

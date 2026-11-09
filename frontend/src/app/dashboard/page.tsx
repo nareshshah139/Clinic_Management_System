@@ -4,17 +4,23 @@ import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Spinner } from '@/components/ui/spinner';
 import { PageHeader } from '@/components/ui/page-header';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Users, Package, TrendingUp, AlertTriangle, Clock, Database, Download } from 'lucide-react';
-import { apiClient } from '@/lib/api';
+import { apiClient, type ApiError } from '@/lib/api';
 import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { useRouter } from 'next/navigation';
 import { QuickGuide } from '@/components/common/QuickGuide';
+import { DoctorPatientPanels } from '@/components/dashboard/DoctorPatientPanels';
 import { formatPatientName, getISTDateString } from '@/lib/utils';
+
+type LoadFailure = 'forbidden' | 'unavailable';
+
+const loadFailure = (error: unknown): LoadFailure =>
+  (error as ApiError)?.status === 403 ? 'forbidden' : 'unavailable';
 
 /**
  * @cc [owner:nareshshah139,label:product] dashboard-clinic-day
@@ -35,6 +41,8 @@ export default function DashboardPage() {
   const [statistics, setStatistics] = useState<SystemStatistics | null>(null);
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
   const [todaysAppointments, setTodaysAppointments] = useState<Appointment[]>([]);
+  const [alertsFailure, setAlertsFailure] = useState<LoadFailure | null>(null);
+  const [appointmentsFailure, setAppointmentsFailure] = useState<LoadFailure | null>(null);
   const [loading, setLoading] = useState(true);
   const [backupLoading, setBackupLoading] = useState(false);
   const { user: currentUser, loading: userLoading } = useDashboardUser();
@@ -44,6 +52,103 @@ export default function DashboardPage() {
     const role = currentUser?.role;
     return role === 'ADMIN' || role === 'OWNER';
   }, [currentUser?.role]);
+
+  const loadAlerts = useCallback(async () => {
+    try {
+      const alertsData = await apiClient.getSystemAlerts<any>();
+      const transformedAlerts: SystemAlert[] = [];
+
+      // Transform overdue invoices to alerts
+      if (alertsData.overdueInvoices && alertsData.overdueInvoices.length > 0) {
+        const count = alertsData.overdueInvoices.length;
+        transformedAlerts.push({
+          id: 'overdue-invoices-summary',
+          title: 'Overdue Invoices',
+          message: `${count} invoice${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} overdue. Total amount: ₹${alertsData.overdueInvoices.reduce((sum: number, inv: any) => sum + (inv.total || 0), 0).toFixed(2)}`,
+          severity: 'HIGH',
+          type: 'billing',
+          createdAt: alertsData.generatedAt || new Date().toISOString(),
+        });
+      }
+
+      // Transform low stock alerts
+      if (alertsData.lowStockAlerts && alertsData.lowStockAlerts.length > 0) {
+        const count = alertsData.lowStockAlerts.length;
+        transformedAlerts.push({
+          id: 'low-stock-summary',
+          title: 'Low Stock Alert',
+          message: `${count} item${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} below reorder level`,
+          severity: 'MEDIUM',
+          type: 'inventory',
+          createdAt: alertsData.generatedAt || new Date().toISOString(),
+        });
+      }
+
+      // Transform expiry alerts
+      if (alertsData.expiryAlerts && alertsData.expiryAlerts.length > 0) {
+        const count = alertsData.expiryAlerts.length;
+        const expiringSoon = alertsData.expiryAlerts.filter((a: any) => a.daysUntilExpiry <= 7).length;
+        transformedAlerts.push({
+          id: 'expiry-alerts-summary',
+          title: 'Expiring Items',
+          message: `${count} item${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} expiring within 30 days${expiringSoon > 0 ? ` (${expiringSoon} within 7 days)` : ''}`,
+          severity: expiringSoon > 0 ? 'HIGH' : 'MEDIUM',
+          type: 'inventory',
+          createdAt: alertsData.generatedAt || new Date().toISOString(),
+        });
+      }
+
+      // Transform pending payments
+      if (alertsData.pendingPayments && alertsData.pendingPayments.length > 0) {
+        const count = alertsData.pendingPayments.length;
+        transformedAlerts.push({
+          id: 'pending-payments-summary',
+          title: 'Pending Payments',
+          message: `${count} payment${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} pending reconciliation`,
+          severity: 'LOW',
+          type: 'billing',
+          createdAt: alertsData.generatedAt || new Date().toISOString(),
+        });
+      }
+
+      // Add system status alert (always present)
+      transformedAlerts.push({
+        id: 'system-status',
+        title: 'System Status',
+        message: 'All systems operational',
+        severity: 'LOW',
+        type: 'system',
+        createdAt: new Date().toISOString(),
+      });
+
+      setAlerts(transformedAlerts);
+      setAlertsFailure(null);
+    } catch (error: unknown) {
+      console.warn('Unable to load system alerts', error);
+      setAlerts([]);
+      setAlertsFailure(loadFailure(error));
+    }
+  }, []);
+
+  const loadTodaysAppointments = useCallback(async () => {
+    const todayDate = getISTDateString();
+    try {
+      let appointments: Appointment[];
+      if (currentUser?.role === 'DOCTOR' && currentUser?.id) {
+        const schedule = await apiClient.getDoctorSchedule(currentUser.id, todayDate);
+        appointments = schedule?.appointments ?? [];
+      } else {
+        const res: any = await apiClient.getAppointments({ date: todayDate, limit: 5, sortBy: 'slot', sortOrder: 'asc' });
+        appointments = res?.appointments || res?.data || [];
+      }
+      setTodaysAppointments(appointments);
+      setAppointmentsFailure(null);
+    } catch (error) {
+      console.error("Failed to load today's appointments", error);
+      setTodaysAppointments([]);
+      setAppointmentsFailure(loadFailure(error));
+    }
+  }, [currentUser?.id, currentUser?.role]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -60,111 +165,7 @@ export default function DashboardPage() {
           console.warn('Unable to load system statistics', error);
         }
 
-        // Fetch system alerts from backend
-        try {
-          const alertsData = await apiClient.getSystemAlerts<any>();
-          const transformedAlerts: SystemAlert[] = [];
-
-          // Transform overdue invoices to alerts
-          if (alertsData.overdueInvoices && alertsData.overdueInvoices.length > 0) {
-            const count = alertsData.overdueInvoices.length;
-            transformedAlerts.push({
-              id: 'overdue-invoices-summary',
-              title: 'Overdue Invoices',
-              message: `${count} invoice${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} overdue. Total amount: ₹${alertsData.overdueInvoices.reduce((sum: number, inv: any) => sum + (inv.total || 0), 0).toFixed(2)}`,
-              severity: 'HIGH',
-              type: 'billing',
-              createdAt: alertsData.generatedAt || new Date().toISOString(),
-            });
-          }
-
-          // Transform low stock alerts
-          if (alertsData.lowStockAlerts && alertsData.lowStockAlerts.length > 0) {
-            const count = alertsData.lowStockAlerts.length;
-            transformedAlerts.push({
-              id: 'low-stock-summary',
-              title: 'Low Stock Alert',
-              message: `${count} item${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} below reorder level`,
-              severity: 'MEDIUM',
-              type: 'inventory',
-              createdAt: alertsData.generatedAt || new Date().toISOString(),
-            });
-          }
-
-          // Transform expiry alerts
-          if (alertsData.expiryAlerts && alertsData.expiryAlerts.length > 0) {
-            const count = alertsData.expiryAlerts.length;
-            const expiringSoon = alertsData.expiryAlerts.filter((a: any) => a.daysUntilExpiry <= 7).length;
-            transformedAlerts.push({
-              id: 'expiry-alerts-summary',
-              title: 'Expiring Items',
-              message: `${count} item${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} expiring within 30 days${expiringSoon > 0 ? ` (${expiringSoon} within 7 days)` : ''}`,
-              severity: expiringSoon > 0 ? 'HIGH' : 'MEDIUM',
-              type: 'inventory',
-              createdAt: alertsData.generatedAt || new Date().toISOString(),
-            });
-          }
-
-          // Transform pending payments
-          if (alertsData.pendingPayments && alertsData.pendingPayments.length > 0) {
-            const count = alertsData.pendingPayments.length;
-            transformedAlerts.push({
-              id: 'pending-payments-summary',
-              title: 'Pending Payments',
-              message: `${count} payment${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} pending reconciliation`,
-              severity: 'LOW',
-              type: 'billing',
-              createdAt: alertsData.generatedAt || new Date().toISOString(),
-            });
-          }
-
-          // Add system status alert (always present)
-          transformedAlerts.push({
-            id: 'system-status',
-            title: 'System Status',
-            message: 'All systems operational',
-            severity: 'LOW',
-            type: 'system',
-            createdAt: new Date().toISOString(),
-          });
-
-          setAlerts(transformedAlerts);
-        } catch (error: unknown) {
-          console.warn('Unable to load system alerts', error);
-          // Fallback to basic system status alert
-          setAlerts([
-            {
-              id: 'system-status',
-              title: 'System Status',
-              message: 'All systems operational',
-              severity: 'LOW',
-              type: 'system',
-              createdAt: new Date().toISOString(),
-            },
-          ]);
-        }
-
-        // Load today's appointments for the current user/role
-        const todayDate = getISTDateString();
-        let appointments: Appointment[] = [];
-
-        if (currentUser?.role === 'DOCTOR' && currentUser?.id) {
-          try {
-            const schedule = await apiClient.getDoctorSchedule(currentUser.id, todayDate);
-            appointments = schedule?.appointments ?? [];
-          } catch (error) {
-            console.error('Failed to load doctor schedule', error);
-          }
-        } else {
-          try {
-            const res: any = await apiClient.getAppointments({ date: todayDate, limit: 5, sortBy: 'slot', sortOrder: 'asc' });
-            appointments = res?.appointments || res?.data || [];
-          } catch (error) {
-            console.error('Failed to load appointments summary', error);
-          }
-        }
-
-        setTodaysAppointments(appointments);
+        await Promise.all([loadAlerts(), loadTodaysAppointments()]);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         // Set fallback data on error
@@ -180,7 +181,7 @@ export default function DashboardPage() {
     };
 
     void fetchDashboardData();
-  }, [currentUser?.id, currentUser?.role, userLoading]);
+  }, [loadAlerts, loadTodaysAppointments, userLoading]);
 
   const handleBackup = async () => {
     try {
@@ -267,6 +268,8 @@ export default function DashboardPage() {
           ]}
         /></>} />
 
+      {currentUser?.role === 'DOCTOR' && currentUser.id ? <DoctorPatientPanels doctorId={currentUser.id} /> : null}
+
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-tour="dashboard-stats">
         {statCards.map((stat, index) => (
@@ -344,7 +347,9 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {alerts.length === 0 ? (
+            {alertsFailure ? (
+              <LoadFailureState failure={alertsFailure} subject="clinic alerts" onRetry={() => void loadAlerts()} />
+            ) : alerts.length === 0 ? (
               <EmptyState icon={AlertTriangle} title="No alerts at this time" description="New clinic notifications will appear here." action={<Button variant="outline" onClick={() => window.location.reload()}>Refresh dashboard</Button>} />
             ) : (
               <div className="space-y-3">
@@ -400,7 +405,9 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {todaysAppointments.length === 0 ? (
+            {appointmentsFailure ? (
+              <LoadFailureState failure={appointmentsFailure} subject="today's appointments" onRetry={() => void loadTodaysAppointments()} />
+            ) : todaysAppointments.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No appointments scheduled for today</p>
             ) : (
               <div className="space-y-3">
@@ -442,6 +449,23 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function LoadFailureState({ failure, subject, onRetry }: { failure: LoadFailure; subject: string; onRetry: () => void }) {
+  return (
+    <div role="alert">
+      <EmptyState
+        icon={AlertTriangle}
+        title={`Couldn't load ${subject}`}
+        description={
+          failure === 'forbidden'
+            ? 'Your account does not have access to this yet. Ask an admin to check your role permissions.'
+            : 'This is not an empty list. Check your connection and try again.'
+        }
+        action={<Button variant="outline" onClick={onRetry}>Try again</Button>}
+      />
     </div>
   );
 }

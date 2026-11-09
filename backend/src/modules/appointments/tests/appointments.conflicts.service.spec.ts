@@ -10,8 +10,10 @@ describe('AppointmentsService - Conflicts', () => {
 
   const mockPrisma = {
     patient: { findFirst: jest.fn() },
-    user: { findFirst: jest.fn() },
+    user: { findFirst: jest.fn(), findUnique: jest.fn().mockResolvedValue(null) },
     room: { findFirst: jest.fn() },
+    doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
+    doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
     appointment: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -20,6 +22,8 @@ describe('AppointmentsService - Conflicts', () => {
       updateMany: jest.fn(),
       count: jest.fn(),
     },
+    $executeRaw: jest.fn(),
+    $transaction: jest.fn(async (cb: any) => cb(mockPrisma)),
   };
 
   const branchId = 'branch-xyz';

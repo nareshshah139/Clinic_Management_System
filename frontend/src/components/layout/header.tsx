@@ -27,6 +27,8 @@ import { useBrandedMode } from './branded-mode-context';
 import { ReceptionistTour } from '@/components/tours/ReceptionistTour';
 import { useToast } from '@/hooks/use-toast';
 import { DoctorSignatureSettings } from '@/components/users/DoctorSignatureSettings';
+import { DoctorLetterheadSettings } from '@/components/users/DoctorLetterheadSettings';
+import { DoctorAvailabilitySettings } from '@/components/users/DoctorAvailabilitySettings';
 import {
   buildTemplateSelectionValue,
   getSelectableWhatsAppTemplates,
@@ -679,6 +681,8 @@ export function Header() {
               {String((user as any)?.role || '').toUpperCase() === 'DOCTOR' && (
                 <>
                   {settingsOpen && user?.id && <DoctorSignatureSettings doctorId={user.id} />}
+                  {settingsOpen && user?.id && <DoctorLetterheadSettings doctorId={user.id} />}
+                  {settingsOpen && user?.id && <DoctorAvailabilitySettings doctorId={user.id} />}
                   <div className="border rounded-md p-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>

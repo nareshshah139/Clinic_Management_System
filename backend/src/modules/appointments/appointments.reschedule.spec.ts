@@ -9,10 +9,15 @@ describe('AppointmentsService.reschedule', () => {
   const branchId = 'branch-1';
 
   const prismaMock: any = {
+    doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
+    doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
+    user: { findUnique: jest.fn().mockResolvedValue(null) },
     appointment: {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    $executeRaw: jest.fn(),
+    $transaction: jest.fn(async (cb: any) => cb(prismaMock)),
   };
 
   beforeEach(async () => {

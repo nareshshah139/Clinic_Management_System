@@ -10,6 +10,8 @@ describe('AppointmentsService.getAvailableSlots', () => {
 
   const prismaMock: any = {
     user: { findFirst: jest.fn(), findUnique: jest.fn() },
+    doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
+    doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
     appointment: { findMany: jest.fn() },
   };
 
@@ -73,6 +75,25 @@ describe('AppointmentsService.getAvailableSlots', () => {
     // Implementation returns only doctor bookedSlots in payload even when roomId is provided
     expect(result.bookedSlots.sort()).toEqual(['10:00-10:30']);
   });
+
+  it("uses the doctor's legacy metadata hours when no override is given", async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'doctor-1', metadata: JSON.stringify({ workingHours: { startHour: 10, endHour: 11 } }) });
+    prismaMock.appointment.findMany.mockReset().mockResolvedValue([]);
+
+    const result = await service.getAvailableSlots(baseQuery(), branchId);
+    expect(result.availableSlots).toEqual(['10:00-10:30', '10:30-11:00']);
+    expect(result.hoursSource).toBe('legacy');
+  });
+
+  it('drops slots that overlap time off and reports the block', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'doctor-1', metadata: null });
+    prismaMock.appointment.findMany.mockReset().mockResolvedValue([]);
+    prismaMock.doctorTimeOff.findMany.mockResolvedValueOnce([
+      { id: 'off-1', kind: 'BLOCKED', reason: 'Rounds', startsAt: new Date('2099-12-01T10:00:00+05:30'), endsAt: new Date('2099-12-01T10:30:00+05:30') },
+    ]);
+
+    const result = await service.getAvailableSlots(baseQuery({ startHour: 10, endHour: 11 }), branchId);
+    expect(result.availableSlots).toEqual(['10:30-11:00']);
+    expect(result.timeOff).toEqual([expect.objectContaining({ kind: 'BLOCKED', reason: 'Rounds', start: 600, end: 630 })]);
+  });
 });
-
-

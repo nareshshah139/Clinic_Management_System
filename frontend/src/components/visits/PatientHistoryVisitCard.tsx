@@ -134,7 +134,9 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
   const day = encounterDay(raw);
   const visitTypeLabel = extractTextFromUnknown(scribe.visitType, []) || visit.visitType || undefined;
   const photoPreviews = Array.isArray(raw.photoPreviewUrls) ? raw.photoPreviewUrls.map(normalizeAssetUrl) : [];
-  const rxItems = Array.isArray(raw.prescriptionItems) ? raw.prescriptionItems : [];
+  const issued = [raw.prescriptionItems, raw.prescription?.items].map(asRecordList).find((items) => items.length > 0) || [];
+  const planItems = asRecordList(planDermatology(raw.plan)?.medicationPlan);
+  const rxItems = (issued.length > 0 ? issued : planItems).map(cleanMedicine);
   const status = String(visit.status || '').toLowerCase().replaceAll('_', '-');
   return {
     dateLabel: displayCalendarDate(day, 'Unknown date'),
@@ -147,7 +149,68 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
     photoCount: Number(raw.photos || 0) || photoPreviews.length,
     photoPreviews: photoPreviews as string[],
     rxItems,
-    hasPrescription: Boolean(visit.prescription?.id) || rxItems.length > 0,
+    planItems,
+    issuedCount: issued.length,
+    medicines: medicineNames(rxItems.length > 0 ? rxItems : freeTextMedicines(raw.plan).map((name) => ({ name }))),
+    hasPrescription: Boolean(visit.prescription?.id) || issued.length > 0,
+  };
+};
+
+type VisitView = 'summary' | 'compact' | 'full';
+type MedicineItem = Record<string, unknown>;
+
+const asRecordList = (value: unknown): MedicineItem[] => {
+  const normalized = normalizeStructuredValue(value);
+  return Array.isArray(normalized)
+    ? normalized.filter((entry): entry is MedicineItem => Boolean(entry) && typeof entry === 'object')
+    : [];
+};
+
+const omitKeys = (record: Record<string, unknown>, keys: string[]) =>
+  Object.fromEntries(Object.entries(record).filter(([key]) => !keys.includes(key)));
+
+const cleanMedicine = (item: MedicineItem): MedicineItem => {
+  const cleaned = omitKeys(item, ['regimenState', 'gstRate', 'drugId', 'inventoryItemId']);
+  return cleaned.name === cleaned.drugName ? omitKeys(cleaned, ['name']) : cleaned;
+};
+
+const planDermatology = (plan: unknown) =>
+  parseJsonObject<Record<string, any>>(parseJsonObject<Record<string, unknown>>(plan)?.dermatology);
+
+const freeTextMedicines = (plan: unknown): string[] => {
+  const medications = planDermatology(plan)?.medications;
+  return [medications?.topicals, medications?.systemics]
+    .flatMap((text) => (typeof text === 'string' ? text.split('\n') : []))
+    .map((line) => line.trim())
+    .filter(Boolean);
+};
+
+const medicineKey = (name: string) => name.toLowerCase().replace(/\s+/g, ' ');
+
+const medicineNames = (items: MedicineItem[]): string[] => {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const item of items) {
+    const raw = [item.drugName, item.name, item.medicine].find((candidate) => typeof candidate === 'string' && candidate.trim());
+    if (typeof raw !== 'string') continue;
+    const name = raw.trim();
+    if (seen.has(medicineKey(name))) continue;
+    seen.add(medicineKey(name));
+    names.push(name);
+  }
+  return names;
+};
+
+const treatmentPlanWithoutDuplicate = (plan: unknown, planItems: MedicineItem[], shown: MedicineItem[]): unknown => {
+  const parsed = parseJsonObject<Record<string, unknown>>(plan);
+  const dermatology = planDermatology(plan);
+  if (!parsed || !dermatology || planItems.length === 0) return plan;
+  const duplicate = medicineNames(planItems).map(medicineKey).join('|') === medicineNames(shown).map(medicineKey).join('|');
+  return {
+    ...parsed,
+    dermatology: duplicate
+      ? omitKeys(dermatology, ['medicationPlan'])
+      : { ...dermatology, medicationPlan: planItems.map(cleanMedicine) },
   };
 };
 
@@ -175,11 +238,13 @@ export default function PatientHistoryVisitCard({
   className,
 }: PatientHistoryVisitCardProps) {
   const detailsId = useId();
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const data = useMemo(() => deriveVisitData(visit), [visit]);
 
   const raw = visit as Record<string, any>;
   const appointmentOnly = raw.entryType === 'appointment';
+  const history = normalizeStructuredValue(raw.history) || raw.historySummary;
+  const historyRecord = parseJsonObject<Record<string, unknown>>(history);
+  const compactHistory = historyRecord ? { personalHistory: historyRecord.personalHistory, ...historyRecord } : history;
   const fullVitals = parseJsonObject<Record<string, unknown>>(visit.vitals);
   const labeledVitals = fullVitals ? Object.fromEntries(Object.entries(fullVitals).map(([key, value]) => [
     ({ temperature: 'Temperature (°C)', temp: 'Temperature (°F)', oxygenSaturation: 'SpO₂ (%)', spo2: 'SpO₂ (%)' } as Record<string, string>)[key] || key, value,
@@ -187,12 +252,12 @@ export default function PatientHistoryVisitCard({
   const sections = [
     ['Complaint details', normalizeStructuredValue(visit.complaints)],
     ['Diagnosis details', normalizeStructuredValue(visit.diagnosis)],
-    ['History', normalizeStructuredValue(raw.history) || raw.historySummary],
+    ['History', history],
     ['Examination', normalizeStructuredValue(raw.exam) || raw.examSummary],
-    ['Treatment plan', normalizeStructuredValue(visit.plan) || raw.planSummary],
+    ['Treatment plan', treatmentPlanWithoutDuplicate(normalizeStructuredValue(visit.plan) || raw.planSummary, data.planItems, data.rxItems)],
     ['Vitals', labeledVitals || normalizeStructuredValue(visit.vitals)],
-    ['Prescription Items', hasClinicalValue(raw.prescriptionItems) ? raw.prescriptionItems : normalizeStructuredValue(raw.prescription?.items)],
-    ['Prescription instructions', { ...raw.prescriptionMeta, ...(raw.prescription?.instructions ? { followUpInstructions: raw.prescription.instructions } : {}), ...(raw.prescription?.pharmacistNotes ? { pharmacistNotes: raw.prescription.pharmacistNotes } : {}), ...(raw.prescription?.validUntil ? { validUntil: formatMaybeDate(String(raw.prescription.validUntil)) } : {}) }],
+    ['Prescription', data.rxItems],
+    ['Prescription instructions', { ...omitKeys({ ...raw.prescriptionMeta }, ['language']), ...(raw.prescription?.instructions ? { followUpInstructions: raw.prescription.instructions } : {}), ...(raw.prescription?.pharmacistNotes ? { pharmacistNotes: raw.prescription.pharmacistNotes } : {}), ...(raw.prescription?.validUntil ? { validUntil: formatMaybeDate(String(raw.prescription.validUntil)) } : {}) }],
     ['Follow-up date', visit.followUp ? formatMaybeDate(String(visit.followUp)) : undefined],
     ['Visit notes', normalizeStructuredValue(visit.scribeJson)],
     ['Lab orders', raw.labOrders],
@@ -200,7 +265,12 @@ export default function PatientHistoryVisitCard({
     ['Consents', raw.consents],
     ['Appointment notes', raw.appointmentNotes || raw.appointment?.notes],
   ].map(([title, value]) => ({ title: String(title), value })).filter(section => hasClinicalValue(section.value));
-  const hasExpandedContent = sections.length > 0 || data.photoPreviews.length > 0 || footerActions;
+  const hasFullDetails = sections.length > 0 || data.photoPreviews.length > 0;
+  const hasCompact = hasClinicalValue(history) || data.medicines.length > 0;
+  const expandedView: VisitView = hasCompact ? 'compact' : 'full';
+  const [view, setView] = useState<VisitView>(defaultCollapsed ? 'summary' : expandedView);
+  const summary = view === 'summary';
+  const hasExpandedContent = hasFullDetails || hasCompact || footerActions;
 
   return (
     <Card
@@ -229,13 +299,13 @@ export default function PatientHistoryVisitCard({
           <dl className="space-y-1 text-sm leading-snug">
             <div className="flex min-w-0 gap-2">
               <dt className="w-28 shrink-0 text-xs leading-5 text-muted-foreground">Chief Complaint</dt>
-              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', collapsed && 'line-clamp-2', data.chiefComplaint ? 'text-foreground' : 'text-muted-foreground')}>
+              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', summary && 'line-clamp-2', data.chiefComplaint ? 'text-foreground' : 'text-muted-foreground')}>
                 {data.chiefComplaint || 'Not recorded'}
               </dd>
             </div>
             <div className="flex min-w-0 gap-2">
               <dt className="w-28 shrink-0 text-xs leading-5 text-muted-foreground">Diagnosis</dt>
-              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', collapsed && 'line-clamp-2', data.primaryDiagnosis ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', summary && 'line-clamp-2', data.primaryDiagnosis ? 'font-medium text-foreground' : 'text-muted-foreground')}>
                 {data.primaryDiagnosis || 'Not recorded'}
               </dd>
             </div>
@@ -254,7 +324,7 @@ export default function PatientHistoryVisitCard({
               {data.hasPrescription && (
                 <span className="inline-flex items-center gap-1.5">
                   <Pill aria-hidden="true" className="h-3.5 w-3.5" />
-                  {data.rxItems.length > 0 ? `${data.rxItems.length} Rx Items` : 'Prescription'}
+                  {data.issuedCount > 0 ? `${data.issuedCount} Rx Items` : 'Prescription'}
                 </span>
               )}
             </div>
@@ -270,14 +340,14 @@ export default function PatientHistoryVisitCard({
                   size="sm"
                   variant="ghost"
                   className="h-8 min-h-8 px-2 text-xs"
-                  aria-expanded={!collapsed}
+                  aria-expanded={!summary}
                   aria-controls={detailsId}
-                  onClick={() => setCollapsed((current) => !current)}
+                  onClick={() => setView((current) => (current === 'summary' ? expandedView : 'summary'))}
                 >
-                  {collapsed ? 'Show details' : 'Hide details'}
+                  {summary ? 'Show details' : 'Hide details'}
                   <ChevronDown
                     aria-hidden="true"
-                    className={cn('h-4 w-4 transition-transform motion-reduce:transition-none', !collapsed && 'rotate-180')}
+                    className={cn('h-4 w-4 transition-transform motion-reduce:transition-none', !summary && 'rotate-180')}
                   />
                 </Button>
               )}
@@ -286,21 +356,45 @@ export default function PatientHistoryVisitCard({
         )}
 
         {hasExpandedContent && (
-          <div id={detailsId} hidden={collapsed} className="border-t border-border p-3">
-            {!collapsed && <>
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] items-start gap-x-6 gap-y-4">
-                {sections.map(section => (
-                  <DetailSection key={section.title} title={section.title}>
-                    <ClinicalHistoryDetails value={section.value} />
-                  </DetailSection>
-                ))}
-                {data.photoPreviews.length > 0 && <DetailSection title="Photos">
-                  <div className="flex flex-wrap gap-2">{data.photoPreviews.map((url, index) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <a key={index} href={url} target="_blank" rel="noreferrer" aria-label={`Open visit photo ${index + 1}`} className="rounded-md focus-visible:outline-2 focus-visible:outline-ring"><img src={url} alt={`Visit photo preview ${index + 1}`} loading="lazy" width={120} height={80} className="h-20 w-30 rounded-md border border-border object-cover" /></a>
-                  ))}</div>
-                </DetailSection>}
-              </div>
+          <div id={detailsId} hidden={summary} className="border-t border-border p-3">
+            {!summary && <>
+              {hasCompact && hasFullDetails && (
+                <div className="mb-3 flex justify-end">
+                  <Button type="button" size="sm" variant="outline" className="h-8 min-h-8 px-2 text-xs" onClick={() => setView((current) => (current === 'full' ? 'compact' : 'full'))}>
+                    {view === 'full' ? 'Compact view' : 'Full details'}
+                  </Button>
+                </div>
+              )}
+              {view === 'compact' ? (
+                <div className="space-y-3">
+                  {hasClinicalValue(history) && (
+                    <DetailSection title="History">
+                      <div className="max-w-lg"><ClinicalHistoryDetails value={compactHistory} /></div>
+                    </DetailSection>
+                  )}
+                  {data.medicines.length > 0 && (
+                    <DetailSection title="Medicines">
+                      <ul className="space-y-0.5 text-foreground">
+                        {data.medicines.map((name) => <li key={name.toLowerCase()} className="min-w-0 break-words">{name}</li>)}
+                      </ul>
+                    </DetailSection>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] items-start gap-x-6 gap-y-4">
+                  {sections.map(section => (
+                    <DetailSection key={section.title} title={section.title}>
+                      <ClinicalHistoryDetails value={section.value} />
+                    </DetailSection>
+                  ))}
+                  {data.photoPreviews.length > 0 && <DetailSection title="Photos">
+                    <div className="flex flex-wrap gap-2">{data.photoPreviews.map((url, index) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <a key={index} href={url} target="_blank" rel="noreferrer" aria-label={`Open visit photo ${index + 1}`} className="rounded-md focus-visible:outline-2 focus-visible:outline-ring"><img src={url} alt={`Visit photo preview ${index + 1}`} loading="lazy" width={120} height={80} className="h-20 w-30 rounded-md border border-border object-cover" /></a>
+                    ))}</div>
+                  </DetailSection>}
+                </div>
+              )}
               {footerActions && <div className="mt-3 border-t border-border pt-3">{footerActions}</div>}
             </>}
           </div>

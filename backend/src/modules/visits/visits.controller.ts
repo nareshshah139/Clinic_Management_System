@@ -1,3 +1,4 @@
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import {
   Controller,
   Get,
@@ -28,7 +29,7 @@ import {
   QueryVisitsDto,
   PatientVisitHistoryDto,
   PatientVisitHistoryQueryDto,
-  DoctorVisitsDto,
+  DoctorVisitsQueryDto,
 } from './dto/query-visit.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -242,6 +243,7 @@ const TRANSCRIBE_UPLOAD_LIMIT_BYTES = (() => {
 
 @ApiTags('Visits')
 @Controller('visits')
+@Roles(...CLINIC_STAFF_ROLES)
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class VisitsController {
@@ -451,7 +453,7 @@ export class VisitsController {
   @Get('doctor/:doctorId')
   getDoctorVisits(
     @Param('doctorId') doctorId: string,
-    @Query() query: Omit<DoctorVisitsDto, 'doctorId'>,
+    @Query() query: DoctorVisitsQueryDto,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.visitsService.getDoctorVisits(

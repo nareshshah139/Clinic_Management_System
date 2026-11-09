@@ -97,4 +97,9 @@ export class CreatePatientDto {
   @IsOptional()
   @IsString()
   consultationType?: string;
+
+  /** The doctor responsible for this patient's continuing care; null clears it on update. */
+  @IsOptional()
+  @IsString()
+  primaryDoctorId?: string | null;
 }

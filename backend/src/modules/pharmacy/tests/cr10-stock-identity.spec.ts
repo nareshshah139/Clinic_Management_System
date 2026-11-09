@@ -41,7 +41,7 @@ it('sums sibling batches even when only one name matches the search query', asyn
 });
 
 it('counts billed quantities by saved identity when the prescription display name is different', async () => {
-  const prisma: any = { $queryRaw: jest.fn().mockResolvedValue([{ id: 'rx' }]), prescription: { findFirst: jest.fn().mockResolvedValue({ id: 'rx', createdAt: new Date(), items: JSON.stringify([{ drugName: 'A custom display name', drugId: 'drug', inventoryItemId: 'batch', quantity: 3 }]), visit: { patient: { id: 'patient', name: 'Synthetic' }, doctor: { id: 'doctor', firstName: 'Synthetic', lastName: 'Doctor' } }, pharmacyInvoices: [{ id: 'bill', status: 'CONFIRMED', items: [{ inventoryItemId: 'batch', drug: { id: 'drug', name: 'Catalog name' }, quantity: 3 }] }] }) } };
+  const prisma: any = { $queryRaw: jest.fn().mockResolvedValue([{ id: 'rx' }]), prescription: { findFirst: jest.fn().mockResolvedValue({ id: 'rx', createdAt: new Date(), items: JSON.stringify([{ drugName: 'A custom display name', drugId: 'drug', inventoryItemId: 'batch', quantity: 3 }]), visit: { patient: { id: 'patient', name: 'Synthetic' }, doctor: { id: 'doctor', firstName: 'Synthetic', lastName: 'Doctor' } }, pharmacyInvoices: [{ id: 'bill', status: 'CONFIRMED', items: [{ inventoryItemId: 'batch', drug: { id: 'drug', name: 'Catalog name' }, quantity: 3 }] }] }) }, inventoryItem: { findMany: jest.fn().mockResolvedValue([{ id: 'batch', unit: 'STRIPS', packSize: 10, packUnit: 'tablets' }]) } };
   const result = await new PharmacyPrescriptionQueueService(prisma, {} as any).findOne('rx', 'clinic');
   expect(result.medications[0].dispensedQuantity).toBe(3);
   expect(result.status).toBe('dispensed');

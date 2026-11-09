@@ -20,10 +20,26 @@ import {
   AvailableSlotsDto,
 } from './dto/query-appointment.dto';
 import { SchedulingUtils, SchedulingConflict } from './utils/scheduling.utils';
-import { AppointmentStatus, VisitType, UserRole } from '@prisma/client';
+import { AppointmentStatus, Prisma, VisitType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WhatsAppTemplatesService } from '../whatsapp-templates/whatsapp-templates.service';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
+import {
+  BlockedInterval,
+  MinuteInterval,
+  istClock,
+  istDayEnd,
+  istDayStart,
+  minutesToHhmm,
+  overlaps,
+  slotLimit,
+  slotToMinutes,
+  timeOffOverlappingSlot,
+} from '../doctor-availability/availability';
+import {
+  loadDayAvailability,
+  loadTimeOff,
+} from '../doctor-availability/availability.queries';
 
 type WhatsAppTemplateComponent = {
   type: 'body';
@@ -61,6 +77,7 @@ export class AppointmentsService {
       visitType,
       notes,
       source,
+      allowOverbook = false,
     } = createAppointmentDto;
 
     // Validate inputs
@@ -83,6 +100,8 @@ export class AppointmentsService {
       throw new NotFoundException('Doctor not found in this branch');
     }
 
+    await this.assertNoTimeOff(doctorId, date, slot, branchId);
+
     // Validate room if provided
     if (roomId) {
       const room = await this.prisma.room.findFirst({
@@ -93,41 +112,10 @@ export class AppointmentsService {
       }
     }
 
-    // Check for scheduling conflicts
-    const conflicts = await this.checkSchedulingConflicts(
-      doctorId,
-      roomId ?? null,
-      date,
-      slot,
-      branchId,
-    );
-    if (conflicts.length > 0) {
-      const suggestions = await this.getAlternativeSlots(
-        doctorId,
-        roomId ?? null,
-        date,
-        slot,
-        branchId,
-      );
-      throw new ConflictException({
-        message: 'Scheduling conflict detected',
-        conflicts,
-        suggestions,
-      });
-    }
-
-    // Create appointment transactionally with tokenNumber generation to reduce race conditions
-    const appointment = await this.prisma.$transaction(async (tx) => {
-      const tokenNumber = await (async () => {
-        const startOfDay = new Date(`${date}T00:00:00.000Z`);
-        const endOfDay = new Date(`${date}T23:59:59.999Z`);
-        const last = await tx.appointment.findFirst({
-          where: { branchId, date: { gte: startOfDay, lte: endOfDay } },
-          orderBy: { tokenNumber: 'desc' },
-          select: { tokenNumber: true },
-        });
-        return ((last?.tokenNumber as number | null) || 0) + 1;
-      })();
+    const appointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
+      await this.lockSchedule(tx, branchId, doctorId, roomId ?? null, date);
+      await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId, { allowOverbook });
+      const tokenNumber = await this.nextDoctorToken(tx, branchId, doctorId, date);
 
       return tx.appointment.create({
         data: {
@@ -154,7 +142,7 @@ export class AppointmentsService {
           },
         },
       });
-    });
+    }));
 
     // Fire-and-forget notifications (if configured and doctor has enabled)
     if (this.notifications) {
@@ -420,6 +408,11 @@ export class AppointmentsService {
     return appointment;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:reliability] appointment-edit-conflicts
+   * Room changes and reactivation MUST check doctor and room conflicts under schedule locks.
+   * Concurrent changes to the appointment MUST fail rather than apply to stale scheduling details.
+   */
   async update(
     id: string,
     updateAppointmentDto: UpdateAppointmentDto,
@@ -442,21 +435,41 @@ export class AppointmentsService {
       }
     }
 
-    const updatedAppointment = await this.prisma.appointment.update({
-      where: { id },
-      data: updateAppointmentDto,
-      include: {
-        patient: {
-          select: { id: true, name: true, phone: true },
-        },
-        doctor: {
-          select: { id: true, firstName: true, lastName: true },
-        },
-        room: {
-          select: { id: true, name: true, type: true },
-        },
-      },
-    });
+    const include = {
+      patient: { select: { id: true, name: true, phone: true } },
+      doctor: { select: { id: true, firstName: true, lastName: true } },
+      room: { select: { id: true, name: true, type: true } },
+    } as const;
+    const affectsSchedule = updateAppointmentDto.roomId !== undefined || updateAppointmentDto.status !== undefined;
+    const updatedAppointment = affectsSchedule
+      ? await this.prisma.$transaction(async (tx) => {
+          const date = appointment.date.toISOString().slice(0, 10);
+          const roomId = updateAppointmentDto.roomId === undefined ? appointment.roomId : updateAppointmentDto.roomId;
+          await this.lockSchedule(tx, branchId, appointment.doctorId, roomId, date);
+          const current = await tx.appointment.findFirst({ where: { id, branchId } });
+          if (!current || current.doctorId !== appointment.doctorId ||
+              current.date.getTime() !== appointment.date.getTime() || current.slot !== appointment.slot ||
+              current.roomId !== appointment.roomId || current.status !== appointment.status) {
+            throw new ConflictException('Appointment changed; refresh and try again');
+          }
+          const status = updateAppointmentDto.status ?? current.status;
+          if (status !== AppointmentStatus.CANCELLED &&
+              (roomId !== current.roomId || current.status === AppointmentStatus.CANCELLED)) {
+            // Un-cancelling adds the patient back to the doctor's slot; a room change leaves the
+            // doctor's load unchanged, so only the new room is checked.
+            await this.assertSlotBookable(tx, 'Scheduling conflict detected', current.doctorId, roomId, date, current.slot, branchId, {
+              excludeAppointmentId: id,
+              roomOnly: current.status !== AppointmentStatus.CANCELLED,
+            });
+          }
+          const changed = await tx.appointment.updateMany({
+            where: { id, branchId, doctorId: current.doctorId, date: current.date, slot: current.slot, roomId: current.roomId, status: current.status },
+            data: updateAppointmentDto,
+          });
+          if (changed.count !== 1) throw new ConflictException('Appointment changed; refresh and try again');
+          return tx.appointment.findUniqueOrThrow({ where: { id }, include });
+        })
+      : await this.prisma.appointment.update({ where: { id }, data: updateAppointmentDto, include });
 
     void this.googleCalendar
       ?.syncAppointmentEvent(updatedAppointment.id, callerUserId)
@@ -483,35 +496,26 @@ export class AppointmentsService {
       throw new BadRequestException(canReschedule.reason);
     }
 
-    // Check for new scheduling conflicts
-    const conflicts = await this.checkSchedulingConflicts(
+    await this.assertNoTimeOff(
       appointment.doctorId,
-      rescheduleDto.roomId ?? appointment.roomId ?? null,
       rescheduleDto.date,
       rescheduleDto.slot,
       branchId,
-      id, // Exclude current appointment from conflict check
     );
 
-    if (conflicts.length > 0) {
-      const suggestions = await this.getAlternativeSlots(
-        appointment.doctorId,
-        rescheduleDto.roomId ?? appointment.roomId ?? null,
-        rescheduleDto.date,
-        rescheduleDto.slot,
-        branchId,
-      );
-      throw new ConflictException({
-        message: 'Scheduling conflict detected for new time slot',
-        conflicts,
-        suggestions,
+    // A new day means a place in that day's queue for this doctor.
+    const sameDay = appointment.date.toISOString().slice(0, 10) === rescheduleDto.date.slice(0, 10);
+    const newRoomId = rescheduleDto.roomId ?? appointment.roomId ?? null;
+    const rescheduledAppointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
+      await this.lockSchedule(tx, branchId, appointment.doctorId, newRoomId, rescheduleDto.date);
+      await this.assertSlotBookable(tx, 'Scheduling conflict detected for new time slot', appointment.doctorId, newRoomId, rescheduleDto.date, rescheduleDto.slot, branchId, {
+        allowOverbook: rescheduleDto.allowOverbook ?? false,
+        excludeAppointmentId: id,
       });
-    }
-
-    // Update appointment with new schedule
-    const rescheduledAppointment = await this.prisma.appointment.update({
+      return tx.appointment.update({
       where: { id },
       data: {
+        ...(sameDay ? {} : { tokenNumber: await this.nextDoctorToken(tx, branchId, appointment.doctorId, rescheduleDto.date) }),
         date: new Date(rescheduleDto.date),
         slot: rescheduleDto.slot,
         roomId: rescheduleDto.roomId ?? appointment.roomId ?? undefined,
@@ -530,6 +534,7 @@ export class AppointmentsService {
         },
       },
     });
+    }));
 
     // Update linked Google Calendar event (non-blocking)
     void this.googleCalendar
@@ -678,86 +683,26 @@ export class AppointmentsService {
       bookedSlots.push(...roomBookedSlots);
     }
 
-    // Determine clinic hours (fallback to defaults if not provided or invalid)
-    // Attempt to read working hours from doctor.metadata if available
-    let doctorStart: number | undefined;
-    let doctorEnd: number | undefined;
-    try {
-      if (doctor?.metadata) {
-        const meta =
-          typeof doctor.metadata === 'string'
-            ? JSON.parse(doctor.metadata)
-            : doctor.metadata;
-        const hours = meta?.workingHours;
-        if (hours && typeof hours === 'object') {
-          // Allow per-day override; fallback to generic startHour/endHour if present
-          // Resolve weekday in clinic timezone to avoid UTC off-by-one
-          const tz = 'Asia/Kolkata';
-          const noonUtc = new Date(`${date}T12:00:00.000Z`); // noon UTC mapped to local day deterministically
-          const localNoon = new Date(
-            noonUtc.toLocaleString('en-US', { timeZone: tz }),
-          );
-          const day = localNoon.getDay(); // 0-6 in clinic TZ
-          const dayKey = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][day];
-          const byDay = hours?.byDay?.[dayKey];
-          const startCandidate = byDay?.startHour ?? hours?.startHour;
-          const endCandidate = byDay?.endHour ?? hours?.endHour;
-          if (Number.isInteger(startCandidate)) doctorStart = startCandidate;
-          if (Number.isInteger(endCandidate)) doctorEnd = endCandidate;
-        }
-      }
-    } catch {}
+    const day = await loadDayAvailability(this.prisma, branchId, doctor, date);
+    const hasOverride =
+      Number.isInteger(startHour) || Number.isInteger(endHour);
+    const workingIntervals = hasOverride
+      ? [this.overrideInterval(day.working, startHour, endHour)]
+      : day.working;
 
-    const clinicStart = Number.isInteger(startHour)
-      ? (startHour as number)
-      : Number.isInteger(doctorStart)
-        ? (doctorStart as number)
-        : 9;
-    const clinicEnd = Number.isInteger(endHour)
-      ? (endHour as number)
-      : Number.isInteger(doctorEnd)
-        ? (doctorEnd as number)
-        : 18;
-    const normalizedStart = Math.max(0, Math.min(23, clinicStart));
-    const normalizedEnd = Math.max(
-      normalizedStart + 1,
-      Math.min(24, clinicEnd),
+    const allSlots = workingIntervals.flatMap((interval) =>
+      this.slotsWithin(interval, durationMinutes),
     );
 
-    // Generate all possible slots for the day
-    const allSlots = SchedulingUtils.generateTimeSlots(
-      normalizedStart,
-      normalizedEnd,
-      durationMinutes,
-    );
-
-    // Filter out booked slots by overlap, not exact string equality
-    let availableSlots = allSlots.filter((slot) =>
-      bookedSlots.every((b) => !SchedulingUtils.doTimeSlotsOverlap(slot, b)),
-    );
-
-    // For same-day scheduling, filter out past slots based on local time
-    const getLocalDateStr = (d: Date): string => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const da = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${da}`;
-    };
-    // Align same-day filtering with clinic timezone (Asia/Kolkata)
-    const now = new Date();
-    const tz = 'Asia/Kolkata';
-    const todayTz = new Date(now.toLocaleString('en-US', { timeZone: tz }));
-    const todayStr = getLocalDateStr(todayTz);
-    if (date === todayStr) {
-      const nowTz = todayTz;
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
-      availableSlots = availableSlots.filter((slot) => {
-        const parsed = SchedulingUtils.parseTimeSlot(slot);
-        const [h, mm] = parsed.start.split(':').map((v) => parseInt(v, 10));
-        const startMinutes = h * 60 + mm;
-        return startMinutes > nowMinutes;
-      });
-    }
+    const now = istClock(new Date());
+    const availableSlots = allSlots.filter((slot) => {
+      const range = slotToMinutes(slot);
+      return (
+        bookedSlots.every((b) => !SchedulingUtils.doTimeSlotsOverlap(slot, b)) &&
+        day.blocked.every((b) => !overlaps(b, range)) &&
+        (date !== now.date || range.start > now.minutes)
+      );
+    });
 
     return {
       date,
@@ -765,6 +710,9 @@ export class AppointmentsService {
       roomId,
       availableSlots,
       bookedSlots: [...new Set(bookedSlots)], // Remove duplicates
+      hoursSource: day.source,
+      workingIntervals,
+      timeOff: day.blocked,
     };
   }
 
@@ -1053,6 +1001,60 @@ export class AppointmentsService {
     return {};
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] time-off-blocks-booking
+   * Creating or rescheduling an appointment MUST fail with 409 when the slot overlaps the
+   * doctor's leave or blocked time, or a branch-wide holiday. Booking outside working
+   * hours stays allowed; the UI only warns.
+   */
+  private async assertNoTimeOff(
+    doctorId: string,
+    date: string,
+    slot: string,
+    branchId: string,
+  ) {
+    const timeOff = await loadTimeOff(
+      this.prisma,
+      branchId,
+      doctorId,
+      istDayStart(date),
+      istDayEnd(date),
+    );
+    const hit = timeOffOverlappingSlot(date, slot, timeOff);
+    if (!hit) return;
+    const message = describeTimeOff(hit);
+    throw new ConflictException({
+      message,
+      conflicts: [{ type: 'time_off', message, timeOff: hit }],
+      suggestions: [],
+    });
+  }
+
+  /** Explicit startHour/endHour query params replace the doctor's hours with one window. */
+  private overrideInterval(
+    working: MinuteInterval[],
+    startHour?: number,
+    endHour?: number,
+  ): MinuteInterval {
+    const doctorStart = working.length
+      ? Math.floor(working[0].start / 60)
+      : 9;
+    const doctorEnd = working.length
+      ? Math.ceil(working[working.length - 1].end / 60)
+      : 18;
+    const start = Math.max(0, Math.min(23, startHour ?? doctorStart));
+    const end = Math.max(start + 1, Math.min(24, endHour ?? doctorEnd));
+    return { start: start * 60, end: end * 60 };
+  }
+
+  private slotsWithin(interval: MinuteInterval, duration: number): string[] {
+    const slots: string[] = [];
+    for (let m = interval.start; m < interval.end; m += duration) {
+      slots.push(`${minutesToHhmm(m)}-${minutesToHhmm(m + duration)}`);
+    }
+    return slots;
+  }
+
   // Private helper methods
   private validateAppointmentInputs(dto: CreateAppointmentDto): void {
     if (!SchedulingUtils.isValidTimeSlot(dto.slot)) {
@@ -1061,9 +1063,8 @@ export class AppointmentsService {
       );
     }
 
-    // Compare appointment slot start time against current time to allow same-day future bookings
-    const timeSlot = SchedulingUtils.parseTimeSlot(dto.slot);
-    const appointmentStart = new Date(`${dto.date}T${timeSlot.start}:00.000Z`);
+    // Slots are IST wall-clock times on the clinic day.
+    const appointmentStart = new Date(istDayStart(dto.date).getTime() + slotToMinutes(dto.slot).start * 60_000);
     const now = new Date();
 
     if (appointmentStart < now) {
@@ -1080,6 +1081,7 @@ export class AppointmentsService {
     slot: string,
     branchId: string,
     excludeAppointmentId?: string,
+    db: Prisma.TransactionClient = this.prisma,
   ): Promise<SchedulingConflict[]> {
     const conflicts: SchedulingConflict[] = [];
 
@@ -1099,7 +1101,7 @@ export class AppointmentsService {
     }
 
     // Check doctor conflicts
-    const doctorAppointments = await this.prisma.appointment.findMany({
+    const doctorAppointments = await db.appointment.findMany({
       where: {
         ...whereClause,
         doctorId,
@@ -1127,7 +1129,7 @@ export class AppointmentsService {
 
     // Check room conflicts if room is specified
     if (roomId) {
-      const roomAppointments = await this.prisma.appointment.findMany({
+      const roomAppointments = await db.appointment.findMany({
         where: {
           ...whereClause,
           roomId,
@@ -1207,26 +1209,97 @@ export class AppointmentsService {
     return [...new Set(appointments.map((apt) => apt.slot))];
   }
 
-  private async generateTokenNumber(
-    date: string,
-    branchId: string,
-  ): Promise<number> {
-    const startOfDay = new Date(`${date}T00:00:00.000Z`);
-    const endOfDay = new Date(`${date}T23:59:59.999Z`);
+  /**
+   * @cc [owner:nareshshah139,label:product] doctor-token-queue
+   * Token numbers MUST count each doctor's own queue for the day in a branch, starting at 1,
+   * so a patient's token reflects only that doctor's patients. Two appointments for the same
+   * doctor and day MUST NOT share a token, including under concurrent booking; the database
+   * unique index enforces it and booking retries on a collision.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] no-concurrent-double-booking
+   * Booking, rescheduling, and scheduling edits MUST check doctor and room conflicts inside the write transaction
+   * while holding the doctor-day lock (and the room-day lock when a room is set), so two
+   * concurrent requests can never both take overlapping slots. Locks are taken doctor first,
+   * then room, so lock order is fixed.
+   */
+  private async lockSchedule(tx: Prisma.TransactionClient, branchId: string, doctorId: string, roomId: string | null, date: string) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`appointment-token:${branchId}:${doctorId}:${date}`}))`;
+    if (roomId) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`appointment-room:${branchId}:${roomId}:${date}`}))`;
+  }
 
-    const lastAppointment = await this.prisma.appointment.findFirst({
+  /**
+   * @cc [owner:nareshshah139,label:product] doctor-overbooking
+   * Callers hold the locks from lockSchedule. A slot with no overlapping booking for the doctor
+   * is bookable. One that already has some MAY take another only when the request carries
+   * allowOverbook and the overlap count is below the doctor's limit, read in this transaction.
+   * Room conflicts are never overbooked. A refusal carries `overbook` so the UI can offer
+   * "book anyway" only when resending with allowOverbook would succeed. A roomOnly check is for an
+   * appointment that already holds its doctor slot and only changes room: just the room must be free.
+   * Model: verification/appointment-overbooking/Overbooking.tla (Count, Decide, Accepts).
+   */
+  private async assertSlotBookable(
+    tx: Prisma.TransactionClient, message: string, doctorId: string, roomId: string | null,
+    date: string, slot: string, branchId: string,
+    { allowOverbook = false, excludeAppointmentId, roomOnly = false }: { allowOverbook?: boolean; excludeAppointmentId?: string; roomOnly?: boolean },
+  ) {
+    const found = await this.checkSchedulingConflicts(doctorId, roomId, date, slot, branchId, excludeAppointmentId, tx);
+    const conflicts = roomOnly ? found.filter((c) => c.type === 'room') : found;
+    if (conflicts.length === 0) return;
+    // Every booking overlapping the slot counts, even when they do not overlap each other,
+    // so simultaneous patients can never exceed the limit.
+    const booked = conflicts.filter((c) => c.type === 'doctor').length;
+    const roomTaken = conflicts.some((c) => c.type === 'room');
+    const doctor = await tx.user.findUnique({ where: { id: doctorId }, select: { maxBookingsPerSlot: true } });
+    const limit = slotLimit(doctor?.maxBookingsPerSlot);
+    if (!roomTaken && acceptsBooking(booked, limit, allowOverbook)) return;
+    const suggestions = await this.getAlternativeSlots(doctorId, roomId, date, slot, branchId);
+    const overbook = { allowed: !roomTaken && booked < limit, booked, limit };
+    throw new ConflictException({ message, conflicts, suggestions, overbook });
+  }
+
+  /** Callers hold the doctor-day lock from lockSchedule. */
+  private async nextDoctorToken(tx: Prisma.TransactionClient, branchId: string, doctorId: string, date: string): Promise<number> {
+    const last = await tx.appointment.findFirst({
       where: {
         branchId,
-        date: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
+        doctorId,
+        date: { gte: new Date(`${date}T00:00:00.000Z`), lte: new Date(`${date}T23:59:59.999Z`) },
       },
-      orderBy: {
-        tokenNumber: 'desc',
-      },
+      orderBy: { tokenNumber: 'desc' },
+      select: { tokenNumber: true },
     });
+    return (last?.tokenNumber ?? 0) + 1;
+  }
 
-    return (lastAppointment?.tokenNumber || 0) + 1;
+  private async withTokenRetry<T>(write: () => Promise<T>, attempts = 5): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await write();
+      } catch (error) {
+        const target = (error as Prisma.PrismaClientKnownRequestError)?.meta?.target;
+        const tokenCollision = (error as { code?: string })?.code === 'P2002'
+          && (Array.isArray(target) ? target.includes('tokenNumber') : String(target ?? '').includes('token'));
+        if (!tokenCollision || attempt >= attempts) throw error;
+      }
+    }
+  }
+
+}
+
+/** Accepts(r, count) in Overbooking.tla. */
+function acceptsBooking(booked: number, limit: number, allowOverbook: boolean): boolean {
+  return booked === 0 || (booked < limit && allowOverbook);
+}
+
+function describeTimeOff(block: BlockedInterval): string {
+  const reason = block.reason ? ` (${block.reason})` : '';
+  switch (block.kind) {
+    case 'LEAVE':
+      return `Doctor is on leave at this time${reason}`;
+    case 'HOLIDAY':
+      return `The clinic is closed for a holiday at this time${reason}`;
+    case 'BLOCKED':
+      return `Doctor's time is blocked off at this time${reason}`;
   }
 }

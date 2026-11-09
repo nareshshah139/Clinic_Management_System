@@ -40,6 +40,7 @@ import {
 } from "./PurchaseProductDetails";
 import { PurchaseManualMatchSearch } from "./PurchaseManualMatchSearch";
 import { PurchaseSupplierReview } from "./PurchaseSupplierReview";
+import { AgreedTermHint, AgreedTermsPanel, useAgreedTerms } from "./AgreedTerms";
 import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
 import { PurchaseReviewSummary } from "./PurchaseReviewSummary";
 import { ReviewStatus, ReviewLegend, reviewColors, type ReviewTone } from "@/components/ui/ReviewStatus";
@@ -3048,6 +3049,12 @@ function PurchaseInvoiceEditor({
   const awaitingManualReview =
     !!activeInvoice && manualReviewCandidateId === activeInvoice.id;
   const catalogueRows = catalogue.state === 'assessed' && catalogueCurrent(catalogue.request) ? catalogue.rows : [];
+  const supplierGstin = !activeInvoice || editingSelectedInvoice ? header.distributorGstin : activeInvoice.distributorGstin;
+  const agreedTerms = useAgreedTerms(supplierGstin, lines.map((line, index) => {
+    const row = catalogueRows.find(candidate => candidate.localId === line.localId);
+    const catalogueDrugId = row && 'product' in row.resolution ? row.resolution.product.id : undefined;
+    return { productName: line.productName, drugId: masterStatuses[index]?.drug.id ?? catalogueDrugId };
+  }));
   const catalogueReady = catalogueRows.length === lines.length && catalogueRows.length > 0 && catalogueRows.every(row => row.resolution.state === 'ready');
   const catalogueBlockers = catalogueRows.filter(row => row.resolution.state !== 'ready');
   const catalogueChecks = stockAdded || activeInvoice?.status === 'CANCELLED' ? 0 : catalogueReady ? 0 : Math.max(1, catalogueBlockers.length);
@@ -3345,11 +3352,7 @@ function PurchaseInvoiceEditor({
             ? header.distributorName
             : activeInvoice.distributorName
         }
-        gstNumber={
-          !activeInvoice || editingSelectedInvoice
-            ? header.distributorGstin
-            : activeInvoice.distributorGstin
-        }
+        gstNumber={supplierGstin}
         canLoad={access.create || access.read}
         canSave={!!access.saveSupplier}
         canEdit={!!access.editSupplier}
@@ -3374,6 +3377,7 @@ function PurchaseInvoiceEditor({
             : undefined
         }
       />
+      {agreedTerms.supplier && <AgreedTermsPanel supplierName={agreedTerms.supplier.name} terms={agreedTerms.terms} />}
       {editingChecks && (
         <>
           <PurchaseOcrChecklist flags={currentHeaderFlags} checked={checkedOcr.header} values={header} />
@@ -5155,6 +5159,7 @@ function PurchaseInvoiceEditor({
                               </span>
                             </div>
                                                           <div className="space-y-3 px-4 pb-4">
+                                <AgreedTermHint term={agreedTerms.termFor(index)} line={line} />
                                 {batchOpen && <label className="flex items-center gap-2 text-sm"><input data-purchase-local-controls type="checkbox" disabled={batchDisabled} checked={selectedRows.includes(line.localId)} onChange={event => selectBatchRows(event.target.checked ? [...currentSelectedRows, line.localId] : currentSelectedRows.filter(id => id !== line.localId))} />Select line {index + 1} for shared terms</label>}
                                 <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
 <Field id={`${line.localId}-product`} label="Product" value={line.productName} className="col-span-2" onChange={event => updateLine(line.localId, "productName", event.target.value)} />

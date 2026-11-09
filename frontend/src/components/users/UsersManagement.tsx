@@ -18,6 +18,8 @@ import { Plus, Edit, Trash2, Settings } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import React, { useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { BranchHolidaySettings, DoctorAvailabilitySettings } from '@/components/users/DoctorAvailabilitySettings';
+import { ResetCodeButton } from '@/components/users/ResetCodeButton';
 
 import {
   parseMetadataObject,
@@ -70,11 +72,8 @@ export default function UsersManagement() {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [genLoading, setGenLoading] = useState(false);
   const [genHints, setGenHints] = useState('');
-  // Working Hours editor state
   const [whOpen, setWhOpen] = useState(false);
-  const [whStartHour, setWhStartHour] = useState<number>(9);
-  const [whEndHour, setWhEndHour] = useState<number>(18);
-  const [whByDay, setWhByDay] = useState<Record<string, { startHour?: number; endHour?: number }>>({});
+  const [holidaysOpen, setHolidaysOpen] = useState(false);
   const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string }>({
     firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE',
   });
@@ -156,58 +155,6 @@ export default function UsersManagement() {
     setWaPhoneNumberId(settings.phoneNumberId);
     setWaAccessToken(''); // do not prefill token for security; allow overwrite
     setWaOpen(true);
-  };
-
-  const openWorkingHours = (u: User) => {
-    setSelectedUser(u);
-    const meta = (u as any)?.metadata || {};
-    const wh = (meta?.workingHours || {}) as any;
-    const start = Number.isInteger(wh?.startHour) ? wh.startHour : 9;
-    const end = Number.isInteger(wh?.endHour) ? wh.endHour : 18;
-    const byDay = typeof wh?.byDay === 'object' && wh.byDay ? wh.byDay : {};
-    setWhStartHour(start);
-    setWhEndHour(end);
-    setWhByDay(byDay);
-    setWhOpen(true);
-  };
-
-  const saveWorkingHours = async () => {
-    if (!selectedUser) return;
-    try {
-      setLoading(true);
-      const existing = ((selectedUser as any)?.metadata || {}) as Record<string, any>;
-      const byDayClean: Record<string, { startHour?: number; endHour?: number }> = {};
-      const days = ['sun','mon','tue','wed','thu','fri','sat'];
-      days.forEach((d) => {
-        const v = whByDay[d];
-        if (v && (Number.isInteger(v.startHour) || Number.isInteger(v.endHour))) {
-          byDayClean[d] = {
-            ...(Number.isInteger(v.startHour) ? { startHour: v.startHour } : {}),
-            ...(Number.isInteger(v.endHour) ? { endHour: v.endHour } : {}),
-          };
-        }
-      });
-      const workingHours = {
-        startHour: whStartHour,
-        endHour: whEndHour,
-        ...(Object.keys(byDayClean).length ? { byDay: byDayClean } : {}),
-      };
-      const metadata = { ...existing, workingHours } as Record<string, any>;
-      await apiClient.updateUserProfile(selectedUser.id, { metadata });
-      setWhOpen(false);
-      await fetchUsers();
-      toast({ title: 'Saved', description: 'Working hours updated' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const copyDefaultsToAllDays = () => {
-    const days = ['sun','mon','tue','wed','thu','fri','sat'];
-    const next: Record<string, { startHour?: number; endHour?: number }> = {};
-    days.forEach((d) => { next[d] = { startHour: whStartHour, endHour: whEndHour }; });
-    setWhByDay(next);
-    toast({ title: 'Applied', description: 'Defaults copied to all days' });
   };
 
   const stripHtml = (html: string) => {
@@ -470,6 +417,16 @@ export default function UsersManagement() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div><h2 className="text-lg font-semibold text-gray-900">Users</h2><p className="mt-1 text-sm text-gray-600">Manage users, roles, and statuses</p></div>
+        <div className="flex flex-wrap gap-2">
+        <Dialog open={holidaysOpen} onOpenChange={setHolidaysOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline">Clinic Holidays</Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader><DialogTitle>Clinic Holidays</DialogTitle></DialogHeader>
+            {holidaysOpen && <BranchHolidaySettings />}
+          </DialogContent>
+        </Dialog>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> New User</Button>
@@ -532,6 +489,7 @@ export default function UsersManagement() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>
@@ -564,98 +522,20 @@ export default function UsersManagement() {
                       <TableCell>{u.role}</TableCell>
                       <TableCell>{u.status}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2 [&_button]:whitespace-nowrap">
                           <Button variant="outline" size="sm" onClick={() => onEdit(u)}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
                           <Button variant="outline" size="sm" onClick={() => void onDelete(u)}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>
+                          <ResetCodeButton user={u} />
                           {u.role === 'DOCTOR' && (
                             <Dialog open={whOpen && selectedUser?.id === u.id} onOpenChange={(open: boolean) => { setWhOpen(open); if (!open) setSelectedUser(null); }}>
                               <DialogTrigger asChild>
-                                <Button variant="outline" size="sm" onClick={() => openWorkingHours(u)}>Working Hours</Button>
+                                <Button variant="outline" size="sm" onClick={() => { setSelectedUser(u); setWhOpen(true); }}>Working Hours</Button>
                               </DialogTrigger>
-                              <DialogContent className="sm:max-w-[520px]">
+                              <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
                                 <DialogHeader>
-                                  <DialogTitle>Doctor Working Hours</DialogTitle>
+                                  <DialogTitle>Availability: Dr. {u.firstName} {u.lastName}</DialogTitle>
                                 </DialogHeader>
-                                <div className="space-y-4">
-                                  <div className="border rounded-md p-3 space-y-3">
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div>
-                                        <Label className="text-sm">Default Start Hour</Label>
-                                        <Input type="number" min={0} max={23} value={whStartHour} onChange={(e) => setWhStartHour(parseInt(e.target.value || '0', 10))} />
-                                      </div>
-                                      <div>
-                                        <Label className="text-sm">Default End Hour</Label>
-                                        <Input type="number" min={1} max={24} value={whEndHour} onChange={(e) => setWhEndHour(parseInt(e.target.value || '0', 10))} />
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <div className="text-xs text-gray-500">Hours are in 24h format. End should be greater than Start.</div>
-                                      <Button size="sm" variant="outline" onClick={copyDefaultsToAllDays}>Copy defaults to all days</Button>
-                                    </div>
-                                  </div>
-
-                                  <div className="border rounded-md p-3 space-y-3">
-                                    <div className="font-medium">Per-day Overrides (optional)</div>
-                                    {['sun','mon','tue','wed','thu','fri','sat'].map((d) => (
-                                      <div key={d} className="grid grid-cols-5 gap-2 items-end">
-                                        <div className="col-span-1 capitalize text-sm">{d}</div>
-                                        <div className="col-span-2">
-                                          <Label className="text-xs">Start</Label>
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            max={23}
-                                            value={Number.isInteger(whByDay[d]?.startHour) ? (whByDay[d]?.startHour as number) : ''}
-                                            onChange={(e) => {
-                                              const v = e.target.value;
-                                              setWhByDay((prev) => ({
-                                                ...prev,
-                                                [d]: { ...(prev[d] || {}), startHour: v === '' ? undefined : parseInt(v, 10) },
-                                              }));
-                                            }}
-                                            placeholder="—"
-                                          />
-                                        </div>
-                                        <div className="col-span-2">
-                                          <Label className="text-xs">End</Label>
-                                          <Input
-                                            type="number"
-                                            min={1}
-                                            max={24}
-                                            value={Number.isInteger(whByDay[d]?.endHour) ? (whByDay[d]?.endHour as number) : ''}
-                                            onChange={(e) => {
-                                              const v = e.target.value;
-                                              setWhByDay((prev) => ({
-                                                ...prev,
-                                                [d]: { ...(prev[d] || {}), endHour: v === '' ? undefined : parseInt(v, 10) },
-                                              }));
-                                            }}
-                                            placeholder="—"
-                                          />
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-
-                                  {(() => {
-                                    const invalidDefault = !(whEndHour > whStartHour);
-                                    const invalidDays = ['sun','mon','tue','wed','thu','fri','sat'].some((d) => {
-                                      const v = whByDay[d];
-                                      if (!v) return false;
-                                      if (Number.isInteger(v.startHour) && Number.isInteger(v.endHour)) {
-                                        return !((v.endHour as number) > (v.startHour as number));
-                                      }
-                                      return false;
-                                    });
-                                    const disabled = invalidDefault || invalidDays;
-                                    return (
-                                      <div className="flex justify-end gap-2">
-                                        <Button variant="outline" onClick={() => setWhOpen(false)}>Close</Button>
-                                        <Button disabled={disabled} onClick={() => void saveWorkingHours()}>{disabled ? 'Fix hours to save' : 'Save'}</Button>
-                                      </div>
-                                    );
-                                  })()}
-                                </div>
+                                {whOpen && selectedUser?.id === u.id && <DoctorAvailabilitySettings doctorId={u.id} canManageHolidays />}
                               </DialogContent>
                             </Dialog>
                           )}

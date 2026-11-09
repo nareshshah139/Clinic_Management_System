@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
-import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto, ChangePasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
 import { Prisma, UserRole, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { readDoctorSignature, signatureDataUrl } from './doctor-signature';
+import { letterheadDataUrl, readDoctorLetterhead } from './doctor-letterhead';
 
 @Injectable()
 export class UsersService {
@@ -27,23 +28,12 @@ export class UsersService {
     if (user.role !== 'DOCTOR' || !await this.prisma.user.findFirst({
       where: { id: user.id, branchId: user.branchId, role: 'DOCTOR', isActive: true },
       select: { id: true },
-    })) throw new ForbiddenException('Only the logged-in doctor can change her signature.');
+    })) throw new ForbiddenException('Only the logged-in doctor can change their own signature or letterhead.');
   }
 
   async uploadOwnSignature(user: { id: string; branchId: string; role: string }, file?: Express.Multer.File) {
     await this.requireSignatureOwner(user);
-    const url = await signatureDataUrl(file);
-    const signature = await this.prisma.$transaction(async tx => {
-      await tx.clinicAsset.updateMany({
-        where: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', isActive: true },
-        data: { isActive: false },
-      });
-      return tx.clinicAsset.create({
-        data: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', name: 'Doctor signature', url },
-        select: { id: true, url: true },
-      });
-    });
-    return { signature };
+    return { signature: await this.replaceOwnAsset(user, 'SIGNATURE', 'Doctor signature', await signatureDataUrl(file)) };
   }
 
   /**
@@ -53,17 +43,43 @@ export class UsersService {
    */
   async removeOwnSignature(user: { id: string; branchId: string; role: string }) {
     await this.requireSignatureOwner(user);
-    await this.prisma.$transaction(async tx => {
+    await this.replaceOwnAsset(user, 'SIGNATURE', 'Signature removed', null);
+    return { signature: null };
+  }
+
+  async getDoctorLetterhead(doctorId: string, branchId: string) {
+    return { letterhead: await readDoctorLetterhead(this.prisma, branchId, doctorId) };
+  }
+
+  async uploadOwnLetterhead(user: { id: string; branchId: string; role: string }, file?: Express.Multer.File) {
+    await this.requireSignatureOwner(user);
+    const letterhead = await this.replaceOwnAsset(user, 'LETTERHEAD', 'Doctor letterhead', await letterheadDataUrl(file));
+    return { letterhead: { ...letterhead, source: 'uploaded' as const } };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] letterhead-removal-persists
+   * Removing a letterhead MUST leave the authenticated doctor without a letterhead
+   * on subsequent reads, including when only the bundled default existed.
+   */
+  async removeOwnLetterhead(user: { id: string; branchId: string; role: string }) {
+    await this.requireSignatureOwner(user);
+    await this.replaceOwnAsset(user, 'LETTERHEAD', 'Letterhead removed', null);
+    return { letterhead: null };
+  }
+
+  /** Deactivates the doctor's current asset of this type; a null url records an explicit removal. */
+  private async replaceOwnAsset(user: { id: string; branchId: string }, type: 'SIGNATURE' | 'LETTERHEAD', name: string, url: string | null) {
+    return this.prisma.$transaction(async tx => {
       await tx.clinicAsset.updateMany({
-        where: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', isActive: true },
+        where: { branchId: user.branchId, ownerId: user.id, type, isActive: true },
         data: { isActive: false },
       });
-      // Persist the choice even when there was no uploaded asset to deactivate.
-      await tx.clinicAsset.create({
-        data: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', name: 'Signature removed', url: '', isActive: false },
+      return tx.clinicAsset.create({
+        data: { branchId: user.branchId, ownerId: user.id, type, name, url: url ?? '', isActive: url !== null },
+        select: { id: true, url: true },
       });
     });
-    return { signature: null };
   }
 
   // User Management Methods
@@ -224,19 +240,7 @@ export class UsersService {
       updateData.permissions = JSON.stringify(updateUserDto.permissions);
     }
     
-    if (updateUserDto.metadata) {
-      updateData.metadata = JSON.stringify(updateUserDto.metadata);
-    }
-
-    const user = await this.prisma.user.update({
-      where: { id },
-      data: updateData,
-      include: {
-        branch: true,
-      },
-    });
-
-    return this.formatUser(user);
+    return this.formatUser(await this.saveUser(id, updateData));
   }
 
   async deleteUser(id: string, branchId: string) {
@@ -269,9 +273,10 @@ export class UsersService {
   }
 
   // Password Management Methods
-  async changePassword(id: string, changePasswordDto: ChangePasswordDto, _branchId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
+  async changePassword(id: string, changePasswordDto: ChangePasswordDto, actor: { id: string; branchId: string; role: string }) {
+    this.requireSelfOrManager(actor, id);
+    const user = await this.prisma.user.findFirst({
+      where: { id, branchId: actor.branchId },
     });
 
     if (!user) {
@@ -305,50 +310,10 @@ export class UsersService {
     return { message: 'Password changed successfully' };
   }
 
-  async resetPassword(resetPasswordDto: ResetPasswordDto) {
-    const user = await this.prisma.user.findFirst({
-      where: { email: resetPasswordDto.email },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    // Implementation pending: generate reset token and send email
-    return { message: 'Password reset link sent if email exists' };
-  }
-
-  async setPassword(setPasswordDto: SetPasswordDto) {
-    // Find user by reset token and ensure not expired
-    const user = await this.prisma.user.findFirst({
-      where: {
-        resetToken: setPasswordDto.resetToken,
-      },
-    });
-
-    if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
-      throw new UnauthorizedException('Invalid or expired token');
-    }
-
-    // Verify password confirmation
-    if (setPasswordDto.password !== setPasswordDto.confirmPassword) {
-      throw new BadRequestException('Password and confirmation do not match');
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(setPasswordDto.password, 10);
-
-    // Update user password and clear token
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashedPassword, resetToken: null, resetTokenExpiry: null },
-    });
-
-    return { message: 'Password set successfully' };
-  }
-
   // Profile Management Methods
-  async updateProfile(id: string, updateProfileDto: UpdateProfileDto, branchId: string) {
+  async updateProfile(id: string, updateProfileDto: UpdateProfileDto, actor: { id: string; branchId: string; role: string }) {
+    this.requireSelfOrManager(actor, id);
+    const branchId = actor.branchId;
     const user = await this.prisma.user.findFirst({
       where: { id, branchId },
     });
@@ -357,21 +322,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const updateData: any = { ...updateProfileDto };
-    
-    if (updateProfileDto.metadata) {
-      updateData.metadata = JSON.stringify(updateProfileDto.metadata);
-    }
-
-    const updatedUser = await this.prisma.user.update({
-      where: { id },
-      data: updateData,
-      include: {
-        branch: true,
-      },
-    });
-
-    return this.formatUser(updatedUser);
+    return this.formatUser(await this.saveUser(id, { ...updateProfileDto }));
   }
 
   async updateUserStatus(id: string, userStatusDto: UserStatusDto, branchId: string) {
@@ -926,8 +877,50 @@ export class UsersService {
     };
   }
 
-  // Helper to format user object consistently
-  private formatUser(user: any) {
+  /**
+   * @cc [owner:nareshshah139,label:product] user-metadata-merge
+   * Saving a user MUST merge the given metadata keys into the stored settings, so one screen's
+   * save never erases another's (print layout, signature preferences, WhatsApp, working hours).
+   * A key sent as null is removed. Concurrent saves of different keys MUST all be kept.
+   */
+  private async saveUser(id: string, data: Record<string, any>) {
+    const { metadata, ...rest } = data;
+    if (metadata && typeof metadata === 'object') {
+      // Compare-and-swap on the stored text: a concurrent save makes the write miss and we merge again.
+      for (let attempt = 0; ; attempt++) {
+        const stored = await this.prisma.user.findUnique({ where: { id }, select: { metadata: true } });
+        const { count } = await this.prisma.user.updateMany({
+          where: { id, metadata: stored?.metadata ?? null },
+          data: { metadata: JSON.stringify(mergeMetadata(stored?.metadata ?? null, metadata)) },
+        });
+        if (count === 1) break;
+        if (attempt >= 20) throw new ConflictException('Settings changed while saving; please try again.');
+      }
+    }
+    return this.prisma.user.update({ where: { id }, data: rest, include: { branch: true } });
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] user-self-service
+   * A user's profile and password MUST be changeable only by that user or by an OWNER, ADMIN
+   * or DOCTOR (the roles RolesGuard treats as managers); every other role is forbidden.
+   */
+  private requireSelfOrManager(actor: { id: string; role: string }, userId: string) {
+    if (actor.id !== userId && !['OWNER', 'ADMIN', 'DOCTOR'].includes(actor.role)) {
+      throw new ForbiddenException('You can only change your own profile and password.');
+    }
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] user-secrets-never-returned
+   * User API responses MUST NOT include password hashes, reset tokens or Google refresh tokens.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:security] whatsapp-token-never-returned
+   * Formatted user responses MUST omit whatsappAccessToken from metadata while retaining
+   * other settings; malformed stored metadata MUST NOT expose its raw value.
+   */
+  private formatUser({ password: _password, resetToken: _resetToken, resetTokenExpiry: _resetTokenExpiry, googleRefreshToken: _googleRefreshToken, ...user }: any) {
     let permissionsParsed: string[] | null = null;
     let metadataParsed: any = null;
     try {
@@ -936,6 +929,11 @@ export class UsersService {
     try {
       metadataParsed = user.metadata ? JSON.parse(user.metadata) : null;
     } catch {}
+    if (metadataParsed && typeof metadataParsed === 'object' && !Array.isArray(metadataParsed)) {
+      delete metadataParsed.whatsappAccessToken;
+    } else {
+      metadataParsed = null;
+    }
 
     return {
       ...user,
@@ -943,4 +941,16 @@ export class UsersService {
       metadata: metadataParsed,
     };
   }
+}
+
+/** Shallow-merges a metadata patch into stored JSON; null values remove keys and unreadable JSON starts empty. */
+export function mergeMetadata(stored: string | null, patch: Record<string, unknown>): Record<string, unknown> {
+  let current: Record<string, unknown> = {};
+  try {
+    const parsed = stored ? JSON.parse(stored) : null;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) current = parsed;
+  } catch {}
+  const merged = { ...current, ...patch };
+  for (const [key, value] of Object.entries(patch)) if (value === null) delete merged[key];
+  return merged;
 }

@@ -50,6 +50,8 @@ model User {
   statusReason               String?
   isActive                   Boolean            @default(true)
   metadata                   String?
+  // Patients a doctor may see in one time slot (1..5); 1 means no overbooking.
+  maxBookingsPerSlot         Int                @default(1)
   // Google Calendar integration (per-user)
   googleCalendarId           String?
   googleRefreshToken         String?
@@ -59,6 +61,7 @@ model User {
   deviceLogs                 DeviceLog[]
   inventoryAudits            InventoryAudit[]
   patientProfile             Patient?           @relation("PatientPortalUser")
+  primaryPatients            Patient[]          @relation("PatientPrimaryDoctor")
   purchaseOrders             PurchaseOrder[]
   reorderRules               ReorderRule[]
   stockAdjustments           StockAdjustment[]
@@ -78,6 +81,10 @@ model User {
   pharmacyAgentAuditEvents   PharmacyAgentAuditEvent[]
   drugInventoryChangesRequested DrugInventoryChangeRequest[] @relation("DrugInventoryChangeRequestedBy")
   drugInventoryChangesReviewed  DrugInventoryChangeRequest[] @relation("DrugInventoryChangeReviewedBy")
+  tradeTermsCreated             PharmacyTradeTerm[]          @relation("PharmacyTradeTermCreatedBy")
+  tradeTermsUpdated             PharmacyTradeTerm[]          @relation("PharmacyTradeTermUpdatedBy")
+  inventoryItemRequestsMade     InventoryItemRequest[]       @relation("InventoryItemRequestedBy")
+  inventoryItemRequestsReviewed InventoryItemRequest[]       @relation("InventoryItemReviewedBy")
 
   // Back-relations
   createdPrescriptionTemplates PrescriptionTemplate[]
@@ -87,6 +94,9 @@ model User {
   ownedPrinterProfiles         PrinterProfile[]
   templateUsages               TemplateUsage[]
   experimentAssignments        ExperimentAssignment[]
+  workingHours                 DoctorWorkingHours[]
+  timeOff                      DoctorTimeOff[]               @relation("DoctorTimeOffDoctor")
+  createdTimeOff               DoctorTimeOff[]               @relation("DoctorTimeOffCreatedBy")
 
   @@map("users")
 }
@@ -138,6 +148,8 @@ model Branch {
   pharmacyAgentAuditEvents PharmacyAgentAuditEvent[]
   prescriptionLinks PrescriptionInventoryLink[]
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
+  tradeTerms                  PharmacyTradeTerm[]
+  inventoryItemRequests       InventoryItemRequest[]
 
   // Back-relations
   prescriptionTemplates    PrescriptionTemplate[]
@@ -146,8 +158,62 @@ model Branch {
   templateUsages           TemplateUsage[]
   translationMemoryEntries TranslationMemoryEntry[]
   layoutExperiments        LayoutExperiment[]
+  doctorWorkingHours       DoctorWorkingHours[]
+  doctorTimeOff            DoctorTimeOff[]
+  clinicInvestigations     ClinicInvestigation[]
 
   @@map("branches")
+}
+
+/// Weekly recurring hours. weekday is 0=Sunday..6=Saturday and minutes count from midnight, both in clinic time (IST).
+model DoctorWorkingHours {
+  id          String   @id @default(cuid())
+  branchId    String
+  doctorId    String
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  doctor      User     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, weekday])
+  @@map("doctor_working_hours")
+}
+
+/// Leave, blocked-off time, and branch holidays (doctorId null).
+model DoctorTimeOff {
+  id          String      @id @default(cuid())
+  branchId    String
+  doctorId    String?
+  kind        TimeOffKind
+  startsAt    DateTime
+  endsAt      DateTime
+  reason      String?
+  createdById String?
+  createdAt   DateTime    @default(now())
+  branch      Branch      @relation(fields: [branchId], references: [id])
+  doctor      User?       @relation("DoctorTimeOffDoctor", fields: [doctorId], references: [id], onDelete: Cascade)
+  createdBy   User?       @relation("DoctorTimeOffCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([branchId, startsAt])
+  @@index([doctorId, startsAt])
+  @@map("doctor_time_off")
+}
+
+model ClinicInvestigation {
+  id             String   @id @default(cuid())
+  branchId       String
+  name           String
+  normalizedName String
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  branch         Branch   @relation(fields: [branchId], references: [id])
+
+  @@unique([branchId, normalizedName])
+  @@map("clinic_investigations")
 }
 
 model Permission {
@@ -216,6 +282,7 @@ model Patient {
   medicalHistory   String?
   consultationType String?
   portalUserId     String?           @unique
+  primaryDoctorId  String?
   branchId         String
   isArchived       Boolean           @default(false)
   archivedAt       DateTime?
@@ -229,6 +296,7 @@ model Patient {
   newInvoices      NewInvoice[]
   branch           Branch            @relation(fields: [branchId], references: [id])
   portalUser       User?             @relation("PatientPortalUser", fields: [portalUserId], references: [id])
+  primaryDoctor    User?             @relation("PatientPrimaryDoctor", fields: [primaryDoctorId], references: [id], onDelete: SetNull)
   referrals        Referral[]
   visits           Visit[]
   pharmacyInvoices PharmacyInvoice[]
@@ -245,6 +313,7 @@ model Patient {
   @@index([isArchived])
   @@index([branchId, name])
   @@index([branchId, phone])
+  @@index([branchId, primaryDoctorId])
   @@map("patients")
 }
 
@@ -272,6 +341,7 @@ model Appointment {
   newInvoices   NewInvoice[]
   visit         Visit?
 
+  @@unique([branchId, doctorId, date, tokenNumber], map: "appointments_doctor_day_token_key")
   @@map("appointments")
 }
 
@@ -524,6 +594,7 @@ enum AssetType {
   LOGO
   STAMP
   SIGNATURE
+  LETTERHEAD
 }
 
 model ClinicAsset {
@@ -958,6 +1029,7 @@ model InventoryItem {
   drugs                Drug[]
   prescriptionLinks PrescriptionInventoryLink[]
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
+  itemRequest                 InventoryItemRequest?
 
   @@index([branchId, name, id], map: "inventory_items_branch_name_id_read_idx")
   @@map("inventory_items")
@@ -1035,6 +1107,7 @@ model Supplier {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   branch        Branch   @relation(fields: [branchId], references: [id])
+  tradeTerms    PharmacyTradeTerm[]
 
   @@map("suppliers")
 }
@@ -1164,6 +1237,7 @@ model Drug {
   inventoryItems InventoryItem[]
   packageItems   PharmacyPackageItem[]
   inventoryChangeRequests DrugInventoryChangeRequest[]
+  tradeTerms              PharmacyTradeTerm[]
 
   @@index([name])
   @@index([manufacturerName])
@@ -1223,6 +1297,61 @@ model DrugInventoryChangeRequest {
   @@index([requestedById])
   @@index([reviewedById])
   @@map("drug_inventory_change_requests")
+}
+
+model PharmacyTradeTerm {
+  id              String   @id @default(cuid())
+  branchId        String
+  supplierId      String
+  drugId          String?
+  productName     String
+  productKey      String
+  discountPercent Float?
+  schemeBuy       Int?
+  schemeFree      Int?
+  minExpiryMonths Int?
+  marginPercent   Float?
+  ptr             Float?
+  ptrRule         String?
+  note            String?
+  createdById     String
+  updatedById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  supplier  Supplier @relation(fields: [supplierId], references: [id])
+  drug      Drug?    @relation(fields: [drugId], references: [id])
+  createdBy User     @relation("PharmacyTradeTermCreatedBy", fields: [createdById], references: [id])
+  updatedBy User     @relation("PharmacyTradeTermUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([branchId, supplierId, productKey])
+  @@index([branchId, supplierId])
+  @@map("pharmacy_trade_terms")
+}
+
+model InventoryItemRequest {
+  id              String                     @id @default(cuid())
+  branchId        String
+  requestedById   String
+  reviewedById    String?
+  status          InventoryItemRequestStatus @default(PENDING)
+  itemName        String
+  payload         Json
+  reason          String?
+  reviewNote      String?
+  inventoryItemId String?                    @unique
+  reviewedAt      DateTime?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  branch        Branch         @relation(fields: [branchId], references: [id])
+  requestedBy   User           @relation("InventoryItemRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy    User?          @relation("InventoryItemReviewedBy", fields: [reviewedById], references: [id])
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([branchId, status])
+  @@map("inventory_item_requests")
 }
 
 // Pharmacy Invoice Model
@@ -1953,6 +2082,18 @@ enum DrugInventoryChangeRequestStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum InventoryItemRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TimeOffKind {
+  LEAVE
+  HOLIDAY
+  BLOCKED
 }
 
 enum UserRole {

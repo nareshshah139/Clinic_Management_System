@@ -1,7 +1,10 @@
+import { Roles } from '../../../shared/decorators/roles.decorator';
+import { PHARMACY_OPERATIONS_ROLES } from '../../../shared/decorators/clinic-staff-roles';
 import { Controller, Get, Post, Body, Query, Param, Req } from '@nestjs/common';
 import { OneMgService } from './one-mg.service';
 
 @Controller('pharmacy/1mg')
+@Roles(...PHARMACY_OPERATIONS_ROLES)
 export class OneMgController {
   constructor(private readonly svc: OneMgService) {}
 

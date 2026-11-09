@@ -1,7 +1,12 @@
+import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { Body, Controller, HttpException, HttpStatus, Post, Res, SetMetadata, Get, Request, Param } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
+import { PasswordResetService } from './password-reset.service';
+import { ResetPasswordDto } from './dto/password-reset.dto';
+import { UserRole } from '@prisma/client';
+import { Authenticated, Roles } from '../../shared/decorators/roles.decorator';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -21,15 +26,31 @@ interface AuthenticatedRequest {
 
 @ApiTags('auth')
 @Controller('auth')
+@Roles(...CLINIC_STAFF_ROLES)
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly prisma: PrismaService,
+    private readonly passwordReset: PasswordResetService,
   ) {}
+
+
+  @Post('users/:id/reset-code')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  issueResetCode(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.passwordReset.issueResetCode(req.user, id);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  resetPassword(@Body() body: ResetPasswordDto) {
+    return this.passwordReset.resetPassword(body.code, body.password, body.confirmPassword);
+  }
 
   @Public()
   @Post('login')
-  @Throttle({ default: { ttl: 60, limit: 5 } })
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
     const { identifier, phone, email, password } = body || {};
     const loginIdentifier = (identifier ?? phone ?? email)?.trim();
@@ -96,6 +117,7 @@ export class AuthController {
 
   // Return current authenticated user
   @Get('me')
+  @Authenticated()
   async me(@Request() req: any) {
     // Passport attaches whatever JwtStrategy.validate returns to req.user
     const u = req.user || {};

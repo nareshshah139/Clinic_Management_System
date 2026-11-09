@@ -559,17 +559,20 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
     try { onChangeCount?.(incoming.length); } catch {}
   };
 
-  const deleteActive = async () => {
-    if (!active) return;
+  /**
+   * @cc [owner:nareshshah139,label:product] delete-selected-photo
+   * Deleting a photo MUST target the selected item using a single API prefix.
+   */
+  const deletePhoto = async (photo: PhotoItem) => {
     const confirmed = window.confirm('Delete this photo? This cannot be undone.');
     if (!confirmed) return;
     if (deleting) return;
     try {
       setDeleting(true);
-      const isDraft = visitId === 'temp' || /\/visits\/photos\/draft\//i.test(active.url);
+      const isDraft = visitId === 'temp' || /\/visits\/photos\/draft\//i.test(photo.url);
       if (isDraft) {
         // Draft mode deletion
-        const draftUrl = active.url.startsWith('/visits/photos/draft/') ? `${baseUrl}${active.url}` : active.url;
+        const draftUrl = toAbsolute(photo.url);
         const resp = await fetch(draftUrl, { method: 'DELETE', credentials: 'include' });
         if (resp.status === 401) handleUnauthorizedRedirect(resp);
         if (!resp.ok) {
@@ -580,8 +583,8 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         catch { await load(); }
       } else {
         // If the image URL points to API route, delete that resource; else treat as legacy
-        if (/\/visits\//i.test(active.url) && !/\/uploads\//i.test(active.url)) {
-          const target = active.url.startsWith('http') ? active.url : `${baseUrl}${active.url}`;
+        if (/\/visits\//i.test(photo.url) && !/\/uploads\//i.test(photo.url)) {
+          const target = toAbsolute(photo.url);
           const resp = await fetch(target, { method: 'DELETE', credentials: 'include' });
           if (resp.status === 401) handleUnauthorizedRedirect(resp);
           if (!resp.ok) {
@@ -590,11 +593,11 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           }
           try { const data = await resp.json(); acknowledgeVersion(data); applyResponseList(data); }
           catch { await load(); }
-        } else if (/\/uploads\//i.test(active.url)) {
+        } else if (/\/uploads\//i.test(photo.url)) {
           const resp = await fetch(`${baseUrl}/visits/${visitId}/photos/legacy`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: active.url }),
+            body: JSON.stringify({ url: photo.url }),
             credentials: 'include',
           });
           if (resp.status === 401) handleUnauthorizedRedirect(resp);
@@ -637,7 +640,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
               </Button>
             )}
             {allowDelete && active && (
-              <Button variant="destructive" size="sm" onClick={deleteActive} disabled={deleting}>
+              <Button variant="destructive" size="sm" onClick={() => void deletePhoto(active)} disabled={deleting}>
                 <Trash2 className="h-4 w-4 mr-2" /> Delete
               </Button>
             )}
@@ -749,7 +752,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                 <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.max(0, i - 1))} disabled={items.length <= 1}>Prev</Button>
                 <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.min(items.length - 1, i + 1))} disabled={items.length <= 1}>Next</Button>
                 {allowDelete && active && (
-                  <Button size="sm" variant="destructive" onClick={deleteActive}>
+                  <Button size="sm" variant="destructive" onClick={() => void deletePhoto(active)}>
                     <Trash2 className="h-4 w-4 mr-1" /> Delete
                   </Button>
                 )}
@@ -779,7 +782,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                         onClick={async (e) => {
                           e.stopPropagation();
                           setActiveIndex(idx);
-                          await deleteActive();
+                          await deletePhoto(it);
                         }}
                         className="absolute top-1 right-1 bg-red-600/90 hover:bg-red-700 text-white rounded-md p-1"
                         title="Delete"

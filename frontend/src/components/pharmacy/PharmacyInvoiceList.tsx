@@ -15,7 +15,6 @@ import {
   Search,
   Filter,
   Eye,
-  Edit,
   Trash2,
   Download,
   Calendar,
@@ -25,6 +24,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { downloadInvoicePdf } from '@/lib/download-invoice-pdf';
 import type {
   PharmacyInvoiceListResponse,
   PharmacyInvoiceSummary,
@@ -147,6 +147,14 @@ export function PharmacyInvoiceList() {
     return () => window.removeEventListener('pharmacy-invoices-refresh', handler);
   }, []);
 
+  /**
+   * @cc [owner:nareshshah139,label:security] escape-invoice-print-fields
+   * Invoice and patient text MUST be escaped before it is inserted into print or PDF HTML.
+   */
+  const escapePrintText = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[character]!));
+
   const renderPrintHtml = (invoice: any) => {
     const dateStr = invoice.invoiceDate ? displayClinicDate(invoice.invoiceDate) : displayClinicDate(invoice.createdAt);
     
@@ -157,11 +165,11 @@ export function PharmacyInvoiceList() {
       
       return `
         <tr>
-          <td style="padding:6px;border:1px solid #ddd;">${itemName}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
+          <td style="padding:6px;border:1px solid #ddd;">${escapePrintText(itemName)}</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:center;">${escapePrintText(item.quantity)}</td>
           <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${item.unitPrice?.toFixed(2) || '0.00'}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${item.discountPercent || 0}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${item.taxPercent || 0}%</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${escapePrintText(item.discountPercent || 0)}%</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${escapePrintText(item.taxPercent || 0)}%</td>
           <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${item.totalAmount?.toFixed(2) || '0.00'}</td>
         </tr>
       `;
@@ -175,7 +183,7 @@ export function PharmacyInvoiceList() {
       <html>
         <head>
           <meta charset="utf-8" />
-          <title>Invoice ${invoice?.invoiceNumber || ''}</title>
+          <title>Invoice ${escapePrintText(invoice?.invoiceNumber || '')}</title>
           ${getGlobalPrintStyleTag()}
           <style>
             @media print {
@@ -258,9 +266,9 @@ export function PharmacyInvoiceList() {
             <div class="invoice-header">
               <h1>Pharmacy Invoice</h1>
               <div class="muted">
-                <strong>Invoice #:</strong> ${invoice?.invoiceNumber || ''}<br/>
-                <strong>Date:</strong> ${dateStr}<br/>
-                <strong>Status:</strong> ${invoice?.status || 'N/A'}
+                <strong>Invoice #:</strong> ${escapePrintText(invoice?.invoiceNumber || '')}<br/>
+                <strong>Date:</strong> ${escapePrintText(dateStr)}<br/>
+                <strong>Status:</strong> ${escapePrintText(invoice?.status || 'N/A')}
               </div>
             </div>
           </div>
@@ -269,8 +277,8 @@ export function PharmacyInvoiceList() {
           <div class="billing-section">
             <strong>Bill To:</strong><br />
             <div style="margin-top: 8px;">
-              ${patientName}<br/>
-              ${patientPhone}${billingAddress ? '<br/>' + billingAddress : ''}
+              ${escapePrintText(patientName)}<br/>
+              ${escapePrintText(patientPhone)}${billingAddress ? '<br/>' + escapePrintText(billingAddress) : ''}
             </div>
           </div>
 
@@ -302,7 +310,7 @@ export function PharmacyInvoiceList() {
           ${invoice.notes ? `
             <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
               <strong>Notes:</strong><br/>
-              ${invoice.notes}
+              ${escapePrintText(invoice.notes)}
             </div>
           ` : ''}
           </div>
@@ -333,20 +341,6 @@ export function PharmacyInvoiceList() {
     }
   };
 
-  const handleEditInvoice = (invoiceId: string) => {
-    // Dispatch event to trigger edit mode in PharmacyInvoiceBuilder
-    window.dispatchEvent(new CustomEvent('pharmacy-invoice-edit', {
-      detail: { invoiceId }
-    }));
-    
-    // Scroll to the invoice builder (assuming it's on the same page)
-    // If it's in a different tab/page, you might need to navigate there first
-    const builderElement = document.querySelector('[data-pharmacy-invoice-builder]');
-    if (builderElement) {
-      builderElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
   const handleConfirmInvoice = async (invoiceId: string) => {
     if (!confirm('Confirm this invoice? This will mark it as finalized and include it in stock predictions.')) {
       return;
@@ -374,27 +368,19 @@ export function PharmacyInvoiceList() {
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] invoice-list-pdf-download
+   * Downloading an invoice MUST save its fetched printable content as a PDF without a pop-up.
+   * Retrieval or rendering failure MUST be reported.
+   */
   const handleDownloadInvoice = async (invoiceId: string) => {
     try {
       setLoading(true);
       const invoice = await apiClient.get(`/pharmacy/invoices/${invoiceId}`);
       
-      // For now, open print dialog which allows save as PDF
-      const win = window.open('', '_blank');
-      if (!win) {
-        alert('Please allow pop-ups to download the invoice');
-        return;
-      }
       const html = renderPrintHtml(invoice);
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-      
-      // Auto-trigger print dialog
-      setTimeout(() => {
-        win.focus();
-        win.print();
-      }, 500);
+      const source = new DOMParser().parseFromString(html, 'text/html');
+      await downloadInvoicePdf(source, (invoice as any)?.invoiceNumber || invoiceId);
     } catch (error) {
       console.error('Failed to download invoice:', error);
       alert('Failed to download invoice. Please try again.');
@@ -755,14 +741,6 @@ export function PharmacyInvoiceList() {
                             title="Confirm Invoice"
                           >
                             <CheckCircle className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditInvoice(invoice.id)}
-                            title="Edit Invoice"
-                          >
-                            <Edit className="h-4 w-4" />
                           </Button>
                         </>
                       )}

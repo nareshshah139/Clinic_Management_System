@@ -438,69 +438,6 @@ describe('UsersController (Integration)', () => {
     });
   });
 
-  describe('/users/reset-password (POST)', () => {
-    const resetPasswordDto = {
-      email: 'john@example.com',
-    };
-
-    it('should generate reset token successfully', async () => {
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'user-123', email: 'john@example.com' });
-      mockPrisma.passwordResetToken.create.mockResolvedValue({ token: 'reset-token' });
-
-      const response = await request(app.getHttpServer())
-        .post('/users/reset-password')
-        .send(resetPasswordDto)
-        .expect(200);
-
-      expect(response.body).toEqual({
-        message: 'Password reset token generated',
-        token: 'reset-token',
-      });
-    });
-
-    it('should return 404 if user not found', async () => {
-      mockPrisma.user.findFirst.mockResolvedValue(null);
-
-      await request(app.getHttpServer())
-        .post('/users/reset-password')
-        .send(resetPasswordDto)
-        .expect(404);
-    });
-  });
-
-  describe('/users/set-password (POST)', () => {
-    const setPasswordDto = {
-      token: 'valid-token',
-      password: 'newPassword',
-      confirmPassword: 'newPassword',
-    };
-
-    it('should set password successfully', async () => {
-      mockPrisma.passwordResetToken.findFirst.mockResolvedValue({
-        userId: 'user-123',
-        expiresAt: new Date(Date.now() + 3600000),
-      });
-      mockPrisma.user.update.mockResolvedValue({ id: 'user-123' });
-      mockPrisma.passwordResetToken.delete.mockResolvedValue({});
-
-      const response = await request(app.getHttpServer())
-        .post('/users/set-password')
-        .send(setPasswordDto)
-        .expect(200);
-
-      expect(response.body).toEqual({ message: 'Password set successfully' });
-    });
-
-    it('should return 401 if token is invalid', async () => {
-      mockPrisma.passwordResetToken.findFirst.mockResolvedValue(null);
-
-      await request(app.getHttpServer())
-        .post('/users/set-password')
-        .send(setPasswordDto)
-        .expect(401);
-    });
-  });
-
   describe('/users/branches (POST)', () => {
     const createBranchDto = {
       name: 'Main Branch',

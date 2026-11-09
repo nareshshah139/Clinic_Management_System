@@ -32,6 +32,8 @@ build
 backups/
 DATABASE_BACKUP_SUMMARY.md
 *.sql
+# Prisma migrations are source, never backups.
+!backend/prisma/migrations/*/migration.sql
 !backend/prisma/migrations/20260503_add_pharmacy_purchase_invoice_drafts/migration.sql
 !backend/prisma/migrations/20260506_add_partner_daily_sales_sync/migration.sql
 !backend/prisma/migrations/20260506_add_pharmacy_purchase_ledger/migration.sql
@@ -62,3 +64,5 @@ prod-backup*.list
 /output/diagnostics/partner-recovery/
 
 /output/diagnostics/recovery-e2e/
+
+/output/pdf/
