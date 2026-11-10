@@ -428,6 +428,7 @@ async function call(page, method, url, body) {
       });
       sink.push(...refusals);
     };
+    const withoutReference = (text) => clean(text).replace(/\(Reference: [0-9a-f-]{36}\)/, "(Reference)");
     const paymentsOf = async (invoiceId) => {
       const invoice = await stack.db.newInvoice.findUnique({ where: { id: invoiceId }, include: { payments: { orderBy: { createdAt: "asc" } } } });
       return [invoice.received, invoice.balance, invoice.payments.map((p) => [p.mode, p.amount, p.reconStatus])];
@@ -452,7 +453,7 @@ async function call(page, method, url, body) {
       await dialog.getByRole("button", { name: "Record ₹600 payment" }).click();
       const alert = dialog.getByRole("alert");
       await alert.waitFor();
-      s.check("the server's refusal, word for word", clean(await alert.innerText()), `Bill ${suresh.invoiceNo} is already paid in full, so ₹600 cannot be recorded. Nothing was saved.`);
+      s.check("the server's refusal, word for word, with its support reference", withoutReference(await alert.innerText()), `Bill ${suresh.invoiceNo} is already paid in full, so ₹600 cannot be recorded. (Reference) Nothing was saved.`);
       await dialog.getByRole("region", { name: `Bill ${suresh.invoiceNo}` }).getByText("Paid", { exact: true }).waitFor();
       s.check("the bill reloads to what is stored", clean(await dialog.getByRole("region", { name: `Bill ${suresh.invoiceNo}` }).innerText()).includes("Total ₹600 Received ₹600 Due ₹0"), true);
       s.check("nothing is left to record", await dialog.getByRole("button", { name: /^Record/ }).count(), 0);
@@ -486,7 +487,7 @@ async function call(page, method, url, body) {
       const before = sink.length;
       await dialog.getByRole("button", { name: "Record ₹400 payment" }).click();
       await dialog.getByRole("alert").waitFor();
-      s.check("the server names what is still due", clean(await dialog.getByRole("alert").innerText()), `Only ₹100 is due on bill ${dressing.invoiceNo}, so ₹400 cannot be recorded. Nothing was saved.`);
+      s.check("the server names what is still due", withoutReference(await dialog.getByRole("alert").innerText()), `Only ₹100 is due on bill ${dressing.invoiceNo}, so ₹400 cannot be recorded. (Reference) Nothing was saved.`);
       await dialog.getByRole("button", { name: "Record ₹100 payment" }).waitFor();
       s.check("the amount moves to what is still due", await amount.inputValue(), "100");
       deliberate(before, "refused overpay");
