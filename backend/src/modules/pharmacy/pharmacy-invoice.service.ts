@@ -29,6 +29,7 @@ import {
   BillPricingError,
   PricedLine,
   priceBill,
+  storedLineValue,
 } from './bill-pricing';
 import { draftBillNumber, isIssuedBillNumber } from './bill-number';
 import { LEDGER_STATUSES, ledgerPaid } from './pharmacy-ledger';
@@ -1639,15 +1640,8 @@ export class PharmacyInvoiceService {
   ) {
     const quantity = this.toPositiveInt(item.quantity, 0);
     const unitPrice = this.money(item.unitPrice);
-    const grossAmount = this.money(quantity * unitPrice);
-    const discountAmount = this.money(item.discountAmount);
-    const billDiscountAmount = this.money(item.billDiscountAmount);
-    const taxableAmount = this.money(
-      grossAmount - discountAmount - billDiscountAmount,
-    );
+    const value = storedLineValue({ ...item, quantity, unitPrice });
     const taxPercent = this.money(item.taxPercent);
-    const taxAmount = this.money(item.taxAmount);
-    const totalAmount = this.money(item.totalAmount);
     const itemName =
       item.itemType === 'PACKAGE'
         ? item.package?.name
@@ -1687,13 +1681,13 @@ export class PharmacyInvoiceService {
       quantity,
       unitPrice,
       discountPercent: this.money(item.discountPercent),
-      discountAmount,
-      billDiscountAmount,
+      discountAmount: value.lineDiscount,
+      billDiscountAmount: value.billDiscount,
       taxPercent,
-      taxAmount,
-      taxableAmount,
-      grossAmount,
-      totalAmount,
+      taxAmount: value.tax,
+      taxableAmount: value.taxable,
+      grossAmount: value.gross,
+      totalAmount: this.money(item.totalAmount),
       dosage: item.dosage,
       frequency: item.frequency,
       duration: item.duration,

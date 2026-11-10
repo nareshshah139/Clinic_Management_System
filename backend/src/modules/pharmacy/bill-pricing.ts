@@ -100,3 +100,25 @@ export function priceBill(lines: PricingLine[], discount?: BillDiscount | null):
     total: rupees(sum(taxable) + sum(tax)),
   };
 }
+
+export type StoredLine = {
+  quantity: number;
+  unitPrice: number;
+  discountAmount: number;
+  billDiscountAmount?: number | null;
+  taxAmount: number;
+  totalAmount: number;
+};
+
+/**
+ * What a stored bill line was charged, in rupees: tax was charged on the value after the line's own discount
+ * and its share of the bill discount, so taxable + tax is the line total. Every reader of line values uses this.
+ */
+export function storedLineValue(line: StoredLine) {
+  const gross = rupees(paise(Number(line.quantity || 0) * Number(line.unitPrice || 0)));
+  const lineDiscount = rupees(paise(Number(line.discountAmount || 0)));
+  const billDiscount = rupees(paise(Number(line.billDiscountAmount || 0)));
+  const taxable = rupees(paise(gross - lineDiscount - billDiscount));
+  const tax = rupees(paise(Number(line.taxAmount || 0)));
+  return { gross, lineDiscount, billDiscount, discount: rupees(paise(lineDiscount + billDiscount)), taxable, tax, total: rupees(paise(taxable + tax)) };
+}

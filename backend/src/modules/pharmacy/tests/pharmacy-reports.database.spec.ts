@@ -520,6 +520,65 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
     ]);
   });
 
+  it('reports a bill-discounted bill at the value the tax was charged on, in every GST report', async () => {
+    // 1000 at 12% with a 10% bill discount: taxable 900, GST 108, total 1008.
+    await db.pharmacyInvoice.create({
+      data: {
+        id: 'bill-discounted',
+        invoiceNumber: 'PHI-2026-700',
+        patientId: 'patient-branch',
+        doctorId: 'doc',
+        branchId: 'branch',
+        subtotal: 1000,
+        discountAmount: 100,
+        billDiscountKind: 'PERCENT',
+        billDiscountValue: 10,
+        billDiscountAmount: 100,
+        taxAmount: 108,
+        totalAmount: 1008,
+        paymentMethod: 'CASH',
+        billingName: 'Meera Shah',
+        billingPhone: '9876543210',
+        status: 'CONFIRMED',
+        invoiceDate: new Date('2026-11-12T05:00:00Z'),
+        createdAt: new Date('2026-11-12T05:00:00Z'),
+        items: {
+          create: [
+            {
+              drugId: 'drug',
+              inventoryItemId: 'batch',
+              quantity: 1,
+              unitPrice: 1000,
+              discountAmount: 0,
+              billDiscountAmount: 100,
+              taxPercent: 12,
+              taxAmount: 108,
+              totalAmount: 1008,
+            },
+          ],
+        },
+      },
+    });
+    const day = q('2026-11-12');
+    const one = async (id: any, sectionId?: string) => rowsOf(await reports.report(id, day, actor), sectionId)[0];
+    const gstr3b: any = await reports.report('gstr-3b', day, actor);
+    expect({
+      register: await one('sales-register'),
+      bills: await one('sales-bills'),
+      b2cs: await one('gstr-1', 'b2cs'),
+      hsn: await one('hsn-wise'),
+      gstr3b: gstr3b.sections[0].rows.find((r: any) => r.key === '3.1a').cells,
+      dayWise: await one('day-wise-summary'),
+    }).toMatchObject({
+      register: { billNo: 'PHI-2026-700', gross: 1000, discount: 100, taxable: 900, cgst: 54, sgst: 54, total: 1008 },
+      bills: { 'r12.taxable': 900, 'r12.cgst': 54, 'r12.sgst': 54 },
+      b2cs: { rate: 12, taxable: 900, cgst: 54, sgst: 54 },
+      hsn: { hsn: '30049099', taxable: 900 },
+      gstr3b: { taxable: 900, cgst: 54, sgst: 54 },
+      dayWise: { 'r12.taxable': 900, 'r12.cgst': 54, 'total.amount': 1008 },
+    });
+  });
+
   it('appends counts by sequence and refuses a stale or racing count without overwriting', async () => {
     const day = '2026-11-05';
     const first = await reports.recordCount(
