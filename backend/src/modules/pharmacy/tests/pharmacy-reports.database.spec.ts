@@ -491,7 +491,7 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
       db.newInvoice.create({
         data: {
           id, invoiceNo: id, branchId, patientId: `patient-${branchId}`, total, balance: total, status, createdAt: new Date(createdAt),
-          payments: { create: payments.map(([mode, amount, at]) => ({ mode: mode as any, amount, createdAt: new Date(at) })) },
+          payments: { create: payments.map(([mode, amount, at]) => ({ mode: mode as any, amount, reconStatus: 'COMPLETED', createdAt: new Date(at) })) },
         },
       });
     await clinicBill('INV-C1', 'branch', '2026-11-05T04:00:00Z', 500, [['CASH', 500, '2026-11-05T04:05:00Z']]);

@@ -193,6 +193,10 @@ export class PaymentDto {
   notes?: string;
 
   @IsOptional()
+  @IsString()
+  gateway?: string;
+
+  @IsOptional()
   @IsObject()
   gatewayResponse?: Record<string, any>;
 

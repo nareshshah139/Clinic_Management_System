@@ -140,7 +140,7 @@ describe('suggested-items-never-alias-caller-data', () => {
   it('editing a suggested medication sig leaves the source visit unchanged', () => {
     const source = visit();
     const suggestion = buildLearnedMedicationSuggestion({
-      drugName: 'Doxycycline',
+      drugName: 'Doxycycline 100 mg',
       diagnosis: 'Acne vulgaris',
       patientVisits: [source],
     });
@@ -206,13 +206,13 @@ describe('suggested-sig-belongs-to-the-typed-drug', () => {
     expect(suggestion?.item.dosage).toBe('5');
   });
 
-  it.failing('target: Cetirizine does not receive the sig of Levocetirizine', () => {
+  it('Cetirizine does not receive the sig of Levocetirizine', () => {
     expect(
       buildLearnedMedicationSuggestion({ drugName: 'Cetirizine', diagnosis: 'Acne vulgaris', patientVisits: history('Levocetirizine') }),
     ).toBeNull();
   });
 
-  it.failing('target: Metformin does not receive the sig of a Glimepiride + Metformin combination', () => {
+  it('Metformin does not receive the sig of a Glimepiride + Metformin combination', () => {
     expect(
       buildLearnedMedicationSuggestion({
         drugName: 'Metformin',

@@ -136,6 +136,26 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(api.processPayment).not.toHaveBeenCalled();
   });
 
+  it('shows the server’s refusal and the bill as it now stands when the payment was already taken elsewhere', async () => {
+    renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', billing: bill('DUE', 500, 300, true) })]);
+    api.getInvoiceById.mockResolvedValue({ id: 'cinv1', invoiceNo: 'INV-1', total: 500, received: 300, balance: 200, items: [], payments: [] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Review bill: ₹500, ₹200 due' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill for Ravi Kumar' });
+    await within(dialog).findByRole('textbox', { name: 'Amount received' });
+
+    api.processPayment.mockRejectedValue({ status: 400, body: { message: 'Bill INV-1 is already paid in full, so ₹200 cannot be recorded.' } });
+    api.getInvoiceById.mockResolvedValue({ id: 'cinv1', invoiceNo: 'INV-1', total: 500, received: 500, balance: 0, items: [], payments: [] });
+    api.getDoctorSchedule.mockResolvedValue({ appointments: [row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', billing: bill('PAID', 500, 500, false) })], billingAccess: ALL });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record ₹200 payment' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Bill INV-1 is already paid in full, so ₹200 cannot be recorded. Nothing was saved.');
+    await waitFor(() => expect(within(dialog).getByRole('region', { name: 'Bill INV-1' })).toHaveTextContent('Total₹500Received₹500Due₹0'));
+    expect(within(dialog).queryByRole('button', { name: /Record/ })).toBeNull();
+    expect(stableToast).not.toHaveBeenCalled();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(await screen.findByRole('button', { name: 'Review bill: ₹500, paid' })).toBeInTheDocument();
+  });
+
   it('shows the bill type but no money to a viewer who cannot read bills', async () => {
     renderDay([row('a1', '09:00-09:15', 'Meera Shah', { billType: 'FIRST_CONSULTATION' })], { read: false, createBill: false, takePayment: false });
     await screen.findByRole('button', { name: 'Meera Shah, 09:00-09:15, Confirmed' });

@@ -1032,7 +1032,7 @@ export class PharmacyReportsService {
   private async clinicBills(branchId: string, day: string): Promise<ClinicBill[]> {
     const range = clinicDayRange(day, day);
     const bills = await this.prisma.newInvoice.findMany({
-      where: { branchId, OR: [{ createdAt: range }, { payments: { some: { createdAt: range } } }] },
+      where: { branchId, OR: [{ createdAt: range }, { payments: { some: { createdAt: range, reconStatus: 'COMPLETED' } } }] },
       select: {
         id: true,
         invoiceNo: true,
@@ -1040,7 +1040,7 @@ export class PharmacyReportsService {
         status: true,
         total: true,
         patient: { select: { name: true } },
-        payments: { select: { mode: true, amount: true, createdAt: true } },
+        payments: { where: { reconStatus: 'COMPLETED' }, select: { mode: true, amount: true, createdAt: true } },
       },
     });
     return bills.map((bill) => ({
@@ -1059,7 +1059,9 @@ export class PharmacyReportsService {
    * @cc [owner:nareshshah139,label:product;security] daily-collection-whole-day
    * Daily Collection MUST show the clinic's consultation and procedure takings and the whole-day
    * total beside the pharmacy collection to a viewer the clinic bill routes admit, and to no one
-   * else. The cash count MUST stay a reconciliation of the pharmacy's money only.
+   * else. The clinic takings MUST count only COMPLETED payments, as the revenue report does, so a
+   * gateway payment counts once confirmed. The cash count MUST stay a reconciliation of the
+   * pharmacy's money only.
    */
   async dailyCollection(
     day: string,

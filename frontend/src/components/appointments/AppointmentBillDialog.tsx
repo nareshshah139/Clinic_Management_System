@@ -109,16 +109,23 @@ export function AppointmentBillDialog({
     }
   }, [invoiceIds]);
 
-  useEffect(() => {
+  const resetForm = useCallback(() => {
     if (!appointment) return;
-    setInvoices(null);
-    setError(null);
     setAdding(false);
     setLine(defaultBillLine(appointment.billType, appointment.visitType === 'PROCEDURE' ? appointment.notes : undefined));
     setFee('');
     setPaidNow(null);
     setMode('CASH');
-    void load();
+  }, [appointment]);
+
+  useEffect(() => {
+    setInvoices(null);
+    setError(null);
+    resetForm();
+  }, [appointment?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (appointment) void load();
   }, [appointment, load]);
 
   const withDue = (invoices ?? []).filter((i) => i.balance > 0);
@@ -141,6 +148,7 @@ export function AppointmentBillDialog({
 
   const finish = async (message: string) => {
     toast({ variant: 'success', title: message });
+    resetForm();
     await onChanged();
   };
 
@@ -182,6 +190,7 @@ export function AppointmentBillDialog({
       await finish(`${rupee(paymentValue)} ${MODE_LABEL[mode]} recorded on ${payInvoice.invoiceNo}`);
     } catch (e) {
       setError(`${getErrorMessage(e)} Nothing was saved.`);
+      await onChanged();
     } finally {
       setSaving(false);
     }

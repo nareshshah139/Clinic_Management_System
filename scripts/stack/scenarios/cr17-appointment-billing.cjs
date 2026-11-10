@@ -407,6 +407,131 @@ async function call(page, method, url, body) {
       s.ok("no refused calls", n.refused.length === 0, n.refused);
       await s.shot(n.page, "nurse-calendar-1280");
     });
+
+    // Review fix: a desk payment is money in hand (COMPLETED), the server caps it at what is due, and
+    // the dialog shows the server's refusal when another desk took the money first.
+    const attempt = (page, method, url, body) =>
+      page.evaluate(async ({ method, url, body }) => {
+        const response = await fetch(`/api${url}`, { method, credentials: "include", headers: { "Content-Type": "application/json" }, body: body && JSON.stringify(body) });
+        return { status: response.status, body: await response.json().catch(() => null) };
+      }, { method, url, body });
+    const otherDesk = async () => {
+      const o = await open("admin", DESKTOP);
+      await o.page.goto(`${stack.base}/dashboard`, { waitUntil: "domcontentloaded" });
+      return o;
+    };
+    const deliberate = (from, label) => {
+      const refusals = sink.splice(from).filter((e) => {
+        const expected = /status of 400/.test(e);
+        if (expected) console.log(`    NOTE deliberate ${label}: ${e}`);
+        return !expected;
+      });
+      sink.push(...refusals);
+    };
+    const withoutReference = (text) => clean(text).replace(/\(Reference: [0-9a-f-]{36}\)/, "(Reference)");
+    const paymentsOf = async (invoiceId) => {
+      const invoice = await stack.db.newInvoice.findUnique({ where: { id: invoiceId }, include: { payments: { orderBy: { createdAt: "asc" } } } });
+      return [invoice.received, invoice.balance, invoice.payments.map((p) => [p.mode, p.amount, p.reconStatus])];
+    };
+
+    await scenario("reception 1280: a payment another desk already took is refused in the server's words, then shows Paid", async (s) => {
+      const desk = await otherDesk();
+      s.opened.push(desk);
+      const suresh = await call(desk.page, "POST", "/billing/invoices", {
+        patientId: "cr17-suresh", appointmentId: "cr17-a-suresh",
+        items: [{ name: "Review consultation", description: "Review consultation", quantity: 1, unitPrice: 600, gstRate: 0, discount: 0 }],
+      });
+      const o = await open("reception", DESKTOP);
+      s.opened.push(o);
+      await calendar(o.page);
+      await chipOf(o.page, "Suresh Babu").click();
+      const dialog = o.page.getByRole("dialog", { name: "Bill for Suresh Babu" });
+      await dialog.getByText("Review consultation").waitFor();
+      s.check("the amount starts at what is due", await dialog.getByRole("textbox", { name: "Amount received" }).inputValue(), "600");
+      await call(desk.page, "POST", "/billing/payments", { invoiceId: suresh.id, amount: 600, method: "CASH" });
+      const before = sink.length;
+      await dialog.getByRole("button", { name: "Record ₹600 payment" }).click();
+      const alert = dialog.getByRole("alert");
+      await alert.waitFor();
+      s.check("the server's refusal, word for word, with its support reference", withoutReference(await alert.innerText()), `Bill ${suresh.invoiceNo} is already paid in full, so ₹600 cannot be recorded. (Reference) Nothing was saved.`);
+      await dialog.getByRole("region", { name: `Bill ${suresh.invoiceNo}` }).getByText("Paid", { exact: true }).waitFor();
+      s.check("the bill reloads to what is stored", clean(await dialog.getByRole("region", { name: `Bill ${suresh.invoiceNo}` }).innerText()).includes("Total ₹600 Received ₹600 Due ₹0"), true);
+      s.check("nothing is left to record", await dialog.getByRole("button", { name: /^Record/ }).count(), 0);
+      deliberate(before, "refused payment");
+      await s.shot(o.page, "reception-refused-payment-1280");
+      s.check("one completed payment in the database", await paymentsOf(suresh.id), [600, 0, [["CASH", 600, "COMPLETED"]]]);
+      const extra = await attempt(desk.page, "POST", "/billing/payments", { invoiceId: suresh.id, amount: 1, method: "CASH" });
+      s.check("the API refuses a rupee more", [extra.status, extra.body?.message], [400, `Bill ${suresh.invoiceNo} is already paid in full, so ₹1 cannot be recorded.`]);
+      deliberate(before, "API overpay");
+      await o.page.keyboard.press("Escape");
+      await chipOf(o.page, "Suresh Babu").filter({ hasText: "₹600 · Paid" }).waitFor();
+      s.ok("no refused calls", o.refused.length === 0, o.refused);
+    });
+
+    await scenario("reception 390: a part paid elsewhere is refused with what is still due, and paying that settles the bill", async (s) => {
+      const desk = await otherDesk();
+      s.opened.push(desk);
+      const dressing = await call(desk.page, "POST", "/billing/invoices", {
+        patientId: "cr17-meera", appointmentId: "cr17-a-meera",
+        items: [{ name: "Dressing", description: "Dressing", quantity: 1, unitPrice: 400, gstRate: 0, discount: 0 }],
+      });
+      const o = await open("reception", PHONE);
+      s.opened.push(o);
+      await calendar(o.page);
+      await chipOf(o.page, "Meera Shah").click();
+      const dialog = o.page.getByRole("dialog", { name: "Bill for Meera Shah" });
+      await dialog.getByText("Dressing").waitFor();
+      const amount = dialog.getByRole("textbox", { name: "Amount received" });
+      s.check("the amount starts at the new bill's due", await amount.inputValue(), "400");
+      await call(desk.page, "POST", "/billing/payments", { invoiceId: dressing.id, amount: 300, method: "UPI" });
+      const before = sink.length;
+      await dialog.getByRole("button", { name: "Record ₹400 payment" }).click();
+      await dialog.getByRole("alert").waitFor();
+      s.check("the server names what is still due", withoutReference(await dialog.getByRole("alert").innerText()), `Only ₹100 is due on bill ${dressing.invoiceNo}, so ₹400 cannot be recorded. (Reference) Nothing was saved.`);
+      await dialog.getByRole("button", { name: "Record ₹100 payment" }).waitFor();
+      s.check("the amount moves to what is still due", await amount.inputValue(), "100");
+      deliberate(before, "refused overpay");
+      await dialog.getByRole("alert").scrollIntoViewIfNeeded();
+      const box = await dialog.boundingBox();
+      s.ok("the bill fits the phone", box && box.x >= 0 && box.x + box.width <= 390, box);
+      s.ok("no sideways scroll", await noSideways(o.page));
+      await s.shot(o.page, "reception-refused-overpay-390");
+      await dialog.getByRole("button", { name: "Record ₹100 payment" }).click();
+      await dialog.getByRole("region", { name: `Bill ${dressing.invoiceNo}` }).getByText("Paid", { exact: true }).waitFor();
+      s.check("the refusal clears once a payment goes through", await dialog.getByRole("alert").count(), 0);
+      s.check("both payments completed in the database", await paymentsOf(dressing.id), [400, 0, [["UPI", 300, "COMPLETED"], ["CASH", 100, "COMPLETED"]]]);
+      await s.shot(o.page, "reception-settled-after-refusal-390");
+      s.ok("no refused calls", o.refused.length === 0, o.refused);
+    });
+
+    await scenario("admin 1280: the revenue report counts the desk payments that Daily Collection shows", async (s) => {
+      const o = await open("admin", DESKTOP);
+      s.opened.push(o);
+      await o.page.goto(`${stack.base}/dashboard`, { waitUntil: "domcontentloaded" });
+      const window = `startDate=${encodeURIComponent(new Date(Date.now() - 86400000).toISOString())}&endDate=${encodeURIComponent(new Date(Date.now() + 3600000).toISOString())}`;
+      const revenue = await call(o.page, "GET", `/reports/revenue?${window}&includePaymentBreakdown=true`);
+      const collection = await call(o.page, "GET", `/pharmacy/reports/daily-collection?from=${today}`);
+      const summary = await call(o.page, "GET", "/billing/payments/summary");
+      s.check("revenue report, Daily Collection's clinic block and the payment summary agree", [revenue.totalRevenue, collection.clinic.net, summary.totalAmount], [6000, 6000, 6000]);
+      const byMode = (lines) => lines.filter(([, amount]) => amount).sort(([a], [b]) => a.localeCompare(b));
+      s.check("by mode", byMode(revenue.paymentBreakdown.map((m) => [m.mode, m.amount])), [["CARD", 500], ["CASH", 4700], ["UPI", 800]]);
+      s.check("Daily Collection by mode", byMode(collection.clinic.modes.map((m) => [m.mode, m.net])), [["CARD", 500], ["CASH", 4700], ["UPI", 800]]);
+      s.check("no clinic payment is left pending", await stack.db.newPayment.count({ where: { reconStatus: { not: "COMPLETED" } } }), 0);
+      await o.page.goto(`${stack.base}/dashboard/reports`, { waitUntil: "domcontentloaded" });
+      const dates = o.page.locator('input[type="date"]');
+      await dates.nth(1).waitFor({ timeout: 120000 });
+      const revenueCard = () => o.page.getByText("Total Revenue", { exact: true }).first().locator("xpath=../..");
+      await revenueCard().waitFor({ timeout: 60000 }).catch(() => {});
+      const defaultRevenue = clean(await revenueCard().innerText().catch(() => "not shown"));
+      console.log(`    NOTE revenue page with its default range ${await dates.nth(0).inputValue()}..${await dates.nth(1).inputValue()}: ${defaultRevenue}`);
+      await dates.nth(1).fill(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+      await o.page.getByRole("button", { name: "Generate Report" }).click();
+      await o.page.getByText("Total Revenue", { exact: true }).first().locator("xpath=../..").filter({ hasText: "6,000" }).waitFor({ timeout: 60000 });
+      s.ok("the Reports page shows the same ₹6,000", clean(await revenueCard().innerText()).includes("6,000"));
+      await revenueCard().scrollIntoViewIfNeeded();
+      await s.shot(o.page, "admin-revenue-report-1280");
+      s.ok("no refused calls", o.refused.length === 0, o.refused);
+    });
   } finally {
     fs.writeFileSync(path.join(out, "cr17-results.json"), JSON.stringify(results, null, 2));
     console.log("\nSUMMARY");
