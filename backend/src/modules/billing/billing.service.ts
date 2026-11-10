@@ -477,9 +477,7 @@ export class BillingService {
           gateway: null,
           reconStatus: 'COMPLETED',
         },
-        include: {
-          invoice: { select: { id: true, invoiceNo: true, total: true } },
-        },
+        include: PAYMENT_INVOICE,
       });
     });
   }
