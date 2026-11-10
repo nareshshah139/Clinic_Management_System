@@ -115,20 +115,6 @@
     ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
-    "testPathIgnorePatterns": [
-      "<rootDir>/modules/appointments/appointments.controller.spec.ts",
-      "<rootDir>/modules/appointments/tests/appointments.controller.spec.ts",
-      "<rootDir>/modules/appointments/tests/appointments.integration.spec.ts",
-      "<rootDir>/modules/appointments/tests/appointments.service.spec.ts",
-      "<rootDir>/modules/billing/tests/billing.integration.spec.ts",
-      "<rootDir>/modules/billing/tests/billing.service.spec.ts",
-      "<rootDir>/modules/prescriptions/tests/prescriptions.integration.spec.ts",
-      "<rootDir>/modules/users/tests/users.integration.spec.ts",
-      "<rootDir>/modules/users/tests/users.service.spec.ts",
-      "<rootDir>/modules/visits/tests/visits.controller.spec.ts",
-      "<rootDir>/modules/visits/tests/visits.e2e.spec.ts",
-      "<rootDir>/modules/visits/tests/visits.integration.spec.ts"
-    ],
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
