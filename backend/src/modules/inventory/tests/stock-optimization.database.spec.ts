@@ -236,6 +236,7 @@ databaseTests('Stock optimization: free goods, unmapped products and concurrent 
   let optimization: InventoryOptimizationService;
   const branchId = 'clinic';
   const MED = '27AAACM4321C1Z2';
+  const LEG = '27AAJCL2468K1Z7';
   const pharmacist = { id: 'kiran', branchId, role: 'PHARMACIST' };
   const now = Date.now();
   const ago = (days: number) => new Date(now - days * DAY);
@@ -248,7 +249,7 @@ databaseTests('Stock optimization: free goods, unmapped products and concurrent 
     await db.user.create({
       data: { id: 'kiran', firstName: 'Kiran', lastName: 'Test', email: 'kiran@example.invalid', password: 'x', role: 'PHARMACIST', branchId, permissions: JSON.stringify(ROLE_PERMISSIONS.PHARMACIST) },
     });
-    for (const [id, name, gstin] of [['slv', 'Shree Laxmi Vitality Pharma', SLV], ['apx', 'Apex Medico Distributors', APX], ['med', 'Medline Traders', MED]])
+    for (const [id, name, gstin] of [['slv', 'Shree Laxmi Vitality Pharma', SLV], ['apx', 'Apex Medico Distributors', APX], ['med', 'Medline Traders', MED], ['leg', 'Legacy Pharma', LEG]])
       await db.supplier.create({ data: { id, branchId, name, gstNumber: gstin } });
     const item = (id: string, name: string, stock: number, age: number, extra: Record<string, unknown> = {}) =>
       db.inventoryItem.create({
@@ -282,6 +283,14 @@ databaseTests('Stock optimization: free goods, unmapped products and concurrent 
     await bill('MED/1', MED, 'Medline Traders', 120, 'acnosis-b', 30, 0, 60);
     await bill('MED/2', MED, 'Medline Traders', 190, 'acnosis-15', 30, 0, 60);
     await db.stockTransaction.create({ data: { branchId, itemId: 'acnosis-a', userId: 'kiran', type: 'SALE', quantity: 1, quantityDelta: -1, unitPrice: 30, totalAmount: 30, createdAt: ago(1) } });
+    await item('legacy', 'Tab. Legacy 5 mg', 5, 200);
+    await bill('LEG/1', LEG, 'Legacy Pharma', 150, 'legacy', 50, 10, 20);
+    await db.inventoryWorkflowDocument.create({
+      data: {
+        branchId, kind: 'SUPPLIER_RETURN', status: 'CHALLAN', reference: 'RET-LEGACY', requestKey: 'legacy-return', createdBy: 'kiran', supplierId: 'leg', supplierGstin: LEG,
+        payload: { lines: [{ inventoryId: 'legacy', sourceLineId: lines['LEG/1'], quantity: 55 }] },
+      },
+    });
     await item('race', 'Tab. Race 5 mg', 100, 200);
     await bill('APX/RACE/1', APX, 'Apex Medico Distributors', 150, 'race', 100, 0, 20);
     optimization = new InventoryOptimizationService(db as any, new InventoryWorkflowService(db as any));
@@ -300,6 +309,11 @@ databaseTests('Stock optimization: free goods, unmapped products and concurrent 
       ['bonus', 100, 10, 20, 2000, 240, 2240, lines['SLV/FREE/1']],
     ]);
     expect(draft.totalAmount).toBe(2240);
+  });
+
+  it('takes paid units an earlier return listed beyond those bought from the free ones: 50 + 10 bought, 55 sent back, 5 free left at no value', async () => {
+    const run = await optimization.run(pharmacist);
+    expect(run.returnable.find((g) => g.gstin === LEG)?.rows.map((r) => [r.quantity, r.freeQuantity, r.value])).toEqual([[5, 5, 0]]);
   });
 
   it('judges an unmapped batch on the sales of its sibling batches with the same name, unit and pack', async () => {
