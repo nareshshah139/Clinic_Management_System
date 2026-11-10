@@ -229,3 +229,91 @@ databaseTests('Stock optimization on PostgreSQL', () => {
     expect((await workflow.transition(actors.admin, fits.id, { action: 'CHALLAN', version: fits.version })).status).toBe('CHALLAN');
   });
 });
+
+databaseTests('Stock optimization: free goods, unmapped products and concurrent drafts on PostgreSQL', () => {
+  let fixture: Awaited<ReturnType<typeof localDatabase>>;
+  let db: PrismaClient;
+  let optimization: InventoryOptimizationService;
+  const branchId = 'clinic';
+  const MED = '27AAACM4321C1Z2';
+  const pharmacist = { id: 'kiran', branchId, role: 'PHARMACIST' };
+  const now = Date.now();
+  const ago = (days: number) => new Date(now - days * DAY);
+  const lines: Record<string, string> = {};
+
+  beforeAll(async () => {
+    fixture = await localDatabase(process.env.PURCHASE_RETURNS_TEST_DATABASE_URL!);
+    db = fixture.prisma;
+    await db.branch.create({ data: { id: branchId, name: 'Skin Care Clinic', address: 'Synthetic' } });
+    await db.user.create({
+      data: { id: 'kiran', firstName: 'Kiran', lastName: 'Test', email: 'kiran@example.invalid', password: 'x', role: 'PHARMACIST', branchId, permissions: JSON.stringify(ROLE_PERMISSIONS.PHARMACIST) },
+    });
+    for (const [id, name, gstin] of [['slv', 'Shree Laxmi Vitality Pharma', SLV], ['apx', 'Apex Medico Distributors', APX], ['med', 'Medline Traders', MED]])
+      await db.supplier.create({ data: { id, branchId, name, gstNumber: gstin } });
+    const item = (id: string, name: string, stock: number, age: number, extra: Record<string, unknown> = {}) =>
+      db.inventoryItem.create({
+        data: {
+          id, branchId, name, type: 'MEDICINE', costPrice: 18, sellingPrice: 30, unit: 'STRIPS', currentStock: stock, gstRate: 12, packSize: 10, packUnit: 'tablets',
+          batchNumber: `${id.toUpperCase()}-1`, expiryDate: new Date('2027-09-30T00:00:00Z'), createdAt: ago(age), ...extra,
+        },
+      });
+    const bill = async (key: string, gstin: string, name: string, age: number, inventoryItemId: string, quantity: number, free: number, rate: number) => {
+      const invoice = await db.pharmacyPurchaseInvoice.create({
+        data: {
+          branchId, createdBy: 'kiran', distributorName: name, distributorGstin: gstin, distributorDlNo: 'synthetic', invoiceNumber: key, invoiceDate: ago(age),
+          billType: 'CREDIT', doctorNameOrRegNo: 'Synthetic', status: 'STOCK_COMMITTED', stockCommittedAt: ago(age), grossAmount: 1, taxableAmount: 1, totalGst: 0, netPayable: 1,
+        },
+      });
+      lines[key] = (
+        await db.pharmacyPurchaseInvoiceItem.create({
+          data: {
+            purchaseInvoiceId: invoice.id, lineNumber: 1, productName: inventoryItemId, manufacturer: 'Synthetic', packSize: '10', packUnitType: 'STRIP',
+            hsnCode: '3004', batchNumber: `${inventoryItemId.toUpperCase()}-1`, expiryMonth: 9, expiryYear: 2027, quantityPurchased: quantity, freeQuantity: free, mrp: 30,
+            discountPercent: 0, purchaseRate: rate, taxableAmount: quantity * rate, cgstPercent: 6, sgstPercent: 6, igstPercent: 0, gstAmount: 0, lineTotal: 0, inventoryItemId,
+          },
+        })
+      ).id;
+    };
+    await item('bonus', 'Tab. Bonus 10 mg', 110, 130);
+    await bill('SLV/FREE/1', SLV, 'Shree Laxmi Vitality Pharma', 120, 'bonus', 100, 10, 20);
+    await item('acnosis-a', 'Tab. Acnosis', 40, 200);
+    await item('acnosis-b', 'Tab.  ACNOSIS ', 30, 120);
+    await item('acnosis-15', 'Tab. Acnosis', 30, 200, { packSize: 15 });
+    await bill('MED/1', MED, 'Medline Traders', 120, 'acnosis-b', 30, 0, 60);
+    await bill('MED/2', MED, 'Medline Traders', 190, 'acnosis-15', 30, 0, 60);
+    await db.stockTransaction.create({ data: { branchId, itemId: 'acnosis-a', userId: 'kiran', type: 'SALE', quantity: 1, quantityDelta: -1, unitPrice: 30, totalAmount: 30, createdAt: ago(1) } });
+    await item('race', 'Tab. Race 5 mg', 100, 200);
+    await bill('APX/RACE/1', APX, 'Apex Medico Distributors', 150, 'race', 100, 0, 20);
+    optimization = new InventoryOptimizationService(db as any, new InventoryWorkflowService(db as any));
+  }, 180000);
+
+  afterAll(async () => {
+    await fixture?.cleanup();
+  });
+
+  it('values 100 bought + 10 free at PTR 20 as 2000 and drafts the free units at no value: 2000 + 240 GST', async () => {
+    const run = await optimization.run(pharmacist);
+    const slv = run.returnable.find((g) => g.gstin === SLV)!;
+    expect([slv.value, slv.blocker, slv.rows.map((r) => [r.name, r.quantity, r.freeQuantity, r.value])]).toEqual([2000, null, [['Tab. Bonus 10 mg', 110, 10, 2000]]]);
+    const draft = await optimization.createReturnDraft(pharmacist, { distributorGstin: SLV, requestKey: randomUUID() });
+    expect((draft.payload as any).lines.map((l: any) => [l.inventoryId, l.quantity, l.freeQuantity, l.unitPrice, l.taxable, l.tax, l.total, l.sourceLineId])).toEqual([
+      ['bonus', 100, 10, 20, 2000, 240, 2240, lines['SLV/FREE/1']],
+    ]);
+    expect(draft.totalAmount).toBe(2240);
+  });
+
+  it('judges an unmapped batch on the sales of its sibling batches with the same name, unit and pack', async () => {
+    const run = await optimization.run(pharmacist);
+    expect(run.returnable.find((g) => g.gstin === MED)?.rows.map((r) => [r.inventoryId, r.quantity])).toEqual([['acnosis-15', 30]]);
+  });
+
+  it('creates one draft when two windows press Create return draft at once with different request keys', async () => {
+    const pressed = await Promise.allSettled([
+      optimization.createReturnDraft(pharmacist, { distributorGstin: APX, requestKey: randomUUID() }),
+      optimization.createReturnDraft(pharmacist, { distributorGstin: APX, requestKey: randomUUID() }),
+    ]);
+    expect(pressed.map((p) => p.status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect(pressed.flatMap((p) => (p.status === 'rejected' ? [String(p.reason.message)] : []))).toEqual(['Every batch is already on a return draft']);
+    expect(await db.inventoryWorkflowDocument.count({ where: { branchId, kind: 'SUPPLIER_RETURN', supplierId: 'apx' } })).toBe(1);
+  });
+});

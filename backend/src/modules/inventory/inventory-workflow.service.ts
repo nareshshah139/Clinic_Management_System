@@ -365,6 +365,14 @@ export class InventoryWorkflowService {
     dto: SaveWorkflowDocumentDto,
     id?: string,
   ) {
+    await this.checkDocument(actor, dto, id);
+    return this.transaction((tx) => this.writeDocument(tx, actor, dto, id));
+  }
+  async checkDocument(
+    actor: WorkflowActor,
+    dto: SaveWorkflowDocumentDto,
+    id?: string,
+  ) {
     if (!WORKFLOW_KINDS.includes(dto.kind))
       throw new BadRequestException('Unknown inventory document kind');
     await this.authorize(actor, dto.kind, true);
@@ -372,135 +380,141 @@ export class InventoryWorkflowService {
       throw new BadRequestException('Reference and request key are required');
     if (!id && clean(dto.requestKey).startsWith('cycle:'))
       throw new BadRequestException('Request keys starting with "cycle:" are reserved for planned stock counts');
-    return this.transaction(async (tx) => {
-      const old = id
-        ? await tx.inventoryWorkflowDocument.findFirst({
-            where: { id, branchId: actor.branchId },
-          })
-        : null;
-      if (id && !old) throw new NotFoundException('Document not found');
-      if (old?.kind === 'COUNT')
-        throw new BadRequestException('Enter counted quantities from Stock counts › My counts');
+  }
+  /** Saves a checked document inside the caller's transaction. */
+  async writeDocument(
+    tx: any,
+    actor: WorkflowActor,
+    dto: SaveWorkflowDocumentDto,
+    id?: string,
+  ) {
+    const old = id
+      ? await tx.inventoryWorkflowDocument.findFirst({
+          where: { id, branchId: actor.branchId },
+        })
+      : null;
+    if (id && !old) throw new NotFoundException('Document not found');
+    if (old?.kind === 'COUNT')
+      throw new BadRequestException('Enter counted quantities from Stock counts › My counts');
+    if (
+      old &&
+      (old.kind !== dto.kind || !['DRAFT', 'CHALLAN'].includes(old.status))
+    )
+      throw new BadRequestException(
+        'This document is locked. Use a linked correction.',
+      );
+    if (old && old.version !== dto.version)
+      throw new ConflictException(
+        'The document changed. Reload before saving.',
+      );
+    if (!old) {
+      const duplicate = await tx.inventoryWorkflowDocument.findUnique({
+        where: {
+          branchId_requestKey: {
+            branchId: actor.branchId,
+            requestKey: dto.requestKey,
+          },
+        },
+      });
+      if (duplicate) {
+        await this.authorize(actor, duplicate.kind);
+        if (duplicate.kind !== dto.kind)
+          throw new ConflictException('This request key already identifies another document kind. Reload its saved outcome.');
+        return this.plain(duplicate);
+      }
+    }
+    const supplier = dto.supplierId
+      ? await tx.supplier.findFirst({
+          where: {
+            id: dto.supplierId,
+            branchId: actor.branchId,
+            isActive: true,
+          },
+        })
+      : null;
+    if (dto.supplierId && !supplier)
+      throw new BadRequestException(
+        'Select an active supplier in this branch',
+      );
+    for (const [value, model] of [
+      [dto.sourceId, 'inventoryWorkflowDocument'],
+      [dto.purchaseInvoiceId, 'pharmacyPurchaseInvoice'],
+      [dto.salesInvoiceId, 'pharmacyInvoice'],
+    ] as const) {
       if (
-        old &&
-        (old.kind !== dto.kind || !['DRAFT', 'CHALLAN'].includes(old.status))
+        value &&
+        !(await tx[model].findFirst({
+          where: { id: value, branchId: actor.branchId },
+        }))
       )
         throw new BadRequestException(
-          'This document is locked. Use a linked correction.',
+          'Linked document is not in this branch',
         );
-      if (old && old.version !== dto.version)
-        throw new ConflictException(
-          'The document changed. Reload before saving.',
-        );
-      if (!old) {
-        const duplicate = await tx.inventoryWorkflowDocument.findUnique({
-          where: {
-            branchId_requestKey: {
-              branchId: actor.branchId,
-              requestKey: dto.requestKey,
-            },
+    }
+    const payload = await this.normalizePayload(
+      tx,
+      actor,
+      dto.kind,
+      dto.payload,
+      old,
+    );
+    if (!old && dto.kind === 'COUNT')
+      await this.refuseOpenCounts(tx, actor, payload.lines, await this.openCountHolders(tx, actor.branchId));
+    if (
+      old?.status === 'CHALLAN' &&
+      (old.supplierId !== (dto.supplierId || null) ||
+        old.sourceId !== (dto.sourceId || null) ||
+        old.purchaseInvoiceId !== (dto.purchaseInvoiceId || null) ||
+        old.payload.sourceHoldId !== payload.sourceHoldId)
+    )
+      throw new BadRequestException('Posted challan identity cannot change');
+    const data = {
+      kind: dto.kind,
+      reference: clean(dto.reference),
+      supplierId: supplier?.id || null,
+      supplierGstin: supplier?.gstNumber?.trim().toUpperCase() || null,
+      sourceId: dto.sourceId || null,
+      purchaseInvoiceId: dto.purchaseInvoiceId || null,
+      salesInvoiceId: dto.salesInvoiceId || null,
+      payload,
+      totalAmount: money(
+        payload.lines.reduce(
+          (n: number, l: WorkflowLine) => n + (l.total || 0),
+          0,
+        ),
+      ),
+    };
+    const saved = old
+      ? await tx.inventoryWorkflowDocument.update({
+          where: { id: old.id, version: dto.version },
+          data: { ...data, version: { increment: 1 } },
+        })
+      : await tx.inventoryWorkflowDocument.create({
+          data: {
+            ...data,
+            branchId: actor.branchId,
+            createdBy: actor.id,
+            requestKey: dto.requestKey,
           },
         });
-        if (duplicate) {
-          await this.authorize(actor, duplicate.kind);
-          if (duplicate.kind !== dto.kind)
-            throw new ConflictException('This request key already identifies another document kind. Reload its saved outcome.');
-          return this.plain(duplicate);
-        }
-      }
-      const supplier = dto.supplierId
-        ? await tx.supplier.findFirst({
-            where: {
-              id: dto.supplierId,
-              branchId: actor.branchId,
-              isActive: true,
-            },
-          })
-        : null;
-      if (dto.supplierId && !supplier)
-        throw new BadRequestException(
-          'Select an active supplier in this branch',
-        );
-      for (const [value, model] of [
-        [dto.sourceId, 'inventoryWorkflowDocument'],
-        [dto.purchaseInvoiceId, 'pharmacyPurchaseInvoice'],
-        [dto.salesInvoiceId, 'pharmacyInvoice'],
-      ] as const) {
-        if (
-          value &&
-          !(await tx[model].findFirst({
-            where: { id: value, branchId: actor.branchId },
-          }))
-        )
-          throw new BadRequestException(
-            'Linked document is not in this branch',
-          );
-      }
-      const payload = await this.normalizePayload(
+    if (old?.status === 'CHALLAN') {
+      await this.validatePosting(
         tx,
         actor,
-        dto.kind,
-        dto.payload,
-        old,
-      );
-      if (!old && dto.kind === 'COUNT')
-        await this.refuseOpenCounts(tx, actor, payload.lines, await this.openCountHolders(tx, actor.branchId));
-      if (
-        old?.status === 'CHALLAN' &&
-        (old.supplierId !== (dto.supplierId || null) ||
-          old.sourceId !== (dto.sourceId || null) ||
-          old.purchaseInvoiceId !== (dto.purchaseInvoiceId || null) ||
-          old.payload.sourceHoldId !== payload.sourceHoldId)
-      )
-        throw new BadRequestException('Posted challan identity cannot change');
-      const data = {
-        kind: dto.kind,
-        reference: clean(dto.reference),
-        supplierId: supplier?.id || null,
-        supplierGstin: supplier?.gstNumber?.trim().toUpperCase() || null,
-        sourceId: dto.sourceId || null,
-        purchaseInvoiceId: dto.purchaseInvoiceId || null,
-        salesInvoiceId: dto.salesInvoiceId || null,
-        payload,
-        totalAmount: money(
-          payload.lines.reduce(
-            (n: number, l: WorkflowLine) => n + (l.total || 0),
-            0,
-          ),
-        ),
-      };
-      const saved = old
-        ? await tx.inventoryWorkflowDocument.update({
-            where: { id: old.id, version: dto.version },
-            data: { ...data, version: { increment: 1 } },
-          })
-        : await tx.inventoryWorkflowDocument.create({
-            data: {
-              ...data,
-              branchId: actor.branchId,
-              createdBy: actor.id,
-              requestKey: dto.requestKey,
-            },
-          });
-      if (old?.status === 'CHALLAN') {
-        await this.validatePosting(
-          tx,
-          actor,
-          saved,
-          await this.settings(actor),
-        );
-        await this.applyStockDocument(tx, actor, saved, old.status);
-      }
-      await this.event(
-        tx,
         saved,
-        actor,
-        old ? 'SAVE' : 'CREATE',
-        old?.status || null,
-        { before: old?.payload || null, after: payload },
+        await this.settings(actor),
       );
-      return this.plain(saved);
-    });
+      await this.applyStockDocument(tx, actor, saved, old.status);
+    }
+    await this.event(
+      tx,
+      saved,
+      actor,
+      old ? 'SAVE' : 'CREATE',
+      old?.status || null,
+      { before: old?.payload || null, after: payload },
+    );
+    return this.plain(saved);
   }
   async normalizePayload(
     tx: any,

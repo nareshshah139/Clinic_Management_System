@@ -6,6 +6,7 @@ import { WorkflowActor } from './inventory-workflow.types';
 import { readStockGaps } from './inventory-stock-query';
 import { money } from './inventory-stock';
 import { displayDay } from './supplier-return';
+import { prescriptionNameKey, stockIdentityKey } from '../pharmacy/pharmacy-stock-identity';
 import {
   classifyStock,
   draftLines,
@@ -21,8 +22,22 @@ const wholeRupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency
 const OPEN_RETURN = ['DRAFT', 'AWAITING_APPROVAL', 'APPROVED'];
 const SENT_RETURN = ['CHALLAN', 'POSTED'];
 const gstinOf = (value: string | null | undefined) => (value ?? '').trim().toUpperCase();
-const productKey = (item: { id: string; unit: string; packSize: number | null; packUnit: string | null; drugs: { id: string }[] }) =>
-  item.drugs.length === 1 ? `${item.drugs[0].id}|${item.unit}|${item.packSize ?? ''}|${item.packUnit ?? ''}` : `batch:${item.id}`;
+/**
+ * The product a batch belongs to, so a batch is judged on its product's sales: its linked drug, or for a batch with no
+ * single linked drug, its standard name, stock unit and pack. Sales take the earliest expiry first, so a later batch of a
+ * product that sells every day may itself never sell.
+ */
+const productKey = (item: { name: string; unit: string; packSize: number | null; packUnit: string | null; drugs: { id: string }[] }) =>
+  item.drugs.length === 1 ? stockIdentityKey(item) : `name:${JSON.stringify([prescriptionNameKey(item.name), item.unit, item.packSize ?? null, item.packUnit ?? null])}`;
+
+/** What is left to return of a purchase line. Returns that put free units under quantity are taken from the free units. */
+function unreturnedOf(bought: { quantityPurchased: number; freeQuantity: number }, sent = { paid: 0, free: 0 }) {
+  let paid = bought.quantityPurchased - sent.paid;
+  let free = bought.freeQuantity - sent.free;
+  if (paid < 0) [free, paid] = [free + paid, 0];
+  if (free < 0) [paid, free] = [paid + free, 0];
+  return { unreturnedPaid: Math.max(0, paid), unreturnedFree: Math.max(0, free) };
+}
 
 type Supplier = { id: string; name: string };
 export type PresentedGroup = DistributorGroup & {
@@ -41,8 +56,9 @@ export type PresentedGroup = DistributorGroup & {
 /**
  * @cc [owner:nareshshah139,label:product] stock-optimization-return-draft
  * A return draft from optimization MUST be built on the server from a fresh run, carry each line's
- * purchase line, batch, PTR and GST, refuse a group below the minimum batch value, leave out batches
- * already on an open return, and create one document per request key.
+ * purchase line, batch, PTR and GST with free units at no value, refuse a group below the minimum
+ * batch value counted on paid units, leave out batches already on an open return, and create one
+ * document per request key. Concurrent presses for one distributor MUST create one draft.
  */
 @Injectable()
 export class InventoryOptimizationService {
@@ -93,11 +109,11 @@ export class InventoryOptimizationService {
     });
   }
 
-  async run(actor: WorkflowActor, now = new Date()) {
+  async run(actor: WorkflowActor, now = new Date(), db: any = this.prisma) {
     await this.workflow.authorize(actor, 'SUPPLIER_RETURN');
     const { version: _version, ...rules } = await this.rules(actor);
-    const result = classifyStock(await this.batches(actor.branchId), rules, now);
-    const suppliers = await this.suppliers(actor.branchId);
+    const result = classifyStock(await this.batches(db, actor.branchId), rules, now);
+    const suppliers = await this.suppliers(db, actor.branchId);
     const present = (group: DistributorGroup): PresentedGroup => {
       const supplier = suppliers.get(group.gstin) ?? null;
       const openReturns = [...new Map(group.rows.filter((r) => r.openReturn).map((r) => [r.openReturn!.id, r.openReturn!])).values()];
@@ -127,32 +143,36 @@ export class InventoryOptimizationService {
     const requestKey = String(input.requestKey ?? '').trim();
     const gstin = gstinOf(String(input.distributorGstin ?? ''));
     if (!requestKey || requestKey.length > 150 || !gstin) throw new BadRequestException('A distributor and a request key are required');
-    const replay = await this.prisma.inventoryWorkflowDocument.findUnique({ where: { branchId_requestKey: { branchId: actor.branchId, requestKey } } });
-    if (replay?.kind === 'SUPPLIER_RETURN') return { ...replay, totalAmount: Number(replay.totalAmount) };
-    const run = await this.run(actor);
-    const group = run.returnable.find((candidate) => candidate.gstin === gstin);
-    if (!group) throw new NotFoundException('This distributor has no returnable slow-moving stock now. Run optimization again.');
-    if (!group.draftable || !group.supplier) throw new BadRequestException(group.blocker);
-    const lines = draftLines(group);
-    const bills = [...new Set(group.rows.filter((r) => !r.openReturn).map((r) => r.source!.invoiceId))];
     const today = clinicDay(new Date());
-    return this.workflow.saveDocument(actor, {
-      kind: 'SUPPLIER_RETURN',
-      reference: `RET-SO-${today.replaceAll('-', '')}-${gstin.slice(2, 7)}`,
-      requestKey,
-      supplierId: group.supplier.id,
-      ...(bills.length === 1 ? { purchaseInvoiceId: bills[0] } : {}),
-      payload: {
-        date: today,
-        returnReason: 'OTHER',
-        reason: `Slow-moving: no sale in ${run.rules.nonMovingDays} days (stock optimization ${displayDay(today)})`,
-        lines,
-      },
+    const reference = `RET-SO-${today.replaceAll('-', '')}-${gstin.slice(2, 7)}`;
+    await this.workflow.checkDocument(actor, { kind: 'SUPPLIER_RETURN', reference, requestKey, payload: {} } as any);
+    return this.workflow.transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`supplier-return:${actor.branchId}:${gstin}`}, 0))`;
+      const replay = await tx.inventoryWorkflowDocument.findUnique({ where: { branchId_requestKey: { branchId: actor.branchId, requestKey } } });
+      if (replay?.kind === 'SUPPLIER_RETURN') return { ...replay, totalAmount: Number(replay.totalAmount) };
+      const run = await this.run(actor, new Date(), tx);
+      const group = run.returnable.find((candidate) => candidate.gstin === gstin);
+      if (!group) throw new NotFoundException('This distributor has no returnable slow-moving stock now. Run optimization again.');
+      if (!group.draftable || !group.supplier) throw new BadRequestException(group.blocker);
+      const bills = [...new Set(group.rows.filter((r) => !r.openReturn).map((r) => r.source!.invoiceId))];
+      return this.workflow.writeDocument(tx, actor, {
+        kind: 'SUPPLIER_RETURN',
+        reference,
+        requestKey,
+        supplierId: group.supplier.id,
+        ...(bills.length === 1 ? { purchaseInvoiceId: bills[0] } : {}),
+        payload: {
+          date: today,
+          returnReason: 'OTHER',
+          reason: `Slow-moving: no sale in ${run.rules.nonMovingDays} days (stock optimization ${displayDay(today)})`,
+          lines: draftLines(group),
+        },
+      });
     });
   }
 
-  private async suppliers(branchId: string) {
-    const rows = await this.prisma.supplier.findMany({
+  private async suppliers(db: any, branchId: string) {
+    const rows: { id: string; name: string; gstNumber: string | null }[] = await db.supplier.findMany({
       where: { branchId, isActive: true, gstNumber: { not: null } },
       select: { id: true, name: true, gstNumber: true },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -162,8 +182,8 @@ export class InventoryOptimizationService {
     return byGstin;
   }
 
-  private async batches(branchId: string): Promise<StockBatch[]> {
-    const items = await this.prisma.inventoryItem.findMany({
+  private async batches(db: any, branchId: string): Promise<StockBatch[]> {
+    const items: any[] = await db.inventoryItem.findMany({
       where: { branchId, currentStock: { gt: 0 } },
       select: {
         id: true, name: true, batchNumber: true, expiryDate: true, unit: true, packSize: true, packUnit: true, currentStock: true,
@@ -171,17 +191,17 @@ export class InventoryOptimizationService {
       },
     });
     const ids = items.map((item) => item.id);
-    const [sales, receipts, lines, returns] = await Promise.all([
-      this.prisma.stockTransaction.groupBy({ by: ['itemId'], where: { branchId, type: 'SALE' }, _max: { createdAt: true } }),
-      this.prisma.stockTransaction.groupBy({ by: ['itemId'], where: { branchId, type: 'PURCHASE', itemId: { in: ids } }, _max: { createdAt: true } }),
-      this.prisma.pharmacyPurchaseInvoiceItem.findMany({
+    const [sales, receipts, lines, returns]: any[][] = await Promise.all([
+      db.stockTransaction.groupBy({ by: ['itemId'], where: { branchId, type: 'SALE' }, _max: { createdAt: true } }),
+      db.stockTransaction.groupBy({ by: ['itemId'], where: { branchId, type: 'PURCHASE', itemId: { in: ids } }, _max: { createdAt: true } }),
+      db.pharmacyPurchaseInvoiceItem.findMany({
         where: { inventoryItemId: { in: ids }, purchaseInvoice: { branchId, status: 'STOCK_COMMITTED' } },
         select: {
           id: true, inventoryItemId: true, quantityPurchased: true, freeQuantity: true, purchaseRate: true, cgstPercent: true, sgstPercent: true, igstPercent: true,
           purchaseInvoice: { select: { id: true, invoiceNumber: true, invoiceDate: true, distributorGstin: true, distributorName: true } },
         },
       }),
-      this.prisma.inventoryWorkflowDocument.findMany({
+      db.inventoryWorkflowDocument.findMany({
         where: { branchId, kind: 'SUPPLIER_RETURN', status: { in: [...OPEN_RETURN, ...SENT_RETURN] } },
         select: { id: true, reference: true, status: true, payload: true },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -189,9 +209,9 @@ export class InventoryOptimizationService {
     ]);
     const soldItems = sales.map((sale) => sale.itemId).filter((id) => !ids.includes(id));
     const siblings = soldItems.length
-      ? await this.prisma.inventoryItem.findMany({
+      ? await db.inventoryItem.findMany({
           where: { branchId, id: { in: soldItems } },
-          select: { id: true, unit: true, packSize: true, packUnit: true, drugs: { select: { id: true } } },
+          select: { id: true, name: true, unit: true, packSize: true, packUnit: true, drugs: { select: { id: true } } },
         })
       : [];
     const keyOf = new Map([...items, ...siblings].map((item) => [item.id, productKey(item)]));
@@ -203,12 +223,14 @@ export class InventoryOptimizationService {
       if (key && at && (!known || known < at)) lastSale.set(key, at);
     }
     const received = new Map(receipts.map((receipt) => [receipt.itemId, receipt._max.createdAt]));
-    const returned = new Map<string, number>();
+    const returned = new Map<string, { paid: number; free: number }>();
     const open = new Map<string, OpenReturn>();
     for (const doc of returns)
       for (const line of ((doc.payload as any)?.lines ?? []) as { inventoryId: string; sourceLineId?: string; quantity: number; freeQuantity?: number }[]) {
-        if (SENT_RETURN.includes(doc.status) && line.sourceLineId)
-          returned.set(line.sourceLineId, (returned.get(line.sourceLineId) ?? 0) + line.quantity + (line.freeQuantity ?? 0));
+        if (SENT_RETURN.includes(doc.status) && line.sourceLineId) {
+          const sent = returned.get(line.sourceLineId) ?? { paid: 0, free: 0 };
+          returned.set(line.sourceLineId, { paid: sent.paid + line.quantity, free: sent.free + (line.freeQuantity ?? 0) });
+        }
         if (OPEN_RETURN.includes(doc.status) && !open.has(line.inventoryId))
           open.set(line.inventoryId, { id: doc.id, reference: doc.reference, status: doc.status });
       }
@@ -235,7 +257,7 @@ export class InventoryOptimizationService {
           distributorName: line.purchaseInvoice.distributorName,
           ptr: line.purchaseRate,
           gstRate: line.cgstPercent + line.sgstPercent + line.igstPercent,
-          unreturned: line.quantityPurchased + line.freeQuantity - (returned.get(line.id) ?? 0),
+          ...unreturnedOf(line, returned.get(line.id)),
         })),
     }));
   }
