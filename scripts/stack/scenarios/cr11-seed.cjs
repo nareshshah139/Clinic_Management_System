@@ -11,6 +11,11 @@ const RECORDED = [
   { key: "teczine", name: "1100 | Teczine Syrup 2.5Mg/5Ml 60Ml", unit: "BOTTLES", stock: 8 },
   { key: "augmentin", name: "Augmentin 500mg 125mg Tab", unit: "STRIPS", stock: 10 },
   { key: "cotton", name: "Cotton roll", unit: "PACKS", stock: 25, type: "CONSUMABLE" },
+  { key: "thyronorm", name: "Thyronorm 50 Tab", unit: "STRIPS", stock: 14 },
+  { key: "omega", name: "Cap. Omega 3", unit: "STRIPS", stock: 11 },
+  { key: "uprise", name: "Uprise D3 60000 Cap", unit: "STRIPS", stock: 5 },
+  { key: "sucralfate", name: "Sucralfate 1g Tab", unit: "STRIPS", stock: 16 },
+  { key: "gel", name: "Ultrasound Gel 250ml", unit: "BOTTLES", stock: 4, type: "EQUIPMENT" },
 ];
 
 async function seed(stack) {
