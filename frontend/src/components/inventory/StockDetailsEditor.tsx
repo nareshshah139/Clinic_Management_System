@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { InventoryChangePreview } from "./InventoryChangePreview";
 import { InventoryRegimenFields } from "./InventoryRegimenFields";
 import { inputClass } from "./workspace-model";
+import { MedicineNameFields } from "./MedicineNameFields";
+import { MEDICINE_FORMS, medicineNameProblems, standardMedicineName, type MedicineFormKey } from "@/lib/medicine-names";
+import { useState } from "react";
 
 const basicFields = [
   ["name", "Product name"],
@@ -16,7 +19,7 @@ const extraFields = [
   ["category", "Category"],
   ["subCategory", "Subcategory"],
   ["genericName", "Composition / generic"],
-  ["dosageForm", "Dosage form"],
+  ["itemCode", "Item code"],
   ["schedule", "Schedule"],
   ["hsnCode", "HSN"],
   ["gstRate", "GST %"],
@@ -39,8 +42,22 @@ const numericFields = new Set([
   "maxStockLevel",
   "reorderLevel",
 ]);
+const namingFields = [
+  ["form", "Form"],
+  ["brandName", "Medicine name"],
+  ["strength", "Strength"],
+  ["isCombination", "Combination product"],
+] as const;
 const fieldValue = (value: unknown, key: string) =>
-  key === "expiryDate" ? String(value || "").slice(0, 10) : String(value ?? "");
+  key === "expiryDate"
+    ? String(value || "").slice(0, 10)
+    : key === "isCombination"
+      ? (value ? "Yes" : "No")
+      : key === "form"
+        ? MEDICINE_FORMS[value as MedicineFormKey]?.label ?? ""
+        : String(value ?? "");
+const printedName = (value: Record<string, any>) =>
+  value.form ? standardMedicineName({ ...value, name: value.brandName || value.name }) : String(value.name ?? "");
 
 /**
  * @cc [owner:nareshshah139,label:product] saved-details-correction-preview
@@ -66,21 +83,34 @@ export function StockDetailsEditor({
   onCancel: () => void;
 }) {
   const original = { ...item, ...item.metadata };
+  const [nameErrors, setNameErrors] = useState<Partial<Record<"form" | "name" | "strength", string>>>({});
+  const naming = item.type === "MEDICINE" || Boolean(original.form) || Boolean(value.form);
+  const beforeName = printedName(original), afterName = printedName(value);
   const changes = [
-    ...basicFields,
-    ...extraFields,
-    ...regimenFields,
-    ["status", "Availability"],
-  ].flatMap(([key, label]) => {
-    const before = fieldValue(original[key], key),
-      after = fieldValue(value[key], key);
-    return before === after ? [] : [{ label, before, after }];
-  });
+    ...(beforeName !== afterName ? [{ label: "Printed name", before: beforeName, after: afterName }] : []),
+    ...[
+      ...basicFields.filter(([key]) => key !== "name"),
+      ...(naming ? namingFields : []),
+      ...extraFields,
+      ...regimenFields,
+      ["status", "Availability"],
+    ].flatMap(([key, label]) => {
+      const before = fieldValue(original[key], key),
+        after = fieldValue(value[key], key);
+      return before === after ? [] : [{ label, before, after }];
+    }),
+  ];
+  const suggestion = !original.form && !value.form ? item.nameSuggestion : null;
+  const problems = () =>
+    medicineNameProblems({ ...value, name: value.form ? value.brandName : value.name }).filter(
+      (p) => p.field === "name" || (p.field === "form" && original.form) || (p.field === "strength" && String(original.strength || "").trim()),
+    );
   const fields = (entries: readonly (readonly [string, string])[]) =>
     entries.map(([key, label]) => (
       <label key={key} className="block text-sm">
         {label}
         <input
+          id={key === "name" ? "edit-name" : undefined}
           className={inputClass}
           type={
             key === "expiryDate"
@@ -111,6 +141,9 @@ export function StockDetailsEditor({
       className="space-y-4 border-y py-5"
       onSubmit={(event) => {
         event.preventDefault();
+        const found = problems();
+        setNameErrors(Object.fromEntries(found.map((p) => [p.field, p.message])));
+        if (found.length) return void document.getElementById(value.form ? `medicine-${found[0].field}` : "edit-name")?.focus();
         if (!busy && changes.length && value.reason?.trim()) void onSave();
       }}
     >
@@ -120,7 +153,28 @@ export function StockDetailsEditor({
         original bill stays in history.
       </p>
       <fieldset disabled={busy} className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">{fields(basicFields)}</div>
+        {naming && (
+          <>
+            {suggestion && (
+              <p className="flex flex-wrap items-center gap-2 rounded-md border border-dashed p-3 text-sm">
+                <span>Suggested from the recorded name: <strong>{suggestion.standardName}</strong></span>
+                <Button type="button" size="sm" variant="outline" onClick={() => onChange({ ...value, form: suggestion.form, brandName: suggestion.brandName, strength: suggestion.strength, isCombination: suggestion.isCombination, itemCode: value.itemCode || suggestion.itemCode })}>
+                  Use suggestion
+                </Button>
+              </p>
+            )}
+            <MedicineNameFields
+              value={value}
+              errors={nameErrors}
+              formRequired={Boolean(original.form)}
+              onChange={(patch) => {
+                setNameErrors({});
+                onChange({ ...value, ...(patch.form && !value.form && !value.brandName && { brandName: value.name }), ...patch });
+              }}
+            />
+          </>
+        )}
+        <div className="grid gap-4 sm:grid-cols-2">{fields(value.form ? basicFields.filter(([key]) => key !== "name") : basicFields)}</div>
         <details open={extraFields.some(([key]) => key === focusField) || undefined}>
           <summary className="cursor-pointer py-2 font-medium">
             More details: tax, stock limits &amp; codes

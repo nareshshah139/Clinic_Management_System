@@ -1,5 +1,6 @@
 "use client";
 
+import { MEDICINE_FORMS, type MedicineFormKey } from "@/lib/medicine-names";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowLeft, Download, Pencil, Printer } from "lucide-react";
 import { displayClinicDate, displayClinicDateTime, displayUtcDate } from "@/lib/date-display";
@@ -194,6 +195,7 @@ export function InventoryItemPage({ itemId, query, navigate, capabilities, onTas
           <header className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div className="min-w-0 space-y-1">
               <h2 className="text-2xl font-semibold">{item.productName || item.name}</h2>
+              {item.recordedName && <p className="text-sm text-muted-foreground">Recorded as {item.recordedName}</p>}
               <p className="flex flex-wrap gap-x-3 gap-y-1">
                 {item.manufacturer ? (
                   <button
@@ -244,6 +246,11 @@ export function InventoryItemPage({ itemId, query, navigate, capabilities, onTas
           </header>
           <dl aria-label="Item details" className="grid grid-cols-2 gap-x-6 gap-y-2 border-y py-3 sm:grid-cols-3 lg:grid-cols-5">
             {([
+              ...(item.form ? [
+                ["Form", MEDICINE_FORMS[item.form as MedicineFormKey]?.label ?? item.form],
+                ["Strength", item.isCombination ? "Combination" : item.strength || <span className="text-amber-800 dark:text-amber-200">Strength missing</span>],
+              ] : []),
+              ["Item code", known(item.itemCode)],
               ["Std. MRP", known(item.mrp, fmtMoney)],
               ["GST %", known(item.gstRate, (v) => `${v}%`)],
               ["HSN", known(item.hsnCode)],

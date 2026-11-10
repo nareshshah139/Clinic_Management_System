@@ -28,6 +28,7 @@ import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
+import { printedMedicineName } from '@/lib/medicine-names';
 import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
@@ -258,6 +259,10 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * and the disclaimer above the signature, even when the signature is hidden.
  * Switching to In-person MUST remove both from regenerated preview and exports.
  */
+/** A stocked item answers to its standard name and the names it was recorded under before. */
+const inventoryNamesOf = (drug: any): string[] =>
+  [drug?.name, ...(Array.isArray(drug?.knownNames) ? drug.knownNames : [])].map((name) => String(name || '').trim().toLowerCase()).filter(Boolean);
+
 function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
@@ -1627,7 +1632,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const normalizedName = query.toLowerCase();
     return loadDrugStock(`name:${normalizedName}`, async () => {
       const list = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q: query, limit: 30 });
-      const matches = (Array.isArray(list) ? list : []).filter((drug: any) => String(drug?.name || '').trim().toLowerCase() === normalizedName);
+      const matches = (Array.isArray(list) ? list : []).filter((drug: any) => inventoryNamesOf(drug).includes(normalizedName));
       return matches.length === 1 ? matches[0].totalStock ?? null : null;
     });
   };
@@ -2306,7 +2311,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         if (!drugId) {
           const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q: drugName, limit: 30 });
           const matches = (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [])
-            .filter((candidate: any) => candidate.name?.trim().toLowerCase() === drugName.trim().toLowerCase());
+            .filter((candidate: any) => inventoryNamesOf(candidate).includes(drugName.trim().toLowerCase()));
           if (matches.length === 1) drugId = matches[0].id;
         }
         const suggestion: any = drugId
@@ -5815,7 +5820,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         ].filter(Boolean);
                         const medsLines = (items || []).map((it: any, idx: number) => {
                           const parts: string[] = [];
-                          parts.push(`${idx + 1}. ${it.drugName}`);
+                          parts.push(`${idx + 1}. ${printedMedicineName(it.drugName)}`);
                           if (it.dosage) parts.push(`Dosage: ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`);
                           parts.push(`Freq: ${(it.frequency || '').replaceAll('_',' ').toLowerCase()}`);
                           parts.push(`Duration: ${it.duration} ${String(it.durationUnit || '').toLowerCase()}`);
@@ -6007,7 +6012,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           </div>
                           {validItems.map((it: any, idx: number) => (
                             <div key={`rx-row-${idx}`} className="rx-row" style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', padding: rxRowPadding }}>
-                              <div style={{ flex: rxColumnFlex.medicine, padding: rxCellPadding }}>{it.drugName}</div>
+                              <div style={{ flex: rxColumnFlex.medicine, padding: rxCellPadding }}>{printedMedicineName(it.drugName)}</div>
                               <div style={{ flex: rxColumnFlex.frequency, padding: rxCellPadding }}>{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</div>
                               <div style={{ flex: rxColumnFlex.timing, padding: rxCellPadding }}>{it.timing || '—'}</div>
                               <div style={{ flex: rxColumnFlex.duration, padding: rxCellPadding }}>{`${it.duration ?? '—'} ${String(it.durationUnit || '').toLowerCase()}`}</div>
@@ -6019,7 +6024,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         <div className="text-sm" style={{ width: '100%' }}>
                           {validItems.map((it: any, idx: number) => (
                             <div key={`rx-${idx}`} className="rx-row" style={{ padding: '3px 0' }}>
-                              <span style={{ fontWeight: 500 }}>{idx + 1}. {it.drugName}</span>
+                              <span style={{ fontWeight: 500 }}>{idx + 1}. {printedMedicineName(it.drugName)}</span>
                               {it.dosage ? ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}` : ''} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
                               {it.instructions && <span> — {tt(`items.${idx}.instructions`, it.instructions)}</span>}
                             </div>
@@ -7009,6 +7014,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       </div>
                       {getRelevanceBadge(d, rowDrugQueries[activeSearchRow], index)}
                     </div>
+                    {d.strengthMissing && <div className="text-xs text-amber-700">Strength missing</div>}
                     <div className="text-xs text-gray-500">
                       {highlightMatch(d.manufacturer || d.manufacturerName || d.genericName || '', rowDrugQueries[activeSearchRow])}
                       {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}

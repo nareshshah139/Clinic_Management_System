@@ -124,3 +124,20 @@ it('follows the server owner, not a matching bill number, for each ledger moveme
   expect(receiptRow).toHaveTextContent('PINV-4512-abcd1234');
   expect(receiptRow).toHaveTextContent('Open purchase correction');
 });
+
+it('shows the standard name, what it was recorded as, and lists medicines missing a strength', async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue({ ...result, quality: { 'Strength missing': 1, 'HSN missing': 3 }, rows: [
+    { ...result.rows[0], id: 'acnosis', name: 'Tab. Acnosis', productName: 'Tab. Acnosis', recordedName: '199 | Acnosis Tab (loose tablets)', strengthMissing: true },
+    { ...result.rows[0], id: 'flutas', name: 'Tab. Flutas 150 mg', productName: 'Tab. Flutas 150 mg', recordedName: null, strengthMissing: false },
+  ] });
+  render(<WorkspaceStock {...props} query={{ view: 'list' }} />);
+  const acnosis = (await screen.findByRole('button', { name: 'Tab. Acnosis' })).closest('td')!;
+  expect(acnosis).toHaveTextContent('Recorded as 199 | Acnosis Tab (loose tablets)');
+  expect(acnosis).toHaveTextContent('Strength missing');
+  const flutas = screen.getByRole('button', { name: 'Tab. Flutas 150 mg' }).closest('td')!;
+  expect(flutas).not.toHaveTextContent('Recorded as');
+  expect(flutas).not.toHaveTextContent('Strength missing');
+  fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+  fireEvent.change(screen.getByLabelText('Missing information'), { target: { value: 'Strength missing' } });
+  expect(props.navigate).toHaveBeenCalledWith(expect.objectContaining({ missing: 'Strength missing', page: '1' }));
+});

@@ -242,3 +242,23 @@ describe('buildLearnedMedicationSuggestion', () => {
     expect(suggestion?.item.durationUnit).toBe('WEEKS');
   });
 });
+
+describe('history of a medicine renamed to the standard format', () => {
+  const history = (drugName: string, extra: Record<string, unknown> = {}) => ({
+    id: 'visit-old', createdAt: '2026-08-01T00:00:00.000Z', doctor: { id: 'doc-1' }, diagnosis: [{ diagnosis: 'Tinea corporis' }],
+    prescriptionItems: [{ drugName, frequency: 'ONCE_WEEKLY', duration: 4, durationUnit: 'WEEKS', inventoryItemId: 'flutas', ...extra }],
+  });
+  it('finds the old sig of the same stocked item although its name changed', () => {
+    const suggestion = buildLearnedMedicationSuggestion({
+      drugName: 'Tab. Flutas 150 mg', inventoryItemId: 'flutas', diagnosis: 'Tinea corporis', doctorId: 'doc-1',
+      patientVisits: [history('13 74 | Flutas 150Mg(Pc)')],
+    });
+    expect(suggestion?.item).toMatchObject({ drugName: '13 74 | Flutas 150Mg(Pc)', frequency: 'ONCE_WEEKLY', duration: 4 });
+  });
+  it('does not borrow the sig of a different stocked item with a similar name', () => {
+    expect(buildLearnedMedicationSuggestion({
+      drugName: 'Tab. Flutas 150 mg', inventoryItemId: 'flutas', diagnosis: 'Tinea corporis', doctorId: 'doc-1',
+      patientVisits: [history('Tab. Flutas 150 mg', { inventoryItemId: 'flutas-forte' })],
+    })).toBeNull();
+  });
+});
