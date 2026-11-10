@@ -429,6 +429,18 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
     ],
   };
 
+  it('refuses payment on any bill that has no issued number yet, including one moved to pending', async () => {
+    const pending = await invoices.create(fiveHundred, 'branch', 'asha');
+    await invoices.updateStatus(pending.id, 'PENDING', 'branch', 'asha');
+    const stored = await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: pending.id } });
+    expect([
+      stored.status,
+      stored.invoiceNumber.startsWith('DRAFT-'),
+      await failure(invoices.addPayment(pending.id, { requestKey: 'pending-receipt', amount: 100, method: 'CASH' }, 'branch')),
+      await db.pharmacyPayment.count({ where: { invoiceId: pending.id } }),
+    ]).toEqual(['PENDING', true, '400: Finish the bill in Sales before taking payment', 0]);
+  });
+
   it('refuses payments on a draft and finishes a draft holding an earlier receipt by collecting only the rest', async () => {
     const draft = await invoices.create(fiveHundred, 'branch', 'asha');
     expect(

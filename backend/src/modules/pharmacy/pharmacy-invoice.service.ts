@@ -2584,8 +2584,8 @@ export class PharmacyInvoiceService {
    * @cc [owner:nareshshah139,label:product] payment-atomic-retry
    * A payment MUST lock its invoice, reject overpayment using the ledger (receipts less refunds), and commit
    * its receipt and recomputed balance together. The same invoice request key and payload MUST
-   * return the original receipt; a changed payload MUST conflict without collecting again. A draft
-   * MUST NOT take payment; finishing it in Sales collects what is due.
+   * return the original receipt; a changed payload MUST conflict without collecting again. A draft, or
+   * any bill without an issued number, MUST NOT take payment; finishing it in Sales collects what is due.
    */
   async addPayment(
     invoiceId: string,
@@ -2622,7 +2622,10 @@ export class PharmacyInvoiceService {
         throw new BadRequestException(
           'Cancelled invoices cannot receive payments',
         );
-      if (invoice.status === 'DRAFT')
+      if (
+        invoice.status === 'DRAFT' ||
+        !isIssuedBillNumber(invoice.invoiceNumber)
+      )
         throw new BadRequestException(
           'Finish the bill in Sales before taking payment',
         );
