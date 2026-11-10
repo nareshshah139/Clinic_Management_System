@@ -74,8 +74,6 @@ npm run dev
 
 ## Railway Deployment
 
-For detailed Railway deployment instructions, see **[RAILWAY_DEPLOYMENT_GUIDE.md](./RAILWAY_DEPLOYMENT_GUIDE.md)**.
-
 ### Quick Deploy
 
 1. **Prerequisites**
@@ -163,10 +161,7 @@ Use the included helper scripts:
 
 ## Documentation
 
-- **[Railway Deployment Guide](./RAILWAY_DEPLOYMENT_GUIDE.md)** - Complete Railway deployment instructions
-- **[Planning Document](./planning.md)** - System architecture and planning
 - **[Backend README](./backend/README.md)** - Backend-specific documentation
-- **[Frontend README](./frontend/README.md)** - Frontend-specific documentation
 - **Module Documentation:**
   - [Appointments Module](./backend/src/modules/appointments/)
   - [Visits Module](./backend/src/modules/visits/)
@@ -175,7 +170,6 @@ Use the included helper scripts:
   - [Prescriptions Module](./backend/src/modules/prescriptions/)
   - [Pharmacy Module](./backend/src/modules/pharmacy/)
   - [Audit Logs Module](./backend/src/modules/audit-logs/)
-  - [Stock Prediction](./STOCK_PREDICTION_FEATURE.md)
 
 ## API Documentation
 
@@ -287,8 +281,6 @@ pg_dump $DATABASE_URL > backup.sql
 psql $DATABASE_URL < backup.sql
 ```
 
-See [DATABASE_BACKUP_INFO.md](./DATABASE_BACKUP_INFO.md) for detailed backup procedures.
-
 ## Contributing
 
 1. Fork the repository
@@ -301,7 +293,6 @@ See [DATABASE_BACKUP_INFO.md](./DATABASE_BACKUP_INFO.md) for detailed backup pro
 
 For issues and questions:
 - Check existing documentation
-- Review [Issues.md](./Issues.md) for known issues
 - Create a GitHub issue
 - Check deployment logs on Railway
 

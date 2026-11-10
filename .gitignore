@@ -30,7 +30,6 @@ build
 
 # database backups (contain sensitive data)
 backups/
-DATABASE_BACKUP_SUMMARY.md
 *.sql
 # Prisma migrations are source, never backups.
 !backend/prisma/migrations/*/migration.sql
