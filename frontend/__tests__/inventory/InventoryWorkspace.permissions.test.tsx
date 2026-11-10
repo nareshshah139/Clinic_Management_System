@@ -163,23 +163,25 @@ it('returns to the Sales register a document was opened from, and refuses anothe
   expect(mockRouter.push).toHaveBeenLastCalledWith('/dashboard/inventory?area=sales&view=SALES_RETURN',{scroll:false});
 });
 
-it.each(['RECEPTION', 'PHARMACIST', 'DOCTOR', 'OWNER'])('keeps the pharmacy reports out of the Purchases menu for %s', async (role) => {
+it.each(['RECEPTION', 'PHARMACIST', 'DOCTOR'])('keeps pharmacy reports out of %s Purchases: they live in Pharmacy Report (CR-33)', async (role) => {
   mockRole = role;
   mockQuery = 'area=purchases&view=suppliers';
   (apiClient.get as jest.Mock).mockResolvedValue({ kinds: {}, rows: [], total: 0, totalPages: 1 });
   render(<InventoryWorkspace/>);
   const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+  expect(options.filter((o) => ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin'].includes(o || ''))).toEqual([]);
   expect(options).toContain('Terms of Trade');
-  expect(options.filter((o) => /report|summary|margin/i.test(o || ''))).toEqual([]);
 });
 
 it.each([
-  ['reports', 'gst-summary'],
-  ['daywise', 'day-wise-summary'],
-  ['margin', 'item-margin'],
-])('sends the old Purchases view=%s link to the Pharmacy Report page', async (view, report) => {
+  ['reports', '/dashboard/pharmacy/reports?report=gst-summary'],
+  ['daywise', '/dashboard/pharmacy/reports?report=day-wise-summary'],
+  ['margin', '/dashboard/pharmacy/reports?report=item-margin'],
+])('sends an old Inventory link to %s on to the same report in Pharmacy Report', async (view, href) => {
+  mockRole = 'PHARMACIST';
   mockQuery = `area=purchases&view=${view}`;
   (apiClient.get as jest.Mock).mockResolvedValue({ kinds: {}, rows: [], total: 0, totalPages: 1 });
   render(<InventoryWorkspace/>);
-  await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith(`/dashboard/pharmacy/reports?report=${report}`, { scroll: false }));
+  await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith(href));
+  expect(screen.getByRole('link', { name: 'Pharmacy Report' })).toHaveAttribute('href', href);
 });

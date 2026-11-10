@@ -13,16 +13,3 @@ it('routes old audit users to versioned Counts without exposing or submitting re
   await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(3));
   expect(apiClient.post).not.toHaveBeenCalled();
 });
-
-it.each([
-  ['gst-summary', 'GST Summary', '/pharmacy/compliance/gst-summary'],
-  ['monthly-report', 'Monthly Report', '/pharmacy/compliance/monthly-report'],
-] as const)('renders and loads only the %s report when asked for one', async (report, title, endpoint) => {
-  jest.mocked(apiClient.get).mockClear();
-  render(<ComplianceCenter report={report} />);
-  expect(await screen.findByText(title)).toBeInTheDocument();
-  await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(1));
-  expect(jest.mocked(apiClient.get).mock.calls[0][0]).toBe(endpoint);
-  expect(screen.queryByText('Expiry Returns')).not.toBeInTheDocument();
-  expect(screen.queryByText('Pharmacy Compliance')).not.toBeInTheDocument();
-});

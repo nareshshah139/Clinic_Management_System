@@ -7,7 +7,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useDashboardUser } from "./dashboard-user-context";
 import { usePendingItemRequestCount } from "@/components/inventory/use-pending-item-requests";
-import { PHARMACY_REPORT_ROLES } from "@/components/pharmacy/pharmacy-report-catalog";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -120,7 +119,7 @@ const navigation: NavigationItem[] = [
     name: "Pharmacy Report", section: "Pharmacy",
     href: "/dashboard/pharmacy/reports",
     icon: FileBarChart,
-    allowedRoles: [...PHARMACY_REPORT_ROLES],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "ACCOUNTANT"],
   },
   {
     name: "Reports", section: "Admin",

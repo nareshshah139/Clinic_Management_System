@@ -4,6 +4,7 @@ import { getISTDateString } from '@/lib/utils';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import "./inventory-readability.css";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, RefreshCw, Plus } from "lucide-react";
@@ -115,19 +116,18 @@ const menus: Record<string, string[][]> = {
  * Failed capability reads MUST hide stale access and expose an explicit retry. Refresh and
  * actor changes MUST fetch capabilities again; older responses cannot restore superseded access.
  */
-/**
- * @cc [owner:nareshshah139,label:product] pharmacy-reports-own-menu
- * GST, monthly, day-wise and item-wise margin reports MUST be opened from the Pharmacy Report menu
- * item, not from an inventory task. Old inventory links to them MUST land on the matching report there.
- */
-const MOVED_REPORT_VIEWS: Record<string, string> = { reports: "gst-summary", daywise: "day-wise-summary", margin: "item-margin" };
+/** Reports moved to Pharmacy Report (CR-33); old Inventory links land on the same report there. */
+const MOVED_REPORTS: Record<string, string> = {
+  reports: "/dashboard/pharmacy/reports?report=gst-summary",
+  daywise: "/dashboard/pharmacy/reports?report=day-wise-summary",
+  margin: "/dashboard/pharmacy/reports?report=item-margin",
+};
 
 export function InventoryWorkspace() {
   const { user } = useDashboardUser();
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const canSeeApprovals = canReadEdits || user?.role === "RECEPTION";
-  const taskVisible = ([id]: string[]) =>
-    id === "approvals" ? canSeeApprovals : true;
+  const taskVisible = ([id]: string[]) => id !== "approvals" || canSeeApprovals;
   const pendingItems = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""));
   const taskLabel = (id: string, label: string) => (id === "approvals" && pendingItems > 0 ? `${label} (${pendingItems})` : label);
   const params = useSearchParams(),
@@ -244,10 +244,6 @@ export function InventoryWorkspace() {
     void loadPermissions();
     return () => { permissionRequest.current += 1; };
   }, [loadPermissions]);
-  const movedReport = area === "purchases" ? MOVED_REPORT_VIEWS[view] : undefined;
-  useEffect(() => {
-    if (movedReport) router.replace(`/dashboard/pharmacy/reports?report=${movedReport}`, { scroll: false });
-  }, [movedReport, router]);
   const availableTasks = (menus[area] || []).filter((task) => taskVisible(task)
     && (task[0] !== "ledger" || area !== "purchases" || caps?.ledger)
     && (task[0] !== "COUNT" || caps?.kinds?.COUNT?.read));
@@ -491,6 +487,7 @@ export function InventoryWorkspace() {
             ) : (
               <p>Supplier credits require purchase-ledger permission.</p>
             ))}
+          {area === "purchases" && MOVED_REPORTS[view] && <MovedReport href={MOVED_REPORTS[view]} />}
           {area === "purchases" && view === "analytics" && (
             <DistributorAnalytics />
           )}
@@ -1167,5 +1164,17 @@ function SupplierWorkspace({ canCreate, canUpdate, onAccount, onBills }: any) {
         ))}
       </ul>
     </section>
+  );
+}
+
+function MovedReport({ href }: { href: string }) {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(href);
+  }, [href, router]);
+  return (
+    <p className="text-base">
+      This report is now under <Link href={href} className="font-medium underline">Pharmacy Report</Link>. Opening it…
+    </p>
   );
 }

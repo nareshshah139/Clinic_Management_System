@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowUp, ArrowUpDown, FileDown, SlidersHorizontal, TrendingUp, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, SlidersHorizontal, TrendingUp, TriangleAlert } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { displayCalendarDate } from "@/lib/date-display";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSkeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { downloadCsv, inputClass } from "@/components/inventory/workspace-model";
+import { inputClass } from "@/components/inventory/workspace-model";
+import { reportById } from "./reports/report-catalog";
+import { ExportMenu } from "./reports/ReportToolbar";
 import { cn } from "@/lib/utils";
 import { ReportInfoTip } from "./ReportInfoTip";
 import {
@@ -31,7 +33,7 @@ import {
   activeMoreFilterCount,
   describeMarginFilters,
   hasActiveFilters,
-  marginCsvPreface,
+  marginExportParams,
   marginFilterParams,
   marginFiltersFromParams,
   marginQuery,
@@ -44,7 +46,6 @@ import {
   formatPercent,
   formatRupees,
   reportErrorHint,
-  marginCsvRows,
   nextMarginSort,
   sortMarginRows,
   useReport,
@@ -73,6 +74,8 @@ const TILE_HELP = {
   netGst: "Sum of the Net GST column.",
   profit: "Sum of the Profit column. The % is total Profit ÷ total taxable sale value of the rows with a recorded cost × 100.",
 };
+
+const MARGIN = reportById("item-margin")!;
 
 const marginIsEmpty = (report: Report) => report.rows.length === 0;
 
@@ -270,19 +273,12 @@ export function ItemMarginReport() {
               <SlidersHorizontal className="size-4" aria-hidden="true" />
               More Filters{moreCount > 0 ? ` (${moreCount})` : ""}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
+            <ExportMenu
+              entry={MARGIN}
+              params={{ from: applied.startDate, to: applied.endDate, q: applied.filters.search.trim() || undefined }}
+              extra={marginExportParams(applied.filters)}
               disabled={state.status !== "loaded"}
-              onClick={() => {
-                if (state.status !== "loaded") return;
-                const { period } = state.data;
-                downloadCsv(`item-margin-${period.startDate}-to-${period.endDate}.csv`, marginCsvRows(state.data, rows), marginCsvPreface(state.data, applied.filters));
-              }}
-            >
-              <FileDown className="size-4" aria-hidden="true" />
-              Download
-            </Button>
+            />
           </div>
           {moreOpen && (
             <fieldset id="margin-more-filters" className="grid gap-3 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-4">

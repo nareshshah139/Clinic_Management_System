@@ -15,7 +15,6 @@ import {
   marginFiltersFromParams,
   marginQuery,
   clinicToday,
-  dayWiseCsvRows,
   nextMarginSort,
   sortMarginRows,
 } from "./pharmacy-report-model";
@@ -74,29 +73,6 @@ describe("billCell", () => {
       "2 bills: APX/0457, DM-88231",
     );
     expect(billCell({ noBills: true, bills: bills() }, "SALES").primary).toBe("No bills");
-  });
-});
-
-describe("dayWiseCsvRows", () => {
-  it("writes one row per day plus a total row with every slab band", () => {
-    const zero = { taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, totalGst: 0, grossAmount: 0 };
-    const twelve = { slabPercent: 12, taxableAmount: 220, cgst: 13.2, sgst: 13.2, igst: 0, totalGst: 26.4, grossAmount: 246.4 };
-    const report: DayWiseReport = {
-      type: "SALES",
-      period: { startDate: "2026-11-05", endDate: "2026-11-06", timeZone: "Asia/Kolkata" },
-      columns: [12],
-      rows: [
-        { date: "2026-11-05", noBills: false, bills: bills({ billCount: 1, ranges: [{ prefix: "PHI-2026-", from: 536, to: 536 }] }), slabs: [twelve], total: twelve, amount: 246.4 },
-        { date: "2026-11-06", noBills: true, bills: bills(), slabs: [{ slabPercent: 12, ...zero }], total: zero, amount: 0 },
-      ],
-      totals: { slabs: [twelve], total: twelve, amount: 246.4, billCount: 1, missingCount: 0, noBillDays: 1 },
-    };
-
-    expect(dayWiseCsvRows(report)).toEqual([
-      { "Bill Date": "2026-11-05", "Bill No.": "536", "Bill Count": 1, "CESS Base": 0, "CESS SGST": 0, "CESS CGST": 0, "CESS IGST": 0, "12% Base": 220, "12% SGST": 13.2, "12% CGST": 13.2, "12% IGST": 0, "Total Base": 220, "Total SGST": 13.2, "Total CGST": 13.2, "Total IGST": 0, "Total Amount": 246.4 },
-      { "Bill Date": "2026-11-06", "Bill No.": "No bills", "Bill Count": 0, "CESS Base": 0, "CESS SGST": 0, "CESS CGST": 0, "CESS IGST": 0, "12% Base": 0, "12% SGST": 0, "12% CGST": 0, "12% IGST": 0, "Total Base": 0, "Total SGST": 0, "Total CGST": 0, "Total IGST": 0, "Total Amount": 0 },
-      { "Bill Date": "Total", "Bill No.": "", "Bill Count": 1, "CESS Base": 0, "CESS SGST": 0, "CESS CGST": 0, "CESS IGST": 0, "12% Base": 220, "12% SGST": 13.2, "12% CGST": 13.2, "12% IGST": 0, "Total Base": 220, "Total SGST": 13.2, "Total CGST": 13.2, "Total IGST": 0, "Total Amount": 246.4 },
-    ]);
   });
 });
 

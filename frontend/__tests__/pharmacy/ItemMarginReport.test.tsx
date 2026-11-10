@@ -2,7 +2,6 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ItemMarginReport } from '@/components/pharmacy/ItemMarginReport';
 import { apiClient } from '@/lib/api';
-import { downloadCsv } from '@/components/inventory/workspace-model';
 
 let mockSearch = '';
 const replace = jest.fn();
@@ -13,10 +12,6 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mockSearch),
 }));
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn() } }));
-jest.mock('@/components/inventory/workspace-model', () => ({
-  ...jest.requireActual('@/components/inventory/workspace-model'),
-  downloadCsv: jest.fn(),
-}));
 
 const get = apiClient.get as jest.Mock;
 
@@ -42,7 +37,6 @@ beforeEach(() => {
   replace.mockReset();
   get.mockReset();
   get.mockResolvedValue(report());
-  (downloadCsv as jest.Mock).mockReset();
 });
 
 describe('ItemMarginReport controls', () => {
@@ -137,22 +131,18 @@ describe('results', () => {
     expect(screen.getByText(/matches type Returns only, category Itch/)).toBeInTheDocument();
   });
 
-  it('puts the active filters in the CSV header rows', async () => {
-    mockSearch = 'from=2026-11-01&to=2026-11-30&type=RETURNS&tag=Retinoid&cost=LOSS';
+  it('carries the active filters into every download format', async () => {
+    mockSearch = 'report=item-margin&from=2026-11-01&to=2026-11-30&type=RETURNS&tag=Retinoid&cost=LOSS&q=gel&field=NAME';
     render(<ItemMarginReport />);
     await screen.findByRole('table', { name: 'Item-wise margin' });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Download' }));
+    await userEvent.click(screen.getByRole('button', { name: /Download/ }));
 
-    await waitFor(() => expect(downloadCsv).toHaveBeenCalledTimes(1));
-    const [name, , preface] = (downloadCsv as jest.Mock).mock.calls[0];
-    expect(name).toBe('item-margin-2026-11-01-to-2026-11-30.csv');
-    expect(preface).toEqual([
-      ['Item-wise margin', '2026-11-01 to 2026-11-30'],
-      ['Type', 'Returns only'],
-      ['Tag', 'Retinoid'],
-      ['Cost status', 'Loss-making'],
-    ]);
+    const links = await screen.findAllByRole('menuitem');
+    expect(links.map(link => [link.textContent, link.getAttribute('href')])).toEqual(['xlsx', 'csv', 'pdf'].map(format => [
+      expect.any(String),
+      `/api/pharmacy/reports/item-margin?marginType=RETURNS&field=NAME&tag=Retinoid&cost=LOSS&from=2026-11-01&to=2026-11-30&q=gel&format=${format}`,
+    ]));
   });
 
   it('shows tiles that add up the visible rows', async () => {
