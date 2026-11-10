@@ -21,9 +21,9 @@ import {
 import type {
   AppointmentInSlot,
   AppointmentCalendar,
+  ClinicBillAccess,
   TimeSlotConfig,
   GetDoctorScheduleResponse,
-  Appointment
 } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 import { useOverbookConfirm } from './useOverbookConfirm';
@@ -31,6 +31,10 @@ import { overbookFlag } from '@/lib/overbooking';
 import { displayCalendarDate } from '@/lib/date-display';
 import { CALENDARS, CALENDAR_ORDER, canMove, type SlotChoice } from './appointment-calendars';
 import CalendarColumn, { type SlotAction } from './CalendarColumn';
+import { AppointmentBillDialog } from './AppointmentBillDialog';
+import { BILL_TYPE_LABEL, billingChip } from './appointment-billing-view';
+
+const NO_BILL_ACCESS: ClinicBillAccess = { read: false, createBill: false, takePayment: false };
 
 /**
  * @cc [owner:nareshshah139,label:product] optimistic-booking-origin
@@ -140,6 +144,9 @@ function DoctorDayCalendarForSelection({
   const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState<boolean>(false);
   const [placing, setPlacing] = useState<boolean>(false);
+  const [billAccess, setBillAccess] = useState<ClinicBillAccess>(NO_BILL_ACCESS);
+  const [billForId, setBillForId] = useState<string | null>(null);
+  const billFor = billForId ? schedule.find((a) => a.id === billForId) ?? null : null;
 
   const slotMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
   const baseGridSlots = useMemo(() => generateTimeSlots({
@@ -232,61 +239,33 @@ function DoctorDayCalendarForSelection({
 
       const res: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
       const sourceAppointments = Array.isArray(res?.appointments) ? res.appointments : [];
+      const items: AppointmentInSlot[] = sourceAppointments
+        .filter((a) => (a.status as AppointmentStatus) !== AppointmentStatus.CANCELLED)
+        .map((a) => ({
+          slot: a.slot,
+          patient: a.patient ? {
+            id: a.patient.id,
+            name: formatPatientName(a.patient),
+            phone: a.patient.phone,
+            email: a.patient.email ?? undefined,
+            gender: a.patient.gender ?? undefined,
+            dob: a.patient.dob ?? undefined,
+            age: a.patient.age ?? (a.patient.dob ? calculateAge(a.patient.dob) ?? undefined : undefined),
+          } : { id: '', name: 'Unknown Patient' },
+          doctor: a.doctor || { firstName: 'Dr.', lastName: 'Unknown' },
+          visitType: a.visitType || 'OPD',
+          room: a.room,
+          id: a.id,
+          status: (a.status as AppointmentStatus) || AppointmentStatus.SCHEDULED,
+          calendar: a.calendar,
+          visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
+          billType: a.billType,
+          billing: a.billing,
+          notes: a.notes ?? undefined,
+          tokenNumber: a.tokenNumber ?? undefined,
+        }));
 
-      // Enrich appointments with patient details (age, gender, visit history)
-      const items: AppointmentInSlot[] = await Promise.all(
-        sourceAppointments
-          .filter((a: Appointment) => (a.status as AppointmentStatus) !== AppointmentStatus.CANCELLED)
-          .map(async (a) => {
-            let patientDetails: any = null;
-            let isFollowUp = false;
-
-            if (a.patient?.id) {
-              try {
-                patientDetails = await apiClient.getPatient(a.patient.id);
-                if (patientDetails) {
-                  try {
-                    const visitHistory: any = await apiClient.getPatientVisitHistory(a.patient.id);
-                    const visits = Array.isArray(visitHistory) ? visitHistory : (visitHistory?.visits || visitHistory?.data || []);
-                    isFollowUp = visits.length > 0;
-                  } catch (err) {
-                    console.warn('Failed to fetch visit history:', err);
-                  }
-                }
-              } catch (err) {
-                console.warn('Failed to fetch patient details:', err);
-              }
-            }
-
-            const age = (patientDetails as any)?.age != null
-              ? (patientDetails as any).age
-              : patientDetails?.dob ? calculateAge(patientDetails.dob) : undefined;
-
-            return {
-              slot: a.slot,
-              patient: a.patient ? {
-                id: a.patient.id,
-                name: formatPatientName(a.patient),
-                phone: a.patient.phone,
-                email: a.patient.email,
-                gender: patientDetails?.gender,
-                dob: patientDetails?.dob,
-                age: age ?? undefined,
-              } : { id: '', name: 'Unknown Patient' },
-              doctor: a.doctor || { firstName: 'Dr.', lastName: 'Unknown' },
-              visitType: a.visitType || 'OPD',
-              room: a.room,
-              id: a.id,
-              status: (a.status as AppointmentStatus) || AppointmentStatus.SCHEDULED,
-              calendar: a.calendar,
-              visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
-              isFollowUp,
-              notes: (a as any).notes ?? undefined,
-              tokenNumber: a.tokenNumber ?? undefined,
-            };
-          })
-      );
-
+      if (request === scheduleRequest.current) setBillAccess(res?.billingAccess ?? NO_BILL_ACCESS);
       if (request === scheduleRequest.current) setSchedule(items);
     } catch (e) {
       if (request !== scheduleRequest.current) return;
@@ -524,6 +503,7 @@ function DoctorDayCalendarForSelection({
                   onOpen={setSelectedAppointment}
                   onReschedule={(appointment) => setMove({ appointment, from: date })}
                   onStartVisit={handleStartVisit}
+                  onOpenBill={billAccess.read ? (appointment) => setBillForId(appointment.id) : undefined}
                   onBook={(slot) => onSelectSlot?.(slot, calendar)}
                   onMove={(slot) => void moveInto({ slot, calendar })}
                 />
@@ -540,6 +520,17 @@ function DoctorDayCalendarForSelection({
       </Card>
 
       {overbookDialog}
+
+      <AppointmentBillDialog
+        appointment={billFor}
+        date={date}
+        access={billAccess}
+        onClose={() => setBillForId(null)}
+        onChanged={async () => {
+          await fetchSchedule();
+          onAppointmentUpdate?.();
+        }}
+      />
 
       <Dialog open={!!selectedAppointment && !showCancelDialog} onOpenChange={(v: boolean) => { if (!v) setSelectedAppointment(null); }}>
         <DialogContent>
@@ -569,11 +560,25 @@ function DoctorDayCalendarForSelection({
               {selectedAppointment.patient?.gender && (
                 <div><span className="text-gray-600">Sex:</span> {selectedAppointment.patient.gender}</div>
               )}
-              {selectedAppointment.isFollowUp && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                    FOLLOW-UP (Existing Patient)
-                  </Badge>
+              {selectedAppointment.billType && (
+                <div><span className="text-gray-600">Bill type:</span> {BILL_TYPE_LABEL[selectedAppointment.billType]}</div>
+              )}
+              {selectedAppointment.billing && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-gray-600">Bill:</span>
+                  <span className={selectedAppointment.billing.attention ? 'font-semibold text-amber-800' : 'font-medium'}>
+                    {billingChip(selectedAppointment.billing).text}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setBillForId(selectedAppointment.id);
+                      setSelectedAppointment(null);
+                    }}
+                  >
+                    {selectedAppointment.billing.invoices.length ? 'Open bill' : billAccess.createBill ? 'Create bill' : 'View bill'}
+                  </Button>
                 </div>
               )}
               <div className="flex items-center gap-2">
