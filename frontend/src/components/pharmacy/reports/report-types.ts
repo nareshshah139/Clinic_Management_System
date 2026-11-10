@@ -77,4 +77,29 @@ export type DailyCollection = {
   history: CashCount[];
 };
 
-export type DailyCollectionReport = PharmacyReport & { collection: DailyCollection; canRecordCount: boolean };
+/** Mirrors backend/src/modules/pharmacy/daily-collection-clinic.ts. */
+export type ClinicCollection = {
+  day: string;
+  modes: { mode: CollectionMode; label: string; received: number; refunds: number; net: number }[];
+  billCount: number;
+  billed: number;
+  collectedOnTodaysBills: number;
+  dueAtDayEnd: number;
+  received: number;
+  refunds: number;
+  net: number;
+};
+export type WholeDay = {
+  modes: { mode: CollectionMode; label: string; clinic: number; pharmacy: number; total: number }[];
+  clinic: number;
+  pharmacy: number;
+  total: number;
+};
+
+export type DailyCollectionReport = PharmacyReport & {
+  collection: DailyCollection;
+  canRecordCount: boolean;
+  /** Null for a viewer who cannot read clinic bills. */
+  clinic: ClinicCollection | null;
+  wholeDay: WholeDay | null;
+};

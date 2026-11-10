@@ -243,7 +243,7 @@ describe('daily collection', () => {
       counted: 3390,
       difference: 0,
     });
-    expect(tiles.find((t) => t.label === 'Difference')).toMatchObject({
+    expect(tiles.find((t) => t.label === 'Pharmacy count difference')).toMatchObject({
       value: 0,
       tone: 'good',
     });
@@ -300,7 +300,7 @@ describe('daily collection', () => {
       returns,
     });
     expect(sections[0].columns.map((c) => c.key)).not.toContain('counted');
-    expect(tiles.find((t) => t.label === 'Difference')!.value).toBe(
+    expect(tiles.find((t) => t.label === 'Pharmacy count difference')!.value).toBe(
       'Not counted',
     );
   });
