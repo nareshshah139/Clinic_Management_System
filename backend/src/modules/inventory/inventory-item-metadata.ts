@@ -5,7 +5,8 @@ import {
 } from '@nestjs/common';
 import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
 import { jsonObject, stockStatus } from './inventory-stock';
-import { retainPreviousInventoryName } from './inventory-names';
+import { retainPreviousInventoryName, withStandardName } from './inventory-names';
+import { MEDICINE_FORM_KEYS, medicineNameProblems } from './medicine-names';
 import type { WorkflowActor } from './inventory-workflow.types';
 
 /**
@@ -21,6 +22,8 @@ import type { WorkflowActor } from './inventory-workflow.types';
  * @cc [owner:nareshshah139,label:product] item-metadata-correction-validation
  * Changed batch labels, expiry or manual targets require a reason; invalid dates, conflicting
  * codes, minimum above maximum and archiving remaining stock MUST reject without an edit.
+ * Naming edits MUST keep the standard name in step with form, name and strength, and MUST NOT
+ * clear a saved form or strength; a strength that was never known may stay blank (Q17).
  */
 /**
  * @cc [owner:nareshshah139,label:product] item-metadata-atomic-audit
@@ -103,12 +106,34 @@ export async function saveInventoryItemMetadata(
       'storageConditions',
       'barcode',
       'sku',
+      'strength',
+      'itemCode',
     ])
       if (input[f] !== undefined) data[f] = String(input[f]).trim() || null;
     if (input.name !== undefined && !data.name)
       throw new BadRequestException('Product name is required');
+    if (input.form !== undefined) {
+      if (input.form !== null && input.form !== '' && !MEDICINE_FORM_KEYS.includes(input.form))
+        throw new BadRequestException('Choose a listed form');
+      data.form = input.form || null;
+    }
+    if (input.isCombination !== undefined) {
+      if (typeof input.isCombination !== 'boolean')
+        throw new BadRequestException('isCombination must be true or false');
+      data.isCombination = input.isCombination;
+    }
+    const naming = ['name', 'form', 'brandName', 'strength', 'isCombination'].some((f) => input[f] !== undefined);
+    if (naming) {
+      const next = (f: string) => (Object.prototype.hasOwnProperty.call(data, f) ? data[f] : item[f]);
+      const named = withStandardName({ type: next('type'), name: next('name'), brandName: next('brandName'), form: next('form'), strength: next('strength'), isCombination: next('isCombination') });
+      const problems = medicineNameProblems({ ...named, name: named.brandName || named.name }).filter((p) =>
+        p.field === 'name' || (p.field === 'form' && item.form) || (p.field === 'strength' && (item.strength || '').trim()));
+      if (problems.length) throw new BadRequestException(problems.map((p) => p.message).join(' '));
+      for (const f of ['name', 'brandName', 'strength', 'isCombination'] as const)
+        if (named[f] !== item[f]) data[f] = named[f];
+    }
     if (data.name && data.name !== item.name)
-      retainPreviousInventoryName(meta, item.name);
+      retainPreviousInventoryName(meta, item.name, Boolean(data.form ?? item.form));
     for (const f of ['barcode', 'sku'])
       if (
         data[f] &&

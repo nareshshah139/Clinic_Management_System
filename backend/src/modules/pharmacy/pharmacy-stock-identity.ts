@@ -3,6 +3,9 @@ import {
   checkedProductQuery,
   matchProductSearch,
 } from '../../shared/search/product-search';
+import { inventoryNameAliases } from '../inventory/inventory-names';
+import { strengthMissing } from '../inventory/medicine-names';
+import { jsonObject } from '../inventory/inventory-stock';
 
 export type PrescriptionIdentity = {
   drugName: string;
@@ -38,10 +41,17 @@ export const stockIdentityKey = (item: any) =>
       ])
     : `inventory:${item.id}`;
 
+/** Names an item has been known by, so prescriptions and searches that used them still find it. */
+export const inventoryKnownNames = (item: { name: string; metadata?: string | null }) => [
+  item.name,
+  ...inventoryNameAliases(jsonObject(item.metadata)),
+];
+
 /**
  * @cc [owner:nareshshah139,label:product] clinic-inventory-search-only
  * Prescription suggestions MUST come from active inventory in the current branch, ranked before
- * limiting. Similar names are suggestions only; different stock units or packs remain separate.
+ * limiting, and MUST show each item's stored standard name while still matching its earlier names.
+ * Similar names are suggestions only; different stock units or packs remain separate.
  */
 export async function searchClinicInventory(
   prisma: any,
@@ -59,8 +69,10 @@ export async function searchClinicInventory(
   });
   const groups = new Map<string, any>();
   for (const item of items) {
+    const aliases = inventoryKnownNames(item).slice(1);
     const match = matchProductSearch(q, {
-      names: [item.name, ...item.drugs.map((d: any) => d.name)],
+      names: [item.name, item.brandName, ...item.drugs.map((d: any) => d.name)].filter(Boolean),
+      aliases,
       ingredients: [
         item.genericName || '',
         ...item.drugs.flatMap((d: any) => [
@@ -68,8 +80,8 @@ export async function searchClinicInventory(
           d.composition2 || '',
         ]),
       ],
-      codes: [item.id, item.barcode, item.sku],
-      details: [item.packUnit],
+      codes: [item.id, item.barcode, item.sku, item.itemCode],
+      details: [item.packUnit, item.strength],
     });
     const key = stockIdentityKey(item),
       previous = groups.get(key);
@@ -102,8 +114,10 @@ export async function searchClinicInventory(
       gstRate: item.gstRate,
       manufacturerName: item.manufacturer || drug?.manufacturerName || '',
       manufacturer: item.manufacturer || drug?.manufacturerName || '',
-      dosageForm: drug?.dosageForm || null,
-      form: drug?.dosageForm || null,
+      dosageForm: drug?.dosageForm || item.form || null,
+      form: drug?.dosageForm || item.form || null,
+      strengthMissing: strengthMissing(item),
+      knownNames: aliases,
       packSizeLabel:
         drug?.packSizeLabel ||
         `${item.packSize || 1} ${item.packUnit || item.unit}`,
@@ -129,7 +143,7 @@ export async function searchClinicInventory(
 /**
  * @cc [owner:nareshshah139,label:product] prescription-stock-stable-identity
  * Saved inventory IDs take precedence over names; otherwise branch-confirmed mappings precede
- * catalog IDs and unique exact inventory names. Invalid explicit links and ambiguous matches
+ * catalog IDs and unique exact inventory names, current or earlier (aliases). Invalid explicit links and ambiguous matches
  * MUST remain unresolved; fuzzy suggestions MUST NOT establish identity or mutate stock.
  */
 export async function resolvePrescriptionInventory(
@@ -171,11 +185,22 @@ export async function resolvePrescriptionInventory(
                 },
               },
             }
-          : { name: { equals: item.drugName.trim(), mode: 'insensitive' } }),
+          : {
+              OR: [
+                { name: { equals: item.drugName.trim(), mode: 'insensitive' } },
+                { metadata: { contains: JSON.stringify(item.drugName.trim()).slice(1, -1), mode: 'insensitive' } },
+              ],
+            }),
       },
       include: inventoryIdentityInclude,
       orderBy: { id: 'asc' },
-    });
+    }).then((rows: any[]) =>
+      item.drugId
+        ? rows
+        : rows.filter((row) =>
+            row.name.trim().toLowerCase() === item.drugName.trim().toLowerCase() ||
+            inventoryKnownNames(row).some((name) => prescriptionNameKey(name) === prescriptionNameKey(item.drugName))),
+    );
     // An existing catalog identity without stock must be reviewed, never switched by name.
     if (
       !candidates.length ||

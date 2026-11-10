@@ -7,6 +7,7 @@ import {
 } from '../../shared/search/product-search';
 import { inventoryNameAliases } from './inventory-names';
 import { money } from './inventory-stock';
+import { STRENGTH_REQUIRED_FORMS } from './medicine-names';
 
 type StockDatabase = Pick<
   Prisma.TransactionClient,
@@ -51,6 +52,7 @@ const issues = {
   'Expiry missing': Prisma.sql`i."expiryDate" IS NULL`,
   'Purchase price missing': Prisma.sql`i."costPrice" = 0`,
   'MRP missing': Prisma.sql`coalesce(i.mrp, 0) = 0`,
+  'Strength missing': Prisma.sql`i.form::text IN (${Prisma.join(STRENGTH_REQUIRED_FORMS)}) AND NOT i."isCombination" AND coalesce(trim(i.strength), '') = ''`,
 };
 const truthy = (value: Prisma.Sql) =>
   Prisma.sql`coalesce(${value}, 'null'::jsonb) NOT IN ('null'::jsonb, 'false'::jsonb, '0'::jsonb, '""'::jsonb)`;
@@ -247,6 +249,7 @@ export async function readStockPage(
     for (;;) {
       const candidates = await db.$queryRaw<any[]>(Prisma.sql`${filtered()}
         SELECT i.id, i.name, i."brandName", i."genericName", i.manufacturer, i.category, i."packSize", i."packUnit",
+          i.form, i.strength, i."isCombination", i."itemCode", i.unit,
           i."batchNumber", i.barcode, i.sku, i.meta AS metadata,
           coalesce((SELECT jsonb_agg(jsonb_build_object('id', d.id, 'name', d.name, 'packSizeLabel', d."packSizeLabel", 'composition1', d.composition1,
             'composition2', d.composition2, 'manufacturerName', d."manufacturerName", 'strength', d.strength, 'dosageForm', d."dosageForm") ORDER BY d.id)
@@ -284,6 +287,7 @@ export async function readStockPage(
             i.barcode,
             i.sku,
             i.metadata.sourceItemCode,
+            i.itemCode,
           ],
         });
         if (match) matches.set(i.id, match);

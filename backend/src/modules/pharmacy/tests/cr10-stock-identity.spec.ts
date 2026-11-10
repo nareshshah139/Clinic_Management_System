@@ -30,7 +30,7 @@ it('does not replace an invalid explicit inventory ID with a same-name item', as
   expect(prisma.inventoryItem.findMany).not.toHaveBeenCalled();
 });
 it('rejects same-name products with different identities instead of taking the first', async () => {
-  const prisma: any = { prescriptionInventoryLink: { findUnique: jest.fn().mockResolvedValue(null) }, inventoryItem: { findMany: jest.fn().mockResolvedValue([{ id: 'a', drugs: [{ id: 'one' }] }, { id: 'b', drugs: [{ id: 'two' }] }]) } };
+  const prisma: any = { prescriptionInventoryLink: { findUnique: jest.fn().mockResolvedValue(null) }, inventoryItem: { findMany: jest.fn().mockResolvedValue([{ id: 'a', name: 'Cream', drugs: [{ id: 'one' }] }, { id: 'b', name: 'cream', drugs: [{ id: 'two' }] }]) } };
   expect(await resolvePrescriptionInventory(prisma, { drugName: 'Cream' }, 'clinic')).toBeNull();
 });
 it('sums sibling batches even when only one name matches the search query', async () => {
@@ -45,4 +45,16 @@ it('counts billed quantities by saved identity when the prescription display nam
   const result = await new PharmacyPrescriptionQueueService(prisma, {} as any).findOne('rx', 'clinic');
   expect(result.medications[0].dispensedQuantity).toBe(3);
   expect(result.status).toBe('dispensed');
+});
+
+it('finds an old prescription line by the name the item had before it was standardised', async () => {
+  const flutas = { id: 'flutas', name: 'Tab. Flutas 150 mg', status: 'ACTIVE', drugs: [], metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc)'] } }) };
+  const lookalike = { id: 'other', name: 'Tab. Flutas 50 mg', status: 'ACTIVE', drugs: [], metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc) old'] } }) };
+  const prisma: any = { prescriptionInventoryLink: { findUnique: jest.fn().mockResolvedValue(null) }, inventoryItem: { findMany: jest.fn().mockResolvedValue([flutas, lookalike]) } };
+  const resolved = await resolvePrescriptionInventory(prisma, { drugName: '13 74 | Flutas 150Mg(Pc)' }, 'clinic');
+  expect(resolved?.anchor.id).toBe('flutas');
+  expect(prisma.inventoryItem.findMany.mock.calls[0][0].where.OR).toEqual([
+    { name: { equals: '13 74 | Flutas 150Mg(Pc)', mode: 'insensitive' } },
+    { metadata: { contains: '13 74 | Flutas 150Mg(Pc)', mode: 'insensitive' } },
+  ]);
 });

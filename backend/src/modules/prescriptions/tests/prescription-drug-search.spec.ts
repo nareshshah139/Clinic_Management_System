@@ -38,3 +38,20 @@ it('passes the authenticated branch to the prescription service', async () => {
   await new PrescriptionsController(service as any).autocompleteDrugs('tyrodin', { user: { id: 'doctor', branchId: 'clinic', role: 'DOCTOR' } }, 30);
   expect(service.autocompleteDrugs).toHaveBeenCalledWith('tyrodin', 30, 'clinic');
 });
+describe('standard medicine names in the picker', () => {
+  const flutas = {
+    ...item, id: 'flutas', name: 'Tab. Flutas 150 mg', brandName: 'Flutas', form: 'TABLET', strength: '150 mg', isCombination: false, itemCode: '13 74',
+    unit: 'STRIPS', packSize: 1, packUnit: 'tablet', drugs: [],
+    metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc)'], recordedName: '13 74 | Flutas 150Mg(Pc)' } }),
+  };
+  const acnosis = { ...flutas, id: 'acnosis', name: 'Tab. Acnosis', brandName: 'Acnosis', strength: null, itemCode: '199', metadata: null };
+  it('shows the standard name whether the doctor types the new or the recorded name', async () => {
+    for (const query of ['flutas 150', '13 74 | Flutas 150Mg(Pc)', 'Tab. Flutas'])
+      expect((await searchPrescriptionDrugs(database([flutas, acnosis]) as any, query, 30, 'clinic')).map((r: any) => [r.name, r.knownNames, r.strengthMissing]))
+        .toEqual([['Tab. Flutas 150 mg', ['13 74 | Flutas 150Mg(Pc)'], false]]);
+  });
+  it('flags a tablet whose strength is not known yet without hiding it', async () => {
+    expect((await searchPrescriptionDrugs(database([flutas, acnosis]) as any, 'acnosis', 30, 'clinic')).map((r: any) => [r.name, r.strengthMissing]))
+      .toEqual([['Tab. Acnosis', true]]);
+  });
+});
