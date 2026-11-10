@@ -3,6 +3,7 @@ import { BillingService } from '../billing.service';
 
 type Invoice = {
   id: string;
+  invoiceNo: string;
   branchId: string;
   patientId: string;
   total: number;
@@ -55,6 +56,22 @@ function setup(
       update: jest.fn(async ({ where, data }) =>
         Object.assign(invoices.find((i) => i.id === where.id)!, data),
       ),
+      updateMany: jest.fn(async ({ where, data }) => {
+        const row: any = invoices.find(
+          (i: any) =>
+            i.id === where.id &&
+            Object.entries(where).every(
+              ([key, test]: [string, any]) => key === 'id' || i[key] >= test.gte,
+            ),
+        );
+        if (!row) return { count: 0 };
+        for (const [key, change] of Object.entries<any>(data))
+          row[key] += change.increment ?? -change.decrement;
+        return { count: 1 };
+      }),
+      findUniqueOrThrow: jest.fn(async ({ where }) =>
+        invoices.find((i) => i.id === where.id),
+      ),
     },
     newPayment: {
       create: jest.fn(async ({ data }) => {
@@ -81,6 +98,7 @@ function setup(
       }),
     },
   };
+  prisma.$transaction = jest.fn(async (command: any) => command(prisma));
   const numbers: any = {
     reserve: jest.fn(async () => ({ sequence: 7, periodKey: '2611' })),
   };
@@ -95,6 +113,7 @@ function setup(
 
 const invoiceOf = (over: Partial<Invoice> = {}): Invoice => ({
   id: 'inv-1',
+  invoiceNo: 'INV-20261110-007',
   branchId: 'branch-a',
   patientId: 'pat-1',
   total: 1180,
@@ -186,13 +205,18 @@ describe('billing payment application', () => {
     expect(invoices[0]).toMatchObject({ received: 1180, balance: 0 });
   });
 
-  it('never lets the balance go negative on an overpayment', async () => {
-    const { service, invoices } = setup({ invoices: [invoiceOf()] });
-    await service.processPayment(
-      { invoiceId: 'inv-1', amount: 1500, method: 'CASH' } as any,
-      'branch-a',
+  it('refuses an overpayment, naming what is due, and writes nothing', async () => {
+    const { service, prisma, invoices } = setup({ invoices: [invoiceOf()] });
+    await expect(
+      service.processPayment(
+        { invoiceId: 'inv-1', amount: 1500, method: 'CASH' } as any,
+        'branch-a',
+      ),
+    ).rejects.toThrow(
+      'Only ₹1,180 is due on bill INV-20261110-007, so ₹1,500 cannot be recorded.',
     );
-    expect(invoices[0].balance).toBe(0);
+    expect(prisma.newPayment.create).not.toHaveBeenCalled();
+    expect(invoices[0]).toMatchObject({ received: 0, balance: 1180 });
   });
 
   it('keeps fractional balances exact to the paisa', async () => {
