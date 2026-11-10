@@ -134,8 +134,6 @@ GET /patients | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACC
 GET /patients/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /patients/:id/next-appointment | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /patients/:id/portal-user | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
-GET /pharmacy/1mg/products/:sku | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
-GET /pharmacy/1mg/search | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 GET /pharmacy/agent/runs/:runId | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use
 GET /pharmacy/agent/sessions | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use
 GET /pharmacy/agent/sessions/:sessionId | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use
@@ -360,11 +358,6 @@ POST /patients/:id/link-user | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION
 POST /patients/:id/send-appointment-reminder | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /patients/:id/unarchive | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /patients/:id/unlink-user | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
-POST /pharmacy/1mg/check-inventory | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
-POST /pharmacy/1mg/orders | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
-POST /pharmacy/1mg/orders/:id/confirm | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
-POST /pharmacy/1mg/webhooks/order-status | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
-POST /pharmacy/1mg/webhooks/payment | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 POST /pharmacy/agent/proposals/:proposalId/apply | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use & pharmacy:agent:proposal:apply
 POST /pharmacy/agent/proposals/:proposalId/reject | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use
 POST /pharmacy/agent/sessions | roles: ADMIN,PHARMACIST,MANAGER,DOCTOR | permissions: pharmacy:agent:use

@@ -1114,20 +1114,6 @@ export class ApiClient {
     return this.get('/prescriptions/fields/autocomplete', params);
   }
 
-  // 1MG proxy endpoints
-  async oneMgSearch(query: string, limit = 10) {
-    return this.get('/pharmacy/1mg/search', { q: query, limit });
-  }
-  async oneMgProduct(sku: string) {
-    return this.get(`/pharmacy/1mg/products/${sku}`);
-  }
-  async oneMgCheckInventory(payload: Record<string, unknown>) {
-    return this.post('/pharmacy/1mg/check-inventory', payload);
-  }
-  async oneMgCreateOrder(payload: Record<string, unknown>) {
-    return this.post('/pharmacy/1mg/orders', payload);
-  }
-
   // Admin operations
   async createDatabaseBackup() {
     return this.post('/auth/backup', {});

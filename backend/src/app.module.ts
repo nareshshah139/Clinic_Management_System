@@ -19,7 +19,6 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { UsersModule } from './modules/users/users.module';
 import { JwtAuthGuard } from './shared/guards/jwt-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
-import { OneMgModule } from './modules/pharmacy/one-mg/one-mg.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 import { PharmacyAgentModule } from './modules/pharmacy-agent/pharmacy-agent.module';
 import { StockPredictionModule } from './modules/stock-prediction/stock-prediction.module';
@@ -65,7 +64,6 @@ const fullFeatureModules = [
   // ConsentsModule,
   UsersModule,
   NotificationsModule,
-  OneMgModule,
   PharmacyModule,
   PharmacyAgentModule,
   StockPredictionModule,
