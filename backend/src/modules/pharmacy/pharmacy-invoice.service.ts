@@ -2367,7 +2367,9 @@ export class PharmacyInvoiceService {
         totalAmount: invoice.totalAmount,
       };
       const after = {
-        billDiscount: discount?.value ? discount : null,
+        billDiscount: discount?.value
+          ? { kind: discount.kind, value: discount.value }
+          : null,
         lines: items.map((item, index) => ({
           id: item.id,
           discountPercent: lineDiscounts.get(item.id) ?? item.discountPercent,

@@ -356,10 +356,6 @@ export class UpdatePharmacyInvoiceDto {
   notes?: string;
 
   @ApiPropertyOptional({
-    description: 'Invoice items',
-    type: [PharmacyInvoiceItemDto],
-  })
-  @ApiPropertyOptional({
     type: BillDiscountDto,
     nullable: true,
     description: 'Discount on the whole bill; null removes it, omitted keeps it',
@@ -369,6 +365,10 @@ export class UpdatePharmacyInvoiceDto {
   @Type(() => BillDiscountDto)
   billDiscount?: BillDiscountDto | null;
 
+  @ApiPropertyOptional({
+    description: 'Invoice items',
+    type: [PharmacyInvoiceItemDto],
+  })
   @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
