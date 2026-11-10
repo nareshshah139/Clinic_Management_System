@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { retainPreviousInventoryName } from './inventory-names';
 import { jsonObject } from './inventory-stock';
-import { parseRecordedName } from './medicine-name-parser';
+import { nameNeedsUnit, parseRecordedName } from './medicine-name-parser';
 import { strengthMissing } from './medicine-names';
 
 export type BackfillItem = {
@@ -30,29 +30,41 @@ export type MedicineNamePlan = {
   branchId: string;
   actorId: string;
   createdAt: string;
-  changes: { id: string; expected: { name: string; metadata: string | null; updatedAt: string }; next: Naming }[];
+  changes: { id: string; expected: { name: string; metadata: string | null; updatedAt: string }; next: Naming; strengthSource: string }[];
   unparsed: { id: string; name: string; type: string; reason: string; message: string }[];
   missingStrength: { id: string; name: string; recordedName: string }[];
+  needsUnit: { id: string; name: string; recordedName: string }[];
   alreadyStandard: number;
+  notMedicine: number;
 };
 
 const NAMING_FIELDS = ['name', 'brandName', 'form', 'strength', 'isCombination', 'itemCode', 'metadata'] as const;
 const iso = (value: Date | string) => new Date(value).toISOString();
 
 /**
- * Reads every item that has no form yet and proposes its standard-format fields. Items whose
+ * Reads every medicine that has no form yet and proposes its standard-format fields. Items whose
  * recorded name cannot be read are listed, never guessed; medicines still missing a strength are
- * listed for the clinic (Q17). Items that already have a form are left alone.
+ * listed for the clinic (Q17), and those whose name carries a number without its unit are also
+ * listed for the pharmacist to enter the unit. Items that already have a form, and items that are
+ * not medicines, are left alone.
  */
 export function planMedicineNames(items: BackfillItem[], branchId: string, actorId: string): MedicineNamePlan {
   const operationId = `medicine-names-${randomUUID()}`;
-  const plan: MedicineNamePlan = { version: 1, operationId, branchId, actorId, createdAt: new Date().toISOString(), changes: [], unparsed: [], missingStrength: [], alreadyStandard: 0 };
+  const plan: MedicineNamePlan = {
+    version: 1, operationId, branchId, actorId, createdAt: new Date().toISOString(), changes: [], unparsed: [], missingStrength: [], needsUnit: [], alreadyStandard: 0, notMedicine: 0,
+  };
   for (const item of [...items].sort((a, b) => a.id.localeCompare(b.id))) {
     if (item.branchId !== branchId) throw new Error(`Item ${item.id} is not in branch ${branchId}`);
     const meta = jsonObject(item.metadata);
     if (item.form) {
       plan.alreadyStandard++;
-      if (strengthMissing(item)) plan.missingStrength.push({ id: item.id, name: item.name, recordedName: meta.nameNormalization?.recordedName ?? item.name });
+      const listed = { id: item.id, name: item.name, recordedName: meta.nameNormalization?.recordedName ?? item.name };
+      if (strengthMissing(item)) plan.missingStrength.push(listed);
+      if (nameNeedsUnit({ ...item, name: item.brandName || item.name })) plan.needsUnit.push(listed);
+      continue;
+    }
+    if (item.type !== 'MEDICINE') {
+      plan.notMedicine++;
       continue;
     }
     const drug = item.drugs?.length === 1 ? item.drugs[0] : undefined;
@@ -81,10 +93,34 @@ export function planMedicineNames(items: BackfillItem[], branchId: string, actor
         itemCode: parsed.itemCode || item.itemCode || null,
         metadata: JSON.stringify(meta),
       },
+      strengthSource: parsed.isCombination
+        ? 'combination: none printed'
+        : parsed.strength
+          ? 'unit stated in recorded name'
+          : parsed.needsUnit
+            ? 'none: number without a unit (needs-unit.csv)'
+            : 'none in recorded name',
     });
     if (parsed.strengthMissing) plan.missingStrength.push({ id: item.id, name: parsed.standardName, recordedName: item.name });
+    if (parsed.needsUnit) plan.needsUnit.push({ id: item.id, name: parsed.standardName, recordedName: item.name });
   }
   return plan;
+}
+
+const csv = (rows: Record<string, unknown>[], columns: string[]) =>
+  [columns.join(','), ...rows.map((row) => columns.map((c) => `"${String(row[c] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n') + '\n';
+
+/** The files a reviewer reads before a plan is applied: every rename, and every list the clinic must act on. */
+export function planReviewFiles(plan: MedicineNamePlan): Record<string, string> {
+  const changes = plan.changes.map((c) => ({
+    id: c.id, recordedName: c.expected.name, newName: c.next.name, form: c.next.form, strength: c.next.strength ?? '', strengthSource: c.strengthSource,
+  }));
+  return {
+    'changes.csv': csv(changes, ['id', 'recordedName', 'newName', 'form', 'strength', 'strengthSource']),
+    'could-not-read.csv': csv(plan.unparsed, ['id', 'type', 'name', 'reason', 'message']),
+    'missing-strength.csv': csv(plan.missingStrength, ['id', 'name', 'recordedName']),
+    'needs-unit.csv': csv(plan.needsUnit, ['id', 'name', 'recordedName']),
+  };
 }
 
 /**

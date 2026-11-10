@@ -69,7 +69,7 @@ export function withStandardName<T extends NamingInput>(input: T): T {
   if (!input.form) return { ...input, ...(itemCode !== undefined && { itemCode }) };
   const brandName = tidy(input.brandName || input.name);
   const isCombination = Boolean(input.isCombination);
-  const strength = normalizeStrength(input.strength, input.form) || null;
+  const strength = normalizeStrength(input.strength) || null;
   return {
     ...input,
     ...(itemCode !== undefined && { itemCode }),

@@ -24,6 +24,7 @@ export type ParsedMedicineName =
       itemCode: string;
       standardName: string;
       strengthMissing: boolean;
+      needsUnit: boolean;
     }
   | { ok: false; reason: 'form' | 'strength' | 'name'; message: string };
 
@@ -31,6 +32,16 @@ const DETECTION_ORDER: MedicineFormKey[] = [
   'SUNSCREEN', 'FACE_WASH', 'SHAMPOO', 'SERUM', 'OINTMENT', 'CREAM', 'LOTION', 'GEL', 'SOLUTION', 'SYRUP', 'CAPSULE', 'TABLET',
 ];
 const UNIT_FORMS: Record<string, MedicineFormKey> = { TABLETS: 'TABLET', CAPSULES: 'CAPSULE' };
+/** Forms where "1g" is the dose; on creams, gels and the rest "30g" is the pack. */
+const GRAM_DOSE_FORMS: MedicineFormKey[] = ['TABLET', 'CAPSULE'];
+/** A number that belongs to the brand ("Omega 3"); D3, B12 and Q10 are single words and never read as numbers. */
+const BRAND_NUMBER = /\bomega[\s-]+\d+\b/gi;
+const BARE_NUMBER = /(?<![\w.\/-])\d+(?:\.\d+)?(?![\w.%\/-])/;
+
+/** A medicine with no strength whose name carries a number that may be one ("Thyronorm 50"): the pharmacist enters the unit. */
+export function nameNeedsUnit(fields: { form?: string | null; name?: string | null; strength?: string | null; isCombination?: boolean | null }): boolean {
+  return strengthMissing(fields) && !normalizeStrength(fields.strength) && BARE_NUMBER.test(String(fields.name ?? '').replace(BRAND_NUMBER, ' '));
+}
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const wordPattern = (form: MedicineFormKey) =>
   new RegExp(`(?<![\\w-])(?:${MEDICINE_FORMS[form].words.map(escape).join('|')})\\.?(?![\\w-])`, 'gi');
@@ -73,7 +84,9 @@ function ingredientCount(hints: RecordedNameHints): number {
 /**
  * Reads a recorded inventory name such as "13 74 | Flutas 150Mg(Pc)" into the separate fields
  * of the standard format. Returns why it could not when the form, the name or a single strength
- * cannot be told apart; those items are listed for the clinic instead of guessed.
+ * cannot be told apart; those items are listed for the clinic instead of guessed. A strength is read
+ * only when the name states its unit: "Thyronorm 50 Tab" keeps 50 in the name, with no strength,
+ * and is flagged needsUnit so the pharmacist can enter the unit.
  */
 export function parseRecordedName(recorded: string, hints: RecordedNameHints = {}): ParsedMedicineName {
   let text = String(recorded ?? '').replace(/\s+/g, ' ').trim();
@@ -91,18 +104,7 @@ export function parseRecordedName(recorded: string, hints: RecordedNameHints = {
     })
     .replace(/\((?:pc|pcs|strip|strips)\)/gi, ' ')
     .replace(/(?<![\w./])\d+\s*['’]?s\b/gi, ' ')
-    .replace(/(?<![\w./])\d+\s*[x×]\s*\d+\b/gi, ' ')
-    .replace(/(?<![\w./])\d+(?:\.\d+)?\s*(?:ml|gm|g)\b(?!\s*\/)/gi, ' ');
-  const strengths: string[] = [];
-  text = text
-    .replace(/(?<![\w.])(\d+(?:\.\d+)?)\s*(mg|mcg)\s*\/\s*(\d+(?:\.\d+)?)\s*ml\b/gi, (match) => {
-      strengths.push(normalizeStrength(match));
-      return ' ';
-    })
-    .replace(/(?<![\w./])(\d+(?:\.\d+)?)\s*(mg|mcg|iu|%)(?![\w/])/gi, (match) => {
-      strengths.push(normalizeStrength(match));
-      return ' ';
-    });
+    .replace(/(?<![\w./])\d+\s*[x×]\s*\d+\b/gi, ' ');
   const form =
     formIn(text) ??
     noteForm ??
@@ -110,13 +112,17 @@ export function parseRecordedName(recorded: string, hints: RecordedNameHints = {
     formIn(hints.packUnit) ??
     UNIT_FORMS[String(hints.unit ?? '')] ??
     null;
+  const gramDose = Boolean(form && GRAM_DOSE_FORMS.includes(form));
+  text = text.replace(gramDose ? /(?<![\w./])\d+(?:\.\d+)?\s*ml\b(?!\s*\/)/gi : /(?<![\w./])\d+(?:\.\d+)?\s*(?:ml|gm|g)\b(?!\s*\/)/gi, ' ');
+  const strengths: string[] = [];
+  const read = (match: string) => {
+    strengths.push(normalizeStrength(match));
+    return ' ';
+  };
+  text = text
+    .replace(/(?<![\w.])\d+(?:\.\d+)?\s*(?:mg|mcg|µg|gm|g)\s*\/\s*\d+(?:\.\d+)?\s*ml\b/gi, read)
+    .replace(gramDose ? /(?<![\w./])\d+(?:\.\d+)?\s*(?:mg|mcg|µg|iu|%|gm|g)(?![\w/])/gi : /(?<![\w./])\d+(?:\.\d+)?\s*(?:mg|mcg|µg|iu|%)(?![\w/])/gi, read);
   for (const key of DETECTION_ORDER) text = text.replace(wordPattern(key), ' ');
-  if (form && MEDICINE_FORMS[form].prefix && !strengths.length) {
-    text = text.replace(/\s(\d+(?:\.\d+)?)\s*$/, (_, value: string) => {
-      strengths.push(normalizeStrength(value, form));
-      return ' ';
-    });
-  }
   const name = tidyName(text);
   if (!name) return { ok: false, reason: 'name', message: 'Nothing is left of the name once codes, pack sizes and the form are removed' };
   if (!form) return { ok: false, reason: 'form', message: 'The form (tablet, capsule, cream and so on) is not in the name' };
@@ -129,5 +135,6 @@ export function parseRecordedName(recorded: string, hints: RecordedNameHints = {
     itemCode,
     standardName: standardMedicineName(fields),
     strengthMissing: strengthMissing(fields),
+    needsUnit: nameNeedsUnit(fields),
   };
 }

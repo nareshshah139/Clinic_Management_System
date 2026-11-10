@@ -57,22 +57,30 @@ const ruleFor = (form: unknown): FormRule | undefined =>
 
 const unit = (raw: string) => {
   const u = raw.toLowerCase().replace('µ', 'mc');
-  return u === 'iu' ? 'IU' : u;
+  return u === 'iu' ? 'IU' : u === 'gm' ? 'g' : u;
 };
 
-/** "150Mg" -> "150 mg", "150" -> "150 mg" (tablets, capsules, syrups), "2.5 MG / 5 ML" -> "2.5mg/5ml". */
-export function normalizeStrength(raw: unknown, form?: string | null): string {
+/** The units a strength may be written in; a number without one is never given one. */
+export const STRENGTH_UNITS = ['mg', 'mcg', 'g', 'IU', '%'] as const;
+
+/** "150Mg" -> "150 mg", "50µg" -> "50 mcg", "2.5 MG / 5 ML" -> "2.5mg/5ml"; a bare "150" stays "150". */
+export function normalizeStrength(raw: unknown): string {
   const text = tidy(raw);
   if (!text) return '';
   const num = '(\\d+(?:\\.\\d+)?)';
-  const ratio = text.match(new RegExp(`^${num}\\s*(mg|mcg|µg|g)?\\s*\\/\\s*${num}\\s*(ml)$`, 'i'));
-  if (ratio) return `${ratio[1]}${unit(ratio[2] || 'mg')}/${ratio[3]}ml`;
-  const single = text.match(new RegExp(`^${num}\\s*(mg|mcg|µg|g|iu|%)?$`, 'i'));
+  const ratio = text.match(new RegExp(`^${num}\\s*(mg|mcg|µg|gm|g)\\s*\\/\\s*${num}\\s*(ml)$`, 'i'));
+  if (ratio) return `${ratio[1]}${unit(ratio[2])}/${ratio[3]}ml`;
+  const single = text.match(new RegExp(`^${num}\\s*(mg|mcg|µg|gm|g|iu|%)?$`, 'i'));
   if (single) {
-    const u = single[2] ? unit(single[2]) : ruleFor(form)?.strengthRequired ? 'mg' : '';
+    const u = single[2] ? unit(single[2]) : '';
     return u === '%' ? `${single[1]}%` : u ? `${single[1]} ${u}` : single[1];
   }
   return text;
+}
+
+/** A strength written without its unit: "50" could be 50 mg or 50 mcg, so none is assumed. */
+export function strengthUnitMissing(fields: MedicineNameFields): boolean {
+  return !fields.isCombination && /^\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?\s*ml)?$/i.test(normalizeStrength(fields.strength));
 }
 
 /** The printed name: "Tab. Flutas 150 mg", "Cap. Antoxid-HC", "Zimba cream", "Syp. Teczine 2.5mg/5ml". */
@@ -80,7 +88,7 @@ export function standardMedicineName(fields: MedicineNameFields): string {
   const rule = ruleFor(fields.form);
   let name = tidy(fields.name);
   if (!rule) return name;
-  const strength = fields.isCombination ? '' : normalizeStrength(fields.strength, fields.form);
+  const strength = fields.isCombination ? '' : normalizeStrength(fields.strength);
   const words = rule.words.map(escape).join('|');
   if (rule.prefix) {
     name = name.replace(new RegExp(`^(?:${words})\\.?\\s+`, 'i'), '');
@@ -99,7 +107,7 @@ export function strengthRequired(fields: MedicineNameFields): boolean {
 
 /** Q17: an unknown strength is allowed and listed, never blocked from prescribing. */
 export function strengthMissing(fields: MedicineNameFields): boolean {
-  return strengthRequired(fields) && !normalizeStrength(fields.strength, fields.form);
+  return strengthRequired(fields) && (!normalizeStrength(fields.strength) || strengthUnitMissing(fields));
 }
 
 export type MedicineNameProblem = { field: 'form' | 'name' | 'strength'; message: string };
@@ -110,7 +118,9 @@ export function medicineNameProblems(fields: MedicineNameFields & { type?: strin
   if (fields.type === 'MEDICINE' && !ruleFor(fields.form))
     problems.push({ field: 'form', message: 'Choose the form: tablet, capsule, syrup, cream and so on.' });
   if (!tidy(fields.name)) problems.push({ field: 'name', message: 'Enter the medicine name.' });
-  if (strengthMissing(fields))
+  if (ruleFor(fields.form) && strengthUnitMissing(fields))
+    problems.push({ field: 'strength', message: 'Add the unit to the strength, for example 50 mg, 50 mcg, 1 g, 60000 IU or 1%.' });
+  else if (strengthMissing(fields))
     problems.push({ field: 'strength', message: 'Enter the strength, for example 150 mg, or tick Combination product.' });
   return problems;
 }

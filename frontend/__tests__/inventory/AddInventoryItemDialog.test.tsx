@@ -808,6 +808,28 @@ describe('AddInventoryItemDialog', () => {
       expect(apiClient.createInventoryItem).not.toHaveBeenCalled();
     });
 
+    it('never adds a unit to a bare number: the pharmacist picks it and the preview shows it', async () => {
+      (apiClient.createInventoryItem as jest.Mock).mockResolvedValue({ id: 'item-1' });
+      open();
+      prices();
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'TABLET' } });
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), { target: { value: 'Thyronorm' } });
+      fireEvent.change(screen.getByLabelText(/^Strength/i), { target: { value: '50' } });
+      expect(screen.getByTestId('medicine-name-preview')).toHaveTextContent(/^Tab\. Thyronorm 50$/);
+      expect(screen.getByRole('group', { name: 'Unit of 50' })).toHaveTextContent('Which unit?mgmcggIU%');
+      fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Add the unit to the strength, for example 50 mg, 50 mcg, 1 g, 60000 IU or 1%.');
+      expect(apiClient.createInventoryItem).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'mcg' }));
+      expect(screen.getByLabelText(/^Strength/i)).toHaveValue('50 mcg');
+      expect(screen.getByTestId('medicine-name-preview')).toHaveTextContent('Tab. Thyronorm 50 mcg');
+      expect(screen.queryByRole('group', { name: 'Unit of 50' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
+      await waitFor(() => expect(apiClient.createInventoryItem).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Tab. Thyronorm 50 mcg', brandName: 'Thyronorm', form: 'TABLET', strength: '50 mcg',
+      })));
+    });
+
     it('refuses a medicine without a form', async () => {
       open();
       prices();

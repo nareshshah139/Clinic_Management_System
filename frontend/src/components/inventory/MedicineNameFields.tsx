@@ -1,6 +1,15 @@
 'use client';
 
-import { MEDICINE_FORMS, MEDICINE_FORM_KEYS, standardMedicineName, strengthMissing, strengthRequired } from '@/lib/medicine-names';
+import {
+  MEDICINE_FORMS,
+  MEDICINE_FORM_KEYS,
+  normalizeStrength,
+  STRENGTH_UNITS,
+  standardMedicineName,
+  strengthMissing,
+  strengthRequired,
+  strengthUnitMissing,
+} from '@/lib/medicine-names';
 
 export type MedicineNameValue = {
   form?: string | null;
@@ -17,6 +26,7 @@ const STRENGTH_EXAMPLE: Record<string, string> = { TABLET: 'e.g. 150 mg', CAPSUL
  * @cc [owner:nareshshah139,label:product] medicine-name-fields-preview
  * The form MUST show, while typing, exactly the name that will print on prescriptions, built from
  * form, name and strength. Codes and pack sizes are entered elsewhere and never appear in it.
+ * A strength typed without its unit MUST print without one until the user picks the unit.
  */
 export function MedicineNameFields({
   value,
@@ -31,6 +41,7 @@ export function MedicineNameFields({
 }) {
   const needsStrength = strengthRequired(value);
   const preview = standardMedicineName({ ...value, name: value.brandName });
+  const bare = strengthUnitMissing(value) && /^\d+(?:\.\d+)?$/.test(normalizeStrength(value.strength)) ? normalizeStrength(value.strength) : '';
   const error = (key: 'form' | 'name' | 'strength') =>
     errors[key] ? <span id={`medicine-${key}-error`} role="alert" className="mt-1 block text-sm text-destructive">{errors[key]}</span> : null;
   return (
@@ -80,6 +91,21 @@ export function MedicineNameFields({
             aria-describedby={errors.strength ? 'medicine-strength-error' : undefined}
             onChange={(event) => onChange({ strength: event.target.value })}
           />
+          {bare && (
+            <div role="group" aria-label={`Unit of ${bare}`} className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Which unit?</span>
+              {STRENGTH_UNITS.map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  className="h-8 min-w-11 rounded-md border border-input bg-background px-2.5 text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary"
+                  onClick={() => onChange({ strength: normalizeStrength(`${bare}${u === '%' ? '' : ' '}${u}`) })}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
+          )}
           {error('strength')}
         </div>
         <div className="flex items-start gap-2 self-center text-sm sm:pt-5">
@@ -100,7 +126,9 @@ export function MedicineNameFields({
       <p className="rounded-md bg-muted px-3 py-2 text-sm" aria-live="polite">
         <span className="text-muted-foreground">Prints as </span>
         <strong data-testid="medicine-name-preview">{preview || '—'}</strong>
-        {value.form && strengthMissing(value) && <span className="block text-xs text-amber-800 dark:text-amber-200">Strength missing</span>}
+        {value.form && (bare || strengthMissing(value)) && (
+          <span className="block text-xs text-amber-800 dark:text-amber-200">{bare ? `Unit missing: ${bare} could be mg or mcg` : 'Strength missing'}</span>
+        )}
       </p>
     </fieldset>
   );
