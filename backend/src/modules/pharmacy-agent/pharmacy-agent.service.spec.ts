@@ -489,3 +489,87 @@ describe('PharmacyAgentService new inventory items', () => {
     expect(prisma.inventoryItemRequest.create).not.toHaveBeenCalled();
   });
 });
+
+describe('PharmacyAgentService medicines it proposes to add', () => {
+  function setup(itemAction: Record<string, unknown>) {
+    const rows: Record<string, any[]> = { proposals: [], messages: [] };
+    const table = (name: string) => ({
+      create: jest.fn(async ({ data }) => {
+        const row = { id: `${name}-${rows[name].length + 1}`, status: 'PENDING_REVIEW', createdAt: new Date(), ...data };
+        if (data.actions) row.actions = data.actions.create.map((a: any, i: number) => ({ id: `action-${i + 1}`, status: 'PENDING', ...a }));
+        rows[name].push(row);
+        return row;
+      }),
+      findFirst: jest.fn(async ({ where }) => rows[name].find((r) => r.id === where.id) ?? null),
+      update: jest.fn(async ({ where, data }) => Object.assign(rows[name].find((r) => r.id === where.id) ?? {}, data)),
+    });
+    const prisma: any = {
+      pharmacyAgentSession: { findFirst: jest.fn().mockResolvedValue({ id: 'session-1', status: 'ACTIVE', title: 'Stock' }), update: jest.fn() },
+      pharmacyAgentMessage: table('messages'),
+      pharmacyAgentRun: { create: jest.fn().mockResolvedValue({ id: 'run-1' }), update: jest.fn() },
+      pharmacyAgentProposal: table('proposals'),
+      pharmacyAgentProposalAction: { update: jest.fn() },
+      pharmacyAgentAuditEvent: { create: jest.fn() },
+      inventoryItemRequest: { findMany: jest.fn().mockResolvedValue([]) },
+      inventoryItem: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const inventory = {
+      createInventoryItem: jest.fn(async (dto: any) => ({ id: 'item-telma', ...dto })),
+      assertItemIdentifiersFree: jest.fn(),
+    };
+    const service = new PharmacyAgentService(
+      prisma, {} as any, {} as any, {} as any, {} as any, inventory as any, {} as any,
+      new InventoryItemRequestService(prisma, inventory as any),
+    ) as any;
+    service.buildBaseContext = async () => ({});
+    service.runCodexAgent = async () => service.normalizeCodexOutput({
+      answer: 'I prepared the new item for your review.',
+      proposals: [{ title: 'Add item', summary: 'New stock line', riskLevel: 'low', actions: [{
+        actionType: 'create_inventory_item', targetType: 'inventory_item', targetId: '', permissionRequired: '', expectedVersion: '', previewJson: '{}',
+        ...itemAction,
+      }] }],
+    });
+    const doctor = { id: 'doc-1', branchId: 'branch-1', role: 'DOCTOR' };
+    return { inventory, prisma, doctor, ask: () => service.sendMessage('session-1', { message: 'Add this to stock' }, doctor), apply: (id: string) => service.applyProposal(id, doctor) };
+  }
+  const blankNaming = { form: '', medicineName: '', strength: '', isCombination: false };
+
+  it('creates "Telma 40 tablet" as Tab. Telma 40 mg when the model leaves the form out', async () => {
+    const { inventory, doctor, ask, apply } = setup({
+      inputJson: JSON.stringify({ name: 'Telma 40 tablet', type: 'MEDICINE', unit: 'TABLETS', sellingPrice: 9 }),
+      itemNaming: blankNaming,
+    });
+    const reply = await ask();
+    expect(reply.proposals).toHaveLength(1);
+    await apply(reply.proposals[0].id);
+    expect(inventory.createInventoryItem).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Tab. Telma 40 mg', brandName: 'Telma', form: 'TABLET', strength: '40 mg', isCombination: false }),
+      doctor.branchId,
+    );
+  });
+
+  it('uses the form, name and strength the model fills in', async () => {
+    const { inventory, ask, apply } = setup({
+      inputJson: JSON.stringify({ name: 'Antoxid HC', type: 'MEDICINE', unit: 'CAPSULES' }),
+      itemNaming: { form: 'CAPSULE', medicineName: 'Antoxid-HC', strength: '', isCombination: true },
+    });
+    const reply = await ask();
+    await apply(reply.proposals[0].id);
+    expect(inventory.createInventoryItem.mock.calls[0][0]).toMatchObject({ name: 'Cap. Antoxid-HC', form: 'CAPSULE', isCombination: true });
+  });
+
+  it('asks for the form instead of proposing an item it cannot name', async () => {
+    const { inventory, prisma, ask } = setup({
+      inputJson: JSON.stringify({ name: 'Zincovit', type: 'MEDICINE', unit: 'PIECES' }),
+      itemNaming: blankNaming,
+    });
+    const reply = await ask();
+    expect(reply.proposals).toEqual([]);
+    expect(reply.message.content).toBe(
+      'Before I can add "Zincovit" to inventory: which form is it: tablet, capsule, syrup, cream, ointment, solution, lotion, gel, shampoo, face wash, serum or sunscreen?',
+    );
+    expect(reply.message.structured).toMatchObject({ needsFollowUp: true, proposals: [] });
+    expect(prisma.pharmacyAgentProposal.create).not.toHaveBeenCalled();
+    expect(inventory.createInventoryItem).not.toHaveBeenCalled();
+  });
+});
