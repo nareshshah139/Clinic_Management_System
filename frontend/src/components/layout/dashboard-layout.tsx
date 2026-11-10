@@ -15,6 +15,7 @@ import { apiClient } from "@/lib/api";
 import type { ApiError } from "@/lib/api";
 import type { User } from "@/lib/types";
 import { DashboardUserProvider } from "./dashboard-user-context";
+import { AnalyticsMount } from "@/lib/analytics";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -113,6 +114,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <DashboardUserProvider value={contextValue}>
+      <AnalyticsMount user={user} />
       <div className="h-screen flex bg-gray-50">
         {/* Sidebar */}
         <div className="hidden shrink-0 md:block">
