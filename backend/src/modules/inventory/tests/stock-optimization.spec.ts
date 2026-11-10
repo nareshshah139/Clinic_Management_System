@@ -8,7 +8,7 @@ const SLV = { distributorGstin: '27AABCS1234F1Z5', distributorName: 'Shree Laxmi
 const APX = { distributorGstin: '27AAACA5678B1ZQ', distributorName: 'Apex Medico Distributors' };
 
 const bought = (lineId: string, age: number, extra: Partial<PurchaseSource> = {}): PurchaseSource => ({
-  lineId, invoiceId: `bill-${lineId}`, invoiceNumber: `SLV/${lineId}`, invoiceDate: daysAgo(age), ...SLV, ptr: 100, gstRate: 12, unreturned: 1000, ...extra,
+  lineId, invoiceId: `bill-${lineId}`, invoiceNumber: `SLV/${lineId}`, invoiceDate: daysAgo(age), ...SLV, ptr: 100, gstRate: 12, unreturnedPaid: 1000, unreturnedFree: 0, ...extra,
 });
 
 const batch = (id: string, extra: Partial<StockBatch> = {}): StockBatch => ({
@@ -94,8 +94,8 @@ describe('stock optimization classification', () => {
     );
     expect(result.returnable[0].value).toBe(2052.5);
     expect(draftLines(result.returnable[0])).toEqual([
-      { inventoryId: 'gst12', quantity: 10, unitPrice: 80, gstRate: 12, sourceLineId: 'gst12' },
-      { inventoryId: 'gst18', quantity: 5, unitPrice: 250.5, gstRate: 18, sourceLineId: 'gst18' },
+      { inventoryId: 'gst12', quantity: 10, freeQuantity: 0, unitPrice: 80, gstRate: 12, sourceLineId: 'gst12' },
+      { inventoryId: 'gst18', quantity: 5, freeQuantity: 0, unitPrice: 250.5, gstRate: 18, sourceLineId: 'gst18' },
     ]);
   });
 
@@ -104,7 +104,7 @@ describe('stock optimization classification', () => {
       [
         batch('split', {
           available: 30,
-          purchases: [bought('old-slv', 300, { unreturned: 12 }), bought('new-apx', 100, { ...APX, unreturned: 10, ptr: 90 }), bought('ancient', 500)],
+          purchases: [bought('old-slv', 300, { unreturnedPaid: 12 }), bought('new-apx', 100, { ...APX, unreturnedPaid: 10, ptr: 90 }), bought('ancient', 500)],
         }),
       ],
       rules,
@@ -118,6 +118,37 @@ describe('stock optimization classification', () => {
       ],
       nonReturnable: [['27AAACA5678B1ZQ', 760, ['split:8']]],
     });
+  });
+
+  it('sends free goods back at no value: 100 bought + 10 free at PTR 20 claims 2000 + 240 GST, not 2200 + 264', () => {
+    const result = classifyStock(
+      [batch('bonus', { available: 110, purchases: [bought('bonus', 120, { ptr: 20, gstRate: 12, unreturnedPaid: 100, unreturnedFree: 10 })] })],
+      rules,
+      now,
+    );
+    const group = result.returnable[0];
+    expect([group.value, group.rows.map((r) => [r.quantity, r.freeQuantity, r.value])]).toEqual([2000, [[110, 10, 2000]]]);
+    expect(draftLines(group)).toEqual([{ inventoryId: 'bonus', quantity: 100, freeQuantity: 10, unitPrice: 20, gstRate: 12, sourceLineId: 'bonus' }]);
+  });
+
+  it('returns part of a bill with free goods in the bill\'s paid-to-free ratio, never claiming more than was paid', () => {
+    const result = classifyStock(
+      [batch('part', { available: 55, purchases: [bought('part', 120, { ptr: 40, unreturnedPaid: 100, unreturnedFree: 10 })] })],
+      rules,
+      now,
+    );
+    expect(draftLines(result.returnable[0])).toEqual([{ inventoryId: 'part', quantity: 50, freeQuantity: 5, unitPrice: 40, gstRate: 12, sourceLineId: 'part' }]);
+    expect(result.returnable[0].value).toBe(2000);
+  });
+
+  it('judges the minimum on the paid value: 70 bought + 10 free at PTR 20 is 1400, below 1500', () => {
+    const result = classifyStock(
+      [batch('border', { available: 80, purchases: [bought('border', 120, { ptr: 20, unreturnedPaid: 70, unreturnedFree: 10 })] })],
+      rules,
+      now,
+    );
+    expect(result.returnable.map((g) => [g.value, g.belowMinimum])).toEqual([[1400, true]]);
+    expect(draftLines(result.returnable[0])).toEqual([]);
   });
 
   it('keeps stock with no purchase on record as non-returnable and sorts rows by shelf life left', () => {
@@ -142,7 +173,7 @@ describe('stock optimization classification', () => {
       rules,
       now,
     );
-    expect(draftLines(result.returnable[0])).toEqual([{ inventoryId: 'free', quantity: 20, unitPrice: 100, gstRate: 12, sourceLineId: 'free' }]);
+    expect(draftLines(result.returnable[0])).toEqual([{ inventoryId: 'free', quantity: 20, freeQuantity: 0, unitPrice: 100, gstRate: 12, sourceLineId: 'free' }]);
   });
 
   it('reads the two rules and refuses values outside their range', () => {

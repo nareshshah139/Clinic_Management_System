@@ -10,7 +10,7 @@ const api = apiClient as unknown as Record<'get' | 'post' | 'patch', jest.Mock>;
 
 const row = (name: string, extra: Record<string, unknown> = {}) => ({
   inventoryId: name, name, batchNumber: `${name.slice(0, 3).toUpperCase()}-1`, expiryDate: '2027-01-31', shelfLifeDays: 82, unit: 'TUBES',
-  quantity: 20, ptr: 75, gstRate: 18, value: 1500, idleDays: 300, lastSaleAt: null, receivedAt: '2026-01-14T00:00:00Z',
+  quantity: 20, freeQuantity: 0, ptr: 75, gstRate: 18, value: 1500, idleDays: 300, lastSaleAt: null, receivedAt: '2026-01-14T00:00:00Z',
   source: { lineId: `line-${name}`, invoiceId: 'bill-2', invoiceNumber: 'SLV/2026/02', invoiceDate: '2026-06-13' }, openReturn: null, ...extra,
 });
 const run = (extra: Record<string, unknown> = {}) => ({
@@ -82,6 +82,16 @@ it('lists returnable and non-returnable groups with literal values and flags the
   const kept = screen.getByRole('region', { name: 'Shree Laxmi Vitality Pharma non-returnable' });
   expect(kept).toHaveTextContent('Expired 10 days ago');
   expect(within(kept).queryByRole('button')).toBeNull();
+});
+
+it('shows free units apart from the paid ones and values only what was paid', async () => {
+  const bonus = row('Tab. Bonus 10 mg', { quantity: 110, freeQuantity: 10, ptr: 20, gstRate: 12, value: 2000 });
+  api.post.mockResolvedValue(run({ returnable: [{ ...run().returnable[0], value: 2000, rows: [bonus] }], nonReturnable: [], totals: { returnable: 2000, nonReturnable: 0 } }));
+  render(<StockOptimization canWrite ran onRan={jest.fn()} onDocument={jest.fn()} onReturns={jest.fn()} />);
+  const slv = await screen.findByRole('region', { name: 'Shree Laxmi Vitality Pharma returnable' });
+  const cells = within(within(slv).getByRole('table')).getAllByRole('row')[1];
+  expect(within(cells).getAllByRole('cell').map((c) => c.textContent).slice(2, 6)).toEqual(['110incl. 10 free, no value', '₹20.00', '12%', '₹2,000.00']);
+  expect(within(within(slv).getByRole('list')).getByText('100 × ₹20.00 + 10 free')).toBeInTheDocument();
 });
 
 it('creates one draft for a double press, then shows the draft and a link to Purchase returns', async () => {
