@@ -292,17 +292,36 @@ export class PharmacyInvoiceService {
     command: (tx: Prisma.TransactionClient) => Promise<T>,
     conflict = 'Invoice or stock changed concurrently. Retry this request with the same key.',
   ): Promise<T> {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        return await this.prisma.$transaction(command, {
+    return this.retryConflicts(
+      () =>
+        this.prisma.$transaction(command, {
           timeout: 15000,
           isolationLevel: 'Serializable',
-        });
+        }),
+      (error) =>
+        this.isSerializationFailure(error) ||
+        (error?.code === 'P2002' &&
+          /invoiceNumber|checkoutRequestKey/.test(String(error.meta?.target))),
+      conflict,
+    );
+  }
+
+  /**
+   * Finishing bills in one branch shares that branch's number counter, so simultaneous finishes
+   * conflict by design; a randomised, growing pause lets them take turns instead of colliding again.
+   */
+  private async retryConflicts<T>(
+    run: () => Promise<T>,
+    retryable: (error: any) => boolean,
+    conflict: string,
+  ): Promise<T> {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        return await run();
       } catch (error) {
-        const duplicate =
-          error?.code === 'P2002' &&
-          /invoiceNumber|checkoutRequestKey/.test(String(error.meta?.target));
-        if (!duplicate && !this.isSerializationFailure(error)) throw error;
+        if (!retryable(error)) throw error;
+        const ceiling = Math.min(500, 20 * 2 ** attempt);
+        await new Promise((resolve) => setTimeout(resolve, Math.random() * ceiling));
       }
     }
     throw new ConflictException(conflict);
@@ -1310,17 +1329,13 @@ export class PharmacyInvoiceService {
     branchId: string,
     userId?: string,
   ) {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        return await this.prisma.$transaction(
+    return this.retryConflicts(
+      () =>
+        this.prisma.$transaction(
           (tx) => this.transitionInvoice(tx, id, status, branchId, userId),
           { timeout: 15000, isolationLevel: 'Serializable' },
-        );
-      } catch (error) {
-        if (!this.isSerializationFailure(error)) throw error;
-      }
-    }
-    throw new ConflictException(
+        ),
+      (error) => this.isSerializationFailure(error),
       'Invoice or stock changed concurrently. Refresh and retry confirmation.',
     );
   }

@@ -253,6 +253,52 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
     );
   });
 
+  it('finishes six bills checked out at the same moment in one branch, each with the next number', async () => {
+    await db.drug.create({
+      data: { id: 'balm', name: 'Synthetic Balm', price: 40, manufacturerName: 'Synthetic', packSizeLabel: '1', branchId: 'branch' },
+    });
+    await db.inventoryItem.create({
+      data: {
+        id: 'balm-batch',
+        branchId: 'branch',
+        name: 'Synthetic Balm',
+        type: 'MEDICINE',
+        costPrice: 20,
+        sellingPrice: 40,
+        unit: 'PIECES',
+        currentStock: 12,
+        stockStatus: 'IN_STOCK',
+        expiryDate: new Date('2099-01-01'),
+        drugs: { connect: { id: 'balm' } },
+      },
+    });
+    const before = await lastIssued();
+    const outcomes = await Promise.allSettled(
+      [1, 2, 3, 4, 5, 6].map((terminal) =>
+        invoices.checkout(
+          {
+            ...bill,
+            paymentMethod: 'CASH' as const,
+            requestKey: `terminal-${terminal}`,
+            items: [{ drugId: 'balm', quantity: 1, unitPrice: 40, discountPercent: 0, taxPercent: 12 }],
+          },
+          'branch',
+          'asha',
+        ),
+      ),
+    );
+    const sold = outcomes.flatMap((outcome) => (outcome.status === 'fulfilled' ? [outcome.value] : []));
+    expect([
+      outcomes.filter((outcome) => outcome.status === 'rejected').map((outcome) => String((outcome as PromiseRejectedResult).reason)),
+      sold.map((bill) => bill.invoiceNumber).sort(),
+      (await db.inventoryItem.findUniqueOrThrow({ where: { id: 'balm-batch' } })).currentStock,
+    ]).toEqual([
+      [],
+      [1, 2, 3, 4, 5, 6].map((n) => `PHI-${year}-${String(before + n).padStart(3, '0')}`),
+      6,
+    ]);
+  });
+
   it('files a bill finished at 00:30 IST on 1 January under the new year, whatever the server clock zone', async () => {
     jest.useFakeTimers({
       now: new Date('2030-12-31T19:00:00Z'),
