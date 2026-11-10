@@ -24,7 +24,7 @@ describe('standard medicine names (shared case table)', () => {
       expect(parsed).toMatchObject({ ok: false, reason: c.unparsed });
       return;
     }
-    expect(parsed).toEqual({ ok: true, ...c.fields, standardName: c.name, strengthMissing: Boolean(c.strengthMissing) });
+    expect(parsed).toEqual({ ok: true, ...c.fields, standardName: c.name, strengthMissing: Boolean(c.strengthMissing), needsUnit: Boolean(c.needsUnit) });
   });
   it('keeps the frontend copy identical to this module', () => {
     const backend = readFileSync(path.join(repo, 'backend/src/modules/inventory/medicine-names.ts'), 'utf8');

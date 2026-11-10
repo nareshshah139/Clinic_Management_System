@@ -114,7 +114,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
       if (medicine) {
         payload.brandName = formData.name.trim();
         payload.form = formData.form;
-        if (!formData.isCombination && formData.strength.trim()) payload.strength = normalizeStrength(formData.strength, formData.form);
+        if (!formData.isCombination && formData.strength.trim()) payload.strength = normalizeStrength(formData.strength);
         payload.isCombination = formData.isCombination;
       } else if (formData.brandName) payload.brandName = formData.brandName;
       if (formData.itemCode.trim()) payload.itemCode = formData.itemCode.trim();

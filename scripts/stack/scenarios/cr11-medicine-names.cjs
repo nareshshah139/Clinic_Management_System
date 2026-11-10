@@ -12,6 +12,8 @@ const VIEWPORTS = { 1280: { width: 1280, height: 800 }, 390: { width: 390, heigh
 const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g, " ").trim();
 const STRENGTH_REFUSAL = "Enter the strength, for example 150 mg, or tick Combination product.";
 const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on.";
+const UNIT_REFUSAL = "Add the unit to the strength, for example 50 mg, 50 mcg, 1 g, 60000 IU or 1%.";
+const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis", "Tab. Thyronorm 50"];
 
 (async () => {
   fs.mkdirSync(out, { recursive: true });
@@ -43,22 +45,50 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
         encoding: "utf8",
       }).trim().split("\n").pop());
       const planned = run("plan", branchId, stack.users.owner.id, path.join(work, "review"));
-      check("backfill dry run: 8 items to rename, 2 it cannot read, 1 missing a strength", [planned.items, planned.changes, planned.couldNotRead, planned.missingStrength, planned.alreadyStandard], [10, 8, 2, 1, 0]);
+      check("backfill dry run: 12 medicines to rename, 1 it cannot read, 4 missing a strength, 2 needing a unit, 2 not medicines", [planned.items, planned.changes, planned.couldNotRead, planned.missingStrength, planned.needsUnit, planned.notMedicine, planned.alreadyStandard], [15, 12, 1, 4, 2, 2, 0]);
       const csv = (file) => fs.readFileSync(path.join(work, "review", file), "utf8").trim().split("\n").slice(1).map((line) => line.split('","').map((cell) => cell.replace(/^"|"$/g, "")));
-      check("backfill lists the names it could not read", csv("could-not-read.csv").map((row) => [row[1], row[2], row[3]]).sort(), [["CONSUMABLE", "Cotton roll", "form"], ["MEDICINE", "Augmentin 500mg 125mg Tab", "strength"]]);
-      check("backfill lists the medicine missing a strength", csv("missing-strength.csv").map((row) => [row[1], row[2]]), [["Tab. Acnosis", "199 | Acnosis Tab (loose tablets)"]]);
-      const rehearsed = run("rehearse", path.join(work, "review/plan.json"));
-      check("rehearsal reports 8 changes and leaves the names as recorded", [rehearsed.updated, rehearsed.rolledBack, await nameOf("flutas")], [8, true, "13 74 | Flutas 150Mg(Pc)"]);
+      check("backfill lists the names it could not read", csv("could-not-read.csv").map((row) => [row[1], row[2], row[3]]).sort(), [["MEDICINE", "Augmentin 500mg 125mg Tab", "strength"]]);
+      check("backfill lists the medicines missing a strength", csv("missing-strength.csv").map((row) => row[1]).sort(), MISSING_STRENGTH);
+      check("needs-unit.csv lists the names with a number but no unit", csv("needs-unit.csv").map((row) => [row[1], row[2]]).sort(), [["Cap. Uprise D3 60000", "Uprise D3 60000 Cap"], ["Tab. Thyronorm 50", "Thyronorm 50 Tab"]]);
+      const renames = Object.fromEntries(csv("changes.csv").map((row) => [row[1], [row[2], row[4], row[5]]]));
+      check("changes.csv shows the reviewer's names with their strength and its source", [renames["Thyronorm 50 Tab"], renames["Cap. Omega 3"], renames["Uprise D3 60000 Cap"], renames["Sucralfate 1g Tab"], renames["Ultrasound Gel 250ml"]], [
+        ["Tab. Thyronorm 50", "", "none: number without a unit (needs-unit.csv)"],
+        ["Cap. Omega 3", "", "none in recorded name"],
+        ["Cap. Uprise D3 60000", "", "none: number without a unit (needs-unit.csv)"],
+        ["Tab. Sucralfate 1 g", "1 g", "unit stated in recorded name"],
+        undefined,
+      ]);
+      check("changes.csv: no new name gains mg its recorded name did not state", Object.entries(renames).filter(([recorded, [next]]) => /\bmg\b/i.test(next) && !/mg/i.test(recorded)), []);
+      fs.rmSync(path.join(work, "review/changes.csv"));
+      const rehearsal = execFileSync(process.execPath, [require.resolve("ts-node/dist/bin.js", { paths: [path.join(root, "backend")] }), "--transpile-only", "scripts/standardize_medicine_names.ts", "rehearse", path.join(work, "review/plan.json")], {
+        cwd: path.join(root, "backend"),
+        env: { ...process.env, DATABASE_URL: url.toString(), NODE_PATH: path.join(root, "backend/node_modules"), TS_NODE_PROJECT: path.join(root, "backend/tsconfig.json") },
+        encoding: "utf8",
+      }).trim().split("\n");
+      const rehearsed = JSON.parse(rehearsal.pop());
+      console.log(`NOTE rehearse printed:\n${rehearsal.join("\n")}`);
+      check("rehearse prints the renames, rewrites changes.csv and reports 12 changes with the names left as recorded", [rehearsal.length, rehearsal.includes("Thyronorm 50 Tab  ->  Tab. Thyronorm 50  [none: number without a unit (needs-unit.csv)]"), csv("changes.csv").length, rehearsed.updated, rehearsed.rolledBack, await nameOf("flutas")], [12, true, 12, 12, true, "13 74 | Flutas 150Mg(Pc)"]);
       const stockBefore = (await db.inventoryItem.findMany({ where: { branchId }, orderBy: { id: "asc" } })).map((i) => [i.id, i.currentStock, i.costPrice, i.packSize]);
       const applied = run("apply", path.join(work, "review/plan.json"));
       const again = run("apply", path.join(work, "review/plan.json"));
-      check("apply renames 8 with 8 audit entries; applying again changes nothing", [applied.updated, applied.auditEntries, again.updated, again.alreadyApplied, again.auditEntries], [8, 8, 0, 8, 8]);
+      check("apply renames 12 with 12 audit entries; applying again changes nothing", [applied.updated, applied.auditEntries, again.updated, again.alreadyApplied, again.auditEntries], [12, 12, 0, 12, 12]);
       const names = {};
       for (const key of Object.keys(items)) names[key] = await nameOf(key);
       check("existing items carry the clinic's standard names", names, {
         flutas: "Tab. Flutas 150 mg", zimba: "Zimba cream", bact: "1-Bact ointment", cwin: "Cwin lotion", sotret: "Cap. Sotret 10 mg",
         antoxid: "Cap. Antoxid-HC", acnosis: "Tab. Acnosis", teczine: "Syp. Teczine 2.5mg/5ml", augmentin: "Augmentin 500mg 125mg Tab", cotton: "Cotton roll",
+        thyronorm: "Tab. Thyronorm 50", omega: "Cap. Omega 3", uprise: "Cap. Uprise D3 60000", sucralfate: "Tab. Sucralfate 1 g", gel: "Ultrasound Gel 250ml",
       });
+      const readBack = async (key) => {
+        const item = await db.inventoryItem.findUnique({ where: { id: items[key].id } });
+        return [item.name, item.form, item.brandName, item.strength];
+      };
+      check("read back from the database: Thyronorm keeps 50 in its name with no unit and no strength", await readBack("thyronorm"), ["Tab. Thyronorm 50", "TABLET", "Thyronorm 50", null]);
+      check("read back: Omega 3 and Uprise D3 60000 carry no strength; Sucralfate keeps 1 g", [await readBack("omega"), await readBack("uprise"), await readBack("sucralfate")], [
+        ["Cap. Omega 3", "CAPSULE", "Omega 3", null], ["Cap. Uprise D3 60000", "CAPSULE", "Uprise D3 60000", null], ["Tab. Sucralfate 1 g", "TABLET", "Sucralfate", "1 g"],
+      ]);
+      check("read back: the equipment gel is left alone", await readBack("gel"), ["Ultrasound Gel 250ml", null, null, null]);
+      check("read back: no item in the branch prints Thyronorm with mg", await db.inventoryItem.count({ where: { branchId, name: { contains: "Thyronorm" }, OR: [{ name: { contains: "mg" } }, { strength: { contains: "mg" } }] } }), 0);
       const flutas = await db.inventoryItem.findUnique({ where: { id: items.flutas.id } });
       check("Flutas keeps its code and pack size apart and its stock unchanged", [flutas.form, flutas.brandName, flutas.strength, flutas.itemCode, flutas.packSize, flutas.isCombination], ["TABLET", "Flutas", "150 mg", "13 74", 10, false]);
       check("backfill moved no stock, cost or pack size", (await db.inventoryItem.findMany({ where: { branchId }, orderBy: { id: "asc" } })).map((i) => [i.id, i.currentStock, i.costPrice, i.packSize]), stockBefore);
@@ -124,10 +154,10 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
         await stockList(page, { search: "13 74 | Flutas 150Mg(Pc)" });
         check(`${tag} searching the recorded name still finds the item`, await productNames(page), ["Tab. Flutas 150 mg"]);
         await stockList(page, { missing: "Strength missing" });
-        check(`${tag} Missing information: Strength missing lists exactly Tab. Acnosis`, await productNames(page), ["Tab. Acnosis"]);
+        check(`${tag} Missing information: Strength missing lists the four medicines without a strength`, (await productNames(page)).sort(), MISSING_STRENGTH);
         check(`${tag} the missing-strength row says so`, (await productCells(page))[0]?.includes("Strength missing"), true);
         await page.getByRole("button", { name: "Filters" }).click();
-        check(`${tag} the filter offers Strength missing with its count`, (await page.getByLabel("Missing information").locator("option").allInnerTexts()).includes("Strength missing (1)"), true);
+        check(`${tag} the filter offers Strength missing with its count`, (await page.getByLabel("Missing information").locator("option").allInnerTexts()).includes("Strength missing (4)"), true);
         if (width === "390") check(`${tag} stock list: no sideways page scroll`, await overflow(page), 0);
         await shot(page, `${tag}-02-missing-strength-list`);
         check(`${tag} stock pages: no console error or refused call`, [seen.errors, seen.refused], [[], []]);
@@ -160,7 +190,13 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       await shot(page, "pharmacist-1280-03-tablet-without-strength-refused");
       await page.locator("#medicine-strength").fill("40");
       await page.getByLabel("Item code").fill("77 01");
-      check("pharmacist-1280 preview builds Tab. Telma 40 mg", await preview(page), "Tab. Telma 40 mg");
+      const units = page.getByRole("group", { name: "Unit of 40" });
+      check("pharmacist-1280 a bare 40 prints with no unit and offers the units", [await preview(page), await page.getByRole("dialog").getByText("Unit missing: 40 could be mg or mcg").count(), clean(await units.innerText())], ["Tab. Telma 40", 1, "Which unit? mg mcg g IU %"]);
+      await shot(page, "pharmacist-1280-04a-bare-number-unit-buttons");
+      await submit(page);
+      check("pharmacist-1280 a bare number is refused on the form", [clean(await page.getByRole("alert").first().innerText()), seen.posts.length], [UNIT_REFUSAL, 0]);
+      await units.getByRole("button", { name: "mg", exact: true }).click();
+      check("pharmacist-1280 pressing mg builds Tab. Telma 40 mg", [await preview(page), await page.locator("#medicine-strength").inputValue()], ["Tab. Telma 40 mg", "40 mg"]);
       await shot(page, "pharmacist-1280-04-tablet-preview");
       await submit(page);
       await page.getByText("Sent to doctor for approval").first().waitFor();
@@ -213,6 +249,18 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
     {
       const { page, context, seen } = await open("admin", "390");
       await addDialog(page);
+      await naming(page, { form: "TABLET", name: "Eltroxin", strength: "25" });
+      check("admin-390 a bare 25 prints without a unit", await preview(page), "Tab. Eltroxin 25");
+      check("admin-390 unit buttons fit the phone width", await overflow(page), 0);
+      await shot(page, "admin-390-06a-unit-buttons-phone");
+      await page.getByRole("group", { name: "Unit of 25" }).getByRole("button", { name: "mcg" }).click();
+      check("admin-390 pressing mcg builds Tab. Eltroxin 25 mcg", await preview(page), "Tab. Eltroxin 25 mcg");
+      await shot(page, "admin-390-06b-mcg-chosen");
+      await submit(page);
+      await page.getByRole("heading", { name: "Add Inventory Item" }).waitFor({ state: "detached" });
+      const eltroxin = await db.inventoryItem.findFirst({ where: { branchId, brandName: "Eltroxin" } });
+      check("admin-390 Eltroxin is saved as 25 mcg", eltroxin && [eltroxin.name, eltroxin.strength], ["Tab. Eltroxin 25 mcg", "25 mcg"]);
+      await addDialog(page);
       await naming(page, { form: "SOLUTION", name: "Protar-K scalp" });
       check("admin-390 the solution follows the cream pattern", await preview(page), "Protar-K scalp solution");
       if ((await overflow(page)) > 0) check("admin-390 add dialog: no sideways page scroll", await overflow(page), 0);
@@ -253,7 +301,7 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       check("admin-1280 clearing a saved strength is refused", [clean(await page.getByRole("alert").first().innerText()), await nameOf("flutas")], [STRENGTH_REFUSAL, "Tab. Flutas 150 mg"]);
       await shot(page, "admin-1280-10-clear-strength-refused");
       const page2 = await call("admin", "GET", `/inventory/workspace/stock?${new URLSearchParams({ missing: "Strength missing", limit: "100" })}`);
-      check("Strength missing still lists exactly Tab. Acnosis (Augmentin is a combination, Telma has 40 mg)", page2.rows.map((r) => r.name), ["Tab. Acnosis"]);
+      check("Strength missing still lists the four (Augmentin is a combination, Telma has 40 mg)", page2.rows.map((r) => r.name).sort(), MISSING_STRENGTH);
       check("admin item page: no console error or refused call", [seen.errors, seen.refused], [[], []]);
       await context.close();
     }

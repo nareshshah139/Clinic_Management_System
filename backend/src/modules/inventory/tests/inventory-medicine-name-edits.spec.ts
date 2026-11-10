@@ -52,6 +52,15 @@ describe('editing a medicine into the standard name format', () => {
     expect(JSON.parse(tx.auditLog.create.mock.calls[0][0].data.oldValues)).toMatchObject({ name: '13 74 | Flutas 150Mg(Pc)', form: null });
   });
 
+  it('refuses a strength typed without its unit instead of printing it as mg', async () => {
+    load(recorded);
+    await expect(edit(recorded, { form: 'TABLET', brandName: 'Thyronorm', strength: '50' })).rejects.toThrow(
+      'Add the unit to the strength, for example 50 mg, 50 mcg, 1 g, 60000 IU or 1%.',
+    );
+    expect(tx.inventoryItem.update).not.toHaveBeenCalled();
+    expect((await edit(recorded, { form: 'TABLET', brandName: 'Thyronorm', strength: '50 mcg' })).name).toBe('Tab. Thyronorm 50 mcg');
+  });
+
   it('prints no strength once the combination box is ticked', async () => {
     const item = { ...recorded, name: 'Cap. Antoxid-HC 50 mg', brandName: 'Antoxid-HC', form: 'CAPSULE', strength: '50 mg' };
     load(item);

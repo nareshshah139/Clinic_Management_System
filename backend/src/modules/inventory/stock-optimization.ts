@@ -16,7 +16,8 @@ export type PurchaseSource = {
   distributorName: string;
   ptr: number;
   gstRate: number;
-  unreturned: number;
+  unreturnedPaid: number;
+  unreturnedFree: number;
 };
 
 export type OpenReturn = { id: string; reference: string; status: string };
@@ -44,6 +45,7 @@ export type OptimizationRow = {
   shelfLifeDays: number | null;
   unit: string;
   quantity: number;
+  freeQuantity: number;
   ptr: number;
   gstRate: number | null;
   value: number;
@@ -74,7 +76,14 @@ export type StockClassification = {
 const day = (value: Date) => value.toISOString().slice(0, 10);
 const utcDay = (value: Date) => Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
 
-function row(batch: StockBatch, now: Date, quantity: number, price: { ptr: number; gstRate: number | null }, source: PurchaseSource | null): OptimizationRow {
+function row(
+  batch: StockBatch,
+  now: Date,
+  quantity: number,
+  freeQuantity: number,
+  price: { ptr: number; gstRate: number | null },
+  source: PurchaseSource | null,
+): OptimizationRow {
   const idleFrom = batch.lastSaleAt && batch.lastSaleAt > batch.receivedAt ? batch.lastSaleAt : batch.receivedAt;
   return {
     inventoryId: batch.id,
@@ -84,9 +93,10 @@ function row(batch: StockBatch, now: Date, quantity: number, price: { ptr: numbe
     shelfLifeDays: batch.expiryDate ? Math.round((utcDay(batch.expiryDate) - utcDay(now)) / DAY) : null,
     unit: batch.unit,
     quantity,
+    freeQuantity,
     ptr: price.ptr,
     gstRate: price.gstRate,
-    value: money(quantity * price.ptr),
+    value: money((quantity - freeQuantity) * price.ptr),
     idleDays: Math.floor((now.getTime() - idleFrom.getTime()) / DAY),
     lastSaleAt: batch.lastSaleAt?.toISOString() ?? null,
     receivedAt: batch.receivedAt.toISOString(),
@@ -112,9 +122,17 @@ function grouped(entries: { gstin: string; name: string; row: OptimizationRow }[
 }
 
 /**
+ * Of `quantity` units going back to one purchase line, how many are its free goods. Units go back in the line's
+ * remaining paid-to-free ratio, rounding toward free, so a claim never exceeds what was paid for the units returned.
+ */
+const freeShare = (quantity: number, source: PurchaseSource) =>
+  Math.min(source.unreturnedFree, Math.ceil((quantity * source.unreturnedFree) / (source.unreturnedPaid + source.unreturnedFree)));
+
+/**
  * A batch is slow when its product has not sold for the non-moving days and the batch itself was received before them.
  * Its quantity goes back first to the newest purchase lines still inside the return window, up to what each line has not
  * already returned; whatever is left cannot be returned and is grouped under the distributor it was last bought from.
+ * Free goods go back at no value, so group values and the minimum count only paid units.
  */
 export function classifyStock(batches: StockBatch[], rules: OptimizationRules, now: Date): StockClassification {
   const idleCutoff = now.getTime() - rules.nonMovingDays * DAY;
@@ -130,9 +148,10 @@ export function classifyStock(batches: StockBatch[], rules: OptimizationRules, n
     const newestFirst = [...batch.purchases].sort((a, b) => b.invoiceDate.getTime() - a.invoiceDate.getTime() || a.lineId.localeCompare(b.lineId));
     let left = batch.available;
     for (const source of newestFirst) {
-      if (left === 0 || source.invoiceDate.getTime() < windowCutoff || source.unreturned <= 0) continue;
-      const quantity = Math.min(left, source.unreturned);
-      returnable.push({ gstin: source.distributorGstin, name: source.distributorName, row: row(batch, now, quantity, source, source) });
+      const unreturned = source.unreturnedPaid + source.unreturnedFree;
+      if (left === 0 || source.invoiceDate.getTime() < windowCutoff || unreturned <= 0) continue;
+      const quantity = Math.min(left, unreturned);
+      returnable.push({ gstin: source.distributorGstin, name: source.distributorName, row: row(batch, now, quantity, freeShare(quantity, source), source, source) });
       left -= quantity;
     }
     if (left > 0) {
@@ -140,7 +159,7 @@ export function classifyStock(batches: StockBatch[], rules: OptimizationRules, n
       kept.push({
         gstin: last?.distributorGstin ?? NO_DISTRIBUTOR,
         name: last?.distributorName ?? 'No purchase on record',
-        row: row(batch, now, left, { ptr: batch.costPrice, gstRate: batch.gstRate }, null),
+        row: row(batch, now, left, 0, { ptr: batch.costPrice, gstRate: batch.gstRate }, null),
       });
     }
   }
@@ -154,14 +173,21 @@ export function classifyStock(batches: StockBatch[], rules: OptimizationRules, n
   };
 }
 
-export type ReturnDraftLine = { inventoryId: string; quantity: number; unitPrice: number; gstRate: number; sourceLineId: string };
+export type ReturnDraftLine = { inventoryId: string; quantity: number; freeQuantity: number; unitPrice: number; gstRate: number; sourceLineId: string };
 
 /** The lines a new return draft for this group carries: none below the minimum, else every row not already on an open return. */
 export function draftLines(group: DistributorGroup): ReturnDraftLine[] {
   if (group.belowMinimum) return [];
   return group.rows
     .filter((r) => !r.openReturn && r.source)
-    .map((r) => ({ inventoryId: r.inventoryId, quantity: r.quantity, unitPrice: r.ptr, gstRate: r.gstRate ?? 0, sourceLineId: r.source!.lineId }));
+    .map((r) => ({
+      inventoryId: r.inventoryId,
+      quantity: r.quantity - r.freeQuantity,
+      freeQuantity: r.freeQuantity,
+      unitPrice: r.ptr,
+      gstRate: r.gstRate ?? 0,
+      sourceLineId: r.source!.lineId,
+    }));
 }
 
 export function parseOptimizationRules(input: Record<string, unknown>, previous: OptimizationRules): OptimizationRules {

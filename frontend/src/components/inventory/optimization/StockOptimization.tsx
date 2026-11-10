@@ -121,7 +121,10 @@ function Rows({ rows, returnable }: { rows: OptimizationRow[]; returnable: boole
                 {row.openReturn && <span className="block text-sm">On return {row.openReturn.reference} ({STATUS[row.openReturn.status] ?? row.openReturn.status})</span>}
               </td>
               <td className={`py-2 pr-3 ${shelfLifeTone(row.shelfLifeDays)}`}>{shelfLifeText(row.shelfLifeDays)}</td>
-              <td className="py-2 pr-3 text-right tabular-nums">{row.quantity}</td>
+              <td className="py-2 pr-3 text-right tabular-nums">
+                {row.quantity}
+                {row.freeQuantity > 0 && <span className="block text-xs text-muted-foreground">incl. {row.freeQuantity} free, no value</span>}
+              </td>
               <td className="py-2 pr-3 text-right tabular-nums">{formatRupees(row.ptr)}</td>
               <td className="py-2 pr-3 text-right tabular-nums">{gst(row.gstRate)}</td>
               <td className="py-2 pr-3 text-right font-medium tabular-nums">{formatRupees(row.value)}</td>
@@ -140,7 +143,10 @@ function Rows({ rows, returnable }: { rows: OptimizationRow[]; returnable: boole
             <p className="text-muted-foreground">Batch {row.batchNumber || "not recorded"} · exp {ddmmyyyy(row.expiryDate)}</p>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
               <dt>Shelf life left</dt><dd className={`text-right ${shelfLifeTone(row.shelfLifeDays)}`}>{shelfLifeText(row.shelfLifeDays)}</dd>
-              <dt>Qty × PTR</dt><dd className="text-right tabular-nums">{row.quantity} × {formatRupees(row.ptr)}</dd>
+              <dt>Qty × PTR</dt>
+              <dd className="text-right tabular-nums">
+                {row.freeQuantity > 0 ? `${row.quantity - row.freeQuantity} × ${formatRupees(row.ptr)} + ${row.freeQuantity} free` : `${row.quantity} × ${formatRupees(row.ptr)}`}
+              </dd>
               <dt>GST</dt><dd className="text-right tabular-nums">{gst(row.gstRate)}</dd>
               <dt className="font-medium">Value at PTR</dt><dd className="text-right font-medium tabular-nums">{formatRupees(row.value)}</dd>
             </dl>

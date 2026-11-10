@@ -1,15 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { applyMedicineNamePlan, backfillItemSelect, MedicineNamePlan, planMedicineNames } from '../src/modules/inventory/medicine-name-backfill';
+import { applyMedicineNamePlan, backfillItemSelect, MedicineNamePlan, planMedicineNames, planReviewFiles } from '../src/modules/inventory/medicine-name-backfill';
 
 const usage = `Usage (DATABASE_URL set):
-  plan <branchId> <actorUserId> <newOutputDir>   writes plan.json, could-not-read.csv, missing-strength.csv
-  rehearse <plan.json>                           applies inside a transaction, reports, rolls back
+  plan <branchId> <actorUserId> <newOutputDir>   writes plan.json, changes.csv, could-not-read.csv, missing-strength.csv, needs-unit.csv
+  rehearse <plan.json>                           applies inside a transaction, reports, rolls back; rewrites changes.csv beside the plan
   apply <plan.json>                              applies with an audit entry per item; re-running is a no-op`;
 
-const csv = (rows: Record<string, unknown>[], columns: string[]) =>
-  [columns.join(','), ...rows.map((row) => columns.map((c) => `"${String(row[c] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n') + '\n';
+const firstChanges = (plan: MedicineNamePlan) =>
+  plan.changes.slice(0, 20).map((c) => `${c.expected.name}  ->  ${c.next.name}  [${c.strengthSource}]`).join('\n');
 
 async function main() {
   const [mode, a, b, c] = process.argv.slice(2);
@@ -21,11 +21,18 @@ async function main() {
       const items = await db.inventoryItem.findMany({ where: { branchId: a }, select: backfillItemSelect });
       const plan = planMedicineNames(items as any, a, b);
       fs.writeFileSync(path.join(c, 'plan.json'), JSON.stringify(plan, null, 2), { mode: 0o600, flag: 'wx' });
-      fs.writeFileSync(path.join(c, 'could-not-read.csv'), csv(plan.unparsed, ['id', 'type', 'name', 'reason', 'message']), { flag: 'wx' });
-      fs.writeFileSync(path.join(c, 'missing-strength.csv'), csv(plan.missingStrength, ['id', 'name', 'recordedName']), { flag: 'wx' });
-      console.log(JSON.stringify({ items: items.length, changes: plan.changes.length, couldNotRead: plan.unparsed.length, missingStrength: plan.missingStrength.length, alreadyStandard: plan.alreadyStandard, dir: c }));
+      for (const [file, content] of Object.entries(planReviewFiles(plan))) fs.writeFileSync(path.join(c, file), content, { flag: 'wx' });
+      console.log(firstChanges(plan));
+      console.log(JSON.stringify({
+        items: items.length, changes: plan.changes.length, couldNotRead: plan.unparsed.length, missingStrength: plan.missingStrength.length,
+        needsUnit: plan.needsUnit.length, alreadyStandard: plan.alreadyStandard, notMedicine: plan.notMedicine, dir: c,
+      }));
     } else if ((mode === 'rehearse' || mode === 'apply') && a) {
       const plan: MedicineNamePlan = JSON.parse(fs.readFileSync(a, 'utf8'));
+      if (mode === 'rehearse') {
+        fs.writeFileSync(path.join(path.dirname(a), 'changes.csv'), planReviewFiles(plan)['changes.csv']);
+        console.log(firstChanges(plan));
+      }
       console.log(JSON.stringify(await applyMedicineNamePlan(db, plan, { rollback: mode === 'rehearse' })));
     } else throw new Error(usage);
   } finally {

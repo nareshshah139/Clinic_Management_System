@@ -165,6 +165,7 @@ const watch = (page) => {
         await run(ctx);
       } catch (e) {
         error = e;
+        console.log(`    ${String(e.message).trim().split("\n").slice(-3).join(" ")}`);
         try {
           const last = ctx.opened.at(-1);
           if (last) await ctx.shot(last.page, `${id}-error`, true);
@@ -431,6 +432,79 @@ const watch = (page) => {
       await page.goto(`${stack.base}${TODAY}`, { waitUntil: "domcontentloaded", timeout: 240000 });
       await page.waitForTimeout(4000);
       s.check("reception sees no data-quality strip", await strip(page).count(), 0);
+    });
+
+    await scenario("11", "free-goods-go-back-at-no-value-unmapped-siblings-share-sales-and-two-presses-make-one-draft", async (s) => {
+      const branchId = stack.branch.id;
+      const BON = { name: "Bonus Pharma", gstin: "27AAGCB7788F1Z9" };
+      const DAY = 86400000;
+      const ago = (days) => new Date(Date.now() - days * DAY);
+      await stack.db.$transaction(async (db) => {
+      await db.$executeRawUnsafe("SELECT set_config('app.purchase_recovery_protocol', '2', true)");
+      const supplier = await db.supplier.create({ data: { branchId, name: BON.name, gstNumber: BON.gstin } });
+      const strip = (id, name, batchNumber, stock, age) =>
+        db.inventoryItem.create({
+          data: {
+            id, branchId, name, type: "MEDICINE", costPrice: 18, sellingPrice: 30, mrp: 30, unit: "STRIPS", packSize: 10, packUnit: "tablets", currentStock: stock, gstRate: 12,
+            batchNumber, expiryDate: new Date("2027-09-30T00:00:00Z"), stockStatus: "IN_STOCK", storageLocation: "Rack C1", category: "Tablet", hsnCode: "30049099",
+            minStockLevel: 2, maxStockLevel: 200, createdAt: ago(age),
+          },
+        });
+      await strip("cr29-bonus", "Tab. Bonus 10 mg", "BON2401", 110, 130);
+      await strip("cr29-acn-a", "Tab. Acnosis", "ACN2401", 40, 200);
+      await strip("cr29-acn-b", "Tab.  ACNOSIS", "ACN2407", 30, 120);
+      const bill = async (no, age, itemId, quantity, free, rate) => {
+        const invoice = await db.pharmacyPurchaseInvoice.create({
+          data: {
+            branchId, createdBy: stack.users.pharmacist.id, supplierId: supplier.id, distributorName: BON.name, distributorGstin: BON.gstin, distributorDlNo: "MH-PUN-BON",
+            invoiceNumber: no, invoiceDate: ago(age), billType: "CREDIT", doctorNameOrRegNo: "Dr. Praneeta Jain", source: "MANUAL", status: "STOCK_COMMITTED",
+            grossAmount: 1, taxableAmount: 1, totalGst: 0, netPayable: 1, stockCommittedAt: ago(age), createdAt: ago(age),
+          },
+        });
+        await db.pharmacyPurchaseInvoiceItem.create({
+          data: {
+            purchaseInvoiceId: invoice.id, lineNumber: 1, productName: itemId, manufacturer: "Synthetic Labs", packSize: "10", packUnitType: "STRIP", hsnCode: "30049099",
+            batchNumber: itemId, expiryMonth: 9, expiryYear: 2027, quantityPurchased: quantity, freeQuantity: free, mrp: 30, discountPercent: 0, purchaseRate: rate,
+            taxableAmount: quantity * rate, cgstPercent: 6, sgstPercent: 6, igstPercent: 0, gstAmount: quantity * rate * 0.12, lineTotal: quantity * rate * 1.12, inventoryItemId: itemId,
+          },
+        });
+      };
+      await bill("BON/2026/015", 120, "cr29-bonus", 100, 10, 20);
+      await bill("BON/2026/016", 120, "cr29-acn-b", 30, 0, 60);
+      await db.stockTransaction.create({
+        data: { branchId, itemId: "cr29-acn-a", userId: stack.users.pharmacist.id, type: "SALE", quantity: 1, quantityDelta: -1, unitPrice: 30, totalAmount: 30, reference: "SEED-SALE-acn-a", createdAt: ago(1) },
+      });
+      }, { timeout: 120000, maxWait: 30000 });
+
+      const { page } = s.track(await open("pharmacist"));
+      await goto(page, `${OPTIMIZE}&run=1`);
+      const r = await runResult(page);
+      const bonus = r.returnable.find((g) => g.name === BON.name);
+      s.check("Bonus Pharma: 110 strips of which 10 free, valued 100 x Rs 20 = Rs 2,000", bonus && [bonus.summary, bonus.rows.map((x) => [x[0].split("Batch")[0], x[2], x[3], x[5]])], [
+        `GSTIN ${BON.gstin} · 1 batch · ₹2,000.00 at PTR, excluding GST`, [["Tab. Bonus 10 mg", "110incl. 10 free, no value", "₹20.00", "₹2,000.00"]],
+      ]);
+      s.ok("the later Acnosis batch is not flagged: its sibling batch sold yesterday", !JSON.stringify(r).includes("ACN2407"), JSON.stringify(r).match(/[^"]*ACN2407[^"]*/)?.[0]);
+      await page.getByRole("region", { name: `${BON.name} returnable` }).scrollIntoViewIfNeeded();
+      await s.shot(page, "11-free-goods-row-1280");
+
+      const presses = await Promise.allSettled([1, 2].map(() => call("pharmacist", "POST", "/inventory/workspace/optimization/return-drafts", { distributorGstin: BON.gstin, requestKey: crypto.randomUUID() })));
+      s.check("two presses with different keys at the same moment: one draft, one refusal", presses.map((p) => p.status).sort(), ["fulfilled", "rejected"]);
+      const drafts = (await supplierReturns()).filter((d) => d.supplierGstin === BON.gstin);
+      s.check("one Bonus Pharma return draft in the database", drafts.length, 1);
+      s.check("the draft claims 2,000 + 240 GST = 2,240, free units at no value", [Number(drafts[0].totalAmount), drafts[0].payload.lines.map((l) => [l.batchNumber, l.quantity, l.freeQuantity, l.unitPrice, l.taxable, l.tax, l.total])], [
+        2240, [["BON2401", 100, 10, 20, 2000, 240, 2240]],
+      ]);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const after = await runResult(page);
+      s.check("after reload the group opens its draft", after.returnable.find((g) => g.name === BON.name)?.buttons, [`Open ${drafts[0].reference} (Draft)`]);
+
+      const phone = s.track(await open("doctor", { width: 390, height: 844 }));
+      await goto(phone.page, `${OPTIMIZE}&run=1`);
+      const p = await runResult(phone.page);
+      s.ok("phone card shows paid units, PTR and the free units", (p.returnable.find((g) => g.name === BON.name)?.rows[0][0] || "").includes("Qty × PTR100 × ₹20.00 + 10 free"), p.returnable.find((g) => g.name === BON.name)?.rows[0][0]);
+      s.ok("no sideways page scroll at 390", (await docOverflow(phone.page)) <= 0, await docOverflow(phone.page));
+      await phone.page.getByRole("region", { name: `${BON.name} returnable` }).scrollIntoViewIfNeeded();
+      await s.shot(phone.page, "11-free-goods-card-390");
     });
   } finally {
     fs.writeFileSync(path.join(out, "cr29-results.json"), JSON.stringify(results, null, 2));

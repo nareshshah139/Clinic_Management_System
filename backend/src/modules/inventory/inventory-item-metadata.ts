@@ -6,7 +6,7 @@ import {
 import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
 import { jsonObject, stockStatus } from './inventory-stock';
 import { retainPreviousInventoryName, withStandardName } from './inventory-names';
-import { MEDICINE_FORM_KEYS, medicineNameProblems } from './medicine-names';
+import { MEDICINE_FORM_KEYS, medicineNameProblems, strengthUnitMissing } from './medicine-names';
 import type { WorkflowActor } from './inventory-workflow.types';
 
 /**
@@ -127,7 +127,7 @@ export async function saveInventoryItemMetadata(
       const next = (f: string) => (Object.prototype.hasOwnProperty.call(data, f) ? data[f] : item[f]);
       const named = withStandardName({ type: next('type'), name: next('name'), brandName: next('brandName'), form: next('form'), strength: next('strength'), isCombination: next('isCombination') });
       const problems = medicineNameProblems({ ...named, name: named.brandName || named.name }).filter((p) =>
-        p.field === 'name' || (p.field === 'form' && item.form) || (p.field === 'strength' && (item.strength || '').trim()));
+        p.field === 'name' || (p.field === 'form' && item.form) || (p.field === 'strength' && ((item.strength || '').trim() || strengthUnitMissing(named))));
       if (problems.length) throw new BadRequestException(problems.map((p) => p.message).join(' '));
       for (const f of ['name', 'brandName', 'strength', 'isCombination'] as const)
         if (named[f] !== item[f]) data[f] = named[f];

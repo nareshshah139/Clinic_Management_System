@@ -21,6 +21,7 @@ export type OptimizationRow = {
   shelfLifeDays: number | null;
   unit: string;
   quantity: number;
+  freeQuantity: number;
   ptr: number;
   gstRate: number | null;
   value: number;
