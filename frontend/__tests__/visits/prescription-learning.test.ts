@@ -255,10 +255,56 @@ describe('history of a medicine renamed to the standard format', () => {
     });
     expect(suggestion?.item).toMatchObject({ drugName: '13 74 | Flutas 150Mg(Pc)', frequency: 'ONCE_WEEKLY', duration: 4 });
   });
-  it('does not borrow the sig of a different stocked item with a similar name', () => {
+  it('does not borrow the sig of a stocked item linked to a different drug under the same name', () => {
     expect(buildLearnedMedicationSuggestion({
-      drugName: 'Tab. Flutas 150 mg', inventoryItemId: 'flutas', diagnosis: 'Tinea corporis', doctorId: 'doc-1',
-      patientVisits: [history('Tab. Flutas 150 mg', { inventoryItemId: 'flutas-forte' })],
+      drugName: 'Tab. Flutas 150 mg', drugId: 'drug-flutas', inventoryItemId: 'flutas', diagnosis: 'Tinea corporis', doctorId: 'doc-1',
+      patientVisits: [history('Tab. Flutas 150 mg', { drugId: 'drug-flutas-forte', inventoryItemId: 'flutas-forte' })],
     })).toBeNull();
+  });
+});
+
+describe('a medicine whose oldest batch was archived', () => {
+  const telma = (inventoryItemId?: string, drugId?: string) => ({
+    drugName: 'Tab. Telma 40 mg', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS',
+    ...(inventoryItemId ? { inventoryItemId } : {}), ...(drugId ? { drugId } : {}),
+  });
+  const rx = (createdAt: string, item: Record<string, unknown>) => ({ createdAt, diagnosis: 'Essential hypertension', items: [item] });
+  const visit = (item: Record<string, unknown>) => ({
+    id: 'visit-a', createdAt: '2026-09-01T00:00:00.000Z', doctor: { id: 'doc-1' }, diagnosis: [{ diagnosis: 'Essential hypertension' }],
+    prescriptionItems: [item],
+  });
+
+  it.each([
+    ['linked to one drug', 'drug-telma'],
+    ['linked to no drug', undefined],
+  ])('suggests the sig written against batch A once batch B is picked (%s)', (_label, drugId) => {
+    const suggestion = buildLearnedMedicationSuggestion({
+      drugName: 'Tab. Telma 40 mg', drugId, inventoryItemId: 'batch-b', diagnosis: 'Essential hypertension', doctorId: 'doc-1',
+      patientVisits: [visit(telma('batch-a', drugId))],
+    });
+    expect(suggestion?.item).toMatchObject({ inventoryItemId: 'batch-a', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' });
+  });
+
+  it('counts plans on batch A and batch B as one learned plan', () => {
+    const plan = buildLearnedPrescriptionPlan({
+      diagnosis: 'Essential hypertension',
+      doctorPrescriptions: [
+        rx('2026-08-01T00:00:00.000Z', telma('batch-a', 'drug-telma')),
+        rx('2026-08-15T00:00:00.000Z', telma('batch-a', 'drug-telma')),
+        rx('2026-10-01T00:00:00.000Z', telma('batch-b', 'drug-telma')),
+      ],
+    });
+    expect([plan?.evidenceCount, plan?.sourceLabel]).toEqual([3, 'Learned from 3 similar prescriptions']);
+  });
+
+  it('groups a name-only line written before CR-11 with a new line that carries the ids', () => {
+    const plan = buildLearnedPrescriptionPlan({
+      diagnosis: 'Essential hypertension',
+      doctorPrescriptions: [
+        rx('2026-05-01T00:00:00.000Z', telma()),
+        rx('2026-10-01T00:00:00.000Z', telma('batch-b', 'drug-telma')),
+      ],
+    });
+    expect([plan?.evidenceCount, plan?.sourceLabel]).toEqual([2, 'Learned from 2 similar prescriptions']);
   });
 });
