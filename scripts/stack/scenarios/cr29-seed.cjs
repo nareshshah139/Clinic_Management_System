@@ -35,10 +35,19 @@ const BILLS = [
 const SALES = [["minox", 75], ["tretB", 10], ["clob", 120]];
 
 async function seed(stack) {
+  return stack.db.$transaction(
+    async (db) => {
+      await db.$executeRawUnsafe("SELECT set_config('app.purchase_recovery_protocol', '2', true)");
+      return seedRecords(db, stack);
+    },
+    { timeout: 120000, maxWait: 30000 },
+  );
+}
+
+async function seedRecords(db, stack) {
   const now = Date.now();
   const ago = (days) => new Date(now - days * DAY_MS);
   const ahead = (days) => new Date(`${istDay(new Date(now + days * DAY_MS))}T00:00:00Z`);
-  const db = stack.db;
   const branchId = stack.branch.id;
   const userId = stack.users.pharmacist.id;
   const suppliers = {};
