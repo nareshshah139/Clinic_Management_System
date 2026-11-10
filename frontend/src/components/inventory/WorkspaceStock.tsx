@@ -473,7 +473,7 @@ export function WorkspaceStock({
           </label>
           {data?.valuation && !error && (
             <div className="overflow-x-auto border-y py-4">
-              <table className="w-full text-left text-sm">
+              <table data-own-cell-spacing className="w-full text-left text-sm">
                 <caption className="mb-2 text-left font-medium">
                   Value of matching batches · each batch's declared stock unit
                 </caption>
