@@ -17,6 +17,7 @@ import {
   getSlotDurationMinutes,
   calculateAge,
   isConflictError,
+  isSlotInPast,
 } from '@/lib/utils';
 import type {
   AppointmentInSlot,
@@ -61,7 +62,13 @@ export interface DoctorDayCalendarProps {
  * move back found its time taken, and limits the move to that calendar.
  */
 type Move = { appointment: AppointmentInSlot; from: string; refused?: SlotChoice };
-type MoveState = { move: Move | null; setMove: (move: Move | null) => void };
+/** `placing` is true while a move is being saved. It outlives a date change, like the move itself. */
+type MoveState = {
+  move: Move | null;
+  setMove: (move: Move | null) => void;
+  placing: boolean;
+  setPlacing: (placing: boolean) => void;
+};
 
 /**
  * @cc [owner:nareshshah139,label:product] schedule-selection-isolation
@@ -71,6 +78,8 @@ type MoveState = { move: Move | null; setMove: (move: Move | null) => void };
  * @cc [owner:nareshshah139,label:product] reschedule-across-days
  * A reschedule in progress MUST survive a date change, so the appointment can move to a free time
  * on another day. It ends when the doctor changes, because a reschedule keeps the doctor.
+ * A move that is still saving MUST block another move after a date change, and a day with
+ * no times left MUST say so instead of asking for a click.
  */
 export default function DoctorDayCalendar(props: DoctorDayCalendarProps) {
   return <DoctorDayCalendarForDoctor key={props.doctorId} {...props} />;
@@ -78,10 +87,12 @@ export default function DoctorDayCalendar(props: DoctorDayCalendarProps) {
 
 function DoctorDayCalendarForDoctor(props: DoctorDayCalendarProps) {
   const [move, setMove] = useState<Move | null>(null);
-  return <DoctorDayCalendarForSelection key={props.date} {...props} move={move} setMove={setMove} />;
+  const [placing, setPlacing] = useState<boolean>(false);
+  return <DoctorDayCalendarForSelection key={props.date} {...props} move={move} setMove={setMove} placing={placing} setPlacing={setPlacing} />;
 }
 
-function moveHint(move: Move, date: string): string {
+function moveHint(move: Move, date: string, dayIsOver: boolean): string {
+  if (dayIsOver) return `No times are left on ${displayCalendarDate(date)}. Change the date to move this appointment.`;
   const where = move.refused ? `the ${CALENDARS[move.refused.calendar].title} calendar` : 'either calendar';
   if (move.from !== date) {
     return `Click a free time in ${where} to move this appointment from ${displayCalendarDate(move.from)} to ${displayCalendarDate(date)}.`;
@@ -128,6 +139,8 @@ function DoctorDayCalendarForSelection({
   maxBookingsPerSlot = 1,
   move,
   setMove,
+  placing,
+  setPlacing,
 }: DoctorDayCalendarProps & MoveState) {
   const router = useRouter();
   const { toast } = useToast();
@@ -139,7 +152,6 @@ function DoctorDayCalendarForSelection({
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentInSlot | null>(null);
   const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState<boolean>(false);
-  const [placing, setPlacing] = useState<boolean>(false);
 
   const slotMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
   const baseGridSlots = useMemo(() => generateTimeSlots({
@@ -477,7 +489,7 @@ function DoctorDayCalendarForSelection({
                       : `Rescheduling ${formatPatientName(move.appointment.patient)}`}
                   </div>
                   <div className="text-amber-700">
-                    {moveHint(move, date)}
+                    {moveHint(move, date, baseGridSlots.every((slot) => isSlotInPast(slot, date)))}
                   </div>
                 </div>
                 <Button size="sm" variant="ghost" className="shrink-0" onClick={() => setMove(null)} disabled={placing}>

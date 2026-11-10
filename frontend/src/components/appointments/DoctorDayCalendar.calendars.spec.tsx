@@ -184,6 +184,44 @@ describe('DoctorDayCalendar Scheduled and Confirmed calendars', () => {
     await waitFor(() => expect(screen.queryByText('Rescheduling Ravi Kumar')).toBeNull());
   });
 
+  it('says no times are left when the reschedule lands on a day that has passed', async () => {
+    api.getDoctorSchedule.mockImplementation(async (_doctor: string, day: string) => toSchedule(day === '2099-01-01' ? [ravi] : []));
+    const { rerender } = render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" />);
+    await screen.findByRole('region', { name: 'Scheduled' });
+    fireEvent.click((await openDetails('Ravi Kumar')).getByRole('button', { name: 'Reschedule' }));
+    expect(await screen.findByText('Click a free time in either calendar. To move to another day, change the date first.')).toBeInTheDocument();
+
+    rerender(<DoctorDayCalendar doctorId="doc-1" date="2000-01-01" />);
+
+    expect(await screen.findByText('No times are left on 01 Jan 2000. Change the date to move this appointment.')).toBeInTheDocument();
+    expect(screen.getByText('Rescheduling Ravi Kumar')).toBeInTheDocument();
+    expect(screen.queryByText(/Click a free time/)).toBeNull();
+  });
+
+  it('sends one reschedule when the date changes while the first is still saving', async () => {
+    api.getDoctorSchedule.mockImplementation(async (_doctor: string, day: string) => toSchedule(day === '2099-01-01' ? [ravi] : []));
+    let finish: (value: never) => void = () => undefined;
+    api.rescheduleAppointment.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }) as never);
+    const { rerender } = render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" />);
+    await screen.findByRole('region', { name: 'Scheduled' });
+    fireEvent.click((await openDetails('Ravi Kumar')).getByRole('button', { name: 'Reschedule' }));
+    await screen.findByText('Rescheduling Ravi Kumar');
+    fireEvent.click(column('Scheduled').getByRole('button', { name: 'Move to 14:00-14:30' }));
+    await waitFor(() => expect(api.rescheduleAppointment).toHaveBeenCalledTimes(1));
+
+    rerender(<DoctorDayCalendar doctorId="doc-1" date="2099-01-02" />);
+    await screen.findByText('Click a free time in either calendar to move this appointment from 01 Jan 2099 to 02 Jan 2099.');
+    fireEvent.click(column('Confirmed').getByRole('button', { name: 'Move to 15:00-15:30' }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Rescheduling Ravi Kumar'));
+
+    expect(api.rescheduleAppointment.mock.calls).toEqual([
+      ['a1', { date: '2099-01-01', slot: '14:00-14:30', roomId: undefined, calendar: 'SCHEDULED' }],
+    ]);
+    finish({ id: 'a1' } as never);
+    await waitFor(() => expect(screen.queryByText('Rescheduling Ravi Kumar')).toBeNull());
+    expect(api.rescheduleAppointment).toHaveBeenCalledTimes(1);
+  });
+
   it('ends a reschedule when the doctor changes', async () => {
     api.getDoctorSchedule.mockResolvedValue(toSchedule([ravi]));
     const { rerender } = render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" />);
