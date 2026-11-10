@@ -235,8 +235,6 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {formData.type === 'MEDICINE' && <InventoryRegimenFields value={formData}
-            onChange={patch => setFormData(prev => ({ ...prev, ...patch } as typeof prev))} />}
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Basic Information</h3>
@@ -364,6 +362,9 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
               </div>
             </div>
           </div>
+
+          {formData.type === 'MEDICINE' && <InventoryRegimenFields value={formData}
+            onChange={patch => setFormData(prev => ({ ...prev, ...patch } as typeof prev))} />}
 
           {/* Identification */}
           <div className="space-y-4">
