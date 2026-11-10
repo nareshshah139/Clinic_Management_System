@@ -120,6 +120,16 @@ async function call(page, method, url, body) {
       return { page, context, refused };
     }
 
+    // Sign-in allows five attempts a minute, so every role signs in once, spaced out, before the scenarios.
+    for (const who of ["reception", "doctor", "admin", "pharmacist", "nurse"]) {
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      await stack.login(page, who);
+      sessions.set(who, await context.storageState());
+      await context.close();
+      await new Promise((resolve) => setTimeout(resolve, 13000));
+    }
+
     async function scenario(name, run) {
       const started = Date.now();
       const checks = [];
@@ -317,7 +327,7 @@ async function call(page, method, url, body) {
       s.check("whole day by mode", await tableRows(o.page, "Whole day by payment mode"), WHOLE);
       s.ok("whole day total", clean(await o.page.getByRole("region", { name: "Whole day", exact: true }).innerText()).includes("Whole day ₹5,224.00 Clinic ₹5,000.00 Pharmacy ₹224.00"), clean(await o.page.getByRole("region", { name: "Whole day", exact: true }).innerText()).slice(0, 200));
       s.check("clinic by mode", await tableRows(o.page, "Clinic: consultations and procedures by payment mode"), [["Cash", "4,000.00", "0.00", "4,000.00"], ["UPI", "500.00", "0.00", "500.00"], ["Card", "500.00", "0.00", "500.00"]]);
-      const clinic = clean(await o.page.getByRole("region", { name: "Clinic: consultations and procedures" }).innerText());
+      const clinic = clean(await o.page.getByRole("region", { name: "Clinic: consultations and procedures", exact: true }).innerText());
       s.ok("clinic tiles", clinic.includes("Clinic received ₹5,000.00") && clinic.includes("Clinic billed today ₹5,200.00") && clinic.includes("Clinic still due ₹200.00"), clinic.slice(0, 300));
       const bills = await tableRows(o.page, "Clinic bills");
       s.check("five clinic bills today", bills.length, 5);
