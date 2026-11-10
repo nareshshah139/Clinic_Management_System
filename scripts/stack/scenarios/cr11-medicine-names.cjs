@@ -8,7 +8,7 @@ const { seed, api, tokenFor, browserLogin } = require("./cr11-seed.cjs");
 
 const root = path.resolve(__dirname, "../../..");
 const out = process.env.SHOTS_DIR || path.join(root, "output/stack/cr11-medicine-names");
-const VIEWPORTS = { 1280: { width: 1280, height: 800 }, 390: { width: 390, height: 844 } };
+const VIEWPORTS = { 1280: { width: 1280, height: 800 }, 1440: { width: 1440, height: 900 }, 390: { width: 390, height: 844 } };
 const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g, " ").trim();
 const STRENGTH_REFUSAL = "Enter the strength, for example 150 mg, or tick Combination product.";
 const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on.";
@@ -161,6 +161,74 @@ const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis"
         if (width === "390") check(`${tag} stock list: no sideways page scroll`, await overflow(page), 0);
         await shot(page, `${tag}-02-missing-strength-list`);
         check(`${tag} stock pages: no console error or refused call`, [seen.errors, seen.refused], [[], []]);
+        await context.close();
+      }
+
+    const stockLayout = (page) =>
+      page.evaluate(() => {
+        const table = [...document.querySelectorAll("main table")].find((t) => [...t.querySelectorAll("th")].some((th) => th.textContent.trim() === "Product / batch"));
+        const lines = (node) => {
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          return new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top))).size;
+        };
+        const column = (name) => [...table.querySelectorAll("thead th")].findIndex((th) => th.textContent.trim() === name);
+        return [...table.querySelectorAll("tbody tr")].map((row) => {
+          const cells = row.querySelectorAll("td");
+          const product = cells[column("Product / batch")];
+          return {
+            name: product.querySelector("button").textContent.trim(),
+            height: Math.round(row.getBoundingClientRect().height),
+            recordedLines: [...product.querySelectorAll("p")].filter((p) => p.textContent.startsWith("Recorded as")).map(lines),
+            strengthMissing: [...product.querySelectorAll("p")].some((p) => p.textContent === "Strength missing"),
+            locationLines: lines(cells[column("Location")]),
+            stateLines: lines(cells[column("Batch state")].querySelector("[data-review-state] > span")),
+            buttons: [...cells[column("Edit")].querySelectorAll("button")].map((b) => {
+              const lineHeight = parseFloat(getComputedStyle(b).lineHeight);
+              return { text: b.textContent.trim(), lines: lines(b), fits: b.scrollWidth <= b.clientWidth, belowTwoLines: b.getBoundingClientRect().height < 2 * lineHeight };
+            }),
+          };
+        });
+      });
+    for (const who of ["pharmacist", "doctor", "admin"])
+      for (const width of who === "pharmacist" ? ["1280", "1440", "390"] : ["1280", "390"]) {
+        const tag = `${who}-${width}`;
+        const { page, context, seen } = await open(who, width);
+        await stockList(page, { missing: "Strength missing" });
+        const rows = await stockLayout(page);
+        console.log(`NOTE ${tag} stock row heights ${JSON.stringify(rows.map((r) => [r.name, r.height, r.recordedLines]))}`);
+        check(`${tag} stock list: the four missing-strength batches, each still saying Strength missing`, rows.map((r) => [r.name, r.strengthMissing]).sort(), MISSING_STRENGTH.map((name) => [name, true]));
+        check(`${tag} stock list: Uprise, Acnosis and Thyronorm still say what they were recorded as`, rows.filter((r) => r.recordedLines.length).map((r) => r.name).sort(), ["Cap. Uprise D3 60000", "Tab. Acnosis", "Tab. Thyronorm 50"]);
+        check(`${tag} stock list: Edit price and Edit stock read on one line each in every row`,
+          rows.flatMap((r) => r.buttons.map((b) => [b.text, b.lines, b.fits, b.belowTwoLines])),
+          rows.flatMap(() => [["Edit price", 1, true, true], ["Edit stock", 1, true, true]]));
+        check(`${tag} stock list: Location stays on one line`, rows.map((r) => r.locationLines), rows.map(() => 1));
+        check(`${tag} stock list: no sideways page scroll`, await overflow(page), 0);
+        if (width !== "390") {
+          check(`${tag} stock list: every column, Edit included, fits without scrolling the table`, await page.evaluate(() => {
+            const table = [...document.querySelectorAll("main table")].find((t) => [...t.querySelectorAll("th")].some((th) => th.textContent.trim() === "Product / batch"));
+            return table.parentElement.scrollWidth - table.parentElement.clientWidth;
+          }), 0);
+          check(`${tag} stock list: the batch state reads on at most two lines`, rows.map((r) => [r.name, r.stateLines <= 2]), rows.map((r) => [r.name, true]));
+          const oneLine = rows.filter((r) => r.recordedLines.every((n) => n === 1));
+          check(`${tag} stock list: a row whose Recorded as fits on one line is at most 112px tall`, oneLine.map((r) => [r.name, r.height <= 112]), oneLine.map((r) => [r.name, true]));
+          check(`${tag} stock list: a row whose Recorded as wraps is at most 140px tall`, rows.map((r) => [r.name, r.height <= 140]), rows.map((r) => [r.name, true]));
+        }
+        if (width === "1440") check(`${tag} stock list: the product column takes the spare width, so every Recorded as line fits on one line`, rows.filter((r) => r.recordedLines.length).map((r) => [r.name, r.recordedLines]), [["Cap. Uprise D3 60000", [1]], ["Tab. Acnosis", [1]], ["Tab. Thyronorm 50", [1]]]);
+        await shot(page, `${tag}-02b-stock-row-actions`);
+        const uprise = stockRows(page).filter({ hasText: "Cap. Uprise D3 60000" });
+        for (const [action, current] of [["Edit price", "Current selling price: ₹76.00"], ["Edit stock", "Current stock on shelf: 5 STRIPS"]]) {
+          await uprise.getByRole("button", { name: action }).click();
+          const dialog = page.getByRole("dialog");
+          await dialog.waitFor();
+          check(`${tag} ${action} opens its editor for that batch`,
+            [clean(await dialog.getByRole("heading").first().innerText()), clean(await dialog.innerText()).includes("Cap. Uprise D3 60000"), clean(await dialog.innerText()).includes(current)],
+            [action, true, true]);
+          if (width === "1280" && who !== "admin") await shot(page, `${tag}-02c-${action.toLowerCase().replace(" ", "-")}-dialog`);
+          await page.keyboard.press("Escape");
+          await dialog.waitFor({ state: "detached" });
+        }
+        check(`${tag} stock row actions: no console error or refused call`, [seen.errors, seen.refused], [[], []]);
         await context.close();
       }
 
