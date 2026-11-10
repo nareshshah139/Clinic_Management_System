@@ -952,8 +952,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [exItchScore, setExItchScore, hydrateExItchScore] = useClinicalState<string>('', 'exItchScore', dirtyClinicalFields);
   const [newMorphology, setNewMorphology] = useState<string>('');
   const [newDistribution, setNewDistribution] = useState<string>('');
-  const [exTriggers, setExTriggers, hydrateExTriggers] = useClinicalState<string>('', 'exTriggers', dirtyClinicalFields);
-  const [exPriorTx, setExPriorTx, hydrateExPriorTx] = useClinicalState<string>('', 'exPriorTx', dirtyClinicalFields);
   const [exDermDx, setExDermDx, hydrateExDermDx] = useClinicalState<Set<string>>(new Set(), 'exDermDx', dirtyClinicalFields);
   const [exObjective, setExObjective, hydrateExObjective] = useClinicalState<string>('', 'exObjective', dirtyClinicalFields);
 
@@ -1113,8 +1111,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const hasDiagnosis = useMemo(() => Boolean(diagnosis?.trim()?.length), [diagnosis]);
   const hasChiefComplaints = useMemo(() => Boolean(chiefComplaints?.trim()?.length), [chiefComplaints]);
   const hasHistories = useMemo(() => Boolean(
-    pastHistory?.trim()?.length || personalHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length
-  ), [pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx]);
+    pastHistory?.trim()?.length || personalHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length
+  ), [pastHistory, personalHistory, medicationHistory, menstrualHistory]);
   
   const hasExamination = useMemo(() => Boolean(
     exSkinType || exAcneSeverity || exItchScore || exMorphology.size || exDistribution.size || exDermDx.size || exObjective?.trim()?.length
@@ -1187,10 +1185,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (pastHistory?.trim()) parts.push(`Past: ${tt('pastHistory', pastHistory)}`);
     if (medicationHistory?.trim()) parts.push(`Medication: ${tt('medicationHistory', medicationHistory)}`);
     if (menstrualHistory?.trim()) parts.push(`Menstrual: ${tt('menstrualHistory', menstrualHistory)}`);
-    if (exTriggers?.trim()) parts.push(`Triggers: ${tt('triggers', exTriggers)}`);
-    if (exPriorTx?.trim()) parts.push(`Prior Tx: ${tt('priorTreatments', exPriorTx)}`);
     return parts.join(' | ');
-  }, [pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, tt]);
+  }, [pastHistory, medicationHistory, menstrualHistory, tt]);
 
   const familyHistoryLine = useMemo(() => {
     const parts: string[] = [];
@@ -1357,8 +1353,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             if (!pastHistory && typeof historyObj.pastHistory === 'string') hydratePastHistory(historyObj.pastHistory);
             if (!medicationHistory && typeof historyObj.medicationHistory === 'string') hydrateMedicationHistory(historyObj.medicationHistory);
             if (!menstrualHistory && typeof historyObj.menstrualHistory === 'string') hydrateMenstrualHistory(historyObj.menstrualHistory);
-            if (!exTriggers && typeof historyObj.triggers === 'string') hydrateExTriggers(historyObj.triggers);
-            if (!exPriorTx && typeof historyObj.priorTreatments === 'string') hydrateExPriorTx(historyObj.priorTreatments);
             const fam = historyObj.familyHistory || {};
             if (familyHistoryDM === false && typeof fam.dm === 'boolean') hydrateFamilyHistoryDM(!!fam.dm);
             if (familyHistoryHTN === false && typeof fam.htn === 'boolean') hydrateFamilyHistoryHTN(!!fam.htn);
@@ -2571,7 +2565,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       history: {
         pastHistory: field('pastHistory', pastHistory), personalHistory,
         medicationHistory: field('medicationHistory', medicationHistory), menstrualHistory: field('menstrualHistory', menstrualHistory),
-        triggers: field('exTriggers', exTriggers), priorTreatments: field('exPriorTx', exPriorTx),
         familyHistory: {
           dm: field('familyHistoryDM', familyHistoryDM), htn: field('familyHistoryHTN', familyHistoryHTN),
           thyroid: field('familyHistoryThyroid', familyHistoryThyroid), others: field('familyHistoryOthers', familyHistoryOthers),
@@ -2597,7 +2590,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         },
       },
     }) || {};
-  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
+  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
 
   /**
@@ -2682,8 +2675,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             personalHistory,
             medicationHistory: clinicalField('medicationHistory', medicationHistory),
             menstrualHistory: clinicalField('menstrualHistory', menstrualHistory),
-            triggers: clinicalField('exTriggers', exTriggers),
-            priorTreatments: clinicalField('exPriorTx', exPriorTx),
           },
           familyHistory: {
             dm: clinicalField('familyHistoryDM', familyHistoryDM),
@@ -2884,9 +2875,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [newTplSkinType, setNewTplSkinType] = useState('');
   const [newTplMorphology, setNewTplMorphology] = useState<Set<string>>(new Set());
   const [newTplDistribution, setNewTplDistribution] = useState<Set<string>>(new Set());
-  // Removed triggers and prior treatments from templates (now part of Patient History)
-  const [newTplTriggers] = useState('');
-  const [newTplPriorTx] = useState('');
   const [newTplItchScore, setNewTplItchScore] = useState<string>('');
   const [newTplSkinConcerns, setNewTplSkinConcerns] = useState<Set<string>>(new Set());
   const [newTplItems, setNewTplItems] = useState<Array<{
@@ -3054,8 +3042,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               distribution: Array.from(exDistribution),
               acneSeverity: exAcneSeverity || undefined,
               itchScore: exItchScore ? Number(exItchScore) : undefined,
-              triggers: exTriggers || undefined,
-              priorTreatments: exPriorTx || undefined,
               skinConcerns: Array.from(skinConcerns),
             }
           },
@@ -3088,8 +3074,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   distribution: Array.from(exDistribution),
                   acneSeverity: exAcneSeverity || undefined,
                   itchScore: exItchScore ? Number(exItchScore) : undefined,
-                  triggers: exTriggers || undefined,
-                  priorTreatments: exPriorTx || undefined,
                   skinConcerns: Array.from(skinConcerns),
                 }
               },
@@ -3105,7 +3089,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     } finally {
       setSavingFieldsTemplate(false);
     }
-  }, [chiefComplaints, diagnosis, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, skinConcerns, loadTemplates, apiClient, toast, showTemplateCreateError]);
+  }, [chiefComplaints, diagnosis, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, skinConcerns, loadTemplates, apiClient, toast, showTemplateCreateError]);
 
   const persistTemplate = useCallback(async (name: string) => {
     try {
@@ -4237,8 +4221,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         exDistribution: Array.from(exDistribution),
         exAcneSeverity,
         exItchScore,
-        exTriggers,
-        exPriorTx,
         familyHistoryDM,
         familyHistoryHTN,
         familyHistoryThyroid,
@@ -4262,7 +4244,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [shouldPersistDraft, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [shouldPersistDraft, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -4323,8 +4305,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         if (Array.isArray(data?.exDistribution)) hydrateExDistribution(new Set(data.exDistribution), data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.exAcneSeverity === 'string') hydrateExAcneSeverity(data.exAcneSeverity, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.exItchScore === 'string') hydrateExItchScore(data.exItchScore, data.dirtyClinicalFields ?? 'populated');
-        if (typeof data?.exTriggers === 'string') hydrateExTriggers(data.exTriggers, data.dirtyClinicalFields ?? 'populated');
-        if (typeof data?.exPriorTx === 'string') hydrateExPriorTx(data.exPriorTx, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.familyHistoryDM === 'boolean') hydrateFamilyHistoryDM(data.familyHistoryDM, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.familyHistoryHTN === 'boolean') hydrateFamilyHistoryHTN(data.familyHistoryHTN, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.familyHistoryThyroid === 'boolean') hydrateFamilyHistoryThyroid(data.familyHistoryThyroid, data.dirtyClinicalFields ?? 'populated');
@@ -4775,16 +4755,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="mt-3">
                   <label htmlFor="personal-history" className="text-xs text-gray-600 flex items-center gap-1">Personal history{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                   <Textarea id="personal-history" rows={2} placeholder="Diet, sleep, habits, occupation, cosmetics/products used" value={personalHistory ?? ''} onChange={(e) => setPersonalHistory(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                  <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Triggers{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Input placeholder="Heat, stress, cosmetics..." value={exTriggers} onChange={(e) => setExTriggers(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Prior Treatments{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Input placeholder="Topicals/systemics tried" value={exPriorTx} onChange={(e) => setExPriorTx(e.target.value)} />
-                  </div>
                 </div>
               </div>
             </CollapsibleSection>
@@ -5962,7 +5932,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 )}
 
                 {/* Histories */}
-                {!!(pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length) && (
+                {!!(pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length) && (
                   <div className={`${printBlockPadding} text-sm`}>
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">History:</span>
@@ -6575,7 +6545,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     ))}
                   </div>
                 </div>
-                {/* Triggers and prior treatments removed from template form */}
                 <div>
                   <div className="text-xs text-gray-600 mb-1">Skin Concerns</div>
                   <div className="flex flex-wrap gap-2">

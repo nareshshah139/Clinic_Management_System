@@ -488,6 +488,28 @@ it('refreshes personal history in an already-open paginated preview', async () =
   }
 });
 
+it('prints the history the form edits and leaves out a visit\'s retired triggers and prior treatments', async () => {
+  paginateSourceContent = true;
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({
+    history: { pastHistory: 'Eczema as a child', triggers: 'Heat and stress', priorTreatments: 'Clobetasol cream' },
+    prescription: { id: 'history-rx', items: [{ drugName: 'Synthetic medicine', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' }] },
+  });
+  try {
+    render(<PrescriptionBuilder patientId="history-print-patient" visitId="history-print-visit" doctorId="doctor" />);
+    await screen.findByDisplayValue('Eczema as a child');
+    await openPreview();
+    await settlePreviewPagination();
+    const printed = document.getElementById('pagedjs-container');
+    expect(printed).toHaveTextContent('Past: Eczema as a child');
+    expect(printed).not.toHaveTextContent('Triggers');
+    expect(printed).not.toHaveTextContent('Prior Tx');
+    expect(printed).not.toHaveTextContent('Heat and stress');
+    expect(printed).not.toHaveTextContent('Clobetasol cream');
+  } finally {
+    get.mockRestore();
+  }
+});
+
 it.each([
   ['Diet: vegetarian\nSleep: 6 hours; teacher; sunscreen daily', false],
   ['Diet: vegetarian\nSleep: 6 hours; teacher; sunscreen daily', true],
