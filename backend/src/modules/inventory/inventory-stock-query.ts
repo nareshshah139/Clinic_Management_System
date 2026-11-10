@@ -79,7 +79,9 @@ export async function readStockGaps(db: StockDatabase, branchId: string): Promis
   const [row] = await db.$queryRaw<{ gaps: Record<QualityGap, number> }[]>(Prisma.sql`${branchItems(branchId)}
     SELECT jsonb_build_object(${Prisma.join(Object.entries(QUALITY_GAPS).flatMap(([gap, condition]) => [Prisma.sql`${gap}`, Prisma.sql`count(*) FILTER (WHERE ${condition})`]))}) AS gaps
     FROM branch_items i`);
-  return Object.fromEntries(Object.keys(QUALITY_GAPS).map((gap) => [gap, Number(row.gaps[gap as QualityGap])])) as Record<QualityGap, number>;
+  const ordered = {} as Record<QualityGap, number>;
+  for (const gap of Object.keys(QUALITY_GAPS) as QualityGap[]) ordered[gap] = Number(row.gaps[gap]);
+  return ordered;
 }
 const totals = Prisma.sql`jsonb_build_object(
   'batches', count(*), 'units', coalesce(sum(i."currentStock"), 0),
