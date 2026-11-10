@@ -50,6 +50,7 @@ export const rxLayout = {
   empty: 'block w-full px-3 py-3 text-center text-gray-500 @6xl:table-cell',
   medicine: `${roomy} w-full`,
   frequency: `${roomy} min-w-[8.5rem] flex-1`,
+  frequencyPair: `${roomy} min-w-[16rem] flex-1`,
   when: `${roomy} min-w-[7.5rem] flex-1`,
   duration: `${snug} flex-none`,
   instructions: `${roomy} relative min-w-[12rem] flex-1 @6xl:min-w-0`,

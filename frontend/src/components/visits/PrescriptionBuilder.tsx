@@ -5184,7 +5184,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <colgroup className={rxLayout.columns}>
                       <col className="w-[24%]" />
                       <col className="w-[8rem]" />
-                      <col className="w-[8rem]" />
+                      <col className="w-[9rem]" />
                       <col className="w-[10.5rem]" />
                       <col />
                       <col className="w-[10rem]" />
@@ -6636,7 +6636,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <colgroup className={rxLayout.columns}>
                       <col className="w-[22%]" />
                       <col className="w-[13rem]" />
-                      <col className="w-[8rem]" />
+                      <col className="w-[9rem]" />
                       <col className="w-[10.5rem]" />
                       <col />
                       <col className="w-[10rem]" />
@@ -6662,7 +6662,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <td className={rxLayout.medicine}>
                             <Input ref={(el) => { newTplMedicineRefs.current[idx] = el; }} value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
                           </td>
-                          <td className={rxLayout.frequency} data-label="Frequency">
+                          <td className={rxLayout.frequencyPair} data-label="Frequency">
                             <div className="grid grid-cols-2 gap-1">
                               <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx, true); return; }

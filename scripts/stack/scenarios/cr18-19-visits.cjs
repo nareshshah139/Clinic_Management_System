@@ -203,6 +203,8 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           ]);
           const pageOverflow = await overflowX(page);
           s.ok(`${size.width}: no sideways page scroll`, pageOverflow <= 0, { pageOverflow, widest: pageOverflow > 0 ? await widest(page) : null });
+          await heading.evaluate((el) => el.scrollIntoView({ block: "start" }));
+          await page.evaluate(() => window.scrollBy(0, -140));
           await s.shot(page, `${role}-${size.width}-patient-history`);
           await page.getByRole("textbox", { name: "Past history" }).fill("Seasonal eczema");
           await page.locator("#personal-history").fill("Works nights; fragrance-free products");
@@ -225,6 +227,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
       const cardText = await history.innerText();
       s.ok("the history card shows the stored triggers", cardText.includes("Heat and stress"), cardText.slice(0, 400));
       s.ok("the history card shows the stored prior treatments", cardText.includes("Clobetasol cream"), cardText.slice(0, 400));
+      await history.getByText("Heat and stress").first().evaluate((el) => el.scrollIntoView({ block: "center" }));
       await s.shot(page, "doctor-1280-old-visit-history-card");
 
       await page.getByRole("tab", { name: "Prescription" }).click();
@@ -352,7 +355,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           s.ok("print: Duration is narrower than Instructions", widths[3] < widths[4], widths);
           const clippedInPrint = await page.locator("#pagedjs-container .rx-row").evaluateAll((els) => els.some((el) => [...el.children].some((c) => c.scrollWidth > c.clientWidth + 1)));
           s.check("print: no cell is cut off", clippedInPrint, false);
-          await page.locator("#pagedjs-container").scrollIntoViewIfNeeded();
+          await page.locator("#pagedjs-container .rx-row").first().evaluate((el) => el.scrollIntoView({ block: "center" }));
           await s.shot(page, `${role}-${size.width}-rx-print-preview`);
         });
       }
