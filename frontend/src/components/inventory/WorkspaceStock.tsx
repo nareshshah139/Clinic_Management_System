@@ -11,6 +11,7 @@ import { InventoryItemPage } from "./InventoryItemPage";
 import { AddInventoryItemDialog } from "./AddInventoryItemDialog";
 import { StockEditDialog } from "./StockEditDialog";
 import { ReviewStatus } from "@/components/ui/ReviewStatus";
+import { gapLabel } from "./optimization/stock-optimization-model";
 import { batchReviewTone, batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from "./stock-batch-view";
 import {
   fmtMoney,
@@ -445,7 +446,7 @@ export function WorkspaceStock({
                     size="sm"
                     onClick={() => filter(k, "")}
                   >
-                    {k}: {v} ×
+                    {k === "gap" ? `${gapLabel(v)} ×` : `${k}: ${v} ×`}
                   </Button>
                 ))}
             </div>

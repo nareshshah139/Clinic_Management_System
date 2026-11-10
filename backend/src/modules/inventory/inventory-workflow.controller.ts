@@ -22,6 +22,7 @@ import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { InventoryWorkspaceService } from './inventory-workspace.service';
 import { InventoryReconciliationService } from './reconciliation/inventory-reconciliation.service';
+import { InventoryOptimizationService } from './stock-optimization.service';
 import {
   SaveWorkflowDocumentDto,
   TransitionWorkflowDto,
@@ -49,6 +50,7 @@ export class InventoryWorkflowController {
     private readonly intakeService: InventoryIntakeService,
     private readonly labels: InventoryLabelService,
     private readonly reconciliation: InventoryReconciliationService,
+    private readonly optimization: InventoryOptimizationService,
   ) {}
   @Get('replenishment/manual-targets') manualTargets(
     @Request() r: any,
@@ -174,6 +176,27 @@ export class InventoryWorkflowController {
   }
   @Get('timeline') timeline(@Request() r: any, @Query() q: any) {
     return this.workspace.timeline(r.user, q);
+  }
+  @Get('stock/gaps') stockGaps(@Request() r: any) {
+    return this.optimization.gaps(r.user);
+  }
+  @Get('optimization/rules') optimizationRules(@Request() r: any) {
+    return this.optimization.rules(r.user);
+  }
+  @Patch('optimization/rules') saveOptimizationRules(
+    @Request() r: any,
+    @Body() b: Record<string, any>,
+  ) {
+    return this.optimization.saveRules(r.user, b);
+  }
+  @Post('optimization/run') runOptimization(@Request() r: any) {
+    return this.optimization.run(r.user);
+  }
+  @Post('optimization/return-drafts') optimizationReturnDraft(
+    @Request() r: any,
+    @Body() b: Record<string, any>,
+  ) {
+    return this.optimization.createReturnDraft(r.user, b);
   }
   @Get('stock') stock(@Request() r: any, @Query() q: any) {
     return this.workspace.stock(r.user, q);

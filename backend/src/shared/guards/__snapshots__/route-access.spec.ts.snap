@@ -110,6 +110,7 @@ GET /inventory/workspace/gmail/status | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,
 GET /inventory/workspace/hold-sources | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/intake | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/labels/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /inventory/workspace/optimization/rules | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/overview | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/owners | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/purchases/:id/actions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -128,6 +129,7 @@ GET /inventory/workspace/sale-movements | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURS
 GET /inventory/workspace/settings | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/stock | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/stock/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /inventory/workspace/stock/gaps | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/suppliers | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/timeline | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /patients | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -264,6 +266,7 @@ PATCH /inventory/purchase-orders/:id | roles: ADMIN,PHARMACIST,RECEPTION | permi
 PATCH /inventory/suppliers/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:supplier:update
 PATCH /inventory/transactions/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:transaction:update
 PATCH /inventory/workspace/documents/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+PATCH /inventory/workspace/optimization/rules | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /inventory/workspace/purchases/:id/metadata | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /inventory/workspace/reconciliation/counts/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /inventory/workspace/settings | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -342,6 +345,8 @@ POST /inventory/workspace/gmail/import | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE
 POST /inventory/workspace/intake | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/intake/csv | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/movement-corrections | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /inventory/workspace/optimization/return-drafts | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /inventory/workspace/optimization/run | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/purchases/:id/originals | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/reconciliation/counts/:id/approve | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/reconciliation/counts/:id/reject | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -

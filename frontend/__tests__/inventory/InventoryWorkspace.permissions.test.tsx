@@ -10,6 +10,7 @@ let mockRole = 'OWNER';
 jest.mock('@/components/layout/dashboard-user-context', () => ({useDashboardUser:()=>({user:{id:'operator',branchId:'branch',role:mockRole}})}));
 jest.mock('@/components/inventory/WorkflowDocumentEditor', () => ({WorkflowDocumentEditor:({recoveryRequestKey,recoveryVersion,recoveryOperation,onBack}:any)=><div><p>Recover request {recoveryRequestKey || 'missing'}</p><p>Recovery version {recoveryVersion ?? 'missing'} operation {recoveryOperation || 'missing'}</p><button onClick={onBack}>Back from recovery</button></div>}));
 jest.mock('@/components/inventory/WorkspaceStock', () => ({WorkspaceStock:({capabilities}:any)=><p>Count access {capabilities.kinds.COUNT.write?'available':'unavailable'}</p>}));
+jest.mock('@/components/inventory/optimization/DataQualityStrip', () => ({DataQualityStrip:()=>null}));
 beforeEach(()=>{jest.clearAllMocks();mockQuery='area=stock&view=list';mockRole='OWNER';});
 it('retries failed permissions from a named control and renders the recovered access',async()=>{
   (apiClient.get as jest.Mock).mockRejectedValueOnce(new Error('Network unavailable')).mockResolvedValue({kinds:{COUNT:{write:true}}});
