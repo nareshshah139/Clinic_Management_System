@@ -48,6 +48,14 @@ const namingFields = [
   ["strength", "Strength"],
   ["isCombination", "Combination product"],
 ] as const;
+/** Only the fields this form edits are sent, so values it never shows (tags, MRP, stock) are left alone. */
+export const editedDetails = (value: Record<string, any>) =>
+  Object.fromEntries(
+    [...basicFields, ...extraFields, ...regimenFields, ...namingFields, ["status"], ["reason"], ["updatedAt"]]
+      .map(([key]) => key)
+      .filter((key) => value[key] !== undefined)
+      .map((key) => [key, value[key]]),
+  );
 const fieldValue = (value: unknown, key: string) =>
   key === "expiryDate"
     ? String(value || "").slice(0, 10)

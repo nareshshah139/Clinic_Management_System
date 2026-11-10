@@ -143,6 +143,9 @@ it('edits the chosen batch and saves it to that batch', async () => {
   fireEvent.change(screen.getByLabelText('Why are you changing it?'), { target: { value: 'Moved shelf' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save corrected details' }));
   await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/inventory/workspace/stock/b2', expect.objectContaining({ storageLocation: 'R2', reason: 'Moved shelf' })));
+  const sent = (apiClient.patch as jest.Mock).mock.calls[0][1];
+  for (const shownElsewhere of ['tags', 'mrp', 'currentStock', 'sellingPrice', 'metadata', 'drugs'])
+    expect(sent).not.toHaveProperty(shownElsewhere);
 });
 
 it('opens the editor on the minimum stock field for a stock alert', async () => {

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ReviewStatus } from "@/components/ui/ReviewStatus";
 import { InventoryAction } from "./InventoryPresentation";
-import { StockDetailsEditor } from "./StockDetailsEditor";
+import { editedDetails, StockDetailsEditor } from "./StockDetailsEditor";
 import { StockEditDialog } from "./StockEditDialog";
 import { stockLedgerExplanation } from "./stock-recovery";
 import { batchReviewTone, batchRowClass, batchState, fmtStockExpiry } from "./stock-batch-view";
@@ -337,7 +337,7 @@ export function InventoryItemPage({ itemId, query, navigate, capabilities, onTas
                 onSave={async () => {
                   setBusy(true); setError("");
                   try {
-                    await apiClient.patch(`/inventory/workspace/stock/${edit.batchId}`, { ...edit.value, batchNumber: edit.value.batchNumber || undefined, expiryDate: edit.value.expiryDate || undefined });
+                    await apiClient.patch(`/inventory/workspace/stock/${edit.batchId}`, { ...editedDetails(edit.value), batchNumber: edit.value.batchNumber || undefined, expiryDate: edit.value.expiryDate || undefined });
                     sessionStorage.removeItem(editKey);
                     await load();
                     setNotice("Corrected details saved. Stock quantity unchanged.");

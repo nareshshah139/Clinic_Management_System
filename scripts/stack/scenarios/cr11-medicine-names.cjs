@@ -69,16 +69,20 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
     check("API refuses a medicine without a form", await refusal("admin", "POST", "/inventory/items", { name: "Telma 40", type: "MEDICINE", unit: "STRIPS", costPrice: 10, sellingPrice: 20 }), [400, FORM_REFUSAL]);
 
     browser = await chromium.launch();
+    const sessions = new Map();
     const open = async (who, width) => {
-      const context = await browser.newContext({ viewport: VIEWPORTS[width] });
+      const context = await browser.newContext({ viewport: VIEWPORTS[width], ...(sessions.has(who) && { storageState: sessions.get(who) }) });
       const page = await context.newPage();
       page.setDefaultTimeout(60000);
       const seen = { errors: [], refused: [], posts: [] };
       page.on("pageerror", (e) => seen.errors.push(`pageerror ${e.message.slice(0, 200)}`));
       page.on("console", (m) => m.type() === "error" && !/status of 400/.test(m.text()) && seen.errors.push(m.text().slice(0, 200)));
-      page.on("response", (r) => r.url().includes("/api/") && [401, 403].includes(r.status()) && seen.refused.push(`${r.status()} ${new URL(r.url()).pathname}`));
+      page.on("response", (r) => r.url().includes("/api/") && [401, 403, 429].includes(r.status()) && seen.refused.push(`${r.status()} ${new URL(r.url()).pathname}`));
       page.on("request", (r) => r.method() === "POST" && new URL(r.url()).pathname === "/api/inventory/items" && seen.posts.push(r.postDataJSON()));
-      await browserLogin(stack, page, who);
+      if (!sessions.has(who)) {
+        await browserLogin(stack, page, who);
+        sessions.set(who, await context.storageState());
+      }
       return { page, context, seen };
     };
     const go = async (page, route) => {
@@ -99,10 +103,12 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       await page.screenshot({ path: path.join(out, `cr11-${name}.png`), fullPage: true });
       await page.setViewportSize(viewport);
     };
-    const productCells = async (page) => (await page.locator("tbody tr td:nth-child(2)").allInnerTexts()).map((text) => clean(text));
+    const stockRows = (page) => page.locator("table").filter({ has: page.getByRole("columnheader", { name: "Product / batch" }) }).locator("tbody tr");
+    const productCells = async (page) => (await stockRows(page).locator("td:nth-child(2)").allInnerTexts()).map((text) => clean(text));
+    const productNames = async (page) => (await stockRows(page).locator("td:nth-child(2) button").allInnerTexts()).map(clean);
     const stockList = async (page, query) => {
       await go(page, `/dashboard/inventory?area=stock&view=list&${new URLSearchParams(query)}`);
-      await page.locator("tbody tr").first().waitFor({ timeout: 240000 });
+      await page.getByText(/\d+ matching batches/).first().waitFor({ timeout: 240000 });
       await settle(page);
     };
 
@@ -113,10 +119,10 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
         await stockList(page, { search: "flutas" });
         check(`${tag} stock list shows the standard name and what it was recorded as`, (await productCells(page))[0]?.startsWith("Tab. Flutas 150 mg Recorded as 13 74 | Flutas 150Mg(Pc)"), true);
         await shot(page, `${tag}-01-stock-standard-name`);
-        await stockList(page, { search: "13 74 | Flutas" });
-        check(`${tag} searching the recorded name still finds the item`, (await page.locator("tbody tr td:nth-child(2) button").allInnerTexts()).map(clean), ["Tab. Flutas 150 mg"]);
+        await stockList(page, { search: "13 74 | Flutas 150Mg(Pc)" });
+        check(`${tag} searching the recorded name still finds the item`, await productNames(page), ["Tab. Flutas 150 mg"]);
         await stockList(page, { missing: "Strength missing" });
-        check(`${tag} Missing information: Strength missing lists exactly Tab. Acnosis`, (await page.locator("tbody tr td:nth-child(2) button").allInnerTexts()).map(clean), ["Tab. Acnosis"]);
+        check(`${tag} Missing information: Strength missing lists exactly Tab. Acnosis`, await productNames(page), ["Tab. Acnosis"]);
         check(`${tag} the missing-strength row says so`, (await productCells(page))[0]?.includes("Strength missing"), true);
         await page.getByRole("button", { name: "Filters" }).click();
         check(`${tag} the filter offers Strength missing with its count`, (await page.getByLabel("Missing information").locator("option").allInnerTexts()).includes("Strength missing (1)"), true);
@@ -146,7 +152,7 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       const { page, context, seen } = await open("pharmacist", "1280");
       await addDialog(page);
       await naming(page, { form: "TABLET", name: "Telma" });
-      check("pharmacist-1280 preview shows the tablet name and flags the missing strength", [await preview(page), await page.getByText("Strength missing").count()], ["Tab. Telma", 1]);
+      check("pharmacist-1280 preview shows the tablet name and flags the missing strength", [await preview(page), await page.getByRole("dialog").getByText("Strength missing").count()], ["Tab. Telma", 1]);
       await submit(page);
       check("pharmacist-1280 a tablet without a strength is refused on the form", [clean(await page.getByRole("alert").first().innerText()), seen.posts.length], [STRENGTH_REFUSAL, 0]);
       await shot(page, "pharmacist-1280-03-tablet-without-strength-refused");
@@ -224,7 +230,8 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       await page.locator("#medicine-name").fill("Augmentin");
       await page.getByLabel("Combination product").check();
       await page.getByLabel("Why are you changing it?").fill("Two ingredients; checked the strip");
-      check("admin-1280 the edit shows the printed name before saving", clean(await page.getByRole("region", { name: "Check your changes" }).innerText()).includes("Augmentin 500mg 125mg Tab Tab. Augmentin"), true);
+      const changes = clean(await page.getByRole("region", { name: "Check your changes" }).innerText());
+      check("admin-1280 the edit shows the printed name before saving", [changes.includes("Printed name Augmentin 500mg 125mg Tab"), changes.includes("Tab. Augmentin")], [true, true]);
       await shot(page, "admin-1280-08-edit-unread-item");
       await page.getByRole("button", { name: "Save corrected details" }).click();
       await page.getByText("Corrected details saved. Stock quantity unchanged.").waitFor();
@@ -282,7 +289,7 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       const acnosis = await pick(page, 1, "acnosis", "Tab. Acnosis");
       const antoxid = await pick(page, 2, "antoxid", "Cap. Antoxid-HC");
       check("doctor-1280 picker rows show standard names; only Acnosis says strength missing", [flutas.startsWith("Tab. Flutas 150 mg"), flutas.includes("Strength missing"), acnosis.includes("Strength missing"), antoxid.startsWith("Cap. Antoxid-HC")], [true, false, true, true]);
-      await pickerRow(page, 3).fill("13 74 | Flutas");
+      await pickerRow(page, 3).fill("13 74 | Flutas 150Mg(Pc)");
       await page.locator("div[title]").filter({ hasText: "Tab. Flutas 150 mg" }).first().waitFor();
       check("doctor-1280 typing the recorded name offers the standard name", clean(await page.locator("div[title]").filter({ hasText: "Tab. Flutas 150 mg" }).first().innerText()).startsWith("Tab. Flutas 150 mg"), true);
       await shot(page, "doctor-1280-11-picker-recorded-name");
