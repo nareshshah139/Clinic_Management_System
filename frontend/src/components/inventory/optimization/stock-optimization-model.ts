@@ -2,12 +2,12 @@ export type GapKey = 'LOCATION' | 'CATEGORY' | 'HSN' | 'MIN_MAX' | 'UNMAPPED';
 export type GapCounts = Record<GapKey, number>;
 
 /** Red gaps stop a correct GST bill or a stock match; amber gaps are housekeeping. */
-export const GAPS: { key: GapKey; label: string; tone: 'red' | 'amber'; why: string }[] = [
-  { key: 'LOCATION', label: 'Missing location', tone: 'amber', why: 'no rack or shelf' },
-  { key: 'CATEGORY', label: 'Missing category', tone: 'amber', why: 'no category' },
-  { key: 'HSN', label: 'Missing HSN code', tone: 'red', why: 'GST needs it' },
-  { key: 'MIN_MAX', label: 'Missing min/max', tone: 'amber', why: 'no reorder levels' },
-  { key: 'UNMAPPED', label: 'Unmapped', tone: 'red', why: 'not linked to a product' },
+export const GAPS: { key: GapKey; label: string; short: string; tone: 'red' | 'amber'; why: string }[] = [
+  { key: 'LOCATION', label: 'Missing location', short: 'No location', tone: 'amber', why: 'no rack or shelf' },
+  { key: 'CATEGORY', label: 'Missing category', short: 'No category', tone: 'amber', why: 'no category' },
+  { key: 'HSN', label: 'Missing HSN code', short: 'No HSN code', tone: 'red', why: 'GST needs it' },
+  { key: 'MIN_MAX', label: 'Missing min/max', short: 'No min/max', tone: 'amber', why: 'no reorder levels' },
+  { key: 'UNMAPPED', label: 'Unmapped', short: 'Unmapped', tone: 'red', why: 'not linked to a product' },
 ];
 
 export const gapLabel = (key: string) => GAPS.find((gap) => gap.key === key)?.label ?? key;

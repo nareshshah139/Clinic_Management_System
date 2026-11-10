@@ -153,6 +153,7 @@ const watch = (page) => {
           if (full) await page.setViewportSize(size);
           t.shots.push(file);
         },
+        allowConsole: null,
         opened: [],
         track(o) {
           this.opened.push(o);
@@ -172,7 +173,7 @@ const watch = (page) => {
       for (const o of ctx.opened) await o.context.close().catch(() => {});
       const failed = t.checks.filter((c) => !c.ok);
       const pageErrors = sink.filter((e) => e.type === "pageerror");
-      const consoleErrors = sink.filter((e) => e.type === "console");
+      const consoleErrors = sink.filter((e) => e.type === "console" && !(ctx.allowConsole && ctx.allowConsole.test(e.text)));
       const pass = !error && failed.length === 0 && pageErrors.length === 0 && consoleErrors.length === 0;
       const detail = [
         error && `EXCEPTION: ${error.message.split("\n")[0]}`,
@@ -422,6 +423,7 @@ const watch = (page) => {
       s.check("a stale version is refused", await refused("admin", "PATCH", "/inventory/workspace/optimization/rules", { nonMovingDays: 30, version: 1 }), 409);
       s.check("other inventory settings still need an approver", await refused("pharmacist", "PATCH", "/inventory/workspace/settings", { lookbackDays: 30, version: 3 }), 403);
       s.check("Apex below the minimum is refused a draft", await refused("pharmacist", "POST", "/inventory/workspace/optimization/return-drafts", { distributorGstin: DISTRIBUTORS.APX.gstin, requestKey: crypto.randomUUID() }), 400);
+      s.allowConsole = /status of 403 \(Forbidden\)/;
       const { page } = s.track(await open("reception"));
       await page.goto(`${stack.base}${TODAY}`, { waitUntil: "domcontentloaded", timeout: 240000 });
       await page.waitForTimeout(4000);

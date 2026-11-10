@@ -44,7 +44,7 @@ export function DataQualityStrip({ active, onOpen }: { active?: string; onOpen: 
       <h2 className="text-sm font-semibold">
         Data quality <span className="font-normal text-muted-foreground">· press a count to list those batches</span>
       </h2>
-      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <ul className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {GAPS.map((gap) => {
           const count = counts?.[gap.key];
           const tone = count ? gap.tone : "calm";
@@ -57,10 +57,11 @@ export function DataQualityStrip({ active, onOpen }: { active?: string; onOpen: 
                 aria-label={`${gap.label}: ${count ?? "loading"} ${count === 1 ? "batch" : "batches"}, ${gap.why}. ${pressed ? "Show all stock" : "Show them"}`}
                 disabled={count === undefined}
                 onClick={() => onOpen(pressed ? "" : gap.key)}
-                className={`flex min-h-10 w-full items-center gap-2 rounded-md border px-3 py-1.5 text-left text-sm transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60 ${TONE[tone]} ${pressed ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                className={`flex min-h-10 w-full items-center gap-2 rounded-md border px-2.5 py-1.5 sm:w-auto text-left text-sm transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60 ${TONE[tone]} ${pressed ? "ring-2 ring-primary ring-offset-1" : ""}`}
               >
                 <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${DOT[tone]}`} />
-                <span className="min-w-0 flex-1 truncate">{gap.label}</span>
+                <span className="min-w-0 flex-1 truncate max-sm:hidden sm:flex-none sm:whitespace-nowrap">{gap.label}</span>
+                <span className="min-w-0 flex-1 sm:hidden">{gap.short}</span>
                 <span className="font-semibold tabular-nums" data-testid={`gap-${gap.key}`}>
                   {count ?? "…"}
                 </span>
