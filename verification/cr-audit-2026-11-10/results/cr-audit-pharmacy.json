@@ -1,0 +1,450 @@
+{
+  "scenario": "cr-audit-pharmacy",
+  "ranAt": "2026-11-10T15:08:16.946Z",
+  "passed": 42,
+  "failed": 21,
+  "pageErrors": [],
+  "rows": [
+    {
+      "cr": "CR-12",
+      "point": "1",
+      "requirement": "One \"Inventory\" menu item; \"Inventory Updates\" removed",
+      "pass": true,
+      "observed": "menu: Dashboard, Patients, Appointments, Visits, Procedures, Rooms, Sales, Inventory, Pharmacy Report, Reports, Users, Test Transcribe"
+    },
+    {
+      "cr": "CR-12",
+      "point": "5",
+      "requirement": "\"Reorder targets\" is no longer a separate menu item",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-17",
+      "point": "3",
+      "requirement": "\"Daily Collection\" tab in the main left-hand menu",
+      "pass": false,
+      "observed": "menu: Dashboard, Patients, Appointments, Visits, Procedures, Rooms, Sales, Inventory, Pharmacy Report, Reports, Users, Test Transcribe"
+    },
+    {
+      "cr": "CR-25",
+      "point": "1",
+      "requirement": "\"Sales\" is a main tab in the left menu",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-12",
+      "point": "1b",
+      "requirement": "The old Inventory Updates address opens the approval queue inside Inventory",
+      "pass": true,
+      "observed": "/dashboard/inventory?area=stock&view=approvals"
+    },
+    {
+      "cr": "CR-13",
+      "point": "1",
+      "requirement": "The grey taglines named in the request are removed from Inventory",
+      "pass": false,
+      "observed": "still shown: Receive, review and manage pharmacy stock. | Every action opens the matching records."
+    },
+    {
+      "cr": "CR-13",
+      "point": "3a",
+      "requirement": "Body and table text at least 16 px",
+      "pass": true,
+      "observed": "body 18px; Sales table cells 16/18px"
+    },
+    {
+      "cr": "CR-13",
+      "point": "3b",
+      "requirement": "Headings and patient names 18-20 px",
+      "pass": true,
+      "observed": "page heading 32px; patient name in the Sales table 18px"
+    },
+    {
+      "cr": "CR-13",
+      "point": "3c",
+      "requirement": "No text below 16 px on the Sales screen",
+      "pass": false,
+      "observed": "2 of 18 text elements are under 16px; smallest 14px"
+    },
+    {
+      "cr": "CR-13",
+      "point": "4",
+      "requirement": "Per-user Text size setting (Normal / Large / Extra large)",
+      "pass": false,
+      "observed": "no \"Text size\" control found in the header menus"
+    },
+    {
+      "cr": "CR-29",
+      "point": "1",
+      "requirement": "Data-quality strip across the top of Inventory (missing location / category / HSN / min-max / unmapped)",
+      "pass": false,
+      "observed": "no strip on the Inventory screen"
+    },
+    {
+      "cr": "CR-29",
+      "point": "2",
+      "requirement": "\"Run optimization\" action that sorts slow-moving stock into returnable / non-returnable",
+      "pass": false,
+      "observed": "no Stock Optimization task in Stock, Purchases or Reorder"
+    },
+    {
+      "cr": "CR-29",
+      "point": "4",
+      "requirement": "Settable rules: non-moving days and minimum batch value",
+      "pass": false,
+      "observed": "no such settings"
+    },
+    {
+      "cr": "CR-29",
+      "point": "1-partial",
+      "requirement": "What exists instead: a \"Missing information\" filter with counts, inside the Stock list's Filters panel",
+      "pass": true,
+      "observed": "Any · HSN missing (23) · MRP missing (23) · Batch missing (1) · Expiry missing (1) · Maximum missing (23) · Minimum missing (23) · Category missing (23) · Location missing (2) · Pack size missing (23)"
+    },
+    {
+      "cr": "CR-34",
+      "point": "header",
+      "requirement": "Item header shows manufacturer, name, pack, current stock, MRP, GST, HSN, GTIN, category, schedule, location, min/max qty, edit and stock-alert buttons",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-34",
+      "point": "header-photo",
+      "requirement": "Product photo (click to zoom) in the header",
+      "pass": false,
+      "observed": "no image on the item page"
+    },
+    {
+      "cr": "CR-34",
+      "point": "header-cess",
+      "requirement": "CESS shown in the header",
+      "pass": false,
+      "observed": ""
+    },
+    {
+      "cr": "CR-34",
+      "point": "header-discount",
+      "requirement": "Min / Default / Max discount % and margin slab",
+      "pass": false,
+      "observed": "only a single \"Margin %\" figure"
+    },
+    {
+      "cr": "CR-34",
+      "point": "tabs",
+      "requirement": "Tabs: Batches · Purchases · Purchase Returns · Sales · Sales Returns · Ledger · Blocked Stock",
+      "pass": true,
+      "observed": "Batches · Purchases · Purchase returns · Sales · Sales returns · Ledger · Blocked stock · Information"
+    },
+    {
+      "cr": "CR-34",
+      "point": "batches",
+      "requirement": "Batches tab columns: batch, qty, expiry, MRP, PTR, discount %, landing price, margin %, total by MRP, total by PTR, GST %",
+      "pass": true,
+      "observed": "Batch no. · Qty · Expiry · MRP · PTR · Discount % · Landing price · Margin % · Total by MRP · Total by PTR · GST % · Actions · WWD0064Current / on hand · Total"
+    },
+    {
+      "cr": "CR-34",
+      "point": "batches-hide-zero",
+      "requirement": "\"Hide zero quantity\" tick box",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-34",
+      "point": "batches-print",
+      "requirement": "Print label / QR for a batch",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-34",
+      "point": "ledger-columns",
+      "requirement": "Ledger columns: bill no., entry date, type, batch, in, out, closing balance, customer / distributor",
+      "pass": true,
+      "observed": "Bill No. / Sr. No. · Entry date · Type · Batch · In · Out · Batch closing · Item closing · Customer / Distributor · By · Action"
+    },
+    {
+      "cr": "CR-34",
+      "point": "ledger-rows",
+      "requirement": "Ledger lists the purchase (10 in) and the sale (2 out) of this item with who it was bought from / sold to",
+      "pass": true,
+      "observed": "SB-26-57393PINV-SB-26-57393-8kq1twyq | 10 Nov 2026, 08:34 pm | PurchasePurchase invoice | WWD0064 | 10 |  | 10 | 10 | Vasu Vaccines And Speciality Drugs | Anil Deshmukh | Open purchase correction  ||  PHI-2026-001INV-PHI-2026-001 | 10 Nov 2026, 08:34 pm | SalePharmacy bill | WWD0064 |  | 2 | 8 | 8 | ANVITHA 57393 | Anil Deshmukh | Open original sale"
+    },
+    {
+      "cr": "CR-34",
+      "point": "ledger-balance",
+      "requirement": "Running closing balance ends at the current stock (8)",
+      "pass": true,
+      "observed": "closing balances: 10, 8"
+    },
+    {
+      "cr": "CR-34",
+      "point": "ledger-filters",
+      "requirement": "Date-range filter, transaction-type filter and Download on the ledger",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-10",
+      "point": "5",
+      "requirement": "Every stock movement is logged with date, user and reason (purchase and billing shown)",
+      "pass": true,
+      "observed": "From To Search Method All methods Purchase invoice Opening stock Customer return Prescription dispensed Pharmacy bill Counter sale Partner daily sale Supplier return Loss or breakage Blocked stock Stock count Movement correction Approved stock edit Location tr"
+    },
+    {
+      "cr": "CR-10",
+      "point": "3a",
+      "requirement": "Stock list can be exported (Excel/CSV) for a physical stock take",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-10",
+      "point": "3b",
+      "requirement": "A filled stock-take file can be imported to reset counts",
+      "pass": false,
+      "observed": "only \"Opening stock import\" exists; counts are entered on screen (Stock counts)"
+    },
+    {
+      "cr": "CR-10",
+      "point": "4",
+      "requirement": "Duplicate items can be merged",
+      "pass": false,
+      "observed": "no Merge action on the stock list"
+    },
+    {
+      "cr": "CR-11",
+      "point": "1",
+      "requirement": "New-item form stores form, brand name, strength, pack size and item code as separate fields",
+      "pass": false,
+      "observed": "fields: Default duration · Default duration unitDaysWeeksMonthsYears · Default frequency · Default when · Default instructions · Item Name * · Type * · Description · Generic Name · Brand Name · Category · Sub-Category · Manufacturer · Supplier · Barcode · SKU · Cost Price (₹) * · Selling Price (₹) * · MRP (₹) · Unit * · Pack Size · Pack Unit · Min Stock · Max Stock · Reorder Level · Reorder Qty · Batch Number · Expiry Date · HSN Code · GST Rate (%) · Storage Location · Storage Conditions · Requires Prescription · Controlled Substance"
+    },
+    {
+      "cr": "CR-11",
+      "point": "4",
+      "requirement": "\"Combination product\" tick box on the new-item form",
+      "pass": false,
+      "observed": ""
+    },
+    {
+      "cr": "CR-11",
+      "point": "5",
+      "requirement": "Rx picker shows the standard name (\"Tab. Flutas 150 mg\"), without code or pack size",
+      "pass": false,
+      "observed": "picker offers: 13 74 | Flutas 150Mg(Pc) 57393"
+    },
+    {
+      "cr": "CR-11",
+      "point": "2",
+      "requirement": "Codes and pack sizes never print on the prescription",
+      "pass": false,
+      "observed": "prints \"13 74 | Flutas 150Mg(Pc) 57393\""
+    },
+    {
+      "cr": "CR-10",
+      "point": "6",
+      "requirement": "Stock column shows each prescribed item's status with quantity (In stock / Low / Out / Not linked)",
+      "pass": true,
+      "observed": "ANVITHA 57393 S6HQ7 0m pending Priya Menon 10 Nov 2026, 08:36 pm 13 74 | Flutas 150Mg(Pc) 573930 dispensed Anaboom Pro Hair Growth Serum 573930/1 Bilashine 200 dispensed Pending In stock 13 74 | Flutas 150Mg(Pc) 57393 (12 strips) Change link Low Anaboom Pro Hair Growth Serum 57393 (8 bottles) Change"
+    },
+    {
+      "cr": "CR-10",
+      "point": "7",
+      "requirement": "Refresh button re-checks stock and matching",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-10",
+      "point": "2",
+      "requirement": "Free-text items can be linked to an inventory item by the pharmacist (\"Link item\")",
+      "pass": true,
+      "observed": "Change link, Change link, Link item"
+    },
+    {
+      "cr": "CR-09",
+      "point": "1",
+      "requirement": "Load opens the bill with the prescribed items and quantities",
+      "pass": true,
+      "observed": "bill for ANVITHA 57393"
+    },
+    {
+      "cr": "CR-09",
+      "point": "2",
+      "requirement": "Unmatched / out-of-stock items are loaded but flagged for the pharmacist",
+      "pass": true,
+      "observed": "link inventory before billing, link inventory before billing, No match, No match"
+    },
+    {
+      "cr": "CR-10",
+      "point": "1",
+      "requirement": "The stocked medicine arrives linked to its inventory item (by ID)",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-12",
+      "point": "2",
+      "requirement": "Stock edit (with reason) is made from the Inventory Stock tab and waits for approval",
+      "pass": true,
+      "observed": "stock still 8 after the pharmacist's edit"
+    },
+    {
+      "cr": "CR-12",
+      "point": "3a",
+      "requirement": "Pending edits show in Today → What needs attention",
+      "pass": true,
+      "observed": "1 Price/stock edits awaiting approval (1)"
+    },
+    {
+      "cr": "CR-12",
+      "point": "3b",
+      "requirement": "Stock changes only when a doctor approves the edit",
+      "pass": true,
+      "observed": "stock 8 -> 7 after the doctor approved"
+    },
+    {
+      "cr": "CR-12",
+      "point": "4",
+      "requirement": "Stock tab lists the clinic's own items, not the full drug catalogue",
+      "pass": true,
+      "observed": "24 clinic stock rows in this database"
+    },
+    {
+      "cr": "CR-12",
+      "point": "6",
+      "requirement": "Physical counts (stock take) live under Stock → Stock counts",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-14",
+      "point": "check",
+      "requirement": "Invoice line \"ZITCARE FORT CAPSULE, 15's\" (as SLV Pharma prints it) finds the saved \"Zitcare Forte Capsule\" as the top match",
+      "pass": false,
+      "observed": "top candidate: none; label: Not in inventory; action: CREATE_NEW"
+    },
+    {
+      "cr": "CR-14",
+      "point": "2",
+      "requirement": "Small spelling differences tolerated: \"ZITCARE FORT CAPSULE\" with the pack typed as \"15 capsules\" finds Zitcare Forte",
+      "pass": true,
+      "observed": "top candidate: Zitcare Forte Capsule; label: Possible match"
+    },
+    {
+      "cr": "CR-14",
+      "point": "4",
+      "requirement": "No \"create new\" recommendation when a same-brand item exists",
+      "pass": false,
+      "observed": "recommended action for the invoice line: CREATE_NEW"
+    },
+    {
+      "cr": "CR-15",
+      "point": "1",
+      "requirement": "Manufacturer / MRP / pack alone never qualifies: Abzorb is not suggested for Moisturex",
+      "pass": true,
+      "observed": "candidates: 0"
+    },
+    {
+      "cr": "CR-15",
+      "point": "2",
+      "requirement": "No real match → \"Not in inventory\" with create new item as the action",
+      "pass": true,
+      "observed": "label: Not in inventory; action: CREATE_NEW"
+    },
+    {
+      "cr": "CR-15",
+      "point": "4",
+      "requirement": "Plain labels instead of scores",
+      "pass": true,
+      "observed": "labels returned: Not in inventory, Possible match, Not in inventory"
+    },
+    {
+      "cr": "CR-15",
+      "point": "3",
+      "requirement": "Confirming Moisturex against Abzorb is refused with a mismatch warning unless acknowledged",
+      "pass": true,
+      "observed": "409 {\"code\":\"PURCHASE_PRODUCT_MISMATCH\",\"message\":\"These look like different products. Confirm anyway?\",\"mismatches\":[\"Product names differ\"],\"requestId\":\"99d20620-896e-44cd-a9ed-d78008ed712a\",\"errorCode\""
+    },
+    {
+      "cr": "CR-28",
+      "point": "5a",
+      "requirement": "Staff see Terms of Trade read-only",
+      "pass": true,
+      "observed": "Read-only. Doctors and admins can change terms."
+    },
+    {
+      "cr": "CR-28",
+      "point": "5b",
+      "requirement": "The server refuses a staff member's attempt to save terms",
+      "pass": true,
+      "observed": "PUT /pharmacy/trade-terms as pharmacist -> 403"
+    },
+    {
+      "cr": "CR-28",
+      "point": "5c",
+      "requirement": "Doctors can add and edit terms",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-28",
+      "point": "3",
+      "requirement": "Entry flow in steps: Distributor → Items → Scheme, distributor searchable by name or GSTIN",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-28",
+      "point": "phase2-1",
+      "requirement": "Phase 2: a setting to turn on automatic purchase checking against saved terms",
+      "pass": false,
+      "observed": "no such setting"
+    },
+    {
+      "cr": "CR-30",
+      "point": "parked",
+      "requirement": "PARKED item, built anyway: a staff member's new item becomes a request for doctor approval",
+      "pass": true,
+      "observed": "POST /inventory/items as pharmacist -> PENDING_APPROVAL"
+    },
+    {
+      "cr": "CR-30",
+      "point": "parked-ui",
+      "requirement": "The doctor's approval queue lists the requested item with Approve / Reject",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-32",
+      "point": "parked",
+      "requirement": "PARKED item, partly built: min/max proposals worked out from sales history (rule-based, not AI)",
+      "pass": true,
+      "observed": "\"Generate target proposal\" under Reorder"
+    },
+    {
+      "cr": "CR-17",
+      "point": "1",
+      "requirement": "Each appointment row shows its billing information",
+      "pass": false,
+      "observed": "row shows: #1 10:00-10:30 ANVITHA 57393 FOLLOW-UP OPD 29y F Scheduled INFO RESCHED START"
+    },
+    {
+      "cr": "CR-17",
+      "point": "2",
+      "requirement": "Each row shows the bill type (first consultation / review / procedure bill)",
+      "pass": false,
+      "observed": "row carries only the visit type and a FOLLOW-UP flag"
+    },
+    {
+      "cr": "CR-17",
+      "point": "3-partial",
+      "requirement": "What exists instead: a Daily collection report under Pharmacy Report (pharmacy takings only)",
+      "pass": true,
+      "observed": ""
+    }
+  ]
+}

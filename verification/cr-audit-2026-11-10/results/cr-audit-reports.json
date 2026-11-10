@@ -1,0 +1,331 @@
+{
+  "scenario": "cr-audit-reports",
+  "ranAt": "2026-11-10T15:01:40.930Z",
+  "passed": 42,
+  "failed": 4,
+  "pageErrors": [],
+  "rows": [
+    {
+      "cr": "CR-33",
+      "point": "org-1",
+      "requirement": "Left-hand list of report categories: GST, Margin, Stock, Accounting, Others",
+      "pass": true,
+      "observed": "GST REPORTS · MARGIN REPORTS · STOCK REPORTS · ACCOUNTING REPORTS · OTHERS"
+    },
+    {
+      "cr": "CR-33",
+      "point": "org-3",
+      "requirement": "Most-used reports are surfaced on the landing page",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33",
+      "point": "org-2",
+      "requirement": "Search box across all reports: \"GSTR\" finds the GST returns",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-purchase-register",
+      "requirement": "GST report \"Purchase Register\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-purchase-bills",
+      "requirement": "GST report \"Purchase Bills\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-sales-register",
+      "requirement": "GST report \"Sales Register\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-sales-bills",
+      "requirement": "GST report \"Sales Bills\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-day-wise-summary",
+      "requirement": "GST report \"Day wise Summary\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-gstr-1",
+      "requirement": "GST report \"GSTR-1\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-gstr-3b",
+      "requirement": "GST report \"GSTR-3B\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-gstr-2a",
+      "requirement": "GST report \"GSTR-2A\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-gstr-2b",
+      "requirement": "GST report \"GSTR-2B\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-hsn-wise",
+      "requirement": "GST report \"HSN wise GST\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "B-composition",
+      "requirement": "GST report \"Composition GST Report\" opens with a date filter and export",
+      "pass": true,
+      "observed": "table: true; export: Excel (.xlsx) / CSV / PDF"
+    },
+    {
+      "cr": "CR-33",
+      "point": "A",
+      "requirement": "Daily collection: bills raised, split by payment mode (cash / UPI / card), against money counted",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33a",
+      "point": "controls",
+      "requirement": "Controls: month picker, Type, GST filter, Go, Download, month total top right",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33a",
+      "point": "show-columns",
+      "requirement": "\"Show Columns\" control to choose which columns appear",
+      "pass": false,
+      "observed": "no column chooser on the report"
+    },
+    {
+      "cr": "CR-33a",
+      "point": "slabs",
+      "requirement": "One column group per GST slab (CESS · 0% · 5% · 12% · 18% · 28% · 40% · Total), each with Base · SGST · CGST · IGST",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33a",
+      "point": "fixed",
+      "requirement": "Fixed columns on the left: Sr No. · Bill No. · Entry Date (with time) · Bill Date · Distributor",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33a",
+      "point": "totals",
+      "requirement": "A totals row sits directly under the header and its grand total matches the figure at the top",
+      "pass": true,
+      "observed": "grand total 22477.2 vs headline 22477.2"
+    },
+    {
+      "cr": "CR-33a",
+      "point": "frozen",
+      "requirement": "Scrolling right keeps Sr No., Bill No., the dates and Distributor frozen",
+      "pass": false,
+      "observed": "scrolled out of view at 1440px: Bill Date, Distributor"
+    },
+    {
+      "cr": "CR-33a",
+      "point": "frozen-billno",
+      "requirement": "At least Bill No. stays visible when scrolled fully right",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33b",
+      "point": "columns",
+      "requirement": "Columns in order: Bill No. · Bill Date · Customer · Mobile · Gross · Disc. · Taxable · CESS · SGST · CGST · IGST · Total (flat, no slab bands)",
+      "pass": true,
+      "observed": "Bill No. · Bill Date · Customer · Mobile · Gross · Disc. · Taxable · CESS · SGST · CGST · IGST · Total"
+    },
+    {
+      "cr": "CR-33b",
+      "point": "arithmetic",
+      "requirement": "On every row Gross − Disc. = Taxable and Taxable + CESS + SGST + CGST + IGST = Total",
+      "pass": true,
+      "observed": "25 bills checked"
+    },
+    {
+      "cr": "CR-33b",
+      "point": "totals",
+      "requirement": "Totals under the header; the Total column's month total matches the figure top right",
+      "pass": true,
+      "observed": "totals row 25,396.52 vs headline 25396.52"
+    },
+    {
+      "cr": "CR-33b",
+      "point": "order",
+      "requirement": "Every bill of the month appears once, in bill-number order",
+      "pass": true,
+      "observed": "501 … 526"
+    },
+    {
+      "cr": "CR-33b",
+      "point": "print-download",
+      "requirement": "Print and Download are both on this report",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33b",
+      "point": "more-filters",
+      "requirement": "More Filters, with the active count shown",
+      "pass": false,
+      "observed": "no More Filters control on the Sales Register"
+    },
+    {
+      "cr": "CR-33b",
+      "point": "second-dropdown",
+      "requirement": "A second dropdown (\"All\") to filter on payment or bill type",
+      "pass": false,
+      "observed": "dropdowns: This month (November 2026)/Last month (O | Sales/Returns/Sales net of returns"
+    },
+    {
+      "cr": "CR-33b",
+      "point": "search",
+      "requirement": "Searching a customer's name narrows the list and the totals follow",
+      "pass": true,
+      "observed": "6 bills for Meera; rows add to 8178.52; headline 8178.52 (was 25396.52)"
+    },
+    {
+      "cr": "CR-33c",
+      "point": "bill-range",
+      "requirement": "Bill No. shows the range of bill numbers issued that day (first - last)",
+      "pass": true,
+      "observed": "10 Nov 2026: 1 - 602gap: 4, 5, 6 +593 more+ 1 counter sale, + 1 customer return"
+    },
+    {
+      "cr": "CR-33c",
+      "point": "controls",
+      "requirement": "Date-range picker, Type dropdown (Sales / Purchase), Go, Download and the range total top right",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33c",
+      "point": "one-row-per-day",
+      "requirement": "One row per day, in date order",
+      "pass": true,
+      "observed": "31 rows for a 31-day month"
+    },
+    {
+      "cr": "CR-33c",
+      "point": "zero-days",
+      "requirement": "Days with no billing are shown as a ₹0 row (so a missed day stands out)",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33c",
+      "point": "slabs",
+      "requirement": "GST slab groups (CESS · 0% · 5% · 12% · 18% · 28% · 40% · Total), each with Base · SGST · CGST · IGST",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33c",
+      "point": "totals",
+      "requirement": "Daily rows add up to the totals row under the header and to the figure top right",
+      "pass": true,
+      "observed": "days 25396.52; totals row 25396.52; headline 25396.52"
+    },
+    {
+      "cr": "CR-33c",
+      "point": "purchase",
+      "requirement": "Switching the type to Purchase summarises purchases the same way",
+      "pass": true,
+      "observed": "4 bills over 31 days"
+    },
+    {
+      "cr": "CR-33d",
+      "point": "tiles",
+      "requirement": "Four summary tiles: Total Sale Amount, Total Purchase, Total Net GST, Total Profit in rupees and as a percentage",
+      "pass": true,
+      "observed": "Total Profit\n\n₹3,248.85 (45.64%)"
+    },
+    {
+      "cr": "CR-33d",
+      "point": "controls",
+      "requirement": "Date range, Type, Tags filter, search-field selector + search box, Go, More Filters, Download",
+      "pass": true,
+      "observed": "6 of 6 inputs"
+    },
+    {
+      "cr": "CR-33d",
+      "point": "columns",
+      "requirement": "Columns: Item Name · Category · Unit · Manufacturer · Sale (qty) · Stock · MRP · Sales Amt. · Purchase · Net GST · Profit (%)",
+      "pass": true,
+      "observed": "Item Name · Category · Unit · Manufacturer · Sale (qty) · Stock · MRP · Sales Amt. · Purchase · Net GST · Profit ₹ (%)"
+    },
+    {
+      "cr": "CR-33d",
+      "point": "sort",
+      "requirement": "Default sort is highest margin first",
+      "pass": true,
+      "observed": "margins: 66.76, 32.2"
+    },
+    {
+      "cr": "CR-33d",
+      "point": "profit-format",
+      "requirement": "Profit shows the rupee amount with the margin percentage in brackets",
+      "pass": true,
+      "observed": "₹1,848.00 (66.76)"
+    },
+    {
+      "cr": "CR-33d",
+      "point": "item-link",
+      "requirement": "Item Name is a link through to the item",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-33d",
+      "point": "tooltips",
+      "requirement": "Column headers carry an (i) explanation of how the figure is worked out",
+      "pass": true,
+      "observed": "11 of 11 headers have an info control"
+    },
+    {
+      "cr": "CR-33d",
+      "point": "one-row-per-item",
+      "requirement": "The same medicine never appears on two rows",
+      "pass": true,
+      "observed": "6 rows"
+    },
+    {
+      "cr": "CR-33d",
+      "point": "reconcile",
+      "requirement": "Sales Amt. − Purchase − Net GST equals the Profit shown on each row",
+      "pass": true,
+      "observed": "2 costed rows checked"
+    }
+  ]
+}

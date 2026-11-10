@@ -1,0 +1,373 @@
+{
+  "scenario": "cr-audit-visits",
+  "ranAt": "2026-11-10T14:54:42.669Z",
+  "passed": 43,
+  "failed": 9,
+  "pageErrors": [],
+  "rows": [
+    {
+      "cr": "CR-21",
+      "point": "3",
+      "requirement": "Header reads the patient from the visit (no \"Patient: Unknown\")",
+      "pass": true,
+      "observed": "Patient: ABHILASH 08531 · 33 · Female · Doctor: Dr. Priya Menon"
+    },
+    {
+      "cr": "CR-21",
+      "point": "2",
+      "requirement": "Works on a brand-new patient's Visit #1",
+      "pass": true,
+      "observed": "Patient: ABHILASH 08531 · 33 · Female · Doctor: Dr. Priya Menon"
+    },
+    {
+      "cr": "CR-21",
+      "point": "1",
+      "requirement": "Name, age and sex stay visible with Patient Context collapsed",
+      "pass": true,
+      "observed": "Patient: ABHILASH 08531 · 33 · Female · Doctor: Dr. Priya Menon"
+    },
+    {
+      "cr": "CR-21",
+      "point": "5",
+      "requirement": "Collapsing hides only the extra detail (ID, phone)",
+      "pass": true,
+      "observed": "phone visible: false"
+    },
+    {
+      "cr": "CR-21",
+      "point": "4",
+      "requirement": "Identity line stays on screen while scrolled down to the Rx section",
+      "pass": true,
+      "observed": "{\"top\":72,\"inView\":true,\"onTop\":true,\"scrolled\":2468}"
+    },
+    {
+      "cr": "CR-22",
+      "point": "2",
+      "requirement": "On Examination is collapsed by default",
+      "pass": true,
+      "observed": "aria-expanded=false"
+    },
+    {
+      "cr": "CR-22",
+      "point": "1",
+      "requirement": "Clicking the heading opens the section with all its fields",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-22",
+      "point": "5",
+      "requirement": "Collapsing hides the fields without deleting what was typed",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-22",
+      "point": "4",
+      "requirement": "The doctor's last choice is remembered",
+      "pass": true,
+      "observed": "stored preference = false"
+    },
+    {
+      "cr": "CR-18",
+      "point": "1",
+      "requirement": "\"Triggers\" field removed from Patient History",
+      "pass": false,
+      "observed": "labels: Past History, Medication History, Menstrual History, Family History, Diabetes, Hypertension, Thyroid, Personal history, Triggers, Prior Treatments"
+    },
+    {
+      "cr": "CR-18",
+      "point": "2",
+      "requirement": "\"Prior Treatments\" field removed from Patient History",
+      "pass": false,
+      "observed": "input with placeholder \"Topicals/systemics tried\" still renders"
+    },
+    {
+      "cr": "CR-18",
+      "point": "3",
+      "requirement": "\"Personal history\" field is present",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-19",
+      "point": "1",
+      "requirement": "Duration column is narrow (no wider than the value it holds)",
+      "pass": false,
+      "observed": "Duration column 216px wide"
+    },
+    {
+      "cr": "CR-19",
+      "point": "2",
+      "requirement": "Instructions column shows \"1 pea size amount- whole face\" in full",
+      "pass": false,
+      "observed": "Instructions column 219px, text needs 260px of 185px"
+    },
+    {
+      "cr": "CR-19",
+      "point": "3",
+      "requirement": "Add Row is available after every row (insert in the middle)",
+      "pass": false,
+      "observed": "buttons on a row: Remove"
+    },
+    {
+      "cr": "CR-19",
+      "point": "3b",
+      "requirement": "With the first row active, Add Row inserts below it rather than at the end",
+      "pass": false,
+      "observed": "rows 4 -> 5; order: Isotroin 20 Capsule | Trudema gentle cleanser | Epiduo gel | (blank) | (blank)"
+    },
+    {
+      "cr": "CR-20",
+      "point": "1a",
+      "requirement": "A typed custom investigation is added and ticked on this prescription",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-20",
+      "point": "1",
+      "requirement": "It is saved permanently on the server",
+      "pass": true,
+      "observed": "GET /clinic-investigations returns 1 saved item(s)"
+    },
+    {
+      "cr": "CR-20",
+      "point": "2",
+      "requirement": "It appears as a standing, unticked checkbox on another patient's prescription",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-20",
+      "point": "3a",
+      "requirement": "The clinic can rename a saved investigation",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-20",
+      "point": "3b",
+      "requirement": "The clinic can remove a saved investigation",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-22",
+      "point": "4b",
+      "requirement": "Open the next visit: On Examination is still collapsed",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-08",
+      "point": "block-a",
+      "requirement": "Chief Complaints: heading and value print on one line",
+      "pass": true,
+      "observed": "label y=253, value y=253, value \"Itchy scaly patches on scalp and elbows for 3 months\""
+    },
+    {
+      "cr": "CR-08",
+      "point": "block-b",
+      "requirement": "History: heading and value print on one line",
+      "pass": true,
+      "observed": "label y=277, value y=277, value \"Past: Hypothyroidism on treatment | Triggers: Heat | Prior Tx: Topical steroids\""
+    },
+    {
+      "cr": "CR-08",
+      "point": "block-c",
+      "requirement": "Personal history: heading and value print on one line",
+      "pass": true,
+      "observed": "label y=301, value y=301, value \"Non-smoker, vegetarian, desk job\""
+    },
+    {
+      "cr": "CR-08",
+      "point": "block-d",
+      "requirement": "Examination: heading and value print on one line",
+      "pass": false,
+      "observed": "block does not print at all"
+    },
+    {
+      "cr": "CR-08",
+      "point": "block-e",
+      "requirement": "Diagnosis: heading and value print on one line",
+      "pass": true,
+      "observed": "label y=229, value y=229, value \"Plaque psoriasis with seborrhoeic dermatitis of scalp\""
+    },
+    {
+      "cr": "CR-08",
+      "point": "block-f",
+      "requirement": "Investigations: heading and value print on one line",
+      "pass": true,
+      "observed": "label y=602, value y=602, value \"CBC, ESR, CRP, LFT, RFT, FBS, HbA1c, TSH, Vitamin D, Ferritin\""
+    },
+    {
+      "cr": "CR-08",
+      "point": "block-g",
+      "requirement": "Procedures: heading and value print on one line",
+      "pass": true,
+      "observed": "label y=626, value y=626, value \"MNF (30 mins) + Retinoin CT (6 hours) done for face; wash at 12 am\""
+    },
+    {
+      "cr": "CR-08",
+      "point": "block-h",
+      "requirement": "Procedure Planned: heading and value print on one line",
+      "pass": true,
+      "observed": "label y=650, value y=650, value \"2nd Peel\""
+    },
+    {
+      "cr": "CR-08",
+      "point": "block-i",
+      "requirement": "Review Date: heading and value print on one line",
+      "pass": true,
+      "observed": "label y=674, value y=674, value \"28 Nov 2026\""
+    },
+    {
+      "cr": "CR-08",
+      "point": "block-j",
+      "requirement": "Follow-up: heading and value print on one line",
+      "pass": true,
+      "observed": "label y=674, value y=674, value \"Post care - 7 days\""
+    },
+    {
+      "cr": "CR-08",
+      "point": "rule-1",
+      "requirement": "Label bold, value normal weight",
+      "pass": true,
+      "observed": "label 600, value 400"
+    },
+    {
+      "cr": "CR-08",
+      "point": "rule-2",
+      "requirement": "A long value wraps under the value, not under the label",
+      "pass": true,
+      "observed": "1 line(s); wrapped lines start at x=278, label ends at x=270"
+    },
+    {
+      "cr": "CR-23",
+      "point": "4",
+      "requirement": "9 medicines and 10 investigations fit on one page with Space-optimized layout ticked",
+      "pass": true,
+      "observed": "optimized 1 page(s); normal layout 2 page(s)"
+    },
+    {
+      "cr": "CR-23",
+      "point": "1-3",
+      "requirement": "Vertical space is tighter than the normal layout",
+      "pass": true,
+      "observed": "content height 1625px normal -> 836px optimized"
+    },
+    {
+      "cr": "CR-23",
+      "point": "5",
+      "requirement": "Text size is not reduced",
+      "pass": true,
+      "observed": "value text 14px in both layouts"
+    },
+    {
+      "cr": "CR-18",
+      "point": "print",
+      "requirement": "Triggers / Prior Tx no longer print under History",
+      "pass": false,
+      "observed": "History line prints: \"Past: Hypothyroidism on treatment | Triggers: Heat | Prior Tx: Topical steroids\""
+    },
+    {
+      "cr": "CR-08",
+      "point": "rule-5",
+      "requirement": "Unticking returns the normal layout unchanged",
+      "pass": true,
+      "observed": "height 1625px vs 1625px, pages 2 vs 2"
+    },
+    {
+      "cr": "CR-23",
+      "point": "6",
+      "requirement": "Normal layout keeps its roomier spacing",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-16",
+      "point": "2",
+      "requirement": "Compact panel shows chief complaints",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-16",
+      "point": "3",
+      "requirement": "Compact panel shows personal history and other history",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-16",
+      "point": "4",
+      "requirement": "Compact panel lists medicine names",
+      "pass": true,
+      "observed": "9 of 9 names listed"
+    },
+    {
+      "cr": "CR-16",
+      "point": "5",
+      "requirement": "No frequency, dose, timing, duration, quantity, route, generic or GST in the default panel",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-16",
+      "point": "6",
+      "requirement": "Each medicine appears once",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-16",
+      "point": "7",
+      "requirement": "Internal fields (Regimen State, Touched, Gst Rate, Language) are gone",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-16",
+      "point": "check-1",
+      "requirement": "The panel fits on screen without scrolling",
+      "pass": true,
+      "observed": "panel is 600px tall in a 900px window"
+    },
+    {
+      "cr": "CR-16",
+      "point": "8",
+      "requirement": "The full regimen is one click away (Full details)",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-16",
+      "point": "7b",
+      "requirement": "Full details also hides the internal fields",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-16",
+      "point": "8b",
+      "requirement": "Full details switches back to the compact view",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-08",
+      "point": "rule-3a",
+      "requirement": "Blank Follow-up, Investigations, Procedures, Review Date and Personal history print nothing",
+      "pass": true,
+      "observed": ""
+    },
+    {
+      "cr": "CR-08",
+      "point": "rule-3b",
+      "requirement": "A blank Diagnosis prints nothing (no empty heading)",
+      "pass": false,
+      "observed": "prints \"Diagnosis: —\""
+    }
+  ]
+}
