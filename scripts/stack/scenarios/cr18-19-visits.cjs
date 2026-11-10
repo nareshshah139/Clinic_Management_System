@@ -156,6 +156,10 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
       await input.fill(name);
       await page.keyboard.press("Escape");
     }
+    async function expandCards(scope) {
+      const closed = scope.getByRole("button", { name: "Show details" });
+      while (await closed.count()) await closed.first().click();
+    }
     async function setInstructions(page, name, text) {
       const field = (await rowNamed(page, name)).getByPlaceholder("e.g., Avoid alcohol");
       await field.fill(text);
@@ -197,7 +201,8 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           s.check("Personal history is the last Patient History field", await body.getByRole("textbox").evaluateAll((els) => els.map((el) => el.getAttribute("aria-label") || el.getAttribute("placeholder"))), [
             "Past history", "Medication history", "Menstrual history", "Others", "Diet, sleep, habits, occupation, cosmetics/products used",
           ]);
-          s.check(`${size.width}: no sideways page scroll`, (await overflowX(page)) <= 0, true);
+          const pageOverflow = await overflowX(page);
+          s.ok(`${size.width}: no sideways page scroll`, pageOverflow <= 0, { pageOverflow, widest: pageOverflow > 0 ? await widest(page) : null });
           await s.shot(page, `${role}-${size.width}-patient-history`);
           await page.getByRole("textbox", { name: "Past history" }).fill("Seasonal eczema");
           await page.locator("#personal-history").fill("Works nights; fragrance-free products");
@@ -215,7 +220,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
       await page.getByRole("tab", { name: "History" }).click();
       const history = page.locator('[role="tabpanel"]:visible');
       await history.getByRole("button", { name: "Show details" }).first().waitFor({ timeout: 120000 });
-      for (const button of await history.getByRole("button", { name: "Show details" }).all()) await button.click();
+      await expandCards(history);
       await history.getByText("Heat and stress").first().waitFor({ timeout: 120000 });
       const cardText = await history.innerText();
       s.ok("the history card shows the stored triggers", cardText.includes("Heat and stress"), cardText.slice(0, 400));
@@ -242,7 +247,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
       await page.getByRole("tab", { name: "History" }).click();
       const after = page.locator('[role="tabpanel"]:visible');
       await after.getByRole("button", { name: "Show details" }).first().waitFor({ timeout: 120000 });
-      for (const button of await after.getByRole("button", { name: "Show details" }).all()) await button.click();
+      await expandCards(after);
       await after.getByText("Heat and stress").first().waitFor({ timeout: 120000 });
       s.ok("the history card still shows them after the saves", (await after.innerText()).includes("Clobetasol cream"));
     });
@@ -306,6 +311,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
               longFieldWidth: Math.round(longField.getBoundingClientRect().width), longFieldHeight: Math.round(longField.getBoundingClientRect().height),
               longClipped: longField.scrollHeight > longField.clientHeight + 1, shortClipped: shortField.scrollHeight > shortField.clientHeight + 1,
               shortValue: shortField.value, longValue: longField.value,
+              offenders: [...wrapper.querySelectorAll("*")].map((n) => ({ tag: n.tagName, cls: String(n.className).slice(0, 50), over: Math.round(n.getBoundingClientRect().right - wrapper.getBoundingClientRect().right) })).filter((n) => n.over > 1).sort((a, b) => b.over - a.over).slice(0, 4),
             };
           });
           s.note(`geometry ${JSON.stringify(geometry)}`);
