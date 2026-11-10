@@ -19,7 +19,7 @@ jest.mock('@/lib/api', () => ({
 
 const api = apiClient as jest.Mocked<typeof apiClient>;
 const appointment = (id: string, slot: string, name: string) => ({
-  id, slot, status: AppointmentStatus.SCHEDULED, visitType: 'OPD', patient: { name },
+  id, slot, status: AppointmentStatus.SCHEDULED, calendar: 'SCHEDULED', visitType: 'OPD', patient: { name },
 });
 
 function renderDay(appointments: object[], maxBookingsPerSlot?: number) {
@@ -29,7 +29,8 @@ function renderDay(appointments: object[], maxBookingsPerSlot?: number) {
   return onSelectSlot;
 }
 
-const tile = (slot: string) => screen.queryByRole('button', { name: new RegExp(`^Book ${slot}`) });
+const scheduled = () => within(screen.getByRole('region', { name: 'Scheduled' }));
+const tile = (slot: string) => scheduled().queryByRole('button', { name: new RegExp(`^Book ${slot}`) });
 const blockOf = (name: RegExp) => screen.getByText(name, { selector: '[data-appointment-block] [data-patient-name]' }).closest('[data-appointment-block]') as HTMLElement;
 const conflict = (overbook: object) => Object.assign(new Error('Scheduling conflict detected'), {
   status: 409, body: { message: 'Scheduling conflict detected', suggestions: [], conflicts: [], overbook },
@@ -48,7 +49,7 @@ describe('DoctorDayCalendar with a per-doctor overbooking limit', () => {
     expect(blockOf(/Ravi Kumar/).style.width).toBe('50%');
 
     fireEvent.click(partial!);
-    expect(onSelectSlot).toHaveBeenCalledWith('11:00-11:15');
+    expect(onSelectSlot).toHaveBeenCalledWith('11:00-11:15', 'SCHEDULED');
   });
 
   it('closes a slot once it holds as many patients as the limit', async () => {
@@ -72,7 +73,7 @@ describe('DoctorDayCalendar with a per-doctor overbooking limit', () => {
       renderDay([appointment('a1', '11:00-11:30', 'Ravi Kumar'), appointment('a2', '15:00-15:30', 'Priya Nair')], limit);
       await screen.findByText('Priya Nair', { selector: '[data-appointment-block] [data-patient-name]' });
       fireEvent.click(screen.getAllByTitle('Reschedule Appointment')[1]);
-      fireEvent.click(await screen.findByRole('button', { name: /^Move to 11:00-11:30/ }));
+      fireEvent.click(await scheduled().findByRole('button', { name: /^Move to 11:00-11:30/ }));
     }
 
     it('asks before overbooking and resends with allowOverbook only after confirmation', async () => {
@@ -87,7 +88,7 @@ describe('DoctorDayCalendar with a per-doctor overbooking limit', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Book anyway' }));
       await waitFor(() => expect(api.rescheduleAppointment).toHaveBeenCalledTimes(2));
-      expect(api.rescheduleAppointment.mock.calls[1]).toEqual(['a2', { date: '2099-01-01', slot: '11:00-11:30', roomId: undefined, allowOverbook: true }]);
+      expect(api.rescheduleAppointment.mock.calls[1]).toEqual(['a2', { date: '2099-01-01', slot: '11:00-11:30', roomId: undefined, calendar: 'SCHEDULED', allowOverbook: true }]);
     });
 
     it('sends nothing more when the user cancels', async () => {

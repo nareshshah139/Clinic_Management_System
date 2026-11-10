@@ -20,6 +20,13 @@ import {
   AvailableSlotsDto,
 } from './dto/query-appointment.dto';
 import { SchedulingUtils, SchedulingConflict } from './utils/scheduling.utils';
+import {
+  AppointmentCalendar,
+  CALENDAR_STATUSES,
+  calendarOf,
+  isMovable,
+  statusEnteringCalendar,
+} from './appointment-calendar';
 import { AppointmentStatus, Prisma, VisitType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WhatsAppTemplatesService } from '../whatsapp-templates/whatsapp-templates.service';
@@ -77,6 +84,7 @@ export class AppointmentsService {
       visitType,
       notes,
       source,
+      calendar = 'SCHEDULED',
       allowOverbook = false,
     } = createAppointmentDto;
 
@@ -114,7 +122,7 @@ export class AppointmentsService {
 
     const appointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
       await this.lockSchedule(tx, branchId, doctorId, roomId ?? null, date);
-      await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId, { allowOverbook });
+      await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId, { allowOverbook, calendar });
       const tokenNumber = await this.nextDoctorToken(tx, branchId, doctorId, date);
 
       return tx.appointment.create({
@@ -129,6 +137,7 @@ export class AppointmentsService {
           source,
           branchId,
           tokenNumber,
+          status: statusEnteringCalendar(calendar),
         },
         include: {
           patient: {
@@ -410,7 +419,8 @@ export class AppointmentsService {
 
   /**
    * @cc [owner:nareshshah139,label:reliability] appointment-edit-conflicts
-   * Room changes and reactivation MUST check doctor and room conflicts under schedule locks.
+   * A status change into another calendar, a reactivation, or a room change MUST check doctor and room
+   * conflicts in the target calendar under schedule locks.
    * Concurrent changes to the appointment MUST fail rather than apply to stale scheduling details.
    */
   async update(
@@ -419,13 +429,14 @@ export class AppointmentsService {
     branchId: string,
     callerUserId?: string,
   ) {
+    const { allowOverbook = false, ...changes } = updateAppointmentDto;
     const appointment = await this.findOne(id, branchId);
 
     // Validate room if provided
-    if (updateAppointmentDto.roomId) {
+    if (changes.roomId) {
       const room = await this.prisma.room.findFirst({
         where: {
-          id: updateAppointmentDto.roomId,
+          id: changes.roomId,
           branchId,
           isActive: true,
         },
@@ -440,11 +451,11 @@ export class AppointmentsService {
       doctor: { select: { id: true, firstName: true, lastName: true } },
       room: { select: { id: true, name: true, type: true } },
     } as const;
-    const affectsSchedule = updateAppointmentDto.roomId !== undefined || updateAppointmentDto.status !== undefined;
+    const affectsSchedule = changes.roomId !== undefined || changes.status !== undefined;
     const updatedAppointment = affectsSchedule
       ? await this.prisma.$transaction(async (tx) => {
           const date = appointment.date.toISOString().slice(0, 10);
-          const roomId = updateAppointmentDto.roomId === undefined ? appointment.roomId : updateAppointmentDto.roomId;
+          const roomId = changes.roomId === undefined ? appointment.roomId : changes.roomId;
           await this.lockSchedule(tx, branchId, appointment.doctorId, roomId, date);
           const current = await tx.appointment.findFirst({ where: { id, branchId } });
           if (!current || current.doctorId !== appointment.doctorId ||
@@ -452,24 +463,27 @@ export class AppointmentsService {
               current.roomId !== appointment.roomId || current.status !== appointment.status) {
             throw new ConflictException('Appointment changed; refresh and try again');
           }
-          const status = updateAppointmentDto.status ?? current.status;
-          if (status !== AppointmentStatus.CANCELLED &&
-              (roomId !== current.roomId || current.status === AppointmentStatus.CANCELLED)) {
-            // Un-cancelling adds the patient back to the doctor's slot; a room change leaves the
-            // doctor's load unchanged, so only the new room is checked.
-            await this.assertSlotBookable(tx, 'Scheduling conflict detected', current.doctorId, roomId, date, current.slot, branchId, {
-              excludeAppointmentId: id,
-              roomOnly: current.status !== AppointmentStatus.CANCELLED,
-            });
+          const target = calendarOf(changes.status ?? current.status);
+          if (target) {
+            const leavesCalendar = target !== calendarOf(current.status);
+            if (leavesCalendar || roomId !== current.roomId) {
+              // A room change within a calendar leaves the doctor's load unchanged, so only the new room is checked.
+              await this.assertSlotBookable(tx, 'Scheduling conflict detected', current.doctorId, roomId, date, current.slot, branchId, {
+                excludeAppointmentId: id,
+                calendar: target,
+                allowOverbook,
+                roomOnly: !leavesCalendar,
+              });
+            }
           }
           const changed = await tx.appointment.updateMany({
             where: { id, branchId, doctorId: current.doctorId, date: current.date, slot: current.slot, roomId: current.roomId, status: current.status },
-            data: updateAppointmentDto,
+            data: changes,
           });
           if (changed.count !== 1) throw new ConflictException('Appointment changed; refresh and try again');
           return tx.appointment.findUniqueOrThrow({ where: { id }, include });
         })
-      : await this.prisma.appointment.update({ where: { id }, data: updateAppointmentDto, include });
+      : await this.prisma.appointment.update({ where: { id }, data: changes, include });
 
     void this.googleCalendar
       ?.syncAppointmentEvent(updatedAppointment.id, callerUserId)
@@ -506,37 +520,42 @@ export class AppointmentsService {
       branchId,
     );
 
-    // A new day means a place in that day's queue for this doctor.
-    const sameDay = appointment.date.toISOString().slice(0, 10) === rescheduleDto.date.slice(0, 10);
+    const calendar = rescheduleDto.calendar ?? 'SCHEDULED';
     const newRoomId = rescheduleDto.roomId ?? appointment.roomId ?? null;
+    const include = {
+      patient: { select: { id: true, name: true, phone: true } },
+      doctor: { select: { id: true, firstName: true, lastName: true } },
+      room: { select: { id: true, name: true, type: true } },
+    } as const;
     const rescheduledAppointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
       await this.lockSchedule(tx, branchId, appointment.doctorId, newRoomId, rescheduleDto.date);
-      await this.assertSlotBookable(tx, 'Scheduling conflict detected for new time slot', appointment.doctorId, newRoomId, rescheduleDto.date, rescheduleDto.slot, branchId, {
+      const current = await tx.appointment.findFirst({ where: { id, branchId } });
+      if (!current) throw new NotFoundException('Appointment not found');
+      const sameDay = current.date.toISOString().slice(0, 10) === rescheduleDto.date.slice(0, 10);
+      const alreadyThere = calendarOf(current.status) === calendar && sameDay && current.slot === rescheduleDto.slot &&
+        (rescheduleDto.roomId === undefined || rescheduleDto.roomId === current.roomId);
+      if (alreadyThere) return tx.appointment.findUniqueOrThrow({ where: { id }, include });
+      if (!isMovable(current.status)) {
+        throw new BadRequestException(`Cannot move an appointment that is ${current.status}`);
+      }
+      await this.assertSlotBookable(tx, 'Scheduling conflict detected for new time slot', current.doctorId, newRoomId, rescheduleDto.date, rescheduleDto.slot, branchId, {
         allowOverbook: rescheduleDto.allowOverbook ?? false,
         excludeAppointmentId: id,
+        calendar,
       });
-      return tx.appointment.update({
-      where: { id },
-      data: {
-        ...(sameDay ? {} : { tokenNumber: await this.nextDoctorToken(tx, branchId, appointment.doctorId, rescheduleDto.date) }),
-        date: new Date(rescheduleDto.date),
-        slot: rescheduleDto.slot,
-        roomId: rescheduleDto.roomId ?? appointment.roomId ?? undefined,
-        notes: rescheduleDto.notes || appointment.notes,
-        status: AppointmentStatus.SCHEDULED, // Reset to scheduled
-      },
-      include: {
-        patient: {
-          select: { id: true, name: true, phone: true },
+      const moved = await tx.appointment.updateMany({
+        where: { id, branchId, status: current.status, date: current.date, slot: current.slot },
+        data: {
+          ...(sameDay ? {} : { tokenNumber: await this.nextDoctorToken(tx, branchId, current.doctorId, rescheduleDto.date) }),
+          date: new Date(rescheduleDto.date),
+          slot: rescheduleDto.slot,
+          roomId: newRoomId ?? undefined,
+          notes: rescheduleDto.notes || current.notes,
+          status: statusEnteringCalendar(calendar),
         },
-        doctor: {
-          select: { id: true, firstName: true, lastName: true },
-        },
-        room: {
-          select: { id: true, name: true, type: true },
-        },
-      },
-    });
+      });
+      if (moved.count !== 1) throw new ConflictException('Appointment changed; refresh and try again');
+      return tx.appointment.findUniqueOrThrow({ where: { id }, include });
     }));
 
     // Update linked Google Calendar event (non-blocking)
@@ -549,6 +568,9 @@ export class AppointmentsService {
 
   async bulkUpdate(bulkUpdateDto: BulkUpdateAppointmentsDto, branchId: string) {
     const { appointmentIds, ...updateData } = bulkUpdateDto;
+    if (updateData.status && isMovable(updateData.status)) {
+      throw new BadRequestException('Moving appointments into a calendar needs a capacity check; use reschedule');
+    }
 
     // Verify all appointments exist and belong to the branch
     const appointments = await this.prisma.appointment.findMany({
@@ -578,28 +600,28 @@ export class AppointmentsService {
   }
 
   async remove(id: string, branchId: string, callerUserId?: string) {
-    const appointment = await this.findOne(id, branchId);
-
-    // Check if appointment can be cancelled
-    if (appointment.status === AppointmentStatus.COMPLETED) {
-      throw new BadRequestException('Cannot cancel completed appointment');
-    }
-
-    if (appointment.status === AppointmentStatus.IN_PROGRESS) {
-      throw new BadRequestException('Cannot cancel appointment in progress');
-    }
-
-    // Check if already cancelled
-    if (appointment.status === AppointmentStatus.CANCELLED) {
-      return { message: 'Appointment is already cancelled' };
-    }
-
-    await this.prisma.appointment.update({
-      where: { id },
-      data: {
-        status: AppointmentStatus.CANCELLED,
+    const cancelled = await this.prisma.appointment.updateMany({
+      where: {
+        id,
+        branchId,
+        status: { notIn: [AppointmentStatus.COMPLETED, AppointmentStatus.IN_PROGRESS, AppointmentStatus.CANCELLED] },
       },
+      data: { status: AppointmentStatus.CANCELLED },
     });
+
+    if (cancelled.count !== 1) {
+      const appointment = await this.findOne(id, branchId);
+      if (appointment.status === AppointmentStatus.COMPLETED) {
+        throw new BadRequestException('Cannot cancel completed appointment');
+      }
+      if (appointment.status === AppointmentStatus.IN_PROGRESS) {
+        throw new BadRequestException('Cannot cancel appointment in progress');
+      }
+      if (appointment.status === AppointmentStatus.CANCELLED) {
+        return { message: 'Appointment is already cancelled' };
+      }
+      throw new ConflictException('Appointment changed; refresh and try again');
+    }
 
     // Remove Google Calendar event if one exists
     void this.googleCalendar
@@ -617,6 +639,7 @@ export class AppointmentsService {
       durationMinutes = 30,
       startHour,
       endHour,
+      calendar = 'SCHEDULED',
     } = query;
 
     // Validate doctor exists and belongs to branch
@@ -635,9 +658,7 @@ export class AppointmentsService {
           gte: new Date(`${date}T00:00:00.000Z`),
           lte: new Date(`${date}T23:59:59.999Z`),
         },
-        status: {
-          not: AppointmentStatus.CANCELLED,
-        },
+        status: { in: [...CALENDAR_STATUSES[calendar]] },
         branchId,
       },
       select: {
@@ -663,9 +684,7 @@ export class AppointmentsService {
             gte: new Date(`${date}T00:00:00.000Z`),
             lte: new Date(`${date}T23:59:59.999Z`),
           },
-          status: {
-            not: AppointmentStatus.CANCELLED,
-          },
+          status: { in: [...CALENDAR_STATUSES[calendar]] },
           branchId,
         },
         select: {
@@ -758,7 +777,7 @@ export class AppointmentsService {
       doctorId,
       doctorName: `${doctor.firstName} ${doctor.lastName}`.trim(),
       date,
-      appointments,
+      appointments: appointments.map((a) => ({ ...a, calendar: calendarOf(a.status) })),
     };
   }
 
@@ -1079,6 +1098,7 @@ export class AppointmentsService {
     date: string,
     slot: string,
     branchId: string,
+    calendar: AppointmentCalendar,
     excludeAppointmentId?: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<SchedulingConflict[]> {
@@ -1090,9 +1110,7 @@ export class AppointmentsService {
         gte: new Date(`${date}T00:00:00.000Z`),
         lte: new Date(`${date}T23:59:59.999Z`),
       },
-      status: {
-        not: AppointmentStatus.CANCELLED,
-      },
+      status: { in: [...CALENDAR_STATUSES[calendar]] },
     };
 
     if (excludeAppointmentId) {
@@ -1164,12 +1182,14 @@ export class AppointmentsService {
     date: string,
     requestedSlot: string,
     branchId: string,
+    calendar: AppointmentCalendar,
   ): Promise<string[]> {
     const bookedSlots = await this.getBookedSlots(
       doctorId,
       roomId,
       date,
       branchId,
+      calendar,
     );
     return SchedulingUtils.suggestAlternativeSlots(
       requestedSlot,
@@ -1183,6 +1203,7 @@ export class AppointmentsService {
     roomId: string | null,
     date: string,
     branchId: string,
+    calendar: AppointmentCalendar,
   ): Promise<string[]> {
     const whereClause: any = {
       branchId,
@@ -1190,9 +1211,7 @@ export class AppointmentsService {
         gte: new Date(`${date}T00:00:00.000Z`),
         lte: new Date(`${date}T23:59:59.999Z`),
       },
-      status: {
-        not: AppointmentStatus.CANCELLED,
-      },
+      status: { in: [...CALENDAR_STATUSES[calendar]] },
       OR: [{ doctorId }],
     };
 
@@ -1217,8 +1236,8 @@ export class AppointmentsService {
    */
   /**
    * @cc [owner:nareshshah139,label:product] no-concurrent-double-booking
-   * Booking, rescheduling, and scheduling edits MUST check doctor and room conflicts inside the write transaction
-   * while holding the doctor-day lock (and the room-day lock when a room is set), so two
+   * Booking, rescheduling, and scheduling edits MUST check doctor and room conflicts in the target calendar
+   * inside the write transaction while holding the doctor-day lock (and the room-day lock when a room is set), so two
    * concurrent requests can never both take overlapping slots. Locks are taken doctor first,
    * then room, so lock order is fixed.
    */
@@ -1229,20 +1248,21 @@ export class AppointmentsService {
 
   /**
    * @cc [owner:nareshshah139,label:product] doctor-overbooking
-   * Callers hold the locks from lockSchedule. A slot with no overlapping booking for the doctor
-   * is bookable. One that already has some MAY take another only when the request carries
+   * Callers hold the locks from lockSchedule. A slot with no overlapping booking in the target calendar
+   * for the doctor is bookable; the other calendar never counts. One that already has some MAY take another only when the request carries
    * allowOverbook and the overlap count is below the doctor's limit, read in this transaction.
    * Room conflicts are never overbooked. A refusal carries `overbook` so the UI can offer
    * "book anyway" only when resending with allowOverbook would succeed. A roomOnly check is for an
    * appointment that already holds its doctor slot and only changes room: just the room must be free.
-   * Model: verification/appointment-overbooking/Overbooking.tla (Count, Decide, Accepts).
+   * Model: verification/appointment-overbooking/Overbooking.tla (Count, Decide, Accepts), and
+   * verification/appointment-calendars/AppointmentCalendars.tla for the per-calendar count.
    */
   private async assertSlotBookable(
     tx: Prisma.TransactionClient, message: string, doctorId: string, roomId: string | null,
     date: string, slot: string, branchId: string,
-    { allowOverbook = false, excludeAppointmentId, roomOnly = false }: { allowOverbook?: boolean; excludeAppointmentId?: string; roomOnly?: boolean },
+    { calendar, allowOverbook = false, excludeAppointmentId, roomOnly = false }: { calendar: AppointmentCalendar; allowOverbook?: boolean; excludeAppointmentId?: string; roomOnly?: boolean },
   ) {
-    const found = await this.checkSchedulingConflicts(doctorId, roomId, date, slot, branchId, excludeAppointmentId, tx);
+    const found = await this.checkSchedulingConflicts(doctorId, roomId, date, slot, branchId, calendar, excludeAppointmentId, tx);
     const conflicts = roomOnly ? found.filter((c) => c.type === 'room') : found;
     if (conflicts.length === 0) return;
     // Every booking overlapping the slot counts, even when they do not overlap each other,
@@ -1252,7 +1272,7 @@ export class AppointmentsService {
     const doctor = await tx.user.findUnique({ where: { id: doctorId }, select: { maxBookingsPerSlot: true } });
     const limit = slotLimit(doctor?.maxBookingsPerSlot);
     if (!roomTaken && acceptsBooking(booked, limit, allowOverbook)) return;
-    const suggestions = await this.getAlternativeSlots(doctorId, roomId, date, slot, branchId);
+    const suggestions = await this.getAlternativeSlots(doctorId, roomId, date, slot, branchId, calendar);
     const overbook = { allowed: !roomTaken && booked < limit, booked, limit };
     throw new ConflictException({ message, conflicts, suggestions, overbook });
   }

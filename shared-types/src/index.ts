@@ -21,6 +21,8 @@ export enum AppointmentStatus {
   NO_SHOW = 'NO_SHOW',
 }
 
+export type AppointmentCalendar = 'SCHEDULED' | 'CONFIRMED';
+
 export enum VisitStatus {
   DRAFT = 'DRAFT',
   IN_PROGRESS = 'IN_PROGRESS',

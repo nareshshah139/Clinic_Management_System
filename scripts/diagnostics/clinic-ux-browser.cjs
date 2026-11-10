@@ -6,8 +6,8 @@ const browserPath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/
 const patient = { id: '00000000-0000-4000-8000-000000000001', firstName: 'Alexandra', lastName: 'Montgomery-Synthetic', name: 'Alexandra Montgomery-Synthetic', gender: 'FEMALE', age: 36, phone: '1234567890', branchId: 'fixture' };
 const doctor = { id: '00000000-0000-4000-8000-000000000002', firstName: 'Test', lastName: 'Doctor', role: 'DOCTOR', branchId: 'fixture', isActive: true };
 const visit = { id: '00000000-0000-4000-8000-000000000003', patientId: patient.id, doctorId: doctor.id, patient, doctor, complaints: [], history: {}, exam: {}, plan: {}, diagnosis: [], createdAt: '2026-11-08T09:00:00Z' };
-const appointment = (id, name, slot, status) => ({ id, slot, status, patient: { name }, visitType: 'OPD' });
-let appointments = [appointment('a2', 'Second Patient', '10:30-11:00', 'CHECKED_IN'), appointment('a1', 'First Patient', '09:00-09:30', 'SCHEDULED'), appointment('a3', 'Finished Patient', '11:00-11:30', 'COMPLETED'), appointment('a4', 'Cancelled Patient', '11:30-12:00', 'CANCELLED')];
+const appointment = (id, name, slot, status, calendar) => ({ id, slot, status, calendar, patient: { name }, visitType: 'OPD' });
+let appointments = [appointment('a2', 'Second Patient', '10:30-11:00', 'CHECKED_IN', 'CONFIRMED'), appointment('a1', 'First Patient', '09:00-09:30', 'SCHEDULED', 'SCHEDULED'), appointment('a3', 'Finished Patient', '11:00-11:30', 'COMPLETED', 'CONFIRMED'), appointment('a4', 'Cancelled Patient', '11:30-12:00', 'CANCELLED', 'CONFIRMED')];
 
 async function setup(page, role = 'DOCTOR') {
   await page.setCookie({ name: 'auth_token', value: 'synthetic-fixture', url: base });
@@ -54,23 +54,33 @@ async function main() {
     await page.keyboard.press('Escape');
     console.log('PASS patient action menu opens and closes by keyboard');
     await page.goto(`${base}/dashboard/appointments`, { waitUntil: 'networkidle2', timeout: 90000 });
-    await page.waitForSelector('[data-appointment-block]', { timeout: 30000 });
-    const blocks = await page.$$eval('[data-appointment-block]', els => els.map(e => e.innerText));
-    const blockText = blocks.join('\n');
-    assert(blockText.includes('First Patient') && blockText.includes('Second Patient'));
-    assert(!blockText.includes('Cancelled Patient'));
-    assert(await page.$('[data-appointment-block] button[aria-label*="First Patient"]'));
-    console.log('PASS calendar blocks show active patients and exclude cancelled');
+    await page.waitForSelector('[aria-label^="First Patient, "]', { timeout: 30000 });
+    const column = calendar => page.$eval(`section[data-calendar="${calendar}"]`, e => e.textContent);
+    const scheduled = await column('SCHEDULED');
+    const confirmed = await column('CONFIRMED');
+    assert(scheduled.includes('First Patient') && !scheduled.includes('Second Patient'));
+    assert(confirmed.includes('Second Patient') && confirmed.includes('Finished Patient') && !confirmed.includes('First Patient'));
+    assert(!scheduled.includes('Cancelled Patient') && !confirmed.includes('Cancelled Patient'));
+    console.log('PASS each appointment sits in the column its calendar names and cancelled appointments are hidden');
     assert.match(await page.title(), /Appointments/);
-    await page.locator('[data-appointment-block] button[aria-label*="First Patient"]').click();
+    for (const width of [1440, 375]) {
+      await page.setViewport({ width, height: 900 });
+      const fits = await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth);
+      assert(fits, `appointments page overflows at ${width}px`);
+      console.log(`PASS appointments ${width}px fits viewport`);
+    }
+    await page.setViewport({ width: 1440, height: 900 });
+    await page.focus('[aria-label^="First Patient, "]'); await page.keyboard.press('Enter');
     await page.waitForSelector('[role="dialog"]');
-    assert.match(await page.$eval('[role="dialog"]', e => e.innerText), /First Patient/);
+    const details = await page.$eval('[role="dialog"]', e => e.innerText);
+    assert.match(details, /First Patient/);
+    assert.match(details, /Confirm/);
     await page.keyboard.press('Escape');
-    console.log('PASS calendar block opens details for the selected patient');
+    console.log('PASS calendar tile opens details with Confirm by keyboard');
     appointments = [];
     await page.reload({ waitUntil: 'networkidle2' });
-    await page.waitForFunction(() => document.querySelector('[data-appointment-block]') === null && !document.body.innerText.includes('Loading schedule'));
-    console.log('PASS calendar shows no appointment blocks when none are scheduled');
+    await page.waitForFunction(() => document.querySelector('section[data-calendar="SCHEDULED"]')?.textContent.includes('No one left to confirm'));
+    console.log('PASS empty Scheduled calendar says no one is left to confirm');
     await page.goto(`${base}/dashboard/visits?visitId=${visit.id}`, { waitUntil: 'networkidle2', timeout: 90000 });
     await page.waitForFunction(() => document.body.innerText.includes('Complete Visit'), { timeout: 30000 });
     const help = await page.$eval('#visit-completion-help', e => e.innerText);

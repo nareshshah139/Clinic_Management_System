@@ -27,7 +27,8 @@ export interface SystemAlert {
 }
 
 // Enums
-import type { AppointmentStatus } from '@cms/shared-types';
+import type { AppointmentStatus, AppointmentCalendar } from '@cms/shared-types';
+export type { AppointmentCalendar } from '@cms/shared-types';
 export { UserRole, AppointmentStatus } from '@cms/shared-types';
 export type VisitStatus = 'IN_PROGRESS' | 'COMPLETED';
 export type VisitType = 'OPD' | 'TELEMED' | 'PROCEDURE';
@@ -108,6 +109,7 @@ export interface AppointmentInSlot {
   visitType: VisitType;
   room?: { id: string; name: string; type: string };
   status: AppointmentStatus;
+  calendar: AppointmentCalendar;
   visit?: { id: string; status?: string | null };
   isFollowUp?: boolean;
   notes?: string;
@@ -248,7 +250,7 @@ export interface GetAvailableSlotsResponse {
 }
 
 export interface GetDoctorScheduleResponse {
-  appointments: Appointment[];
+  appointments: Array<Appointment & { calendar: AppointmentCalendar }>;
   doctorId: string;
   date: string;
 }
@@ -259,6 +261,7 @@ export interface RescheduleAppointmentPayload {
   roomId?: string;
   notes?: string;
   allowOverbook?: boolean;
+  calendar?: AppointmentCalendar;
 }
 
 // Create Appointment DTO

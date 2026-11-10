@@ -5,8 +5,10 @@ import {
   IsEnum,
   IsObject,
   IsBoolean,
+  IsIn,
 } from 'class-validator';
 import { VisitType } from '@prisma/client';
+import { type AppointmentCalendar, CALENDARS } from '../appointment-calendar';
 
 // Runtime enum to ensure decorator evaluation doesn't receive undefined
 export enum VisitTypeEnum {
@@ -48,6 +50,10 @@ export class CreateAppointmentDto {
   @IsObject()
   metadata?: Record<string, any>; // Additional scheduling data
 
+  @IsOptional()
+  @IsIn(CALENDARS)
+  calendar?: AppointmentCalendar;
+
   /** Book into a slot that already has patients, up to the doctor's limit. Sent only after the user confirms. */
   @IsOptional()
   @IsBoolean()
@@ -72,4 +78,8 @@ export class RescheduleAppointmentDto {
   @IsOptional()
   @IsBoolean()
   allowOverbook?: boolean;
+
+  @IsOptional()
+  @IsIn(CALENDARS)
+  calendar?: AppointmentCalendar;
 }
