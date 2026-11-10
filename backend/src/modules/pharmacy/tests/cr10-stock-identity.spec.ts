@@ -46,3 +46,15 @@ it('counts billed quantities by saved identity when the prescription display nam
   expect(result.medications[0].dispensedQuantity).toBe(3);
   expect(result.status).toBe('dispensed');
 });
+
+it('finds an old prescription line by the name the item had before it was standardised', async () => {
+  const flutas = { id: 'flutas', name: 'Tab. Flutas 150 mg', status: 'ACTIVE', drugs: [], metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc)'] } }) };
+  const lookalike = { id: 'other', name: 'Tab. Flutas 50 mg', status: 'ACTIVE', drugs: [], metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc) old'] } }) };
+  const prisma: any = { prescriptionInventoryLink: { findUnique: jest.fn().mockResolvedValue(null) }, inventoryItem: { findMany: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([flutas, lookalike]) } };
+  const resolved = await resolvePrescriptionInventory(prisma, { drugName: '13 74 | Flutas 150Mg(Pc)' }, 'clinic');
+  expect(resolved?.anchor.id).toBe('flutas');
+  expect(prisma.inventoryItem.findMany.mock.calls.map((call: any) => [call[0].where.name, call[0].where.metadata])).toEqual([
+    [{ equals: '13 74 | Flutas 150Mg(Pc)', mode: 'insensitive' }, undefined],
+    [undefined, { contains: '13 74 | Flutas 150Mg(Pc)', mode: 'insensitive' }],
+  ]);
+});

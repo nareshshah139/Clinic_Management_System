@@ -117,6 +117,11 @@ describe('InventoryController (Integration)', () => {
     it('should create a new inventory item', async () => {
       const createItemDto = {
         name: 'Paracetamol 500mg',
+        brandName: 'Paracetamol',
+        form: 'TABLET',
+        strength: '500MG',
+        itemCode: ' 13 74 ',
+        packSize: 10,
         description: 'Pain relief medicine',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.5,
@@ -168,11 +173,48 @@ describe('InventoryController (Integration)', () => {
         stockStatus: StockStatus.OUT_OF_STOCK,
       });
       expect(response.body.tags).toEqual(createItemDto.tags);
+      expect(mockPrismaService.inventoryItem.create.mock.calls[0][0].data).toMatchObject({
+        name: 'Tab. Paracetamol 500 mg',
+        brandName: 'Paracetamol',
+        form: 'TABLET',
+        strength: '500 mg',
+        isCombination: false,
+        itemCode: '13 74',
+        packSize: 10,
+      });
+    });
+
+    it('refuses a tablet without a strength and accepts a combination or a cream without one', async () => {
+      const base = { type: InventoryItemType.MEDICINE, costPrice: 10, sellingPrice: 15, unit: UnitType.STRIPS };
+      mockPrismaService.inventoryItem.findFirst.mockResolvedValue(null);
+      mockPrismaService.inventoryItem.create.mockImplementation(async ({ data }: any) => ({ id: 'new', ...data, tags: null, createdAt: new Date(), updatedAt: new Date() }));
+      const refused = await request(app.getHttpServer())
+        .post('/inventory/items')
+        .send({ ...base, name: 'Flutas', brandName: 'Flutas', form: 'TABLET' })
+        .expect(400);
+      expect(refused.body.message).toBe('Enter the strength, for example 150 mg, or tick Combination product.');
+      const noForm = await request(app.getHttpServer())
+        .post('/inventory/items')
+        .send({ ...base, name: 'Flutas 150mg' })
+        .expect(400);
+      expect(noForm.body.message).toBe('Choose the form: tablet, capsule, syrup, cream and so on.');
+      const combination = await request(app.getHttpServer())
+        .post('/inventory/items')
+        .send({ ...base, name: 'Antoxid-HC', brandName: 'Antoxid-HC', form: 'CAPSULE', isCombination: true })
+        .expect(201);
+      expect(combination.body.name).toBe('Cap. Antoxid-HC');
+      const cream = await request(app.getHttpServer())
+        .post('/inventory/items')
+        .send({ ...base, unit: UnitType.TUBES, name: 'Zimba', brandName: 'Zimba', form: 'CREAM' })
+        .expect(201);
+      expect(cream.body.name).toBe('Zimba cream');
     });
 
     it('should return 409 for duplicate SKU', async () => {
       const createItemDto = {
         name: 'Paracetamol 500mg',
+        form: 'TABLET',
+        strength: '500 mg',
         sku: 'PAR-500',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.5,

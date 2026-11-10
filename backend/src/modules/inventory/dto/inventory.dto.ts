@@ -1,5 +1,6 @@
 import { IsString, IsNumber, IsOptional, IsEnum, IsArray, ValidateNested, IsDateString, IsBoolean, Min, Max, IsUUID, IsInt, IsIn, MaxLength, IsNotEmpty, ArrayMinSize, ArrayMaxSize } from 'class-validator';
 import { Type } from 'class-transformer';
+import { MEDICINE_FORM_KEYS, type MedicineFormKey } from '../medicine-names';
 
 // Enums
 export enum InventoryItemType {
@@ -88,6 +89,24 @@ export class CreateInventoryItemDto extends InventoryRegimenDefaultsDto {
   @IsString()
   @IsOptional()
   brandName?: string;
+
+  @IsOptional()
+  @IsIn(MEDICINE_FORM_KEYS)
+  form?: MedicineFormKey;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(60)
+  strength?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isCombination?: boolean;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(60)
+  itemCode?: string;
 
   @IsEnum(InventoryItemType)
   type: InventoryItemType;
@@ -228,6 +247,24 @@ export class UpdateInventoryItemDto extends InventoryRegimenDefaultsDto {
   @IsString()
   @IsOptional()
   brandName?: string;
+
+  @IsOptional()
+  @IsIn(MEDICINE_FORM_KEYS)
+  form?: MedicineFormKey;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(60)
+  strength?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isCombination?: boolean;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(60)
+  itemCode?: string;
 
   @IsEnum(InventoryItemType)
   @IsOptional()

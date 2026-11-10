@@ -333,6 +333,18 @@ function normalizeDrugKey(value: unknown): string {
   return normalizeText(value).replace(/\s+/g, ' ').trim();
 }
 
+function drugKey(item: Record<string, unknown>): string {
+  const inventoryItemId = normalizeWhitespace(item.inventoryItemId);
+  return inventoryItemId ? `inventory:${inventoryItemId}` : normalizeText(extractDrugName(item));
+}
+
+/** The same stocked item matches by its inventory ID, so a renamed item keeps its history. */
+function sameDrug(item: Record<string, unknown>, input: { drugName: string; inventoryItemId?: string | null }): boolean {
+  const left = normalizeWhitespace(item.inventoryItemId);
+  const right = normalizeWhitespace(input.inventoryItemId);
+  return left && right ? left === right : drugNamesMatch(extractDrugName(item), input.drugName);
+}
+
 function drugNamesMatch(left: unknown, right: unknown): boolean {
   const a = normalizeDrugKey(left);
   const b = normalizeDrugKey(right);
@@ -354,10 +366,7 @@ function normalizeItems(value: unknown): Array<Record<string, unknown>> {
 }
 
 function buildSignature(items: Array<Record<string, unknown>>): string {
-  const names = uniqCaseInsensitive(items.map((entry) => extractDrugName(entry)).filter(Boolean))
-    .map((entry) => normalizeText(entry))
-    .sort();
-  return names.join('|');
+  return [...new Set(items.map(drugKey).filter(Boolean))].sort().join('|');
 }
 
 function extractComboDrugNames(items: Array<Record<string, unknown>>): string[] {
@@ -371,7 +380,7 @@ function buildMedicationSignature(item: Record<string, unknown>): string {
       ? String(durationRaw)
       : normalizeWhitespace(durationRaw);
   return [
-    normalizeDrugKey(extractDrugName(item)),
+    normalizeWhitespace(item.inventoryItemId) ? drugKey(item) : normalizeDrugKey(extractDrugName(item)),
     normalizeWhitespace(item.dosage),
     normalizeText(item.dosageUnit),
     normalizeText(item.frequency),
@@ -616,6 +625,7 @@ function buildPatientMedicationRecords(input: {
   visits: unknown[];
   diagnosis: string;
   drugName: string;
+  inventoryItemId?: string | null;
   currentVisitId?: string | null;
   doctorId?: string;
 }): FlatMedicationRecord[] {
@@ -635,7 +645,7 @@ function buildPatientMedicationRecords(input: {
         : 0;
 
       return normalizeItems(visit.prescriptionItems || visit.items)
-        .filter((item) => drugNamesMatch(extractDrugName(item), input.drugName))
+        .filter((item) => sameDrug(item, input))
         .map<FlatMedicationRecord>((item) => ({
           sourceKind: 'patient-last-plan',
           sourceLabel: sameDoctor
@@ -660,6 +670,7 @@ function buildDoctorMedicationRecords(input: {
   prescriptions: unknown[];
   diagnosis: string;
   drugName: string;
+  inventoryItemId?: string | null;
 }): FlatMedicationRecord[] {
   const rawRecords = (input.prescriptions || [])
     .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
@@ -671,7 +682,7 @@ function buildDoctorMedicationRecords(input: {
 
       const createdAtMs = parseDateMs(record.createdAt || asObject(record.visit).createdAt);
       return normalizeItems(record.items)
-        .filter((item) => drugNamesMatch(extractDrugName(item), input.drugName))
+        .filter((item) => sameDrug(item, input))
         .map<FlatMedicationRecord>((item) => ({
           sourceKind: 'doctor-pattern',
           sourceLabel: '',
@@ -840,6 +851,7 @@ export function buildLearnedPrescriptionPlan(input: {
  */
 export function buildLearnedMedicationSuggestion(input: {
   drugName: string;
+  inventoryItemId?: string | null;
   diagnosis: string;
   patientVisits?: unknown[];
   doctorPrescriptions?: unknown[];
@@ -854,6 +866,7 @@ export function buildLearnedMedicationSuggestion(input: {
     visits: input.patientVisits || [],
     diagnosis,
     drugName,
+    inventoryItemId: input.inventoryItemId,
     currentVisitId: input.currentVisitId,
     doctorId: input.doctorId,
   })[0] || null;
@@ -862,6 +875,7 @@ export function buildLearnedMedicationSuggestion(input: {
     prescriptions: input.doctorPrescriptions || [],
     diagnosis,
     drugName,
+    inventoryItemId: input.inventoryItemId,
   })[0] || null;
 
   const primary = [patientCandidate, doctorCandidate]

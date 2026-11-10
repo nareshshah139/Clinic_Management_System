@@ -21,6 +21,7 @@
     "start:prod": "node dist/main",
     "start:dev-no-typecheck": "TS_NODE_TRANSPILE_ONLY=1 NODE_OPTIONS=--max_old_space_size=2048 nest start --watch",
     "backfill:drug-master": "ts-node scripts/backfill_drug_master_from_inventory.ts",
+    "backfill:medicine-names": "ts-node --transpile-only scripts/standardize_medicine_names.ts",
     "lint": "eslint \"{src,apps,libs,test}/*.ts\" --fix",
     "test": "jest",
     "test:appointments": "jest --runInBand src/modules/appointments/appointments.*.spec.ts",

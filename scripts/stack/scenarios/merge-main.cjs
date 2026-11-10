@@ -159,14 +159,16 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       await go(page, "/dashboard/inventory?area=stock&view=list");
       await page.getByRole("button", { name: "Add batch" }).first().click();
       const dialog = page.getByRole("dialog");
-      await dialog.getByLabel("Item Name *").fill("Ketoconazole Shampoo 2%");
+      await dialog.getByLabel("Form *").selectOption("SHAMPOO");
+      await dialog.getByLabel("Medicine name *").fill("Ketoconazole");
+      await dialog.getByLabel(/^Strength/).fill("2%");
       await dialog.getByLabel("Cost Price (₹) *").fill("120");
       await dialog.getByLabel("Selling Price (₹) *").fill("185");
       await shot(page, "pharmacist-new-item-form-1280");
       await dialog.getByRole("button", { name: "Add Item" }).click();
       await page.getByRole("heading", { name: "Sent to doctor for approval" }).waitFor({ timeout: 60000 });
       await shot(page, "pharmacist-new-item-sent-1280");
-      const request = await stack.db.inventoryItemRequest.findFirst({ where: { branchId, itemName: "Ketoconazole Shampoo 2%" } });
+      const request = await stack.db.inventoryItemRequest.findFirst({ where: { branchId, itemName: "Ketoconazole 2% shampoo" } });
       check("CR-30 the pharmacist's new item waits for a doctor", [request?.status, request?.requestedById, request?.inventoryItemId ?? null], ["PENDING", U.pharmacist.id, null]);
       check("pharmacist new-item request: no console error or refused call", [seen.errors, seen.refused], [[], []]);
       await context.close();
@@ -185,14 +187,14 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       const { page, context, seen } = await open("doctor", DESKTOP);
       await go(page, "/dashboard/inventory?area=stock&view=approvals");
       await page.getByRole("tab", { name: /New items/ }).click();
-      await page.getByText("Ketoconazole Shampoo 2%").first().waitFor();
+      await page.getByText("Ketoconazole 2% shampoo").first().waitFor();
       await shot(page, "doctor-item-requests-1280");
       await page.getByRole("button", { name: "Approve", exact: true }).first().click();
       const dialog = page.getByRole("dialog", { name: "Approve new item" });
       await dialog.waitFor();
       await dialog.getByRole("button", { name: "Approve", exact: true }).click();
       await dialog.waitFor({ state: "hidden" });
-      const request = await stack.db.inventoryItemRequest.findFirst({ where: { branchId, itemName: "Ketoconazole Shampoo 2%" } });
+      const request = await stack.db.inventoryItemRequest.findFirst({ where: { branchId, itemName: "Ketoconazole 2% shampoo" } });
       check("CR-30 the doctor's approval creates the item", [request.status, request.reviewedById, !!request.inventoryItemId], ["APPROVED", U.doctor.id, true]);
 
       await go(page, `/dashboard/inventory?area=stock&view=COUNT&document=${count.id}`);

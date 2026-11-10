@@ -185,9 +185,9 @@ describe('possible duplicates on the review list', () => {
 
 describe('possible duplicates on a staff submission', () => {
   it('returns the existing inventory match with the queued request', async () => {
-    const { service } = build({ items: [gel] });
+    const { service } = build({ items: [{ ...gel, name: 'Adapalene 0.1% gel' }] });
     const outcome: any = await service.createOrRequest(
-      { name: 'ADAPALENE 0.1% Gel  15g', type: 'MEDICINE', unit: 'TUBES' } as any,
+      { name: 'ADAPALENE 0.1% Gel  15g', brandName: 'ADAPALENE  0.1%', form: 'GEL', type: 'MEDICINE', unit: 'TUBES' } as any,
       reception,
     );
     expect(outcome.created).toBe(false);
@@ -197,7 +197,7 @@ describe('possible duplicates on a staff submission', () => {
   it('returns empty duplicates for a genuinely new name', async () => {
     const { service } = build();
     const outcome: any = await service.createOrRequest(
-      { name: 'Brand New Serum', type: 'MEDICINE', unit: 'BOTTLES' } as any,
+      { name: 'Brand New Serum', form: 'SERUM', type: 'MEDICINE', unit: 'BOTTLES' } as any,
       reception,
     );
     expect(outcome.request.possibleDuplicates).toEqual({ inventory: [], pendingRequests: [] });
