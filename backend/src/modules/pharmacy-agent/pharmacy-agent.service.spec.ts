@@ -534,9 +534,9 @@ describe('PharmacyAgentService medicines it proposes to add', () => {
   }
   const blankNaming = { form: '', medicineName: '', strength: '', isCombination: false };
 
-  it('creates "Telma 40 tablet" as Tab. Telma 40 mg when the model leaves the form out', async () => {
+  it('creates "Telma 40 mg tablet" as Tab. Telma 40 mg when the model leaves the form out', async () => {
     const { inventory, doctor, ask, apply } = setup({
-      inputJson: JSON.stringify({ name: 'Telma 40 tablet', type: 'MEDICINE', unit: 'TABLETS', sellingPrice: 9 }),
+      inputJson: JSON.stringify({ name: 'Telma 40 mg tablet', type: 'MEDICINE', unit: 'TABLETS', sellingPrice: 9 }),
       itemNaming: blankNaming,
     });
     const reply = await ask();
@@ -546,6 +546,20 @@ describe('PharmacyAgentService medicines it proposes to add', () => {
       expect.objectContaining({ name: 'Tab. Telma 40 mg', brandName: 'Telma', form: 'TABLET', strength: '40 mg', isCombination: false }),
       doctor.branchId,
     );
+  });
+
+  it('asks for the strength of "Telma 40 tablet" instead of guessing 40 mg', async () => {
+    const { inventory, prisma, ask } = setup({
+      inputJson: JSON.stringify({ name: 'Telma 40 tablet', type: 'MEDICINE', unit: 'TABLETS', sellingPrice: 9 }),
+      itemNaming: blankNaming,
+    });
+    const reply = await ask();
+    expect(reply.proposals).toEqual([]);
+    expect(reply.message.content).toBe(
+      'Before I can add "Telma 40 tablet" to inventory: what is its strength, for example 40 mg, or is it a combination product?',
+    );
+    expect(prisma.pharmacyAgentProposal.create).not.toHaveBeenCalled();
+    expect(inventory.createInventoryItem).not.toHaveBeenCalled();
   });
 
   it('uses the form, name and strength the model fills in', async () => {
