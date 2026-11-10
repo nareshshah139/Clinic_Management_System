@@ -579,6 +579,42 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
     });
   });
 
+  it('leaves a cancelled draft, which never got a bill number, out of the Sales Register and GSTR-1 documents issued', async () => {
+    const at = '2026-11-14T05:00:00Z';
+    const base = {
+      patientId: 'patient-branch',
+      branchId: 'branch',
+      subtotal: 200,
+      taxAmount: 24,
+      totalAmount: 224,
+      paymentMethod: 'CASH' as const,
+      billingName: 'Meera Shah',
+      billingPhone: '9876543210',
+      invoiceDate: new Date(at),
+      createdAt: new Date(at),
+    };
+    await db.pharmacyInvoice.create({ data: { ...base, id: 'issued-800', invoiceNumber: 'PHI-2026-800', status: 'CONFIRMED' } });
+    await db.pharmacyInvoice.create({
+      data: { ...base, id: 'cancelled-draft', invoiceNumber: 'DRAFT-4b1d8c2e-93f0-4a57-8d1e-6c2b9f0a7e31', status: 'CANCELLED' },
+    });
+    const day = q('2026-11-14');
+    const register = await reports.report('sales-register', q('2026-11-14', '2026-11-14', { type: 'ALL' }), actor);
+    const gstr1 = await reports.report('gstr-1', day, actor);
+    expect([rowsOf(register).map((r: any) => r.billNo), rowsOf(gstr1, 'docs')]).toEqual([
+      ['PHI-2026-800'],
+      [
+        {
+          nature: 'Invoices for outward supply',
+          from: 'PHI-2026-800',
+          to: 'PHI-2026-800',
+          total: 1,
+          cancelled: 0,
+          net: 1,
+        },
+      ],
+    ]);
+  });
+
   it('appends counts by sequence and refuses a stale or racing count without overwriting', async () => {
     const day = '2026-11-05';
     const first = await reports.recordCount(

@@ -7,6 +7,7 @@ import { getErrorMessage } from '@/lib/utils';
 import { displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
 import { formatRupees, printHtml, renderPharmacyInvoiceHtml } from '@/lib/pharmacy-invoice-print';
 import type { BillDiscount } from '@/lib/bill-pricing';
+import { billNumberLabel, isIssuedBillNumber } from '@/lib/bill-number';
 import { toast } from '@/hooks/use-toast';
 import { requestKey } from '@/components/inventory/workspace-model';
 import { Badge } from '@/components/ui/badge';
@@ -277,6 +278,7 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
 
   const { bill } = load;
   const editable = POSTED.has(bill.status);
+  const issued = isIssuedBillNumber(bill.invoiceNumber);
   const { paid, due, refundDue } = settlementOf(bill);
   const lineDiscount = bill.discountAmount - bill.billDiscountAmount;
   const reload = async () => {
@@ -298,7 +300,7 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
       <Card>
         <CardHeader className="gap-2">
           <CardTitle className="flex flex-wrap items-center gap-2 text-xl">
-            <span>Bill {bill.invoiceNumber}</span>
+            <span>{issued ? `Bill ${bill.invoiceNumber}` : billNumberLabel(bill)}</span>
             {bill.status === 'CANCELLED' ? (
               <Badge variant="danger">Cancelled</Badge>
             ) : refundDue > 0 ? (
@@ -316,9 +318,11 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
             {bill.doctor ? ` · Dr. ${personName(bill.doctor)}` : ''}
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={() => void print()}>
-              <Printer aria-hidden="true" /> Print
-            </Button>
+            {issued && (
+              <Button type="button" variant="outline" onClick={() => void print()}>
+                <Printer aria-hidden="true" /> Print
+              </Button>
+            )}
             {editable && (
               <Button type="button" variant="outline" onClick={() => setEditing(true)}>
                 <Percent aria-hidden="true" /> Edit discount

@@ -147,6 +147,17 @@ it('reopens a draft bill in Sales, and blocks print and WhatsApp with a reason',
   expect(screen.getByRole('button', { name: 'Send draft bill for Meera Shah on WhatsApp' })).toHaveAccessibleDescription('Finish this draft bill first');
 });
 
+it('names a cancelled draft as one, never by its draft placeholder, and opens it in Sales', async () => {
+  get.mockResolvedValue(response({ rows: [row({ id: 'PHARMACY_BILL:c', recordId: 'c', billNo: null, state: 'CANCELLED', paymentModes: [] })] }));
+  render(<SalesPage />);
+  const open = await screen.findByRole('link', { name: 'Open cancelled draft bill for Meera Shah' });
+  expect([open.textContent, open.getAttribute('href'), screen.queryByText(/DRAFT-/)]).toEqual([
+    'Cancelled draft',
+    '/dashboard/pharmacy/sales/bill?bill=c',
+    null,
+  ]);
+});
+
 it('writes the WhatsApp message with clinic, date, modes and balance due', async () => {
   get.mockResolvedValue(response({ rows: [row({ paymentModes: ['UPI', 'CASH'], due: 200 })] }));
   render(<SalesPage />);

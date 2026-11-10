@@ -199,6 +199,20 @@ it.each([
   expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
 });
 
+it('explains a draft that was cancelled before it got a bill number, without showing its placeholder', async () => {
+  const get = api.get.getMockImplementation()!;
+  const cancelled = { ...invoice, invoiceNumber: 'DRAFT-1f2e', status: 'CANCELLED', payments: [], revisions: [] };
+  api.get.mockImplementation(async (url: string, query?: any) => (url === '/pharmacy/invoices/d-1' ? cancelled : get(url, query)));
+  open('draft=d-1');
+  expect(await screen.findByText('This draft was cancelled before it was finished, so it never became a bill and has no bill number.')).toBeInTheDocument();
+  expect([
+    screen.getByText('Cancelled draft').tagName,
+    screen.queryByText(/DRAFT-1f2e/),
+    screen.queryByRole('button', { name: /Print/ }),
+    screen.queryByRole('button', { name: 'Save draft' }),
+  ]).toEqual(['SPAN', null, null, null]);
+});
+
 it('keeps a finished checkout with its own bill and still offers a pending one anywhere', async () => {
   const attempt = (confirmed: boolean) => JSON.stringify({
     requestKey: 'k-1', confirmed, context: JSON.stringify(['patient-1', 'rx-1', undefined, undefined]),

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { issuedBillNumber } from './bill-number';
 import { CLINIC_TIME_ZONE } from './clinic-day';
 import { money } from './gst-slabs';
 import { PharmacyComplianceService } from './pharmacy-compliance.service';
@@ -317,7 +318,9 @@ export class PharmacyReportsService {
     ];
     return {
       docs,
-      cancelledBillNumbers: cancelled.map((bill) => bill.invoiceNumber),
+      cancelledBillNumbers: cancelled.flatMap(
+        (bill) => issuedBillNumber(bill.invoiceNumber) ?? [],
+      ),
     };
   }
 
@@ -954,7 +957,9 @@ export class PharmacyReportsService {
           : 'DRAFT';
     const collectionBills: CollectionBill[] = bills.map((bill) => ({
       id: bill.id,
-      number: bill.invoiceNumber,
+      number:
+        issuedBillNumber(bill.invoiceNumber) ??
+        (bill.status === 'CANCELLED' ? 'Cancelled draft' : 'Draft'),
       day: clinicDay(bill.invoiceDate),
       entryAt: bill.createdAt.toISOString(),
       state: state(bill.status),

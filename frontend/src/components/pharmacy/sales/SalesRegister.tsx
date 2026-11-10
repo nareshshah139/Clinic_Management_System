@@ -134,7 +134,8 @@ export function SalesRegister({
   const startNew = () => router.push(newEntryHref(register, returnTo, requestKey()));
   const openRow = (row: SalesRegisterRow) => router.push(openHref(row, returnTo));
 
-  const billName = (row: SalesRegisterRow) => row.billNo ?? `draft ${copy.one} for ${row.patientName ?? 'walk-in customer'}`;
+  const billName = (row: SalesRegisterRow) =>
+    row.billNo ?? `${row.state === 'CANCELLED' ? 'cancelled draft' : 'draft'} ${copy.one} for ${row.patientName ?? 'walk-in customer'}`;
   const setFilter = (key: FilterKey) => (value: string) => dispatch({ type: 'filter', key, value });
   const paymentModes = paymentModesFor(register);
   const entryByOptions = (data?.entryByOptions ?? []).map((person) => ({ value: person.id, label: person.name }));
@@ -143,7 +144,7 @@ export function SalesRegister({
   }
 
   const billCell = (row: SalesRegisterRow) => {
-    const label = row.billNo ?? <Badge variant="warning" className={badgeText}>Draft</Badge>;
+    const label = row.billNo ?? (row.state === 'CANCELLED' ? 'Cancelled draft' : <Badge variant="warning" className={badgeText}>Draft</Badge>);
     const linkClass =
       'whitespace-nowrap rounded-sm text-left font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
     const stop = (event: MouseEvent) => event.stopPropagation();

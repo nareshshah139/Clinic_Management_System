@@ -152,14 +152,16 @@ describe('sales register rows', () => {
     ]);
   });
 
-  it('keeps a legacy draft number as reserved but never shows a draft placeholder as one', () => {
+  it('keeps a legacy draft number as reserved but never shows a draft placeholder as one, cancelled or not', () => {
     const draft = (invoiceNumber: string) =>
       billEntry(pharmacyBill({ status: 'DRAFT', invoiceNumber }), null).row;
+    const cancelled = billEntry(pharmacyBill({ status: 'CANCELLED', invoiceNumber: 'DRAFT-6f1c2a9e-0b7d-4c55-9b0e-3f8e2a1d4c10' }), null).row;
     expect(
-      [draft('PHI-2026-007'), draft('DRAFT-6f1c2a9e-0b7d-4c55-9b0e-3f8e2a1d4c10')].map((r) => [r.billNo, r.reservedNo]),
+      [draft('PHI-2026-007'), draft('DRAFT-6f1c2a9e-0b7d-4c55-9b0e-3f8e2a1d4c10'), cancelled].map((r) => [r.billNo, r.reservedNo, r.state]),
     ).toEqual([
-      [null, 'PHI-2026-007'],
-      [null, null],
+      [null, 'PHI-2026-007', 'DRAFT'],
+      [null, null, 'DRAFT'],
+      [null, null, 'CANCELLED'],
     ]);
   });
 

@@ -8,7 +8,7 @@ import {
   money,
   pageOf,
 } from './register-utils';
-import { isIssuedBillNumber } from './bill-number';
+import { issuedBillNumber } from './bill-number';
 
 export const SALES_REGISTERS = ['sales', 'returns'] as const;
 export const SALE_SOURCES = [
@@ -233,11 +233,9 @@ export function billEntry(
       id: `PHARMACY_BILL:${bill.id}`,
       source: 'PHARMACY_BILL',
       recordId: bill.id,
-      billNo: state === 'DRAFT' ? null : bill.invoiceNumber,
+      billNo: state === 'DRAFT' ? null : issuedBillNumber(bill.invoiceNumber),
       reservedNo:
-        state === 'DRAFT' && isIssuedBillNumber(bill.invoiceNumber)
-          ? bill.invoiceNumber
-          : null,
+        state === 'DRAFT' ? issuedBillNumber(bill.invoiceNumber) : null,
       state,
       entryAt: bill.createdAt.toISOString(),
       billDate: clinicDay(bill.invoiceDate),

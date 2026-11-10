@@ -5,6 +5,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { isIssuedBillNumber } from '@/lib/bill-number';
 import { getErrorMessage } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -72,7 +73,16 @@ function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
       </Card>
     );
   if (load.status === 'finished')
-    return <FinishedBillView id={load.id} notice={`This draft was finished as bill ${load.number}, so it can no longer be edited as a draft.`} />;
+    return (
+      <FinishedBillView
+        id={load.id}
+        notice={
+          isIssuedBillNumber(load.number)
+            ? `This draft was finished as bill ${load.number}, so it can no longer be edited as a draft.`
+            : 'This draft was cancelled before it was finished, so it never became a bill and has no bill number.'
+        }
+      />
+    );
   if (load.status === 'error')
     return (
       <Card>
