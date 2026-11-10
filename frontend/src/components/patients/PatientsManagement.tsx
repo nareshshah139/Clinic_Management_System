@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import { formatPatientName, filterRoomsByVisitType, calculateAge, formatAge } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -492,6 +493,7 @@ export default function PatientsManagement() {
       } else {
         const created = (await apiClient.createPatient(payload)) as any;
         savedPatientId = created?.id || created?.data?.id || savedPatientId;
+        track('patient_registered', { source: 'patients_page' });
       }
       
       // Optional: auto-book next available slot for walk-in patients when doctor is selected
@@ -566,6 +568,7 @@ export default function PatientsManagement() {
             toast({ title: 'Walk-in not booked', description: `${slot} on ${displayCalendarDate(dateStr)} was taken and you chose not to overbook it.` });
             return;
           }
+          track('appointment_booked', { source: 'walk_in' });
           toast({
             title: 'Walk-in appointment booked',
             description: `Booked into the Confirmed calendar for ${displayCalendarDate(dateStr)} at ${slot}`,

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import { usePrefilledPatient } from './usePrefilledPatient';
 import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/lib/doctor-availability';
 import { useToast } from '@/hooks/use-toast';
@@ -383,6 +384,7 @@ export default function AppointmentsCalendar({
         return;
       }
       
+      track('appointment_booked', { source: 'calendar' });
       // Clear optimistic appointment and refresh with real data
       setOptimisticAppointment(null);
       setRefreshKey(prev => prev + 1);

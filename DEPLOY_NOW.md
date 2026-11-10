@@ -173,6 +173,10 @@ railway logs --service frontend
 - `NEXT_PUBLIC_API_PROXY` - Backend URL with trailing slash
 - `PORT` - Default: 3000
 
+**Frontend Optional (analytics, rebuild after changing):**
+- `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` - OpenPanel client ID; unset disables analytics
+- `NEXT_PUBLIC_OPENPANEL_API_URL` - Self-hosted OpenPanel URL (default: https://api.openpanel.dev)
+
 **Backend Optional:**
 - `OPENAI_API_KEY` - For translation features
 - `OPENAI_TRANSLATION_MODEL` - Default: gpt-4o-mini

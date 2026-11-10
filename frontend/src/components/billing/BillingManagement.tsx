@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, AlertCircle, Package, Trash2, ShoppingCart, Printer } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import type { Invoice } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
@@ -439,6 +440,7 @@ export default function BillingManagement() {
         notes: activeTab === 'builder' ? (invoiceNotes || undefined) : undefined,
       });
       
+      track('invoice_created');
       setSuccess('Invoice created successfully!');
       setTimeout(() => setSuccess(''), 3000);
       setOpen(false);
