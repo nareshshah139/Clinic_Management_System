@@ -41,12 +41,15 @@ const watch = (page) => {
     console.log(`SEED today=${today} batches=${Object.keys(batches).length}`);
     const tokens = {};
     const as = async (who) => (tokens[who] ??= await tokenFor(stack, who));
+    for (const who of ["pharmacist", "doctor", "admin", "reception"]) await as(who);
+    await new Promise((resolve) => setTimeout(resolve, 61000));
     const call = async (who, method, url, body) => api(stack, await as(who), method, url, body);
     const refused = async (who, method, url, body) => {
       try {
         await call(who, method, url, body);
         return "allowed";
       } catch (e) {
+        if (!e.status) throw e;
         return e.status;
       }
     };
@@ -140,7 +143,14 @@ const watch = (page) => {
         },
         async shot(page, slug, full = false) {
           const file = path.join(out, `cr29-${slug}.png`);
-          await page.screenshot({ path: file, fullPage: full });
+          const size = page.viewportSize();
+          if (full) {
+            const tall = await page.evaluate(() => Math.max(...[...document.querySelectorAll("*")].map((el) => el.scrollHeight)));
+            await page.setViewportSize({ width: size.width, height: Math.min(6000, Math.max(size.height, tall + 80)) });
+            await page.waitForTimeout(400);
+          }
+          await page.screenshot({ path: file });
+          if (full) await page.setViewportSize(size);
           t.shots.push(file);
         },
         opened: [],
@@ -257,7 +267,7 @@ const watch = (page) => {
     await scenario("04", "pharmacist-1280-run-optimization-splits-returnable-and-non-returnable-by-distributor", async (s) => {
       const { page } = s.track(await open("pharmacist"));
       await goto(page, OPTIMIZE);
-      s.ok("the strip also tops Stock optimization", await strip(page).isVisible());
+      s.check("the strip also tops Stock optimization", (await stripCounts(page)).map((c) => c.count), [2, 0, 2, 2, 3]);
       await page.getByRole("button", { name: "Run optimization" }).click();
       await page.waitForURL((url) => url.searchParams.get("run") === "1");
       const r = await runResult(page);
@@ -320,8 +330,8 @@ const watch = (page) => {
       await goto(page, `/dashboard/inventory?area=purchases&view=SUPPLIER_RETURN&document=${doc.id}`);
       await page.getByRole("heading", { name: `RET-SO-${stamp}-AABCS` }).waitFor({ timeout: 120000 });
       await page.waitForTimeout(800);
-      const values = await page.locator("main input").evaluateAll((inputs) => inputs.map((i) => i.value));
-      const body = clean(await page.locator("main").innerText());
+      const values = await page.locator("main.inventory-surface input").evaluateAll((inputs) => inputs.map((i) => i.value));
+      const body = clean(await page.locator("main.inventory-surface").innerText());
       s.ok("the draft document shows the batches pre-filled", body.includes("ADG2405") && body.includes("CLB2311") && [75, 100, 18, 12].every((n) => values.some((v) => v !== "" && Number(v) === n)), { values });
       await s.shot(page, "05-draft-document-1280", true);
     });
@@ -334,6 +344,7 @@ const watch = (page) => {
       s.check("phone cards per batch for Navjeevan", r.returnable[1].rows.length, 1);
       s.ok("no sideways page scroll at 390", (await docOverflow(page)) <= 0, await docOverflow(page));
       await s.shot(page, "06-results-390", true);
+      await s.shot(page, "06-results-390-top");
       await page.getByRole("region", { name: `${DISTRIBUTORS.NVJ.name} returnable` }).getByRole("button", { name: "Create return draft" }).click();
       await page.getByText(/^Return draft RET-SO-/).waitFor();
       const nvj = (await supplierReturns()).find((d) => d.supplierGstin === DISTRIBUTORS.NVJ.gstin);

@@ -40,9 +40,11 @@ export function DataQualityStrip({ active, onOpen }: { active?: string; onOpen: 
   }, [load]);
   if (failed && !counts) return null;
   return (
-    <section aria-label="Data quality" aria-busy={!counts} className="flex flex-wrap items-center gap-2 print:hidden">
-      <h2 className="mr-1 text-sm font-semibold">Data quality</h2>
-      <ul className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-1 sm:flex-wrap">
+    <section aria-label="Data quality" aria-busy={!counts} className="space-y-1.5 print:hidden">
+      <h2 className="text-sm font-semibold">
+        Data quality <span className="font-normal text-muted-foreground">· press a count to list those batches</span>
+      </h2>
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {GAPS.map((gap) => {
           const count = counts?.[gap.key];
           const tone = count ? gap.tone : "calm";

@@ -71,7 +71,7 @@ function RulesPanel({ canWrite, onSaved }: { canWrite: boolean; onSaved: () => v
           Saved for this branch. Anyone who can raise a supplier return can change them.
         </InventoryHelp>
       </div>
-      <div className="grid gap-3 sm:grid-cols-[repeat(2,minmax(0,16rem))_auto] sm:items-end">
+      <div className="grid gap-3 sm:grid-cols-[repeat(2,minmax(0,16rem))_auto] sm:items-start">
         <div className="text-sm">
           <label htmlFor="non-moving-days" className="mb-1 block font-medium">Non-moving days</label>
           <input id="non-moving-days" className={inputClass} inputMode="numeric" disabled={!canWrite || !rules} value={form.nonMovingDays}
@@ -85,7 +85,7 @@ function RulesPanel({ canWrite, onSaved }: { canWrite: boolean; onSaved: () => v
           <p id="minimum-help" className="mt-1 text-muted-foreground">Below this, a return costs more than it recovers.</p>
         </div>
         {canWrite && (
-          <Button type="submit" variant="outline" className="sm:mb-6" disabled={!changed || state.busy}>
+          <Button type="submit" variant="outline" className="justify-self-start sm:mt-7" disabled={!changed || state.busy}>
             {state.busy ? "Saving…" : "Save rules"}
           </Button>
         )}
