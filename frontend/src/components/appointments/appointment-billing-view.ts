@@ -16,6 +16,8 @@ export type BillingChip = {
   text: string;
   /** Shown on a narrow row: the state, with the amount still due. */
   short: string;
+  /** Shown on a phone-width row: ₹ with a tick when paid, or with ! when money is to be collected. */
+  tiny: string;
   tone: BillingTone;
   /** The full sentence for screen readers and the tooltip. */
   label: string;
@@ -35,6 +37,7 @@ export function billingChip(billing: AppointmentBilling, billType?: BillType): B
     return {
       text: 'Not billed',
       short: 'Not billed',
+      tiny: billing.attention ? '₹!' : '',
       tone: billing.attention ? 'unbilled' : 'quiet',
       label: billing.attention ? `${kind}: not billed yet, visit finished` : `${kind}: not billed yet`,
     };
@@ -43,6 +46,7 @@ export function billingChip(billing: AppointmentBilling, billType?: BillType): B
     return {
       text: `${rupee(billing.total)} · Paid${bills}`,
       short: 'Paid',
+      tiny: '₹✓',
       tone: 'paid',
       label: `${kind}: ${rupee(billing.total)}${count > 1 ? ` in ${count} bills` : ''}, paid`,
     };
@@ -50,6 +54,7 @@ export function billingChip(billing: AppointmentBilling, billType?: BillType): B
   return {
     text: `${rupee(billing.total)} · Due ${rupee(billing.due)}${bills}`,
     short: `Due ${rupee(billing.due)}`,
+    tiny: '₹!',
     tone: 'due',
     label: `${kind}: ${rupee(billing.total)}${count > 1 ? ` in ${count} bills` : ''}, ${rupee(billing.due)} due`,
   };

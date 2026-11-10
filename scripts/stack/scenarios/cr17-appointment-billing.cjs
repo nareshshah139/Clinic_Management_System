@@ -99,8 +99,9 @@ async function call(page, method, url, body) {
     await setup.context().close();
 
     const sink = [];
+    const sessions = new Map();
     async function open(who, viewport) {
-      const context = await browser.newContext({ viewport });
+      const context = await browser.newContext({ viewport, ...(sessions.has(who) && { storageState: sessions.get(who) }) });
       const page = await context.newPage();
       page.setDefaultTimeout(60000);
       page.on("pageerror", (e) => sink.push(`${who} pageerror ${e.message.slice(0, 200)}`));
@@ -112,7 +113,10 @@ async function call(page, method, url, body) {
         if (where === KNOWN_REFUSAL) console.log(`    NOTE ${who} ${r.status()} ${where} (header alerts, predates CR-17)`);
         else refused.push(`${r.status()} ${where}`);
       });
-      await stack.login(page, who);
+      if (!sessions.has(who)) {
+        await stack.login(page, who);
+        sessions.set(who, await context.storageState());
+      }
       return { page, context, refused };
     }
 
@@ -247,9 +251,11 @@ async function call(page, method, url, body) {
       s.opened.push(o);
       await calendar(o.page);
       const all = await rows(o.page);
-      s.check("short chips on a phone", Object.fromEntries(all.map((r) => [r.name, r.chip])), {
-        "Lakshmi Devi": "Not billed", "Meera Shah": "Paid", "Priya Nair": "Due ₹200", "Ravi Kumar": "Paid", "Suresh Babu": "",
+      s.check("phone chips: ₹ with a tick when paid, with ! when money is to be collected", Object.fromEntries(all.map((r) => [r.name, r.chip])), {
+        "Lakshmi Devi": "₹!", "Meera Shah": "₹✓", "Priya Nair": "₹!", "Ravi Kumar": "₹✓", "Suresh Babu": "",
       });
+      const names = await o.page.locator("[data-patient-name]").evaluateAll((n) => n.map((el) => el.getBoundingClientRect().width));
+      s.ok("every patient name keeps some room on a phone", names.every((w) => w >= 24), names);
       s.check("the bill type still reaches the reader", all.find((r) => r.name === "Priya Nair").label, "Review bill: ₹1,700 in 2 bills, ₹200 due");
       s.ok("no sideways scroll", await noSideways(o.page));
       await s.shot(o.page, "reception-calendar-390");
@@ -261,6 +267,8 @@ async function call(page, method, url, body) {
       const box = await dialog.boundingBox();
       s.ok("the bill fits the phone", box && box.x >= 0 && box.x + box.width <= 390, box);
       await s.shot(o.page, "reception-two-bills-390");
+      await o.page.keyboard.press("Escape");
+      await dialog.waitFor({ state: "hidden" });
       s.check("no Daily Collection in reception's phone menu", (await menuLinks(o.page, true)).includes("Daily Collection"), false);
     });
 
@@ -307,7 +315,7 @@ async function call(page, method, url, body) {
       await o.page.getByRole("heading", { name: "Whole day", level: 2 }).waitFor({ timeout: 120000 });
       await o.page.getByRole("table", { name: "Whole day by payment mode", exact: true }).waitFor();
       s.check("whole day by mode", await tableRows(o.page, "Whole day by payment mode"), WHOLE);
-      s.ok("whole day total", clean(await o.page.getByRole("region", { name: "Whole day" }).innerText()).includes("Whole day ₹5,224.00 Clinic ₹5,000.00 Pharmacy ₹224.00"), clean(await o.page.getByRole("region", { name: "Whole day" }).innerText()).slice(0, 200));
+      s.ok("whole day total", clean(await o.page.getByRole("region", { name: "Whole day", exact: true }).innerText()).includes("Whole day ₹5,224.00 Clinic ₹5,000.00 Pharmacy ₹224.00"), clean(await o.page.getByRole("region", { name: "Whole day", exact: true }).innerText()).slice(0, 200));
       s.check("clinic by mode", await tableRows(o.page, "Clinic: consultations and procedures by payment mode"), [["Cash", "4,000.00", "0.00", "4,000.00"], ["UPI", "500.00", "0.00", "500.00"], ["Card", "500.00", "0.00", "500.00"]]);
       const clinic = clean(await o.page.getByRole("region", { name: "Clinic: consultations and procedures" }).innerText());
       s.ok("clinic tiles", clinic.includes("Clinic received ₹5,000.00") && clinic.includes("Clinic billed today ₹5,200.00") && clinic.includes("Clinic still due ₹200.00"), clinic.slice(0, 300));
@@ -358,7 +366,7 @@ async function call(page, method, url, body) {
     await scenario("pharmacist 1280: Daily Collection without clinic money; nurse: bill types only, no menu item", async (s) => {
       const p = await open("pharmacist", DESKTOP);
       s.opened.push(p);
-      await p.page.goto(`${stack.base}/dashboard`, { waitUntil: "domcontentloaded" });
+      await p.page.goto(`${stack.base}/dashboard/inventory`, { waitUntil: "domcontentloaded" });
       await p.page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Daily Collection" }).click();
       await p.page.getByTestId("collection-status").waitFor({ timeout: 120000 });
       s.check("no clinic block for the pharmacist", [await p.page.getByRole("heading", { name: "Whole day", level: 2 }).count(), await p.page.getByRole("table", { name: "Clinic bills" }).count()], [0, 0]);

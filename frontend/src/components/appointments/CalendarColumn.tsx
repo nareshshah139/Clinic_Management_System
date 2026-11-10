@@ -244,7 +244,7 @@ export default function CalendarColumn({
                         {patientName}
                       </span>
                       {apt.billType && (
-                        <span data-bill-type className={`hidden shrink-0 font-semibold @min-[14rem]:inline ${apt.billType === 'PROCEDURE' ? 'text-purple-700' : apt.billType === 'REVIEW' ? 'text-sky-700' : 'text-teal-700'}`}>
+                        <span data-bill-type className={`hidden shrink-0 font-semibold @min-[10rem]:inline ${apt.billType === 'PROCEDURE' ? 'text-purple-700' : apt.billType === 'REVIEW' ? 'text-sky-700' : 'text-teal-700'}`}>
                           {BILL_TYPE_LABEL[apt.billType]}
                         </span>
                       )}
@@ -315,8 +315,9 @@ export default function CalendarColumn({
                     disabled={isOptimistic || !onOpenBill}
                     className={`my-0.5 mr-0.5 shrink-0 items-center gap-1 self-start whitespace-nowrap rounded px-1.5 text-[11px] font-semibold leading-4 ring-1 ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${BILLING_TONE[chip.tone]}`}
                   >
-                    {(chip.tone === 'due' || chip.tone === 'unbilled') && <CircleAlert className="size-3 shrink-0" aria-hidden="true" />}
-                    <span className="@min-[22rem]:hidden">{chip.short}</span>
+                    {(chip.tone === 'due' || chip.tone === 'unbilled') && <CircleAlert className="hidden size-3 shrink-0 @min-[12rem]:block" aria-hidden="true" />}
+                    <span className="@min-[12rem]:hidden">{chip.tiny}</span>
+                    <span className="hidden @min-[12rem]:inline @min-[22rem]:hidden">{chip.short}</span>
                     <span className="hidden @min-[22rem]:inline">{chip.text}</span>
                   </button>
                 )}
