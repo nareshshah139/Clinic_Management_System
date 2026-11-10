@@ -124,10 +124,18 @@ async function call(page, method, url, body) {
     for (const who of ["reception", "doctor", "admin", "pharmacist", "nurse"]) {
       const context = await browser.newContext();
       const page = await context.newPage();
-      await stack.login(page, who);
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await stack.login(page, who);
+          break;
+        } catch (error) {
+          if (attempt === 5 || !String(error.message).includes("429")) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 20000));
+        }
+      }
       sessions.set(who, await context.storageState());
       await context.close();
-      await new Promise((resolve) => setTimeout(resolve, 13000));
+      await new Promise((resolve) => setTimeout(resolve, 15000));
     }
 
     async function scenario(name, run) {
