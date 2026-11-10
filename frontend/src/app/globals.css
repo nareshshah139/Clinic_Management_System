@@ -424,6 +424,6 @@
 @media screen {
   main :is(table):not([data-print-preview] *, .prescription-print *, #pagedjs-container *) { width: 100%; font-variant-numeric: tabular-nums; }
   main :is(thead):not([data-print-preview] *, .prescription-print *, #pagedjs-container *) { position: sticky; top: 0; z-index: 1; background: var(--muted); }
-  main :is(th, td):not([data-print-preview] *, .prescription-print *, #pagedjs-container *) { padding: 0.75rem 1rem; }
+  main :is(th, td):not([data-print-preview] *, .prescription-print *, #pagedjs-container *, [data-own-cell-spacing] *) { padding: 0.75rem 1rem; }
   main tbody tr:not([data-print-preview] *, .prescription-print *, #pagedjs-container *):hover { background: var(--accent-soft); }
 }

@@ -57,6 +57,21 @@ it('names each control after its medicine, or after its position while the row h
   expect(screen.getAllByRole('button', { name: /^Add a medicine below / }).map(button => button.getAttribute('aria-label'))).toEqual([
     'Add a medicine below Amoxicillin', 'Add a medicine below Cetirizine', 'Add a medicine below row 3',
   ]);
+  expect(screen.getAllByRole('button', { name: /^Remove / }).map(button => button.getAttribute('aria-label'))).toEqual(['Remove Amoxicillin', 'Remove Cetirizine', 'Remove row 3']);
+  expect(screen.getAllByRole('combobox', { name: /^(Frequency|When|Duration unit) for / }).map(box => box.getAttribute('aria-label'))).toEqual([
+    'Frequency for Amoxicillin', 'When for Amoxicillin', 'Duration unit for Amoxicillin',
+    'Frequency for Cetirizine', 'When for Cetirizine', 'Duration unit for Cetirizine',
+    'Frequency for row 3', 'When for row 3', 'Duration unit for row 3',
+  ]);
+  expect(screen.getAllByRole('columnheader').map(header => header.textContent)).toEqual(['Medicine', 'Frequency (0-1-0)', 'When', 'Duration', 'Instructions', 'Actions']);
+});
+
+it('removes a medicine from the middle with its icon button and keeps the rest in order', async () => {
+  const onClinicalDataChange = await mount([medicine('Amoxicillin'), medicine('Cetirizine', { instructions: 'At night' }), medicine('Doxycycline')]);
+  fireEvent.click(screen.getByRole('button', { name: 'Remove Cetirizine' }));
+  expect(names().filter(Boolean)).toEqual(['Amoxicillin', 'Doxycycline']);
+  expect(screen.queryByDisplayValue('At night')).not.toBeInTheDocument();
+  await waitFor(() => expect(medicationPlan(onClinicalDataChange)).toEqual(['Amoxicillin', 'Doxycycline']));
 });
 
 it('does not stack blank rows when a blank row is already below', async () => {

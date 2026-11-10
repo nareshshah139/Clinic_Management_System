@@ -1,5 +1,5 @@
-import type { ComponentProps } from 'react';
-import { Plus } from 'lucide-react';
+import type { ComponentProps, ReactNode } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -23,41 +23,74 @@ export function rowDescription(medicineName: string | undefined, index: number):
   return medicineName?.trim() || `row ${index + 1}`;
 }
 
-export function AddRowBelowButton({ medicineName, index, onClick }: { medicineName?: string; index: number; onClick: () => void }) {
-  const label = `Add a medicine below ${rowDescription(medicineName, index)}`;
+function RowIconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
   return (
     <Button type="button" size="icon" variant="outline" aria-label={label} title={label} onClick={onClick}>
-      <Plus aria-hidden="true" />
+      {children}
     </Button>
   );
 }
 
-const cell = 'block align-top before:mb-1 before:block before:text-xs before:font-medium before:text-gray-500 before:content-[attr(data-label)] @6xl:table-cell @6xl:w-auto @6xl:py-2 @6xl:before:hidden';
+export function AddRowBelowButton({ medicineName, index, onClick }: { medicineName?: string; index: number; onClick: () => void }) {
+  return <RowIconButton label={`Add a medicine below ${rowDescription(medicineName, index)}`} onClick={onClick}><Plus aria-hidden="true" /></RowIconButton>;
+}
+
+export function RemoveRowButton({ medicineName, index, onClick }: { medicineName?: string; index: number; onClick: () => void }) {
+  return <RowIconButton label={`Remove ${rowDescription(medicineName, index)}`} onClick={onClick}><Trash2 aria-hidden="true" /></RowIconButton>;
+}
+
+const cell = 'min-w-0 align-top @6xl:table-cell @6xl:py-2';
 const roomy = `${cell} @6xl:px-3`;
 const snug = `${cell} @6xl:px-2`;
-
-/**
- * Below a 72rem container each medicine is a short stack (name, regimen, instructions) so nothing
- * hides behind a sideways scroll; from 72rem up the same markup is a fixed-layout table.
- */
-export const rxLayout = {
-  wrapper: '@container overflow-x-auto',
-  table: 'block w-full text-sm @6xl:table @6xl:table-fixed',
-  columns: 'hidden @6xl:table-column-group',
-  head: 'block sr-only bg-gray-50 text-gray-700 @6xl:not-sr-only @6xl:table-header-group',
-  body: 'block @6xl:table-row-group',
-  row: 'flex flex-wrap items-start gap-x-2 gap-y-2 border-t px-3 py-3 @6xl:table-row @6xl:p-0',
-  empty: 'block w-full px-3 py-3 text-center text-gray-500 @6xl:table-cell',
-  medicine: `${roomy} w-full`,
-  frequency: `${roomy} min-w-[8.5rem] flex-1`,
-  frequencyPair: `${roomy} min-w-[16rem] flex-1`,
-  when: `${roomy} min-w-[7.5rem] flex-1`,
-  duration: `${snug} flex-none`,
-  instructions: `${roomy} relative min-w-[12rem] flex-1 @6xl:min-w-0`,
-  actions: `${snug} ml-auto flex-none`,
+const rowBox = 'grid grid-flow-dense items-start gap-x-2 px-2 @6xl:table-row @6xl:p-0';
+const tracks = {
+  prescription: 'grid-cols-[7.25rem_minmax(0,1fr)_4.75rem] @lg:grid-cols-[9.75rem_minmax(0,1fr)_7.25rem_4.5rem_4.75rem]',
+  template: 'grid-cols-[7.25rem_minmax(0,1fr)_4.75rem] @lg:grid-cols-[9.75rem_minmax(0,1fr)_15rem_4.5rem_4.75rem]',
 } as const;
 
-const FIELD_TEXT = 'px-3 py-1.5 text-base md:text-sm [overflow-wrap:anywhere]';
+/**
+ * One medicine per row in three arrangements chosen by the container width, all from the same
+ * table markup so the DOM (and focus) order is medicine, frequency, when, duration, instructions,
+ * actions everywhere:
+ * - under 32rem (phones): medicine; frequency and when; duration with the row buttons; instructions.
+ * - 32rem to 72rem (the 1280 laptop): medicine, frequency, when; then duration, instructions and
+ *   the row buttons. Column headers show once above the list in the same two-line shape.
+ * - 72rem and up: a fixed-layout table.
+ */
+function layoutFor(variant: keyof typeof tracks) {
+  const pair = variant === 'template';
+  return {
+    wrapper: '@container',
+    table: 'block w-full text-sm @6xl:table @6xl:table-fixed',
+    columns: 'hidden @6xl:table-column-group',
+    head: 'sr-only block bg-gray-50 text-xs text-gray-600 @lg:not-sr-only @6xl:table-header-group @6xl:text-sm @6xl:text-gray-700',
+    headRow: `${rowBox} ${tracks[variant]} gap-y-0.5 py-1.5`,
+    actionsHead: `${snug} sr-only col-start-3 @lg:col-start-5 @lg:row-start-2 @6xl:not-sr-only`,
+    body: 'block @6xl:table-row-group',
+    row: `${rowBox} ${tracks[variant]} gap-y-1 border-t py-1 even:bg-slate-50 @lg:gap-y-1.5 @lg:py-1.5 [&_[role=combobox]]:bg-white [&_input]:bg-white [&_textarea]:bg-white`,
+    empty: 'block w-full px-3 py-3 text-center text-gray-500 @6xl:table-cell',
+    medicine: `${roomy} col-span-full @lg:col-start-1 @lg:col-end-3 @lg:row-start-1`,
+    frequency: pair
+      ? `${roomy} col-span-full @lg:col-start-3 @lg:col-end-4 @lg:row-start-1`
+      : `${roomy} col-start-1 @lg:col-start-3 @lg:row-start-1`,
+    when: pair
+      ? `${roomy} col-span-full @lg:col-start-4 @lg:col-end-6 @lg:row-start-1`
+      : `${roomy} col-start-2 col-end-4 @lg:col-start-4 @lg:col-end-6 @lg:row-start-1`,
+    duration: `${snug} col-start-1 col-end-3 max-w-[9.75rem] @lg:col-end-2 @lg:row-start-2 @6xl:max-w-none`,
+    instructions: `${roomy} relative col-span-full @lg:col-start-2 @lg:col-end-5 @lg:row-start-2`,
+    actions: `${snug} col-start-3 @lg:col-start-5 @lg:row-start-2`,
+  };
+}
+
+export const rxLayout = { prescription: layoutFor('prescription'), template: layoutFor('template') } as const;
+
+/** Select triggers sized so a value such as "After Breakfast" or "MONTHS" fits its track on one line. */
+export const rxSelect = 'w-full gap-1 px-1.5 py-1.5';
+
+/** The stock hint sits on the medicine field's top border in the compact rows so the name keeps the width. */
+export const rxStock = 'pointer-events-none absolute right-2 top-0 -translate-y-1/2 whitespace-nowrap rounded-sm bg-white px-1 text-[11px] leading-none text-gray-500 @6xl:pointer-events-auto @6xl:static @6xl:translate-y-0 @6xl:bg-transparent @6xl:px-0 @6xl:text-xs';
+
+const FIELD_TEXT = 'px-3 py-1 text-base md:py-1.5 md:text-sm [overflow-wrap:anywhere]';
 
 /**
  * A single logical line that wraps instead of clipping. The hidden mirror gives the grid cell the

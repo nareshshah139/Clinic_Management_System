@@ -115,7 +115,7 @@ fs.mkdirSync(output, { recursive: true });
     await page.waitForFunction(() => document.querySelectorAll('input[placeholder="Search medicine name..."]').length === 3);
     const remove = await page.evaluateHandle(() => {
       const inputs = [...document.querySelectorAll('input[placeholder="Search medicine name..."]')];
-      return [...inputs[1].closest('tr').querySelectorAll('button')].find(e => e.textContent.trim() === 'Remove');
+      return [...inputs[1].closest('tr').querySelectorAll('button')].find(e => e.getAttribute('aria-label')?.startsWith('Remove '));
     });
     await remove.asElement().asLocator().click();
     await page.waitForFunction(() => document.querySelectorAll('input[placeholder="Search medicine name..."]').length === 2);

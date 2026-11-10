@@ -36,8 +36,11 @@ import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
 import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
-import { AddRowBelowButton, WrappingTextField, insertBlankBelow, rxLayout } from './rx-table';
+import { AddRowBelowButton, RemoveRowButton, WrappingTextField, insertBlankBelow, rowDescription, rxLayout, rxSelect, rxStock } from './rx-table';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
+
+const rx = rxLayout.prescription;
+const rxTemplate = rxLayout.template;
 
 // Minimal local types aligned with backend DTO enums
 type Language = 'EN' | 'TE' | 'HI';
@@ -5179,36 +5182,36 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                 </div>
                 <div className="overflow-visible border rounded-md">
-                  <div className={rxLayout.wrapper}>
-                    <table className={rxLayout.table}>
-                    <colgroup className={rxLayout.columns}>
+                  <div className={rx.wrapper}>
+                    <table data-own-cell-spacing className={rx.table}>
+                    <colgroup className={rx.columns}>
                       <col className="w-[24%]" />
-                      <col className="w-[8rem]" />
-                      <col className="w-[9rem]" />
+                      <col className="w-[8.75rem]" />
+                      <col className="w-[11.25rem]" />
                       <col className="w-[10.5rem]" />
                       <col />
-                      <col className="w-[10rem]" />
+                      <col className="w-[6rem]" />
                     </colgroup>
-                    <thead className={rxLayout.head}>
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Medicine</th>
-                        <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
-                        <th className="px-3 py-2 text-left font-medium">When</th>
-                        <th className="px-2 py-2 text-left font-medium">Duration</th>
-                        <th className="px-3 py-2 text-left font-medium">Instructions</th>
-                        <th className="px-2 py-2 text-right font-medium">Actions</th>
+                    <thead className={rx.head}>
+                      <tr className={rx.headRow}>
+                        <th className={`${rx.medicine} text-left font-medium`}>Medicine</th>
+                        <th className={`${rx.frequency} text-left font-medium`}>Frequency<span className="hidden @6xl:inline"> (0-1-0)</span></th>
+                        <th className={`${rx.when} text-left font-medium`}>When</th>
+                        <th className={`${rx.duration} text-left font-medium`}>Duration</th>
+                        <th className={`${rx.instructions} text-left font-medium`}>Instructions</th>
+                        <th className={`${rx.actionsHead} text-right font-medium`}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody className={rxLayout.body}>
+                    <tbody className={rx.body}>
                       {items.length === 0 && (
                         <tr>
-                          <td colSpan={6} className={rxLayout.empty}>No items added yet</td>
+                          <td colSpan={6} className={rx.empty}>No items added yet</td>
                         </tr>
                       )}
                       {items.map((it, idx) => (
-                        <tr key={idx} className={rxLayout.row}>
-                          <td className={rxLayout.medicine} onMouseEnter={() => it.inventoryItemId ? prefetchDrugStockById(it.drugId, it.inventoryItemId) : prefetchDrugStockByName(it.drugName)} title={(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return `Remaining stock: ${stock ?? '—'}`; })()}>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <tr key={idx} className={rx.row}>
+                          <td className={rx.medicine} onMouseEnter={() => it.inventoryItemId ? prefetchDrugStockById(it.drugId, it.inventoryItemId) : prefetchDrugStockByName(it.drugName)} title={(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return `Remaining stock: ${stock ?? '—'}`; })()}>
+                            <div className="relative flex items-center gap-2">
                               <Input 
                                 ref={(el) => { inputRefs.current[idx] = el; }}
                                 value={it.drugName} 
@@ -5248,9 +5251,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   }
                                 }}
                                 placeholder="Search medicine name..." 
-                                className="min-w-[10rem] flex-1"
+                                className="min-w-0 flex-1"
                               />
-                              <span className="text-xs text-gray-500 whitespace-nowrap">
+                              <span className={rxStock}>
                                 Stock:{' '}
                                 {(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return stock != null ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span> : <span className="text-gray-400">—</span>; })()}
                               </span>
@@ -5258,8 +5261,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             {it.regimenState?.loading && <p className="mt-1 text-xs text-slate-500" role="status">Loading usual values…</p>}
                             {it.regimenState?.failed && <p className="mt-1 text-xs text-amber-700" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
                           </td>
-                          <td className={rxLayout.frequency} data-label="Frequency">
-                            <div className="min-w-[100px]">
+                          <td className={rx.frequency}>
+                            <div>
                               <Select value={it.dosePattern || it.frequency || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
@@ -5273,7 +5276,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 }
                                 updateItem(idx, patch);
                               }}>
-                                <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectTrigger className={rxSelect} aria-label={`Frequency for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="Frequency" /></SelectTrigger>
                                 <SelectContent>
                                   {Array.from(new Set([...dosePatternOptions, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
@@ -5284,12 +5287,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </div>
                             {regimenHint(it, idx, 'frequency')}
                           </td>
-                          <td className={rxLayout.when} data-label="When">
+                          <td className={rx.when}>
                             <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                               if (v === '__CUSTOM__') { openCustomDialog('timing', idx); return; }
                               updateItem(idx, { timing: v });
                             }}>
-                              <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger className={rxSelect} aria-label={`When for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="When" /></SelectTrigger>
                               <SelectContent>
                                 {Array.from(new Set([...getTimingOptionsForFrequency(it.frequency), it.timing].filter((t): t is string => Boolean(t)))).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -5299,14 +5302,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </Select>
                             {regimenHint(it, idx, 'timing')}
                           </td>
-                          <td className={rxLayout.duration} data-label="Duration">
-                            <div className="flex items-start gap-1.5">
-                              <Input type="number" className="w-12 shrink-0 px-2 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
+                          <td className={rx.duration}>
+                            <div className="flex items-start gap-1">
+                              <Input type="number" className="w-10 shrink-0 px-1 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
                               <Select value={it.durationUnit} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: DurationUnit) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('durationUnit', idx); return; }
                                 updateItem(idx, { durationUnit: v });
                               }}>
-                                <SelectTrigger className="gap-1 px-2"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className={`${rxSelect} min-w-0 flex-1`} aria-label={`Duration unit for ${rowDescription(it.drugName, idx)}`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {Array.from(new Set([...durationUnitOptions, it.durationUnit].filter(Boolean))).map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
@@ -5317,7 +5320,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </div>
                             {regimenHint(it, idx, 'duration')}
                           </td>
-                          <td className={rxLayout.instructions} data-label="Instructions">
+                          <td className={rx.instructions}>
                             <div className="space-y-1">
                               <WrappingTextField
                                 aria-label={`Instructions for ${it.drugName || 'new medicine'}`}
@@ -5334,7 +5337,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               />
                               {regimenHint(it, idx, 'instructions')}
                               {instrFocusIdx === idx && !!getInstructionSuggestions(it.drugName, it.instructions || '').length && (
-                                <div className="absolute z-50 mt-1 w-[260px] bg-white border rounded-md shadow-sm max-h-48 overflow-auto">
+                                <div tabIndex={-1} className="absolute z-50 mt-1 w-[260px] bg-white border rounded-md shadow-sm max-h-48 overflow-auto">
                                   {getInstructionSuggestions(it.drugName, it.instructions || '').map((s) => (
                                     <div
                                       key={s}
@@ -5354,10 +5357,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               )}
                             </div>
                           </td>
-                          <td className={rxLayout.actions}>
-                            <div className="flex items-start justify-end gap-1.5">
+                          <td className={rx.actions}>
+                            <div className="flex items-start justify-end gap-1">
                               <AddRowBelowButton medicineName={it.drugName} index={idx} onClick={() => insertRowBelow(idx)} />
-                              <Button size="sm" variant="outline" className="min-h-9 whitespace-nowrap" onClick={() => removeItem(idx)}>Remove</Button>
+                              <RemoveRowButton medicineName={it.drugName} index={idx} onClick={() => removeItem(idx)} />
                             </div>
                           </td>
                         </tr>
@@ -6631,39 +6634,39 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="text-sm text-gray-600">Total items: {newTplItems.length}</div>
                   <Button size="sm" variant="outline" onClick={addNewTplItem}>Add Row</Button>
                 </div>
-                <div className={`${rxLayout.wrapper} border rounded-md`}>
-                  <table className={rxLayout.table}>
-                    <colgroup className={rxLayout.columns}>
+                <div className={`${rxTemplate.wrapper} border rounded-md`}>
+                  <table data-own-cell-spacing className={rxTemplate.table}>
+                    <colgroup className={rxTemplate.columns}>
                       <col className="w-[22%]" />
-                      <col className="w-[13rem]" />
-                      <col className="w-[9rem]" />
+                      <col className="w-[16.5rem]" />
+                      <col className="w-[11.25rem]" />
                       <col className="w-[10.5rem]" />
                       <col />
-                      <col className="w-[10rem]" />
+                      <col className="w-[6rem]" />
                     </colgroup>
-                    <thead className={rxLayout.head}>
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Medicine</th>
-                        <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
-                        <th className="px-3 py-2 text-left font-medium">When</th>
-                        <th className="px-2 py-2 text-left font-medium">Duration</th>
-                        <th className="px-3 py-2 text-left font-medium">Instructions</th>
-                        <th className="px-2 py-2 text-right font-medium">Actions</th>
+                    <thead className={rxTemplate.head}>
+                      <tr className={rxTemplate.headRow}>
+                        <th className={`${rxTemplate.medicine} text-left font-medium`}>Medicine</th>
+                        <th className={`${rxTemplate.frequency} text-left font-medium`}>Frequency (0-1-0)</th>
+                        <th className={`${rxTemplate.when} text-left font-medium`}>When</th>
+                        <th className={`${rxTemplate.duration} text-left font-medium`}>Duration</th>
+                        <th className={`${rxTemplate.instructions} text-left font-medium`}>Instructions</th>
+                        <th className={`${rxTemplate.actionsHead} text-right font-medium`}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody className={rxLayout.body}>
+                    <tbody className={rxTemplate.body}>
                       {newTplItems.length === 0 && (
                         <tr>
-                          <td colSpan={6} className={rxLayout.empty}>No items added yet</td>
+                          <td colSpan={6} className={rxTemplate.empty}>No items added yet</td>
                         </tr>
                       )}
                       {newTplItems.map((it: any, idx: number) => (
-                        <tr key={`newtpl-row-${idx}`} className={rxLayout.row}>
-                          <td className={rxLayout.medicine}>
+                        <tr key={`newtpl-row-${idx}`} className={rxTemplate.row}>
+                          <td className={rxTemplate.medicine}>
                             <Input ref={(el) => { newTplMedicineRefs.current[idx] = el; }} value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
                           </td>
-                          <td className={rxLayout.frequencyPair} data-label="Frequency">
-                            <div className="grid grid-cols-2 gap-1">
+                          <td className={rxTemplate.frequency}>
+                            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] gap-1">
                               <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx, true); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
@@ -6677,7 +6680,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 }
                                 updateNewTplItem(idx, patch);
                               }}>
-                                <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectTrigger className={rxSelect} aria-label={`Dose pattern for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="Pattern" /></SelectTrigger>
                                 <SelectContent>
                                   {dosePatternOptions.map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
@@ -6692,7 +6695,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 if (it.timing && !allowed.includes(it.timing)) patch.timing = '';
                                 updateNewTplItem(idx, patch);
                               }}>
-                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className={rxSelect} aria-label={`Frequency for ${rowDescription(it.drugName, idx)}`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {frequencyOptions.map(f => (
                                     <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
@@ -6702,12 +6705,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </Select>
                             </div>
                           </td>
-                          <td className={rxLayout.when} data-label="When">
+                          <td className={rxTemplate.when}>
                             <Select value={it.timing || ''} onValueChange={(v: string) => {
                               if (v === '__CUSTOM__') { openCustomDialog('timing', idx, true); return; }
                               updateNewTplItem(idx, { timing: v });
                             }}>
-                              <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger className={rxSelect} aria-label={`When for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="When" /></SelectTrigger>
                               <SelectContent>
                                 {getTimingOptionsForFrequency(it.frequency).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -6716,14 +6719,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </SelectContent>
                             </Select>
                           </td>
-                          <td className={rxLayout.duration} data-label="Duration">
-                            <div className="flex items-start gap-1.5">
-                              <Input type="number" className="w-12 shrink-0 px-2 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration ?? ''} onChange={(e) => updateNewTplItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
+                          <td className={rxTemplate.duration}>
+                            <div className="flex items-start gap-1">
+                              <Input type="number" className="w-10 shrink-0 px-1 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration ?? ''} onChange={(e) => updateNewTplItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
                               <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('durationUnit', idx, true); return; }
                                 updateNewTplItem(idx, { durationUnit: v });
                               }}>
-                                <SelectTrigger className="gap-1 px-2"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className={`${rxSelect} min-w-0 flex-1`} aria-label={`Duration unit for ${rowDescription(it.drugName, idx)}`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {durationUnitOptions.map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
@@ -6733,13 +6736,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </Select>
                             </div>
                           </td>
-                          <td className={rxLayout.instructions} data-label="Instructions">
+                          <td className={rxTemplate.instructions}>
                             <WrappingTextField aria-label={`Instructions for ${it.drugName || 'new medicine'}`} value={it.instructions || ''} onValueChange={(value) => updateNewTplItem(idx, { instructions: value })} placeholder="e.g., Avoid alcohol" />
                           </td>
-                          <td className={rxLayout.actions}>
-                            <div className="flex items-start justify-end gap-1.5">
+                          <td className={rxTemplate.actions}>
+                            <div className="flex items-start justify-end gap-1">
                               <AddRowBelowButton medicineName={it.drugName} index={idx} onClick={() => insertNewTplRowBelow(idx)} />
-                              <Button size="sm" variant="outline" className="min-h-9 whitespace-nowrap" onClick={() => removeNewTplRxItem(idx)}>Remove</Button>
+                              <RemoveRowButton medicineName={it.drugName} index={idx} onClick={() => removeNewTplRxItem(idx)} />
                             </div>
                           </td>
                         </tr>
