@@ -13,9 +13,11 @@ const clinicToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kol
 const DESKTOP = { width: 1280, height: 900 };
 const PHONE = { width: 390, height: 844 };
 const results = [];
-// The header asks every role for system alerts; RECEPTION and NURSE are refused. That predates CR-17
-// and is tracked on its own, so it is noted here rather than failed.
-const KNOWN_REFUSAL = "/api/reports/alerts";
+// Refusals that predate CR-17 and are tracked on their own, so they are noted here rather than failed:
+// the header asks every role for system alerts (RECEPTION and NURSE are refused), and the calendar's
+// room filter asks for rooms, which NURSE is refused.
+const KNOWN_REFUSALS = { "/api/reports/alerts": { roles: ["reception", "nurse"], console: null }, "/api/appointments/rooms": { roles: ["nurse"], console: "Failed to fetch rooms" } };
+const known = (who, where) => KNOWN_REFUSALS[where]?.roles.includes(who);
 
 async function seed(stack, today) {
   const db = stack.db;
@@ -105,12 +107,14 @@ async function call(page, method, url, body) {
       const page = await context.newPage();
       page.setDefaultTimeout(60000);
       page.on("pageerror", (e) => sink.push(`${who} pageerror ${e.message.slice(0, 200)}`));
-      page.on("console", (m) => m.type() === "error" && !(m.location()?.url ?? "").includes(KNOWN_REFUSAL) && sink.push(`${who} console ${m.text().slice(0, 200)}`));
+      const knownConsole = (m) =>
+        Object.entries(KNOWN_REFUSALS).some(([where, k]) => k.roles.includes(who) && ((m.location()?.url ?? "").includes(where) || (k.console && m.text().startsWith(k.console))));
+      page.on("console", (m) => m.type() === "error" && !knownConsole(m) && sink.push(`${who} console ${m.text().slice(0, 200)}`));
       const refused = [];
       page.on("response", (r) => {
         if (!r.url().includes("/api/") || ![401, 403].includes(r.status())) return;
         const where = new URL(r.url()).pathname;
-        if (where === KNOWN_REFUSAL) console.log(`    NOTE ${who} ${r.status()} ${where} (header alerts, predates CR-17)`);
+        if (known(who, where)) console.log(`    NOTE ${who} ${r.status()} ${where} (predates CR-17)`);
         else refused.push(`${r.status()} ${where}`);
       });
       if (!sessions.has(who)) {
