@@ -37,7 +37,7 @@ export class BillingService {
         discount: createInvoiceDto.discount
       });
 
-      const { patientId, visitId, items, discount, discountReason, notes, dueDate, metadata, mode, gstin, hsn } = createInvoiceDto as any;
+      const { patientId, visitId, appointmentId, items, discount, discountReason, notes, dueDate, metadata, mode, gstin, hsn } = createInvoiceDto as any;
 
       if (!items || items.length === 0) {
         console.error('❌ No items provided for invoice');
@@ -55,16 +55,7 @@ export class BillingService {
       throw new NotFoundException('Patient not found');
     }
 
-    // Verify visit exists and belongs to branch (if provided)
-    if (visitId) {
-      const visit = await this.prisma.visit.findFirst({
-        where: { id: visitId, patientId, patient: { branchId } },
-      });
-
-      if (!visit) {
-        throw new NotFoundException('Visit not found');
-      }
-    }
+    const links = await this.invoiceLinks(patientId, branchId, visitId, appointmentId);
 
     const invoiceNumber = await this.generateInvoiceNumber(branchId);
 
@@ -86,7 +77,8 @@ export class BillingService {
       items: { create: invoiceItemsData },
     };
     
-    if (visitId) data.visitId = visitId;
+    if (links.visitId) data.visitId = links.visitId;
+    if (links.appointmentId) data.appointmentId = links.appointmentId;
     if (mode) data.mode = mode;
     if (gstin) data.gstin = gstin;
     if (hsn) data.hsn = hsn;
@@ -135,6 +127,35 @@ export class BillingService {
       // Re-throw the error so it can be handled by the controller
       throw error;
     }
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security;product] invoice-appointment-link
+   * A supplied appointment MUST belong to the invoice patient in the authenticated branch, and a
+   * supplied visit MUST be that appointment's visit; otherwise nothing is written. The bill keeps
+   * both links: the appointment's visit when only the appointment is given, and the visit's
+   * appointment when only the visit is given.
+   */
+  private async invoiceLinks(patientId: string, branchId: string, visitId?: string, appointmentId?: string) {
+    const visit = visitId
+      ? await this.prisma.visit.findFirst({ where: { id: visitId, patientId, patient: { branchId } }, select: { id: true, appointmentId: true } })
+      : null;
+    if (visitId && !visit) throw new NotFoundException('Visit not found');
+    const appointment = appointmentId
+      ? await this.prisma.appointment.findFirst({
+          where: { id: appointmentId, patientId, branchId },
+          select: { id: true, visit: { select: { id: true, deletedAt: true } } },
+        })
+      : null;
+    if (appointmentId && !appointment) throw new NotFoundException('Appointment not found');
+    if (visit && appointment && visit.appointmentId !== appointment.id) {
+      throw new BadRequestException('The visit belongs to a different appointment');
+    }
+    const appointmentVisit = appointment?.visit && !appointment.visit.deletedAt ? appointment.visit.id : null;
+    return {
+      visitId: visit?.id ?? appointmentVisit,
+      appointmentId: appointment?.id ?? visit?.appointmentId ?? null,
+    };
   }
 
   async findAllInvoices(query: QueryInvoicesDto, branchId: string) {

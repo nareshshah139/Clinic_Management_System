@@ -260,7 +260,7 @@ describe('AppointmentsService', () => {
       mockPrisma.user.findFirst.mockResolvedValue(mockDoctor);
       mockPrisma.appointment.findMany.mockResolvedValue(mockAppointments);
 
-      const result = await service.getDoctorSchedule(mockDoctor.id, futureDateString, mockBranchId);
+      const result = await service.getDoctorSchedule(mockDoctor.id, futureDateString, mockBranchId, { id: 'reception', role: 'RECEPTION' });
 
       expect(result).toEqual({
         doctorId: mockDoctor.id,
@@ -299,7 +299,7 @@ describe('AppointmentsService', () => {
       mockPrisma.user.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.getDoctorSchedule(mockDoctor.id, futureDateString, mockBranchId),
+        service.getDoctorSchedule(mockDoctor.id, futureDateString, mockBranchId, { id: 'reception', role: 'RECEPTION' }),
       ).rejects.toThrow(new NotFoundException('Doctor not found in this branch'));
     });
   });

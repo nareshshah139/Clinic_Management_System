@@ -511,28 +511,28 @@ export function dailyCollectionSections(
   }
 
   const tiles: ReportTile[] = [
-    { label: 'Billed today', value: b.totalBilled, kind: 'money' },
+    { label: 'Pharmacy billed today', value: b.totalBilled, kind: 'money' },
     {
-      label: 'Expected in hand',
+      label: 'Pharmacy expected in hand',
       value: collection.expectedTotal,
       kind: 'money',
       help: 'Money received today in every mode, less refunds paid out.',
     },
     {
-      label: 'Still due',
+      label: 'Pharmacy still due',
       value: money(b.dueAtDayEnd + b.counterSalesOnCredit),
       kind: 'money',
       tone: b.dueAtDayEnd + b.counterSalesOnCredit > 0 ? 'warning' : undefined,
     },
     collection.difference === null
       ? {
-          label: 'Difference',
+          label: 'Pharmacy count difference',
           value: 'Not counted',
           kind: 'text',
           tone: 'warning',
         }
       : {
-          label: 'Difference',
+          label: 'Pharmacy count difference',
           value: collection.difference,
           kind: 'money',
           tone: collection.status === 'BALANCED' ? 'good' : 'bad',
@@ -543,20 +543,20 @@ export function dailyCollectionSections(
     sections: [
       section({
         id: 'modes',
-        title: 'Reconciliation by payment mode',
+        title: 'Pharmacy reconciliation by payment mode',
         columns: modeColumns,
         rows: modeRows,
       }),
       section({
         id: 'billing',
-        title: 'Bills raised today',
+        title: 'Pharmacy bills raised today',
         columns: billingColumns,
         rows: billingRows,
         totals: null,
       }),
       section({
         id: 'documents',
-        title: 'Bills, counter sales and returns',
+        title: 'Pharmacy bills, counter sales and returns',
         columns: docColumns,
         rows: docRows,
         emptyText: 'Nothing was billed or received on this day.',

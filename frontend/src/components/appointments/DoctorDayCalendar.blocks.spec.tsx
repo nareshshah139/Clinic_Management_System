@@ -27,7 +27,7 @@ function renderDay(appointments: object[], onSelectSlot = jest.fn()) {
   return onSelectSlot;
 }
 
-const blockFor = (name: RegExp) => screen.getByRole('button', { name: new RegExp(`^(?:Token \\d+, )?${name.source}, `, name.flags) }).parentElement as HTMLElement;
+const blockFor = (name: RegExp) => screen.getByRole('button', { name: new RegExp(`^(?:Token \\d+, )?${name.source}, `, name.flags) }).closest('[data-appointment-block]') as HTMLElement;
 const calendarName = { selector: '[data-appointment-block] [data-patient-name]' };
 const scheduled = () => within(screen.getByRole('region', { name: 'Scheduled' }));
 

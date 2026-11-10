@@ -77,7 +77,7 @@ export const REPORTS: ReportEntry[] = [
     ],
     about: "Batches with stock that have expired or expire soon, with their value at cost and MRP.", keywords: ["expiry", "expired", "stock", "return", "near expiry"] },
   { id: "daily-collection", title: "Daily Collection", category: "Accounting Reports", view: "collection", period: "day", common: true,
-    about: "The day's takings by payment mode against the bills raised, with a count of the drawer to show any shortfall the same day.", keywords: ["collection", "daily", "cash", "upi", "card", "payment", "reconciliation", "takings"] },
+    about: "The day's whole take by payment mode: consultation and procedure bills beside the pharmacy's, with a count of the pharmacy drawer to show any shortfall the same day.", keywords: ["collection", "daily", "cash", "upi", "card", "payment", "reconciliation", "takings", "consultation", "procedure", "clinic"] },
   { id: "gst-summary", title: "GST Summary & Monthly P&L", category: "Accounting Reports", view: "gst-summary", period: "none",
     about: "Input and output GST for a range, and the month's procurement, sales, profit and stock value.", keywords: ["gst", "summary", "monthly", "profit", "p&l", "procurement"] },
   { id: "doctor-wise-sales", title: "Daily Sales Summary – Doctorwise", category: "Others", view: "table", period: "range",

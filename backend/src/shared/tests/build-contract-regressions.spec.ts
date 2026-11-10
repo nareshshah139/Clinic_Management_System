@@ -70,7 +70,7 @@ describe('Backend build contract regressions', () => {
     const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       await expect(service.createInvoice({ patientId: 'patient', visitId: 'other-visit', items: [{ name: 'Synthetic service', quantity: 1, unitPrice: 100 }] }, 'branch')).rejects.toThrow(NotFoundException);
-      expect(prisma.visit.findFirst).toHaveBeenCalledWith({ where: { id: 'other-visit', patientId: 'patient', patient: { branchId: 'branch' } } });
+      expect(prisma.visit.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'other-visit', patientId: 'patient', patient: { branchId: 'branch' } } }));
       expect(prisma.invoice.create).not.toHaveBeenCalled();
     } finally { log.mockRestore(); error.mockRestore(); }
   });

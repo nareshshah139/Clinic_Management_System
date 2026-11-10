@@ -464,13 +464,13 @@ describe('billing invoice visit and patient scope', () => {
         'branch-a',
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(prisma.visit.findFirst).toHaveBeenCalledWith({
+    expect(prisma.visit.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         id: 'visit-of-someone-else',
         patientId: 'pat-1',
         patient: { branchId: 'branch-a' },
       },
-    });
+    }));
     expect(prisma.newInvoice.create).not.toHaveBeenCalled();
   });
 

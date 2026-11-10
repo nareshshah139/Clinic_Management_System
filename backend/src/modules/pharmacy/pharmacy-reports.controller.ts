@@ -76,7 +76,7 @@ export class PharmacyReportsController {
     @Query() query: PharmacyReportQueryDto,
     @Request() req: any,
   ) {
-    const actor = { branchId: req.user.branchId, role: req.user.role };
+    const actor = { branchId: req.user.branchId, role: req.user.role, id: req.user.id };
     if (!query.format) return this.reports.report(reportId(id), query, actor);
     const file = await this.reports.file(
       reportId(id),

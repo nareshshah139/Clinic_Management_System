@@ -90,6 +90,7 @@ export class AppointmentsController {
       doctorId,
       date,
       req.user.branchId,
+      req.user,
     );
   }
 

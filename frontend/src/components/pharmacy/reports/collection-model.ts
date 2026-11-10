@@ -57,10 +57,10 @@ export function draftChanged(collection: DailyCollection, draft: CountDraft, not
 const rupees = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function statusMessage(status: CollectionStatus, difference: number | null): { tone: "good" | "bad" | "warning"; text: string } {
-  if (status === "NOT_COUNTED") return { tone: "warning", text: "Not counted yet. Count the cash drawer and check the UPI and card settlements, then enter them below." };
-  if (status === "BALANCED") return { tone: "good", text: "Balanced: what was counted matches what the system expected." };
+  if (status === "NOT_COUNTED") return { tone: "warning", text: "Pharmacy not counted yet. Count the pharmacy cash drawer and check its UPI and card settlements, then enter them below." };
+  if (status === "BALANCED") return { tone: "good", text: "Pharmacy balanced: what was counted matches what the system expected." };
   const amount = rupees.format(Math.abs(difference ?? 0));
   return status === "SHORT"
-    ? { tone: "bad", text: `Short by ${amount}. Check the drawer, pending UPI settlements and any refunds paid in cash.` }
-    : { tone: "warning", text: `Over by ${amount}. Check for a payment taken without a bill, or a bill not yet confirmed.` };
+    ? { tone: "bad", text: `Pharmacy short by ${amount}. Check the drawer, pending UPI settlements and any refunds paid in cash.` }
+    : { tone: "warning", text: `Pharmacy over by ${amount}. Check for a payment taken without a bill, or a bill not yet confirmed.` };
 }
