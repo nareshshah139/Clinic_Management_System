@@ -132,6 +132,20 @@ describe('DoctorDayCalendar Scheduled and Confirmed calendars', () => {
     expect(api.rescheduleAppointment.mock.calls[0]).toEqual(['a2', { date: '2099-01-01', slot: '11:00-11:30', roomId: undefined, calendar: 'SCHEDULED' }]);
   });
 
+  it('offers Reschedule only while an appointment can still move', async () => {
+    const missed: Fixture = { id: 'a4', slot: '13:00-13:30', name: 'Meena Rao', status: AppointmentStatus.NO_SHOW, calendar: 'CONFIRMED' };
+    await renderDay(ravi, missed);
+
+    expect(column('Scheduled').getAllByTitle('Reschedule Appointment')).toHaveLength(1);
+    expect(column('Confirmed').queryAllByTitle('Reschedule Appointment')).toHaveLength(0);
+    const noShow = await openDetails('Meena Rao');
+    expect(noShow.getByRole('button', { name: /Cancel Appointment/ })).toBeInTheDocument();
+    expect(noShow.queryByRole('button', { name: 'Reschedule' })).toBeNull();
+    fireEvent.click(noShow.getAllByRole('button', { name: 'Close' })[0]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((await openDetails('Ravi Kumar')).getByRole('button', { name: 'Reschedule' })).toBeInTheDocument();
+  });
+
   it('reschedules into whichever column the free time is clicked in', async () => {
     await renderDay(ravi);
     api.rescheduleAppointment.mockResolvedValueOnce({ id: 'a1' } as never);

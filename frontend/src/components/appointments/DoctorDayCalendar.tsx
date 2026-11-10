@@ -28,7 +28,7 @@ import type {
 import { AppointmentStatus } from '@cms/shared-types';
 import { useOverbookConfirm } from './useOverbookConfirm';
 import { overbookFlag } from '@/lib/overbooking';
-import { CALENDARS, CALENDAR_ORDER, type SlotChoice } from './appointment-calendars';
+import { CALENDARS, CALENDAR_ORDER, canMove, type SlotChoice } from './appointment-calendars';
 import CalendarColumn, { type SlotAction } from './CalendarColumn';
 
 /**
@@ -579,16 +579,18 @@ function DoctorDayCalendarForSelection({
                   <FileText className="h-4 w-4 mr-2" />
                   Start Visit
                 </Button>
-                <Button
-                  variant="outline"
-                  disabled={placing}
-                  onClick={() => {
-                    setMove({ appointment: selectedAppointment });
-                    setSelectedAppointment(null);
-                  }}
-                >
-                  Reschedule
-                </Button>
+                {canMove(selectedAppointment.status) && (
+                  <Button
+                    variant="outline"
+                    disabled={placing}
+                    onClick={() => {
+                      setMove({ appointment: selectedAppointment });
+                      setSelectedAppointment(null);
+                    }}
+                  >
+                    Reschedule
+                  </Button>
+                )}
                 <Button
                   variant="destructive"
                   disabled={placing}

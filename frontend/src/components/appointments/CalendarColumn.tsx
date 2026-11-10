@@ -15,7 +15,7 @@ import {
 import type { AppointmentInSlot, AppointmentCalendar } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 import { layoutDay } from './day-layout';
-import { CALENDARS } from './appointment-calendars';
+import { CALENDARS, canMove } from './appointment-calendars';
 
 type StatusStyle = {
   label: string;
@@ -258,18 +258,20 @@ export default function CalendarColumn({
                 >
                   INFO
                 </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onReschedule(apt);
-                  }}
-                  className="bg-amber-700 hover:bg-amber-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                  title="Reschedule Appointment"
-                  disabled={isOptimistic}
-                >
-                  RESCHED
-                </button>
+                {canMove(apt.status) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReschedule(apt);
+                    }}
+                    className="bg-amber-700 hover:bg-amber-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                    title="Reschedule Appointment"
+                    disabled={isOptimistic}
+                  >
+                    RESCHED
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={(e) => {

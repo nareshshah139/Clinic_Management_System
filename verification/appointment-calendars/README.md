@@ -59,7 +59,7 @@ The runner accepts only tla2tools v1.7.4. The correct protocol passes at limits 
 | `noTargetCheck` | A status edit moves an appointment between calendars without a capacity check. `PATCH` did this before this change. | `WithinLimit`, or `NoAccidentalOverbook` at limit 2 |
 | `countSourceCalendar` | The capacity check counts the calendar the appointment leaves instead of the one it enters. | `WithinLimit` |
 | `countOutsideLock` | The count happens before the doctor-day lock. | `WithinLimit` |
-| `noCAS` | The write does not compare the status and slot it read. `reschedule` and `remove` did this before this change. | `NoResurrection` |
+| `noCAS` | The write does not compare the status and slot it read. `reschedule` and `remove` did this before this change. | `NoResurrection` or `NoDemotion`, whichever TLC reaches first. With `NoDemotion` removed, `NoResurrection` still fails. |
 | `noNoop` | A request that already took effect is checked again. | `RetryIsHarmless` |
 
 ## Model to code
@@ -79,4 +79,6 @@ The runner accepts only tla2tools v1.7.4. The correct protocol passes at limits 
 - Two concurrent requests. Three-way races reduce to pairs here because every request takes the same doctor-day lock or writes one row with a compare-and-set.
 - Slots are disjoint in the model. Overlap arithmetic is `SchedulingUtils.doTimeSlotsOverlap`, covered by its unit tests.
 - Room locks are outside the model. Room conflicts follow the same calendar rule as doctor conflicts.
+- `PATCH /appointments/:id` status edits are outside the model. They check capacity whenever the calendar changes, including a scheduled patient set to `CHECKED_IN`. They do not refuse a demotion such as `IN_PROGRESS` back to `SCHEDULED`. No screen sends one, and `main` allowed the same.
+- `NO_SHOW` and later statuses cannot be moved. The UI offers Reschedule only for `SCHEDULED` and `CONFIRMED`. Rebooking a no-show is a new booking.
 - `pg_advisory_xact_lock` gives mutual exclusion per key until commit or rollback.
