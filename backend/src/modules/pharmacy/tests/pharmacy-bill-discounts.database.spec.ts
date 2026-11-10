@@ -133,7 +133,7 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       },
     });
     for (const [id, name, price, onHand] of [
-      ['cream', 'Synthetic Cream', 50, 20],
+      ['cream', 'Synthetic Cream', 50, 40],
       ['tablet', 'Synthetic Tablet', 30, 5],
       ['shampoo', 'Synthetic Shampoo', 200, 3],
     ] as const) {
@@ -364,6 +364,58 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
     for (let round = 0; round < 6; round++)
       expect(allowed).toContain(JSON.stringify(await race(`T${round}`, 'together')));
   }, 120000);
+
+  it('revises return terms exactly per sold unit, or refuses when a return could not tell which price applies', async () => {
+    const workflow = new InventoryWorkflowService(db as any);
+    const twice = {
+      ...bill,
+      paymentMethod: 'CASH' as const,
+      items: [
+        { drugId: 'cream', quantity: 1, unitPrice: 50, discountPercent: 0, taxPercent: 12 },
+        { drugId: 'cream', quantity: 1, unitPrice: 50, discountPercent: 0, taxPercent: 12 },
+      ],
+    };
+    const sold = await invoices.checkout({ ...twice, requestKey: 'cream-twice' }, 'branch', 'asha');
+    const second = sold.items[1].id;
+    const edit = (version: number, change: object) =>
+      invoices.reviseDiscount(sold.id, { expectedVersion: version, lines: [], reason: 'Agreed discount', ...change } as any, 'branch', 'asha');
+    expect(await failure(edit(sold.mutationVersion, { lines: [{ id: second, discountPercent: 10 }] }))).toBe(
+      '409: Synthetic Cream is on this bill more than once at different prices, so a return could not tell which price to refund. Give its lines the same discount, or correct the bill through a return.',
+    );
+    const revised = await edit(sold.mutationVersion, { billDiscount: { kind: 'PERCENT', value: 10 } });
+    const sale = await db.stockTransaction.findFirstOrThrow({ where: { branchId: 'branch', reference: `INV-${sold.invoiceNumber}` } });
+    const returned = await workflow.saveDocument({ id: 'doctor', branchId: 'branch', role: 'DOCTOR' }, {
+      kind: 'SALES_RETURN',
+      reference: 'SR-TWICE',
+      requestKey: 'sr-twice',
+      salesInvoiceId: sold.id,
+      payload: { lines: [{ inventoryId: 'cream-batch', sourceLineId: sale.id, quantity: 1, disposition: 'RESTOCK' }] },
+    } as any);
+    expect([revised.totalAmount, [returned.payload.lines[0].taxable, returned.payload.lines[0].tax]]).toEqual([100.8, [45, 5.4]]);
+
+    await db.drug.create({ data: { id: 'gel', name: 'Synthetic Gel', price: 80, manufacturerName: 'Synthetic', packSizeLabel: '1', branchId: 'branch' } });
+    await db.drug.create({ data: { id: 'gel-twin', name: 'Synthetic Gel Twin', price: 80, manufacturerName: 'Synthetic', packSizeLabel: '1', branchId: 'branch' } });
+    await db.inventoryItem.create({
+      data: {
+        id: 'gel-batch', branchId: 'branch', name: 'Synthetic Gel', type: 'MEDICINE', costPrice: 40, sellingPrice: 80, unit: 'PIECES',
+        currentStock: 5, stockStatus: 'IN_STOCK', expiryDate: new Date('2099-01-01'), drugs: { connect: { id: 'gel' } },
+      },
+    });
+    const gel = await invoices.checkout(
+      { ...bill, paymentMethod: 'CASH' as const, requestKey: 'gel-bill', items: [{ drugId: 'gel', quantity: 1, unitPrice: 80, discountPercent: 0, taxPercent: 12 }] },
+      'branch',
+      'asha',
+    );
+    await db.inventoryItem.update({ where: { id: 'gel-batch' }, data: { drugs: { connect: { id: 'gel-twin' } } } });
+    expect(
+      await failure(
+        invoices.reviseDiscount(gel.id, { expectedVersion: gel.mutationVersion, billDiscount: { kind: 'PERCENT', value: 10 }, lines: [], reason: 'x' }, 'branch', 'asha'),
+      ),
+    ).toBe(
+      '409: A batch sold on this bill is now linked to more than one product, so its return price cannot be revised exactly. Correct the bill through a return.',
+    );
+    expect((await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: gel.id } })).totalAmount).toBe(89.6);
+  }, 60000);
 
   it('applies a bill discount before tax, keeps it on the draft, and revises a paid bill into a refund due', async () => {
     const discounted = {

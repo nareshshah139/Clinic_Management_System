@@ -2286,8 +2286,9 @@ export class PharmacyInvoiceService {
    * A finished bill's bill discount and line discount % MAY change, and nothing else: items, quantities,
    * batches, prices, stock and the bill number MUST stay as they are. The change MUST name the bill version
    * it was made from and MUST be refused for drafts, cancelled bills and bills with a sales return. It MUST
-   * record who, when, why and the old and new amounts, and later returns MUST refund the revised line value.
-   * Paid, balance and status MUST come from the ledger, so money already taken above the new total shows as
+   * record who, when, why and the old and new amounts, and later returns MUST refund the revised line value
+   * exactly; when they could not (one drug at different unit prices, or a sold batch now linked to several
+   * drugs) the change MUST be refused. Paid, balance and status MUST come from the ledger, so money already taken above the new total shows as
    * a refund due rather than being kept or dropped.
    */
   async reviseDiscount(
@@ -2430,12 +2431,17 @@ export class PharmacyInvoiceService {
     return rows.map((row) => row.reference);
   }
 
+  /**
+   * Rewrites the return terms frozen on the bill's SALE movements to the revised line values. A movement
+   * is not tied to a line, only to a drug, so the terms are exact only when every unit of a drug on the
+   * bill carries the same price; otherwise, or when a sold batch now maps to more than one drug, the edit
+   * is refused rather than leaving a later return to refund a guessed price.
+   */
   private async reviseSaleTerms(
     tx: Prisma.TransactionClient,
     invoice: { id: string; invoiceNumber: string },
     branchId: string,
   ) {
-    const { invoiceNumber } = invoice;
     const items = await tx.pharmacyInvoiceItem.findMany({
       where: { invoiceId: invoice.id },
       include: {
@@ -2444,49 +2450,69 @@ export class PharmacyInvoiceService {
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
-    const byDrug = new Map<string, { taxable: number; tax: number }>();
-    for (const requirement of this.saleRequirements(items).values()) {
-      const group = byDrug.get(requirement.drugId) ?? { taxable: 0, tax: 0 };
-      group.taxable += requirement.taxableAmount;
-      group.tax += requirement.taxAmount;
-      byDrug.set(requirement.drugId, group);
-    }
+    const byDrug = new Map<
+      string,
+      { name: string; quantity: number; taxable: number; tax: number; perUnit: number[] }
+    >();
+    for (const item of items)
+      for (const part of this.saleRequirements([item]).values()) {
+        const group = byDrug.get(part.drugId) ?? {
+          name: part.drugName,
+          quantity: 0,
+          taxable: 0,
+          tax: 0,
+          perUnit: [],
+        };
+        group.quantity += part.quantity;
+        group.taxable += part.taxableAmount;
+        group.tax += part.taxAmount;
+        group.perUnit.push(part.taxableAmount / part.quantity);
+        byDrug.set(part.drugId, group);
+      }
+    for (const group of byDrug.values())
+      if (money(Math.max(...group.perUnit) - Math.min(...group.perUnit)) > 0.01)
+        throw new ConflictException(
+          `${group.name} is on this bill more than once at different prices, so a return could not tell which price to refund. Give its lines the same discount, or correct the bill through a return.`,
+        );
     const movements = await tx.stockTransaction.findMany({
-      where: { branchId, type: 'SALE', reference: `INV-${invoiceNumber}` },
+      where: { branchId, type: 'SALE', reference: `INV-${invoice.invoiceNumber}` },
       include: { item: { select: { drugs: { select: { id: true } } } } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
     const groups = new Map<string, typeof movements>();
     for (const movement of movements) {
       const drugs = movement.item?.drugs ?? [];
-      if (drugs.length !== 1 || !byDrug.has(drugs[0].id)) continue;
+      if (drugs.length !== 1 || !byDrug.has(drugs[0].id))
+        throw new ConflictException(
+          'A batch sold on this bill is now linked to more than one product, so its return price cannot be revised exactly. Correct the bill through a return.',
+        );
       groups.set(drugs[0].id, [...(groups.get(drugs[0].id) ?? []), movement]);
     }
     for (const [drugId, group] of groups) {
-      const { taxable, tax } = byDrug.get(drugId)!;
-      const quantity = group.reduce((sum, movement) => sum + movement.quantity, 0);
+      const { taxable, tax, quantity } = byDrug.get(drugId)!;
       let before = 0;
       for (const movement of group) {
         const notes = jsonObject(movement.notes);
         const share = (amount: number) =>
           money(((before + movement.quantity) * amount) / quantity) -
           money((before * amount) / quantity);
-        if (notes.saleTerms)
-          await tx.stockTransaction.update({
-            where: { id: movement.id },
-            data: {
-              notes: JSON.stringify({
-                ...notes,
-                saleTerms: {
-                  ...notes.saleTerms,
-                  unitPrice: taxable / quantity,
-                  gstRate: taxable > 0 ? (tax / taxable) * 100 : 0,
-                  taxablePerUnit: share(taxable) / movement.quantity,
-                  taxPerUnit: share(tax) / movement.quantity,
-                },
-              }),
-            },
-          });
+        await tx.stockTransaction.update({
+          where: { id: movement.id },
+          data: {
+            notes: JSON.stringify({
+              ...notes,
+              saleTerms: {
+                discountPercent: 0,
+                schemePerUnit: 0,
+                ...notes.saleTerms,
+                unitPrice: taxable / quantity,
+                gstRate: taxable > 0 ? (tax / taxable) * 100 : 0,
+                taxablePerUnit: share(taxable) / movement.quantity,
+                taxPerUnit: share(tax) / movement.quantity,
+              },
+            }),
+          },
+        });
         before += movement.quantity;
       }
     }
