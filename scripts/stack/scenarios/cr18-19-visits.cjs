@@ -358,6 +358,57 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
       }
     }
 
+    await scenario("19-update-order", "inserting and removing medicines in a saved prescription keeps the saved order on update and reload", async (s) => {
+      const { page } = s.track(await open("admin", SIZES[0]));
+      const visitId = await makeVisit(page);
+      await openPrescription(page, visitId);
+      await page.getByRole("button", { name: "Add Row" }).first().click();
+      const durations = { Alpha: "5", Bravo: "6", Charlie: "7", Delta: "8", Echo: "9" };
+      const fillRow = async (index, name) => {
+        await typeMedicine(page, index, name);
+        await (await rowNamed(page, name)).getByLabel(`Duration for ${name}`).fill(durations[name]);
+      };
+      await fillRow(0, "Alpha");
+      await fillRow(1, "Bravo");
+      await fillRow(2, "Charlie");
+      await page.waitForTimeout(AUTOSAVE_QUIET_MS);
+      await saveRx(page);
+      s.check("first save keeps the typing order", await savedNames(page, visitId), ["Alpha", "Bravo", "Charlie"]);
+
+      await page.getByRole("button", { name: "Add a medicine below Charlie" }).click();
+      await fillRow((await names(page)).indexOf("Charlie") + 1, "Delta");
+      await page.getByRole("button", { name: "Add a medicine below Alpha" }).click();
+      await fillRow((await names(page)).indexOf("Alpha") + 1, "Echo");
+      s.check("insert after the last medicine and after the first", await filled(page), ["Alpha", "Echo", "Bravo", "Charlie", "Delta"]);
+      await page.waitForTimeout(AUTOSAVE_QUIET_MS);
+      await saveRx(page);
+      s.check("the update saves [Alpha, Echo, Bravo, Charlie, Delta]", await savedNames(page, visitId), ["Alpha", "Echo", "Bravo", "Charlie", "Delta"]);
+
+      await (await rowNamed(page, "Bravo")).getByRole("button", { name: "Remove" }).click();
+      s.check("removing the middle medicine closes the gap", await filled(page), ["Alpha", "Echo", "Charlie", "Delta"]);
+      await page.waitForTimeout(AUTOSAVE_QUIET_MS);
+      await saveRx(page);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByRole("tab", { name: "Prescription" }).click();
+      await page.getByRole("button", { name: "Add Row" }).first().waitFor();
+      s.check("after reload the screen shows the saved order", await filled(page), ["Alpha", "Echo", "Charlie", "Delta"]);
+      s.check("and the server holds the same order with each duration", asArray((await api(page, "GET", `/visits/${visitId}`)).prescription.items).map((i) => [i.drugName, i.duration]), [["Alpha", 5], ["Echo", 9], ["Charlie", 7], ["Delta", 8]]);
+      await (await rowNamed(page, "Echo")).scrollIntoViewIfNeeded();
+      await s.shot(page, "admin-1280-update-order");
+    });
+
+    await scenario("18-19-refusal", "roles that cannot write visits are still refused by the server", async (s) => {
+      const { page: doctorPage } = s.track(await open("doctor", SIZES[0]));
+      const visitId = await makeVisit(doctorPage);
+      const { page } = s.track(await open("reception", SIZES[0]));
+      const status = (method, url, body) => page.evaluate(async ({ method, url, body }) => (await fetch(`/api${url}`, { method, credentials: "include", headers: { "Content-Type": "application/json" }, body: body && JSON.stringify(body) })).status, { method, url, body });
+      s.check("reception cannot create a visit", await status("POST", "/visits", { patientId: patient.id, doctorId, complaints: [{ complaint: "x" }] }), 403);
+      s.check("reception cannot change a visit's history", await status("PATCH", `/visits/${visitId}`, { history: { pastHistory: "x" } }), 403);
+      s.check("reception cannot save a prescription", await status("POST", "/prescriptions", { patientId: patient.id, doctorId, visitId, items: [{ drugName: "x", dosage: 1, dosageUnit: "TABLET", frequency: "DAILY", duration: 1, durationUnit: "DAYS" }] }), 403);
+      const visit = await api(doctorPage, "GET", `/visits/${visitId}`);
+      s.check("the visit is unchanged", [asObject(visit.history).pastHistory ?? null, visit.prescription ?? null], [null, null]);
+    });
+
     await scenario("19-template", "template editor: insert between, wrapping instructions, order saved", async (s) => {
       for (const size of SIZES) {
         const { page } = s.track(await open("doctor", size));

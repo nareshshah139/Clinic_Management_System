@@ -5187,7 +5187,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       <col className="w-[8rem]" />
                       <col className="w-[10.5rem]" />
                       <col />
-                      <col className="w-[9rem]" />
+                      <col className="w-[10rem]" />
                     </colgroup>
                     <thead className={rxLayout.head}>
                       <tr>
@@ -5273,7 +5273,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 }
                                 updateItem(idx, patch);
                               }}>
-                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
                                 <SelectContent>
                                   {Array.from(new Set([...dosePatternOptions, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
@@ -5289,7 +5289,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               if (v === '__CUSTOM__') { openCustomDialog('timing', idx); return; }
                               updateItem(idx, { timing: v });
                             }}>
-                              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
                               <SelectContent>
                                 {Array.from(new Set([...getTimingOptionsForFrequency(it.frequency), it.timing].filter((t): t is string => Boolean(t)))).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -5357,7 +5357,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <td className={rxLayout.actions}>
                             <div className="flex items-start justify-end gap-1.5">
                               <AddRowBelowButton medicineName={it.drugName} index={idx} onClick={() => insertRowBelow(idx)} />
-                              <Button size="sm" variant="outline" className="min-h-9" onClick={() => removeItem(idx)}>Remove</Button>
+                              <Button size="sm" variant="outline" className="min-h-9 whitespace-nowrap" onClick={() => removeItem(idx)}>Remove</Button>
                             </div>
                           </td>
                         </tr>
@@ -6639,7 +6639,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       <col className="w-[8rem]" />
                       <col className="w-[10.5rem]" />
                       <col />
-                      <col className="w-[9rem]" />
+                      <col className="w-[10rem]" />
                     </colgroup>
                     <thead className={rxLayout.head}>
                       <tr>
@@ -6677,7 +6677,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 }
                                 updateNewTplItem(idx, patch);
                               }}>
-                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
                                 <SelectContent>
                                   {dosePatternOptions.map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
@@ -6692,7 +6692,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 if (it.timing && !allowed.includes(it.timing)) patch.timing = '';
                                 updateNewTplItem(idx, patch);
                               }}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {frequencyOptions.map(f => (
                                     <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
@@ -6707,7 +6707,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               if (v === '__CUSTOM__') { openCustomDialog('timing', idx, true); return; }
                               updateNewTplItem(idx, { timing: v });
                             }}>
-                              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
                               <SelectContent>
                                 {getTimingOptionsForFrequency(it.frequency).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -6739,7 +6739,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <td className={rxLayout.actions}>
                             <div className="flex items-start justify-end gap-1.5">
                               <AddRowBelowButton medicineName={it.drugName} index={idx} onClick={() => insertNewTplRowBelow(idx)} />
-                              <Button size="sm" variant="outline" className="min-h-9" onClick={() => removeNewTplRxItem(idx)}>Remove</Button>
+                              <Button size="sm" variant="outline" className="min-h-9 whitespace-nowrap" onClick={() => removeNewTplRxItem(idx)}>Remove</Button>
                             </div>
                           </td>
                         </tr>
