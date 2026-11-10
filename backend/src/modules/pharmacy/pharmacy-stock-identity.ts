@@ -171,36 +171,23 @@ export async function resolvePrescriptionInventory(
     });
     if (!anchor) return null;
   } else {
-    const candidates = await prisma.inventoryItem.findMany({
-      where: {
-        branchId,
-        status: 'ACTIVE',
-        ...(item.drugId
-          ? {
-              drugs: {
-                some: {
-                  id: item.drugId,
-                  isActive: true,
-                  isDiscontinued: false,
-                },
-              },
-            }
-          : {
-              OR: [
-                { name: { equals: item.drugName.trim(), mode: 'insensitive' } },
-                { metadata: { contains: JSON.stringify(item.drugName.trim()).slice(1, -1), mode: 'insensitive' } },
-              ],
-            }),
-      },
-      include: inventoryIdentityInclude,
-      orderBy: { id: 'asc' },
-    }).then((rows: any[]) =>
+    const find = (where: object) =>
+      prisma.inventoryItem.findMany({
+        where: { branchId, status: 'ACTIVE', ...where },
+        include: inventoryIdentityInclude,
+        orderBy: { id: 'asc' },
+      });
+    const name = item.drugName.trim();
+    let candidates = await find(
       item.drugId
-        ? rows
-        : rows.filter((row) =>
-            row.name.trim().toLowerCase() === item.drugName.trim().toLowerCase() ||
-            inventoryKnownNames(row).some((name) => prescriptionNameKey(name) === prescriptionNameKey(item.drugName))),
+        ? { drugs: { some: { id: item.drugId, isActive: true, isDiscontinued: false } } }
+        : { name: { equals: name, mode: 'insensitive' } },
     );
+    // A line written before the item was renamed still names it by an earlier name.
+    if (!candidates.length && !item.drugId)
+      candidates = (await find({ metadata: { contains: JSON.stringify(name).slice(1, -1), mode: 'insensitive' } })).filter((row: any) =>
+        inventoryKnownNames(row).some((known) => prescriptionNameKey(known) === prescriptionNameKey(name)),
+      );
     // An existing catalog identity without stock must be reviewed, never switched by name.
     if (
       !candidates.length ||
