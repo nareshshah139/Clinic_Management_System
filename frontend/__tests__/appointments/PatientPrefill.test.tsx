@@ -17,7 +17,7 @@ jest.mock('@/lib/api', () => ({ apiClient: {
 } }));
 jest.mock('@/components/appointments/DoctorDayCalendar', () => ({
   __esModule: true,
-  default: ({ onSelectSlot }: any) => <button onClick={() => onSelectSlot('10:00-10:30')}>Choose slot</button>,
+  default: ({ onSelectSlot }: any) => <button onClick={() => onSelectSlot('10:00-10:30', 'SCHEDULED')}>Choose slot</button>,
 }));
 jest.mock('@/components/appointments/AppointmentBookingDialog', () => ({
   __esModule: true,

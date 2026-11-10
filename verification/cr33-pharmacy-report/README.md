@@ -34,9 +34,9 @@ Several staff can count the same day at once. Each save names the count it was b
 | `correct` | the check plus the unique key, as built | no violation (292 states with 2 staff, 6,833 with 3) |
 | `noCheck` | append after whatever is latest | `NoLostUpdate` violated |
 | `noUnique` | the check and the insert as separate steps, no unique key | `Contiguous` violated |
-| `overwrite` | one row per day, last write wins | `HistoryKept` violated |
+| `overwrite` | one row per day, last write wins | `HistoryKept` violated, and `NoLostUpdate` violated |
 
-Properties: `Contiguous` (sequences run 1..n with no gaps or duplicates), `NoLostUpdate` (every saved count was typed by someone looking at the count it replaces), `HistoryKept` (no saved count is ever erased) and `SomeoneCounted`.
+Each property a negative control must break is checked in its own run, alone, because a broken mode can break several at once and TLC stops at whichever its workers reach first. Properties: `Contiguous` (sequences run 1..n with no gaps or duplicates), `NoLostUpdate` (every saved count was typed by someone looking at the count it replaces), `HistoryKept` (no saved count is ever erased) and `SomeoneCounted`.
 
 ```bash
 python3 verification/cr33-pharmacy-report/verify.py --jar /path/to/tla2tools.jar

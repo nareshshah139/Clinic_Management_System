@@ -205,8 +205,8 @@ export function apiParams(entry: ReportEntry, params: ReportParams): Record<stri
   return out;
 }
 
-export function exportHref(entry: ReportEntry, params: ReportParams, format: "xlsx" | "csv" | "pdf") {
-  return `/api/pharmacy/reports/${entry.id}?${new URLSearchParams({ ...apiParams(entry, params), format })}`;
+export function exportHref(entry: ReportEntry, params: ReportParams, format: "xlsx" | "csv" | "pdf", extra: Record<string, string> = {}) {
+  return `/api/pharmacy/reports/${entry.id}?${new URLSearchParams({ ...extra, ...apiParams(entry, params), format })}`;
 }
 
 export const shiftDay = (day: string, days: number) => addDays(day, days);

@@ -1,7 +1,19 @@
+import fc from "fast-check";
 import {
   type DayWiseReport,
+  type MarginFilters,
   type MarginRow,
+  DEFAULT_MARGIN_FILTERS,
+  MARGIN_COST_STATUSES,
+  MARGIN_ITEM_TYPES,
+  MARGIN_SEARCH_FIELDS,
+  MARGIN_TYPES,
+  activeMoreFilterCount,
   billCell,
+  describeMarginFilters,
+  marginFilterParams,
+  marginFiltersFromParams,
+  marginQuery,
   clinicToday,
   nextMarginSort,
   sortMarginRows,
@@ -83,4 +95,51 @@ describe("margin sorting", () => {
 
 it("uses the Asia/Kolkata calendar day", () => {
   expect(clinicToday(new Date("2026-11-06T19:00:00.000Z"))).toBe("2026-11-07");
+});
+
+describe("margin filters", () => {
+  const text = fc.string({ minLength: 1, maxLength: 20 }).filter((value) => value.trim() === value && value !== "");
+  const filtersArb: fc.Arbitrary<MarginFilters> = fc.record({
+    type: fc.constantFrom(...MARGIN_TYPES),
+    search: fc.option(text, { nil: "" }).map((value) => value ?? ""),
+    searchField: fc.constantFrom(...MARGIN_SEARCH_FIELDS),
+    tag: fc.option(text, { nil: "" }).map((value) => value ?? ""),
+    category: fc.option(text, { nil: "" }).map((value) => value ?? ""),
+    manufacturer: fc.option(text, { nil: "" }).map((value) => value ?? ""),
+    itemType: fc.constantFrom(...MARGIN_ITEM_TYPES, ""),
+    costStatus: fc.constantFrom(...MARGIN_COST_STATUSES),
+  });
+
+  it("survives a trip through the page URL", () => {
+    fc.assert(
+      fc.property(filtersArb, (filters) => {
+        const url = new URLSearchParams(marginFilterParams(filters));
+        expect(marginFiltersFromParams(url)).toEqual(filters);
+      }),
+    );
+  });
+
+  it("writes nothing to the URL for the defaults and falls back on unknown values", () => {
+    expect(marginFilterParams(DEFAULT_MARGIN_FILTERS)).toEqual({});
+    expect(marginFiltersFromParams(new URLSearchParams("type=EVERYTHING&field=EMAIL&cost=FREE&itemType=PET"))).toEqual(DEFAULT_MARGIN_FILTERS);
+  });
+
+  it("sends only the filters that are set, with the type always explicit", () => {
+    expect(marginQuery("2026-11-01", "2026-11-30", DEFAULT_MARGIN_FILTERS)).toEqual({ startDate: "2026-11-01", endDate: "2026-11-30", type: "NET", searchField: "ALL", costStatus: "ALL" });
+    expect(marginQuery("2026-11-01", "2026-11-30", { ...DEFAULT_MARGIN_FILTERS, tag: " Acne ", search: "  " })).toMatchObject({ tag: "Acne" });
+    expect(marginQuery("2026-11-01", "2026-11-30", { ...DEFAULT_MARGIN_FILTERS, search: "  " })).not.toHaveProperty("search");
+  });
+
+  it("counts only the filters inside More Filters", () => {
+    expect(activeMoreFilterCount({ ...DEFAULT_MARGIN_FILTERS, tag: "Acne", type: "RETURNS", search: "x" })).toBe(0);
+    expect(activeMoreFilterCount({ ...DEFAULT_MARGIN_FILTERS, category: "Acne", costStatus: "LOSS" })).toBe(2);
+  });
+
+  it("names each active filter for the CSV header and empty states", () => {
+    expect(describeMarginFilters({ ...DEFAULT_MARGIN_FILTERS, type: "RETURNS", search: "gel", searchField: "NAME", costStatus: "MISSING_COST" })).toEqual([
+      ["Type", "Returns only"],
+      ["Search", "gel (Item name)"],
+      ["Cost status", "Missing cost"],
+    ]);
+  });
 });

@@ -759,7 +759,18 @@ export class PharmacyReportsService {
     branchId: string,
   ): Promise<PharmacyReport> {
     const data: any = await this.compliance.getItemMargin(
-      { startDate: period.from, endDate: period.to, search: query.q } as any,
+      {
+        startDate: period.from,
+        endDate: period.to,
+        search: query.q,
+        type: query.marginType,
+        searchField: query.field,
+        tag: query.tag,
+        category: query.category,
+        manufacturer: query.manufacturer,
+        itemType: query.itemType,
+        costStatus: query.cost,
+      },
       branchId,
     );
     const columns = [

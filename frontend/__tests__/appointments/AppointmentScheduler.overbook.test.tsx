@@ -19,8 +19,8 @@ jest.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: toastMock }),
 }));
 
-jest.mock('@/components/appointments/DoctorDayCalendar', () => function MockDoctorDayCalendar({ onSelectSlot }: { onSelectSlot: (slot: string) => void }) {
-  return <button type="button" onClick={() => onSelectSlot('10:00-10:30')}>10:00-10:30</button>;
+jest.mock('@/components/appointments/DoctorDayCalendar', () => function MockDoctorDayCalendar({ onSelectSlot }: { onSelectSlot: (slot: string, calendar: 'SCHEDULED' | 'CONFIRMED') => void }) {
+  return <button type="button" onClick={() => onSelectSlot('10:00-10:30', 'SCHEDULED')}>10:00-10:30</button>;
 });
 
 const create = apiClient.createAppointment as jest.Mock;
@@ -50,7 +50,11 @@ describe('AppointmentScheduler - overbooking confirmation', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Book anyway' }));
     await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
     expect(create.mock.calls[1][0]).toEqual({ ...create.mock.calls[0][0], allowOverbook: true });
-    await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Appointment Booked Successfully' })));
+    expect(create.mock.calls[0][0]).toMatchObject({ slot: '10:00-10:30', calendar: 'SCHEDULED' });
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Appointment Booked Successfully',
+      description: 'Pat Ient scheduled for 10:00-10:30 in the Scheduled calendar',
+    })));
   });
 
   it('sends nothing more when the user cancels', async () => {

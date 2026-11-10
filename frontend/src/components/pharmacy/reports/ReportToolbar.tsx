@@ -11,7 +11,7 @@ import { exportHref, periodPresets, presetFor, shiftDay, type ReportEntry, type 
 
 const fieldLabel = "text-base font-medium";
 
-export function ExportMenu({ entry, params, disabled }: { entry: ReportEntry; params: ReportParams; disabled?: boolean }) {
+export function ExportMenu({ entry, params, extra, disabled }: { entry: ReportEntry; params: ReportParams; extra?: Record<string, string>; disabled?: boolean }) {
   const formats = [
     { format: "xlsx" as const, label: "Excel (.xlsx)" },
     { format: "csv" as const, label: "CSV" },
@@ -27,7 +27,7 @@ export function ExportMenu({ entry, params, disabled }: { entry: ReportEntry; pa
       <DropdownMenuContent align="end">
         {formats.map(({ format, label }) => (
           <DropdownMenuItem key={format} asChild className="text-base">
-            <a href={exportHref(entry, params, format)} download>
+            <a href={exportHref(entry, params, format, extra)} download>
               {label}
             </a>
           </DropdownMenuItem>
