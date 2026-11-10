@@ -90,6 +90,8 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
       await page.getByRole("button", { name: "Add Row" }).first().waitFor();
     }
     const overflowX = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    const widest = (page) => page.evaluate(() => [...document.querySelectorAll("body *")].map((el) => ({ tag: el.tagName, cls: String(el.className).slice(0, 60), right: Math.round(el.getBoundingClientRect().right) })).sort((a, b) => b.right - a.right).slice(0, 3));
+    const AUTOSAVE_QUIET_MS = 9500;
 
     async function scenario(id, name, run) {
       if (process.env.ONLY && !process.env.ONLY.split(",").includes(id)) return;
@@ -154,6 +156,12 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
       await input.fill(name);
       await page.keyboard.press("Escape");
     }
+    async function setInstructions(page, name, text) {
+      const field = (await rowNamed(page, name)).getByPlaceholder("e.g., Avoid alcohol");
+      await field.fill(text);
+      await page.keyboard.press("Tab");
+      await page.waitForTimeout(300);
+    }
     async function saveRx(page) {
       const saved = page.waitForResponse((r) => /\/api\/prescriptions(\/|$)/.test(r.url()) && ["POST", "PATCH"].includes(r.request().method()) && r.status() < 300, { timeout: 120000 });
       await page.getByRole("button", { name: /^(Create|Update) Prescription$/ }).click();
@@ -178,7 +186,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           const { page } = s.track(await open(role, size));
           const visitId = await makeVisit(page);
           await openPrescription(page, visitId);
-          const heading = page.getByRole("heading", { name: "Patient History" });
+          const heading = page.locator("#section-histories-heading");
           await heading.waitFor();
           await heading.scrollIntoViewIfNeeded();
           const body = page.locator("div.opacity-100").filter({ has: page.getByRole("textbox", { name: "Past history" }) }).first();
@@ -206,6 +214,8 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
       await openVisit(page, oldId);
       await page.getByRole("tab", { name: "History" }).click();
       const history = page.locator('[role="tabpanel"]:visible');
+      await history.getByRole("button", { name: "Show details" }).first().waitFor({ timeout: 120000 });
+      for (const button of await history.getByRole("button", { name: "Show details" }).all()) await button.click();
       await history.getByText("Heat and stress").first().waitFor({ timeout: 120000 });
       const cardText = await history.innerText();
       s.ok("the history card shows the stored triggers", cardText.includes("Heat and stress"), cardText.slice(0, 400));
@@ -220,15 +230,21 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
       let visit = await api(page, "GET", `/visits/${oldId}`);
       let stored = asObject(visit.history);
       s.check("after a visit save the history keeps both retired values and takes the edit", [stored.pastHistory, stored.triggers, stored.priorTreatments, stored.personalHistory], ["Eczema as a child, asthma", "Heat and stress", "Clobetasol cream", "Night shifts"]);
+      if ((await names(page)).length === 0) await page.getByRole("button", { name: "Add Row" }).first().click();
       await typeMedicine(page, 0, "Emollient");
+      await (await rowNamed(page, "Emollient")).getByLabel("Duration for Emollient").fill("10");
+      await page.waitForTimeout(AUTOSAVE_QUIET_MS);
       await saveRx(page);
       visit = await api(page, "GET", `/visits/${oldId}`);
       stored = asObject(visit.history);
       s.check("after a prescription save the history still keeps both retired values", [stored.pastHistory, stored.triggers, stored.priorTreatments], ["Eczema as a child, asthma", "Heat and stress", "Clobetasol cream"]);
       s.check("the examination keeps its stored triggers and prior treatments", [asObject(visit.exam).dermatology?.triggers, asObject(visit.exam).dermatology?.priorTreatments], ["Sun exposure", "Hydroquinone"]);
       await page.getByRole("tab", { name: "History" }).click();
-      await page.locator('[role="tabpanel"]:visible').getByText("Heat and stress").first().waitFor({ timeout: 120000 });
-      s.ok("the history card still shows them after the saves", (await page.locator('[role="tabpanel"]:visible').innerText()).includes("Clobetasol cream"));
+      const after = page.locator('[role="tabpanel"]:visible');
+      await after.getByRole("button", { name: "Show details" }).first().waitFor({ timeout: 120000 });
+      for (const button of await after.getByRole("button", { name: "Show details" }).all()) await button.click();
+      await after.getByText("Heat and stress").first().waitFor({ timeout: 120000 });
+      s.ok("the history card still shows them after the saves", (await after.innerText()).includes("Clobetasol cream"));
     });
 
     // ---------------------------------------------------------------- CR-19
@@ -239,14 +255,15 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           const visitId = await makeVisit(page);
           await openPrescription(page, visitId);
           const table = rxTable(page);
-          s.ok("the table scrolls inside its own container, not the page", (await overflowX(page)) <= 0, await overflowX(page));
+          const startOverflow = await overflowX(page);
+          s.ok("the page has no sideways scroll before any edit", startOverflow <= 0, { startOverflow, widest: startOverflow > 0 ? await widest(page) : null });
 
           if ((await names(page)).length === 0) await page.getByRole("button", { name: "Add Row" }).first().click();
           await typeMedicine(page, 0, "Fucibet cream");
-          await (await rowNamed(page, "Fucibet cream")).getByPlaceholder("e.g., Avoid alcohol").fill(FUCIBET_NOTE);
+          await setInstructions(page, "Fucibet cream", FUCIBET_NOTE);
           await (await rowNamed(page, "Fucibet cream")).getByLabel("Duration for Fucibet cream").fill("30");
           await typeMedicine(page, 1, "Cetaphil cleanser");
-          await (await rowNamed(page, "Cetaphil cleanser")).getByPlaceholder("e.g., Avoid alcohol").fill(LONG_NOTE);
+          await setInstructions(page, "Cetaphil cleanser", LONG_NOTE);
           await (await rowNamed(page, "Cetaphil cleanser")).getByLabel("Duration for Cetaphil cleanser").fill("15");
           await typeMedicine(page, 2, "Sunscreen SPF 50");
           await (await rowNamed(page, "Sunscreen SPF 50")).getByLabel("Duration for Sunscreen SPF 50").fill("60");
@@ -264,7 +281,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           await page.keyboard.type("Tretinoin gel");
           await page.keyboard.press("Escape");
           await (await rowNamed(page, "Tretinoin gel")).getByLabel("Duration for Tretinoin gel").fill("45");
-          await (await rowNamed(page, "Tretinoin gel")).getByPlaceholder("e.g., Avoid alcohol").fill("At night");
+          await setInstructions(page, "Tretinoin gel", "At night");
           s.check("literal row order [A, new, B, C]", await filled(page), ["Fucibet cream", "Tretinoin gel", "Cetaphil cleanser", "Sunscreen SPF 50"]);
           const fucibet = await rowNamed(page, "Fucibet cream");
           s.check("Fucibet kept its duration and note when the row went in below it", [await fucibet.getByLabel("Duration for Fucibet cream").inputValue(), await fucibet.getByPlaceholder("e.g., Avoid alcohol").inputValue()], ["30", FUCIBET_NOTE]);
@@ -303,6 +320,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           await (await rowNamed(page, "Cetaphil cleanser")).scrollIntoViewIfNeeded();
           await s.shot(page, `${role}-${size.width}-rx-table`);
 
+          await page.waitForTimeout(AUTOSAVE_QUIET_MS);
           await saveRx(page);
           s.check("saved prescription items are in screen order", await savedNames(page, visitId), ["Fucibet cream", "Tretinoin gel", "Cetaphil cleanser", "Sunscreen SPF 50"]);
           const saved = asArray((await api(page, "GET", `/visits/${visitId}`)).prescription.items);
@@ -314,7 +332,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           await page.getByRole("tab", { name: "Prescription" }).click();
           await page.getByRole("button", { name: "Add Row" }).first().waitFor();
           s.check("after reload the order is the same", await filled(page), ["Fucibet cream", "Tretinoin gel", "Cetaphil cleanser", "Sunscreen SPF 50"]);
-          s.check("and the long instruction is still whole", await page.getByDisplayValue(LONG_NOTE).count(), 1);
+          s.check("and the long instruction is still whole", await page.locator("textarea").evaluateAll((els, text) => els.filter((el) => el.value === text).length, LONG_NOTE), 1);
 
           await page.getByRole("button", { name: "Print Preview" }).click();
           const printed = page.locator("#pagedjs-container .rx-row");

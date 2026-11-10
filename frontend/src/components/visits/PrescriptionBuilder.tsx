@@ -5183,10 +5183,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <colgroup>
                       <col className="w-[24%]" />
                       <col className="w-[8rem]" />
-                      <col className="w-[7rem]" />
-                      <col className="w-[10rem]" />
+                      <col className="w-[8rem]" />
+                      <col className="w-[11rem]" />
                       <col />
-                      <col className="w-[8.5rem]" />
+                      <col className="w-[9rem]" />
                     </colgroup>
                     <thead className={rxLayout.head}>
                       <tr>
@@ -5257,7 +5257,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             {it.regimenState?.loading && <p className="mt-1 text-xs text-slate-500" role="status">Loading usual values…</p>}
                             {it.regimenState?.failed && <p className="mt-1 text-xs text-amber-700" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
                           </td>
-                          <td className={rxLayout.frequency} data-label="Frequency (0-1-0)">
+                          <td className={rxLayout.frequency} data-label="Frequency">
                             <div className="min-w-[100px]">
                               <Select value={it.dosePattern || it.frequency || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx); return; }
@@ -6635,10 +6635,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <colgroup>
                       <col className="w-[22%]" />
                       <col className="w-[13rem]" />
-                      <col className="w-[7rem]" />
-                      <col className="w-[10rem]" />
+                      <col className="w-[8rem]" />
+                      <col className="w-[11rem]" />
                       <col />
-                      <col className="w-[8.5rem]" />
+                      <col className="w-[9rem]" />
                     </colgroup>
                     <thead className={rxLayout.head}>
                       <tr>
@@ -6661,7 +6661,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <td className={rxLayout.medicine}>
                             <Input ref={(el) => { newTplMedicineRefs.current[idx] = el; }} value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
                           </td>
-                          <td className={rxLayout.frequency} data-label="Frequency (0-1-0)">
+                          <td className={rxLayout.frequency} data-label="Frequency">
                             <div className="grid grid-cols-2 gap-1">
                               <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx, true); return; }
