@@ -513,7 +513,9 @@ async function call(page, method, url, body) {
       const collection = await call(o.page, "GET", `/pharmacy/reports/daily-collection?from=${today}`);
       const summary = await call(o.page, "GET", "/billing/payments/summary");
       s.check("revenue report, Daily Collection's clinic block and the payment summary agree", [revenue.totalRevenue, collection.clinic.net, summary.totalAmount], [6000, 6000, 6000]);
-      s.check("by mode", Object.fromEntries(revenue.paymentBreakdown.map((m) => [m.mode, m.amount])), Object.fromEntries(collection.clinic.modes.map((m) => [m.mode, m.net])));
+      const byMode = (lines) => lines.filter(([, amount]) => amount).sort(([a], [b]) => a.localeCompare(b));
+      s.check("by mode", byMode(revenue.paymentBreakdown.map((m) => [m.mode, m.amount])), [["CARD", 500], ["CASH", 4700], ["UPI", 800]]);
+      s.check("Daily Collection by mode", byMode(collection.clinic.modes.map((m) => [m.mode, m.net])), [["CARD", 500], ["CASH", 4700], ["UPI", 800]]);
       s.check("no clinic payment is left pending", await stack.db.newPayment.count({ where: { reconStatus: { not: "COMPLETED" } } }), 0);
       await o.page.goto(`${stack.base}/dashboard/reports`, { waitUntil: "domcontentloaded" });
       const dates = o.page.locator('input[type="date"]');
