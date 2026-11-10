@@ -31,7 +31,7 @@ import {
   priceBill,
   storedLineValue,
 } from './bill-pricing';
-import { draftBillNumber, isIssuedBillNumber } from './bill-number';
+import { draftBillNumber, isIssuedBillNumber, issuedNumberContains } from './bill-number';
 import { LEDGER_STATUSES, ledgerPaid } from './pharmacy-ledger';
 
 type DraftFence = { checkoutRequestKey: string; checkoutPayloadHash: string };
@@ -587,7 +587,7 @@ export class PharmacyInvoiceService {
 
     if (search) {
       where.OR = [
-        { invoiceNumber: { contains: search, mode: 'insensitive' } },
+        issuedNumberContains(search),
         { billingName: { contains: search, mode: 'insensitive' } },
         { billingPhone: { contains: search, mode: 'insensitive' } },
         { patient: { name: { contains: search, mode: 'insensitive' } } },

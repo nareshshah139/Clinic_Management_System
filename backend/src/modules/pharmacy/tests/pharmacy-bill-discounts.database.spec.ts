@@ -299,6 +299,19 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
     ]);
   });
 
+  it('finds bills by their issued number and never by a draft placeholder', async () => {
+    const draft = await invoices.create(cream(), 'branch', 'asha');
+    const sold = await invoices.checkout({ ...cream(), requestKey: 'searchable-bill' }, 'branch', 'asha');
+    const found = async (search: string) =>
+      (await invoices.findAll({ search, limit: 100 } as any, 'branch')).data.map((bill: { id: string }) => bill.id);
+    const placeholderPiece = draft.invoiceNumber.slice('DRAFT-'.length, 'DRAFT-'.length + 8);
+    expect([
+      (await found('draft')).includes(draft.id),
+      (await found(placeholderPiece)).includes(draft.id),
+      await found(sold.invoiceNumber),
+    ]).toEqual([false, false, [sold.id]]);
+  });
+
   it('files a bill finished at 00:30 IST on 1 January under the new year, whatever the server clock zone', async () => {
     jest.useFakeTimers({
       now: new Date('2030-12-31T19:00:00Z'),

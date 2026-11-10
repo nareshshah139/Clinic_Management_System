@@ -10,4 +10,12 @@ export const isIssuedBillNumber = (invoiceNumber: string) => !invoiceNumber.star
 export const issuedBillNumber = (invoiceNumber: string): string | null =>
   isIssuedBillNumber(invoiceNumber) ? invoiceNumber : null;
 
+/** Matches bills whose issued number contains the text; draft placeholders never match. */
+export const issuedNumberContains = (text: string) => ({
+  AND: [
+    { invoiceNumber: { contains: text, mode: 'insensitive' as const } },
+    { NOT: { invoiceNumber: { startsWith: DRAFT_PREFIX } } },
+  ],
+});
+
 export const billNumberLabel = (invoiceNumber: string) => issuedBillNumber(invoiceNumber) ?? 'Draft';
