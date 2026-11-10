@@ -23,21 +23,25 @@ CASES = [
 ]
 
 
-def config(mode, staff, saves):
+def config(mode, staff, saves, expected):
+    """The correct protocol is checked against every property; a negative control only against the one it
+    must break, since a broken mode can break several at the same step and TLC reports whichever it meets first."""
+    invariants = ["TypeOK", "Contiguous", "NoLostUpdate", "SomeoneCounted"] if expected is None else ["TypeOK"] + ([expected] if expected != "HistoryKept" else [])
+    properties = "PROPERTIES HistoryKept\n" if expected in (None, "HistoryKept") else ""
     return (
         "SPECIFICATION Spec\n"
         "CONSTANTS\n"
         f"  Staff = {staff}\n"
         f"  MaxSaves = {saves}\n"
         f'  MODE = "{mode}"\n'
-        "INVARIANTS TypeOK Contiguous NoLostUpdate SomeoneCounted\n"
-        "PROPERTIES HistoryKept\n"
+        f"INVARIANTS {' '.join(invariants)}\n"
+        f"{properties}"
     )
 
 
-def run_case(jar, mode, staff, saves, workdir):
+def run_case(jar, mode, staff, saves, expected, workdir):
     name = f"MC_{mode}_{len(staff.split(','))}_{saves}"
-    (Path(workdir) / f"{name}.cfg").write_text(config(mode, staff, saves))
+    (Path(workdir) / f"{name}.cfg").write_text(config(mode, staff, saves, expected))
     (Path(workdir) / SPEC.name).write_text(SPEC.read_text())
     proc = subprocess.run(
         ["java", "-XX:+UseParallelGC", "-cp", str(Path(jar).resolve()), "tlc2.TLC", "-workers", "2", "-deadlock",
@@ -65,7 +69,7 @@ def main():
     failures = 0
     with tempfile.TemporaryDirectory() as workdir:
         for mode, staff, saves, expected in CASES:
-            got, detail = run_case(args.jar, mode, staff, saves, workdir)
+            got, detail = run_case(args.jar, mode, staff, saves, expected, workdir)
             ok = got == expected
             failures += not ok
             want = "no error" if expected is None else f"{expected} violated"
