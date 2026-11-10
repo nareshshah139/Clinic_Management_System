@@ -109,7 +109,7 @@ export async function saveInventoryItemMetadata(
       'strength',
       'itemCode',
     ])
-      if (input[f] !== undefined) data[f] = String(input[f]).trim() || null;
+      if (input[f] !== undefined) data[f] = String(input[f] ?? '').trim() || null;
     if (input.name !== undefined && !data.name)
       throw new BadRequestException('Product name is required');
     if (input.form !== undefined) {

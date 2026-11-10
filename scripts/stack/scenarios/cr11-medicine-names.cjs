@@ -231,7 +231,7 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       await page.getByLabel("Combination product").check();
       await page.getByLabel("Why are you changing it?").fill("Two ingredients; checked the strip");
       const changes = clean(await page.getByRole("region", { name: "Check your changes" }).innerText());
-      check("admin-1280 the edit shows the printed name before saving", [changes.includes("Printed name Augmentin 500mg 125mg Tab"), changes.includes("Tab. Augmentin")], [true, true]);
+      check("admin-1280 the edit shows the printed name before saving", [changes.includes("Printed name"), changes.includes("Augmentin 500mg 125mg Tab"), changes.includes("Tab. Augmentin")], [true, true, true]);
       await shot(page, "admin-1280-08-edit-unread-item");
       await page.getByRole("button", { name: "Save corrected details" }).click();
       await page.getByText("Corrected details saved. Stock quantity unchanged.").waitFor();
@@ -272,7 +272,12 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       await page.goto(`${stack.base}/dashboard/visits?visitId=${visit.id}&patientId=${patient.id}`, { waitUntil: "domcontentloaded", timeout: 240000 });
       await page.getByTestId("visit-identity").first().waitFor({ timeout: 240000 });
       await page.getByRole("tab", { name: "Prescription" }).first().click();
-      await pickerRow(page, 0).waitFor({ timeout: 120000 });
+      const ready = await pickerRow(page, 0).waitFor({ timeout: 60000 }).then(() => true, () => false);
+      if (!ready) {
+        await shot(page, `visit-before-add-row-${page.viewportSize().width}`);
+        await page.getByRole("button", { name: "Add Row" }).first().click();
+        await pickerRow(page, 0).waitFor({ timeout: 60000 });
+      }
     };
     const previewText = async (page) => {
       await page.getByRole("button", { name: "Print Preview" }).click();

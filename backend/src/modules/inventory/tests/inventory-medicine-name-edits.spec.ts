@@ -68,6 +68,12 @@ describe('editing a medicine into the standard name format', () => {
     expect((await edit(unknown, { storageLocation: 'A-1', brandName: 'Acnosis', strength: '' })).name).toBe('Tab. Acnosis');
   });
 
+  it('keeps unset details unset when the form sends them back empty', async () => {
+    load({ ...recorded, manufacturer: null, category: null });
+    const saved = await edit(recorded, { manufacturer: null, category: null, itemCode: null, barcode: null, form: 'TABLET', brandName: 'Flutas', strength: '150 mg' });
+    expect([saved.manufacturer, saved.category, saved.itemCode, saved.barcode]).toEqual([null, null, null, null]);
+  });
+
   it('keeps a typed name for an item without a form', async () => {
     load(recorded);
     expect((await edit(recorded, { name: 'Cotton roll' })).name).toBe('Cotton roll');
