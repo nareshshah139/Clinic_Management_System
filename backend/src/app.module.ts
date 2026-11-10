@@ -21,7 +21,6 @@ import { JwtAuthGuard } from './shared/guards/jwt-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 import { PharmacyAgentModule } from './modules/pharmacy-agent/pharmacy-agent.module';
-import { StockPredictionModule } from './modules/stock-prediction/stock-prediction.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { RolesGuard } from './shared/guards/roles.guard';
 import { PermissionsGuard } from './shared/guards/permissions.guard';
@@ -66,7 +65,6 @@ const fullFeatureModules = [
   NotificationsModule,
   PharmacyModule,
   PharmacyAgentModule,
-  StockPredictionModule,
   AuditLogsModule,
   WhatsAppTemplatesModule,
   GoogleCalendarModule,

@@ -224,10 +224,6 @@ GET /reports/payments | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/revenue | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/summary | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
-GET /stock-prediction/bulk-order | roles: OWNER,ADMIN,MANAGER,PHARMACIST | permissions: -
-GET /stock-prediction/critical-items | roles: OWNER,ADMIN,MANAGER,PHARMACIST | permissions: -
-GET /stock-prediction/predictions | roles: OWNER,ADMIN,MANAGER,PHARMACIST | permissions: -
-GET /stock-prediction/trends | roles: OWNER,ADMIN,MANAGER | permissions: -
 GET /users | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /users/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /users/:id/letterhead | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -420,7 +416,6 @@ POST /prescriptions/templates/:templateId/versions/:versionId/reject | roles: OW
 POST /prescriptions/templates/:templateId/versions/:versionId/submit | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /prescriptions/translations | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /reports/export | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
-POST /stock-prediction/predictions | roles: OWNER,ADMIN,MANAGER,PHARMACIST | permissions: -
 POST /users | roles: OWNER,ADMIN | permissions: -
 POST /users/:id/change-password | roles: any signed-in user | permissions: -
 POST /users/branches | roles: OWNER,ADMIN | permissions: -
