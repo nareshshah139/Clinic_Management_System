@@ -148,8 +148,8 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       await go(page, "/dashboard/inventory?area=stock&view=list");
       const stockNav = page.getByRole("navigation", { name: "stock tasks" });
       await stockNav.getByRole("button", { name: "Stock counts" }).waitFor({ timeout: 120000 }).catch(() => {});
-      const stockTasks = (await stockNav.getByRole("button").allInnerTexts()).map(clean).slice(0, 4).map((t) => t.replace(/ \(\d+\)$/, ""));
-      check(`${who} Stock shows Stock list, Stock ledger, approvals and Stock counts as tasks`, stockTasks, ["Stock list", "Stock ledger", "Approve corrections", "Stock counts"]);
+      const stockTasks = (await stockNav.getByRole("button").allInnerTexts()).map(clean).slice(0, 5).map((t) => t.replace(/ \(\d+\)$/, ""));
+      check(`${who} Stock shows Stock list, Stock optimization, Stock ledger, approvals and Stock counts as tasks`, stockTasks, ["Stock list", "Stock optimization", "Stock ledger", "Approve corrections", "Stock counts"]);
       await shot(page, `${who}-stock-tasks-1280`);
       await context.close();
     }
