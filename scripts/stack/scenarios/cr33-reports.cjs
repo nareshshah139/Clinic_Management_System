@@ -230,7 +230,7 @@ async function tableData(page, name) {
       await page.reload({ waitUntil: "networkidle" });
       await page.getByRole("textbox", { name: "Cash counted" }).fill(String(expected.today.CASH));
       await page.getByRole("button", { name: "Save recount" }).click();
-      await page.getByText(/Count saved\. Balanced/).waitFor();
+      await page.getByText(/Count saved\. Pharmacy balanced/).waitFor();
       await doctor.page.getByRole("button", { name: "Save recount" }).click();
       await doctor.page.getByText(/Someone else saved a count/).waitFor();
       assert.equal(await doctor.page.getByRole("textbox", { name: "Cash counted" }).inputValue(), String(expected.today.CASH));
