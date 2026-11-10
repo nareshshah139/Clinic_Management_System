@@ -5944,11 +5944,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 )}
 
                 {/* Diagnosis */}
-                {includeSections.diagnosis && (
-                  <div className={`${printBlockPadding} text-sm`}>
+                {includeSections.diagnosis && !!diagnosis?.trim() && (
+                  <div className={`${printBlockPadding} text-sm`} data-print-diagnosis>
                     <div className={`flex flex-wrap gap-2 items-start ${printCompact ? '' : 'mb-1'}`}>
                       <span className="font-semibold">Diagnosis:</span>
-                      <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{(diagnosis?.trim() || '').length > 0 ? tt('diagnosis', diagnosis) : '—'}</span>
+                      <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{tt('diagnosis', diagnosis)}</span>
                     </div>
                   </div>
                 )}
