@@ -17,8 +17,9 @@ const PAGES = [
   ["purchase-bills", "/dashboard/inventory?area=purchases&view=register", (p) => p.getByRole("button", { name: "Mark bill LIN-1 paid" })],
   ["purchase-returns", "/dashboard/inventory?area=purchases&view=register&tab=returns", (p) => p.getByText("RET-A").first()],
   ["terms-of-trade", "/dashboard/inventory?area=purchases&view=terms", (p) => p.getByRole("heading", { name: "Terms of Trade" })],
-  ["day-wise-summary", "/dashboard/inventory?area=purchases&view=daywise", (p) => p.getByText("Day-wise Summary", { exact: true })],
-  ["item-margin", "/dashboard/inventory?area=purchases&view=margin", (p) => p.getByText("Item-wise Margin", { exact: true })],
+  // CR-33 moved these into Pharmacy Report; the old Inventory links redirect there.
+  ["day-wise-summary", "/dashboard/pharmacy/reports?report=day-wise-summary", (p) => p.getByText("Day-wise Summary", { exact: true })],
+  ["item-margin", "/dashboard/pharmacy/reports?report=item-margin", (p) => p.getByText("Item-wise Margin", { exact: true })],
   ["payments-dues", `/dashboard/inventory?area=purchases&view=ledger&gstin=${GSTIN}`, (p) => p.getByRole("heading", { name: "Purchase Ledger" })],
   ["stock-ledger", "/dashboard/inventory?area=stock&view=ledger", (p) => p.getByRole("list", { name: "Stock movements" })],
   ["stock-counts", "/dashboard/inventory?area=stock&view=COUNT", (p) => p.getByRole("button", { name: "Count an item" })],
@@ -141,9 +142,9 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       await settle(page);
       await purchaseNav.locator("option", { hasText: "Payments & dues" }).waitFor({ state: "attached", timeout: 60000 }).catch(() => {});
       const tasks = (await purchaseNav.locator("button, option").allInnerTexts()).map(clean);
-      check(`${who} Purchases holds Purchase bills, Terms of Trade, Day-wise summary, Item-wise margin and Payments & dues`,
+      check(`${who} Purchases holds Purchase bills, Terms of Trade and Payments & dues; reports live in Pharmacy Report (CR-33)`,
         ["Purchase bills", "Terms of Trade", "Day-wise summary", "Item-wise margin", "Payments & dues"].filter((t) => tasks.includes(t)),
-        ["Purchase bills", "Terms of Trade", "Day-wise summary", "Item-wise margin", "Payments & dues"]);
+        ["Purchase bills", "Terms of Trade", "Payments & dues"]);
       await go(page, "/dashboard/inventory?area=stock&view=list");
       const stockNav = page.getByRole("navigation", { name: "stock tasks" });
       await stockNav.getByRole("button", { name: "Stock counts" }).waitFor({ timeout: 120000 }).catch(() => {});

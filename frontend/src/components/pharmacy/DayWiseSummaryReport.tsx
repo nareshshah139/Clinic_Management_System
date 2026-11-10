@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, FileDown } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { displayCalendarDate } from "@/lib/date-display";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSkeleton } from "@/components/ui/skeleton";
-import { downloadCsv, inputClass } from "@/components/inventory/workspace-model";
+import { inputClass } from "@/components/inventory/workspace-model";
+import { reportById } from "./reports/report-catalog";
+import { ExportMenu } from "./reports/ReportToolbar";
 import { GstSlabGroupTable, type SlabGroupRow } from "./GstSlabGroupTable";
 import { ReportInfoTip } from "./ReportInfoTip";
 import {
@@ -19,7 +21,6 @@ import {
   billCell,
   clinicMonthStart,
   clinicToday,
-  dayWiseCsvRows,
   formatRupees,
   reportErrorHint,
   useReport,
@@ -34,6 +35,8 @@ const BILL_NO_HELP: Record<DayWiseType, string> = {
 
 const TOTAL_HELP =
   "Sum of the Total amount column: Base + SGST + CGST + IGST for every day in the range. Returns and credit notes count as negative amounts on the day they were posted.";
+
+const DAY_WISE = reportById("day-wise-summary")!;
 
 const dayWiseIsEmpty = (report: DayWiseReport) => report.rows.every((row) => row.noBills);
 
@@ -129,19 +132,11 @@ export function DayWiseSummaryReport() {
             </select>
           </div>
           <Button type="submit" disabled={state.status === "loading"}>Go</Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={state.status !== "loaded"}
-            onClick={() => {
-              if (state.status !== "loaded") return;
-              const { period, type: loadedType } = state.data;
-              downloadCsv(`day-wise-${loadedType.toLowerCase()}-${period.startDate}-to-${period.endDate}.csv`, dayWiseCsvRows(state.data));
-            }}
-          >
-            <FileDown className="size-4" aria-hidden="true" />
-            Download
-          </Button>
+          <ExportMenu
+            entry={DAY_WISE}
+            params={{ from: report?.period.startDate ?? startDate, to: report?.period.endDate ?? endDate, type: report?.type ?? type }}
+            disabled={!report}
+          />
         </form>
       </CardHeader>
       <CardContent className="space-y-3">
