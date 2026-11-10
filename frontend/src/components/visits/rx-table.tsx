@@ -44,7 +44,7 @@ export const rxLayout = {
   wrapper: '@container overflow-x-auto',
   table: 'block w-full text-sm @6xl:table @6xl:table-fixed',
   columns: 'hidden @6xl:table-column-group',
-  head: 'sr-only bg-gray-50 text-gray-700 @6xl:not-sr-only @6xl:table-header-group',
+  head: 'block sr-only bg-gray-50 text-gray-700 @6xl:not-sr-only @6xl:table-header-group',
   body: 'block @6xl:table-row-group',
   row: 'flex flex-wrap items-start gap-x-2 gap-y-2 border-t px-3 py-3 @6xl:table-row @6xl:p-0',
   empty: 'block w-full px-3 py-3 text-center text-gray-500 @6xl:table-cell',

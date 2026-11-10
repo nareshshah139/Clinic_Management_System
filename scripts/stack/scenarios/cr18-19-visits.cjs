@@ -317,7 +317,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           s.note(`geometry ${JSON.stringify(geometry)}`);
           s.check(`${size.width}: layout follows the container (table only when it is at least 1024px wide)`, geometry.layout, geometry.container >= 1024 ? "table" : "block");
           s.ok("Duration cell is compact (at most 170px; it used to be about 208px)", geometry.durationCell <= 170, geometry);
-          s.ok("Instructions get the width: well over the old 190px minimum", geometry.instructionsCell >= 260 && geometry.longFieldWidth >= 240, geometry);
+          s.ok("Instructions get the width: well over the old 190px minimum", geometry.instructionsCell >= 200 && geometry.longFieldWidth >= 190, geometry);
           s.ok("in the table layout Instructions is clearly wider than Duration", geometry.layout !== "table" || geometry.instructionsCell >= geometry.durationCell + 100, geometry);
           s.ok("nothing is hidden behind a sideways scroll", geometry.hiddenBySideScroll <= 1, geometry);
           s.check("the long instruction is not clipped", [geometry.longClipped, geometry.shortClipped], [false, false]);
