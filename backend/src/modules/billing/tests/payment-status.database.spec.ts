@@ -66,14 +66,15 @@ databaseTests('Clinic payments on PostgreSQL', () => {
     const window = { startDate: new Date(Date.now() - 3_600_000).toISOString(), endDate: new Date(Date.now() + 3_600_000).toISOString() };
     const takings = async () => {
       const report = await revenue.generateRevenueReport(window as any, 'branch');
+      const summary = await billing.getPaymentSummary({} as any, 'branch');
       const collection = await pharmacyReports.dailyCollection(day, { branchId: 'branch', id: 'doc', role: 'DOCTOR' });
       const clinic = collection.clinic!;
-      return [report.totalRevenue, clinic.net, clinic.dueAtDayEnd, clinic.modes.map((m) => [m.mode, m.net])];
+      return [report.totalRevenue, summary.totalAmount, clinic.net, clinic.dueAtDayEnd, clinic.modes.map((m) => [m.mode, m.net])];
     };
 
-    expect(await takings()).toEqual([500, 500, 800, [['CASH', 500], ['UPI', 0], ['CARD', 0]]]);
+    expect(await takings()).toEqual([500, 500, 500, 800, [['CASH', 500], ['UPI', 0], ['CARD', 0]]]);
     await billing.confirmPayment(online.id, 'branch');
-    expect(await takings()).toEqual([800, 800, 500, [['CASH', 500], ['UPI', 300], ['CARD', 0]]]);
+    expect(await takings()).toEqual([800, 800, 800, 500, [['CASH', 500], ['UPI', 300], ['CARD', 0]]]);
   });
 
   it('records cash taken at the desk as completed, so the bill is paid', async () => {
