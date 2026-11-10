@@ -32,6 +32,27 @@ export function AddRowBelowButton({ medicineName, index, onClick }: { medicineNa
   );
 }
 
+const cell = 'block align-top before:mb-1 before:block before:text-xs before:font-medium before:text-gray-500 before:content-[attr(data-label)] @5xl:table-cell @5xl:w-auto @5xl:px-3 @5xl:py-2 @5xl:before:hidden';
+
+/**
+ * Below a 64rem container each medicine is a short stack (name, regimen, instructions) so nothing
+ * hides behind a sideways scroll; from 64rem up the same markup is a fixed-layout table.
+ */
+export const rxLayout = {
+  wrapper: '@container overflow-x-auto',
+  table: 'block w-full text-sm @5xl:table @5xl:table-fixed',
+  head: 'sr-only bg-gray-50 text-gray-700 @5xl:not-sr-only @5xl:table-header-group',
+  body: 'block @5xl:table-row-group',
+  row: 'flex flex-wrap items-start gap-x-2 gap-y-2 border-t px-3 py-3 @5xl:table-row @5xl:p-0',
+  empty: 'block w-full px-3 py-3 text-center text-gray-500 @5xl:table-cell',
+  medicine: `${cell} w-full`,
+  frequency: `${cell} min-w-[8.5rem] flex-1`,
+  when: `${cell} min-w-[7.5rem] flex-1`,
+  duration: `${cell} flex-none @5xl:px-2`,
+  instructions: `${cell} relative w-full`,
+  actions: `${cell} w-full @5xl:px-2`,
+} as const;
+
 const FIELD_TEXT = 'px-3 py-1.5 text-base md:text-sm [overflow-wrap:anywhere]';
 
 /**

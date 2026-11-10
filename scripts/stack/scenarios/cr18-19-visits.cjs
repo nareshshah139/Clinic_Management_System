@@ -12,6 +12,7 @@ const FUCIBET_NOTE = "1 pea size amount- whole face";
 const LONG_NOTE = "Apply a thin layer on the affected skin twice daily after cleansing and keep out of direct sunlight, reapply after swimming";
 const OLD_HISTORY = { pastHistory: "Eczema as a child", personalHistory: "Night shifts", triggers: "Heat and stress", priorTreatments: "Clobetasol cream" };
 const SIZES = [{ width: 1280, height: 900 }, { width: 390, height: 844 }];
+const WIDE = { width: 1920, height: 1000 };
 const ROLES = ["doctor", "admin", "owner"];
 
 let sink = [];
@@ -232,7 +233,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
 
     // ---------------------------------------------------------------- CR-19
     for (const role of ROLES) {
-      for (const size of SIZES) {
+      for (const size of role === "doctor" ? [...SIZES, WIDE] : SIZES) {
         await scenario(`19-${role}-${size.width}`, `rx-table-insert-between-save-reload-print-as-${role}-at-${size.width}`, async (s) => {
           const { page } = s.track(await open(role, size));
           const visitId = await makeVisit(page);
@@ -246,7 +247,9 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           await (await rowNamed(page, "Fucibet cream")).getByLabel("Duration for Fucibet cream").fill("30");
           await typeMedicine(page, 1, "Cetaphil cleanser");
           await (await rowNamed(page, "Cetaphil cleanser")).getByPlaceholder("e.g., Avoid alcohol").fill(LONG_NOTE);
+          await (await rowNamed(page, "Cetaphil cleanser")).getByLabel("Duration for Cetaphil cleanser").fill("15");
           await typeMedicine(page, 2, "Sunscreen SPF 50");
+          await (await rowNamed(page, "Sunscreen SPF 50")).getByLabel("Duration for Sunscreen SPF 50").fill("60");
           s.check("three medicines in typing order", await filled(page), ["Fucibet cream", "Cetaphil cleanser", "Sunscreen SPF 50"]);
 
           s.check("each row's add control has a name that says which medicine it follows", (await page.getByRole("button", { name: /^Add a medicine below / }).evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")))).slice(0, 3), [
@@ -260,6 +263,8 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           s.ok("focus lands in the new row's medicine field", true);
           await page.keyboard.type("Tretinoin gel");
           await page.keyboard.press("Escape");
+          await (await rowNamed(page, "Tretinoin gel")).getByLabel("Duration for Tretinoin gel").fill("45");
+          await (await rowNamed(page, "Tretinoin gel")).getByPlaceholder("e.g., Avoid alcohol").fill("At night");
           s.check("literal row order [A, new, B, C]", await filled(page), ["Fucibet cream", "Tretinoin gel", "Cetaphil cleanser", "Sunscreen SPF 50"]);
           const fucibet = await rowNamed(page, "Fucibet cream");
           s.check("Fucibet kept its duration and note when the row went in below it", [await fucibet.getByLabel("Duration for Fucibet cream").inputValue(), await fucibet.getByPlaceholder("e.g., Avoid alcohol").inputValue()], ["30", FUCIBET_NOTE]);
@@ -274,19 +279,24 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           s.ok("the footer Add Row still appends at the end", afterFooter.at(-1) === "" && afterFooter.indexOf("Sunscreen SPF 50") < afterFooter.length - 1, afterFooter);
 
           const geometry = await table.evaluate((el) => {
-            const th = (label) => [...el.querySelectorAll("th")].find((h) => h.textContent.trim() === label).getBoundingClientRect().width;
+            const wrapper = el.parentElement;
+            const width = (selector) => Math.round(el.querySelector(selector).getBoundingClientRect().width);
             const longField = [...el.querySelectorAll("textarea")].find((t) => t.value.startsWith("Apply a thin layer"));
             const shortField = [...el.querySelectorAll("textarea")].find((t) => t.value.startsWith("1 pea size"));
             return {
-              duration: Math.round(th("Duration")), instructions: Math.round(th("Instructions")), medicine: Math.round(th("Medicine")),
+              layout: getComputedStyle(el).display, container: wrapper.clientWidth, hiddenBySideScroll: wrapper.scrollWidth - wrapper.clientWidth,
+              durationCell: width('td[data-label="Duration"]'), instructionsCell: width('td[data-label="Instructions"]'),
+              longFieldWidth: Math.round(longField.getBoundingClientRect().width), longFieldHeight: Math.round(longField.getBoundingClientRect().height),
               longClipped: longField.scrollHeight > longField.clientHeight + 1, shortClipped: shortField.scrollHeight > shortField.clientHeight + 1,
-              longLines: Math.round(longField.clientHeight / 20), shortValue: shortField.value, longValue: longField.value,
-              container: el.parentElement.clientWidth, tableWidth: Math.round(el.getBoundingClientRect().width),
+              shortValue: shortField.value, longValue: longField.value,
             };
           });
           s.note(`geometry ${JSON.stringify(geometry)}`);
-          s.ok("Duration column is no wider than 170px (was about 208px)", geometry.duration <= 170, geometry);
-          s.ok("Instructions column is wider than Duration by at least 70px and holds more than the old 190px minimum", geometry.instructions >= geometry.duration + 70 && geometry.instructions > 220, geometry);
+          s.check(`${size.width}: layout follows the container (table only when it is at least 1024px wide)`, geometry.layout, geometry.container >= 1024 ? "table" : "block");
+          s.ok("Duration cell is compact (at most 170px; it used to be about 208px)", geometry.durationCell <= 170, geometry);
+          s.ok("Instructions get the width: well over the old 190px minimum", geometry.instructionsCell >= 260 && geometry.longFieldWidth >= 240, geometry);
+          s.ok("in the table layout Instructions is clearly wider than Duration", geometry.layout !== "table" || geometry.instructionsCell >= geometry.durationCell + 100, geometry);
+          s.ok("nothing is hidden behind a sideways scroll", geometry.hiddenBySideScroll <= 1, geometry);
           s.check("the long instruction is not clipped", [geometry.longClipped, geometry.shortClipped], [false, false]);
           s.check("the full text is in the field", [geometry.shortValue, geometry.longValue], [FUCIBET_NOTE, LONG_NOTE]);
           s.check(`${size.width}: the page itself has no sideways scroll`, (await overflowX(page)) <= 0, true);
@@ -297,7 +307,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           s.check("saved prescription items are in screen order", await savedNames(page, visitId), ["Fucibet cream", "Tretinoin gel", "Cetaphil cleanser", "Sunscreen SPF 50"]);
           const saved = asArray((await api(page, "GET", `/visits/${visitId}`)).prescription.items);
           s.check("saved durations and instructions travel with their medicines", saved.map((i) => [i.drugName, i.duration, i.instructions ?? null]), [
-            ["Fucibet cream", 30, FUCIBET_NOTE], ["Tretinoin gel", saved[1].duration, saved[1].instructions ?? null], ["Cetaphil cleanser", saved[2].duration, LONG_NOTE], ["Sunscreen SPF 50", saved[3].duration, saved[3].instructions ?? null],
+            ["Fucibet cream", 30, FUCIBET_NOTE], ["Tretinoin gel", 45, "At night"], ["Cetaphil cleanser", 15, LONG_NOTE], ["Sunscreen SPF 50", 60, null],
           ]);
 
           await page.reload({ waitUntil: "domcontentloaded" });
@@ -313,6 +323,7 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           const rows = await page.locator("#pagedjs-container .rx-row").evaluateAll((els) => els.map((el) => [...el.children].map((c) => c.textContent.trim())));
           s.check("print preview lists the medicines in screen order", rows.map((r) => r[0]), ["Fucibet cream", "Tretinoin gel", "Cetaphil cleanser", "Sunscreen SPF 50"]);
           s.check("print preview shows both long instructions in full", [rows[0][4], rows[2][4]], [FUCIBET_NOTE, LONG_NOTE]);
+          s.check("print preview shows each duration with its medicine", rows.map((r) => r[3]), ["30 days", "45 days", "15 days", "60 days"]);
           const widths = await page.locator("#pagedjs-container .rx-row").first().evaluate((el) => [...el.children].map((c) => Math.round(c.getBoundingClientRect().width)));
           s.ok("print: Duration is narrower than Instructions", widths[3] < widths[4], widths);
           const clippedInPrint = await page.locator("#pagedjs-container .rx-row").evaluateAll((els) => els.some((el) => [...el.children].some((c) => c.scrollWidth > c.clientWidth + 1)));
@@ -340,11 +351,16 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
         await dialog.getByPlaceholder("e.g., Avoid alcohol").nth(1).fill(LONG_NOTE);
         s.check(`${size.width}: template rows [A, new, B]`, await inputs.evaluateAll((els) => els.map((el) => el.value)), ["Alpha", "Beta", "Gamma"]);
         const geometry = await dialog.locator("table").evaluate((el) => {
-          const th = (label) => [...el.querySelectorAll("th")].find((h) => h.textContent.trim() === label).getBoundingClientRect().width;
+          const wrapper = el.parentElement;
           const field = [...el.querySelectorAll("textarea")].find((t) => t.value.startsWith("Apply a thin layer"));
-          return { duration: Math.round(th("Duration")), instructions: Math.round(th("Instructions")), clipped: field.scrollHeight > field.clientHeight + 1 };
+          return {
+            layout: getComputedStyle(el).display, container: wrapper.clientWidth, hiddenBySideScroll: wrapper.scrollWidth - wrapper.clientWidth,
+            durationCell: Math.round(el.querySelector('td[data-label="Duration"]').getBoundingClientRect().width),
+            instructionsCell: Math.round(el.querySelector('td[data-label="Instructions"]').getBoundingClientRect().width), clipped: field.scrollHeight > field.clientHeight + 1,
+          };
         });
-        s.ok(`${size.width}: template Duration narrow, Instructions wider and unclipped`, geometry.duration <= 170 && geometry.instructions > geometry.duration && !geometry.clipped, geometry);
+        s.note(`template geometry ${size.width} ${JSON.stringify(geometry)}`);
+        s.ok(`${size.width}: template Duration compact, Instructions wide, unclipped, nothing behind a sideways scroll`, geometry.durationCell <= 170 && geometry.instructionsCell > geometry.durationCell && !geometry.clipped && geometry.hiddenBySideScroll <= 1, geometry);
         s.check(`${size.width}: the page has no sideways scroll with the dialog open`, (await overflowX(page)) <= 0, true);
         await s.shot(page, `doctor-${size.width}-template-editor`);
         if (size.width === 1280) {

@@ -36,7 +36,7 @@ import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
 import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
-import { AddRowBelowButton, WrappingTextField, insertBlankBelow } from './rx-table';
+import { AddRowBelowButton, WrappingTextField, insertBlankBelow, rxLayout } from './rx-table';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -5178,8 +5178,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                 </div>
                 <div className="overflow-visible border rounded-md">
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1000px] table-fixed text-sm">
+                  <div className={rxLayout.wrapper}>
+                    <table className={rxLayout.table}>
                     <colgroup>
                       <col className="w-[24%]" />
                       <col className="w-[8rem]" />
@@ -5188,7 +5188,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       <col />
                       <col className="w-[8.5rem]" />
                     </colgroup>
-                    <thead className="bg-gray-50 text-gray-700">
+                    <thead className={rxLayout.head}>
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Medicine</th>
                         <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
@@ -5198,15 +5198,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         <th className="px-2 py-2 text-right font-medium">Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className={rxLayout.body}>
                       {items.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
+                          <td colSpan={6} className={rxLayout.empty}>No items added yet</td>
                         </tr>
                       )}
                       {items.map((it, idx) => (
-                        <tr key={idx} className="border-t">
-                          <td className="px-3 py-2 align-top" onMouseEnter={() => it.inventoryItemId ? prefetchDrugStockById(it.drugId, it.inventoryItemId) : prefetchDrugStockByName(it.drugName)} title={(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return `Remaining stock: ${stock ?? '—'}`; })()}>
+                        <tr key={idx} className={rxLayout.row}>
+                          <td className={rxLayout.medicine} onMouseEnter={() => it.inventoryItemId ? prefetchDrugStockById(it.drugId, it.inventoryItemId) : prefetchDrugStockByName(it.drugName)} title={(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return `Remaining stock: ${stock ?? '—'}`; })()}>
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                               <Input 
                                 ref={(el) => { inputRefs.current[idx] = el; }}
@@ -5257,7 +5257,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             {it.regimenState?.loading && <p className="mt-1 text-xs text-slate-500" role="status">Loading usual values…</p>}
                             {it.regimenState?.failed && <p className="mt-1 text-xs text-amber-700" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
                           </td>
-                          <td className="px-3 py-2 align-top">
+                          <td className={rxLayout.frequency} data-label="Frequency (0-1-0)">
                             <div className="min-w-[100px]">
                               <Select value={it.dosePattern || it.frequency || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx); return; }
@@ -5283,7 +5283,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </div>
                             {regimenHint(it, idx, 'frequency')}
                           </td>
-                          <td className="px-3 py-2 align-top">
+                          <td className={rxLayout.when} data-label="When">
                             <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                               if (v === '__CUSTOM__') { openCustomDialog('timing', idx); return; }
                               updateItem(idx, { timing: v });
@@ -5298,7 +5298,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </Select>
                             {regimenHint(it, idx, 'timing')}
                           </td>
-                          <td className="px-2 py-2 align-top">
+                          <td className={rxLayout.duration} data-label="Duration">
                             <div className="flex items-start gap-1.5">
                               <Input type="number" className="w-12 shrink-0 px-2 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
                               <Select value={it.durationUnit} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: DurationUnit) => {
@@ -5316,7 +5316,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </div>
                             {regimenHint(it, idx, 'duration')}
                           </td>
-                          <td className="px-3 py-2 align-top relative">
+                          <td className={rxLayout.instructions} data-label="Instructions">
                             <div className="space-y-1">
                               <WrappingTextField
                                 aria-label={`Instructions for ${it.drugName || 'new medicine'}`}
@@ -5353,7 +5353,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               )}
                             </div>
                           </td>
-                          <td className="px-2 py-2 align-top">
+                          <td className={rxLayout.actions}>
                             <div className="flex items-start justify-end gap-1.5">
                               <AddRowBelowButton medicineName={it.drugName} index={idx} onClick={() => insertRowBelow(idx)} />
                               <Button size="sm" variant="outline" className="min-h-9" onClick={() => removeItem(idx)}>Remove</Button>
@@ -6630,17 +6630,17 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="text-sm text-gray-600">Total items: {newTplItems.length}</div>
                   <Button size="sm" variant="outline" onClick={addNewTplItem}>Add Row</Button>
                 </div>
-                <div className="overflow-auto border rounded-md">
-                  <table className="w-full min-w-[900px] table-fixed text-sm">
+                <div className={`${rxLayout.wrapper} border rounded-md`}>
+                  <table className={rxLayout.table}>
                     <colgroup>
-                      <col className="w-[20%]" />
+                      <col className="w-[22%]" />
                       <col className="w-[13rem]" />
                       <col className="w-[7rem]" />
                       <col className="w-[10rem]" />
                       <col />
                       <col className="w-[8.5rem]" />
                     </colgroup>
-                    <thead className="bg-gray-50 text-gray-700">
+                    <thead className={rxLayout.head}>
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Medicine</th>
                         <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
@@ -6650,18 +6650,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         <th className="px-2 py-2 text-right font-medium">Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className={rxLayout.body}>
                       {newTplItems.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
+                          <td colSpan={6} className={rxLayout.empty}>No items added yet</td>
                         </tr>
                       )}
                       {newTplItems.map((it: any, idx: number) => (
-                        <tr key={`newtpl-row-${idx}`} className="border-t">
-                          <td className="px-3 py-2 align-top">
+                        <tr key={`newtpl-row-${idx}`} className={rxLayout.row}>
+                          <td className={rxLayout.medicine}>
                             <Input ref={(el) => { newTplMedicineRefs.current[idx] = el; }} value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
                           </td>
-                          <td className="px-3 py-2 align-top">
+                          <td className={rxLayout.frequency} data-label="Frequency (0-1-0)">
                             <div className="grid grid-cols-2 gap-1">
                               <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx, true); return; }
@@ -6701,7 +6701,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </Select>
                             </div>
                           </td>
-                          <td className="px-3 py-2 align-top">
+                          <td className={rxLayout.when} data-label="When">
                             <Select value={it.timing || ''} onValueChange={(v: string) => {
                               if (v === '__CUSTOM__') { openCustomDialog('timing', idx, true); return; }
                               updateNewTplItem(idx, { timing: v });
@@ -6715,7 +6715,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </SelectContent>
                             </Select>
                           </td>
-                          <td className="px-2 py-2 align-top">
+                          <td className={rxLayout.duration} data-label="Duration">
                             <div className="flex items-start gap-1.5">
                               <Input type="number" className="w-12 shrink-0 px-2 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration ?? ''} onChange={(e) => updateNewTplItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
                               <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => {
@@ -6732,10 +6732,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </Select>
                             </div>
                           </td>
-                          <td className="px-3 py-2 align-top">
+                          <td className={rxLayout.instructions} data-label="Instructions">
                             <WrappingTextField aria-label={`Instructions for ${it.drugName || 'new medicine'}`} value={it.instructions || ''} onValueChange={(value) => updateNewTplItem(idx, { instructions: value })} placeholder="e.g., Avoid alcohol" />
                           </td>
-                          <td className="px-2 py-2 align-top">
+                          <td className={rxLayout.actions}>
                             <div className="flex items-start justify-end gap-1.5">
                               <AddRowBelowButton medicineName={it.drugName} index={idx} onClick={() => insertNewTplRowBelow(idx)} />
                               <Button size="sm" variant="outline" className="min-h-9" onClick={() => removeNewTplRxItem(idx)}>Remove</Button>
