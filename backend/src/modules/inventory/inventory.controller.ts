@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { InventoryService } from './inventory.service';
+import { BATCH_DELETE_ROLES } from './inventory-stock';
 import { InventoryImportService } from './inventory-import.service';
 import { InventoryItemRequestService } from './inventory-item-request.service';
 import {
@@ -205,7 +206,7 @@ export class InventoryController {
   }
 
   @Delete('items/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Roles(...BATCH_DELETE_ROLES)
   @Permissions('inventory:item:delete')
   deleteInventoryItem(
     @Param('id') id: string,

@@ -14,6 +14,12 @@ import {
 } from 'class-validator';
 import { IsRegisterRange } from '../register-utils';
 import { REPORT_FORMATS } from '../pharmacy-report-table';
+import {
+  MARGIN_COST_STATUSES,
+  MARGIN_ITEM_TYPES,
+  MARGIN_SEARCH_FIELDS,
+  MARGIN_TYPES,
+} from '../pharmacy-item-margin';
 
 const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const trimmed = ({ value }: { value: unknown }) =>
@@ -91,6 +97,47 @@ export class PharmacyReportQueryDto {
   @IsOptional()
   @IsIn(['expired', '1m', '2m', '3m', '6m'])
   window?: 'expired' | '1m' | '2m' | '3m' | '6m';
+
+  @ApiPropertyOptional({ enum: MARGIN_TYPES, description: 'Item margin: net sales, sales only, or returns only' })
+  @IsOptional()
+  @IsIn(MARGIN_TYPES)
+  marginType?: (typeof MARGIN_TYPES)[number];
+
+  @ApiPropertyOptional({ enum: MARGIN_SEARCH_FIELDS, description: 'Item margin: which field `q` matches' })
+  @IsOptional()
+  @IsIn(MARGIN_SEARCH_FIELDS)
+  field?: (typeof MARGIN_SEARCH_FIELDS)[number];
+
+  @ApiPropertyOptional({ description: 'Item margin: item tag' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(trimmed)
+  tag?: string;
+
+  @ApiPropertyOptional({ description: 'Item margin: item category' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(trimmed)
+  category?: string;
+
+  @ApiPropertyOptional({ description: 'Item margin: manufacturer' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(trimmed)
+  manufacturer?: string;
+
+  @ApiPropertyOptional({ enum: MARGIN_ITEM_TYPES })
+  @IsOptional()
+  @IsIn(MARGIN_ITEM_TYPES)
+  itemType?: (typeof MARGIN_ITEM_TYPES)[number];
+
+  @ApiPropertyOptional({ enum: MARGIN_COST_STATUSES, description: 'Item margin: all, missing cost, or loss-making rows' })
+  @IsOptional()
+  @IsIn(MARGIN_COST_STATUSES)
+  cost?: (typeof MARGIN_COST_STATUSES)[number];
 
   @ApiPropertyOptional({ enum: REPORT_FORMATS })
   @IsOptional()

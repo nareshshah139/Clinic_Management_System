@@ -41,7 +41,7 @@ ACTION_MAP = {
  'submit': {'ui':'Submit count', 'ui_source':'frontend/src/components/inventory/WorkflowDocumentEditor.tsx', 'backend':'POST /inventory/workspace/documents/:id/transition POST', 'source':'backend/src/modules/inventory/inventory-workflow.service.ts'},
  'approve': {'ui':'Approve document', 'ui_source':'frontend/src/components/inventory/WorkflowDocumentEditor.tsx', 'backend':'POST /inventory/workspace/documents/:id/transition APPROVE', 'source':'backend/src/modules/inventory/inventory-workflow.service.ts'},
  'post': {'ui':'Apply approved count', 'ui_source':'frontend/src/components/inventory/WorkflowDocumentEditor.tsx', 'backend':'POST /inventory/workspace/documents/:id/transition POST', 'source':'backend/src/modules/inventory/inventory-workflow.service.ts'},
- 'dispose': {'ui':'Blocked stock -> source -> source-linked loss', 'ui_source':'frontend/src/components/inventory/WorkspaceStock.tsx', 'backend':'POST source-linked LOSS document and POST transition', 'source':'backend/src/modules/inventory/inventory-workflow.service.ts'},
+ 'dispose': {'ui':'Blocked stock -> source -> source-linked loss', 'ui_source':'frontend/src/components/inventory/InventoryItemPage.tsx', 'backend':'POST source-linked LOSS document and POST transition', 'source':'backend/src/modules/inventory/inventory-workflow.service.ts'},
  'cancel': {'ui':'Cancel document', 'ui_source':'frontend/src/components/inventory/WorkflowDocumentEditor.tsx', 'backend':'POST /inventory/workspace/documents/:id/transition CANCEL', 'source':'backend/src/modules/inventory/inventory-workflow.service.ts'},
 }
 

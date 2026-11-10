@@ -10,6 +10,11 @@ import { UserRole } from '@prisma/client';
  * clinic manager or doctor out; other roles MUST be listed, and a request without a user role
  * MUST be denied on a role-listed route.
  */
+export function roleMeetsRoles(role: string | undefined, required: readonly UserRole[]): boolean {
+  if (!role) return false;
+  return role === 'OWNER' || role === 'ADMIN' || role === 'DOCTOR' || required.includes(role as UserRole);
+}
+
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
@@ -39,15 +44,6 @@ export class RolesGuard implements CanActivate {
       return !!user?.role && !!permissions?.length;
     }
 
-    if (!user || !user.role) {
-      return false;
-    }
-
-    // OWNER, ADMIN, and DOCTOR have universal access
-    if (user.role === 'OWNER' || user.role === 'ADMIN' || user.role === 'DOCTOR') {
-      return true;
-    }
-
-    return requiredRoles.includes(user.role as UserRole);
+    return roleMeetsRoles(user?.role, requiredRoles);
   }
 } 

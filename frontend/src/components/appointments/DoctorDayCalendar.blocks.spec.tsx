@@ -18,7 +18,7 @@ jest.mock('@/lib/api', () => ({
 }));
 
 const appointment = (id: string, slot: string, name: string, status: AppointmentStatus, extra: object = {}) => ({
-  id, slot, status, visitType: 'OPD', patient: { name }, ...extra,
+  id, slot, status, calendar: status === AppointmentStatus.SCHEDULED ? 'SCHEDULED' : 'CONFIRMED', visitType: 'OPD', patient: { name }, ...extra,
 });
 
 function renderDay(appointments: object[], onSelectSlot = jest.fn()) {
@@ -29,6 +29,7 @@ function renderDay(appointments: object[], onSelectSlot = jest.fn()) {
 
 const blockFor = (name: RegExp) => screen.getByRole('button', { name: new RegExp(`^(?:Token \\d+, )?${name.source}, `, name.flags) }).parentElement as HTMLElement;
 const calendarName = { selector: '[data-appointment-block] [data-patient-name]' };
+const scheduled = () => within(screen.getByRole('region', { name: 'Scheduled' }));
 
 describe('DoctorDayCalendar appointment blocks', () => {
   it('lays two appointments in the same slot side by side, each with its own readable name', async () => {
@@ -127,7 +128,7 @@ describe('DoctorDayCalendar appointment blocks', () => {
     expect(parseFloat(normal.style.top)).toBeGreaterThan(0);
     expect(parseFloat(late.style.top)).toBeLessThan(100);
     const grid = early.parentElement as HTMLElement;
-    const gutter = grid.previousElementSibling as HTMLElement;
+    const gutter = document.querySelector('[data-time-gutter]') as HTMLElement;
     expect(parseFloat(grid.style.paddingTop)).toBeGreaterThan(0);
     expect(grid.style.paddingTop).toBe(gutter.style.paddingTop);
     expect(grid.style.paddingBottom).toBe(gutter.style.paddingBottom);
@@ -138,16 +139,16 @@ describe('DoctorDayCalendar appointment blocks', () => {
   it('books the clicked empty slot', async () => {
     const onSelectSlot = renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.SCHEDULED)]);
     await screen.findByText('Ravi Kumar', calendarName);
-    fireEvent.click(screen.getByRole('button', { name: 'Book 14:00-14:30' }));
-    expect(onSelectSlot).toHaveBeenCalledWith('14:00-14:15');
+    fireEvent.click(scheduled().getByRole('button', { name: 'Book 14:00-14:30' }));
+    expect(onSelectSlot).toHaveBeenCalledWith('14:00-14:15', 'SCHEDULED');
   });
 
   it('books a press-and-release on an empty tile as the whole tile', async () => {
     const onSelectSlot = renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.SCHEDULED)]);
     await screen.findByText('Ravi Kumar', calendarName);
-    const tile = screen.getByRole('button', { name: 'Book 14:00-14:30' }).parentElement as HTMLElement;
+    const tile = scheduled().getByRole('button', { name: 'Book 14:00-14:30' }).parentElement as HTMLElement;
     fireEvent.mouseDown(tile, { button: 0 });
     fireEvent.mouseUp(tile);
-    expect(onSelectSlot).toHaveBeenCalledWith('14:00-14:30');
+    expect(onSelectSlot).toHaveBeenCalledWith('14:00-14:30', 'SCHEDULED');
   });
 });

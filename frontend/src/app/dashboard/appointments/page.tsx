@@ -110,9 +110,11 @@ function AppointmentsPageInner() {
           </DialogHeader>
           <div className="space-y-3">
             <ul className="text-sm text-gray-700 space-y-2">
-              <li>• <strong>Search patient</strong> by name or phone, then <strong>click any free slot</strong> to book</li>
+              <li>• <strong>Scheduled</strong> (left) holds patients booked ahead who still need a confirmation call. <strong>Confirmed</strong> (right) is the doctor&apos;s real day, with walk-ins.</li>
+              <li>• When a patient confirms on the call, click them and press <strong>Confirm</strong>. They move to Confirmed at the same time.</li>
+              <li>• <strong>Search patient</strong> by name or phone, then <strong>click a free time</strong> in either column to book into that calendar</li>
               <li>• Calendar auto-finds 15-min slots even in larger grid views</li>
-              <li>• <strong>Single-click</strong> to book, <strong>double-click</strong> appointment to view/edit/cancel</li>
+              <li>• <strong>Click</strong> an appointment to view, confirm, reschedule or cancel it</li>
               <li>• <strong>Drag across tiles</strong> to select custom time ranges</li>
               <li>• Adjust appointment duration in the booking dialog (15/30/45/60/90 min)</li>
             </ul>

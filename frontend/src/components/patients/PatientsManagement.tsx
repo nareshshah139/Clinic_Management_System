@@ -537,7 +537,7 @@ export default function PatientsManagement() {
       date.setDate(date.getDate() + i);
       const dateStr = formatDate(date);
       try {
-        const slotsRes = (await apiClient.getAvailableSlots({ doctorId, date: dateStr, durationMinutes: 30 })) as any;
+        const slotsRes = (await apiClient.getAvailableSlots({ doctorId, date: dateStr, durationMinutes: 30, calendar: 'CONFIRMED' })) as any;
         let availableSlots: string[] = slotsRes?.availableSlots || [];
 
         // If a room is specified, filter to slots where the room is also available
@@ -559,6 +559,7 @@ export default function PatientsManagement() {
             slot,
             visitType,
             source: 'WALK_IN',
+            calendar: 'CONFIRMED',
             notes: 'Auto-booked next available slot for walk-in',
             ...(roomId ? { roomId } : {}),
             ...overbookFlag(allowOverbook),
@@ -570,7 +571,7 @@ export default function PatientsManagement() {
           track('appointment_booked', { source: 'walk_in' });
           toast({
             title: 'Walk-in appointment booked',
-            description: `Appointment scheduled for ${displayCalendarDate(dateStr)} at ${slot}`,
+            description: `Booked into the Confirmed calendar for ${displayCalendarDate(dateStr)} at ${slot}`,
             variant: 'default',
           });
           return;

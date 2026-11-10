@@ -29,11 +29,11 @@ jest.mock('@/hooks/use-toast', () => ({
 }));
 
 jest.mock('@/components/appointments/DoctorDayCalendar', () => {
-  return function MockDoctorDayCalendar({ onSelectSlot, date, optimisticAppointment }: { onSelectSlot: (slot: string) => void; date: string; optimisticAppointment?: { appointment: { patient?: { name?: string } } } }) {
+  return function MockDoctorDayCalendar({ onSelectSlot, date, optimisticAppointment }: { onSelectSlot: (slot: string, calendar: 'SCHEDULED' | 'CONFIRMED') => void; date: string; optimisticAppointment?: { appointment: { patient?: { name?: string } } } }) {
     return (
       <div data-testid="calendar">
         {date} {optimisticAppointment?.appointment.patient?.name}
-        <button type="button" onClick={() => onSelectSlot('10:00-10:30')}>
+        <button type="button" onClick={() => onSelectSlot('10:00-10:30', 'SCHEDULED')}>
           10:00-10:30
         </button>
       </div>

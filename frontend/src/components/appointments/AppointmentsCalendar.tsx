@@ -12,14 +12,14 @@ import { usePrefilledPatient } from './usePrefilledPatient';
 import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/lib/doctor-availability';
 import { useToast } from '@/hooks/use-toast';
 import { createCleanupTimeouts, getISTDateString, formatPatientName } from '@/lib/utils';
-import type { User, Patient, TimeSlotConfig, AppointmentInSlot } from '@/lib/types';
+import type { User, Patient, TimeSlotConfig, AppointmentInSlot, Appointment, AppointmentCalendar } from '@/lib/types';
 import DoctorDayCalendar, { type ScopedAppointment } from '@/components/appointments/DoctorDayCalendar';
 import { Badge } from '@/components/ui/badge';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle, Info } from 'lucide-react';
-import { AppointmentStatus } from '@cms/shared-types';
 import { useOverbookConfirm } from './useOverbookConfirm';
+import { CALENDARS, CALENDAR_ORDER, type SlotChoice } from './appointment-calendars';
 import { overbookFlag } from '@/lib/overbooking';
 
 interface AppointmentsCalendarProps {
@@ -33,7 +33,8 @@ interface AppointmentsCalendarProps {
 /**
  * @cc [owner:nareshshah139,label:product] appointment-calendar-legend
  * Calendar legend colors MUST match the doctor timeline for visit types and past or completed
- * appointments in either theme.
+ * appointments in either theme. The legend MUST name the Scheduled and Confirmed calendars and
+ * say how Confirm moves a patient between them.
  */
 /**
  * @cc [owner:nareshshah139,label:accessibility] appointment-booking-success-feedback
@@ -68,7 +69,7 @@ export default function AppointmentsCalendar({
   // const [error, setError] = useState<string | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [bookingDetails, setBookingDetails] = useState<any | null>(null);
+  const [bookingDetails, setBookingDetails] = useState<(Appointment & { calendar: AppointmentCalendar }) | null>(null);
   const [searchingPatients, setSearchingPatients] = useState<boolean>(false);
   // const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [visitTypeFilter, setVisitTypeFilter] = useState<string>('ALL');
@@ -93,7 +94,7 @@ export default function AppointmentsCalendar({
 
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
-  const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
+  const [pendingBooking, setPendingBooking] = useState<SlotChoice | null>(null);
   const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
   const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
 
@@ -299,7 +300,7 @@ export default function AppointmentsCalendar({
     }
   };
 
-  const handleBookingRequest = (slot: string) => {
+  const handleBookingRequest = (slot: string, calendar: AppointmentCalendar) => {
     if (!selectedPatient || selectedPatient.id !== selectedPatientId) {
       toast({ variant: 'destructive', title: 'Patient required', description: 'Select a patient before booking.' });
       return;
@@ -315,7 +316,7 @@ export default function AppointmentsCalendar({
       return;
     }
 
-    setPendingBookingSlot(slot);
+    setPendingBooking({ slot, calendar });
     setBookingDialogOpen(true);
   };
 
@@ -325,6 +326,8 @@ export default function AppointmentsCalendar({
     slot?: string;
     notes?: string;
   }) => {
+    if (!pendingBooking) return;
+    const { calendar } = pendingBooking;
     try {
       setLoading(true);
       
@@ -347,7 +350,7 @@ export default function AppointmentsCalendar({
 
       const optimisticDoctor = doctors.find((d) => d.id === doctorId);
 
-      const finalSlot = appointmentData.slot || pendingBookingSlot;
+      const finalSlot = appointmentData.slot || pendingBooking.slot;
 
       const optimisticAppt: AppointmentInSlot = {
         id: `optimistic-${finalSlot}`,
@@ -358,7 +361,8 @@ export default function AppointmentsCalendar({
           : { id: doctorId, firstName: 'Dr.', lastName: 'Unknown' },
         visitType: appointmentData.visitType,
         room: selectedRoom ? { id: selectedRoom.id, name: selectedRoom.name, type: selectedRoom.type } : undefined,
-        status: AppointmentStatus.SCHEDULED,
+        status: CALENDARS[calendar].entryStatus,
+        calendar,
         notes: appointmentData.notes,
       };
       
@@ -372,6 +376,7 @@ export default function AppointmentsCalendar({
         visitType: appointmentData.visitType,
         roomId: appointmentData.roomId,
         notes: appointmentData.notes,
+        calendar,
         ...overbookFlag(allowOverbook),
       }));
       if (!created) {
@@ -385,7 +390,7 @@ export default function AppointmentsCalendar({
       setRefreshKey(prev => prev + 1);
       
       // Set success feedback and highlight newly booked slot
-      setBookingDetails(created);
+      setBookingDetails({ ...created, calendar });
       setRecentBookedSlot(finalSlot);
       
       // Refresh rooms after booking
@@ -399,7 +404,7 @@ export default function AppointmentsCalendar({
       
       // Close dialog
       setBookingDialogOpen(false);
-      setPendingBookingSlot('');
+      setPendingBooking(null);
       
     } catch (e: any) {
       // Reset optimistic update on error
@@ -426,7 +431,7 @@ export default function AppointmentsCalendar({
 
   const handleBookingCancel = () => {
     setBookingDialogOpen(false);
-    setPendingBookingSlot('');
+    setPendingBooking(null);
   };
 
   const currentDoctor = doctors.find((d) => d.id === doctorId);
@@ -446,7 +451,7 @@ export default function AppointmentsCalendar({
                 <CalendarIcon className="h-5 w-5" /> 
                 Doctor Calendar
               </CardTitle>
-              <CardDescription>Daily calendar for selected doctor. Click an empty slot to schedule.</CardDescription>
+              <CardDescription>Click a free time in the Scheduled or Confirmed column to book into that calendar.</CardDescription>
             </div>
             {googleConfigured !== false && (
               <div className="flex items-center gap-2">
@@ -630,6 +635,15 @@ export default function AppointmentsCalendar({
           {/* Legend */}
           <div className="border rounded p-3 bg-gray-50">
             <h3 className="font-semibold mb-2">Legend</h3>
+            <ul className="mb-3 space-y-1 text-sm">
+              {CALENDAR_ORDER.map((calendar) => (
+                <li key={calendar} className="flex items-start gap-2">
+                  <span aria-hidden="true" className="mt-1.5 h-1 w-4 shrink-0 rounded" style={{ backgroundColor: CALENDARS[calendar].accentColor }} />
+                  <span><strong>{CALENDARS[calendar].title}:</strong> {CALENDARS[calendar].description}</span>
+                </li>
+              ))}
+              <li className="text-gray-700">Open a scheduled patient and press <strong>Confirm</strong> to move them to Confirmed at the same time.</li>
+            </ul>
             <div className="flex flex-wrap gap-4 items-center">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(219, 234, 254, 0.95)' }} />
@@ -686,7 +700,7 @@ export default function AppointmentsCalendar({
                   <p className="font-medium">Appointment Successfully Booked!</p>
                   <p style={{ color: '#16a34a' }}>
                     {bookingDetails.patient?.name || `${selectedPatient?.firstName ?? ''} ${selectedPatient?.lastName ?? ''}`.trim()} 
-                    {' '} scheduled for {bookingDetails.slot}
+                    {' '} scheduled for {bookingDetails.slot} in the {CALENDARS[bookingDetails.calendar].title} calendar
                     {bookingDetails.room && ` in ${bookingDetails.room.name}`}
                     {bookingDetails.visitType && ` (${bookingDetails.visitType})`}
                   </p>
@@ -709,7 +723,7 @@ export default function AppointmentsCalendar({
             roomFilter={roomFilter}
             onSelectSlot={handleBookingRequest}
             refreshKey={refreshKey}
-            bookingInProgress={loading ? pendingBookingSlot : undefined}
+            bookingInProgress={loading && pendingBooking ? pendingBooking : undefined}
             optimisticAppointment={optimisticAppointment?.doctorId === doctorId && optimisticAppointment.date === date ? optimisticAppointment : undefined}
             onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
             disableSlotBooking={!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId}
@@ -725,7 +739,7 @@ export default function AppointmentsCalendar({
         onOpenChange={setBookingDialogOpen}
         doctorId={doctorId}
         date={date}
-        slot={pendingBookingSlot}
+        slot={pendingBooking?.slot ?? ''}
         patient={selectedPatient}
         onConfirm={handleBookingConfirm}
         onCancel={handleBookingCancel}

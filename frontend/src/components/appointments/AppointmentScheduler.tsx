@@ -15,7 +15,7 @@ import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/li
 import { useToast } from '@/hooks/use-toast';
 import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError, getConflictDetails, doTimeSlotsOverlap, generateTimeSlots, addMinutesToHHMM, getSlotDurationMinutes } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType, Appointment } from '@/lib/types';
+import type { User, Patient, AppointmentInSlot, AppointmentCalendar, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType, Appointment } from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle, Info } from 'lucide-react';
@@ -24,6 +24,7 @@ import { useOverbookConfirm } from './useOverbookConfirm';
 import { overbookFlag } from '@/lib/overbooking';
 import { AppointmentStatus } from '@cms/shared-types';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
+import { CALENDARS, type SlotChoice } from './appointment-calendars';
 
 // Stable fallback to avoid recreating default objects each render
 const DEFAULT_TIME_SLOT_CONFIG: TimeSlotConfig = {
@@ -74,7 +75,6 @@ export default function AppointmentScheduler({
   const [optimisticAppointment, setOptimisticAppointment] = useState<ScopedAppointment | undefined>(undefined);
   const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [isBooking, setIsBooking] = useState<boolean>(false);
-  const [bookingSlot, setBookingSlot] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [searchingPatients, setSearchingPatients] = useState<boolean>(false);
@@ -127,7 +127,7 @@ export default function AppointmentScheduler({
     void applyHours();
     return () => { cancelled = true; };
   }, [doctorId, date]);
-  const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
+  const [pendingBooking, setPendingBooking] = useState<SlotChoice | null>(null);
   const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
   const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
 
@@ -206,10 +206,10 @@ export default function AppointmentScheduler({
       setError(null);
       
       const scheduleRes: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
-      const scheduleAppointments: Appointment[] = Array.isArray(scheduleRes?.appointments) ? scheduleRes.appointments : [];
+      const scheduleAppointments = Array.isArray(scheduleRes?.appointments) ? scheduleRes.appointments : [];
       const appts: AppointmentInSlot[] = scheduleAppointments
         .filter((a: Appointment) => (a.status as AppointmentStatus) !== AppointmentStatus.CANCELLED)
-        .map((a: Appointment) => ({
+        .map((a) => ({
         id: a.id,
         slot: a.slot,
         patient: a.patient ? {
@@ -222,6 +222,7 @@ export default function AppointmentScheduler({
         visitType: a.visitType || 'OPD',
         room: a.room,
         status: (a.status as AppointmentStatus) || AppointmentStatus.SCHEDULED,
+        calendar: a.calendar,
         visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
       }));
       
@@ -286,7 +287,7 @@ export default function AppointmentScheduler({
     }
   }, [autoPromptedForSearch, toast]);
 
-  const handleBookingRequest = (slot: string) => {
+  const handleBookingRequest = (slot: string, calendar: AppointmentCalendar) => {
     if (!selectedPatient || selectedPatient.id !== selectedPatientId) {
       toast({ variant: 'destructive', title: 'Patient required', description: 'Select a patient before booking.' });
       return;
@@ -315,8 +316,7 @@ export default function AppointmentScheduler({
       return;
     }
     
-    setPendingBookingSlot(slot);
-    setBookingSlot(slot);
+    setPendingBooking({ slot, calendar });
     setBookingDialogOpen(true);
   };
 
@@ -325,9 +325,11 @@ export default function AppointmentScheduler({
     roomId?: string;
     slot?: string;
   }) => {
+    if (!pendingBooking) return;
+    const { calendar } = pendingBooking;
     try {
       setIsBooking(true);
-      const finalSlot = appointmentData.slot || pendingBookingSlot;
+      const finalSlot = appointmentData.slot || pendingBooking.slot;
       const created = await sendWithOverbookConfirm((allowOverbook) => apiClient.createAppointment({
         doctorId, 
         patientId: selectedPatientId, 
@@ -335,6 +337,7 @@ export default function AppointmentScheduler({
         slot: finalSlot, 
         visitType: appointmentData.visitType,
         roomId: appointmentData.roomId,
+        calendar,
         ...overbookFlag(allowOverbook),
       }));
       if (!created) return;
@@ -344,7 +347,7 @@ export default function AppointmentScheduler({
       toast({
         variant: "success",
         title: "Appointment Booked Successfully",
-        description: `${formatPatientName(selectedPatient)} scheduled for ${finalSlot}`,
+        description: `${formatPatientName(selectedPatient)} scheduled for ${finalSlot} in the ${CALENDARS[calendar].title} calendar`,
       });
       
       // Optimistic UI update with better error handling
@@ -360,12 +363,13 @@ export default function AppointmentScheduler({
         doctor: created.doctor || { firstName: 'Dr.', lastName: 'Unknown' },
         visitType: appointmentData.visitType,
         room: created.room,
-        status: AppointmentStatus.SCHEDULED,
+        status: CALENDARS[calendar].entryStatus,
+        calendar,
         visit: created.visit ? { id: created.visit.id, status: created.visit.status } : undefined,
       };
       
       setAppointments(prev => [...prev, newAppt]);
-      setAppointmentsBySlot(prev => ({ ...prev, [pendingBookingSlot]: newAppt }));
+      setAppointmentsBySlot(prev => ({ ...prev, [pendingBooking.slot]: newAppt }));
       setOptimisticAppointment({ doctorId, date, appointment: newAppt });
       
       setRecentBookedSlot(finalSlot);
@@ -380,8 +384,7 @@ export default function AppointmentScheduler({
       
       // Close dialog
       setBookingDialogOpen(false);
-      setPendingBookingSlot('');
-      setBookingSlot('');
+      setPendingBooking(null);
       setRefreshKey(prev => prev + 1);
       
     } catch (e: any) {
@@ -407,14 +410,12 @@ export default function AppointmentScheduler({
       });
     } finally {
       setIsBooking(false);
-      setBookingSlot('');
     }
   };
 
   const handleBookingCancel = () => {
     setBookingDialogOpen(false);
-    setPendingBookingSlot('');
-    setBookingSlot('');
+    setPendingBooking(null);
   };
 
   const startReschedule = (appointment: AppointmentInSlot) => {
@@ -792,7 +793,7 @@ export default function AppointmentScheduler({
         roomFilter={roomFilter}
         onSelectSlot={handleBookingRequest}
         refreshKey={refreshKey}
-        bookingInProgress={isBooking ? bookingSlot : undefined}
+        bookingInProgress={isBooking && pendingBooking ? pendingBooking : undefined}
         onAppointmentUpdate={() => setRefreshKey((prev) => prev + 1)}
         timeSlotConfig={slotConfig}
         disableSlotBooking={(!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId) && !rescheduleContext}
@@ -807,7 +808,7 @@ export default function AppointmentScheduler({
         onOpenChange={setBookingDialogOpen}
         doctorId={doctorId}
         date={date}
-        slot={pendingBookingSlot}
+        slot={pendingBooking?.slot ?? ''}
         patient={selectedPatient}
         onConfirm={handleBookingConfirm}
         onCancel={handleBookingCancel}

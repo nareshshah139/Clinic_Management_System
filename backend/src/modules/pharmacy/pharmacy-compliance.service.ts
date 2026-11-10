@@ -18,7 +18,7 @@ import {
 } from './dto/pharmacy-compliance.dto';
 import { CLINIC_TIME_ZONE, clinicDay, clinicPeriod } from './clinic-day';
 import { DayDocument, buildDayWiseReport, highestSequence } from './pharmacy-day-wise';
-import { buildItemMarginReport, marginLinesFrom, productCatalog } from './pharmacy-item-margin';
+import { buildItemMarginReport, marginFiltersFrom, marginLinesFrom, productCatalog } from './pharmacy-item-margin';
 import {
   money,
   purchaseLineSlab,
@@ -208,7 +208,7 @@ export class PharmacyComplianceService {
         where: { branchId },
         select: {
           id: true, name: true, category: true, manufacturer: true, unit: true, packSize: true, packUnit: true,
-          mrp: true, currentStock: true, gstRate: true, createdAt: true,
+          mrp: true, currentStock: true, gstRate: true, createdAt: true, tags: true, type: true,
           drugs: { select: { id: true, name: true, manufacturerName: true, packSizeLabel: true, category: true } },
         },
       }),
@@ -238,6 +238,7 @@ export class PharmacyComplianceService {
     });
 
     const { lines, fallbackProducts } = marginLinesFrom({ invoices, documents, movements, batches });
+    const filters = marginFiltersFrom(query);
     return {
       period: { startDate: period.startDate, endDate: period.endDate, timeZone: CLINIC_TIME_ZONE },
       scope: {
@@ -247,8 +248,9 @@ export class PharmacyComplianceService {
         dateBasis: `Saved document date, ${CLINIC_TIME_ZONE} calendar days`,
         costBasis: 'Cost per stock unit recorded on the sale movement (purchase rate before GST); a missing or zero cost is reported as unknown',
       },
-      search: query.search?.trim() || null,
-      ...buildItemMarginReport({ lines, catalog: productCatalog(batches), fallbackProducts, search: query.search }),
+      search: filters.search ?? null,
+      filters,
+      ...buildItemMarginReport({ lines, catalog: productCatalog(batches), fallbackProducts, filters }),
     };
   }
 
