@@ -991,6 +991,10 @@ model InventoryItem {
   description          String?
   genericName          String?
   brandName            String?
+  form                 MedicineForm?
+  strength             String?
+  isCombination        Boolean            @default(false)
+  itemCode             String?
   type                 InventoryItemType
   category             String?
   subCategory          String?
@@ -2231,6 +2235,22 @@ enum Language {
   EN
   TE
   HI
+}
+
+enum MedicineForm {
+  TABLET
+  CAPSULE
+  SYRUP
+  CREAM
+  OINTMENT
+  SOLUTION
+  LOTION
+  GEL
+  SHAMPOO
+  FACE_WASH
+  SERUM
+  SUNSCREEN
+  OTHER
 }
 
 enum InventoryItemType {
