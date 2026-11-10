@@ -612,15 +612,15 @@ export class BillingService {
     const [sumAgg, count, methodBreakdown, dailyBreakdown] = await Promise.all([
       this.prisma.newPayment.aggregate({ where, _sum: { amount: true } }),
       this.prisma.newPayment.count({ where }),
-      this.prisma.newPayment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { id: true } }),
-      this.prisma.newPayment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { id: true } }),
+      this.prisma.newPayment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { _all: true } }),
     ]);
 
     return {
       totalAmount: sumAgg._sum.amount ?? 0,
       paymentCount: count,
-      methodBreakdown: methodBreakdown.map(m => ({ method: m.mode, amount: m._sum.amount ?? 0, count: m._count.id })),
-      dailyBreakdown: dailyBreakdown.map(d => ({ date: d.createdAt, amount: d._sum.amount ?? 0, count: d._count.id })),
+      methodBreakdown: methodBreakdown.map(m => ({ method: m.mode, amount: m._sum.amount ?? 0, count: m._count._all })),
+      dailyBreakdown: dailyBreakdown.map(d => ({ date: d.createdAt, amount: d._sum.amount ?? 0, count: d._count._all })),
       period: { startDate: startDate || null, endDate: endDate || null },
     };
   }
