@@ -93,7 +93,7 @@ export function MedicineNameFields({
           />
           {bare && (
             <div role="group" aria-label={`Unit of ${bare}`} className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">Which unit?</span>
+              <span className="w-full text-xs text-muted-foreground">Which unit?</span>
               {STRENGTH_UNITS.map((u) => (
                 <button
                   key={u}
