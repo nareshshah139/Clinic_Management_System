@@ -32,3 +32,12 @@ it('does not treat a stored bare wildcard as the privileged-role bypass', async 
 
   await expect(workflow.authorize(actor, 'PURCHASE_ORDER', true)).rejects.toThrow();
 });
+
+it('offers batch delete only to roles the delete route admits', async () => {
+  const canDelete = async (role: string) =>
+    (await new InventoryWorkflowService(database(role, '["inventory:*"]', ['inventory:*']) as any)
+      .capabilities({ id: role, branchId: 'branch', role } as any)).itemDelete;
+  expect(await canDelete('PHARMACIST')).toBe(true);
+  expect(await canDelete('OWNER')).toBe(true);
+  expect(await canDelete('MANAGER')).toBe(false);
+});

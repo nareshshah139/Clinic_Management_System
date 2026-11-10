@@ -55,8 +55,10 @@ export function StockDetailsEditor({
   onSave,
   onCancel,
   busy,
+  focusField,
 }: {
   item: Record<string, any>;
+  focusField?: string;
   value: Record<string, any>;
   busy: boolean;
   onChange: (value: Record<string, any>) => void;
@@ -91,6 +93,7 @@ export function StockDetailsEditor({
             key === "name" ||
             ((key === "batchNumber" || key === "expiryDate") && !!original[key])
           }
+          autoFocus={key === focusField}
           min={numericFields.has(key) ? 0 : undefined}
           step={
             key === "gstRate" ? "0.01" : numericFields.has(key) ? 1 : undefined
@@ -118,7 +121,7 @@ export function StockDetailsEditor({
       </p>
       <fieldset disabled={busy} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">{fields(basicFields)}</div>
-        <details>
+        <details open={extraFields.some(([key]) => key === focusField) || undefined}>
           <summary className="cursor-pointer py-2 font-medium">
             More details: tax, stock limits &amp; codes
           </summary>

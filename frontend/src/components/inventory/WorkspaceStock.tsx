@@ -1,17 +1,15 @@
 "use client";
 
-import { displayUtcDate, displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
+import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Search, Printer, Download, Plus } from "lucide-react";
+import { Search, Download, Plus } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { InventoryAction, InventoryHelp } from "./InventoryPresentation";
-import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StockDetailsEditor } from "./StockDetailsEditor";
+import { InventoryItemPage } from "./InventoryItemPage";
 import { AddInventoryItemDialog } from "./AddInventoryItemDialog";
 import { StockEditDialog } from "./StockEditDialog";
-import { stockLedgerExplanation } from "./stock-recovery";
 import { ReviewStatus } from "@/components/ui/ReviewStatus";
 import { batchReviewTone, batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from "./stock-batch-view";
 import {
@@ -19,7 +17,6 @@ import {
   inputClass,
   downloadCsv,
   requestKey,
-  workflowKinds,
 } from "./workspace-model";
 
 type Props = {
@@ -86,9 +83,7 @@ export function WorkspaceStock({
   const selectionScope = JSON.stringify(Object.entries(stockQuery)
     .filter(([key]) => !["page", "item", "return"].includes(key))
     .sort(([a], [b]) => a.localeCompare(b)));
-  const editKey = `inventory-item-edit:${user?.branchId}:${user?.id}:${itemId}`;
   const [data, setData] = useState<any>(null),
-    [detail, setDetail] = useState<any>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [filters, setFilters] = useState(false),
@@ -96,43 +91,20 @@ export function WorkspaceStock({
     [search, setSearch] = useState(query.search || ""),
     [add, setAdd] = useState(false),
     [selected, setSelected] = useState<string[]>([]),
-    [edit, setEdit] = useState<any>(null),
     [notice, setNotice] = useState(""),
-    [tab, setTab] = useState("batches"),
-    [correction, setCorrection] = useState<any>(null),
-    [hideZero, setHideZero] = useState(false),
     [location, setLocation] = useState(""),
     [locationReason, setLocationReason] = useState(""),
     [showLocation, setShowLocation] = useState(false);
   const load = async () => {
+    if (itemId) return;
     setBusy(true);
     setError("");
     try {
-      if (itemId) {
-        const d = await apiClient.get<any>(
-          `/inventory/workspace/stock/${itemId}`,
-        );
-        setDetail(d);
-        try {
-          const recovered = JSON.parse(
-            sessionStorage.getItem(editKey) || "null",
-          );
-          setEdit(recovered);
-          if (recovered)
-            setNotice(
-              recovered.updatedAt === d.item.updatedAt
-                ? "Restored unsaved product details."
-                : "This product changed since your edits. Saving will require reloading the current record.",
-            );
-        } catch {
-          setEdit(null);
-        }
-      } else
-        setData(
-          await apiClient.get(
-            "/inventory/workspace/stock?" + new URLSearchParams(stockQuery),
-          ),
-        );
+      setData(
+        await apiClient.get(
+          "/inventory/workspace/stock?" + new URLSearchParams(stockQuery),
+        ),
+      );
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -153,14 +125,6 @@ export function WorkspaceStock({
     setSearch(query.search || "");
   }, [JSON.stringify(query)]);
   useEffect(() => { setSelected([]); }, [selectionScope]);
-  useEffect(() => {
-    if (edit && itemId)
-      try {
-        sessionStorage.setItem(editKey, JSON.stringify(edit));
-      } catch {
-        setNotice("Browser recovery unavailable; save before leaving.");
-      }
-  }, [edit, editKey, itemId]);
   const filter = (key: string, value: string) =>
     navigate({ [key]: value, page: "1", item: "" });
   const count = async () => {
@@ -227,25 +191,19 @@ export function WorkspaceStock({
       setBusy(false);
     }
   };
-  const item = detail?.item;
-  const baseTask = (kind: string) =>
-    onTask(kind, {
-      payload: {
-        reason: "",
-        lines: [
-          {
-            id: requestKey(),
-            inventoryId: item.id,
-            name: item.name,
-            unit: item.unit,
-            quantity: 1,
-            unitPrice: item.costPrice,
-            batchNumber: item.batchNumber,
-            expiryDate: item.expiryDate,
-          },
-        ],
-      },
-    });
+  if (itemId)
+    return (
+      <InventoryItemPage
+        itemId={itemId}
+        query={query}
+        navigate={navigate}
+        capabilities={capabilities}
+        onTask={onTask}
+        onDocument={onDocument}
+        onInvoice={onInvoice}
+        onBack={onBack}
+      />
+    );
   return (
     <div className="space-y-5">
       {error && (
@@ -265,620 +223,7 @@ export function WorkspaceStock({
           {notice === "Submitted for doctor or admin approval." && <Button variant="link" onClick={() => navigate({ view: 'approvals', item: '', page: '1' })}>Open approval queue</Button>}
         </p>
       )}
-      {itemId ? (
-        <>
-          <Button
-            variant="ghost"
-            onClick={() => (onBack ? onBack() : navigate({ item: "" }))}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to stock list
-          </Button>
-          {item && (
-            <>
-              <header className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-semibold">{item.productName || item.name}</h2>
-                  {item.packLabel && <p>{item.packLabel} · Stock counted in {item.unit}</p>}
-                  <p className="text-sm"><ReviewStatus tone={batchReviewTone(item)}>{batchState(item)}</ReviewStatus></p>
-                  <p className="text-muted-foreground">
-                    {item.batchNumber || "Batch unspecified"} · Expiry{" "}
-                    {fmtStockExpiry(item.expiryDate)} ·{" "}
-                    {item.storageLocation || "Location not assigned"}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {capabilities?.itemWrite && (
-                    <Button variant="outline" onClick={() => setEdit({ ...item, ...item.metadata, expiryDate: item.expiryDate?.slice(0, 10) || "", reason: "" })}>
-                      <Pencil className="h-4 w-4" /> Edit product details
-                    </Button>
-                  )}
-                  <InventoryAction
-                    label="Print batch label"
-                    onClick={() =>
-                      window.open(
-                        `/api/inventory/workspace/labels/${item.id}`,
-                        "_blank",
-                      )
-                    }
-                  >
-                    <Printer className="h-4 w-4" />
-                  </InventoryAction>
-                </div>
-              </header>
-              <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-y py-5 sm:grid-cols-4">
-                <div>
-                  <dt className="text-sm text-muted-foreground">
-                    Physical stock
-                  </dt>
-                  <dd className="text-xl font-semibold">
-                    {item.currentStock} {item.unit}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-muted-foreground">Held</dt>
-                  <dd className="text-xl font-semibold">
-                    {item.heldStock} {item.unit}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-muted-foreground">
-                    Available to sell
-                  </dt>
-                  <dd className="text-xl font-semibold">
-                    {item.available} {item.unit}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-muted-foreground">
-                    Minimum / maximum
-                  </dt>
-                  <dd className="text-xl font-semibold">
-                    {item.minStockLevel ?? "—"} / {item.maxStockLevel ?? "—"}{" "}
-                    {item.unit}
-                  </dd>
-                </div>
-              </dl>
-              <p className="text-sm">
-                {item.baseQuantity == null
-                  ? "Pack conversion needs verification."
-                  : `Physical equivalent: ${item.baseQuantity} base units (${item.baseFactor} per ${item.unit}).`}{" "}
-                {item.packQuantity != null && (
-                  <span>
-                    {" "}
-                    Verified pack equivalent: {item.packQuantity}{" "}
-                    {item.packEquivalentUnit}.{" "}
-                  </span>
-                )}{" "}
-                PTR {fmtMoney(item.costPrice)} · MRP {fmtMoney(item.mrp)} ·
-                Margin {item.margin == null ? "unknown" : `${item.margin}%`}.{" "}
-                {item.priceBasis}.
-              </p>
-              {!capabilities?.kinds?.COUNT?.write && (
-                <section className="space-y-2 rounded-md border p-4" aria-label="Batch recovery handoff">
-                  {item.drugs?.length > 1 && <p>This batch is linked to more than one product. Its physical product must be verified before reconciliation.</p>}
-                  <p>Ask a colleague who can count stock to open this batch, verify its product identity when needed, and record a fresh physical count. Viewing this batch or sharing this reference does not change stock.</p>
-                  <label className="block">Batch recovery reference
-                    <input className="mt-1 w-full rounded-md border p-2" readOnly value={`/dashboard/inventory?area=stock&view=list&item=${encodeURIComponent(item.id)}`} onFocus={event => event.currentTarget.select()} />
-                  </label>
-                </section>
-              )}
-              {item.drugs?.length > 1 && capabilities?.kinds?.COUNT?.write && (
-                <form key={`${item.id}:${item.updatedAt}`} className="space-y-3 rounded-md border p-4 print:hidden" onSubmit={async e => {
-                  e.preventDefault();
-                  const values = new FormData(e.currentTarget);
-                  setBusy(true); setError("");
-                  try {
-                    await apiClient.post("/inventory/workspace/stocktake/resolve-identity", {
-                      itemId: item.id, updatedAt: item.updatedAt, productId: values.get("productId"),
-                      reason: values.get("reason"), confirmed: values.get("confirmed") === "on",
-                    });
-                    await load();
-                    setNotice("Product identity resolved. Stock quantity has not changed. Verify the physical count before using this batch.");
-                  } catch (error: any) { setError(error.message); }
-                  finally { setBusy(false); }
-                }}>
-                  <p className="font-medium">Resolve this batch’s product identity</p>
-                  <p>This batch is linked to more than one product. Verify the physical pack before choosing its product. Resolving the link does not change the stock quantity.</p>
-                  <label className="block">Verified product
-                    <select name="productId" required className="ml-2 rounded-md border p-2" defaultValue="">
-                      <option value="" disabled>Select the product on the physical pack</option>
-                      {item.drugs.map((drug: any) => <option key={drug.id} value={drug.id}>{drug.name}</option>)}
-                    </select>
-                  </label>
-                  <label className="block">Reason <input name="reason" required maxLength={500} className="ml-2 rounded-md border p-2" /></label>
-                  <label className="block"><input name="confirmed" type="checkbox" required /> I verified the physical product and the existing {item.unit} stock unit and pack size.</label>
-                  <Button disabled={busy}>Resolve product identity</Button>
-                </form>
-              )}
-              <div className="flex flex-wrap gap-2 print:hidden">
-                {canSubmitEdits && <>
-                  <Button variant="outline" onClick={() => setStockEdit({ item, field: 'stock' })}>Edit stock</Button>
-                  <Button variant="outline" onClick={() => setStockEdit({ item, field: 'price' })}>Edit price</Button>
-                </>}
-                {["HOLD", "LOSS", "SUPPLIER_RETURN"]
-                  .filter((k) => capabilities?.kinds?.[k]?.write)
-                  .map((k) => (
-                    <Button
-                      key={k}
-                      variant="outline"
-                      onClick={() => baseTask(k)}
-                    >
-                      {workflowKinds[k].label}
-                    </Button>
-                  ))}
-                {capabilities?.kinds?.COUNT?.write && (
-                  <Button
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        const d = await apiClient.post<any>(
-                          "/inventory/workspace/counts",
-                          { itemIds: [item.id], requestKey: requestKey() },
-                        );
-                        onDocument("COUNT", d.id);
-                      } catch (e: any) {
-                        setError(e.message);
-                      }
-                    }}
-                  >
-                    Count this batch
-                  </Button>
-                )}
-              </div>
-              {edit && <StockDetailsEditor item={item} value={edit} onChange={setEdit} busy={busy}
-                onCancel={() => { sessionStorage.removeItem(editKey); setEdit(null); }}
-                onSave={async () => {
-                  setBusy(true); setError("");
-                  try {
-                    await apiClient.patch(`/inventory/workspace/stock/${item.id}`, { ...edit, batchNumber: edit.batchNumber || undefined, expiryDate: edit.expiryDate || undefined });
-                    sessionStorage.removeItem(editKey);
-                    await load();
-                    setNotice("Corrected details saved. Stock quantity unchanged.");
-                  } catch (e: any) { setError(e.message); }
-                  finally { setBusy(false); }
-                }} />}
-              <nav
-                aria-label="Item history"
-                className="flex flex-wrap gap-2 border-b pb-3"
-              >
-                {[
-                  "batches",
-                  "purchases",
-                  "purchase returns",
-                  "sales",
-                  "sales returns",
-                  "ledger",
-                  "blocked stock",
-                  "information",
-                ].map((t) => (
-                  <Button
-                    key={t}
-                    variant={tab === t ? "default" : "ghost"}
-                    onClick={() => setTab(t)}
-                  >
-                    {t[0].toUpperCase() + t.slice(1)}
-                  </Button>
-                ))}
-              </nav>
-              {tab === "batches" && (
-                <>
-                  <p className="text-sm text-muted-foreground">{detail.identityBasis}. Multiple batches can be on hand; compare expiry dates when choosing stock.</p>
-                  <label className="flex gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={hideZero}
-                      onChange={(e) => setHideZero(e.target.checked)}
-                    />
-                    Hide zero-stock batches
-                  </label>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr>
-                          {[
-                            "Batch",
-                            "Batch state",
-                            "Expiry",
-                            "Physical",
-                            "Held",
-                            "Available",
-                            "Unit",
-                            "Base equivalent",
-                            "PTR",
-                            "MRP",
-                            "Landing price",
-                            "Margin",
-                            "GST",
-                            "Location",
-                          ].map((t) => (
-                            <th key={t} className="p-3">
-                              {t}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {detail.batches
-                          .filter((b: any) => !hideZero || b.currentStock !== 0)
-                          .map((b: any) => (
-                            <tr key={b.id} className={batchRowClass(b)}>
-                              <td className="p-3">
-                                <button
-                                  className="font-medium underline"
-                                  onClick={() => navigate({ item: b.id })}
-                                >
-                                  {b.batchNumber || "No batch"}
-                                </button>
-                              </td>
-                              <td><ReviewStatus tone={batchReviewTone(b)}>{batchState(b)}</ReviewStatus></td>
-                              <td>{fmtStockExpiry(b.expiryDate)}</td>
-                              <td>{b.currentStock}</td>
-                              <td>{b.heldStock}</td>
-                              <td>{b.available}</td>
-                              <td>{b.unit}</td>
-                              <td>{b.baseQuantity ?? "Unknown"}</td>
-                              <td>{fmtMoney(b.costPrice)}</td>
-                              <td className="text-right tabular-nums">{fmtMoney(b.mrp)}</td>
-                              <td>
-                                {b.metadata.landingCostPerStockUnit == null
-                                  ? "Unknown"
-                                  : fmtMoney(
-                                      b.metadata.landingCostPerStockUnit,
-                                    )}
-                              </td>
-                              <td>{b.margin ?? "Unknown"}%</td>
-                              <td>{b.gstRate ?? "Unknown"}%</td>
-                              <td>{b.storageLocation || "—"}</td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-              {tab === "purchases" && (
-                <ul className="divide-y">
-                  {detail.purchases.map((p: any) => (
-                    <li
-                      key={p.id}
-                      className="flex flex-wrap justify-between gap-3 py-3"
-                    >
-                      <button
-                        className="underline"
-                        onClick={() => onInvoice(p.id)}
-                      >
-                        {p.invoiceNumber} · {p.distributorName}
-                      </button>
-                      <span>
-                        {displayUtcDate(p.invoiceDate)} · {fmtMoney(p.netPayable)} ·{" "}
-                        {p.status}
-                      </span>
-                    </li>
-                  ))}
-                  {!detail.purchases.length && (
-                    <li className="py-5 text-muted-foreground">
-                      No linked purchase bills found.
-                    </li>
-                  )}
-                </ul>
-              )}
-              {["purchase returns", "sales returns"].includes(tab) && (
-                <ul className="divide-y">
-                  {detail.history
-                    .filter((h: any) =>
-                      tab === "blocked stock"
-                        ? h.heldDelta !== 0
-                        : h.document.kind ===
-                          (tab === "purchase returns"
-                            ? "SUPPLIER_RETURN"
-                            : "SALES_RETURN"),
-                    )
-                    .map((h: any) => (
-                      <li
-                        key={h.id}
-                        className="flex flex-wrap justify-between gap-3 py-3"
-                      >
-                        <button
-                          className="underline"
-                          onClick={() =>
-                            onDocument(h.document.kind, h.document.id)
-                          }
-                        >
-                          {h.document.reference}
-                        </button>
-                        <span>
-                          {h.document.status} · Physical {h.quantityDelta} ·
-                          Held {h.heldDelta} {item.unit}
-                          <span className="block text-xs text-muted-foreground">
-                            {displayClinicDate(h.document.createdAt)} ·{" "}
-                            {h.document.createdBy} ·{" "}
-                            {h.document.payload?.reason || "No reason recorded"}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-              )}
-              {tab === "blocked stock" && (
-                <section className="space-y-3">
-                  <h3 className="font-semibold">Held stock by source</h3>
-                  {detail.holdsRestricted ? (
-                    <p>
-                      Access to held-stock documents is required to view these
-                      details.
-                    </p>
-                  ) : (
-                    <ul className="divide-y">
-                      {(detail.holds || []).map((h: any) => (
-                        <li
-                          key={h.id}
-                          className="flex flex-wrap justify-between gap-3 py-3 text-sm"
-                        >
-                          <button
-                            className="underline"
-                            onClick={() => onDocument(h.kind, h.id)}
-                          >
-                            {h.reference}
-                          </button>
-                          <span>
-                            {h.remainingHeld} {item.unit} still held ·{" "}
-                            {h.status}
-                            <span className="block text-xs text-muted-foreground">
-                              {displayClinicDate(h.createdAt)} · {h.ownerName} ·{" "}
-                              {h.reason || "No reason recorded"}
-                            </span>
-                          </span>
-                        </li>
-                      ))}
-                      {!detail.holds?.length && (
-                        <li className="py-5 text-muted-foreground">
-                          No held-stock history for this batch.
-                        </li>
-                      )}
-                    </ul>
-                  )}
-                </section>
-              )}
-              {["ledger", "sales"].includes(tab) && (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    {stockLedgerExplanation(detail.ledger, item.unit)}{" "}
-                    {capabilities?.kinds?.COUNT?.write
-                      ? "Use Count this batch to record a fresh physical observation. Applying an approved count may adjust stock; starting a count does not."
-                      : "Use the batch recovery reference above to ask an authorized colleague to review the evidence and record a fresh count."}
-                  </p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr>
-                          {[
-                            "Date",
-                            "Reference",
-                            "Type",
-                            "In / out",
-                            "Closing",
-                            "Reason",
-                            "Action",
-                          ].map((t) => (
-                            <th className="p-3" key={t}>
-                              {t}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {detail.movements
-                          .filter(
-                            (m: any) => tab !== "sales" || m.type === "SALE",
-                          )
-                          .map((m: any) => (
-                            <tr key={m.id}>
-                              <td className="p-3 text-right tabular-nums">
-                                {displayClinicDateTime(m.createdAt)}
-                              </td>
-                              <td className="p-3">
-                                {(() => {
-                                  const h = detail.history.find(
-                                    (h: any) => h.transactionId === m.id,
-                                  );
-                                  const p =
-                                    m.owner?.type === "purchase" ? m.owner : null;
-                                  return h ? (
-                                    <button
-                                      className="underline"
-                                      onClick={() =>
-                                        onDocument(
-                                          h.document.kind,
-                                          h.document.id,
-                                        )
-                                      }
-                                    >
-                                      {m.reference}
-                                    </button>
-                                  ) : p ? (
-                                    <button
-                                      className="underline"
-                                      onClick={() => onInvoice(p.id)}
-                                    >
-                                      {m.reference}
-                                    </button>
-                                  ) : (
-                                    m.reference || "—"
-                                  );
-                                })()}
-                                <span className="block text-xs text-muted-foreground">
-                                  {m.performedBy || m.userId}
-                                </span>
-                              </td>
-                              <td className="p-3">{m.type}</td>
-                              <td className="p-3">
-                                {m.delta == null
-                                  ? "Unknown"
-                                  : m.delta > 0
-                                    ? `+${m.delta}`
-                                    : m.delta}
-                              </td>
-                              <td className="p-3">{m.closing ?? "—"}</td>
-                              <td className="p-3">{m.reason || "—"}</td>
-                              <td className="p-3">
-                                {capabilities?.approve &&
-                                  (() => {
-                                    const h = detail.history.find(
-                                        (h: any) => h.transactionId === m.id,
-                                      ),
-                                      p =
-                                        m.owner?.type === "purchase"
-                                          ? m.owner
-                                          : null;
-                                    return h ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          onDocument(
-                                            h.document.kind,
-                                            h.document.id,
-                                          )
-                                        }
-                                      >
-                                        Open source correction
-                                      </Button>
-                                    ) : p ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => onInvoice(p.id)}
-                                      >
-                                        Open purchase correction
-                                      </Button>
-                                    ) : m.correctionAllowed === false ? (
-                                      m.owner?.type === "sale" ? (
-                                        <a
-                                          className="underline"
-                                          href={`/dashboard/pharmacy/invoices?search=${encodeURIComponent(m.reference || "")}`}
-                                        >
-                                          Open original sale
-                                        </a>
-                                      ) : m.owner?.type === "workflow" ? (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() =>
-                                            onDocument(m.owner.kind, m.owner.id)
-                                          }
-                                        >
-                                          Open source correction
-                                        </Button>
-                                      ) : (
-                                        <span>
-                                          Source document needs identification
-                                          before correction.
-                                        </span>
-                                      )
-                                    ) : (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          setCorrection({
-                                            transactionId: m.id,
-                                            correctDelta: m.delta,
-                                            reason: "",
-                                            requestKey: requestKey(),
-                                          })
-                                        }
-                                      >
-                                        Correct
-                                      </Button>
-                                    );
-                                  })()}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-              {correction && (
-                <form
-                  className="flex flex-wrap items-end gap-3 border p-4"
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    try {
-                      const d = await apiClient.post<any>(
-                        "/inventory/workspace/movement-corrections",
-                        correction,
-                      );
-                      setCorrection(null);
-                      onDocument("CORRECTION", d.id);
-                    } catch (e: any) {
-                      setError(e.message);
-                    }
-                  }}
-                >
-                  <label className="text-sm">
-                    Correct signed quantity
-                    <input
-                      className={inputClass}
-                      type="number"
-                      value={correction.correctDelta ?? ""}
-                      onChange={(e) =>
-                        setCorrection({
-                          ...correction,
-                          correctDelta: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="flex-1 text-sm">
-                    Reason
-                    <input
-                      className={inputClass}
-                      required
-                      value={correction.reason}
-                      onChange={(e) =>
-                        setCorrection({ ...correction, reason: e.target.value })
-                      }
-                    />
-                  </label>
-                  <Button>Post linked correction</Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setCorrection(null)}
-                  >
-                    Cancel
-                  </Button>
-                </form>
-              )}
-              {tab === "information" && (
-                <dl className="grid gap-3 sm:grid-cols-2">
-                  {[
-                    ["Category", item.category],
-                    [
-                      "Manufacturer",
-                      item.manufacturer || "Optional; not recorded",
-                    ],
-                    ["HSN", item.hsnCode],
-                    ["GST", item.gstRate],
-                    ["Barcode", item.barcode],
-                    ["SKU", item.sku],
-                    ["Missing details", item.issues.join(", ") || "None"],
-                  ].map(([k, v]) => (
-                    <div key={k}>
-                      <dt className="text-sm text-muted-foreground">{k}</dt>
-                      <dd>{v ?? "—"}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
-            </>
-          )}
-        </>
-      ) : (
-        <>
+      <>
           <header className="flex flex-wrap justify-between gap-3">
             <div>
               <div className="flex items-center gap-2"><h2 className="text-2xl font-semibold">Stock</h2>
@@ -1374,8 +719,7 @@ export function WorkspaceStock({
             onOpenChange={setAdd}
             onSuccess={load}
           />
-        </>
-      )}
+      </>
       {stockEdit && <StockEditDialog item={stockEdit.item} field={stockEdit.field}
         onClose={() => setStockEdit(null)} onSubmitted={() => { setStockEdit(null); setNotice("Submitted for doctor or admin approval."); }} />}
     </div>

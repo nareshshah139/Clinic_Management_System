@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, TrendingUp, TriangleAlert } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ArrowDown, ArrowUp, ArrowUpDown, SlidersHorizontal, TrendingUp, TriangleAlert } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { displayCalendarDate } from "@/lib/date-display";
 import { Button } from "@/components/ui/button";
@@ -11,12 +12,31 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSkeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { inputClass } from "@/components/inventory/workspace-model";
 import { reportById } from "./reports/report-catalog";
 import { ExportMenu } from "./reports/ReportToolbar";
 import { cn } from "@/lib/utils";
 import { ReportInfoTip } from "./ReportInfoTip";
 import {
+  DEFAULT_MARGIN_FILTERS,
   DEFAULT_MARGIN_SORT,
+  MARGIN_COST_STATUSES,
+  MARGIN_COST_STATUS_LABELS,
+  MARGIN_FILTER_PARAM_KEYS,
+  MARGIN_ITEM_TYPE_LABELS,
+  MARGIN_SEARCH_FIELDS,
+  MARGIN_SEARCH_FIELD_LABELS,
+  MARGIN_TYPES,
+  MARGIN_TYPE_LABELS,
+  type MarginFilters,
+  type MarginItemType,
+  activeMoreFilterCount,
+  describeMarginFilters,
+  hasActiveFilters,
+  marginExportParams,
+  marginFilterParams,
+  marginFiltersFromParams,
+  marginQuery,
   type ItemMarginReport as Report,
   type MarginRow,
   type MarginSort,
@@ -65,7 +85,7 @@ function Tile({ label, value, help, tone }: { label: string; value: string; help
       <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
         {label} <ReportInfoTip label={label}>{help}</ReportInfoTip>
       </p>
-      <p className={cn("mt-1 truncate text-lg font-semibold tabular-nums", tone === "good" && "text-emerald-700 dark:text-emerald-400", tone === "bad" && "text-destructive")}>
+      <p className={cn("mt-1 break-words text-lg font-semibold tabular-nums", tone === "good" && "text-emerald-700 dark:text-emerald-400", tone === "bad" && "text-destructive")}>
         {value}
       </p>
     </div>
@@ -107,15 +127,15 @@ function SortHeader({ column, sort, onSort }: { column: (typeof COLUMNS)[number]
 
 const FROZEN_NAME = "sticky left-0 z-10 min-w-48 max-w-64 whitespace-normal border-r bg-background";
 
-const itemHref = (itemId: string) =>
-  `/dashboard/inventory?area=stock&view=list&item=${encodeURIComponent(itemId)}&return=${encodeURIComponent("area=purchases&view=margin")}`;
+const itemHref = (itemId: string, returnTo: string) =>
+  `/dashboard/inventory?area=stock&view=list&item=${encodeURIComponent(itemId)}&return=${encodeURIComponent(returnTo)}`;
 
-function MarginTableRow({ row }: { row: MarginRow }) {
+function MarginTableRow({ row, returnTo }: { row: MarginRow; returnTo: string }) {
   const money = "px-2 text-right tabular-nums";
   return (
     <TableRow>
       <TableCell className={cn("px-2 font-medium", FROZEN_NAME)}>
-        {row.itemId ? <a className="text-primary underline-offset-4 hover:underline" href={itemHref(row.itemId)}>{row.name}</a> : row.name}
+        {row.itemId ? <a className="text-primary underline-offset-4 hover:underline" href={itemHref(row.itemId, returnTo)}>{row.name}</a> : row.name}
       </TableCell>
       <TableCell className="px-2">{row.category || "—"}</TableCell>
       <TableCell className="whitespace-nowrap px-2">{row.unitLabel || "—"}</TableCell>
@@ -140,32 +160,71 @@ function MarginTableRow({ row }: { row: MarginRow }) {
   );
 }
 
+type Applied = { startDate: string; endDate: string; filters: MarginFilters };
+
+const withCurrent = (options: string[], current: string) => (current && !options.includes(current) ? [current, ...options] : options);
+
+function FilterSelect({ id, label, value, onChange, children }: { id: string; label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <Label htmlFor={id}>{label}</Label>
+      <select id={id} className={inputClass} value={value} onChange={(event) => onChange(event.target.value)}>
+        {children}
+      </select>
+    </div>
+  );
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] item-margin-filters
+ * The item-wise margin report MUST offer Type (net, sales, returns), Tags, a search-field selector and
+ * a More Filters panel whose button shows how many of its filters are active. Dropdown options come from
+ * the report period, so an option never shows an empty report. The dates and filters live in the page
+ * URL so refresh and back keep them, and the tiles always add up the visible rows.
+ */
 export function ItemMarginReport() {
-  const [startDate, setStartDate] = useState(clinicMonthStart);
-  const [endDate, setEndDate] = useState(clinicToday);
-  const [search, setSearch] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const paramsKey = params.toString();
+  const applied = useMemo<Applied>(() => {
+    const current = new URLSearchParams(paramsKey);
+    return { startDate: current.get("from") || clinicMonthStart(), endDate: current.get("to") || clinicToday(), filters: marginFiltersFromParams(current) };
+  }, [paramsKey]);
+  const [startDate, setStartDate] = useState(applied.startDate);
+  const [endDate, setEndDate] = useState(applied.endDate);
+  const [filters, setFilters] = useState<MarginFilters>(applied.filters);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [sort, setSort] = useState<MarginSort>(DEFAULT_MARGIN_SORT);
   const [state, run] = useReport<Report>(marginIsEmpty);
-
-  const load = useCallback(
-    () =>
-      run(() =>
-        apiClient.get<Report>("/pharmacy/compliance/item-margin", {
-          startDate,
-          endDate,
-          ...(search.trim() ? { search: search.trim() } : {}),
-        }),
-      ),
-    [endDate, run, search, startDate],
-  );
+  const setFilter = <K extends keyof MarginFilters>(key: K, value: MarginFilters[K]) => setFilters((current) => ({ ...current, [key]: value }));
 
   useEffect(() => {
-    if (state.status === "idle") void load();
-  }, [load, state.status]);
+    setStartDate(applied.startDate);
+    setEndDate(applied.endDate);
+    setFilters(applied.filters);
+  }, [applied]);
+
+  useEffect(() => {
+    void run(() => apiClient.get<Report>("/pharmacy/compliance/item-margin", marginQuery(applied.startDate, applied.endDate, applied.filters)));
+  }, [applied, run]);
+
+  const apply = (next: Applied) => {
+    const query = new URLSearchParams(paramsKey);
+    for (const key of ["from", "to", ...MARGIN_FILTER_PARAM_KEYS]) query.delete(key);
+    query.set("from", next.startDate);
+    query.set("to", next.endDate);
+    for (const [key, value] of Object.entries(marginFilterParams(next.filters))) query.set(key, value);
+    const href = `${pathname}?${query.toString()}`;
+    if (query.toString() === paramsKey) void run(() => apiClient.get<Report>("/pharmacy/compliance/item-margin", marginQuery(next.startDate, next.endDate, next.filters)));
+    else router.replace(href, { scroll: false });
+  };
 
   const rows = useMemo(() => (state.status === "loaded" ? sortMarginRows(state.data.rows, sort) : []), [sort, state]);
   const totals = state.status === "loaded" ? state.data.totals : null;
-  const loaded = state.status === "loaded" || state.status === "empty" ? state.data : null;
+  const options = state.status === "loaded" || state.status === "empty" ? state.data.options : { tags: [], categories: [], manufacturers: [], itemTypes: [] };
+  const moreCount = activeMoreFilterCount(filters);
+  const returnTo = `${pathname}?${paramsKey}`;
 
   return (
     <Card>
@@ -178,34 +237,79 @@ export function ItemMarginReport() {
           <CardDescription>What each item sold for, what it cost and what the clinic made, for posted sales in the period.</CardDescription>
         </div>
         <form
-          className="grid gap-3 sm:grid-cols-[repeat(2,minmax(0,12rem))_minmax(0,18rem)_auto_auto] sm:items-end"
+          className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
-            void load();
+            apply({ startDate, endDate, filters });
           }}
         >
-          <div className="space-y-1">
-            <Label htmlFor="margin-start">From</Label>
-            <Input id="margin-start" type="date" required value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(2,minmax(0,11rem))_minmax(0,11rem)_minmax(0,11rem)]">
+            <div className="space-y-1">
+              <Label htmlFor="margin-start">From</Label>
+              <Input id="margin-start" className="h-10" type="date" required value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="margin-end">To</Label>
+              <Input id="margin-end" className="h-10" type="date" required value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} />
+            </div>
+            <FilterSelect id="margin-type" label="Type" value={filters.type} onChange={(value) => setFilter("type", value as MarginFilters["type"])}>
+              {MARGIN_TYPES.map((type) => <option key={type} value={type}>{MARGIN_TYPE_LABELS[type]}</option>)}
+            </FilterSelect>
+            <FilterSelect id="margin-tag" label="Tags" value={filters.tag} onChange={(value) => setFilter("tag", value)}>
+              <option value="">All tags</option>
+              {withCurrent(options.tags, filters.tag).map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+            </FilterSelect>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="margin-end">To</Label>
-            <Input id="margin-end" type="date" required value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} />
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)] lg:grid-cols-[minmax(0,11rem)_minmax(0,22rem)_auto_auto_auto] lg:items-end">
+            <FilterSelect id="margin-search-field" label="Search in" value={filters.searchField} onChange={(value) => setFilter("searchField", value as MarginFilters["searchField"])}>
+              {MARGIN_SEARCH_FIELDS.map((field) => <option key={field} value={field}>{MARGIN_SEARCH_FIELD_LABELS[field]}</option>)}
+            </FilterSelect>
+            <div className="space-y-1">
+              <Label htmlFor="margin-search">Search</Label>
+              <Input id="margin-search" className="h-10" type="search" maxLength={100} placeholder="Type to search" value={filters.search} onChange={(event) => setFilter("search", event.target.value)} />
+            </div>
+            <Button type="submit" disabled={state.status === "loading"}>Go</Button>
+            <Button type="button" variant="outline" aria-expanded={moreOpen} aria-controls="margin-more-filters" onClick={() => setMoreOpen((open) => !open)}>
+              <SlidersHorizontal className="size-4" aria-hidden="true" />
+              More Filters{moreCount > 0 ? ` (${moreCount})` : ""}
+            </Button>
+            <ExportMenu
+              entry={MARGIN}
+              params={{ from: applied.startDate, to: applied.endDate, q: applied.filters.search.trim() || undefined }}
+              extra={marginExportParams(applied.filters)}
+              disabled={state.status !== "loaded"}
+            />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="margin-search">Search</Label>
-            <Input id="margin-search" type="search" maxLength={100} placeholder="Item, category or manufacturer" value={search} onChange={(event) => setSearch(event.target.value)} />
-          </div>
-          <Button type="submit" disabled={state.status === "loading"}>Go</Button>
-          <ExportMenu
-            entry={MARGIN}
-            params={{
-              from: loaded?.period.startDate ?? startDate,
-              to: loaded?.period.endDate ?? endDate,
-              q: loaded?.search ?? undefined,
-            }}
-            disabled={!loaded}
-          />
+          {moreOpen && (
+            <fieldset id="margin-more-filters" className="grid gap-3 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-4">
+              <legend className="px-1 text-sm font-medium">More Filters</legend>
+              <FilterSelect id="margin-category" label="Category" value={filters.category} onChange={(value) => setFilter("category", value)}>
+                <option value="">All categories</option>
+                {withCurrent(options.categories, filters.category).map((category) => <option key={category} value={category}>{category}</option>)}
+              </FilterSelect>
+              <FilterSelect id="margin-manufacturer" label="Manufacturer" value={filters.manufacturer} onChange={(value) => setFilter("manufacturer", value)}>
+                <option value="">All manufacturers</option>
+                {withCurrent(options.manufacturers, filters.manufacturer).map((name) => <option key={name} value={name}>{name}</option>)}
+              </FilterSelect>
+              <FilterSelect id="margin-item-type" label="Item type" value={filters.itemType} onChange={(value) => setFilter("itemType", value as MarginItemType | "")}>
+                <option value="">All types</option>
+                {Object.entries(MARGIN_ITEM_TYPE_LABELS).filter(([type]) => options.itemTypes.includes(type) || type === filters.itemType).map(([type, label]) => <option key={type} value={type}>{label}</option>)}
+              </FilterSelect>
+              <FilterSelect id="margin-cost-status" label="Cost status" value={filters.costStatus} onChange={(value) => setFilter("costStatus", value as MarginFilters["costStatus"])}>
+                {MARGIN_COST_STATUSES.map((status) => <option key={status} value={status}>{MARGIN_COST_STATUS_LABELS[status]}</option>)}
+              </FilterSelect>
+              <div className="sm:col-span-2 lg:col-span-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={!hasActiveFilters(filters)}
+                  onClick={() => apply({ startDate, endDate, filters: { ...DEFAULT_MARGIN_FILTERS } })}
+                >
+                  Clear filters
+                </Button>
+              </div>
+            </fieldset>
+          )}
         </form>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -234,8 +338,12 @@ export function ItemMarginReport() {
         )}
         {state.status === "empty" && (
           <EmptyState
-            title={state.data.search ? `No sold items match "${state.data.search}"` : "No items sold in this range"}
-            description={`No posted sales between ${displayCalendarDate(state.data.period.startDate)} and ${displayCalendarDate(state.data.period.endDate)}${state.data.search ? " match the search" : ""}. Change the range or search and press Go.`}
+            title={hasActiveFilters(applied.filters) ? "No items match these filters" : "No items sold in this range"}
+            description={`${
+              hasActiveFilters(applied.filters)
+                ? `Nothing posted between ${displayCalendarDate(state.data.period.startDate)} and ${displayCalendarDate(state.data.period.endDate)} matches ${describeMarginFilters(applied.filters).map(([label, value]) => `${label.toLowerCase()} ${value}`).join(", ")}.`
+                : `No posted sales between ${displayCalendarDate(state.data.period.startDate)} and ${displayCalendarDate(state.data.period.endDate)}.`
+            } Change the range or filters and press Go.`}
           />
         )}
         {state.status === "loaded" && (
@@ -248,7 +356,7 @@ export function ItemMarginReport() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row) => <MarginTableRow key={row.key} row={row} />)}
+              {rows.map((row) => <MarginTableRow key={row.key} row={row} returnTo={returnTo} />)}
             </TableBody>
           </Table>
         )}

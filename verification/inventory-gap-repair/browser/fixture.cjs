@@ -178,8 +178,10 @@ http
       } else
         body = {
           item: row,
-          batches: [row],
-          movements: [],
+          batches: [{ ...row, purchaseDiscountPercent: null, deletable: false, deleteBlockedReason: "Dispose or return remaining stock before deleting a batch" }],
+          product: { batchIds: [row.id], physical: row.currentStock, held: row.heldStock, available: row.available },
+          itemLedger: { rows: [], closing: 0, currentStock: row.currentStock, matches: false, batches: [{ batchId: row.id, closing: 0, currentStock: row.currentStock, matches: false }] },
+          ledger: { status: "UNVERIFIED", checkpoint: null },
           purchases: [invoice],
           history: [],
           holds: [],

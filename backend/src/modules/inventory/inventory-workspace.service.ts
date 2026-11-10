@@ -1,3 +1,4 @@
+import { PharmacyPurchaseInvoiceStatus } from '@prisma/client';
 import { readStockPage } from './inventory-stock-query';
 import { saveInventoryItemMetadata } from './inventory-item-metadata';
 import { reconcileInventoryLedger } from './inventory-ledger';
@@ -9,13 +10,56 @@ import { PharmacyPurchaseReturnsRegisterService } from '../pharmacy/pharmacy-pur
 import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
-import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
+import { batchDeleteBlock, jsonObject, money, movementDelta, writeStockMovement } from './inventory-stock';
 import { inventoryProductName } from './inventory-names';
 import { displayDay } from './supplier-return';
 import { clinicDay, peopleById } from '../pharmacy/register-utils';
 import { PharmacySupplierCreditService } from '../pharmacy/pharmacy-supplier-credit.service';
 import { EVERY_ALLOCATION, creditBalance } from '../pharmacy/supplier-credit-balance';
-import { parseTimelineQuery, readInventoryTimeline } from './inventory-timeline';
+import { classifyMovement, loadSourceContext, parseTimelineQuery, readInventoryTimeline, SourceContext } from './inventory-timeline';
+import { LEDGER_KIND, runItemLedger } from './inventory-item-ledger';
+
+const finiteOrNull = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+
+function latestPurchaseLine(purchases: { status: PharmacyPurchaseInvoiceStatus; invoiceDate: Date; items: { inventoryItemId: string | null; discountPercent: number; createdAt: Date }[] }[], batchId: string) {
+  return purchases
+    .filter(p => p.status !== PharmacyPurchaseInvoiceStatus.CANCELLED)
+    .flatMap(p => p.items.filter(line => line.inventoryItemId === batchId).map(line => ({ line, invoiceDate: p.invoiceDate })))
+    .sort((a, b) => b.invoiceDate.getTime() - a.invoiceDate.getTime() || b.line.createdAt.getTime() - a.line.createdAt.getTime())[0]?.line;
+}
+
+type LedgerMovement = {
+  id: string; itemId: string; createdAt: Date; type: string; reference: string | null; reason: string | null; notes: string | null;
+  quantity: number; quantityDelta: number | null; supplier: string | null; customer: string | null; batchNumber: string | null;
+  user?: { id: string; firstName: string; lastName: string } | null;
+};
+
+function itemLedgerRows(
+  batches: { id: string; batchNumber: string | null; currentStock: number }[],
+  movements: LedgerMovement[],
+  sources: SourceContext,
+  owners: Map<string, any>,
+  correctionAllowed: (m: LedgerMovement) => boolean,
+) {
+  const run = runItemLedger(batches, movements.map(m => {
+    const info = jsonObject(m.notes);
+    return { id: m.id, batchId: m.itemId, at: m.createdAt, delta: movementDelta(m), recordedBefore: finiteOrNull(info.beforeStock), recordedAfter: finiteOrNull(info.afterStock) };
+  }));
+  const byId = new Map(movements.map(m => [m.id, m]));
+  const batchNumbers = new Map(batches.map(b => [b.id, b.batchNumber]));
+  const rows = run.rows.map(row => {
+    const m = byId.get(row.id)!;
+    const source = classifyMovement(m, sources);
+    return {
+      ...row, at: m.createdAt, batchNumber: batchNumbers.get(m.itemId) ?? m.batchNumber ?? null,
+      kind: LEDGER_KIND[source.channel], channel: source.channel, channelLabel: source.label,
+      reference: m.reference, document: source.document, counterparty: source.counterparty,
+      actor: m.user ? { id: m.user.id, name: `${m.user.firstName} ${m.user.lastName}`.trim() } : null,
+      reason: m.reason, owner: owners.get(m.id) || null, correctionAllowed: correctionAllowed(m),
+    };
+  });
+  return { rows, closing: run.closing, currentStock: run.currentStock, matches: run.matches, batches: run.batches };
+}
 
 @Injectable()
 export class InventoryWorkspaceService {
@@ -118,21 +162,29 @@ async timeline(actor: WorkflowActor, q: Record<string, any> = {}) {
   async item(actor: WorkflowActor,id:string) {
     await this.require(actor,'inventory:item:read');
     const item=await this.prisma.inventoryItem.findFirst({where:{id,branchId:actor.branchId},include:{drugs:{select:{id:true,name:true}}}}); if(!item)throw new NotFoundException('Batch not found');
-    const [batches,movements,effects,purchases]=await Promise.all([
-      this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,...(item.drugs.length===1?{drugs:{some:{id:item.drugs[0].id},every:{id:item.drugs[0].id}},unit:item.unit,packSize:item.packSize,packUnit:item.packUnit}:{id:item.id})},include:{drugs:{select:{id:true,name:true}},_count:{select:{drugs:true}}},orderBy:[{expiryDate:'asc'},{id:'asc'}]}),
-      this.prisma.stockTransaction.findMany({where:{branchId:actor.branchId,itemId:id},orderBy:[{createdAt:'asc'},{id:'asc'}]}),
-      this.prisma.inventoryWorkflowEffect.findMany({where:{branchId:actor.branchId,inventoryId:id},include:{document:true},orderBy:{createdAt:'desc'}}),
-      this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId:actor.branchId,items:{some:{inventoryItemId:id}}},include:{documents:{select:{id:true,fileName:true}},items:true},orderBy:{invoiceDate:'desc'}})
+    const batches=await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,...(item.drugs.length===1?{drugs:{some:{id:item.drugs[0].id},every:{id:item.drugs[0].id}},unit:item.unit,packSize:item.packSize,packUnit:item.packUnit}:{id:item.id})},include:{drugs:{select:{id:true,name:true}},_count:{select:{drugs:true}}},orderBy:[{expiryDate:'asc'},{id:'asc'}]});
+    const batchIds=batches.map(b=>b.id);
+    const [movements,effects,purchases]=await Promise.all([
+      this.prisma.stockTransaction.findMany({where:{branchId:actor.branchId,itemId:{in:batchIds}},include:{user:{select:{id:true,firstName:true,lastName:true}}},orderBy:[{createdAt:'asc'},{id:'asc'}]}),
+      this.prisma.inventoryWorkflowEffect.findMany({where:{branchId:actor.branchId,inventoryId:{in:batchIds}},include:{document:true},orderBy:{createdAt:'desc'}}),
+      this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId:actor.branchId,items:{some:{inventoryItemId:{in:batchIds}}}},include:{documents:{select:{id:true,fileName:true}},items:true},orderBy:{invoiceDate:'desc'}})
     ]);
-    const owners=await this.movementOwners(actor.branchId,movements);
+    const [owners,sources]=await Promise.all([this.movementOwners(actor.branchId,movements),loadSourceContext(this.prisma,actor.branchId,movements)]);
     const legacyPurchaseIds=[...new Set([...owners.values()].filter(o=>o.type==='purchase'&&!purchases.some(p=>p.id===o.id)).map(o=>o.id))];
     if(legacyPurchaseIds.length)purchases.push(...await this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId:actor.branchId,id:{in:legacyPurchaseIds}},include:{documents:{select:{id:true,fileName:true}},items:true},orderBy:{invoiceDate:'desc'}}));
     const caps=await this.workflow.capabilities(actor);
-    const holds=['HOLD','SALES_RETURN'].some(k=>caps.kinds[k]?.read)?await this.holdSources(actor,{itemId:id,history:'true',internalAll:true}):{rows:[],restricted:true};
-    const ledger = reconcileInventoryLedger(item, movements);
-    return {holds:holds.rows,holdsPagination:{total:(holds as any).total||0,page:(holds as any).page||1,totalPages:(holds as any).totalPages||0},holdsRestricted:'restricted' in holds&&holds.restricted,identityBasis:item.drugs.length===1?'One linked product identity, stock unit and exact pack':item.drugs.length?'Ambiguous linked products; selected batch only until mapping is reviewed':'Unmapped batch only; link a verified product to group sibling batches',item:this.present(item),batches:batches.map(i=>this.present(i)),openingBalance:null,
+    const holds=['HOLD','SALES_RETURN'].some(k=>caps.kinds[k]?.read)?await this.holdSources(actor,{itemIds:batchIds,history:'true',internalAll:true}):{rows:[],restricted:true};
+    const ledger = reconcileInventoryLedger(item, movements.filter(m=>m.itemId===id));
+    const correctionAllowed=(m:{id:string;reference:string|null})=>!owners.has(m.id)&&!/^INV-|^PI-|^PINV-|^PURCHASE-|^WF-/.test(m.reference||'');
+    return {holds:holds.rows,holdsPagination:{total:(holds as any).total||0,page:(holds as any).page||1,totalPages:(holds as any).totalPages||0},holdsRestricted:'restricted' in holds&&holds.restricted,identityBasis:item.drugs.length===1?'One linked product identity, stock unit and exact pack':item.drugs.length?'Ambiguous linked products; selected batch only until mapping is reviewed':'Unmapped batch only; link a verified product to group sibling batches',item:this.present(item),
+      batches:batches.map(b=>{
+        const deleteBlockedReason=batchDeleteBlock(b,{effects:effects.filter(e=>e.inventoryId===b.id).length,transactions:movements.filter(m=>m.itemId===b.id).length});
+        return {...this.present(b),purchaseDiscountPercent:latestPurchaseLine(purchases,b.id)?.discountPercent??null,deletable:deleteBlockedReason===null,deleteBlockedReason};
+      }),
+      product:{batchIds,physical:batches.reduce((n,b)=>n+b.currentStock,0),held:batches.reduce((n,b)=>n+b.heldStock,0),available:batches.reduce((n,b)=>n+b.currentStock-b.heldStock,0)},
+      openingBalance:null,
       ledger: { ...ledger, movements: undefined },
-      movements:ledger.movements.map(m=>({...m,owner:owners.get(m.id)||null,correctionAllowed:!owners.has(m.id)&&!/^INV-|^PI-|^PINV-|^PURCHASE-|^WF-/.test(m.reference||'')})),
+      itemLedger:itemLedgerRows(batches,movements,sources,owners,correctionAllowed),
       history:effects.map(e=>({...e,document:{...e.document,totalAmount:Number(e.document.totalAmount)}})),purchases};
   }
   /**
@@ -383,7 +435,7 @@ async timeline(actor: WorkflowActor, q: Record<string, any> = {}) {
       this.prisma.inventoryWorkflowDocument.findMany({where:{branchId:actor.branchId,kind:{in:['LOSS','SUPPLIER_RETURN']},status:{in:['POSTED','CHALLAN']}},include:{effects:true}}),
       this.prisma.user.findMany({where:{branchId:actor.branchId,id:{in:docs.map(d=>d.createdBy)}},select:{id:true,firstName:true,lastName:true}}),
     ]);
-    const rows=docs.map(doc=>{const payload:any=doc.payload;const balances=new Map<string,number>();for(const e of doc.effects)if(e.inventoryId)balances.set(e.inventoryId,(balances.get(e.inventoryId)||0)+e.heldDelta);for(const c of consumers)if((c.payload as any).sourceHoldId===doc.id)for(const e of c.effects)if(e.inventoryId)balances.set(e.inventoryId,(balances.get(e.inventoryId)||0)+e.heldDelta);const owner=users.find(u=>u.id===doc.createdBy);const uniqueLines=[...new Map<string,any>((payload.lines||[]).map((l:any)=>[l.inventoryId,l])).values()];const lines=uniqueLines.filter((l:any)=>(!q.itemId||l.inventoryId===q.itemId)&&doc.effects.some(e=>e.inventoryId===l.inventoryId&&e.heldDelta!==0)).map((l:any)=>({...l,remainingHeld:['RELEASED','REVERSED'].includes(doc.status)?0:Math.max(0,balances.get(l.inventoryId)||0)}));return {...doc,payload:{...payload,lines},ownerName:owner?`${owner.firstName} ${owner.lastName}`:doc.createdBy,reason:payload.reason,remainingHeld:lines.reduce((n:number,l:any)=>n+l.remainingHeld,0)};}).filter(doc=>(q.history==='true'?doc.payload.lines.length>0:doc.remainingHeld>0)&&(!q.search||`${doc.reference} ${doc.payload.lines.map((l:any)=>l.name).join(' ')}`.toLowerCase().includes(String(q.search).toLowerCase())));
+    const rows=docs.map(doc=>{const payload:any=doc.payload;const balances=new Map<string,number>();for(const e of doc.effects)if(e.inventoryId)balances.set(e.inventoryId,(balances.get(e.inventoryId)||0)+e.heldDelta);for(const c of consumers)if((c.payload as any).sourceHoldId===doc.id)for(const e of c.effects)if(e.inventoryId)balances.set(e.inventoryId,(balances.get(e.inventoryId)||0)+e.heldDelta);const owner=users.find(u=>u.id===doc.createdBy);const uniqueLines=[...new Map<string,any>((payload.lines||[]).map((l:any)=>[l.inventoryId,l])).values()];const itemIds:string[]|null=Array.isArray(q.itemIds)?q.itemIds:q.itemId?[String(q.itemId)]:null;const lines=uniqueLines.filter((l:any)=>(!itemIds||itemIds.includes(l.inventoryId))&&doc.effects.some(e=>e.inventoryId===l.inventoryId&&e.heldDelta!==0)).map((l:any)=>({...l,remainingHeld:['RELEASED','REVERSED'].includes(doc.status)?0:Math.max(0,balances.get(l.inventoryId)||0)}));return {...doc,payload:{...payload,lines},ownerName:owner?`${owner.firstName} ${owner.lastName}`:doc.createdBy,reason:payload.reason,remainingHeld:lines.reduce((n:number,l:any)=>n+l.remainingHeld,0)};}).filter(doc=>(q.history==='true'?doc.payload.lines.length>0:doc.remainingHeld>0)&&(!q.search||`${doc.reference} ${doc.payload.lines.map((l:any)=>l.name).join(' ')}`.toLowerCase().includes(String(q.search).toLowerCase())));
     const page=q.internalAll===true?1:Math.max(1,Number(q.page)||1),limit=q.internalAll===true?Math.max(1,rows.length):Math.min(100,Math.max(1,Number(q.limit)||30));return {rows:rows.slice((page-1)*limit,page*limit),total:rows.length,page,limit,totalPages:Math.ceil(rows.length/limit)};
   }
   /**
