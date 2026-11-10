@@ -152,6 +152,20 @@ describe('sales register rows', () => {
     ]);
   });
 
+  it('lists only the modes money was received in, so a refund paid out by UPI is not a UPI payment', () => {
+    const { row, collected } = billEntry(
+      pharmacyBill({
+        totalAmount: 450,
+        payments: [
+          { method: 'CASH', amount: 500 },
+          { method: 'UPI', amount: -50 },
+        ],
+      }),
+      null,
+    );
+    expect([row.paymentModes, row.refunded, collected]).toEqual([['CASH'], 50, { CASH: 500, UPI: -50 }]);
+  });
+
   it('keeps a legacy draft number as reserved but never shows a draft placeholder as one, cancelled or not', () => {
     const draft = (invoiceNumber: string) =>
       billEntry(pharmacyBill({ status: 'DRAFT', invoiceNumber }), null).row;

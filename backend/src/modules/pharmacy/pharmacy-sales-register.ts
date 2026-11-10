@@ -243,7 +243,9 @@ export function billEntry(
       patientName: text(bill.billingName) ?? text(bill.patient?.name),
       mobile: text(bill.billingPhone) ?? text(bill.patient?.phone),
       amount,
-      paymentModes: Object.keys(collected) as PaymentMode[],
+      paymentModes: [
+        ...new Set(bill.payments.filter((p) => p.amount > 0).map((p) => paymentMode(p.method))),
+      ],
       due: state === 'FINAL' ? Math.max(0, money(amount - paid)) : 0,
       refundDue: state === 'FINAL' ? Math.max(0, money(paid - amount)) : 0,
       refunded,
