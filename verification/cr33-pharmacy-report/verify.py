@@ -13,13 +13,15 @@ ROOT = Path(__file__).resolve().parent
 SPEC = ROOT / "CashCount.tla"
 JAR_SHA256 = "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
 
-# (mode, staff, max saves, expected) where expected is None for "no error" or the property TLC must report.
+# (mode, staff, max saves, expected) where expected is None for "no error", or the set of properties TLC may
+# report. Last-write-wins breaks two properties in different states, and which one TLC reaches first depends on
+# how its workers interleave, so that control accepts either.
 CASES = [
     ("correct", "{a, b}", 4, None),
     ("correct", "{a, b, c}", 4, None),
-    ("noCheck", "{a, b}", 3, "NoLostUpdate"),
-    ("noUnique", "{a, b}", 3, "Contiguous"),
-    ("overwrite", "{a, b}", 3, "HistoryKept"),
+    ("noCheck", "{a, b}", 3, {"NoLostUpdate"}),
+    ("noUnique", "{a, b}", 3, {"Contiguous"}),
+    ("overwrite", "{a, b}", 3, {"HistoryKept", "NoLostUpdate"}),
 ]
 
 
@@ -66,9 +68,9 @@ def main():
     with tempfile.TemporaryDirectory() as workdir:
         for mode, staff, saves, expected in CASES:
             got, detail = run_case(args.jar, mode, staff, saves, workdir)
-            ok = got == expected
+            ok = got is None if expected is None else got in expected
             failures += not ok
-            want = "no error" if expected is None else f"{expected} violated"
+            want = "no error" if expected is None else f"{' or '.join(sorted(expected))} violated"
             seen = "no error" if got is None else f"{got} violated"
             note = detail if got is None else ""
             print(f"{'PASS' if ok else 'FAIL'}  {mode:<10} staff={staff:<10} saves={saves}  expected {want}, got {seen} {note}")
