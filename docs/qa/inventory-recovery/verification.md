@@ -30,7 +30,6 @@ Backend database suites require explicit loopback URLs through `PARTNER_RECOVERY
 Run these browser scripts from the repository root after installing dependencies:
 
 ```sh
-node frontend/scripts/verify-stock-recovery.cjs
 node frontend/scripts/verify-supplier-payment-recovery.js --browser=chrome
 OPENING_IMPORT_BROWSER=chrome node scripts/verify-opening-import-recovery.cjs
 node frontend/scripts/verify-partner-recovery.cjs --chrome
