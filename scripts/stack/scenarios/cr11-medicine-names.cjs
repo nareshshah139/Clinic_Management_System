@@ -284,7 +284,7 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
     };
     const previewText = async (page) => {
       await page.getByRole("button", { name: "Print Preview" }).click();
-      const dialog = page.getByRole("dialog").last();
+      const dialog = page.getByRole("dialog").filter({ hasText: "Download PDF" }).last();
       await dialog.waitFor();
       await page.waitForTimeout(2500);
       return clean(await dialog.innerText());
