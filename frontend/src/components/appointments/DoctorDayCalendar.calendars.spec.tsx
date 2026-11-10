@@ -106,7 +106,7 @@ describe('DoctorDayCalendar Scheduled and Confirmed calendars', () => {
 
     fireEvent.click((await openDetails('Ravi Kumar')).getByRole('button', { name: 'Confirm' }));
 
-    expect(await screen.findByText('10:00-10:30 is taken in Confirmed. Click a free time in the Confirmed calendar.')).toBeInTheDocument();
+    expect(await screen.findByText('10:00-10:30 is taken in Confirmed. Click a free time in the Confirmed calendar, or change the date to pick another day.')).toBeInTheDocument();
     expect(screen.getByText('Moving Ravi Kumar to Confirmed')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(column('Scheduled').queryByRole('button', { name: /^(Move to|Book) / })).toBeNull();
@@ -151,12 +151,51 @@ describe('DoctorDayCalendar Scheduled and Confirmed calendars', () => {
     api.rescheduleAppointment.mockResolvedValueOnce({ id: 'a1' } as never);
     fireEvent.click((await openDetails('Ravi Kumar')).getByRole('button', { name: 'Reschedule' }));
 
-    expect(await screen.findByText('Click a free time in either calendar to move this appointment there.')).toBeInTheDocument();
+    expect(await screen.findByText('Click a free time in either calendar. To move to another day, change the date first.')).toBeInTheDocument();
     expect(column('Scheduled').getByRole('button', { name: 'Move to 14:00-14:30' })).toBeInTheDocument();
     fireEvent.click(column('Confirmed').getByRole('button', { name: 'Move to 14:00-14:30' }));
 
     await waitFor(() => expect(api.rescheduleAppointment).toHaveBeenCalledTimes(1));
     expect(api.rescheduleAppointment.mock.calls[0]).toEqual(['a1', { date: '2099-01-01', slot: '14:00-14:30', roomId: undefined, calendar: 'CONFIRMED' }]);
+  });
+
+  it('keeps a reschedule going when the date changes and moves the appointment to that day', async () => {
+    api.getDoctorSchedule.mockImplementation(async (_doctor: string, day: string) => toSchedule(day === '2099-01-01' ? [ravi] : [priya]));
+    api.rescheduleAppointment.mockResolvedValueOnce({ id: 'a1' } as never);
+    const { rerender } = render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" />);
+    await screen.findByRole('region', { name: 'Scheduled' });
+    fireEvent.click((await openDetails('Ravi Kumar')).getByRole('button', { name: 'Reschedule' }));
+    expect(await screen.findByText('Rescheduling Ravi Kumar')).toBeInTheDocument();
+
+    rerender(<DoctorDayCalendar doctorId="doc-1" date="2099-01-02" />);
+
+    await screen.findByRole('button', { name: 'Priya Nair, 11:00-11:30, Confirmed' });
+    expect(column('Scheduled').queryByText('Ravi Kumar')).toBeNull();
+    expect(screen.getByText('Rescheduling Ravi Kumar')).toBeInTheDocument();
+    expect(screen.getByText('Click a free time in either calendar to move this appointment from 01 Jan 2099 to 02 Jan 2099.')).toBeInTheDocument();
+    fireEvent.click(column('Scheduled').getByRole('button', { name: 'Move to 11:00-11:30' }));
+
+    await waitFor(() => expect(api.rescheduleAppointment).toHaveBeenCalledTimes(1));
+    expect(api.rescheduleAppointment.mock.calls[0]).toEqual(['a1', { date: '2099-01-02', slot: '11:00-11:30', roomId: undefined, calendar: 'SCHEDULED' }]);
+    await waitFor(() => expect(stableToast).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Appointment rescheduled',
+      description: 'Ravi Kumar is now on 02 Jan 2099 at 11:00-11:30 in Scheduled.',
+    })));
+    await waitFor(() => expect(screen.queryByText('Rescheduling Ravi Kumar')).toBeNull());
+  });
+
+  it('ends a reschedule when the doctor changes', async () => {
+    api.getDoctorSchedule.mockResolvedValue(toSchedule([ravi]));
+    const { rerender } = render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" />);
+    await screen.findByRole('region', { name: 'Scheduled' });
+    fireEvent.click((await openDetails('Ravi Kumar')).getByRole('button', { name: 'Reschedule' }));
+    expect(await screen.findByText('Rescheduling Ravi Kumar')).toBeInTheDocument();
+
+    rerender(<DoctorDayCalendar doctorId="doc-2" date="2099-01-01" />);
+
+    await waitFor(() => expect(api.getDoctorSchedule).toHaveBeenCalledWith('doc-2', '2099-01-01'));
+    expect(await screen.findByRole('button', { name: 'Ravi Kumar, 10:00-10:30, Scheduled' })).toBeInTheDocument();
+    expect(screen.queryByText('Rescheduling Ravi Kumar')).toBeNull();
   });
 
   it('shows the phone number as a link that dials it', async () => {

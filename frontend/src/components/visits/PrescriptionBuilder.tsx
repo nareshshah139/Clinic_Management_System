@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle, CalendarDays, ChevronDown, ChevronRight, ChevronUp, FlaskConical, Languages, Mic, MicOff, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import { ManageClinicInvestigations, hasInvestigation, mergeInvestigationOptions, sameInvestigation, tidyInvestigationName, useClinicInvestigations, type ClinicInvestigation } from './ClinicInvestigations';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { getErrorMessage } from '@/lib/utils';
@@ -2702,6 +2703,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         ? await apiClient.createQuickPrescription({ ...payload, reason: standaloneReason })
         : await apiClient.createPrescription(payload);
       if (!res?.id) throw new Error('The server did not confirm the saved prescription. Your draft is still available; please retry.');
+      if (!existingId) track('prescription_created', { mode: standalone ? 'quick' : 'visit' });
       createdPrescriptionIdRef.current = res.id;
       setSavedPrescriptionId(res?.id || null);
       if (res.visit) {

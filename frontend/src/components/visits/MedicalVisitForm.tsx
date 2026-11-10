@@ -51,6 +51,7 @@ import {
 } from 'lucide-react';
 import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import { apiClient } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { compactClinicalPatch, mergeClinicalPatch, useClinicalState, acknowledgedVisitVersion } from '@/lib/clinical-patch';
 import { usePatientHistory } from './usePatientHistory';
@@ -1612,6 +1613,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         const idemKey = buildIdempotencyKey('POST', completeId, completePayload as any);
         const completedVisit = await apiClient.completeVisit(completeId, completePayload, { idempotencyKey: idemKey });
         if (completedVisit.status !== 'COMPLETED') throw new Error('The server did not confirm visit completion. Please retry.');
+        track('visit_completed', { follow_up_set: Boolean(reviewDate) });
         setVisitStatus(completedVisit.status);
         acknowledgeMutationVersion(completedVisit.version);
         if (typeof window !== 'undefined' && draftStorageKey) {

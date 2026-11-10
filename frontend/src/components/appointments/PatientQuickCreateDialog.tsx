@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import { getErrorMessage, formatPatientName } from '@/lib/utils';
 import type { Patient } from '@/lib/types';
 
@@ -134,6 +135,7 @@ export default function PatientQuickCreateDialog({
       };
 
       const created = (await apiClient.createPatient(payload)) as Patient & { data?: Patient };
+      track('patient_registered', { source: 'quick_create' });
       const patient: Patient = {
         ...(created?.data ?? created),
         name: formatPatientName(created?.data ?? created),

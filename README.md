@@ -230,6 +230,21 @@ Smart inventory tracking:
 - `NEXT_PUBLIC_API_PROXY` - Backend API URL (include trailing slash)
 - `PORT` - Server port (default: 3000)
 
+### Analytics (optional)
+
+The staff frontend can send product analytics to [OpenPanel](https://openpanel.dev). It is off unless `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` is set.
+
+- `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` - OpenPanel client ID. Leave unset to send nothing.
+- `NEXT_PUBLIC_OPENPANEL_API_URL` - Collector URL for a self-hosted OpenPanel (default: `https://api.openpanel.dev`). Must be `https`, or `http` for `localhost` only.
+
+Both are inlined at build time, so rebuild the frontend after changing them. In OpenPanel, add the clinic's site origin to the client's allowed domains so the collector accepts requests from staff browsers.
+
+Sent: the screen as a route template (for example `/dashboard/patients/[id]`), the signed-in staff member's ID, role and branch ID, and the named events `patient_registered`, `appointment_booked`, `visit_completed`, `prescription_created` and `invoice_created`.
+
+Never sent: patient names or IDs, staff names, emails or phone numbers, URLs with query strings or record IDs, page titles, or any text read from the screen or an API response. Every payload is rebuilt from a closed vocabulary in `frontend/src/lib/analytics/vocabulary.ts` and dropped whole if anything falls outside it.
+
+To add an event, declare it in `vocabulary.ts` (properties are closed lists of literals or booleans only) and call `track('event_name', { ... })` from `@/lib/analytics` after the server confirms the write.
+
 ## Security
 
 - 🔐 JWT-based authentication
