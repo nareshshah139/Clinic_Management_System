@@ -82,6 +82,8 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       if (!sessions.has(who)) {
         await browserLogin(stack, page, who);
         sessions.set(who, await context.storageState());
+        seen.errors.length = 0;
+        seen.refused.length = 0;
       }
       return { page, context, seen };
     };
@@ -300,7 +302,11 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       await shot(page, "doctor-1280-11-picker-recorded-name");
       await pickerRow(page, 3).fill("");
       await page.keyboard.press("Escape");
+      const response = page.waitForResponse((r) => /^\/api\/prescriptions(\/[^/]+)?$/.test(new URL(r.url()).pathname) && ["POST", "PATCH", "PUT"].includes(r.request().method()), { timeout: 120000 }).catch(() => null);
       await page.getByRole("button", { name: "Create Prescription" }).click();
+      const answered = await response;
+      console.log(`NOTE create prescription answered ${answered ? `${answered.status()} ${(await answered.text()).slice(0, 300)}` : "nothing"}`);
+      await shot(page, "doctor-1280-12a-after-create");
       const saved = await (async () => {
         for (let i = 0; i < 60; i++) {
           const rx = await db.prescription.findFirst({ where: { visitId: visits.newVisit.id } });
