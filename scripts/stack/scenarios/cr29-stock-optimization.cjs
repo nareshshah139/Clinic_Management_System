@@ -165,6 +165,7 @@ const watch = (page) => {
         await run(ctx);
       } catch (e) {
         error = e;
+        console.log(`    ${String(e.message).trim().split("\n").slice(-3).join(" ")}`);
         try {
           const last = ctx.opened.at(-1);
           if (last) await ctx.shot(last.page, `${id}-error`, true);
@@ -434,11 +435,12 @@ const watch = (page) => {
     });
 
     await scenario("11", "free-goods-go-back-at-no-value-unmapped-siblings-share-sales-and-two-presses-make-one-draft", async (s) => {
-      const db = stack.db;
       const branchId = stack.branch.id;
       const BON = { name: "Bonus Pharma", gstin: "27AAGCB7788F1Z9" };
       const DAY = 86400000;
       const ago = (days) => new Date(Date.now() - days * DAY);
+      await stack.db.$transaction(async (db) => {
+      await db.$executeRawUnsafe("SELECT set_config('app.purchase_recovery_protocol', '2', true)");
       const supplier = await db.supplier.create({ data: { branchId, name: BON.name, gstNumber: BON.gstin } });
       const strip = (id, name, batchNumber, stock, age) =>
         db.inventoryItem.create({
@@ -472,6 +474,7 @@ const watch = (page) => {
       await db.stockTransaction.create({
         data: { branchId, itemId: "cr29-acn-a", userId: stack.users.pharmacist.id, type: "SALE", quantity: 1, quantityDelta: -1, unitPrice: 30, totalAmount: 30, reference: "SEED-SALE-acn-a", createdAt: ago(1) },
       });
+      }, { timeout: 120000, maxWait: 30000 });
 
       const { page } = s.track(await open("pharmacist"));
       await goto(page, `${OPTIMIZE}&run=1`);
