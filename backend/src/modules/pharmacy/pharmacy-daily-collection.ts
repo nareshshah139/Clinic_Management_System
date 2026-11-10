@@ -1,5 +1,6 @@
 import { money } from './gst-slabs';
 import { entryStamp } from './pharmacy-gst-reports';
+import { isRefund } from './pharmacy-ledger';
 import {
   ReportColumn,
   ReportRow,
@@ -53,6 +54,7 @@ export type CollectionBill = {
   state: 'FINAL' | 'DRAFT' | 'CANCELLED';
   customer: string | null;
   total: number;
+  /** The bill's ledger entries: receipts are positive, refunds handed back are negative. */
   payments: { mode: string; amount: number; day: string }[];
 };
 
@@ -142,7 +144,8 @@ export function collectionStatus(difference: number | null): CollectionStatus {
 /**
  * Bills dated `day` are what was billed. Payments dated `day` are what was received, whichever day
  * their bill is from. Counter sales are paid in full at the counter unless sold on credit. Refunds
- * in a payment mode leave that mode; refunds as store credit move no money.
+ * handed back on a bill and customer returns refunded in a payment mode leave that mode on the day
+ * they are paid out; refunds as store credit move no money.
  */
 export function buildDailyCollection(input: {
   day: string;
@@ -187,11 +190,17 @@ export function buildDailyCollection(input: {
 
   let outsideCount = 0;
   let outsideAmount = 0;
+  let billRefundCount = 0;
+  let billRefunds = 0;
   for (const bill of input.bills) {
     for (const payment of bill.payments) {
       if (payment.day !== day) continue;
       const mode = collectionMode(payment.mode);
-      if (bill.state === 'FINAL' && bill.day === day)
+      if (isRefund(payment)) {
+        add(refunds, mode, -payment.amount);
+        billRefundCount += 1;
+        billRefunds = money(billRefunds - payment.amount);
+      } else if (bill.state === 'FINAL' && bill.day === day)
         add(onToday, mode, payment.amount);
       else add(onEarlier, mode, payment.amount);
       if (bill.state !== 'FINAL') {
@@ -273,9 +282,11 @@ export function buildDailyCollection(input: {
       totalBilled: money(billed + counterTotal),
     },
     refunds: {
-      count: returns.length,
+      count: returns.length + billRefundCount,
       paidOut: money(
-        returns.reduce((sum, ret) => sum + ret.total, 0) - storeCredit,
+        returns.reduce((sum, ret) => sum + ret.total, 0) -
+          storeCredit +
+          billRefunds,
       ),
       storeCredit,
     },
@@ -451,7 +462,13 @@ export function dailyCollectionSections(
         paidToday: money(today.reduce((sum, p) => sum + p.amount, 0)),
         modes:
           Array.from(
-            new Set(today.map((p) => MODE_LABEL[collectionMode(p.mode)])),
+            new Set(
+              today.map((p) =>
+                isRefund(p)
+                  ? `Refund · ${MODE_LABEL[collectionMode(p.mode)]}`
+                  : MODE_LABEL[collectionMode(p.mode)],
+              ),
+            ),
           ).join(', ') || '—',
         due: raisedToday ? Math.max(0, money(bill.total - paid)) : 0,
       },

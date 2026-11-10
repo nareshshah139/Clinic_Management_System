@@ -212,25 +212,27 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await page.getByLabel("Notes").fill("Collect after 6 pm");
         const beforeDraft = await stocks();
         await page.getByRole("button", { name: "Save draft" }).click();
-        await page.getByText(/^All changes saved to draft /).waitFor({ timeout: 60000 });
+        await page.getByText("All changes saved to the draft").waitFor({ timeout: 60000 });
         await page.waitForURL("**/sales/bill?draft=*", { timeout: 60000 });
         const draft = await invoiceFor({ patientId: draftPatient.id });
         check(`${tag} Save draft stores the bill without moving stock`, [draft?.status, draft?.items.map((i) => [i.quantity, i.discountPercent]), draft?.notes, delta(beforeDraft, await stocks())],
           ["DRAFT", [[3, 5], [1, 0]], "Collect after 6 pm", { [CREAM]: 0, [GEL]: 0, [TABLET]: 0 }]);
-        check(`${tag} the saved draft stays open with its reserved number`, [new URL(page.url()).searchParams.get("draft"), await page.getByText(`${draft.invoiceNumber} not final`).count()], [draft.id, 1]);
+        check(`${tag} the saved draft stays open and has no bill number yet`, [
+          new URL(page.url()).searchParams.get("draft"), draft.invoiceNumber.startsWith("DRAFT-"), await page.getByText("Gets its bill number when finished").count(), await page.getByText(draft.invoiceNumber).count(),
+        ], [draft.id, true, 1, 0]);
         await shot(page, `${tag}-04-draft-saved`);
 
         await clickTo(page, page.getByRole("link", { name: "Back to Sales" }), /\/dashboard\/pharmacy\/sales$/);
         await saleRow(page, draftPatient.name).first().waitFor({ timeout: 120000 });
         const draftCell = clean(await saleRow(page, draftPatient.name).first().locator("td").first().innerText());
-        check(`${tag} the draft is a Draft row in Sales`, draftCell, `Draft ${draft.invoiceNumber} not final`);
+        check(`${tag} the draft is a Draft row in Sales`, draftCell, "Draft");
         await shot(page, `${tag}-05-sales-draft-row`);
         await clickTo(page, saleRow(page, draftPatient.name).first().getByRole("link", { name: /Open draft bill/ }), `**/sales/bill?draft=${draft.id}`);
         await line(page, GEL).waitFor({ timeout: 120000 });
         check(`${tag} reopening restores patient, every line, discount and notes`, [
           await page.getByLabel("Patient *").inputValue(), await lineHeadings(page), await quantities(page),
           await line(page, TABLET).locator("input[type=number]").nth(2).inputValue(), await page.getByLabel("Notes").inputValue(),
-          await page.getByText("All changes saved to draft").count(),
+          await page.getByText("All changes saved to the draft").count(),
         ], [`${draftPatient.name} (${draftPatient.phone})`, [TABLET, GEL], ["3", "1"], "5", "Collect after 6 pm", 1]);
         check(`${tag} reopened draft: no page overflow`, await overflow(page), 0);
         await shot(page, `${tag}-06-draft-reopened`);
@@ -240,16 +242,16 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await finish(page);
         await closePreview(page);
         const finished = await invoiceFor({ id: draft.id });
-        check(`${tag} finishing the draft posts that same bill under its number, stock moved once`,
-          [finished.status, finished.invoiceNumber, finished.items.map((i) => i.quantity), delta(beforeFinish, await stocks()), await salesCount(draft.invoiceNumber), await db.pharmacyInvoice.count({ where: { patientId: draftPatient.id } })],
-          ["CONFIRMED", draft.invoiceNumber, [4, 1], { [CREAM]: 0, [GEL]: -1, [TABLET]: -4 }, 2, 1]);
+        check(`${tag} finishing the draft posts that same bill and numbers it then, stock moved once`,
+          [finished.status, /^PHI-\d{4}-\d{3,}$/.test(finished.invoiceNumber), finished.items.map((i) => i.quantity), delta(beforeFinish, await stocks()), await salesCount(finished.invoiceNumber), await db.pharmacyInvoice.count({ where: { patientId: draftPatient.id } })],
+          ["CONFIRMED", true, [4, 1], { [CREAM]: 0, [GEL]: -1, [TABLET]: -4 }, 2, 1]);
         await shot(page, `${tag}-07-draft-finished`);
         await clickTo(page, page.getByRole("button", { name: "Back to Sales" }), /\/dashboard\/pharmacy\/sales$/);
         await saleRow(page, draftPatient.name).first().waitFor({ timeout: 120000 });
         check(`${tag} the Sales row now carries the bill number and its payment`, [
           clean(await saleRow(page, draftPatient.name).first().locator("td").first().innerText()), clean(await saleRow(page, draftPatient.name).first().locator("td").nth(-2).innerText()),
           (await db.pharmacyPayment.findMany({ where: { invoiceId: draft.id }, select: { amount: true, method: true } })).map((p) => [p.amount, p.method]),
-        ], [draft.invoiceNumber, "Cash", [[finished.totalAmount, "CASH"]]]);
+        ], [finished.invoiceNumber, "Cash", [[finished.totalAmount, "CASH"]]]);
         await shot(page, `${tag}-08-sales-after-finish`);
 
         const discardPatient = await patient();
@@ -262,7 +264,7 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await page.getByRole("button", { name: "Discard draft" }).click();
         const dialog = page.getByRole("dialog", { name: "Discard this draft?" });
         await dialog.waitFor();
-        check(`${tag} discard asks first and names the draft`, clean(await dialog.innerText()).includes(`${doomed.invoiceNumber} for ${discardPatient.name} will be removed from Sales.`), true);
+        check(`${tag} discard asks first and names the draft`, clean(await dialog.innerText()).includes(`The draft for ${discardPatient.name} will be removed from Sales.`), true);
         check(`${tag} discard dialog: no page overflow`, await overflow(page), 0);
         await shot(page, `${tag}-09-discard-confirm`);
         await dialog.getByRole("button", { name: "Discard draft" }).click();
@@ -285,7 +287,7 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await line(tabB.page, CREAM).waitFor({ timeout: 120000 });
         await tabA.getByLabel("Notes").fill("From the front desk");
         await tabA.getByRole("button", { name: "Save draft" }).click();
-        await tabA.getByText(/^All changes saved to draft /).waitFor({ timeout: 60000 });
+        await tabA.getByText("All changes saved to the draft").waitFor({ timeout: 60000 });
         tabB.seen.expected = true;
         await line(tabB.page, CREAM).getByLabel("Quantity").fill("2");
         await tabB.page.getByRole("button", { name: "Save draft" }).click();
@@ -307,7 +309,7 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await tabB.page.getByRole("alert").filter({ hasText: FINISHED }).waitFor({ timeout: 60000 });
         check(`${tag} saving a draft finished elsewhere is refused`, (await invoiceFor({ id: shared.id })).notes, "From the front desk");
         await tabB.page.getByRole("button", { name: "Reload draft" }).click();
-        await tabB.page.getByText("This bill is already finished").waitFor({ timeout: 60000 });
+        await tabB.page.getByText(/^This draft was finished as bill PHI-/).waitFor({ timeout: 60000 });
         await shot(tabB.page, `${tag}-11-second-tab-finished`);
         check(`${tag} second tab: no unexpected console error or refused call`, [tabB.seen.errors, tabB.seen.refused], [[], []]);
         await tabB.page.close();

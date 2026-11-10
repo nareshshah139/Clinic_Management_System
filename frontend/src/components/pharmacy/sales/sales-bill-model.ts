@@ -1,3 +1,6 @@
+import type { BillDiscount } from '@/lib/bill-pricing';
+import { isIssuedBillNumber } from '@/lib/bill-number';
+
 export const SALES_BILL_PATH = '/dashboard/pharmacy/sales/bill';
 
 export const PREFILL_KEYS = ['patientId', 'prescriptionId', 'doctorId', 'visitId'] as const;
@@ -5,7 +8,7 @@ export type BillPrefill = Partial<Record<(typeof PREFILL_KEYS)[number], string>>
 
 export type BillSession =
   | { kind: 'new' }
-  | { kind: 'draft'; id: string; version: number; number: string };
+  | { kind: 'draft'; id: string; version: number; number: string | null };
 export type DraftSession = Extract<BillSession, { kind: 'draft' }>;
 
 export type BillFields = {
@@ -67,6 +70,8 @@ export type SavedInvoice = {
   invoiceNumber: string;
   status: string;
   mutationVersion: number;
+  billDiscountKind?: BillDiscount['kind'] | null;
+  billDiscountValue?: number;
   patientId: string;
   doctorId: string | null;
   prescriptionId: string | null;
@@ -86,14 +91,18 @@ export type SavedInvoice = {
 export type SavedDraft = {
   session: DraftSession;
   fields: BillFields;
+  billDiscount: BillDiscount | null;
   lines: SavedInvoiceLine[];
   patient: { id: string; name: string; phone?: string } | null;
   doctor: { id: string; firstName: string; lastName: string } | null;
 };
 
-export function billHref({ draft, prefill }: { draft?: string; prefill?: BillPrefill } = {}) {
+export function billHref({ draft, bill, edit, prefill }: { draft?: string; bill?: string; edit?: 'discount'; prefill?: BillPrefill } = {}) {
   const params = new URLSearchParams();
-  if (draft) params.set('draft', draft);
+  if (bill) {
+    params.set('bill', bill);
+    if (edit) params.set('edit', edit);
+  } else if (draft) params.set('draft', draft);
   else for (const key of PREFILL_KEYS) if (prefill?.[key]) params.set(key, prefill[key]!);
   const query = params.toString();
   return query ? `${SALES_BILL_PATH}?${query}` : SALES_BILL_PATH;
@@ -117,9 +126,10 @@ export function pharmacyBillingRedirect(params: Pick<URLSearchParams, 'get'>): s
   return BILLING_SECTIONS.has(section) || prefill ? billHref({ prefill }) : null;
 }
 
-export function billPayload(fields: BillFields, lines: BillLineInput[]) {
+export function billPayload(fields: BillFields, lines: BillLineInput[], billDiscount: BillDiscount | null = null) {
   return {
     ...fields,
+    billDiscount: billDiscount?.value ? billDiscount : null,
     items: lines.map((line) => ({
       drugId: line.drugId,
       inventoryItemId: line.inventoryItemId,
@@ -152,7 +162,12 @@ export function draftProblem(fields: BillFields, lines: DraftLine[]): string | n
 export function draftFromInvoice(invoice: SavedInvoice): SavedDraft {
   const text = (value: string | null | undefined) => value ?? '';
   return {
-    session: { kind: 'draft', id: invoice.id, version: invoice.mutationVersion, number: invoice.invoiceNumber },
+    session: {
+      kind: 'draft',
+      id: invoice.id,
+      version: invoice.mutationVersion,
+      number: isIssuedBillNumber(invoice.invoiceNumber) ? invoice.invoiceNumber : null,
+    },
     fields: {
       patientId: invoice.patientId,
       doctorId: text(invoice.doctorId),
@@ -166,6 +181,7 @@ export function draftFromInvoice(invoice: SavedInvoice): SavedDraft {
       billingPincode: text(invoice.billingPincode),
       notes: text(invoice.notes),
     },
+    billDiscount: invoice.billDiscountKind ? { kind: invoice.billDiscountKind, value: invoice.billDiscountValue ?? 0 } : null,
     lines: invoice.items,
     patient: invoice.patient ? { id: invoice.patient.id, name: invoice.patient.name, phone: invoice.patient.phone ?? undefined } : null,
     doctor: invoice.doctor,
@@ -181,3 +197,5 @@ export function draftRefusal(error: unknown, fallback: string): DraftRefusal | n
   if (status !== 409) return null;
   return { status, message: typeof message === 'string' ? message : fallback };
 }
+
+export const draftName = (session: DraftSession) => (session.number ? `Draft ${session.number}` : 'The draft');

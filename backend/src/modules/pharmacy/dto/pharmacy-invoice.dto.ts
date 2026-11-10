@@ -5,10 +5,12 @@ import {
   IsEnum,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Length,
   Min,
   ValidateNested,
@@ -16,10 +18,25 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type, Transform } from 'class-transformer';
 import {
+  PharmacyBillDiscountKind,
   PharmacyInvoiceStatus,
   PharmacyPaymentMethod,
   PharmacyPaymentStatus,
 } from '@prisma/client';
+
+export class BillDiscountDto {
+  @ApiProperty({
+    enum: PharmacyBillDiscountKind,
+    description: 'PERCENT of the bill after item discounts, or a rupee AMOUNT',
+  })
+  @IsEnum(PharmacyBillDiscountKind)
+  kind: PharmacyBillDiscountKind;
+
+  @ApiProperty({ example: 10 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  value: number;
+}
 
 // Enum for invoice item types
 export enum PharmacyInvoiceItemType {
@@ -208,6 +225,16 @@ export class CreatePharmacyInvoiceDto {
   @ValidateNested({ each: true })
   @Type(() => PharmacyInvoiceItemDto)
   items: PharmacyInvoiceItemDto[];
+
+  @ApiPropertyOptional({
+    type: BillDiscountDto,
+    nullable: true,
+    description: 'Discount on the whole bill, split across lines before tax',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BillDiscountDto)
+  billDiscount?: BillDiscountDto | null;
 }
 
 export class CheckoutPharmacyInvoiceDto extends CreatePharmacyInvoiceDto {
@@ -327,6 +354,16 @@ export class UpdatePharmacyInvoiceDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    type: BillDiscountDto,
+    nullable: true,
+    description: 'Discount on the whole bill; null removes it, omitted keeps it',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BillDiscountDto)
+  billDiscount?: BillDiscountDto | null;
 
   @ApiPropertyOptional({
     description: 'Invoice items',
@@ -540,6 +577,66 @@ export class PharmacyPaymentDto {
   @IsOptional()
   @IsString()
   gateway?: string;
+}
+
+export class LineDiscountDto {
+  @ApiProperty()
+  @IsString()
+  id: string;
+
+  @ApiProperty({ example: 5 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  discountPercent: number;
+}
+
+export class ReviseBillDiscountDto {
+  @ApiProperty({ description: 'Version of the bill the change was made from' })
+  @IsInt()
+  @Min(0)
+  expectedVersion: number;
+
+  @ApiPropertyOptional({ type: BillDiscountDto, nullable: true })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BillDiscountDto)
+  billDiscount?: BillDiscountDto | null;
+
+  @ApiProperty({ type: [LineDiscountDto], description: 'New discount % per bill line' })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LineDiscountDto)
+  lines: LineDiscountDto[];
+
+  @ApiProperty({ description: 'Why the discount changed' })
+  @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsNotEmpty({ message: 'Enter a reason for changing the discount' })
+  @MaxLength(500)
+  reason: string;
+}
+
+export class RefundPharmacyBillDto {
+  @ApiProperty({ description: 'Stable refund attempt key. Reuse after an uncertain response.' })
+  @IsString()
+  @Length(1, 128)
+  requestKey: string;
+
+  @ApiProperty({ description: 'Refund amount: the refund due shown to the user', example: 50 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount: number;
+
+  @ApiProperty({ enum: PharmacyPaymentMethod })
+  @IsEnum(PharmacyPaymentMethod)
+  method: PharmacyPaymentMethod;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  reference?: string;
 }
 
 export class QueryPharmacyInvoicePrintDto {

@@ -6,7 +6,6 @@ const databaseTests = process.env.INVOICE_NUMBERS_TEST_DATABASE_URL
   ? describe
   : describe.skip;
 const quarterPastMidnightIst = new Date('2026-03-31T18:45:00Z');
-const onUtcServer = quarterPastMidnightIst.getTimezoneOffset() === 0;
 
 databaseTests('Invoice number reservation with PostgreSQL', () => {
   let fixture: Awaited<ReturnType<typeof localDatabase>>;
@@ -132,47 +131,27 @@ databaseTests('Invoice number reservation with PostgreSQL', () => {
     ).toEqual({ sequence: 1, periodKey: '20260410' });
   });
 
-  (onUtcServer ? it : it.skip)(
-    'files a sale at 00:15 IST under the previous day on a UTC server',
-    async () => {
+  it('files a number under the IST calendar day and year whatever the server timezone', async () => {
+    await numbers.reserve({
+      type: 'BILLING',
+      branchId: 'branch-a',
+      date: new Date('2026-03-31T10:00:00Z'),
+    });
+    const newYearIst = new Date('2026-12-31T19:00:00Z');
+    expect([
       await numbers.reserve({
         type: 'BILLING',
         branchId: 'branch-a',
-        date: new Date('2026-03-31T10:00:00Z'),
-      });
-      expect(
-        await numbers.reserve({
-          type: 'BILLING',
-          branchId: 'branch-a',
-          date: quarterPastMidnightIst,
-        }),
-      ).toEqual({ sequence: 2, periodKey: '20260331' });
-    },
-  );
-
-  // Target invoice-period-follows-clinic-day: periodKey reads the server's local date, not IST.
-  (onUtcServer ? it.failing : it.skip)(
-    'files a sale at 00:15 IST under the IST day whatever the server timezone',
-    async () => {
-      const newYearIst = new Date('2026-12-31T19:00:00Z');
-      expect(
-        (
-          await numbers.reserve({
-            type: 'BILLING',
-            branchId: 'branch-a',
-            date: quarterPastMidnightIst,
-          })
-        ).periodKey,
-      ).toBe('20260401');
-      expect(
-        (
-          await numbers.reserve({
-            type: 'PHARMACY',
-            branchId: 'branch-a',
-            date: newYearIst,
-          })
-        ).periodKey,
-      ).toBe('2027');
-    },
-  );
+        date: quarterPastMidnightIst,
+      }),
+      await numbers.reserve({
+        type: 'PHARMACY',
+        branchId: 'branch-a',
+        date: newYearIst,
+      }),
+    ]).toEqual([
+      { sequence: 1, periodKey: '20260401' },
+      { sequence: 1, periodKey: '2027' },
+    ]);
+  });
 });

@@ -71,6 +71,7 @@ model User {
   visits                     Visit[]
   pharmacyInvoices           PharmacyInvoice[]  @relation("PharmacyInvoiceDoctor")
   createdPharmacyInvoices    PharmacyInvoice[]  @relation("PharmacyInvoiceCreator")
+  pharmacyInvoiceRevisions   PharmacyInvoiceRevision[]
   receivedSupplierCredits    InventorySupplierCredit[] @relation("SupplierCreditReceiver")
   partnerDailySalesSubmitted PartnerDailySale[] @relation("PartnerDailySaleSubmittedBy")
   createdPackages            PharmacyPackage[]  @relation("PharmacyPackageCreator")
@@ -1360,7 +1361,7 @@ model InventoryItemRequest {
 // Pharmacy Invoice Model
 model PharmacyInvoice {
   id             String  @id @default(cuid())
-  invoiceNumber  String  @unique
+  invoiceNumber  String
   patientId      String
   doctorId       String?
   prescriptionId String?
@@ -1369,10 +1370,13 @@ model PharmacyInvoice {
   branchId       String
 
   // Invoice Details
-  subtotal       Float
-  discountAmount Float @default(0)
-  taxAmount      Float @default(0)
-  totalAmount    Float
+  subtotal           Float
+  discountAmount     Float                     @default(0)
+  billDiscountKind   PharmacyBillDiscountKind?
+  billDiscountValue  Float                     @default(0)
+  billDiscountAmount Float                     @default(0)
+  taxAmount          Float                     @default(0)
+  totalAmount        Float
 
   // Payment Details
   paymentMethod PharmacyPaymentMethod
@@ -1399,6 +1403,7 @@ model PharmacyInvoice {
   updatedAt       DateTime  @updatedAt
   mutationVersion Int       @default(0)
   createdById     String?
+  revisedAt       DateTime?
 
   // Relations
   patient      Patient               @relation(fields: [patientId], references: [id])
@@ -1408,7 +1413,10 @@ model PharmacyInvoice {
   branch       Branch                @relation(fields: [branchId], references: [id])
   items        PharmacyInvoiceItem[]
   payments     PharmacyPayment[]
+  revisions    PharmacyInvoiceRevision[]
 
+  /// A bill number is unique within its branch, like the branch's PHARMACY counter that issues it.
+  @@unique([branchId, invoiceNumber])
   @@unique([branchId, checkoutRequestKey])
   @@index([patientId])
   @@index([doctorId])
@@ -1433,11 +1441,12 @@ model PharmacyInvoiceItem {
   // Item Details
   quantity        Int
   unitPrice       Float
-  discountPercent Float @default(0)
-  discountAmount  Float @default(0)
-  taxPercent      Float @default(0)
-  taxAmount       Float @default(0)
-  totalAmount     Float
+  discountPercent    Float @default(0)
+  discountAmount     Float @default(0)
+  billDiscountAmount Float @default(0)
+  taxPercent         Float @default(0)
+  taxAmount          Float @default(0)
+  totalAmount        Float
 
   // Item Type
   itemType PharmacyItemType @default(DRUG) // New enum
@@ -1464,6 +1473,25 @@ model PharmacyInvoiceItem {
 }
 
 // Pharmacy Payments
+model PharmacyInvoiceRevision {
+  id            String   @id @default(cuid())
+  invoiceId     String
+  branchId      String
+  revisedById   String?
+  reason        String
+  previousTotal Float
+  revisedTotal  Float
+  before        Json
+  after         Json
+  createdAt     DateTime @default(now())
+
+  invoice   PharmacyInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  revisedBy User?           @relation(fields: [revisedById], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId, createdAt])
+  @@map("pharmacy_invoice_revisions")
+}
+
 model PharmacyPayment {
   id        String @id @default(cuid())
   invoiceId String
@@ -2047,6 +2075,11 @@ enum PharmacyPaymentMethod {
   NETBANKING
   WALLET
   INSURANCE
+}
+
+enum PharmacyBillDiscountKind {
+  PERCENT
+  AMOUNT
 }
 
 enum PharmacyPaymentStatus {

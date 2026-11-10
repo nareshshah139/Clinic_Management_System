@@ -272,6 +272,7 @@ PATCH /patients/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACI
 PATCH /pharmacy/dispense-tasks/:taskId/lines/:lineId | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 PATCH /pharmacy/dispense-tasks/:taskId/status | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 PATCH /pharmacy/invoices/:id | roles: ADMIN,PHARMACIST | permissions: pharmacy:invoice:update
+PATCH /pharmacy/invoices/:id/discount | roles: ADMIN,PHARMACIST | permissions: pharmacy:invoice:update
 PATCH /pharmacy/invoices/:id/status | roles: ADMIN,PHARMACIST | permissions: pharmacy:invoice:update
 PATCH /pharmacy/packages/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /pharmacy/purchase-invoices/:id/review | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:review|inventory:po:update
@@ -376,6 +377,7 @@ POST /pharmacy/compliance/audits | roles: OWNER,ADMIN,PHARMACIST,MANAGER | permi
 POST /pharmacy/compliance/audits/:auditId/adjustments | roles: OWNER,ADMIN,PHARMACIST,MANAGER | permissions: pharmacy:compliance:audit
 POST /pharmacy/invoices | roles: ADMIN,PHARMACIST | permissions: pharmacy:invoice:create
 POST /pharmacy/invoices/:id/payments | roles: ADMIN,PHARMACIST | permissions: pharmacy:invoice:payment:add
+POST /pharmacy/invoices/:id/refunds | roles: ADMIN,PHARMACIST | permissions: pharmacy:invoice:payment:add
 POST /pharmacy/invoices/checkout | roles: ADMIN,PHARMACIST | permissions: pharmacy:invoice:create & pharmacy:invoice:update
 POST /pharmacy/packages | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /pharmacy/partner-sales | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -

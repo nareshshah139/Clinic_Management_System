@@ -67,3 +67,27 @@ describe('printHtml frame lifetime', () => {
     expect(second.frame.srcdoc).toBe('<p>B</p>');
   });
 });
+
+it('prints a revised bill with its bill discount and marks a draft as not a tax invoice', () => {
+  const bill = {
+    invoiceNumber: 'PHI-2026-001',
+    status: 'CONFIRMED',
+    invoiceDate: '2026-11-09T05:00:00.000Z',
+    revisedAt: '2026-11-10T06:00:00.000Z',
+    items: [],
+    subtotal: 330,
+    discountAmount: 84.4,
+    billDiscountKind: 'PERCENT',
+    billDiscountValue: 20,
+    billDiscountAmount: 61.4,
+    taxAmount: 37.08,
+    totalAmount: 282.68,
+  };
+  const html = renderPharmacyInvoiceHtml(bill);
+  expect(html).toContain('<strong>Revised:</strong> 10 Nov 2026');
+  expect(html).toContain('<div><strong>Item discount:</strong> -₹23.00</div>');
+  expect(html).toContain('<div><strong>Bill discount (20%):</strong> -₹61.40</div>');
+  expect(html).toContain('<div class="grand"><strong>Grand Total:</strong> ₹282.68</div>');
+  const draft = renderPharmacyInvoiceHtml({ ...bill, invoiceNumber: 'DRAFT-9a', status: 'DRAFT', revisedAt: null });
+  expect([draft.includes('<title>Draft bill, not a tax invoice</title>'), draft.includes('DRAFT-9a')]).toEqual([true, false]);
+});

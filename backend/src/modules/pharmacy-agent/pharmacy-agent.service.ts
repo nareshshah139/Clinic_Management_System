@@ -7,6 +7,7 @@ import {
   OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { billNumberLabel } from '../pharmacy/bill-number';
 import { spawn } from 'child_process';
 import { codexOAuthEnv } from '../../shared/codex/codex-oauth';
 import { createHash, randomUUID } from 'crypto';
@@ -919,7 +920,10 @@ export class PharmacyAgentService implements OnModuleInit {
       generatedAt: new Date().toISOString(),
       dashboard,
       lowStock,
-      recentInvoices,
+      recentInvoices: recentInvoices.map((invoice: any) => ({
+        ...invoice,
+        invoiceNumber: billNumberLabel(invoice.invoiceNumber),
+      })),
       pendingTasks,
       safety:
         'All database writes must be returned as proposals. The backend will not apply them until user approval.',

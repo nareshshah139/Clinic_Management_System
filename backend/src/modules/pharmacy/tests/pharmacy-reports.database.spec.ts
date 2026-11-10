@@ -486,6 +486,135 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
     expect(report.canRecordCount).toBe(true);
   });
 
+  it('takes a cash refund on Tuesday for Monday’s revised bill out of Tuesday’s expected cash', async () => {
+    await db.pharmacyInvoice.create({
+      data: {
+        id: 'revised-bill',
+        invoiceNumber: 'PHI-2026-600',
+        patientId: 'patient-branch',
+        branchId: 'branch',
+        subtotal: 150,
+        totalAmount: 150,
+        paymentMethod: 'CASH',
+        billingName: 'Meera Shah',
+        billingPhone: '9876543210',
+        status: 'CONFIRMED',
+        invoiceDate: new Date('2026-11-09T05:00:00Z'),
+        createdAt: new Date('2026-11-09T05:00:00Z'),
+        payments: {
+          create: [
+            { requestKey: 'paid', method: 'CASH', amount: 200, status: 'COMPLETED', paymentDate: new Date('2026-11-09T05:01:00Z') },
+            { requestKey: 'refund:back', method: 'CASH', amount: -50, status: 'REFUNDED', paymentDate: new Date('2026-11-10T06:00:00Z') },
+          ],
+        },
+      },
+    });
+    const cash = async (day: string) => {
+      const { collection } = await reports.dailyCollection(day, actor);
+      const line = collection.modes.find((m) => m.mode === 'CASH')!;
+      return [line.onTodaysBills, line.refunds, line.expected, collection.billing.paidAboveBill];
+    };
+    expect([await cash('2026-11-09'), await cash('2026-11-10')]).toEqual([
+      [200, 0, 200, 50],
+      [0, 50, -50, 0],
+    ]);
+  });
+
+  it('reports a bill-discounted bill at the value the tax was charged on, in every GST report', async () => {
+    // 1000 at 12% with a 10% bill discount: taxable 900, GST 108, total 1008.
+    await db.pharmacyInvoice.create({
+      data: {
+        id: 'bill-discounted',
+        invoiceNumber: 'PHI-2026-700',
+        patientId: 'patient-branch',
+        doctorId: 'doc',
+        branchId: 'branch',
+        subtotal: 1000,
+        discountAmount: 100,
+        billDiscountKind: 'PERCENT',
+        billDiscountValue: 10,
+        billDiscountAmount: 100,
+        taxAmount: 108,
+        totalAmount: 1008,
+        paymentMethod: 'CASH',
+        billingName: 'Meera Shah',
+        billingPhone: '9876543210',
+        status: 'CONFIRMED',
+        invoiceDate: new Date('2026-11-12T05:00:00Z'),
+        createdAt: new Date('2026-11-12T05:00:00Z'),
+        items: {
+          create: [
+            {
+              drugId: 'drug',
+              inventoryItemId: 'batch',
+              quantity: 1,
+              unitPrice: 1000,
+              discountAmount: 0,
+              billDiscountAmount: 100,
+              taxPercent: 12,
+              taxAmount: 108,
+              totalAmount: 1008,
+            },
+          ],
+        },
+      },
+    });
+    const day = q('2026-11-12');
+    const one = async (id: any, sectionId?: string) => rowsOf(await reports.report(id, day, actor), sectionId)[0];
+    const gstr3b: any = await reports.report('gstr-3b', day, actor);
+    expect({
+      register: await one('sales-register'),
+      bills: await one('sales-bills'),
+      b2cs: await one('gstr-1', 'b2cs'),
+      hsn: await one('hsn-wise'),
+      gstr3b: gstr3b.sections[0].rows.find((r: any) => r.key === '3.1a').cells,
+      dayWise: await one('day-wise-summary'),
+    }).toMatchObject({
+      register: { billNo: 'PHI-2026-700', gross: 1000, discount: 100, taxable: 900, cgst: 54, sgst: 54, total: 1008 },
+      bills: { 'r12.taxable': 900, 'r12.cgst': 54, 'r12.sgst': 54 },
+      b2cs: { rate: 12, taxable: 900, cgst: 54, sgst: 54 },
+      hsn: { hsn: '30049099', taxable: 900 },
+      gstr3b: { taxable: 900, cgst: 54, sgst: 54 },
+      dayWise: { 'r12.taxable': 900, 'r12.cgst': 54, 'total.amount': 1008 },
+    });
+  });
+
+  it('leaves a cancelled draft, which never got a bill number, out of the Sales Register and GSTR-1 documents issued', async () => {
+    const at = '2026-11-14T05:00:00Z';
+    const base = {
+      patientId: 'patient-branch',
+      branchId: 'branch',
+      subtotal: 200,
+      taxAmount: 24,
+      totalAmount: 224,
+      paymentMethod: 'CASH' as const,
+      billingName: 'Meera Shah',
+      billingPhone: '9876543210',
+      invoiceDate: new Date(at),
+      createdAt: new Date(at),
+    };
+    await db.pharmacyInvoice.create({ data: { ...base, id: 'issued-800', invoiceNumber: 'PHI-2026-800', status: 'CONFIRMED' } });
+    await db.pharmacyInvoice.create({
+      data: { ...base, id: 'cancelled-draft', invoiceNumber: 'DRAFT-4b1d8c2e-93f0-4a57-8d1e-6c2b9f0a7e31', status: 'CANCELLED' },
+    });
+    const day = q('2026-11-14');
+    const register = await reports.report('sales-register', q('2026-11-14', '2026-11-14', { type: 'ALL' }), actor);
+    const gstr1 = await reports.report('gstr-1', day, actor);
+    expect([rowsOf(register).map((r: any) => r.billNo), rowsOf(gstr1, 'docs')]).toEqual([
+      ['PHI-2026-800'],
+      [
+        {
+          nature: 'Invoices for outward supply',
+          from: 'PHI-2026-800',
+          to: 'PHI-2026-800',
+          total: 1,
+          cancelled: 0,
+          net: 1,
+        },
+      ],
+    ]);
+  });
+
   it('appends counts by sequence and refuses a stale or racing count without overwriting', async () => {
     const day = '2026-11-05';
     const first = await reports.recordCount(

@@ -123,6 +123,23 @@ describe('line normalisation', () => {
     });
   });
 
+  it('taxes a bill line on its value after the bill discount, so taxable + tax is the stored line total', () => {
+    // 1000 at 12% with a 10% bill discount: the line's share of the bill discount is 100.
+    const line = billLine({
+      name: 'Isotroin 10 Capsule',
+      hsn: '30049099',
+      unit: 'STRIP',
+      quantity: 1,
+      unitPrice: 1000,
+      discountAmount: 0,
+      billDiscountAmount: 100,
+      taxPercent: 12,
+      taxAmount: 108,
+      totalAmount: 1008,
+    });
+    expect([line.gross, line.discount, line.taxable, line.cgst, line.sgst, line.total]).toEqual([1000, 100, 900, 54, 54, 1008]);
+  });
+
   it('never shows a negative discount on a refund priced from the original sale', () => {
     const line = workflowLine({
       name: 'x',

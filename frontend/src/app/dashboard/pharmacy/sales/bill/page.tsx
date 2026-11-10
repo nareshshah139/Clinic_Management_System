@@ -5,6 +5,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { isIssuedBillNumber } from '@/lib/bill-number';
 import { getErrorMessage } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -14,6 +15,7 @@ import { Tabs } from '@/components/ui/tabs';
 import { PharmacyInvoiceBuilderFixed } from '@/components/pharmacy/PharmacyInvoiceBuilderFixed';
 import { PrescriptionDispensingQueue } from '@/components/pharmacy/PrescriptionDispensingQueue';
 import { SalesHeader } from '@/components/pharmacy/sales/SalesHeader';
+import { FinishedBillView } from '@/components/pharmacy/sales/FinishedBillView';
 import { SALES_PATH, salesTabHref, type Register } from '@/components/pharmacy/sales/sales-register-model';
 import {
   PREFILL_KEYS,
@@ -28,7 +30,7 @@ import {
 type DraftLoad =
   | { status: 'loading' }
   | { status: 'ready'; draft: SavedDraft }
-  | { status: 'finished'; number: string }
+  | { status: 'finished'; number: string; id: string }
   | { status: 'missing' }
   | { status: 'error'; message: string };
 
@@ -40,7 +42,7 @@ function useSavedDraft(id: string, reloadKey: number): DraftLoad {
     apiClient.get<SavedInvoice>(`/pharmacy/invoices/${encodeURIComponent(id)}`).then(
       (invoice) => {
         if (!live) return;
-        setLoad(invoice.status === 'DRAFT' ? { status: 'ready', draft: draftFromInvoice(invoice) } : { status: 'finished', number: invoice.invoiceNumber });
+        setLoad(invoice.status === 'DRAFT' ? { status: 'ready', draft: draftFromInvoice(invoice) } : { status: 'finished', number: invoice.invoiceNumber, id: invoice.id });
       },
       (error) => {
         if (!live) return;
@@ -72,13 +74,14 @@ function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
     );
   if (load.status === 'finished')
     return (
-      <Card>
-        <EmptyState
-          title="This bill is already finished"
-          description={`Bill ${load.number} was finished, so it can no longer be edited. Print it from Sales, or record a sales return to correct it.`}
-          action={back}
-        />
-      </Card>
+      <FinishedBillView
+        id={load.id}
+        notice={
+          isIssuedBillNumber(load.number)
+            ? `This draft was finished as bill ${load.number}, so it can no longer be edited as a draft.`
+            : 'This draft was cancelled before it was finished, so it never became a bill and has no bill number.'
+        }
+      />
     );
   if (load.status === 'error')
     return (
@@ -155,6 +158,7 @@ function SalesBillContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const draftId = searchParams.get('draft');
+  const billId = searchParams.get('bill');
   const [created, setCreated] = useState<string | null>(null);
   const prefill = prefillFrom(searchParams);
   const leave = () => router.push(SALES_PATH);
@@ -169,7 +173,9 @@ function SalesBillContent() {
             </Button>
           }
         />
-        {draftId && draftId !== created ? (
+        {billId ? (
+          <FinishedBillView key={billId} id={billId} startEditing={searchParams.get('edit') === 'discount'} />
+        ) : draftId && draftId !== created ? (
           <DraftBill key={draftId} id={draftId} onLeave={leave} />
         ) : (
           <NewBill prefill={draftId ? undefined : prefill} onCreated={setCreated} onLeave={leave} />

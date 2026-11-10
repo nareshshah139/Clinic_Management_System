@@ -307,7 +307,7 @@ databaseTests('Sales register on PostgreSQL', () => {
     expect(
       Object.fromEntries(
         sales.rows.map((r) => [
-          r.billNo ?? `draft ${r.reservedNo === draft.invoiceNumber}`,
+          r.billNo ?? `draft ${r.reservedNo}`,
           [r.entryBy?.name ?? null, r.paymentModes, r.due],
         ]),
       ),
@@ -317,7 +317,7 @@ databaseTests('Sales register on PostgreSQL', () => {
       [sold.invoiceNumber]: ['Ravi Synthetic', ['UPI'], 0],
       'LEGACY-1': ['Asha Synthetic', [], 100],
       'LEGACY-UNSOLD': [null, [], 100],
-      'draft true': ['Asha Synthetic', [], 0],
+      'draft null': ['Asha Synthetic', [], 0],
     });
     expect([
       sales.totals,
@@ -338,7 +338,7 @@ databaseTests('Sales register on PostgreSQL', () => {
         gstin: '27ABCDE1234F1Z5',
       },
       125,
-      [draft.id],
+      [],
       [['SR-1', [sold.invoiceNumber], ['CASH']]],
     ]);
     expect(

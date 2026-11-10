@@ -1,3 +1,4 @@
+import { StoredLine, storedLineValue } from './bill-pricing';
 import { money, STANDARD_GST_SLABS } from './gst-slabs';
 import {
   CellValue,
@@ -99,34 +100,28 @@ export function signedLine(line: ReportLine, sign: 1 | -1): ReportLine {
   };
 }
 
-/** A pharmacy bill line: unit price before tax, a percentage discount, tax on the discounted value. */
-export function billLine(item: {
-  name: string;
-  hsn: string | null;
-  unit: string | null;
-  quantity: number;
-  unitPrice: number;
-  discountAmount: number;
-  taxPercent: number;
-  taxAmount: number;
-  totalAmount: number;
-}): ReportLine {
-  const gross = money(Number(item.quantity || 0) * Number(item.unitPrice || 0));
-  const discount = money(item.discountAmount);
-  const taxable = money(gross - discount);
-  const tax = money(item.taxAmount);
+/** A pharmacy bill line: unit price before tax, its own and its share of the bill discount, tax on the discounted value. */
+export function billLine(
+  item: StoredLine & {
+    name: string;
+    hsn: string | null;
+    unit: string | null;
+    taxPercent: number;
+  },
+): ReportLine {
+  const value = storedLineValue(item);
   return {
     name: item.name,
     hsn: item.hsn,
     unit: item.unit,
     quantity: Number(item.quantity || 0),
-    gross,
-    discount,
-    taxable,
+    gross: value.gross,
+    discount: value.discount,
+    taxable: value.taxable,
     rate: money(item.taxPercent),
-    ...splitIntraState(tax),
+    ...splitIntraState(value.tax),
     cess: 0,
-    total: money(taxable + tax),
+    total: value.total,
   };
 }
 

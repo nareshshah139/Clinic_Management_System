@@ -13,9 +13,9 @@ ROOT = Path(__file__).resolve().parent
 SPEC = ROOT / "CashCount.tla"
 JAR_SHA256 = "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
 
-# (mode, staff, max saves, expected) where expected is None for "no error", or the set of properties TLC may
-# report. Last-write-wins breaks two properties in different states, and which one TLC reaches first depends on
-# how its workers interleave, so that control accepts either.
+# (mode, staff, max saves, broken) where broken is None for "no error", or every property the mode must break.
+# A broken mode can break several properties at once and TLC stops at whichever its workers reach first, so each
+# property a control must break gets its own run that checks only that property.
 CASES = [
     ("correct", "{a, b}", 4, None),
     ("correct", "{a, b, c}", 4, None),
@@ -25,21 +25,23 @@ CASES = [
 ]
 
 
-def config(mode, staff, saves):
+def config(mode, staff, saves, target):
+    invariants = ["TypeOK", "Contiguous", "NoLostUpdate", "SomeoneCounted"] if target is None else ["TypeOK"] + ([target] if target != "HistoryKept" else [])
+    properties = "PROPERTIES HistoryKept\n" if target in (None, "HistoryKept") else ""
     return (
         "SPECIFICATION Spec\n"
         "CONSTANTS\n"
         f"  Staff = {staff}\n"
         f"  MaxSaves = {saves}\n"
         f'  MODE = "{mode}"\n'
-        "INVARIANTS TypeOK Contiguous NoLostUpdate SomeoneCounted\n"
-        "PROPERTIES HistoryKept\n"
+        f"INVARIANTS {' '.join(invariants)}\n"
+        f"{properties}"
     )
 
 
-def run_case(jar, mode, staff, saves, workdir):
-    name = f"MC_{mode}_{len(staff.split(','))}_{saves}"
-    (Path(workdir) / f"{name}.cfg").write_text(config(mode, staff, saves))
+def run_case(jar, mode, staff, saves, target, workdir):
+    name = f"MC_{mode}_{len(staff.split(','))}_{saves}_{target or 'all'}"
+    (Path(workdir) / f"{name}.cfg").write_text(config(mode, staff, saves, target))
     (Path(workdir) / SPEC.name).write_text(SPEC.read_text())
     proc = subprocess.run(
         ["java", "-XX:+UseParallelGC", "-cp", str(Path(jar).resolve()), "tlc2.TLC", "-workers", "2", "-deadlock",
@@ -64,19 +66,20 @@ def main():
     args = parser.parse_args()
     if hashlib.sha256(Path(args.jar).read_bytes()).hexdigest() != JAR_SHA256:
         sys.exit(f"{args.jar} does not match the pinned tla2tools 1.7.4 checksum")
+    checks = [(mode, staff, saves, target) for mode, staff, saves, broken in CASES for target in (sorted(broken) if broken else [None])]
     failures = 0
     with tempfile.TemporaryDirectory() as workdir:
-        for mode, staff, saves, expected in CASES:
-            got, detail = run_case(args.jar, mode, staff, saves, workdir)
-            ok = got is None if expected is None else got in expected
+        for mode, staff, saves, target in checks:
+            got, detail = run_case(args.jar, mode, staff, saves, target, workdir)
+            ok = got == target
             failures += not ok
-            want = "no error" if expected is None else f"{' or '.join(sorted(expected))} violated"
+            want = "no error" if target is None else f"{target} violated"
             seen = "no error" if got is None else f"{got} violated"
             note = detail if got is None else ""
             print(f"{'PASS' if ok else 'FAIL'}  {mode:<10} staff={staff:<10} saves={saves}  expected {want}, got {seen} {note}")
             if not ok and got is not None:
                 print(detail)
-    print(f"\n{len(CASES) - failures}/{len(CASES)} cash-count model checks behave as expected")
+    print(f"\n{len(checks) - failures}/{len(checks)} cash-count model checks behave as expected")
     sys.exit(1 if failures else 0)
 
 

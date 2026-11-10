@@ -26,7 +26,7 @@ const COLUMN_HELP = {
   onTodaysBills: "Payments received today against bills dated today.",
   onEarlierBills: "Payments received today against bills from earlier days (balances settled today), and money taken on bills that are not final.",
   counterSales: "Counter sales paid at the counter today. Counter sales on credit move no money.",
-  refunds: "Customer returns refunded in this mode today. Refunds as store credit move no money.",
+  refunds: "Money handed back in this mode today: refunds on bills whose discount was revised, and customer returns. Refunds as store credit move no money.",
   expected: "On today's bills + On earlier bills + Counter sales - Refunds: what should be in hand.",
 };
 

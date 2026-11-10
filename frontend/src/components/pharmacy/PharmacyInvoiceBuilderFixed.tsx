@@ -3,6 +3,7 @@
 import { downloadInvoicePdf } from '@/lib/download-invoice-pdf';
 
 import { displayClinicDate } from '@/lib/date-display';
+import { isIssuedBillNumber } from '@/lib/bill-number';
 import { Spinner } from '@/components/ui/spinner';
 import { useState, useEffect, useRef, useCallback } from 'react';
 
@@ -53,8 +54,11 @@ import { apiClient } from '@/lib/api';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
+import { BillPricingError, priceBill, type BillDiscount } from '@/lib/bill-pricing';
+import { BillDiscountInput } from './sales/BillDiscountInput';
 import {
   billPayload,
+  draftName,
   draftProblem,
   draftRefusal,
   type BillFields,
@@ -306,8 +310,9 @@ export function PharmacyInvoiceBuilderFixed({
     }
   }, [toast, billContext]);
   const [session, setSession] = useState<BillSession>(draft?.session ?? { kind: 'new' });
+  const [billDiscount, setBillDiscount] = useState<BillDiscount | null>(draft?.billDiscount ?? null);
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(() =>
-    draft ? JSON.stringify(billPayload(draft.fields, savedLines(draft))) : null,
+    draft ? JSON.stringify(billPayload(draft.fields, savedLines(draft), draft.billDiscount)) : null,
   );
   const [savingDraft, setSavingDraft] = useState(false);
   const [refusal, setRefusal] = useState<DraftRefusal | null>(null);
@@ -1250,18 +1255,30 @@ export function PharmacyInvoiceBuilderFixed({
   };
 
   const calculateInvoiceTotals = () => {
-    const subtotal = items.reduce(
-      (sum, item) => sum + item.quantity * item.unitPrice,
-      0
-    );
-    const totalDiscount = items.reduce(
-      (sum, item) => sum + item.discountAmount,
-      0
-    );
-    const totalTax = items.reduce((sum, item) => sum + item.taxAmount, 0);
-    const grandTotal = subtotal - totalDiscount + totalTax;
-
-    return { subtotal, totalDiscount, totalTax, grandTotal };
+    const lines = items.map((item) => ({
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      discountPercent: item.discountPercent,
+      taxPercent: item.taxPercent ?? 0,
+    }));
+    let discountProblem: string | null = null;
+    let price;
+    try {
+      price = priceBill(lines, billDiscount);
+    } catch (error) {
+      if (!(error instanceof BillPricingError)) throw error;
+      discountProblem = error.message;
+      price = priceBill(lines, null);
+    }
+    return {
+      subtotal: price.subtotal,
+      lineDiscount: price.lineDiscount,
+      billDiscountAmount: price.billDiscount,
+      totalDiscount: price.discount,
+      totalTax: price.tax,
+      grandTotal: price.total,
+      discountProblem,
+    };
   };
 
   const getValidInvoiceItems = () => {
@@ -1286,6 +1303,11 @@ export function PharmacyInvoiceBuilderFixed({
               : 'Billing phone is required',
         variant: 'destructive',
       });
+      return null;
+    }
+
+    if (discountProblem) {
+      toast({ title: 'Check the bill discount', description: discountProblem, variant: 'destructive' });
       return null;
     }
 
@@ -1350,7 +1372,7 @@ export function PharmacyInvoiceBuilderFixed({
       setLoading(true);
 
       const invoicePayload = {
-        ...billPayload(invoiceData, validItems),
+        ...billPayload(invoiceData, validItems, billDiscount),
         ...(session.kind === 'draft' ? { draftId: session.id, draftVersion: session.version } : {}),
       };
 
@@ -1463,19 +1485,19 @@ export function PharmacyInvoiceBuilderFixed({
    * a refusal MUST be shown with a way to reload, never retried over the other change.
    */
   const saveDraft = async () => {
-    const problem = draftProblem(invoiceData, items);
+    const problem = draftProblem(invoiceData, items) ?? discountProblem;
     if (problem) {
       toast({ title: 'Draft not saved', description: problem, variant: 'destructive' });
       return;
     }
-    const payload = billPayload(invoiceData, items);
+    const payload = billPayload(invoiceData, items, billDiscount);
     setSavingDraft(true);
     try {
       const saved = session.kind === 'draft'
         ? await apiClient.updatePharmacyInvoice(session.id, { ...payload, expectedVersion: session.version })
         : await apiClient.post('/pharmacy/invoices', payload);
       const { id, mutationVersion, invoiceNumber } = saved as { id: string; mutationVersion: number; invoiceNumber: string };
-      const next: DraftSession = { kind: 'draft', id, version: mutationVersion, number: invoiceNumber };
+      const next: DraftSession = { kind: 'draft', id, version: mutationVersion, number: isIssuedBillNumber(invoiceNumber) ? invoiceNumber : null };
       setSession(next);
       setSavedSnapshot(JSON.stringify(payload));
       onDraftSaved?.(next);
@@ -1495,7 +1517,7 @@ export function PharmacyInvoiceBuilderFixed({
     try {
       await apiClient.delete(`/pharmacy/invoices/${encodeURIComponent(session.id)}?version=${session.version}`);
       setDiscardOpen(false);
-      toast({ title: 'Draft discarded', description: `${session.number} for ${invoiceData.billingName || 'this patient'} was removed. No stock moved.` });
+      toast({ title: 'Draft discarded', description: `${draftName(session)} for ${invoiceData.billingName || 'this patient'} was removed. No stock moved.` });
       onDiscarded?.(session);
     } catch (error) {
       setDiscardOpen(false);
@@ -1515,6 +1537,10 @@ export function PharmacyInvoiceBuilderFixed({
     invoiceDate: new Date().toISOString(),
     subtotal,
     discountAmount: totalDiscount,
+    lineDiscountAmount: lineDiscount,
+    billDiscountKind: billDiscount?.kind ?? null,
+    billDiscountValue: billDiscount?.value ?? 0,
+    billDiscountAmount,
     taxAmount: totalTax,
     totalAmount: grandTotal,
     billingName: invoiceData.billingName,
@@ -1660,10 +1686,14 @@ export function PharmacyInvoiceBuilderFixed({
 
     const totals = {
       subtotal: invoiceCore?.subtotal || 0,
-      totalDiscount: invoiceCore?.discountAmount || 0,
+      lineDiscount: invoiceCore?.lineDiscountAmount ?? (invoiceCore?.discountAmount || 0) - (invoiceCore?.billDiscountAmount || 0),
+      billDiscount: invoiceCore?.billDiscountAmount || 0,
       totalTax: invoiceCore?.taxAmount || 0,
       grandTotal: invoiceCore?.totalAmount || 0,
     };
+    const billDiscountLabel =
+      invoiceCore?.billDiscountKind === 'PERCENT' ? `Bill discount (${Number(invoiceCore.billDiscountValue)}%)` : 'Bill discount';
+    const invoiceNumberText = hasSavedInvoiceIdentity(invoice) ? invoiceCore?.invoiceNumber : 'Given when the bill is printed';
     const gstRows =
       isStandardPrintData && Array.isArray(invoice.gstSummary)
         ? invoice.gstSummary
@@ -1779,9 +1809,10 @@ export function PharmacyInvoiceBuilderFixed({
                 ${branch?.phone ? `Phone: ${escapeHtml(branch.phone)}<br/>` : ''}
                 ${branch?.gstNumber ? `GSTIN: ${escapeHtml(branch.gstNumber)}<br/>` : ''}
                 ${branch?.drugLicenseNumber ? `DL No: ${escapeHtml(branch.drugLicenseNumber)}<br/>` : ''}
-                <strong>Invoice #:</strong> ${escapeHtml(invoiceCore?.invoiceNumber || '')}<br/>
+                <strong>Invoice #:</strong> ${escapeHtml(invoiceNumberText || '')}<br/>
                 <strong>Copy:</strong> ${escapeHtml(copyType)}<br/>
                 <strong>Date:</strong> ${escapeHtml(dateStr)}
+                ${invoiceCore?.revisedAt ? `<br/><strong>Revised ${escapeHtml(displayClinicDate(invoiceCore.revisedAt))}</strong>` : ''}
               </div>
             </div>
           </div>
@@ -1819,7 +1850,8 @@ export function PharmacyInvoiceBuilderFixed({
 
           <div class="totals-section">
             <div><strong>Subtotal:</strong> ₹${formatMoney(totals.subtotal)}</div>
-            <div><strong>Discount:</strong> -₹${formatMoney(totals.totalDiscount)}</div>
+            <div><strong>Item discount:</strong> -₹${formatMoney(totals.lineDiscount)}</div>
+            ${totals.billDiscount > 0 ? `<div><strong>${escapeHtml(billDiscountLabel)}:</strong> -₹${formatMoney(totals.billDiscount)}</div>` : ''}
             <div><strong>Tax:</strong> ₹${formatMoney(totals.totalTax)}</div>
             <div class="grand-total"><strong>Grand Total:</strong> ₹${formatMoney(totals.grandTotal)}</div>
             ${invoiceCore?.amountInWords ? `<div class="muted">${escapeHtml(invoiceCore.amountInWords)}</div>` : ''}
@@ -2043,9 +2075,9 @@ export function PharmacyInvoiceBuilderFixed({
     }
   };
 
-  const { subtotal, totalDiscount, totalTax, grandTotal } =
+  const { subtotal, lineDiscount, billDiscountAmount, totalDiscount, totalTax, grandTotal, discountProblem } =
     calculateInvoiceTotals();
-  const draftChanged = savedSnapshot !== JSON.stringify(billPayload(invoiceData, items));
+  const draftChanged = savedSnapshot !== JSON.stringify(billPayload(invoiceData, items, billDiscount));
   const leaveFinishedBill = () => {
     sessionStorage.removeItem(checkoutStorageKey);
     checkoutAttemptRef.current = null;
@@ -2186,7 +2218,7 @@ export function PharmacyInvoiceBuilderFixed({
           {session.kind === 'draft' ? (
             <>
               <Badge variant="warning">Draft</Badge>
-              <span>{session.number} not final</span>
+              {session.number ? <span>{session.number} not final</span> : <span className="text-base font-normal text-muted-foreground">Gets its bill number when finished</span>}
             </>
           ) : (
             'New bill'
@@ -2885,10 +2917,19 @@ export function PharmacyInvoiceBuilderFixed({
                     <span>Subtotal:</span>
                     <span>₹{subtotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount:</span>
-                    <span>-₹{totalDiscount.toFixed(2)}</span>
-                  </div>
+                  {lineDiscount > 0 && (
+                    <div className="flex justify-between text-success-text">
+                      <span>Item discounts:</span>
+                      <span>-₹{lineDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <BillDiscountInput value={billDiscount} onChange={setBillDiscount} problem={discountProblem} disabled={loading} />
+                  {billDiscountAmount > 0 && (
+                    <div className="flex justify-between text-success-text">
+                      <span>Bill discount{billDiscount?.kind === 'PERCENT' ? ` (${billDiscount.value}%)` : ''}:</span>
+                      <span>-₹{billDiscountAmount.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span>Tax:</span>
                     <span>{hasUnresolvedGst ? 'GST pending' : `₹${totalTax.toFixed(2)}`}</span>
@@ -3023,7 +3064,7 @@ export function PharmacyInvoiceBuilderFixed({
                       ? 'Saves the bill to Sales without moving stock or taking payment.'
                       : draftChanged
                         ? 'Unsaved changes'
-                        : `All changes saved to draft ${session.number}`}
+                        : 'All changes saved to the draft'}
                   </p>
                   {session.kind === 'draft' && (
                     <Button
@@ -3050,7 +3091,7 @@ export function PharmacyInvoiceBuilderFixed({
           <DialogTitle>Discard this draft?</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          {session.kind === 'draft' ? session.number : 'This draft'} for {invoiceData.billingName || 'this patient'} will be removed from Sales.
+          {session.kind === 'draft' ? draftName(session) : 'This draft'} for {invoiceData.billingName || 'this patient'} will be removed from Sales.
           Nothing was sold, so stock and payments are unchanged. This cannot be undone.
         </p>
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

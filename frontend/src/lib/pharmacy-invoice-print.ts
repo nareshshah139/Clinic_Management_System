@@ -1,5 +1,6 @@
 import { displayCalendarDate, displayClinicDate } from '@/lib/date-display';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
+import { billNumberLabel } from '@/lib/bill-number';
 
 export type ClinicIdentity = {
   name: string;
@@ -105,13 +106,17 @@ export function renderPharmacyInvoiceHtml(invoice: any, clinic?: ClinicIdentity 
     invoice.patient?.phone || invoice.billingPhone || 'N/A',
     invoice.billingAddress || invoice.patient?.address || '',
   ].filter(Boolean);
+  const number = billNumberLabel(invoice ?? {});
+  const billDiscount = Number(invoice?.billDiscountAmount) || 0;
+  const discount = Number(invoice?.discountAmount) || 0;
   return renderPrintDocument({
-    title: `Pharmacy Invoice ${invoice?.invoiceNumber || ''}`.trim(),
+    title: number === 'Draft' ? 'Draft bill, not a tax invoice' : `Pharmacy Invoice ${number}`,
     clinic,
     meta: [
-      ['Invoice #', invoice?.invoiceNumber || ''],
+      ['Invoice #', number],
       ['Date', displayClinicDate(invoice.invoiceDate || invoice.createdAt)],
       ['Status', invoice?.status || 'N/A'],
+      ...(invoice?.revisedAt ? [['Revised', displayClinicDate(invoice.revisedAt)] as [string, string]] : []),
     ],
     party,
     columns: [
@@ -132,7 +137,10 @@ export function renderPharmacyInvoiceHtml(invoice: any, clinic?: ClinicIdentity 
     ]),
     totals: [
       ['Subtotal', formatRupees(invoice.subtotal)],
-      ['Discount', formatRupees(-(Number(invoice.discountAmount) || 0))],
+      ['Item discount', formatRupees(-(discount - billDiscount))],
+      ...(billDiscount > 0
+        ? [[invoice.billDiscountKind === 'PERCENT' ? `Bill discount (${invoice.billDiscountValue}%)` : 'Bill discount', formatRupees(-billDiscount)] as [string, string]]
+        : []),
       ['Tax', formatRupees(invoice.taxAmount)],
     ],
     grandTotal: ['Grand Total', formatRupees(invoice.totalAmount)],

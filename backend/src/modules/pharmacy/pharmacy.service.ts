@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { billNumberLabel } from './bill-number';
 
 @Injectable()
 export class PharmacyService {
@@ -278,7 +279,7 @@ export class PharmacyService {
         topSellingDrugs: topSellingWithDetails,
         recentInvoices: recentInvoices.map((invoice: any) => ({
           id: invoice.id,
-          invoiceNumber: invoice.invoiceNumber,
+          invoiceNumber: billNumberLabel(invoice.invoiceNumber),
           patientName: invoice.patient.name,
           amount: invoice.totalAmount,
           status: invoice.status,
@@ -469,7 +470,7 @@ export class PharmacyService {
 
       return (invoices as any[]).map((invoice: any) => ({
         id: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
+        invoiceNumber: billNumberLabel(invoice.invoiceNumber),
         patientName: invoice.patient.name,
         doctorName: invoice.doctor
           ? `${invoice.doctor.firstName} ${invoice.doctor.lastName}`

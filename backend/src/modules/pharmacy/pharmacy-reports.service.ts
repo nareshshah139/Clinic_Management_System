@@ -5,9 +5,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { issuedBillNumber } from './bill-number';
 import { CLINIC_TIME_ZONE } from './clinic-day';
 import { money } from './gst-slabs';
 import { PharmacyComplianceService } from './pharmacy-compliance.service';
+import { LEDGER_STATUSES } from './pharmacy-ledger';
 import {
   CashCount,
   COLLECTION_MODES,
@@ -220,6 +222,7 @@ export class PharmacyReportsService {
               quantity: true,
               unitPrice: true,
               discountAmount: true,
+              billDiscountAmount: true,
               taxPercent: true,
               taxAmount: true,
               totalAmount: true,
@@ -272,6 +275,7 @@ export class PharmacyReportsService {
               quantity: item.quantity,
               unitPrice: item.unitPrice,
               discountAmount: item.discountAmount,
+              billDiscountAmount: item.billDiscountAmount,
               taxPercent: item.taxPercent,
               taxAmount: item.taxAmount,
               totalAmount: item.totalAmount,
@@ -314,7 +318,9 @@ export class PharmacyReportsService {
     ];
     return {
       docs,
-      cancelledBillNumbers: cancelled.map((bill) => bill.invoiceNumber),
+      cancelledBillNumbers: cancelled.flatMap(
+        (bill) => issuedBillNumber(bill.invoiceNumber) ?? [],
+      ),
     };
   }
 
@@ -919,7 +925,11 @@ export class PharmacyReportsService {
           branchId,
           OR: [
             { invoiceDate: range, status: { in: [...SALE_STATUSES] } },
-            { payments: { some: { status: 'COMPLETED', paymentDate: range } } },
+            {
+              payments: {
+                some: { status: { in: LEDGER_STATUSES }, paymentDate: range },
+              },
+            },
           ],
         },
         select: {
@@ -932,7 +942,7 @@ export class PharmacyReportsService {
           billingName: true,
           patient: { select: { name: true } },
           payments: {
-            where: { status: 'COMPLETED' },
+            where: { status: { in: LEDGER_STATUSES } },
             select: { method: true, amount: true, paymentDate: true },
           },
         },
@@ -958,7 +968,9 @@ export class PharmacyReportsService {
           : 'DRAFT';
     const collectionBills: CollectionBill[] = bills.map((bill) => ({
       id: bill.id,
-      number: bill.invoiceNumber,
+      number:
+        issuedBillNumber(bill.invoiceNumber) ??
+        (bill.status === 'CANCELLED' ? 'Cancelled draft' : 'Draft'),
       day: clinicDay(bill.invoiceDate),
       entryAt: bill.createdAt.toISOString(),
       state: state(bill.status),
@@ -1023,7 +1035,7 @@ export class PharmacyReportsService {
         tiles,
         sections,
         notes: [
-          'Billed is bills dated this day. Received is payments dated this day, whichever day their bill is from. Refunds as store credit move no money.',
+          'Billed is bills dated this day. Received is payments dated this day, whichever day their bill is from. Refunds handed back on a bill or for a customer return leave their mode on the day they are paid out; refunds as store credit move no money.',
           collection.outsideBills.count
             ? `${collection.outsideBills.count} payment(s) of ${collection.outsideBills.amount.toFixed(2)} were received on bills that are not final (draft or cancelled); they are counted in the mode where the money came in.`
             : '',

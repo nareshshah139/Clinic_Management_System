@@ -944,7 +944,7 @@ function makeCheck(t) {
         const foot = await footer(page).catch(() => ({}));
         s.check(`${role}: total`, foot.total, fmt(finalSum(fySales)));
       } else s.note(`${role}: no table; body: ${(await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 200)}`);
-      const alert = (await page.locator('[role="alert"]').allInnerTexts()).filter((t) => t.trim());
+      const alert = (await page.locator('[role="alert"]:not(#__next-route-announcer__)').allInnerTexts()).filter((t) => t.trim());
       s.check(`${role}: no error alert`, alert, []);
       await s.shot(page, `11-${role}`);
     }

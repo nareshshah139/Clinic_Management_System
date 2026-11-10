@@ -23,7 +23,7 @@ async function audit() {
       await tx.$executeRawUnsafe("SET LOCAL statement_timeout='20s'");
       report.transactionReadOnly = (await tx.$queryRawUnsafe('SHOW transaction_read_only'))[0].transaction_read_only;
       report.invoices = (await tx.$queryRawUnsafe(`WITH receipts AS (
-        SELECT "invoiceId",sum(amount) FILTER (WHERE status='COMPLETED') AS paid FROM pharmacy_payments GROUP BY "invoiceId"
+        SELECT "invoiceId",sum(amount) FILTER (WHERE status IN ('COMPLETED','REFUNDED')) AS paid FROM pharmacy_payments GROUP BY "invoiceId"
       ) SELECT count(*)::int AS total,
         count(*) FILTER (WHERE abs(i."paidAmount"-coalesce(r.paid,0))>0.01)::int AS cached_paid_mismatch,
         count(*) FILTER (WHERE abs(i."balanceAmount"-(i."totalAmount"-coalesce(r.paid,0)))>0.01)::int AS cached_balance_mismatch,

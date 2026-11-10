@@ -20,9 +20,16 @@ beforeEach(() => {
 
 it('sends a draft sale to Sales to finish, without confirming or taking payment from the list', async () => {
   render(<PharmacyInvoiceList />);
-  expect(await screen.findByRole('link', { name: 'Continue draft SALE-9 in Sales' })).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill?draft=draft-1');
+  expect(await screen.findByRole('link', { name: 'Continue the draft for Sample Patient in Sales' })).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill?draft=draft-1');
   expect(screen.getByTitle('Delete Invoice')).toBeInTheDocument();
-  expect([screen.queryByTitle('Confirm Invoice'), screen.queryByTitle('Mark as Paid')]).toEqual([null, null]);
+  expect(screen.getByRole('heading', { name: 'Draft', level: 3 })).toBeInTheDocument();
+  expect([
+    screen.queryByTitle('Confirm Invoice'),
+    screen.queryByTitle('Mark as Paid'),
+    screen.queryByTitle('View Invoice'),
+    screen.queryByTitle('Download Invoice'),
+    screen.queryByText('SALE-9'),
+  ]).toEqual([null, null, null, null, null]);
 });
 
 it('deletes a draft only at the version the list showed, and shows the plain refusal when it changed', async () => {
@@ -36,4 +43,17 @@ it('deletes a draft only at the version the list showed, and shows the plain ref
   (apiClient.delete as jest.Mock).mockRejectedValueOnce(Object.assign(new Error(message), { status: 409, body: { message } }));
   fireEvent.click(screen.getByTitle('Delete Invoice'));
   await waitFor(() => expect(window.alert).toHaveBeenLastCalledWith(message));
+});
+
+it('offers no view, download or payment for a cancelled draft, which never got a bill number', async () => {
+  const cancelled = { ...draft, id: 'draft-2', invoiceNumber: 'DRAFT-4b1d2c3e-0000-4000-8000-000000000000', status: 'CANCELLED' };
+  (apiClient.getPharmacyInvoices as jest.Mock).mockResolvedValue({ data: [cancelled], pagination: { page: 1, limit: 10, total: 1, pages: 1 } });
+  render(<PharmacyInvoiceList />);
+  expect(await screen.findByRole('heading', { name: 'Cancelled draft', level: 3 })).toBeInTheDocument();
+  expect([
+    screen.queryByTitle('View Invoice'),
+    screen.queryByTitle('Download Invoice'),
+    screen.queryByTitle('Mark as Paid'),
+    screen.queryByText(/DRAFT-4b1d/),
+  ]).toEqual([null, null, null, null]);
 });
