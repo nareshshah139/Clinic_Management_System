@@ -31,6 +31,14 @@ import { AppointmentStatus, Prisma, VisitType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WhatsAppTemplatesService } from '../whatsapp-templates/whatsapp-templates.service';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
+import { clinicBillAccess } from '../billing/billing-access';
+import {
+  appointmentStart,
+  billTypeOf,
+  billingSummary,
+  hadEarlierVisit,
+  invoicesByAppointment,
+} from './appointment-billing';
 import {
   BlockedInterval,
   MinuteInterval,
@@ -734,7 +742,13 @@ export class AppointmentsService {
     };
   }
 
-  async getDoctorSchedule(doctorId: string, date: string, branchId: string) {
+  /**
+   * @cc [owner:nareshshah139,label:product;security] doctor-schedule-billing
+   * Every appointment on the day MUST carry its bill type. Its billing (live clinic invoices linked
+   * by appointment or through its visit, each counted once) MUST be included only for a viewer who
+   * can read clinic bills, and the response MUST say what that viewer may do with bills.
+   */
+  async getDoctorSchedule(doctorId: string, date: string, branchId: string, viewer: { id: string; role: string }) {
     // Validate doctor exists and belongs to branch
     const doctor = await this.prisma.user.findFirst({
       where: { id: doctorId, branchId, role: UserRole.DOCTOR },
@@ -758,7 +772,7 @@ export class AppointmentsService {
       },
       include: {
         patient: {
-          select: { id: true, name: true, phone: true },
+          select: { id: true, name: true, phone: true, email: true, gender: true, dob: true, age: true },
         },
         room: {
           select: { id: true, name: true, type: true },
@@ -773,11 +787,48 @@ export class AppointmentsService {
       },
     });
 
+    const billingAccess = await clinicBillAccess(this.prisma, viewer);
+    const patientIds = [...new Set(appointments.map((a) => a.patientId))];
+    const visitIds = appointments.flatMap((a) => (a.visit ? [a.visit.id] : []));
+    const [priorVisits, invoices] = await Promise.all([
+      patientIds.length
+        ? this.prisma.visit.findMany({
+            where: { patientId: { in: patientIds }, deletedAt: null, patient: { branchId }, createdAt: { lt: new Date(`${date}T23:59:59.999+05:30`) } },
+            select: { patientId: true, appointmentId: true, createdAt: true },
+          })
+        : Promise.resolve([] as { patientId: string; appointmentId: string | null; createdAt: Date }[]),
+      billingAccess.read && appointments.length
+        ? this.prisma.newInvoice.findMany({
+            where: {
+              branchId,
+              status: { not: 'CANCELLED' },
+              OR: [{ appointmentId: { in: appointments.map((a) => a.id) } }, ...(visitIds.length ? [{ visitId: { in: visitIds } }] : [])],
+            },
+            select: { id: true, invoiceNo: true, appointmentId: true, visitId: true, total: true, received: true, balance: true },
+            orderBy: { createdAt: 'asc' },
+          })
+        : [],
+    ]);
+    const billsOf = invoicesByAppointment(
+      appointments.map((a) => ({ id: a.id, visitId: a.visit?.id ?? null })),
+      invoices,
+    );
+
     return {
       doctorId,
       doctorName: `${doctor.firstName} ${doctor.lastName}`.trim(),
       date,
-      appointments: appointments.map((a) => ({ ...a, calendar: calendarOf(a.status) })),
+      billingAccess,
+      appointments: appointments.map((a) => {
+        const visits = priorVisits.filter((v) => v.patientId === a.patientId);
+        const billType = billTypeOf(a.visitType, hadEarlierVisit(a.id, appointmentStart(date, a.slot), visits));
+        return {
+          ...a,
+          calendar: calendarOf(a.status),
+          billType,
+          ...(billingAccess.read ? { billing: billingSummary(a.status, a.visit?.status ?? null, billsOf.get(a.id) ?? []) } : {}),
+        };
+      }),
     };
   }
 

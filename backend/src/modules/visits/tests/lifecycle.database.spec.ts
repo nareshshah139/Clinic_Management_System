@@ -105,7 +105,7 @@ databaseTests('Visit and prescription lifecycle against PostgreSQL', () => {
     expect(saved).toMatchObject({ deletedAt: expect.any(Date), appointmentId: null, deletedAppointmentId: appointment.id, plan: v.plan, completedAt: v.completedAt });
     const appointments = new AppointmentsService(db as PrismaService);
     expect(await appointments.findOne(appointment.id, branchId)).toMatchObject({ status: 'CHECKED_IN', visit: null });
-    const schedule = await appointments.getDoctorSchedule(doctor.id, '2026-10-05', branchId);
+    const schedule = await appointments.getDoctorSchedule(doctor.id, '2026-10-05', branchId, { id: doctor.id, role: 'DOCTOR' });
     expect(schedule.appointments.find(a => a.id === appointment.id)?.visit).toBeNull();
     const input = { patientId: patient.id, doctorId: doctor.id, appointmentId: appointment.id, complaints: [{ complaint: 'Replacement encounter' }] };
     const attempts = await Promise.allSettled([visits.create(input, branchId), visits.create(input, branchId)]);
@@ -134,7 +134,7 @@ databaseTests('Visit and prescription lifecycle against PostgreSQL', () => {
     await visit({ appointmentId: appointment.id, deletedAt: new Date() });
     const appointments = new AppointmentsService(db as PrismaService);
     expect((await appointments.findOne(appointment.id, branchId)).visit).toBeNull();
-    expect((await appointments.getDoctorSchedule(doctor.id, '2026-10-05', branchId)).appointments.find(a => a.id === appointment.id)?.visit).toBeNull();
+    expect((await appointments.getDoctorSchedule(doctor.id, '2026-10-05', branchId, { id: doctor.id, role: 'DOCTOR' })).appointments.find(a => a.id === appointment.id)?.visit).toBeNull();
     expect((await appointments.getRoomSchedule(room.id, '2026-10-05', branchId)).appointments.find(a => a.id === appointment.id)?.visit).toBeNull();
   });
 
