@@ -28,6 +28,7 @@ import type {
 import { AppointmentStatus } from '@cms/shared-types';
 import { useOverbookConfirm } from './useOverbookConfirm';
 import { overbookFlag } from '@/lib/overbooking';
+import { displayCalendarDate } from '@/lib/date-display';
 import { CALENDARS, CALENDAR_ORDER, canMove, type SlotChoice } from './appointment-calendars';
 import CalendarColumn, { type SlotAction } from './CalendarColumn';
 
@@ -55,15 +56,39 @@ export interface DoctorDayCalendarProps {
   maxBookingsPerSlot?: number;
 }
 
-/** Reschedule mode. `refused` is set when a confirm or move back found its time taken, and limits the move to that calendar. */
-type Move = { appointment: AppointmentInSlot; refused?: SlotChoice };
+/**
+ * Reschedule mode. `from` is the day the appointment is on. `refused` is set when a confirm or
+ * move back found its time taken, and limits the move to that calendar.
+ */
+type Move = { appointment: AppointmentInSlot; from: string; refused?: SlotChoice };
+type MoveState = { move: Move | null; setMove: (move: Move | null) => void };
 
 /**
  * @cc [owner:nareshshah139,label:product] schedule-selection-isolation
  * Changing the doctor or date resets the calendar and its dialogs; a failed or superseded request cannot display appointments from another selection.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] reschedule-across-days
+ * A reschedule in progress MUST survive a date change, so the appointment can move to a free time
+ * on another day. It ends when the doctor changes, because a reschedule keeps the doctor.
+ */
 export default function DoctorDayCalendar(props: DoctorDayCalendarProps) {
-  return <DoctorDayCalendarForSelection key={JSON.stringify([props.doctorId, props.date])} {...props} />;
+  return <DoctorDayCalendarForDoctor key={props.doctorId} {...props} />;
+}
+
+function DoctorDayCalendarForDoctor(props: DoctorDayCalendarProps) {
+  const [move, setMove] = useState<Move | null>(null);
+  return <DoctorDayCalendarForSelection key={props.date} {...props} move={move} setMove={setMove} />;
+}
+
+function moveHint(move: Move, date: string): string {
+  const where = move.refused ? `the ${CALENDARS[move.refused.calendar].title} calendar` : 'either calendar';
+  if (move.from !== date) {
+    return `Click a free time in ${where} to move this appointment from ${displayCalendarDate(move.from)} to ${displayCalendarDate(date)}.`;
+  }
+  return move.refused
+    ? `${move.refused.slot} is taken in ${CALENDARS[move.refused.calendar].title}. Click a free time in ${where}, or change the date to pick another day.`
+    : `Click a free time in ${where}. To move to another day, change the date first.`;
 }
 
 /**
@@ -101,7 +126,9 @@ function DoctorDayCalendarForSelection({
   disableSlotBooking = false,
   selectedRoomName,
   maxBookingsPerSlot = 1,
-}: DoctorDayCalendarProps) {
+  move,
+  setMove,
+}: DoctorDayCalendarProps & MoveState) {
   const router = useRouter();
   const { toast } = useToast();
   const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
@@ -112,7 +139,6 @@ function DoctorDayCalendarForSelection({
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentInSlot | null>(null);
   const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState<boolean>(false);
-  const [move, setMove] = useState<Move | null>(null);
   const [placing, setPlacing] = useState<boolean>(false);
 
   const slotMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
@@ -340,7 +366,7 @@ function DoctorDayCalendarForSelection({
     router.push(`/dashboard/visits?${searchParams.toString()}`);
   };
 
-  const place = async (appointment: AppointmentInSlot, target: SlotChoice): Promise<'placed' | 'declined'> => {
+  const place = async (appointment: AppointmentInSlot, from: string, target: SlotChoice): Promise<'placed' | 'declined'> => {
     const moved = await sendWithOverbookConfirm((allowOverbook) => apiClient.rescheduleAppointment(appointment.id, {
       date,
       slot: target.slot,
@@ -352,7 +378,7 @@ function DoctorDayCalendarForSelection({
     toast({
       variant: 'success',
       title: target.calendar === appointment.calendar ? 'Appointment rescheduled' : CALENDARS[target.calendar].arrivedTitle,
-      description: `${formatPatientName(appointment.patient)} is now at ${target.slot} in ${CALENDARS[target.calendar].title}.`,
+      description: `${formatPatientName(appointment.patient)} is now ${from === date ? '' : `on ${displayCalendarDate(date)} `}at ${target.slot} in ${CALENDARS[target.calendar].title}.`,
     });
     await fetchSchedule();
     onAppointmentUpdate?.();
@@ -364,13 +390,13 @@ function DoctorDayCalendarForSelection({
     const target = { slot: appointment.slot, calendar };
     setPlacing(true);
     try {
-      const outcome = await place(appointment, target);
+      const outcome = await place(appointment, date, target);
       setSelectedAppointment(null);
-      if (outcome === 'declined') setMove({ appointment, refused: target });
+      if (outcome === 'declined') setMove({ appointment, from: date, refused: target });
     } catch (e) {
       if (isConflictError(e)) {
         setSelectedAppointment(null);
-        setMove({ appointment, refused: target });
+        setMove({ appointment, from: date, refused: target });
       } else {
         toast({ variant: 'destructive', title: `Could not move ${formatPatientName(appointment.patient)}`, description: getErrorMessage(e) });
       }
@@ -383,7 +409,7 @@ function DoctorDayCalendarForSelection({
     if (!move || placing) return;
     setPlacing(true);
     try {
-      if (await place(move.appointment, target) === 'placed') setMove(null);
+      if (await place(move.appointment, move.from, target) === 'placed') setMove(null);
     } catch (e) {
       toast({ variant: 'destructive', title: 'Failed to reschedule', description: getErrorMessage(e) });
     } finally {
@@ -451,9 +477,7 @@ function DoctorDayCalendarForSelection({
                       : `Rescheduling ${formatPatientName(move.appointment.patient)}`}
                   </div>
                   <div className="text-amber-700">
-                    {move.refused
-                      ? `${move.refused.slot} is taken in ${CALENDARS[move.refused.calendar].title}. Click a free time in the ${CALENDARS[move.refused.calendar].title} calendar.`
-                      : 'Click a free time in either calendar to move this appointment there.'}
+                    {moveHint(move, date)}
                   </div>
                 </div>
                 <Button size="sm" variant="ghost" className="shrink-0" onClick={() => setMove(null)} disabled={placing}>
@@ -498,7 +522,7 @@ function DoctorDayCalendarForSelection({
                   slotAction={slotActionFor(calendar)}
                   busy={showLoadingOverlay}
                   onOpen={setSelectedAppointment}
-                  onReschedule={(appointment) => setMove({ appointment })}
+                  onReschedule={(appointment) => setMove({ appointment, from: date })}
                   onStartVisit={handleStartVisit}
                   onBook={(slot) => onSelectSlot?.(slot, calendar)}
                   onMove={(slot) => void moveInto({ slot, calendar })}
@@ -584,7 +608,7 @@ function DoctorDayCalendarForSelection({
                     variant="outline"
                     disabled={placing}
                     onClick={() => {
-                      setMove({ appointment: selectedAppointment });
+                      setMove({ appointment: selectedAppointment, from: date });
                       setSelectedAppointment(null);
                     }}
                   >
