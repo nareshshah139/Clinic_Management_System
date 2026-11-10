@@ -6,6 +6,8 @@ import { InvoiceNumbersService } from '../../../shared/numbering/invoice-numbers
 import { PharmacyInvoiceService } from '../pharmacy-invoice.service';
 import { PharmacySalesRegisterService } from '../pharmacy-sales-register.service';
 import { InventoryWorkflowService } from '../../inventory/inventory-workflow.service';
+import { PharmacyComplianceService } from '../pharmacy-compliance.service';
+import { clinicDay } from '../clinic-day';
 
 const databaseTests = process.env.SALES_REGISTER_TEST_DATABASE_URL
   ? describe
@@ -622,5 +624,47 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
         invoices.reviseDiscount(stillDraft.id, { expectedVersion: 0, billDiscount: null, lines: [], reason: 'x' }, 'branch', 'asha'),
       ),
     ).toBe('409: This bill is not finished yet. Change its discount in the draft.');
+  }, 60000);
+  it('reports item margin at the discounted value the bill was charged, before and after a discount edit', async () => {
+    await db.drug.create({
+      data: { id: 'serum', name: 'Synthetic Serum', price: 100, manufacturerName: 'Synthetic', packSizeLabel: '1', branchId: 'branch' },
+    });
+    await db.inventoryItem.create({
+      data: {
+        id: 'serum-batch', branchId: 'branch', name: 'Synthetic Serum', type: 'MEDICINE', costPrice: 40, sellingPrice: 100,
+        gstRate: 12, unit: 'PIECES', currentStock: 10, stockStatus: 'IN_STOCK', expiryDate: new Date('2099-01-01'),
+        drugs: { connect: { id: 'serum' } },
+      },
+    });
+    const sold = await invoices.checkout(
+      {
+        ...bill,
+        paymentMethod: 'CASH',
+        requestKey: 'serum-margin',
+        billDiscount: { kind: 'PERCENT', value: 10 },
+        items: [{ drugId: 'serum', quantity: 2, unitPrice: 100, discountPercent: 0, taxPercent: 12 }],
+      } as any,
+      'branch',
+      'asha',
+    );
+    const today = clinicDay(new Date());
+    const margin = async () => {
+      const report: any = await new PharmacyComplianceService(db as any).getItemMargin(
+        { startDate: today, endDate: today, search: 'serum', searchField: 'NAME' } as any,
+        'branch',
+      );
+      return report.rows.map((row: any) => [row.name, row.saleQuantity, row.salesAmount, row.purchase, row.netGst, row.profit, row.profitPercent]);
+    };
+    // 2 x 100 at 12%, 10% bill discount: taxable 180, GST 21.60, total 201.60; cost 2 x 40 + 12% input GST = 89.60.
+    expect([sold.totalAmount, await margin()]).toEqual([201.6, [['Synthetic Serum', 2, 201.6, 89.6, 12, 100, 55.56]]]);
+
+    await invoices.reviseDiscount(
+      sold.id,
+      { expectedVersion: sold.mutationVersion, billDiscount: { kind: 'PERCENT', value: 20 }, lines: [], reason: 'Loyalty discount' } as any,
+      'branch',
+      'asha',
+    );
+    // Revised to 20%: taxable 160, GST 19.20, total 179.20; profit is the taxable value less cost, 80.
+    expect(await margin()).toEqual([['Synthetic Serum', 2, 179.2, 89.6, 9.6, 80, 50]]);
   }, 60000);
 });
