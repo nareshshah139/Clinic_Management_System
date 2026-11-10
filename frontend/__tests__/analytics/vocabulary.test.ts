@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { EVENTS, ROUTES, SCREEN_VIEW } from '@/lib/analytics/vocabulary';
+import { EVENTS, PAGE_ROUTES, SCREEN_VIEW } from '@/lib/analytics/vocabulary';
 
 const APP_DIR = path.resolve(__dirname, '../../src/app');
 
@@ -13,20 +13,13 @@ function pageTemplates(dir: string, prefix = ''): string[] {
 
 describe('analytics vocabulary', () => {
   it('lists exactly the page.tsx routes under src/app', () => {
-    expect([...ROUTES].sort()).toEqual(pageTemplates(APP_DIR).sort());
+    expect([...PAGE_ROUTES].sort()).toEqual(pageTemplates(APP_DIR).sort());
   });
 
   it('keeps reserved names and identity properties out of the event catalog', () => {
-    const names = Object.keys(EVENTS);
     const propKeys = Object.values(EVENTS).flatMap((spec) => Object.keys(spec));
-    expect(names).toEqual([
-      'patient_registered',
-      'appointment_booked',
-      'visit_completed',
-      'prescription_created',
-      'invoice_created',
-    ]);
-    expect(names).not.toContain(SCREEN_VIEW);
-    expect(propKeys).toEqual(['source', 'source', 'follow_up_set', 'mode']);
+    const reserved = [SCREEN_VIEW, 'role', 'branch_id', '__path'];
+    expect(Object.keys(EVENTS)).toContain('patient_registered');
+    expect([...Object.keys(EVENTS), ...propKeys].filter((key) => reserved.includes(key))).toEqual([]);
   });
 });

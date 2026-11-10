@@ -1,7 +1,7 @@
 import { UserRole } from '@cms/shared-types';
 import {
   EVENTS,
-  ROUTES,
+  PAGE_ROUTES,
   SCREEN_VIEW,
   type EventName,
   type PropSpec,
@@ -56,7 +56,7 @@ const isEventName = (value: unknown): value is EventName =>
   typeof value === 'string' && has(EVENTS, value);
 
 const isRouteTemplate = (value: string): value is RouteTemplate =>
-  value === OTHER_ROUTE || (ROUTES as readonly string[]).includes(value);
+  value === OTHER_ROUTE || (PAGE_ROUTES as readonly string[]).includes(value);
 
 export function identityOf(user: {
   id: string;
@@ -77,11 +77,11 @@ export function routeTemplate(pathname: string): RouteTemplate {
   const bare = pathname.split(/[?#]/)[0];
   const trimmed = bare.length > 1 && bare.endsWith('/') ? bare.slice(0, -1) : bare;
   if (!trimmed.startsWith('/')) return OTHER_ROUTE;
-  const exact = ROUTES.find((route) => route === trimmed);
+  const exact = PAGE_ROUTES.find((route) => route === trimmed);
   if (exact) return exact;
 
   const actual = segmentsOf(trimmed);
-  const dynamic = ROUTES.find((route) => {
+  const dynamic = PAGE_ROUTES.find((route) => {
     const expected = segmentsOf(route);
     return (
       route.includes('[') &&

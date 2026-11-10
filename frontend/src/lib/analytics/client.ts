@@ -90,9 +90,12 @@ const sameIdentity = (a: Identity | null, b: Identity | null): boolean =>
 
 export function AnalyticsMount({ user }: { user: User | null }): null {
   const pathname = usePathname();
+  const staffId = user?.id;
+  const role = user?.role;
+  const branchId = user?.branchId;
 
   useEffect(() => {
-    const next = user ? identityOf(user) : null;
+    const next = staffId ? identityOf({ id: staffId, role: role ?? '', branchId }) : null;
     if (sameIdentity(next, identity)) return;
     identity = next;
     lastScreen = null;
@@ -105,8 +108,7 @@ export function AnalyticsMount({ user }: { user: User | null }): null {
         },
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, user?.role, user?.branchId]);
+  }, [staffId, role, branchId]);
 
   useEffect(() => {
     if (!identity) return;
@@ -126,7 +128,7 @@ export function AnalyticsMount({ user }: { user: User | null }): null {
         },
       },
     });
-  }, [pathname, user?.id]);
+  }, [pathname, staffId]);
 
   return null;
 }

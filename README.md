@@ -237,7 +237,7 @@ The staff frontend can send product analytics to [OpenPanel](https://openpanel.d
 - `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` - OpenPanel client ID. Leave unset to send nothing.
 - `NEXT_PUBLIC_OPENPANEL_API_URL` - Collector URL for a self-hosted OpenPanel (default: `https://api.openpanel.dev`). Must be `https`, or `http` for `localhost` only.
 
-Both are inlined at build time, so rebuild the frontend after changing them. The clinic's site origin must be allowed on the OpenPanel client, or the collector will reject the requests.
+Both are inlined at build time, so rebuild the frontend after changing them. In OpenPanel, add the clinic's site origin to the client's allowed domains so the collector accepts requests from staff browsers.
 
 Sent: the screen as a route template (for example `/dashboard/patients/[id]`), the signed-in staff member's ID, role and branch ID, and the named events `patient_registered`, `appointment_booked`, `visit_completed`, `prescription_created` and `invoice_created`.
 

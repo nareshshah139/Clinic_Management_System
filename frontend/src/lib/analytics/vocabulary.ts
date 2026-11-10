@@ -25,8 +25,7 @@ export type EventProps<N extends EventName> = {
 
 export const SCREEN_VIEW = 'screen_view';
 
-/** One template per page.tsx under src/app. A test derives this list from the file system and fails on any difference. */
-export const ROUTES = [
+export const PAGE_ROUTES = [
   '/',
   '/login',
   '/reset-password',
@@ -53,6 +52,6 @@ export const ROUTES = [
   '/dashboard/users',
   '/dashboard/visits',
 ] as const;
-export type RouteTemplate = (typeof ROUTES)[number] | '/other';
+export type RouteTemplate = (typeof PAGE_ROUTES)[number] | '/other';
 
 export type StaffRole = AnyRole | 'UNKNOWN';
