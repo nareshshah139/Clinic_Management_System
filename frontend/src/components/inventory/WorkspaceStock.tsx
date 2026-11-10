@@ -610,7 +610,7 @@ export function WorkspaceStock({
             )}
           </div>
           <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-left text-sm">
+            <table data-own-cell-spacing className="w-full text-left text-sm">
               <thead className="bg-muted">
                 <tr>
                   {[
@@ -625,8 +625,8 @@ export function WorkspaceStock({
                     "Location",
                     ...(canSubmitEdits ? ["Edit"] : []),
                   ].map((t) => (
-                    <th key={t} className="whitespace-nowrap p-3">
-                      {t}
+                    <th key={t} className="whitespace-nowrap px-2 py-2">
+                      {t === "Select" ? <span className="sr-only">{t}</span> : t}
                     </th>
                   ))}
                 </tr>
@@ -634,7 +634,7 @@ export function WorkspaceStock({
               <tbody className="divide-y">
                 {data?.rows.map((i: any) => (
                   <tr key={i.id} className={batchRowClass(i)}>
-                    <td className="p-3">
+                    <td className="px-2 py-2">
                       <input
                         type="checkbox"
                         aria-label={`Select ${i.name} ${i.batchNumber}`}
@@ -648,7 +648,7 @@ export function WorkspaceStock({
                         }
                       />
                     </td>
-                    <td className="min-w-52 p-3">
+                    <td className="min-w-60 px-2 py-2">
                       <button
                         onClick={() => navigate({ item: i.id })}
                         className="text-left font-medium underline decoration-muted-foreground/50 underline-offset-4"
@@ -664,21 +664,21 @@ export function WorkspaceStock({
                         {i.batchNumber || "Batch missing"}
                       </p>
                     </td>
-                    <td className="p-3"><ReviewStatus tone={batchReviewTone(i)}>{batchState(i)}</ReviewStatus></td>
-                    <td className="whitespace-nowrap p-3">
+                    <td className="w-36 px-2 py-2"><ReviewStatus tone={batchReviewTone(i)}>{batchState(i)}</ReviewStatus></td>
+                    <td className="whitespace-nowrap px-2 py-2">
                       {fmtStockExpiry(i.expiryDate)}
                     </td>
-                    {moreColumns && <><td className="p-3">{i.currentStock}</td><td className="p-3">{i.heldStock}</td></>}
-                    <td className="p-3"><strong className="whitespace-nowrap">{i.available} {!moreColumns && i.unit}</strong>{!moreColumns && i.heldStock > 0 && <p className="text-sm text-muted-foreground">{i.heldStock} set aside</p>}</td>
-                    {moreColumns && <><td className="p-3">{i.unit}</td><td className="p-3">{fmtMoney(i.costPrice)}</td><td className="p-3 text-right tabular-nums">{fmtMoney(i.mrp)}</td></>}
-                    <td className="p-3">{fmtMoney(i.sellingPrice)}</td>
-                    <td className="p-3">
+                    {moreColumns && <><td className="px-2 py-2">{i.currentStock}</td><td className="px-2 py-2">{i.heldStock}</td></>}
+                    <td className="px-2 py-2"><strong className="whitespace-nowrap">{i.available} {!moreColumns && i.unit}</strong>{!moreColumns && i.heldStock > 0 && <p className="text-sm text-muted-foreground">{i.heldStock} set aside</p>}</td>
+                    {moreColumns && <><td className="px-2 py-2">{i.unit}</td><td className="px-2 py-2">{fmtMoney(i.costPrice)}</td><td className="px-2 py-2 text-right tabular-nums">{fmtMoney(i.mrp)}</td></>}
+                    <td className="px-2 py-2">{fmtMoney(i.sellingPrice)}</td>
+                    <td className="whitespace-nowrap px-2 py-2">
                       {i.storageLocation || "Not assigned"}
                     </td>
-                    {canSubmitEdits && <td className="p-3">
+                    {canSubmitEdits && <td className="px-2 py-2">
                       <div className="flex flex-col items-start gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setStockEdit({ item: i, field: 'price' })}>Edit price</Button>
-                        <Button size="sm" variant="outline" onClick={() => setStockEdit({ item: i, field: 'stock' })}>Edit stock</Button>
+                        <Button size="sm" variant="outline" className="whitespace-nowrap! lg:min-h-8!" onClick={() => setStockEdit({ item: i, field: 'price' })}>Edit price</Button>
+                        <Button size="sm" variant="outline" className="whitespace-nowrap! lg:min-h-8!" onClick={() => setStockEdit({ item: i, field: 'stock' })}>Edit stock</Button>
                       </div>
                     </td>}
                   </tr>
