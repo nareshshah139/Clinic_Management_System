@@ -307,7 +307,11 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       await page.getByRole("button", { name: "Create Prescription" }).click();
       const answered = await response;
       console.log(`NOTE create prescription answered ${answered ? `${answered.status()} ${(await answered.text()).slice(0, 300)}` : "nothing"}`);
-      await shot(page, "doctor-1280-12a-after-create");
+      const stay = page.getByRole("button", { name: "Stay Here" });
+      if (await stay.waitFor({ timeout: 30000 }).then(() => true, () => false)) {
+        await shot(page, "doctor-1280-12a-saved-go-to-pharmacy");
+        await stay.click();
+      }
       const saved = await (async () => {
         for (let i = 0; i < 60; i++) {
           const rx = await db.prescription.findFirst({ where: { visitId: visits.newVisit.id } });
