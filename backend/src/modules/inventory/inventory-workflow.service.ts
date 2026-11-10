@@ -48,6 +48,7 @@ import {
   permissionGrants,
   PermissionGrants,
 } from '../../shared/access/permission-grants';
+import { storedOptimizationRules } from './stock-optimization';
 import {
   parseReconciliationInput,
   readReconciliation,
@@ -219,6 +220,7 @@ export class InventoryWorkflowService {
       ...DEFAULT_INVENTORY_SETTINGS,
       ...stored,
       reconciliation: readReconciliation(stored, clinicDay(row?.updatedAt ?? new Date())),
+      optimization: storedOptimizationRules(stored.optimization),
       version: row?.version || 0,
     };
     for (const key of LEGACY_COUNT_SETTINGS) delete value[key];
@@ -1743,6 +1745,13 @@ export class InventoryWorkflowService {
     return created;
   }
   /**
+   * @cc [owner:nareshshah139,label:product] supplier-return-purchase-line
+   * A supplier return line that names a purchase line, and every line of a bill-linked return, MUST
+   * match a stock-committed purchase line for that batch from the return's distributor GSTIN, inside
+   * the linked bill when there is one. Quantities already sent back against that purchase line on any
+   * return count against its paid plus free quantity.
+   */
+  /**
    * @cc [owner:nareshshah139,label:product;target] sales-return-original-batch
    * A customer return MUST reference its original sale line and batch, limit quantity to the
    * unreturned sold amount, and distinguish restockable goods from non-saleable returns.
@@ -1889,31 +1898,32 @@ export class InventoryWorkflowService {
         throw new BadRequestException(
           'Select the original sale movement for each return line',
         );
-      if (doc.kind === 'SUPPLIER_RETURN' && doc.purchaseInvoiceId) {
-        const original = await tx.pharmacyPurchaseInvoice.findFirst({
-          where: {
-            id: doc.purchaseInvoiceId,
-            branchId: actor.branchId,
-            status: 'STOCK_COMMITTED',
-          },
-          include: { items: true },
-        });
-        const bought = original?.items.find(
-          (l: any) =>
-            l.id === line.sourceLineId &&
-            l.inventoryItemId === line.inventoryId,
-        );
-        if (!bought || original.distributorGstin !== doc.supplierGstin)
+      if (doc.kind === 'SUPPLIER_RETURN' && (doc.purchaseInvoiceId || line.sourceLineId)) {
+        const bought = line.sourceLineId
+          ? await tx.pharmacyPurchaseInvoiceItem.findFirst({
+              where: {
+                id: line.sourceLineId,
+                inventoryItemId: line.inventoryId,
+                purchaseInvoice: {
+                  branchId: actor.branchId,
+                  status: 'STOCK_COMMITTED',
+                  ...(doc.purchaseInvoiceId ? { id: doc.purchaseInvoiceId } : {}),
+                },
+              },
+              include: { purchaseInvoice: { select: { distributorGstin: true } } },
+            })
+          : null;
+        if (!bought || bought.purchaseInvoice.distributorGstin !== doc.supplierGstin)
           throw new BadRequestException(
             'Return must match the original supplier and purchase batch',
           );
         const prior = await tx.inventoryWorkflowDocument.findMany({
           where: {
             branchId: actor.branchId,
-            purchaseInvoiceId: doc.purchaseInvoiceId,
             kind: 'SUPPLIER_RETURN',
             status: { in: ['CHALLAN', 'POSTED'] },
             id: { not: doc.id },
+            payload: { path: ['lines'], array_contains: [{ sourceLineId: line.sourceLineId }] },
           },
         });
         const returned = prior
