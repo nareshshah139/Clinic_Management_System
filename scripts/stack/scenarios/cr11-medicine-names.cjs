@@ -268,6 +268,7 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       const text = clean(await result.innerText());
       await result.locator(".font-medium").first().dispatchEvent("click");
       await page.waitForFunction(([i, value]) => document.querySelectorAll('input[placeholder="Search medicine name..."]')[i]?.value === value, [index, expected], { timeout: 30000 });
+      await page.getByLabel(`Duration for ${expected}`).fill("14");
       return text;
     };
     const openPrescription = async (page, visit, patient) => {
