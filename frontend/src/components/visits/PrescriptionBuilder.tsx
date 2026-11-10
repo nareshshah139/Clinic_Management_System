@@ -36,6 +36,7 @@ import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
 import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
+import { AddRowBelowButton, WrappingTextField, insertBlankBelow } from './rx-table';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -1149,8 +1150,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const rxCellPadding = printCompact ? '0 6px' : '0 12px';
   const pageBreakClass = (enabled: boolean) => (enabled && !fitToPage ? 'pb-before-page' : '');
   const rxColumnFlex = printCompact
-    ? { medicine: '2 1 0%', frequency: '0.9 1 0%', timing: '0.9 1 0%', duration: '0.8 1 0%', instructions: '2.2 1 0%' }
-    : { medicine: '2 1 0%', frequency: '1 1 0%', timing: '1 1 0%', duration: '1 1 0%', instructions: '1.5 1 0%' };
+    ? { medicine: '2 1 0%', frequency: '0.9 1 0%', timing: '0.9 1 0%', duration: '0.7 1 0%', instructions: '2.4 1 0%' }
+    : { medicine: '2 1 0%', frequency: '1 1 0%', timing: '1 1 0%', duration: '0.85 1 0%', instructions: '2 1 0%' };
   const patientName = useMemo(() => visitData?.patient?.name || patientData?.name || '—', [visitData, patientData]);
   const patientCodeDisplay = useMemo(() => visitData?.patient?.patientCode || patientData?.patientCode || '', [visitData, patientData]);
   const reviewDateDisplay = useMemo(() => {
@@ -2359,6 +2360,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     });
   };
 
+  const insertRowBelow = (index: number) => {
+    const { rows, focusIndex } = insertBlankBelow(items, index, createBlankItem, (row) => !(row.drugName || '').trim());
+    setItems(rows);
+    setRowDrugQueries({});
+    setRowDrugResults({});
+    setRowLoadingDrugs({});
+    setActiveSearchRow(null);
+    setDropdownPosition(null);
+    setActiveRowIdx(focusIndex);
+    setTimeout(() => inputRefs.current[focusIndex]?.focus(), 10);
+  };
+
   const applyPresetToRow = (rowIdx: number, preset: Partial<PrescriptionItemForm>) => {
     if (rowIdx < 0 || rowIdx >= items.length) return;
     updateItem(rowIdx, preset);
@@ -2894,6 +2907,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   const addNewTplItem = () => {
     setNewTplItems((prev) => [...prev, { drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: '', durationUnit: 'DAYS', route: '', instructions: '' }]);
+  };
+  const newTplMedicineRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const insertNewTplRowBelow = (index: number) => {
+    const { rows, focusIndex } = insertBlankBelow<(typeof newTplItems)[number]>(newTplItems, index, () => ({ drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: '', durationUnit: 'DAYS', route: '', instructions: '' }), (row) => !(row.drugName || '').trim());
+    setNewTplItems(rows);
+    setTimeout(() => newTplMedicineRefs.current[focusIndex]?.focus(), 10);
   };
   const removeNewTplItem = (idx: number) => {
     setNewTplItems((prev) => prev.filter((_, i) => i !== idx));
@@ -5160,15 +5179,23 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 </div>
                 <div className="overflow-visible border rounded-md">
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1080px] text-sm">
+                    <table className="w-full min-w-[1000px] table-fixed text-sm">
+                    <colgroup>
+                      <col className="w-[24%]" />
+                      <col className="w-[8rem]" />
+                      <col className="w-[7rem]" />
+                      <col className="w-[10rem]" />
+                      <col />
+                      <col className="w-[8.5rem]" />
+                    </colgroup>
                     <thead className="bg-gray-50 text-gray-700">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Medicine</th>
                         <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
                         <th className="px-3 py-2 text-left font-medium">When</th>
-                        <th className="px-3 py-2 text-left font-medium">Duration</th>
+                        <th className="px-2 py-2 text-left font-medium">Duration</th>
                         <th className="px-3 py-2 text-left font-medium">Instructions</th>
-                        <th className="px-3 py-2 text-right font-medium">Actions</th>
+                        <th className="px-2 py-2 text-right font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -5180,7 +5207,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       {items.map((it, idx) => (
                         <tr key={idx} className="border-t">
                           <td className="px-3 py-2 align-top" onMouseEnter={() => it.inventoryItemId ? prefetchDrugStockById(it.drugId, it.inventoryItemId) : prefetchDrugStockByName(it.drugName)} title={(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return `Remaining stock: ${stock ?? '—'}`; })()}>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                               <Input 
                                 ref={(el) => { inputRefs.current[idx] = el; }}
                                 value={it.drugName} 
@@ -5216,11 +5243,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
-                                    addRowAndFocus();
+                                    insertRowBelow(idx);
                                   }
                                 }}
                                 placeholder="Search medicine name..." 
-                                className="min-w-[180px]"
+                                className="min-w-[10rem] flex-1"
                               />
                               <span className="text-xs text-gray-500 whitespace-nowrap">
                                 Stock:{' '}
@@ -5271,14 +5298,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </Select>
                             {regimenHint(it, idx, 'timing')}
                           </td>
-                          <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-[5rem_6rem] gap-2">
-                              <Input type="number" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
+                          <td className="px-2 py-2 align-top">
+                            <div className="flex items-start gap-1.5">
+                              <Input type="number" className="w-12 shrink-0 px-2 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
                               <Select value={it.durationUnit} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: DurationUnit) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('durationUnit', idx); return; }
                                 updateItem(idx, { durationUnit: v });
                               }}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="gap-1 px-2"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {Array.from(new Set([...durationUnitOptions, it.durationUnit].filter(Boolean))).map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
@@ -5289,9 +5316,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </div>
                             {regimenHint(it, idx, 'duration')}
                           </td>
-                          <td className="min-w-[190px] px-3 py-2 align-top relative">
+                          <td className="px-3 py-2 align-top relative">
                             <div className="space-y-1">
-                              <Input
+                              <WrappingTextField
+                                aria-label={`Instructions for ${it.drugName || 'new medicine'}`}
                                 value={it.instructions || ''}
                                 onFocus={() => { setInstrFocusIdx(idx); setActiveRowIdx(idx); }}
                                 onBlur={(e) => {
@@ -5300,7 +5328,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
                                   pushRecent(byDrugKey, e.target.value);
                                 }}
-                                onChange={(e) => updateItem(idx, { instructions: e.target.value })}
+                                onValueChange={(value) => updateItem(idx, { instructions: value })}
                                 placeholder="e.g., Avoid alcohol"
                               />
                               {regimenHint(it, idx, 'instructions')}
@@ -5325,8 +5353,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               )}
                             </div>
                           </td>
-                          <td className="px-3 py-2 align-top text-right">
-                            <Button size="sm" variant="outline" onClick={() => removeItem(idx)}>Remove</Button>
+                          <td className="px-2 py-2 align-top">
+                            <div className="flex items-start justify-end gap-1.5">
+                              <AddRowBelowButton medicineName={it.drugName} index={idx} onClick={() => insertRowBelow(idx)} />
+                              <Button size="sm" variant="outline" className="min-h-9" onClick={() => removeItem(idx)}>Remove</Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -5977,11 +6008,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           </div>
                           {validItems.map((it: any, idx: number) => (
                             <div key={`rx-row-${idx}`} className="rx-row" style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', padding: rxRowPadding }}>
-                              <div style={{ flex: rxColumnFlex.medicine, padding: rxCellPadding }}>{it.drugName}</div>
+                              <div style={{ flex: rxColumnFlex.medicine, padding: rxCellPadding, overflowWrap: 'anywhere' }}>{it.drugName}</div>
                               <div style={{ flex: rxColumnFlex.frequency, padding: rxCellPadding }}>{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</div>
                               <div style={{ flex: rxColumnFlex.timing, padding: rxCellPadding }}>{it.timing || '—'}</div>
                               <div style={{ flex: rxColumnFlex.duration, padding: rxCellPadding }}>{`${it.duration ?? '—'} ${String(it.durationUnit || '').toLowerCase()}`}</div>
-                              <div style={{ flex: rxColumnFlex.instructions, padding: rxCellPadding }}>{it.instructions ? tt(`items.${idx}.instructions`, it.instructions) : '—'}</div>
+                              <div style={{ flex: rxColumnFlex.instructions, padding: rxCellPadding, overflowWrap: 'anywhere' }}>{it.instructions ? tt(`items.${items.indexOf(it)}.instructions`, it.instructions) : '—'}</div>
                             </div>
                           ))}
                         </div>
@@ -5991,7 +6022,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             <div key={`rx-${idx}`} className="rx-row" style={{ padding: '3px 0' }}>
                               <span style={{ fontWeight: 500 }}>{idx + 1}. {it.drugName}</span>
                               {it.dosage ? ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}` : ''} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
-                              {it.instructions && <span> — {tt(`items.${idx}.instructions`, it.instructions)}</span>}
+                              {it.instructions && <span> — {tt(`items.${items.indexOf(it)}.instructions`, it.instructions)}</span>}
                             </div>
                           ))}
                         </div>
@@ -6600,15 +6631,23 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <Button size="sm" variant="outline" onClick={addNewTplItem}>Add Row</Button>
                 </div>
                 <div className="overflow-auto border rounded-md">
-                  <table className="min-w-full text-sm">
+                  <table className="w-full min-w-[900px] table-fixed text-sm">
+                    <colgroup>
+                      <col className="w-[20%]" />
+                      <col className="w-[13rem]" />
+                      <col className="w-[7rem]" />
+                      <col className="w-[10rem]" />
+                      <col />
+                      <col className="w-[8.5rem]" />
+                    </colgroup>
                     <thead className="bg-gray-50 text-gray-700">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Medicine</th>
                         <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
                         <th className="px-3 py-2 text-left font-medium">When</th>
-                        <th className="px-3 py-2 text-left font-medium">Duration</th>
+                        <th className="px-2 py-2 text-left font-medium">Duration</th>
                         <th className="px-3 py-2 text-left font-medium">Instructions</th>
-                        <th className="px-3 py-2 text-right font-medium">Actions</th>
+                        <th className="px-2 py-2 text-right font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -6620,7 +6659,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       {newTplItems.map((it: any, idx: number) => (
                         <tr key={`newtpl-row-${idx}`} className="border-t">
                           <td className="px-3 py-2 align-top">
-                            <Input value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
+                            <Input ref={(el) => { newTplMedicineRefs.current[idx] = el; }} value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
@@ -6676,14 +6715,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </SelectContent>
                             </Select>
                           </td>
-                          <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-2 gap-1">
-                              <Input type="number" value={it.duration ?? ''} onChange={(e) => updateNewTplItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
+                          <td className="px-2 py-2 align-top">
+                            <div className="flex items-start gap-1.5">
+                              <Input type="number" className="w-12 shrink-0 px-2 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration ?? ''} onChange={(e) => updateNewTplItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
                               <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('durationUnit', idx, true); return; }
                                 updateNewTplItem(idx, { durationUnit: v });
                               }}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="gap-1 px-2"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {durationUnitOptions.map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
@@ -6694,10 +6733,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </div>
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <Input value={it.instructions || ''} onChange={(e) => updateNewTplItem(idx, { instructions: e.target.value })} placeholder="e.g., Avoid alcohol" />
+                            <WrappingTextField aria-label={`Instructions for ${it.drugName || 'new medicine'}`} value={it.instructions || ''} onValueChange={(value) => updateNewTplItem(idx, { instructions: value })} placeholder="e.g., Avoid alcohol" />
                           </td>
-                          <td className="px-3 py-2 align-top text-right">
-                            <Button size="sm" variant="outline" onClick={() => removeNewTplRxItem(idx)}>Remove</Button>
+                          <td className="px-2 py-2 align-top">
+                            <div className="flex items-start justify-end gap-1.5">
+                              <AddRowBelowButton medicineName={it.drugName} index={idx} onClick={() => insertNewTplRowBelow(idx)} />
+                              <Button size="sm" variant="outline" className="min-h-9" onClick={() => removeNewTplRxItem(idx)}>Remove</Button>
+                            </div>
                           </td>
                         </tr>
                       ))}

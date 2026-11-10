@@ -510,6 +510,39 @@ it('prints the history the form edits and leaves out a visit\'s retired triggers
   }
 });
 
+const rxDrug = (drugName: string, extra = {}) => ({ drugName, dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', dosePattern: '1-0-0', duration: 5, durationUnit: 'DAYS', ...extra });
+const printedRows = () => Array.from(document.querySelectorAll('#pagedjs-container .rx-row')).map(row => Array.from(row.children).map(cell => cell.textContent));
+
+it('prints medicines in the order they were inserted with their full instructions', async () => {
+  paginateSourceContent = true;
+  const long = 'Apply a thin layer on the affected skin twice daily after cleansing and keep out of direct sunlight, reapply after swimming';
+  localStorage.setItem('rxDraft:order-patient:standalone', JSON.stringify({ items: [rxDrug('Amoxicillin'), rxDrug('Ibuprofen', { instructions: long, duration: 30 }), rxDrug('Cetirizine', { instructions: '1 pea size amount- whole face' })] }));
+  render(<PrescriptionBuilder patientId="order-patient" visitId={null} doctorId="doctor" standalone />);
+  await screen.findByDisplayValue('Ibuprofen');
+  await openPreview();
+  await settlePreviewPagination();
+  expect(printedRows().map(cells => [cells[0], cells[3], cells[4]])).toEqual([
+    ['Amoxicillin', '5 days', '—'],
+    ['Ibuprofen', '30 days', long],
+    ['Cetirizine', '5 days', '1 pea size amount- whole face'],
+  ]);
+});
+
+it('translates instructions under the medicine they belong to when a blank row sits above it', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:translate-patient:standalone', JSON.stringify({ language: 'HI', items: [rxDrug('Amoxicillin'), rxDrug(''), rxDrug('Cetirizine', { instructions: 'Apply nightly' })] }));
+  const translate = jest.spyOn(apiClient, 'translateTexts').mockImplementation(async (_target: string, texts: string[]) => ({ translations: texts.map(text => `HI ${text}`) }) as any);
+  try {
+    render(<PrescriptionBuilder patientId="translate-patient" visitId={null} doctorId="doctor" standalone />);
+    await screen.findByDisplayValue('Cetirizine');
+    await openPreview();
+    await settlePreviewPagination();
+    await waitFor(() => expect(printedRows().map(cells => cells[4])).toEqual(['—', 'HI Apply nightly']));
+  } finally {
+    translate.mockRestore();
+  }
+});
+
 it.each([
   ['Diet: vegetarian\nSleep: 6 hours; teacher; sunscreen daily', false],
   ['Diet: vegetarian\nSleep: 6 hours; teacher; sunscreen daily', true],
