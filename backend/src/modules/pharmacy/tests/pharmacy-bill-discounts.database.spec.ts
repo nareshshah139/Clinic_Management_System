@@ -133,7 +133,7 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       },
     });
     for (const [id, name, price, onHand] of [
-      ['cream', 'Synthetic Cream', 50, 10],
+      ['cream', 'Synthetic Cream', 50, 20],
       ['tablet', 'Synthetic Tablet', 30, 5],
       ['shampoo', 'Synthetic Shampoo', 200, 3],
     ] as const) {
@@ -188,7 +188,7 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       ids.map(async (id) => (await db.pharmacyInvoice.findUniqueOrThrow({ where: { id } })).invoiceNumber),
     );
   const lastIssued = async () =>
-    (await db.numberSequence.findFirst({ where: { type: 'PHARMACY', branchId: 'branch' } }))?.lastNumber ?? 0;
+    (await db.numberSequence.findFirst({ where: { type: 'PHARMACY', periodKey: String(year) } }))?.lastNumber ?? 0;
 
   it('numbers bills only when they are finished, so discarded drafts and failed finishes leave no gap', async () => {
     const [a, b, c] = [
@@ -249,6 +249,42 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
     expect(await failure(invoices.getPrintData(unfinished.id, 'branch'))).toBe(
       '409: Finish this bill before printing it. A draft is not a tax invoice and has no bill number yet.',
     );
+  });
+
+  it('files a bill finished at 00:30 IST on 1 January under the new year, whatever the server clock zone', async () => {
+    jest.useFakeTimers({
+      now: new Date('2030-12-31T19:00:00Z'),
+      doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'hrtime', 'performance'],
+    });
+    try {
+      const sold = await invoices.checkout({ ...cream(), requestKey: 'new-year-bill' }, 'branch', 'asha');
+      expect([sold.invoiceNumber, sold.invoiceDate.toISOString()]).toEqual(['PHI-2031-001', '2030-12-31T19:00:00.000Z']);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('keeps each branch’s series consecutive: a number another branch holds is not skipped', async () => {
+    await db.branch.create({ data: { id: 'branch-2', name: 'Second Clinic', address: 'Synthetic' } });
+    const next = `PHI-${year}-${String((await lastIssued()) + 1).padStart(3, '0')}`;
+    await db.pharmacyInvoice.create({
+      data: {
+        invoiceNumber: next,
+        patientId: 'patient',
+        branchId: 'branch-2',
+        subtotal: 50,
+        totalAmount: 50,
+        paymentMethod: 'CASH',
+        billingName: 'Ravi',
+        billingPhone: '9000000000',
+        status: 'CONFIRMED',
+      },
+    });
+    const sold = await invoices.checkout({ ...cream(), requestKey: 'beside-branch-2' }, 'branch', 'asha');
+    expect([
+      sold.invoiceNumber,
+      (await db.pharmacyInvoice.findMany({ where: { invoiceNumber: next }, select: { branchId: true }, orderBy: { branchId: 'asc' } })).map((bill) => bill.branchId),
+    ]).toEqual([next, ['branch', 'branch-2']]);
   });
 
   it('applies a bill discount before tax, keeps it on the draft, and revises a paid bill into a refund due', async () => {

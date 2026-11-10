@@ -4,6 +4,9 @@ import { PrismaService } from '../database/prisma.service';
 
 export type InvoiceNumberType = 'BILLING' | 'PHARMACY' | string;
 
+/** India has no daylight saving, so the clinic day is UTC plus a fixed 5:30. */
+const IST_OFFSET_MS = 330 * 60_000;
+
 @Injectable()
 export class InvoiceNumbersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -20,8 +23,7 @@ export class InvoiceNumbersService {
     client: Prisma.TransactionClient = this.prisma,
   ): Promise<{ sequence: number; periodKey: string }> {
     const { type, branchId } = params;
-    const date = params.date ?? new Date();
-    const periodKey = this.computePeriodKey(type, date);
+    const periodKey = this.computePeriodKey(type, params.date ?? new Date());
 
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
@@ -46,23 +48,15 @@ export class InvoiceNumbersService {
    * any other type MUST fall back to a daily period.
    */
   /**
-   * @cc [owner:nareshshah139,label:integrity;target] invoice-period-follows-clinic-day
-   * The period MUST follow the clinic's IST calendar date whatever the server timezone. Today it reads
-   * the server's local date, so on a UTC server a sale from 00:00 to 05:30 IST joins the previous day
-   * (or year). This is a target obligation, not a pass claim.
+   * @cc [owner:nareshshah139,label:integrity] invoice-period-follows-clinic-day
+   * The period MUST follow the clinic's IST calendar date whatever the server timezone, so a sale at
+   * 00:15 IST belongs to that IST day and year.
    */
   private computePeriodKey(type: InvoiceNumberType, date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    if (type === 'BILLING') {
-      return `${year}${month}${day}`; // daily sequences
-    }
-    if (type === 'PHARMACY') {
-      return `${year}`; // yearly sequences
-    }
-    // Default to daily if unknown type
-    return `${year}${month}${day}`;
+    const ist = new Date(date.getTime() + IST_OFFSET_MS).toISOString();
+    const year = ist.slice(0, 4);
+    if (type === 'PHARMACY') return year;
+    return `${year}${ist.slice(5, 7)}${ist.slice(8, 10)}`;
   }
 }
 

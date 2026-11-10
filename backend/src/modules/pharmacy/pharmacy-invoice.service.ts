@@ -1398,11 +1398,12 @@ export class PharmacyInvoiceService {
           branchId,
         )
       : [];
+    const issuedAt = new Date();
     const issued =
       shouldApplyStock && !isIssuedBillNumber(existingInvoice.invoiceNumber)
         ? {
-            invoiceNumber: await this.issueBillNumber(tx, branchId),
-            invoiceDate: new Date(),
+            invoiceNumber: await this.issueBillNumber(tx, branchId, issuedAt),
+            invoiceDate: issuedAt,
           }
         : {};
     const invoiceNumber = issued.invoiceNumber ?? existingInvoice.invoiceNumber;
@@ -2366,7 +2367,7 @@ export class PharmacyInvoiceService {
         throw new BadRequestException(
           'The discount is unchanged. Change a discount before saving.',
         );
-      await this.reviseSaleTerms(tx, invoice.invoiceNumber, branchId);
+      await this.reviseSaleTerms(tx, invoice, branchId);
       const revisedAt = new Date();
       await tx.pharmacyInvoiceRevision.create({
         data: {
@@ -2431,11 +2432,12 @@ export class PharmacyInvoiceService {
 
   private async reviseSaleTerms(
     tx: Prisma.TransactionClient,
-    invoiceNumber: string,
+    invoice: { id: string; invoiceNumber: string },
     branchId: string,
   ) {
+    const { invoiceNumber } = invoice;
     const items = await tx.pharmacyInvoiceItem.findMany({
-      where: { invoice: { invoiceNumber } },
+      where: { invoiceId: invoice.id },
       include: {
         drug: true,
         package: { include: { items: { include: { drug: true } } } },
@@ -2718,27 +2720,20 @@ export class PharmacyInvoiceService {
    * @cc [owner:nareshshah139,label:integrity] bill-number-issued-at-finish
    * A pharmacy bill MUST get its PHI number only when it is first posted, reserved on the posting
    * transaction, so drafts, discarded drafts and rolled-back or retried postings consume no number and
-   * finished bills stay consecutive per series. A draft that already holds a number keeps it.
+   * finished bills stay consecutive in their branch's series, filed under the IST year of the moment the
+   * bill is posted. A number is unique within its branch, as its counter is, so no number is skipped.
+   * A draft that already holds a number keeps it.
    */
   private async issueBillNumber(
     tx: Prisma.TransactionClient,
     branchId: string,
+    issuedAt: Date,
   ): Promise<string> {
-    for (let attempt = 0; attempt < 1000; attempt++) {
-      const { sequence, periodKey } = await this.invoiceNumbers.reserve(
-        { type: 'PHARMACY', branchId },
-        tx,
-      );
-      const invoiceNumber = `PHI-${periodKey}-${String(sequence).padStart(3, '0')}`;
-      const taken = await tx.pharmacyInvoice.findUnique({
-        where: { invoiceNumber },
-        select: { id: true },
-      });
-      if (!taken) return invoiceNumber;
-    }
-    throw new InternalServerErrorException(
-      'Could not issue a free pharmacy bill number',
+    const { sequence, periodKey } = await this.invoiceNumbers.reserve(
+      { type: 'PHARMACY', branchId, date: issuedAt },
+      tx,
     );
+    return `PHI-${periodKey}-${String(sequence).padStart(3, '0')}`;
   }
 
   private resolveUnitPrice(

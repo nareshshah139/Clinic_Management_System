@@ -1361,7 +1361,7 @@ model InventoryItemRequest {
 // Pharmacy Invoice Model
 model PharmacyInvoice {
   id             String  @id @default(cuid())
-  invoiceNumber  String  @unique
+  invoiceNumber  String
   patientId      String
   doctorId       String?
   prescriptionId String?
@@ -1415,6 +1415,8 @@ model PharmacyInvoice {
   payments     PharmacyPayment[]
   revisions    PharmacyInvoiceRevision[]
 
+  /// A bill number is unique within its branch, like the branch's PHARMACY counter that issues it.
+  @@unique([branchId, invoiceNumber])
   @@unique([branchId, checkoutRequestKey])
   @@index([patientId])
   @@index([doctorId])
