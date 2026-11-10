@@ -236,19 +236,19 @@ export default function CalendarColumn({
                       {apt.tokenNumber != null && (
                         <span className="shrink-0 font-semibold text-gray-500">#{apt.tokenNumber}</span>
                       )}
-                      <span data-appointment-time className="hidden shrink-0 font-bold text-blue-700 @min-[14rem]:inline">{`${start}-${end}`}</span>
+                      <span data-appointment-time className="hidden shrink-0 font-bold text-blue-700 @min-[24rem]:inline">{`${start}-${end}`}</span>
                       <span
                         data-patient-name
                         className={`min-w-0 flex-auto truncate font-semibold ${status.strikeName ? 'line-through' : ''}`}
                       >
                         {patientName}
                       </span>
-                      <span className="hidden min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden @min-[20rem]:flex">
-                        {apt.billType && (
-                          <span data-bill-type className={`shrink-0 font-semibold ${apt.billType === 'PROCEDURE' ? 'text-purple-700' : apt.billType === 'REVIEW' ? 'text-sky-700' : 'text-teal-700'}`}>
-                            {BILL_TYPE_LABEL[apt.billType]}
-                          </span>
-                        )}
+                      {apt.billType && (
+                        <span data-bill-type className={`hidden shrink-0 font-semibold @min-[14rem]:inline ${apt.billType === 'PROCEDURE' ? 'text-purple-700' : apt.billType === 'REVIEW' ? 'text-sky-700' : 'text-teal-700'}`}>
+                          {BILL_TYPE_LABEL[apt.billType]}
+                        </span>
+                      )}
+                      <span className="hidden min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden @min-[28rem]:flex">
                         {apt.visitType === 'PROCEDURE' && apt.notes && (
                           <span className="truncate font-medium text-purple-700">({apt.notes})</span>
                         )}
