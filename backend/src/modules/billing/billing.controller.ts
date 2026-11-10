@@ -30,7 +30,6 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Roles } from '../../shared/decorators/roles.decorator';
 import { Permissions } from '../../shared/decorators/permissions.decorator';
 import { UserRole } from '@prisma/client';
-import { CLINIC_BILL_ROUTES } from './billing-access';
 
 interface AuthenticatedRequest {
   user: {
@@ -56,8 +55,8 @@ export class BillingController {
 
   // Invoice endpoints
   @Post('invoices')
-  @Roles(...CLINIC_BILL_ROUTES.create.roles)
-  @Permissions(CLINIC_BILL_ROUTES.create.permission)
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('billing:invoice:create')
   async createInvoice(
     @Body() createInvoiceDto: CreateInvoiceDto,
     @Request() req: AuthenticatedRequest,
@@ -81,8 +80,8 @@ export class BillingController {
   }
 
   @Get('invoices')
-  @Roles(...CLINIC_BILL_ROUTES.read.roles)
-  @Permissions(CLINIC_BILL_ROUTES.read.permission)
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION, UserRole.DOCTOR)
+  @Permissions('billing:invoice:read')
   findAllInvoices(
     @Query() query: QueryInvoicesDto,
     @Request() req: AuthenticatedRequest,
@@ -101,8 +100,8 @@ export class BillingController {
   }
 
   @Get('invoices/:id')
-  @Roles(...CLINIC_BILL_ROUTES.read.roles)
-  @Permissions(CLINIC_BILL_ROUTES.read.permission)
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION, UserRole.DOCTOR)
+  @Permissions('billing:invoice:read')
   findInvoiceById(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.billingService.findInvoiceById(id, req.user.branchId);
   }
@@ -131,8 +130,8 @@ export class BillingController {
 
   // Payment endpoints
   @Post('payments')
-  @Roles(...CLINIC_BILL_ROUTES.pay.roles)
-  @Permissions(CLINIC_BILL_ROUTES.pay.permission)
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('billing:payment:process')
   processPayment(
     @Body() paymentDto: PaymentDto,
     @Request() req: AuthenticatedRequest,
