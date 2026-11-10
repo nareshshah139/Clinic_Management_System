@@ -3,6 +3,7 @@ import { apiClient } from '@/lib/api';
 import { DataQualityStrip } from './DataQualityStrip';
 import { StockOptimization } from './StockOptimization';
 import { shelfLifeText } from './stock-optimization-model';
+import { sourceBills } from '../purchase/purchase-returns-model';
 
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
 const api = apiClient as unknown as Record<'get' | 'post' | 'patch', jest.Mock>;
@@ -133,5 +134,12 @@ it('keeps the rules read-only for someone who cannot raise returns', async () =>
 it('reads shelf life as days when short and months beyond two months', () => {
   expect([shelfLifeText(null), shelfLifeText(-1), shelfLifeText(0), shelfLifeText(51), shelfLifeText(294)]).toEqual([
     'Expiry not recorded', 'Expired 1 day ago', 'Expires today', '51 days', '9 months (294 days)',
+  ]);
+});
+
+it('names the first source bill of a multi-bill return and counts the rest', () => {
+  expect([sourceBills('SLV/2026/112, SLV/2026/087'), sourceBills('NVJ/2026/019')]).toEqual([
+    { count: 2, shown: 'SLV/2026/112 +1' },
+    { count: 1, shown: 'NVJ/2026/019' },
   ]);
 });

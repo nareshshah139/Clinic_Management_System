@@ -324,7 +324,10 @@ const watch = (page) => {
       const row = page.locator("tbody tr").filter({ hasText: `RET-SO-${stamp}-AABCS` });
       await row.first().waitFor({ timeout: 120000 });
       const text = clean(await row.first().innerText());
-      s.ok("Purchase › Returns lists the draft with both bills, the distributor and ₹5,130.00", text.includes("SLV/2026/112, SLV/2026/087") && text.includes(DISTRIBUTORS.SLV.name) && text.includes("₹5,130.00") && /Draft/i.test(text), text);
+      const billTitle = await row.first().locator('[title="SLV/2026/112, SLV/2026/087"]').count();
+      s.ok("Purchase › Returns lists the draft with both bills (first shown, all in the title), the distributor and ₹5,130.00", text.includes("SLV/2026/112 +1") && billTitle === 1 && text.includes("₹5,130.00") && /Draft/i.test(text), { text, billTitle });
+      const fits = await page.evaluate(() => { const t = document.querySelector("table"); const box = t.closest(".overflow-x-auto") || t.parentElement; return box.scrollWidth - box.clientWidth; });
+      s.ok("the returns table fits 1280 without sideways scroll", fits <= 1, fits);
       await s.shot(page, "05-purchase-returns-1280");
       const reg = await call("pharmacist", "GET", `/pharmacy/purchase-returns-register?${new URLSearchParams({ from: today, to: today, sortBy: "entryAt", sortDir: "desc", page: "1", limit: "50" })}`);
       s.check("register API row", reg.rows.map((x) => [x.returnRef, x.distributor.name, x.sourceBillNo, x.returnValue, x.state]), [[`RET-SO-${stamp}-AABCS`, DISTRIBUTORS.SLV.name, "SLV/2026/112, SLV/2026/087", 5130, "DRAFT"]]);
