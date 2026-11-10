@@ -145,6 +145,7 @@ async function call(page, method, url, body) {
         },
         async shot(page, slug) {
           const file = path.join(out, `cr17-${slug}.png`);
+          await page.waitForTimeout(500);
           await page.screenshot({ path: file, fullPage: false });
           shots.push(file);
         },
