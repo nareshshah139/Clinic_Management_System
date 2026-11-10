@@ -34,13 +34,12 @@ describe('CORS origins', () => {
     ]);
   });
 
-  it('is the configuration both boot paths install', () => {
+  it('is the configuration the boot path installs', () => {
     const main = fs.readFileSync(
       path.join(__dirname, '..', '..', 'main.ts'),
       'utf8',
     );
     expect(main.match(/enableCors\([^)]*\)/g)).toEqual([
-      'enableCors(CORS_OPTIONS)',
       'enableCors(CORS_OPTIONS)',
     ]);
   });

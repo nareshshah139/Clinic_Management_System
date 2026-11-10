@@ -15,7 +15,6 @@ import { PrescriptionsModule } from './modules/prescriptions/prescriptions.modul
 import { BillingModule } from './modules/billing/billing.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { ReportsModule } from './modules/reports/reports.module';
-// import { ConsentsModule } from './modules/consents/consents.module';
 import { UsersModule } from './modules/users/users.module';
 import { JwtAuthGuard } from './shared/guards/jwt-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -31,8 +30,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { WhatsAppTemplatesModule } from './modules/whatsapp-templates/whatsapp-templates.module';
 import { GoogleCalendarModule } from './modules/google-calendar/google-calendar.module';
-
-const minimalBoot = process.env.MINIMAL_BOOT === 'true';
 
 const commonImports = [
   ConfigModule.forRoot({
@@ -60,7 +57,6 @@ const fullFeatureModules = [
   BillingModule,
   InventoryModule,
   ReportsModule,
-  // ConsentsModule,
   UsersModule,
   NotificationsModule,
   PharmacyModule,
@@ -70,13 +66,8 @@ const fullFeatureModules = [
   GoogleCalendarModule,
 ];
 
-const minimalModules = [AuthModule];
-
 @Module({
-  imports: [
-    ...commonImports,
-    ...(minimalBoot ? minimalModules : fullFeatureModules),
-  ],
+  imports: [...commonImports, ...fullFeatureModules],
   controllers: [AppController],
   providers: [
     AppService,
