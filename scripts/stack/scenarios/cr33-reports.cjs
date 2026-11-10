@@ -66,12 +66,16 @@ async function tableData(page, name) {
     const expected = await seed(stack.db, { branchId: stack.branch.id, doctorId: users.doctor.id, pharmacistId: users.pharmacist.id, today });
     const month = expected.month;
 
+    const sessions = new Map();
     const open = async (who, viewport = { width: 1440, height: 900 }) => {
-      const context = await browser.newContext({ viewport, acceptDownloads: true, timezoneId: "Asia/Kolkata" });
+      const context = await browser.newContext({ viewport, acceptDownloads: true, timezoneId: "Asia/Kolkata", ...(sessions.has(who) && { storageState: sessions.get(who) }) });
       const page = await context.newPage();
       page.on("console", (m) => m.type() === "error" && !/Download the React DevTools|favicon/.test(m.text()) && errors.push(`${who}: ${m.text()}`));
       page.on("pageerror", (e) => errors.push(`${who}: ${e.message}`));
-      await stack.login(page, who);
+      if (!sessions.has(who)) {
+        await stack.login(page, who);
+        sessions.set(who, await context.storageState());
+      }
       return { context, page };
     };
     const shot = (page, name) => page.screenshot({ path: path.join(out, `${name}.png`), fullPage: true });
@@ -295,10 +299,11 @@ async function tableData(page, name) {
         assert.ok(!(await text()).includes("DRAFT-"), "no draft placeholder in GSTR-1");
         await shot(role.page, `gstr1-documents-${who}-1440`);
         await role.page.goto(`${stack.base}/dashboard/pharmacy/sales?from=${tuesday}&to=${tuesday}`, { waitUntil: "networkidle" });
-        const row = role.page.locator('[role="tabpanel"] tbody tr').filter({ hasText: "Cancelled draft" });
+        const sales = role.page.getByRole("tabpanel", { name: "Sales" });
+        const row = sales.locator("tbody tr").filter({ hasText: "Cancelled draft" });
         await row.first().waitFor();
         assert.equal(await row.count(), 1);
-        assert.ok(!(await role.page.locator('[role="tabpanel"]').innerText()).includes("DRAFT-"), "no draft placeholder in Sales");
+        assert.ok(!(await sales.innerText()).includes("DRAFT-"), "no draft placeholder in Sales");
         await shot(role.page, `sales-cancelled-draft-${who}-1440`);
       });
       await role.context.close();
