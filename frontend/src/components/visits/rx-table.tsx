@@ -32,7 +32,9 @@ export function AddRowBelowButton({ medicineName, index, onClick }: { medicineNa
   );
 }
 
-const cell = 'block align-top before:mb-1 before:block before:text-xs before:font-medium before:text-gray-500 before:content-[attr(data-label)] @6xl:table-cell @6xl:w-auto @6xl:px-3 @6xl:py-2 @6xl:before:hidden';
+const cell = 'block align-top before:mb-1 before:block before:text-xs before:font-medium before:text-gray-500 before:content-[attr(data-label)] @6xl:table-cell @6xl:w-auto @6xl:py-2 @6xl:before:hidden';
+const roomy = `${cell} @6xl:px-3`;
+const snug = `${cell} @6xl:px-2`;
 
 /**
  * Below a 72rem container each medicine is a short stack (name, regimen, instructions) so nothing
@@ -41,16 +43,17 @@ const cell = 'block align-top before:mb-1 before:block before:text-xs before:fon
 export const rxLayout = {
   wrapper: '@container overflow-x-auto',
   table: 'block w-full text-sm @6xl:table @6xl:table-fixed',
+  columns: 'hidden @6xl:table-column-group',
   head: 'sr-only bg-gray-50 text-gray-700 @6xl:not-sr-only @6xl:table-header-group',
   body: 'block @6xl:table-row-group',
   row: 'flex flex-wrap items-start gap-x-2 gap-y-2 border-t px-3 py-3 @6xl:table-row @6xl:p-0',
   empty: 'block w-full px-3 py-3 text-center text-gray-500 @6xl:table-cell',
-  medicine: `${cell} w-full`,
-  frequency: `${cell} min-w-[8.5rem] flex-1`,
-  when: `${cell} min-w-[7.5rem] flex-1`,
-  duration: `${cell} flex-none @6xl:px-2`,
-  instructions: `${cell} relative min-w-[12rem] flex-1 @6xl:min-w-0`,
-  actions: `${cell} ml-auto flex-none @6xl:px-2`,
+  medicine: `${roomy} w-full`,
+  frequency: `${roomy} min-w-[8.5rem] flex-1`,
+  when: `${roomy} min-w-[7.5rem] flex-1`,
+  duration: `${snug} flex-none`,
+  instructions: `${roomy} relative min-w-[12rem] flex-1 @6xl:min-w-0`,
+  actions: `${snug} ml-auto flex-none`,
 } as const;
 
 const FIELD_TEXT = 'px-3 py-1.5 text-base md:text-sm [overflow-wrap:anywhere]';

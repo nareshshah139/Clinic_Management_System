@@ -60,3 +60,18 @@ it('does not copy triggers or prior treatments into a saved fields template', as
   await waitFor(() => expect(createPrescriptionTemplate).toHaveBeenCalledTimes(1));
   expect(createPrescriptionTemplate.mock.calls[0][0].metadata.examination.dermatology).toEqual({ skinType: 'III', morphology: [], distribution: [], skinConcerns: [] });
 });
+
+it('offers chief complaint suggestions under the field while it is focused, and not after it loses focus', async () => {
+  jest.mocked(apiClient.autocompletePrescriptionField).mockImplementation((async ({ field }: { field: string }) => field === 'chiefComplaints' ? ['Acne on the face'] : []) as any);
+  render(<PrescriptionBuilder patientId="patient" visitId={null} doctorId="doctor" />);
+  await screen.findByRole('textbox', { name: 'Past history' });
+  const complaints = document.querySelector('.complaint-autocomplete textarea') as HTMLTextAreaElement;
+  expect(screen.queryByText('Acne on the face')).not.toBeInTheDocument();
+  fireEvent.focus(complaints);
+  const option = await screen.findByText('Acne on the face');
+  expect(option.closest('.complaint-autocomplete')).not.toBeNull();
+  fireEvent.click(option);
+  expect(complaints).toHaveValue('Acne on the face');
+  fireEvent.blur(complaints);
+  expect(screen.queryByText('Acne on the face', { selector: 'div.cursor-pointer' })).not.toBeInTheDocument();
+});

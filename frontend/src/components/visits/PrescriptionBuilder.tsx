@@ -715,6 +715,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   // Autocomplete state for clinical fields
   const [diagOptions, setDiagOptions] = useState<string[]>([]);
   const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
+  const [complaintFieldFocused, setComplaintFieldFocused] = useState(false);
   const [loadingVisit, setLoadingVisit] = useState(false);
   const [visitData, setVisitData] = useState<any>(null);
   const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
@@ -4685,8 +4686,17 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="opacity-100">
                 <label className="text-xs text-gray-600 flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                 <div className="relative complaint-autocomplete flex items-start">
-                  <Textarea key="chief-complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+                  <Textarea key="chief-complaints" rows={2} value={chiefComplaints} onFocus={() => setComplaintFieldFocused(true)} onBlur={() => setComplaintFieldFocused(false)} onChange={(e) => setChiefComplaints(e.target.value)} />
                   <VoiceButton fieldName="chiefComplaints" />
+                  {complaintFieldFocused && complaintOptions.length > 0 && (
+                    <div className="absolute left-0 top-full z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                      {complaintOptions.map((opt) => (
+                        <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setChiefComplaints(opt); setComplaintOptions([]); pushRecent('chiefComplaints', opt); }}>
+                          {opt}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="mt-2">
                   <div className="text-xs text-gray-600 mb-1">Skin Concerns</div>
@@ -4704,15 +4714,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     ))}
                   </div>
                 </div>
-                {complaintOptions.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
-                    {complaintOptions.map((opt) => (
-                      <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setChiefComplaints(opt); setComplaintOptions([]); pushRecent('chiefComplaints', opt); }}>
-                        {opt}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </CollapsibleSection>
 
@@ -5180,11 +5181,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="overflow-visible border rounded-md">
                   <div className={rxLayout.wrapper}>
                     <table className={rxLayout.table}>
-                    <colgroup>
+                    <colgroup className={rxLayout.columns}>
                       <col className="w-[24%]" />
                       <col className="w-[8rem]" />
                       <col className="w-[8rem]" />
-                      <col className="w-[11rem]" />
+                      <col className="w-[10.5rem]" />
                       <col />
                       <col className="w-[9rem]" />
                     </colgroup>
@@ -6632,11 +6633,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 </div>
                 <div className={`${rxLayout.wrapper} border rounded-md`}>
                   <table className={rxLayout.table}>
-                    <colgroup>
+                    <colgroup className={rxLayout.columns}>
                       <col className="w-[22%]" />
                       <col className="w-[13rem]" />
                       <col className="w-[8rem]" />
-                      <col className="w-[11rem]" />
+                      <col className="w-[10.5rem]" />
                       <col />
                       <col className="w-[9rem]" />
                     </colgroup>
