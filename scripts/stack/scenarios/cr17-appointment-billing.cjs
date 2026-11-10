@@ -528,6 +528,7 @@ async function call(page, method, url, body) {
       await o.page.getByRole("button", { name: "Generate Report" }).click();
       await o.page.getByText("Total Revenue", { exact: true }).first().locator("xpath=../..").filter({ hasText: "6,000" }).waitFor({ timeout: 60000 });
       s.ok("the Reports page shows the same ₹6,000", clean(await revenueCard().innerText()).includes("6,000"));
+      await revenueCard().scrollIntoViewIfNeeded();
       await s.shot(o.page, "admin-revenue-report-1280");
       s.ok("no refused calls", o.refused.length === 0, o.refused);
     });
