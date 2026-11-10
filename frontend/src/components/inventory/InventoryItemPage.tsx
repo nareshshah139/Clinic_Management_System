@@ -15,6 +15,7 @@ import { StockEditDialog } from "./StockEditDialog";
 import { stockLedgerExplanation } from "./stock-recovery";
 import { batchReviewTone, batchRowClass, batchState, fmtStockExpiry } from "./stock-batch-view";
 import { downloadCsv, fmtMoney, inputClass, requestKey, workflowKinds } from "./workspace-model";
+import { billHref } from "@/components/pharmacy/sales/sales-bill-model";
 import {
   LEDGER_KIND_LABEL,
   chainBreakNote,
@@ -657,7 +658,7 @@ function DocumentCell({ row, onDocument, onInvoice }: { row: ItemLedgerRow; onDo
   const doc = row.document;
   const link = doc?.type === "WORKFLOW" ? <button className="underline" onClick={() => onDocument(doc.kind, doc.id)}>{label}</button>
     : doc?.type === "PURCHASE_INVOICE" ? <button className="underline" onClick={() => onInvoice(doc.id)}>{label}</button>
-    : doc?.type === "PHARMACY_INVOICE" ? <a className="underline" href={`/dashboard/pharmacy/invoices?search=${encodeURIComponent(doc.number)}`}>{label}</a>
+    : doc?.type === "PHARMACY_INVOICE" ? <a className="underline" href={billHref({ bill: doc.id })}>{label}</a>
     : <span>{label}</span>;
   return (
     <>
@@ -674,7 +675,7 @@ function CorrectionAction({ row, onDocument, onInvoice, onCorrect }: {
   if (owner?.type === "workflow") return <Button size="sm" variant="outline" onClick={() => onDocument(owner.kind, owner.id)}>Open source correction</Button>;
   if (owner?.type === "purchase") return <Button size="sm" variant="outline" onClick={() => onInvoice(owner.id)}>Open purchase correction</Button>;
   if (owner?.type === "sale")
-    return <a className="underline" href={`/dashboard/pharmacy/invoices?search=${encodeURIComponent(row.reference || "")}`}>Open original sale</a>;
+    return <a className="underline" href={billHref({ bill: owner.id })}>Open original sale</a>;
   if (row.correctionAllowed) return <Button size="sm" variant="outline" onClick={() => onCorrect(row)}>Correct</Button>;
   return <span>Source document needs identification before correction.</span>;
 }

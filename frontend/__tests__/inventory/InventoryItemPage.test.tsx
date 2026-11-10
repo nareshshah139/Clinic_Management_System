@@ -150,3 +150,16 @@ it('opens the editor on the minimum stock field for a stock alert', async () => 
   fireEvent.click(await screen.findByRole('button', { name: 'Set stock alert' }));
   expect(screen.getByLabelText('Minimum stock')).toHaveFocus();
 });
+
+it('opens a pharmacy bill sale in its Sales bill view from the document and the correction column', async () => {
+  const sale = ledgerRow('m5', 'b1', '2026-10-05T05:00:00.000Z', 'SALE', -1, 6, 7, {
+    reference: 'INV-PHI-2026-007',
+    document: { type: 'PHARMACY_INVOICE', id: 'bill-7', number: 'PHI-2026-007', status: 'CONFIRMED', prescriptionId: null },
+    owner: { type: 'sale', kind: 'PHARMACY_INVOICE', id: 'bill-7', status: 'CONFIRMED' },
+    correctionAllowed: false,
+  });
+  (apiClient.get as jest.Mock).mockResolvedValue({ ...payload, itemLedger: { ...payload.itemLedger, rows: [sale] } });
+  render(<InventoryItemPage itemId="b1" query={{ itemTab: 'ledger' }} navigate={jest.fn()} capabilities={{ ...caps, approve: true }} onTask={jest.fn()} onDocument={jest.fn()} onInvoice={jest.fn()} />);
+  expect((await screen.findByRole('link', { name: 'PHI-2026-007' })).getAttribute('href')).toBe('/dashboard/pharmacy/sales/bill?bill=bill-7');
+  expect(screen.getByRole('link', { name: 'Open original sale' }).getAttribute('href')).toBe('/dashboard/pharmacy/sales/bill?bill=bill-7');
+});
