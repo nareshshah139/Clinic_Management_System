@@ -287,6 +287,84 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
     ]).toEqual([next, ['branch', 'branch-2']]);
   });
 
+  it('serialises a discount edit against a sales return: never a return at pre-edit terms after the edit', async () => {
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 400));
+    const slowSaleReads = new Proxy(db, {
+      get(target, prop) {
+        if (prop !== '$transaction') return (target as any)[prop];
+        return (run: (tx: any) => Promise<unknown>, options: unknown) =>
+          target.$transaction(
+            (tx: any) =>
+              run(
+                new Proxy(tx, {
+                  get(client, model) {
+                    if (model !== 'stockTransaction') return client[model];
+                    return new Proxy(client.stockTransaction, {
+                      get(delegate, method) {
+                        if (method !== 'findMany') return delegate[method];
+                        return async (args: unknown) => {
+                          const rows = await delegate.findMany(args);
+                          await pause();
+                          return rows;
+                        };
+                      },
+                    });
+                  },
+                }),
+              ),
+            options as any,
+          );
+      },
+    });
+    const race = async (round: string, order: 'together' | 'edit reads first' | 'return reads first') => {
+      const workflow = new InventoryWorkflowService((order === 'return reads first' ? slowSaleReads : db) as any);
+      const sold = await invoices.checkout({ ...cream(1), requestKey: `race-${round}` }, 'branch', 'asha');
+      const sale = await db.stockTransaction.findFirstOrThrow({ where: { branchId: 'branch', reference: `INV-${sold.invoiceNumber}` } });
+      const original = (PharmacyInvoiceService.prototype as any).salesReturnsAgainst;
+      const check = jest.spyOn(invoices as any, 'salesReturnsAgainst');
+      if (order === 'edit reads first')
+        check.mockImplementation(async (...args: unknown[]) => {
+          const found = await original.apply(invoices, args);
+          await pause();
+          return found;
+        });
+      const editing = invoices.reviseDiscount(
+        sold.id,
+        { expectedVersion: sold.mutationVersion, billDiscount: { kind: 'PERCENT', value: 10 }, lines: [], reason: 'Loyalty discount' },
+        'branch',
+        'asha',
+      );
+      if (order === 'edit reads first') await new Promise((resolve) => setTimeout(resolve, 100));
+      const returning = workflow.saveDocument({ id: 'doctor', branchId: 'branch', role: 'DOCTOR' }, {
+        kind: 'SALES_RETURN',
+        reference: `SR-${round}`,
+        requestKey: `sr-${round}`,
+        salesInvoiceId: sold.id,
+        payload: { lines: [{ inventoryId: 'cream-batch', sourceLineId: sale.id, quantity: 1, disposition: 'RESTOCK' }] },
+      } as any);
+      const [edit, ret] = await Promise.allSettled([editing, returning]);
+      check.mockRestore();
+      const bill = await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: sold.id } });
+      const line = ret.status === 'fulfilled' ? (ret.value as any).payload.lines[0] : null;
+      return [
+        edit.status === 'fulfilled' ? 'edit saved' : `edit refused: ${(edit.reason as Error).message.replace(round, '#')}`,
+        bill.totalAmount,
+        line ? [line.taxable, line.tax] : `return refused: ${(ret as PromiseRejectedResult).reason?.message}`,
+      ];
+    };
+    const refused = 'edit refused: This bill has a sales return (SR-#), so its discount can no longer be changed. Correct it through the return.';
+    expect([
+      await race('A', 'edit reads first'),
+      await race('B', 'return reads first'),
+    ]).toEqual([
+      [refused, 56, [50, 6]],
+      ['edit saved', 50.4, [45, 5.4]],
+    ]);
+    const allowed = [JSON.stringify(['edit saved', 50.4, [45, 5.4]]), JSON.stringify([refused, 56, [50, 6]])];
+    for (let round = 0; round < 6; round++)
+      expect(allowed).toContain(JSON.stringify(await race(`T${round}`, 'together')));
+  }, 120000);
+
   it('applies a bill discount before tax, keeps it on the draft, and revises a paid bill into a refund due', async () => {
     const discounted = {
       ...bill,
