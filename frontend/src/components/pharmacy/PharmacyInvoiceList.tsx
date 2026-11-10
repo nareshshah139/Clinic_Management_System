@@ -47,6 +47,7 @@ import {
   type PharmacyPaymentMethod as PharmacyPaymentMethodType,
 } from '@/lib/api-enums';
 import { billNumberLabel } from '@/lib/bill-number';
+import { settlementOf } from '@/components/pharmacy/sales/finished-bill-model';
 import { renderPharmacyInvoiceHtml } from '@/lib/pharmacy-invoice-print';
 
 type StatusFilter = PharmacyInvoiceStatusType | 'all';
@@ -213,7 +214,8 @@ export function PharmacyInvoiceList() {
 
   /**
    * @cc [owner:nareshshah139,label:product] collect-remaining-balance
-   * Mark as paid MUST collect the freshly loaded remaining balance, never the original total.
+   * Mark as paid MUST collect the freshly loaded remaining balance from the ledger (receipts less refunds),
+   * never the original total.
    * An uncertain payment MUST retain its request key and exact amount across retries and reloads.
    */
   const handleMarkAsPaid = async (invoice: PharmacyInvoiceSummary) => {
@@ -228,8 +230,7 @@ export function PharmacyInvoiceList() {
         payment = JSON.parse(saved);
       } else {
         const latest = await apiClient.get<PharmacyInvoiceSummary & { payments: Array<{ status: string; amount: number }> }>(`/pharmacy/invoices/${invoice.id}`);
-        const amount = Math.round(Math.max(0, latest.totalAmount - latest.payments
-          .filter(entry => entry.status === 'COMPLETED').reduce((sum, entry) => sum + entry.amount, 0)) * 100) / 100;
+        const amount = settlementOf(latest).due;
         if (amount <= 0) {
           await loadInvoices();
           alert('This invoice has no remaining balance.');

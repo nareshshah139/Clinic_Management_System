@@ -62,7 +62,8 @@ const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 10
 
 export const lineName = (line: Pick<BillLine, 'drug' | 'package'>) => line.drug?.name ?? line.package?.name ?? 'Item';
 
-export function settlementOf(bill: Pick<FinishedBill, 'totalAmount' | 'payments'>, total = bill.totalAmount) {
+/** The bill's ledger: receipts plus refunds (negative entries); paid above the total is a refund due. */
+export function settlementOf(bill: { totalAmount: number; payments: { status: string; amount: number }[] }, total = bill.totalAmount) {
   const paid = money(bill.payments.filter((payment) => LEDGER.has(payment.status)).reduce((sum, payment) => sum + payment.amount, 0));
   const balance = money(total - paid);
   return { paid, due: Math.max(0, balance), refundDue: Math.max(0, -balance) };

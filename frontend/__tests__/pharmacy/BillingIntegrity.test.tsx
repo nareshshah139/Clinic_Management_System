@@ -178,6 +178,25 @@ it("collects the authoritative remaining 20 rather than the original 100", async
   ).toBeNull();
 });
 
+it("collects what the ledger leaves due after a refund: paid 200, revised to 150, refunded 50, revised to 180", async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue({
+    ...invoice,
+    totalAmount: 180,
+    payments: [
+      { amount: 200, status: "COMPLETED" },
+      { amount: -50, status: "REFUNDED" },
+    ],
+  });
+  (apiClient.post as jest.Mock).mockResolvedValue({ id: "payment-2", amount: 30 });
+  render(<PharmacyInvoiceList />);
+  fireEvent.click(await screen.findByTitle("Mark as Paid"));
+  await waitFor(() => expect(window.alert).toHaveBeenCalledWith("Invoice marked as paid successfully"));
+  expect([(apiClient.post as jest.Mock).mock.calls[0][1].amount, (window.confirm as jest.Mock).mock.calls[0][0]]).toEqual([
+    30,
+    "Mark invoice PHI-2026-001 as paid?\n\nRemaining payment: ₹30.00",
+  ]);
+});
+
 it("reuses the original payment after a lost response even when reloaded balance is zero", async () => {
   (apiClient.get as jest.Mock).mockResolvedValue({
     ...invoice,
