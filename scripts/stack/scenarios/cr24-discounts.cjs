@@ -18,6 +18,8 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
 const rupees = (value) => `₹${Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const paise = (value) => Math.round(Number((value * 100).toFixed(6)));
 const sequenceOf = (number) => Number(/^PHI-\d{4}-(\d+)$/.exec(number)?.[1] ?? NaN);
+const money = (value) => Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const istToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
 
 (async () => {
   fs.mkdirSync(out, { recursive: true });
@@ -228,6 +230,9 @@ const sequenceOf = (number) => Number(/^PHI-\d{4}-(\d+)$/.exec(number)?.[1] ?? N
           await db.auditLog.count({ where: { entityId: sold.id, action: "PHARMACY_BILL_DISCOUNT_REVISED" } }),
         ], [1, 1, 1]);
         await shot(page, `${tag}-06-refund-due`);
+        const today = istToday();
+        const cashLine = async () => (await call(who, "GET", `/pharmacy/reports/daily-collection?from=${today}`)).collection.modes.find((m) => m.mode === "CASH");
+        const cashBefore = await cashLine();
         await page.getByRole("button", { name: `Record refund ${rupees(refund)}` }).click();
         const refundDialog = page.getByRole("dialog", { name: `Record refund of ${rupees(refund)}` });
         await refundDialog.waitFor();
@@ -243,6 +248,65 @@ const sequenceOf = (number) => Number(/^PHI-\d{4}-(\d+)$/.exec(number)?.[1] ?? N
           clean(await revisedRow.locator("td").first().innerText()), clean(await revisedRow.locator("td").nth(-3).innerText()), clean(await revisedRow.locator("td").nth(-2).innerText()),
         ], [`${sold.invoiceNumber} Revised`, rupees(revised.totalAmount), `Refunded ${rupees(refund)} Cash`]);
         await shot(page, `${tag}-07-sales-revised-refunded`);
+
+        const cashAfter = await cashLine();
+        check(`${tag} the refund leaves today's expected cash, in the Refunds column`, [
+          paise(cashBefore.expected) - paise(cashAfter.expected), paise(cashAfter.refunds) - paise(cashBefore.refunds),
+        ], [paise(refund), paise(refund)]);
+        await go(page, `/dashboard/pharmacy/reports?report=daily-collection&from=${today}`);
+        const documents = page.getByRole("table", { name: "Bills, counter sales and returns", exact: true });
+        await documents.locator("tbody tr").first().waitFor({ timeout: 120000 });
+        const refundShown = (await documents.locator("tbody tr").filter({ hasText: sold.invoiceNumber }).allInnerTexts()).some((text) => clean(text).includes("Refund · Cash"));
+        if (width === "1280") {
+          const cashRow = page.getByRole("table", { name: "Reconciliation by payment mode", exact: true }).locator("tbody tr").filter({ has: page.getByRole("rowheader", { name: "Cash", exact: true }) });
+          const cashCells = (await cashRow.locator("td").allInnerTexts()).map(clean);
+          check(`${tag} Daily Collection shows the refund and the reduced expected cash on screen`, [cashCells[3], cashCells[4], refundShown], [
+            `-${money(cashAfter.refunds)}`, money(cashAfter.expected), true,
+          ]);
+        } else check(`${tag} Daily Collection lists the refund on the bill`, refundShown, true);
+        check(`${tag} Daily Collection with a refund: no page overflow`, await overflow(page), 0);
+        await shot(page, `${tag}-07a-daily-collection-refund`);
+
+        const lineValues = revised.items.map((i) => {
+          const discount = paise(i.discountAmount) + paise(i.billDiscountAmount);
+          return { gross: paise(i.quantity * i.unitPrice), discount, taxable: paise(i.quantity * i.unitPrice) - discount, tax: paise(i.taxAmount), total: paise(i.totalAmount) };
+        });
+        const sum = (key) => money(lineValues.reduce((n, v) => n + v[key], 0) / 100);
+        await go(page, `/dashboard/pharmacy/reports?report=sales-register&from=${today}&to=${today}`);
+        const register = page.getByRole("table", { name: "Sales Register", exact: true });
+        const gstRow = register.locator("tbody tr").filter({ hasText: sold.invoiceNumber }).first();
+        await gstRow.waitFor({ timeout: 120000 });
+        const gstCells = (await gstRow.locator("td").allInnerTexts()).map(clean);
+        check(`${tag} the GST Sales Register row of the bill-discounted bill reads the value the tax was charged on`, [gstCells[4], gstCells[5], gstCells[6], gstCells[11]], [
+          sum("gross"), sum("discount"), sum("taxable"), money(revised.totalAmount),
+        ]);
+        check(`${tag} the line taxable plus tax is the stored line total`, lineValues.map((v) => v.taxable + v.tax - v.total), lineValues.map(() => 0));
+        await shot(page, `${tag}-07b-gst-register-discounted`);
+
+        const cancelledPatient = await patient();
+        const cancelledDraft = await call(who, "POST", "/pharmacy/invoices", {
+          patientId: cancelledPatient.id, paymentMethod: "CASH", billingName: cancelledPatient.name, billingPhone: cancelledPatient.phone,
+          items: [{ itemType: "DRUG", drugId: drugs[CREAM].id, quantity: 1, unitPrice: drugs[CREAM].price, discountPercent: 0, taxPercent: 12 }],
+        });
+        await call(who, "PATCH", `/pharmacy/invoices/${cancelledDraft.id}/status`, { status: "CANCELLED" });
+        const cancelledRow = await toSales(page, cancelledPatient.name);
+        const salesText = clean(await page.locator('[role="tabpanel"]:visible table').first().innerText());
+        check(`${tag} a cancelled draft shows as Cancelled draft in Sales and its placeholder never appears`, [
+          clean(await cancelledRow.locator("td").first().innerText()), salesText.includes("DRAFT-"), cancelledDraft.invoiceNumber.startsWith("DRAFT-"),
+        ], ["Cancelled draft Cancelled", false, true]);
+        await shot(page, `${tag}-07c-sales-cancelled-draft`);
+        await go(page, `/dashboard/pharmacy/reports?report=gstr-1&from=${today}&to=${today}`);
+        const docs = page.getByRole("table", { name: "GSTR-1: Documents issued (Table 13)", exact: true });
+        await docs.locator("tbody tr").first().waitFor({ timeout: 120000 });
+        const docRows = (await docs.locator("tbody tr").allInnerTexts()).map(clean);
+        const issuedToday = await db.pharmacyInvoice.count({
+          where: { branchId, status: { in: ["CONFIRMED", "DISPENSED", "COMPLETED"] }, invoiceDate: { gte: new Date(`${today}T00:00:00+05:30`), lt: new Date(Date.parse(`${today}T00:00:00+05:30`) + 86400000) } },
+        });
+        const invoicesRow = (await docs.locator("tbody tr").filter({ hasText: /^Invoices for outward supply/ }).first().locator("td").allInnerTexts()).map(clean);
+        check(`${tag} GSTR-1 documents issued count only numbered bills: no draft placeholder, no cancelled draft`, [
+          docRows.some((text) => text.includes("DRAFT-")), invoicesRow[3], invoicesRow[4],
+        ], [false, String(issuedToday), "0"]);
+        await shot(page, `${tag}-07d-gstr1-documents`);
 
         await go(page, `/dashboard/pharmacy/sales/bill?bill=${sold.id}`);
         await page.getByRole("button", { name: "Print", exact: true }).click();

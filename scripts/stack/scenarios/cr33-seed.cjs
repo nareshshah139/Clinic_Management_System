@@ -149,6 +149,40 @@ async function seedRows(db, { branchId, doctorId, pharmacistId, today }) {
     due: r2(t2.total - r2(t2.total * 0.5)),
   };
   expected.today.expected = r2(expected.today.CASH + expected.today.UPI + expected.today.CARD);
+
+  // A Monday and Tuesday of their own: a bill paid 200 in cash on Monday whose discount was later edited to
+  // 150, with 50 handed back in cash on Tuesday; Tuesday's bill of 1000 at 12% with a 10% bill discount; and a
+  // draft cancelled on Tuesday before it got a number.
+  const MON = "2024-03-11";
+  const TUE = "2024-03-12";
+  const patient = patients[0];
+  const doc = (id, invoiceNumber, day, data) =>
+    db.pharmacyInvoice.create({
+      data: {
+        id, invoiceNumber, patientId: patient.id, doctorId, branchId, createdById: pharmacistId, paymentMethod: "CASH",
+        billingName: patient.name, billingPhone: patient.phone, invoiceDate: at(day, "10:00"), createdAt: at(day, "10:00"), ...data,
+      },
+    });
+  await doc("cr33-revised", "PHI-2024-001", MON, {
+    subtotal: 150, totalAmount: 150, status: "CONFIRMED", revisedAt: at(TUE, "09:00"),
+    items: { create: [{ drugId: `${ITEMS[2].id}-drug`, inventoryItemId: ITEMS[2].id, quantity: 1, unitPrice: 150, taxPercent: 0, taxAmount: 0, totalAmount: 150 }] },
+    payments: {
+      create: [
+        { requestKey: "cr33-paid", method: "CASH", amount: 200, status: "COMPLETED", paymentDate: at(MON, "10:01") },
+        { requestKey: "refund:cr33-back", method: "CASH", amount: -50, status: "REFUNDED", paymentDate: at(TUE, "09:05") },
+      ],
+    },
+  });
+  await doc("cr33-bill-discount", "PHI-2024-002", TUE, {
+    subtotal: 1000, discountAmount: 100, billDiscountKind: "PERCENT", billDiscountValue: 10, billDiscountAmount: 100, taxAmount: 108, totalAmount: 1008, status: "CONFIRMED", paymentMethod: "CARD",
+    items: { create: [{ drugId: `${ITEMS[0].id}-drug`, inventoryItemId: ITEMS[0].id, quantity: 1, unitPrice: 1000, discountAmount: 0, billDiscountAmount: 100, taxPercent: 12, taxAmount: 108, totalAmount: 1008 }] },
+    payments: { create: [{ requestKey: "cr33-card", method: "CARD", amount: 1008, status: "COMPLETED", paymentDate: at(TUE, "10:02") }] },
+  });
+  await doc("cr33-cancelled-draft", "DRAFT-0d6b1f2a-7c3e-4a59-9e81-5b2c4d6f8a10", TUE, {
+    subtotal: 180, taxAmount: 21.6, totalAmount: 201.6, status: "CANCELLED",
+    items: { create: [{ drugId: `${ITEMS[0].id}-drug`, inventoryItemId: ITEMS[0].id, quantity: 1, unitPrice: 180, taxPercent: 12, taxAmount: 21.6, totalAmount: 201.6 }] },
+  });
+  expected.refundDay = { monday: MON, tuesday: TUE };
   return expected;
 }
 

@@ -59,6 +59,10 @@ async function tableData(page, name) {
       data: { branchId: stack.branch.id, email: "kiran.accounts@stack.example.invalid", firstName: "Kiran", lastName: "Accounts", role: "ACCOUNTANT", password: owner.password, permissions: JSON.stringify(["pharmacy:compliance:read"]) },
     });
     users.accountant = { ...users.owner, id: accountant.id, email: accountant.email, role: "ACCOUNTANT" };
+    const admin = await stack.db.user.create({
+      data: { branchId: stack.branch.id, email: "asha.admin@stack.example.invalid", firstName: "Asha", lastName: "Admin", role: "ADMIN", password: owner.password, permissions: JSON.stringify([]) },
+    });
+    users.admin = { ...users.owner, id: admin.id, email: admin.email, role: "ADMIN" };
     const expected = await seed(stack.db, { branchId: stack.branch.id, doctorId: users.doctor.id, pharmacistId: users.pharmacist.id, today });
     const month = expected.month;
 
@@ -254,6 +258,51 @@ async function tableData(page, name) {
       await page.goto(`${stack.base}/dashboard/inventory?area=purchases&view=margin`, { waitUntil: "networkidle" });
       await page.waitForURL(/report=item-margin/);
     });
+
+    const { monday, tuesday } = expected.refundDay;
+    for (const who of ["pharmacist", "doctor", "admin"]) {
+      const role = await open(who);
+      const text = () => role.page.locator("main").innerText();
+      await check(`${who}: a refund handed back on Tuesday for Monday's revised bill takes 50 out of Tuesday's expected cash`, async () => {
+        await role.page.goto(`${reports}?report=daily-collection&from=${tuesday}`, { waitUntil: "networkidle" });
+        const modes = await tableData(role.page, "Reconciliation by payment mode");
+        const mode = (label) => modes.rows.find((r) => r[0] === label);
+        assert.deepEqual([mode("Cash").slice(0, 6), mode("Card").slice(0, 6)], [
+          ["Cash", "0.00", "0.00", "0.00", "-50.00", "-50.00"],
+          ["Card", "1,008.00", "0.00", "0.00", "0.00", "1,008.00"],
+        ]);
+        const documents = await tableData(role.page, "Bills, counter sales and returns");
+        const refunded = documents.rows.find((r) => r[0] === "PHI-2024-001");
+        assert.deepEqual([refunded[1], refunded[5], refunded[6]], ["Bill of 11/03/2024", "-50.00", "Refund · Cash"]);
+        assert.ok(!(await text()).includes("DRAFT-"), "no draft placeholder on the page");
+        await shot(role.page, `refund-day-${who}-1440`);
+        await role.page.goto(`${reports}?report=daily-collection&from=${monday}`, { waitUntil: "networkidle" });
+        const mondayModes = await tableData(role.page, "Reconciliation by payment mode");
+        assert.deepEqual(mondayModes.rows.find((r) => r[0] === "Cash").slice(0, 6), ["Cash", "200.00", "0.00", "0.00", "0.00", "200.00"]);
+      });
+      await check(`${who}: the bill-discounted bill reads taxable 900 on 1000 at 12% with a 10% bill discount, in the Sales Register and GSTR-1`, async () => {
+        await role.page.goto(`${reports}?report=sales-register&from=${tuesday}&to=${tuesday}`, { waitUntil: "networkidle" });
+        const register = await tableData(role.page, "Sales Register");
+        assert.deepEqual(register.rows.map((r) => [r[0], ...r.slice(4)]), [["PHI-2024-002", "1,000.00", "100.00", "900.00", "0.00", "54.00", "54.00", "0.00", "1,008.00"]]);
+        await shot(role.page, `bill-discount-register-${who}-1440`);
+        await role.page.goto(`${reports}?report=gstr-1&from=${tuesday}&to=${tuesday}`, { waitUntil: "networkidle" });
+        const b2cs = await tableData(role.page, "GSTR-1: B2C small, rate-wise (Table 7)");
+        assert.deepEqual(b2cs.rows.map((r) => r.slice(2, 6)), [["12.00", "900.00", "54.00", "54.00"]]);
+      });
+      await check(`${who}: a draft cancelled before it got a number is not a document issued in GSTR-1 and shows no number in Sales`, async () => {
+        const docs = await tableData(role.page, "GSTR-1: Documents issued (Table 13)");
+        assert.deepEqual(docs.rows, [["Invoices for outward supply", "PHI-2024-002", "PHI-2024-002", "1", "0", "1"]]);
+        assert.ok(!(await text()).includes("DRAFT-"), "no draft placeholder in GSTR-1");
+        await shot(role.page, `gstr1-documents-${who}-1440`);
+        await role.page.goto(`${stack.base}/dashboard/pharmacy/sales?from=${tuesday}&to=${tuesday}`, { waitUntil: "networkidle" });
+        const row = role.page.locator('[role="tabpanel"] tbody tr').filter({ hasText: "Cancelled draft" });
+        await row.first().waitFor();
+        assert.equal(await row.count(), 1);
+        assert.ok(!(await role.page.locator('[role="tabpanel"]').innerText()).includes("DRAFT-"), "no draft placeholder in Sales");
+        await shot(role.page, `sales-cancelled-draft-${who}-1440`);
+      });
+      await role.context.close();
+    }
 
     await check("at 390 px the page never scrolls sideways; wide tables scroll inside their frame", async () => {
       const phone = await open("pharmacist", { width: 390, height: 844 });
