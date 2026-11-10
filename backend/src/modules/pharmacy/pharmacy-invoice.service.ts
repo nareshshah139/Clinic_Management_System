@@ -2288,8 +2288,8 @@ export class PharmacyInvoiceService {
    * it was made from and MUST be refused for drafts, cancelled bills and bills with a sales return. It MUST
    * record who, when, why and the old and new amounts, and later returns MUST refund the revised line value
    * exactly; when they could not (one drug at different unit prices, or a sold batch now linked to several
-   * drugs) the change MUST be refused. Paid, balance and status MUST come from the ledger, so money already taken above the new total shows as
-   * a refund due rather than being kept or dropped.
+   * drugs) the change MUST be refused. Paid, balance and status MUST come from the ledger, so money already
+   * taken above the new total shows as a refund due rather than being kept or dropped.
    */
   async reviseDiscount(
     id: string,
@@ -2431,12 +2431,7 @@ export class PharmacyInvoiceService {
     return rows.map((row) => row.reference);
   }
 
-  /**
-   * Rewrites the return terms frozen on the bill's SALE movements to the revised line values. A movement
-   * is not tied to a line, only to a drug, so the terms are exact only when every unit of a drug on the
-   * bill carries the same price; otherwise, or when a sold batch now maps to more than one drug, the edit
-   * is refused rather than leaving a later return to refund a guessed price.
-   */
+  /** A SALE movement is tied to a drug, not a line, so its return terms are exact only when every unit of that drug on the bill has one price. */
   private async reviseSaleTerms(
     tx: Prisma.TransactionClient,
     invoice: { id: string; invoiceNumber: string },
