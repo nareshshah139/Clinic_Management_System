@@ -892,6 +892,10 @@ export class PharmacyInvoiceService {
         throw new ConflictException(
           'Finish this bill before printing it. A draft is not a tax invoice and has no bill number yet.',
         );
+      if (!isIssuedBillNumber(invoice.invoiceNumber))
+        throw new ConflictException(
+          'This draft was cancelled before it was finished, so it has no bill to print.',
+        );
 
       const reference = `INV-${invoice.invoiceNumber}`;
       const stockTransactions = await prismaAny.stockTransaction.findMany({

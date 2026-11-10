@@ -46,7 +46,7 @@ import {
   type PharmacyPaymentStatus as PharmacyPaymentStatusType,
   type PharmacyPaymentMethod as PharmacyPaymentMethodType,
 } from '@/lib/api-enums';
-import { billNumberLabel } from '@/lib/bill-number';
+import { billNumberLabel, isIssuedBillNumber } from '@/lib/bill-number';
 import { settlementOf } from '@/components/pharmacy/sales/finished-bill-model';
 import { renderPharmacyInvoiceHtml } from '@/lib/pharmacy-invoice-print';
 
@@ -527,7 +527,7 @@ export function PharmacyInvoiceList() {
                     </div>
                     
                     <div className="flex gap-2 ml-4">
-                      {invoice.status !== 'DRAFT' && (
+                      {isIssuedBillNumber(invoice.invoiceNumber) && invoice.status !== 'DRAFT' && (
                         <>
                           <Button
                             variant="ghost"
@@ -547,7 +547,7 @@ export function PharmacyInvoiceList() {
                           </Button>
                         </>
                       )}
-                      {(pendingPaymentIds.includes(invoice.id) || (invoice.status !== 'CANCELLED' && invoice.status !== 'DRAFT' && (invoice.paymentStatus === 'PENDING' || invoice.paymentStatus === 'PARTIALLY_PAID'))) && (
+                      {(pendingPaymentIds.includes(invoice.id) || (isIssuedBillNumber(invoice.invoiceNumber) && invoice.status !== 'CANCELLED' && invoice.status !== 'DRAFT' && (invoice.paymentStatus === 'PENDING' || invoice.paymentStatus === 'PARTIALLY_PAID'))) && (
                         <Button
                           variant="ghost"
                           size="sm"

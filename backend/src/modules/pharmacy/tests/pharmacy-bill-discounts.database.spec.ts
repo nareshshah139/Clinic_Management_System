@@ -310,6 +310,10 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       (await found(placeholderPiece)).includes(draft.id),
       await found(sold.invoiceNumber),
     ]).toEqual([false, false, [sold.id]]);
+    await invoices.updateStatus(draft.id, 'CANCELLED', 'branch', 'asha');
+    expect(await failure(invoices.getPrintData(draft.id, 'branch'))).toBe(
+      '409: This draft was cancelled before it was finished, so it has no bill to print.',
+    );
   });
 
   it('files a bill finished at 00:30 IST on 1 January under the new year, whatever the server clock zone', async () => {

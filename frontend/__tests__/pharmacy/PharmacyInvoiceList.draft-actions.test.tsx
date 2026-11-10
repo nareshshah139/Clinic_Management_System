@@ -44,3 +44,16 @@ it('deletes a draft only at the version the list showed, and shows the plain ref
   fireEvent.click(screen.getByTitle('Delete Invoice'));
   await waitFor(() => expect(window.alert).toHaveBeenLastCalledWith(message));
 });
+
+it('offers no view, download or payment for a cancelled draft, which never got a bill number', async () => {
+  const cancelled = { ...draft, id: 'draft-2', invoiceNumber: 'DRAFT-4b1d2c3e-0000-4000-8000-000000000000', status: 'CANCELLED' };
+  (apiClient.getPharmacyInvoices as jest.Mock).mockResolvedValue({ data: [cancelled], pagination: { page: 1, limit: 10, total: 1, pages: 1 } });
+  render(<PharmacyInvoiceList />);
+  expect(await screen.findByRole('heading', { name: 'Cancelled draft', level: 3 })).toBeInTheDocument();
+  expect([
+    screen.queryByTitle('View Invoice'),
+    screen.queryByTitle('Download Invoice'),
+    screen.queryByTitle('Mark as Paid'),
+    screen.queryByText(/DRAFT-4b1d/),
+  ]).toEqual([null, null, null, null]);
+});
