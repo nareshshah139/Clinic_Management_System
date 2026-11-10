@@ -11,6 +11,7 @@ import {
   salesRegisterPage,
   workflowEntry,
 } from './pharmacy-sales-register';
+import { LEDGER_STATUSES } from './pharmacy-ledger';
 import { clinicDayRange, peopleById } from './register-utils';
 
 type PharmacyBills = Awaited<
@@ -115,7 +116,7 @@ export class PharmacySalesRegisterService {
         createdById: true,
         patient: { select: { name: true, phone: true } },
         payments: {
-          where: { status: { in: ['COMPLETED', 'REFUNDED'] } },
+          where: { status: { in: LEDGER_STATUSES } },
           select: { method: true, amount: true },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         },

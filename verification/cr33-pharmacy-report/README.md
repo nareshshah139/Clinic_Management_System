@@ -10,14 +10,15 @@ Proved for every non-negative input, over real numbers:
   - every head balances: credit used + cash = liability, and credit used + credit carried forward = credit;
   - the allocation is legal under CGST Act s.49(5), s.49A and rule 88A (permitted routes only; IGST credit pays IGST first; CGST and SGST credit pay their own head before IGST; IGST credit is exhausted before CGST or SGST credit);
   - it is cash-optimal: no legal allocation pays less tax in cash.
-- **Daily collection**: for every bill, billed = collected − paid above the bill + still due; a bill is never both due and over-paid; the day is SHORT exactly when the count falls short by half a paisa or more.
+- **Daily collection**: a bill's ledger is its receipts plus its refunds (negative entries), and collected is their sum. For every bill, billed = collected − paid above the bill + still due; a bill is never both due and over-paid; a refund handed back on a day lowers that day's expected money by exactly the refund; the day is SHORT exactly when the count falls short by half a paisa or more.
 
-A conformance step runs the real TypeScript `setOff` on 400 random inputs and checks that it matches the symbolic model, so the proof is about the shipped code. The code also rounds each step to the paisa; the Jest suites cover that.
+A conformance step runs the real TypeScript `setOff` on 400 random inputs and checks that it matches the symbolic model, so the proof is about the shipped code. A second conformance step runs the real `buildDailyCollection` on 300 random days with receipts, refunds, counter sales and returns and checks the same identities: expected in hand equals the money that moved that day, billed = collected − paid above + due, and the refunds column adds up to what was paid out. The code also rounds each step to the paisa; the Jest suites cover that.
 
 Negative controls, which must fail:
 
 - the naive greedy order (IGST credit to CGST before SGST) is shown to pay avoidable cash. This is the bug the proof caught during development: liability CGST 100 + SGST 100 against credit IGST 100 + CGST 100 paid ₹100 in cash that the law lets the clinic pay from credit.
 - a CGST-credit-to-SGST route is shown to be illegal.
+- counting receipts only (the reader that ignored refunds) is shown to overstate the money expected in hand after a refund.
 
 ```bash
 python3 -m venv /tmp/z3 && /tmp/z3/bin/pip install z3-solver==5.3.1.0

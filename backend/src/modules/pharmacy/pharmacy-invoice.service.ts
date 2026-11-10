@@ -21,7 +21,7 @@ import {
   PharmacyInvoiceItemDto,
 } from './dto/pharmacy-invoice.dto';
 
-import { PharmacyPaymentMethod, PharmacyPaymentStatus, Prisma } from '@prisma/client';
+import { PharmacyPaymentMethod, Prisma } from '@prisma/client';
 import { InvoiceNumbersService } from '../../shared/numbering/invoice-numbers.service';
 import {
   BillDiscount,
@@ -31,6 +31,7 @@ import {
   priceBill,
 } from './bill-pricing';
 import { draftBillNumber, isIssuedBillNumber } from './bill-number';
+import { LEDGER_STATUSES, ledgerPaid } from './pharmacy-ledger';
 
 type DraftFence = { checkoutRequestKey: string; checkoutPayloadHash: string };
 
@@ -42,7 +43,6 @@ const COLLECTED_AT_COUNTER = new Set<PharmacyPaymentMethod>([
   'WALLET',
 ]);
 
-const LEDGER_STATUSES: PharmacyPaymentStatus[] = ['COMPLETED', 'REFUNDED'];
 const POSTED_STATUSES = ['CONFIRMED', 'DISPENSED', 'COMPLETED'];
 const SETTLED_RETURN_STATUSES = ['CANCELLED', 'REJECTED', 'REVERSED'];
 
@@ -904,11 +904,7 @@ export class PharmacyInvoiceService {
         this.toPrintLineItem(item, index + 1, stockTransactions),
       );
       const gstSummary = this.buildGstSummary(lines);
-      const paidAmount = this.money(
-        invoice.payments
-          .filter((payment: any) => LEDGER_STATUSES.includes(payment.status))
-          .reduce((sum: number, payment: any) => sum + payment.amount, 0),
-      );
+      const paidAmount = ledgerPaid(invoice.payments);
       const totalAmount = this.money(invoice.totalAmount);
       const balanceAmount = this.money(totalAmount - paidAmount);
 

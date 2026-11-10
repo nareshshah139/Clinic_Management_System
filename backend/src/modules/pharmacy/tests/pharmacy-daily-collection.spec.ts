@@ -263,6 +263,36 @@ describe('daily collection', () => {
     expect(documents.totals!.paidToday).toBe(counted.expectedTotal);
   });
 
+  it('takes a refund of a revised bill out of the day it was handed back, in its mode', () => {
+    const monday = '2026-11-04';
+    // Paid 200 cash on Monday; the discount was edited to 150 and 50 handed back in cash today.
+    const revised = bill('050', 150, [paid('CASH', 200, monday), paid('CASH', -50)], { day: monday });
+    // Paid 200 by UPI today, revised to 180 and 20 refunded by UPI the same day.
+    const sameDay = bill('105', 180, [paid('UPI', 200), paid('UPI', -20)]);
+    const today = buildDailyCollection({ day: DAY, bills: [revised, sameDay], counterSales: [], returns: [], history: [] });
+    const line = (m: string) => today.modes.find((entry) => entry.mode === m)!;
+    expect([line('CASH'), line('UPI')].map((entry) => [entry.onTodaysBills, entry.onEarlierBills, entry.refunds, entry.expected])).toEqual([
+      [0, 0, 50, -50],
+      [200, 0, 20, 180],
+    ]);
+    expect([today.expectedTotal, today.refunds, today.billing.collectedOnTodaysBills, today.billing.paidAboveBill, today.billing.dueAtDayEnd]).toEqual([
+      130,
+      { count: 2, paidOut: 70, storeCredit: 0 },
+      180,
+      0,
+      0,
+    ]);
+    const onMonday = buildDailyCollection({ day: monday, bills: [revised], counterSales: [], returns: [], history: [] });
+    expect([onMonday.expectedTotal, onMonday.billing.paidAboveBill]).toEqual([200, 50]);
+
+    const documents = dailyCollectionSections(today, { bills: [revised, sameDay], counterSales: [], returns: [] }).sections.find((s) => s.id === 'documents')!;
+    expect(documents.rows.map((r) => [r.cells.number, r.cells.paidToday, r.cells.modes])).toEqual([
+      ['PHI-2026-050', -50, 'Refund · Cash'],
+      ['PHI-2026-105', 180, 'UPI, Refund · UPI'],
+    ]);
+    expect(documents.totals!.paidToday).toBe(today.expectedTotal);
+  });
+
   it('hides the Counted and Difference columns until someone counts', () => {
     const { sections, tiles } = dailyCollectionSections(collection, {
       bills,

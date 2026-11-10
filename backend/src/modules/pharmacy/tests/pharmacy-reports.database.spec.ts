@@ -486,6 +486,40 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
     expect(report.canRecordCount).toBe(true);
   });
 
+  it('takes a cash refund on Tuesday for Monday’s revised bill out of Tuesday’s expected cash', async () => {
+    await db.pharmacyInvoice.create({
+      data: {
+        id: 'revised-bill',
+        invoiceNumber: 'PHI-2026-600',
+        patientId: 'patient-branch',
+        branchId: 'branch',
+        subtotal: 150,
+        totalAmount: 150,
+        paymentMethod: 'CASH',
+        billingName: 'Meera Shah',
+        billingPhone: '9876543210',
+        status: 'CONFIRMED',
+        invoiceDate: new Date('2026-11-09T05:00:00Z'),
+        createdAt: new Date('2026-11-09T05:00:00Z'),
+        payments: {
+          create: [
+            { requestKey: 'paid', method: 'CASH', amount: 200, status: 'COMPLETED', paymentDate: new Date('2026-11-09T05:01:00Z') },
+            { requestKey: 'refund:back', method: 'CASH', amount: -50, status: 'REFUNDED', paymentDate: new Date('2026-11-10T06:00:00Z') },
+          ],
+        },
+      },
+    });
+    const cash = async (day: string) => {
+      const { collection } = await reports.dailyCollection(day, actor);
+      const line = collection.modes.find((m) => m.mode === 'CASH')!;
+      return [line.onTodaysBills, line.refunds, line.expected, collection.billing.paidAboveBill];
+    };
+    expect([await cash('2026-11-09'), await cash('2026-11-10')]).toEqual([
+      [200, 0, 200, 50],
+      [0, 50, -50, 0],
+    ]);
+  });
+
   it('appends counts by sequence and refuses a stale or racing count without overwriting', async () => {
     const day = '2026-11-05';
     const first = await reports.recordCount(
