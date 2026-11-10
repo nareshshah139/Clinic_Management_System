@@ -127,8 +127,6 @@ type MedicalVisitDraftState = {
   distribution: string[];
   acneSeverity: string;
   itchScore: string;
-  triggers: string;
-  priorTx: string;
   dermDx: string[];
   procType: string;
   fluence: string;
@@ -273,8 +271,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const [distribution, setDistribution, hydrateDistribution] = useClinicalState<Set<string>>(new Set(), 'distribution', dirtyClinicalFields);
   const [acneSeverity, setAcneSeverity, hydrateAcneSeverity] = useClinicalState<string>('', 'acneSeverity', dirtyClinicalFields);
   const [itchScore, setItchScore, hydrateItchScore] = useClinicalState<string>('', 'itchScore', dirtyClinicalFields);
-  const [triggers, setTriggers, hydrateTriggers] = useClinicalState<string>('', 'triggers', dirtyClinicalFields);
-  const [priorTx, setPriorTx, hydratePriorTx] = useClinicalState<string>('', 'priorTx', dirtyClinicalFields);
   const [dermDx, setDermDx, hydrateDermDx] = useClinicalState<Set<string>>(new Set(), 'dermDx', dirtyClinicalFields);
   const [procType, setProcType, hydrateProcType] = useClinicalState<string>('', 'procType', dirtyClinicalFields);
   const [fluence, setFluence, hydrateFluence] = useClinicalState<string>('', 'fluence', dirtyClinicalFields);
@@ -652,8 +648,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     distribution: Array.from(distribution),
     acneSeverity,
     itchScore,
-    triggers,
-    priorTx,
     dermDx: Array.from(dermDx),
     procType,
     fluence,
@@ -684,7 +678,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     painScore,
     passes,
     plan,
-    priorTx,
     procType,
     reviewDate,
     skinConcerns,
@@ -693,7 +686,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     subjective,
     systemics,
     topicals,
-    triggers,
     vitals,
     visitStatus,
     acneSeverity,
@@ -734,8 +726,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     hydrateDistribution(new Set(draft.distribution || []), draft.dirtyClinicalFields ?? 'populated');
     hydrateAcneSeverity(draft.acneSeverity || '', draft.dirtyClinicalFields ?? 'populated');
     hydrateItchScore(draft.itchScore || '', draft.dirtyClinicalFields ?? 'populated');
-    hydrateTriggers(draft.triggers || '', draft.dirtyClinicalFields ?? 'populated');
-    hydratePriorTx(draft.priorTx || '', draft.dirtyClinicalFields ?? 'populated');
     hydrateDermDx(new Set(draft.dermDx || []), draft.dirtyClinicalFields ?? 'populated');
     hydrateProcType(draft.procType || '', draft.dirtyClinicalFields ?? 'populated');
     hydrateFluence(draft.fluence || '', draft.dirtyClinicalFields ?? 'populated');
@@ -829,7 +819,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
           skinType: field('skinType', skinType), morphology: field('morphology', Array.from(morphology)),
           distribution: field('distribution', Array.from(distribution)), acneSeverity: field('acneSeverity', acneSeverity),
           itchScore: field('itchScore', number(itchScore)), painScore: field('painScore', number(painScore)),
-          triggers: field('triggers', triggers), priorTreatments: field('priorTx', priorTx),
           skinConcerns: field('skinConcerns', Array.from(skinConcerns)),
         },
       },
@@ -860,7 +849,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       merged.teleVideoConsent = teleVideoConsent;
     }
     return merged;
-  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, triggers, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
+  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
 
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
@@ -1161,8 +1150,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
           if (derm?.acneSeverity && !acneSeverity) hydrateAcneSeverity(String(derm.acneSeverity));
           if (derm?.itchScore != null && !itchScore) hydrateItchScore(String(derm.itchScore));
           if (derm?.painScore != null && !painScore) hydratePainScore(String(derm.painScore));
-          if (derm?.triggers && !triggers) hydrateTriggers(String(derm.triggers));
-          if (derm?.priorTreatments && !priorTx) hydratePriorTx(String(derm.priorTreatments));
           if (Array.isArray(derm?.skinConcerns) && skinConcerns.size === 0) hydrateSkinConcerns(new Set(derm.skinConcerns));
         } catch {}
         try {
@@ -1244,8 +1231,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     distribution,
     acneSeverity,
     itchScore,
-    triggers,
-    priorTx,
     dermDx,
     procType,
     fluence,

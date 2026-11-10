@@ -29,7 +29,7 @@ it('sends restored history, examination, medications, procedures, custom section
   localStorage.setItem('rxDraft:synthetic:standalone', JSON.stringify({
     chiefComplaints: 'Complaint', diagnosis: 'Primary diagnosis', exDermDx: ['Psoriasis'],
     pastHistory: 'Past history', medicationHistory: 'Medication history', menstrualHistory: 'Menstrual history', familyHistoryDM: true, familyHistoryOthers: 'Family note',
-    exObjective: 'Examination', exSkinType: 'III', exMorphology: ['Papules'], exDistribution: ['Face'], exAcneSeverity: 'Mild', exItchScore: '0', exTriggers: 'Sun', exPriorTx: 'Prior treatment', skinConcerns: ['Dryness'],
+    exObjective: 'Examination', exSkinType: 'III', exMorphology: ['Papules'], exDistribution: ['Face'], exAcneSeverity: 'Mild', exItchScore: '0', skinConcerns: ['Dryness'],
     vitalsHeightCm: 160, vitalsWeightKg: 60, vitalsBpSys: 120, vitalsBpDia: 80, vitalsPulse: 72,
     investigations: ['CBC'], procedures: 'Procedure performed', procedurePlanned: 'Procedure planned', followUpInstructions: 'Review instructions',
     procedureMetrics: { device: 'Laser', wavelengthNm: 1064, passes: 0, area: 'Face' }, customSections: [{ id: 'custom', title: 'Additional detail', content: 'Complete custom note' }], items: [item],
@@ -38,7 +38,7 @@ it('sends restored history, examination, medications, procedures, custom section
   render(<PrescriptionBuilder patientId="synthetic" visitId={null} doctorId="doctor" reviewDate="2026-10-01" onClinicalDataChange={onClinicalDataChange} />);
   await waitFor(() => expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({
     complaints: [{ complaint: 'Complaint' }], diagnosis: [{ diagnosis: 'Primary diagnosis' }, { diagnosis: 'Psoriasis' }],
-    history: { pastHistory: 'Past history', medicationHistory: 'Medication history', menstrualHistory: 'Menstrual history', triggers: 'Sun', priorTreatments: 'Prior treatment', familyHistory: { dm: true, others: 'Family note' } },
+    history: { pastHistory: 'Past history', medicationHistory: 'Medication history', menstrualHistory: 'Menstrual history', familyHistory: { dm: true, others: 'Family note' } },
     vitals: { height: 160, weight: 60, systolicBP: 120, diastolicBP: 80, heartRate: 72 },
     examination: { generalAppearance: 'Examination', dermatology: { diagnoses: ['Psoriasis'], skinType: 'III', morphology: ['Papules'], distribution: ['Face'], acneSeverity: 'Mild', itchScore: 0, skinConcerns: ['Dryness'] } },
     treatmentPlan: { investigations: ['CBC'], procedurePlanned: 'Procedure planned', followUpInstructions: 'Review instructions', dermatology: { procedures: [{ type: 'Procedure performed' }], medicationPlan: [item] } },

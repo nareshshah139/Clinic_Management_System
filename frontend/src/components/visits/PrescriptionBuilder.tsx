@@ -37,7 +37,11 @@ import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
 import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
+import { AddRowBelowButton, RemoveRowButton, WrappingTextField, insertBlankBelow, rowDescription, rxLayout, rxSelect, rxStock } from './rx-table';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
+
+const rx = rxLayout.prescription;
+const rxTemplate = rxLayout.template;
 
 // Minimal local types aligned with backend DTO enums
 type Language = 'EN' | 'TE' | 'HI';
@@ -719,6 +723,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   // Autocomplete state for clinical fields
   const [diagOptions, setDiagOptions] = useState<string[]>([]);
   const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
+  const [complaintFieldFocused, setComplaintFieldFocused] = useState(false);
   const [loadingVisit, setLoadingVisit] = useState(false);
   const [visitData, setVisitData] = useState<any>(null);
   const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
@@ -957,8 +962,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [exItchScore, setExItchScore, hydrateExItchScore] = useClinicalState<string>('', 'exItchScore', dirtyClinicalFields);
   const [newMorphology, setNewMorphology] = useState<string>('');
   const [newDistribution, setNewDistribution] = useState<string>('');
-  const [exTriggers, setExTriggers, hydrateExTriggers] = useClinicalState<string>('', 'exTriggers', dirtyClinicalFields);
-  const [exPriorTx, setExPriorTx, hydrateExPriorTx] = useClinicalState<string>('', 'exPriorTx', dirtyClinicalFields);
   const [exDermDx, setExDermDx, hydrateExDermDx] = useClinicalState<Set<string>>(new Set(), 'exDermDx', dirtyClinicalFields);
   const [exObjective, setExObjective, hydrateExObjective] = useClinicalState<string>('', 'exObjective', dirtyClinicalFields);
 
@@ -1118,8 +1121,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const hasDiagnosis = useMemo(() => Boolean(diagnosis?.trim()?.length), [diagnosis]);
   const hasChiefComplaints = useMemo(() => Boolean(chiefComplaints?.trim()?.length), [chiefComplaints]);
   const hasHistories = useMemo(() => Boolean(
-    pastHistory?.trim()?.length || personalHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length
-  ), [pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx]);
+    pastHistory?.trim()?.length || personalHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length
+  ), [pastHistory, personalHistory, medicationHistory, menstrualHistory]);
   
   const hasExamination = useMemo(() => Boolean(
     exSkinType || exAcneSeverity || exItchScore || exMorphology.size || exDistribution.size || exDermDx.size || exObjective?.trim()?.length
@@ -1156,8 +1159,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const rxCellPadding = printCompact ? '0 6px' : '0 12px';
   const pageBreakClass = (enabled: boolean) => (enabled && !fitToPage ? 'pb-before-page' : '');
   const rxColumnFlex = printCompact
-    ? { medicine: '2 1 0%', frequency: '0.9 1 0%', timing: '0.9 1 0%', duration: '0.8 1 0%', instructions: '2.2 1 0%' }
-    : { medicine: '2 1 0%', frequency: '1 1 0%', timing: '1 1 0%', duration: '1 1 0%', instructions: '1.5 1 0%' };
+    ? { medicine: '2 1 0%', frequency: '0.9 1 0%', timing: '0.9 1 0%', duration: '0.7 1 0%', instructions: '2.4 1 0%' }
+    : { medicine: '2 1 0%', frequency: '1 1 0%', timing: '1 1 0%', duration: '0.85 1 0%', instructions: '2 1 0%' };
   const patientName = useMemo(() => visitData?.patient?.name || patientData?.name || '—', [visitData, patientData]);
   const patientCodeDisplay = useMemo(() => visitData?.patient?.patientCode || patientData?.patientCode || '', [visitData, patientData]);
   const reviewDateDisplay = useMemo(() => {
@@ -1192,10 +1195,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (pastHistory?.trim()) parts.push(`Past: ${tt('pastHistory', pastHistory)}`);
     if (medicationHistory?.trim()) parts.push(`Medication: ${tt('medicationHistory', medicationHistory)}`);
     if (menstrualHistory?.trim()) parts.push(`Menstrual: ${tt('menstrualHistory', menstrualHistory)}`);
-    if (exTriggers?.trim()) parts.push(`Triggers: ${tt('triggers', exTriggers)}`);
-    if (exPriorTx?.trim()) parts.push(`Prior Tx: ${tt('priorTreatments', exPriorTx)}`);
     return parts.join(' | ');
-  }, [pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, tt]);
+  }, [pastHistory, medicationHistory, menstrualHistory, tt]);
 
   const familyHistoryLine = useMemo(() => {
     const parts: string[] = [];
@@ -1362,8 +1363,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             if (!pastHistory && typeof historyObj.pastHistory === 'string') hydratePastHistory(historyObj.pastHistory);
             if (!medicationHistory && typeof historyObj.medicationHistory === 'string') hydrateMedicationHistory(historyObj.medicationHistory);
             if (!menstrualHistory && typeof historyObj.menstrualHistory === 'string') hydrateMenstrualHistory(historyObj.menstrualHistory);
-            if (!exTriggers && typeof historyObj.triggers === 'string') hydrateExTriggers(historyObj.triggers);
-            if (!exPriorTx && typeof historyObj.priorTreatments === 'string') hydrateExPriorTx(historyObj.priorTreatments);
             const fam = historyObj.familyHistory || {};
             if (familyHistoryDM === false && typeof fam.dm === 'boolean') hydrateFamilyHistoryDM(!!fam.dm);
             if (familyHistoryHTN === false && typeof fam.htn === 'boolean') hydrateFamilyHistoryHTN(!!fam.htn);
@@ -2370,6 +2369,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     });
   };
 
+  const insertRowBelow = (index: number) => {
+    const { rows, focusIndex } = insertBlankBelow(items, index, createBlankItem, (row) => !(row.drugName || '').trim());
+    setItems(rows);
+    setRowDrugQueries({});
+    setRowDrugResults({});
+    setRowLoadingDrugs({});
+    setActiveSearchRow(null);
+    setDropdownPosition(null);
+    setActiveRowIdx(focusIndex);
+    setTimeout(() => inputRefs.current[focusIndex]?.focus(), 10);
+  };
+
   const applyPresetToRow = (rowIdx: number, preset: Partial<PrescriptionItemForm>) => {
     if (rowIdx < 0 || rowIdx >= items.length) return;
     updateItem(rowIdx, preset);
@@ -2576,7 +2587,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       history: {
         pastHistory: field('pastHistory', pastHistory), personalHistory,
         medicationHistory: field('medicationHistory', medicationHistory), menstrualHistory: field('menstrualHistory', menstrualHistory),
-        triggers: field('exTriggers', exTriggers), priorTreatments: field('exPriorTx', exPriorTx),
         familyHistory: {
           dm: field('familyHistoryDM', familyHistoryDM), htn: field('familyHistoryHTN', familyHistoryHTN),
           thyroid: field('familyHistoryThyroid', familyHistoryThyroid), others: field('familyHistoryOthers', familyHistoryOthers),
@@ -2602,7 +2612,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         },
       },
     }) || {};
-  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
+  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
 
   /**
@@ -2687,8 +2697,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             personalHistory,
             medicationHistory: clinicalField('medicationHistory', medicationHistory),
             menstrualHistory: clinicalField('menstrualHistory', menstrualHistory),
-            triggers: clinicalField('exTriggers', exTriggers),
-            priorTreatments: clinicalField('exPriorTx', exPriorTx),
           },
           familyHistory: {
             dm: clinicalField('familyHistoryDM', familyHistoryDM),
@@ -2889,9 +2897,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [newTplSkinType, setNewTplSkinType] = useState('');
   const [newTplMorphology, setNewTplMorphology] = useState<Set<string>>(new Set());
   const [newTplDistribution, setNewTplDistribution] = useState<Set<string>>(new Set());
-  // Removed triggers and prior treatments from templates (now part of Patient History)
-  const [newTplTriggers] = useState('');
-  const [newTplPriorTx] = useState('');
   const [newTplItchScore, setNewTplItchScore] = useState<string>('');
   const [newTplSkinConcerns, setNewTplSkinConcerns] = useState<Set<string>>(new Set());
   const [newTplItems, setNewTplItems] = useState<Array<{
@@ -2911,6 +2916,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   const addNewTplItem = () => {
     setNewTplItems((prev) => [...prev, { drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: '', durationUnit: 'DAYS', route: '', instructions: '' }]);
+  };
+  const newTplMedicineRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const insertNewTplRowBelow = (index: number) => {
+    const { rows, focusIndex } = insertBlankBelow<(typeof newTplItems)[number]>(newTplItems, index, () => ({ drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: '', durationUnit: 'DAYS', route: '', instructions: '' }), (row) => !(row.drugName || '').trim());
+    setNewTplItems(rows);
+    setTimeout(() => newTplMedicineRefs.current[focusIndex]?.focus(), 10);
   };
   const removeNewTplItem = (idx: number) => {
     setNewTplItems((prev) => prev.filter((_, i) => i !== idx));
@@ -3059,8 +3070,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               distribution: Array.from(exDistribution),
               acneSeverity: exAcneSeverity || undefined,
               itchScore: exItchScore ? Number(exItchScore) : undefined,
-              triggers: exTriggers || undefined,
-              priorTreatments: exPriorTx || undefined,
               skinConcerns: Array.from(skinConcerns),
             }
           },
@@ -3093,8 +3102,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   distribution: Array.from(exDistribution),
                   acneSeverity: exAcneSeverity || undefined,
                   itchScore: exItchScore ? Number(exItchScore) : undefined,
-                  triggers: exTriggers || undefined,
-                  priorTreatments: exPriorTx || undefined,
                   skinConcerns: Array.from(skinConcerns),
                 }
               },
@@ -3110,7 +3117,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     } finally {
       setSavingFieldsTemplate(false);
     }
-  }, [chiefComplaints, diagnosis, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, skinConcerns, loadTemplates, apiClient, toast, showTemplateCreateError]);
+  }, [chiefComplaints, diagnosis, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, skinConcerns, loadTemplates, apiClient, toast, showTemplateCreateError]);
 
   const persistTemplate = useCallback(async (name: string) => {
     try {
@@ -4242,8 +4249,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         exDistribution: Array.from(exDistribution),
         exAcneSeverity,
         exItchScore,
-        exTriggers,
-        exPriorTx,
         familyHistoryDM,
         familyHistoryHTN,
         familyHistoryThyroid,
@@ -4267,7 +4272,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [shouldPersistDraft, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [shouldPersistDraft, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -4328,8 +4333,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         if (Array.isArray(data?.exDistribution)) hydrateExDistribution(new Set(data.exDistribution), data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.exAcneSeverity === 'string') hydrateExAcneSeverity(data.exAcneSeverity, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.exItchScore === 'string') hydrateExItchScore(data.exItchScore, data.dirtyClinicalFields ?? 'populated');
-        if (typeof data?.exTriggers === 'string') hydrateExTriggers(data.exTriggers, data.dirtyClinicalFields ?? 'populated');
-        if (typeof data?.exPriorTx === 'string') hydrateExPriorTx(data.exPriorTx, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.familyHistoryDM === 'boolean') hydrateFamilyHistoryDM(data.familyHistoryDM, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.familyHistoryHTN === 'boolean') hydrateFamilyHistoryHTN(data.familyHistoryHTN, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.familyHistoryThyroid === 'boolean') hydrateFamilyHistoryThyroid(data.familyHistoryThyroid, data.dirtyClinicalFields ?? 'populated');
@@ -4691,8 +4694,17 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="opacity-100">
                 <label className="text-xs text-gray-600 flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                 <div className="relative complaint-autocomplete flex items-start">
-                  <Textarea key="chief-complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+                  <Textarea key="chief-complaints" rows={2} value={chiefComplaints} onFocus={() => setComplaintFieldFocused(true)} onBlur={() => setComplaintFieldFocused(false)} onChange={(e) => setChiefComplaints(e.target.value)} />
                   <VoiceButton fieldName="chiefComplaints" />
+                  {complaintFieldFocused && complaintOptions.length > 0 && (
+                    <div className="absolute left-0 top-full z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                      {complaintOptions.map((opt) => (
+                        <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setChiefComplaints(opt); setComplaintOptions([]); pushRecent('chiefComplaints', opt); }}>
+                          {opt}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="mt-2">
                   <div className="text-xs text-gray-600 mb-1">Skin Concerns</div>
@@ -4710,15 +4722,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     ))}
                   </div>
                 </div>
-                {complaintOptions.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
-                    {complaintOptions.map((opt) => (
-                      <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setChiefComplaints(opt); setComplaintOptions([]); pushRecent('chiefComplaints', opt); }}>
-                        {opt}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </CollapsibleSection>
 
@@ -4780,16 +4783,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="mt-3">
                   <label htmlFor="personal-history" className="text-xs text-gray-600 flex items-center gap-1">Personal history{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                   <Textarea id="personal-history" rows={2} placeholder="Diet, sleep, habits, occupation, cosmetics/products used" value={personalHistory ?? ''} onChange={(e) => setPersonalHistory(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                  <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Triggers{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Input placeholder="Heat, stress, cosmetics..." value={exTriggers} onChange={(e) => setExTriggers(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Prior Treatments{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Input placeholder="Topicals/systemics tried" value={exPriorTx} onChange={(e) => setExPriorTx(e.target.value)} />
-                  </div>
                 </div>
               </div>
             </CollapsibleSection>
@@ -5194,28 +5187,36 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                 </div>
                 <div className="overflow-visible border rounded-md">
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1080px] text-sm">
-                    <thead className="bg-gray-50 text-gray-700">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Medicine</th>
-                        <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
-                        <th className="px-3 py-2 text-left font-medium">When</th>
-                        <th className="px-3 py-2 text-left font-medium">Duration</th>
-                        <th className="px-3 py-2 text-left font-medium">Instructions</th>
-                        <th className="px-3 py-2 text-right font-medium">Actions</th>
+                  <div className={rx.wrapper}>
+                    <table data-own-cell-spacing className={rx.table}>
+                    <colgroup className={rx.columns}>
+                      <col className="w-[24%]" />
+                      <col className="w-[8.75rem]" />
+                      <col className="w-[11.25rem]" />
+                      <col className="w-[10.5rem]" />
+                      <col />
+                      <col className="w-[6rem]" />
+                    </colgroup>
+                    <thead className={rx.head}>
+                      <tr className={rx.headRow}>
+                        <th className={`${rx.medicine} text-left font-medium`}>Medicine</th>
+                        <th className={`${rx.frequency} text-left font-medium`}>Frequency<span className="hidden @6xl:inline"> (0-1-0)</span></th>
+                        <th className={`${rx.when} text-left font-medium`}>When</th>
+                        <th className={`${rx.duration} text-left font-medium`}>Duration</th>
+                        <th className={`${rx.instructions} text-left font-medium`}>Instructions</th>
+                        <th className={`${rx.actionsHead} text-right font-medium`}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className={rx.body}>
                       {items.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
+                          <td colSpan={6} className={rx.empty}>No items added yet</td>
                         </tr>
                       )}
                       {items.map((it, idx) => (
-                        <tr key={idx} className="border-t">
-                          <td className="px-3 py-2 align-top" onMouseEnter={() => it.inventoryItemId ? prefetchDrugStockById(it.drugId, it.inventoryItemId) : prefetchDrugStockByName(it.drugName)} title={(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return `Remaining stock: ${stock ?? '—'}`; })()}>
-                            <div className="flex items-center gap-2">
+                        <tr key={idx} className={rx.row}>
+                          <td className={rx.medicine} onMouseEnter={() => it.inventoryItemId ? prefetchDrugStockById(it.drugId, it.inventoryItemId) : prefetchDrugStockByName(it.drugName)} title={(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return `Remaining stock: ${stock ?? '—'}`; })()}>
+                            <div className="relative flex items-center gap-2">
                               <Input 
                                 ref={(el) => { inputRefs.current[idx] = el; }}
                                 value={it.drugName} 
@@ -5251,13 +5252,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
-                                    addRowAndFocus();
+                                    insertRowBelow(idx);
                                   }
                                 }}
                                 placeholder="Search medicine name..." 
-                                className="min-w-[180px]"
+                                className="min-w-0 flex-1"
                               />
-                              <span className="text-xs text-gray-500 whitespace-nowrap">
+                              <span className={rxStock}>
                                 Stock:{' '}
                                 {(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return stock != null ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span> : <span className="text-gray-400">—</span>; })()}
                               </span>
@@ -5265,8 +5266,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             {it.regimenState?.loading && <p className="mt-1 text-xs text-slate-500" role="status">Loading usual values…</p>}
                             {it.regimenState?.failed && <p className="mt-1 text-xs text-amber-700" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
                           </td>
-                          <td className="px-3 py-2 align-top">
-                            <div className="min-w-[100px]">
+                          <td className={rx.frequency}>
+                            <div>
                               <Select value={it.dosePattern || it.frequency || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
@@ -5280,7 +5281,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 }
                                 updateItem(idx, patch);
                               }}>
-                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectTrigger className={rxSelect} aria-label={`Frequency for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="Frequency" /></SelectTrigger>
                                 <SelectContent>
                                   {Array.from(new Set([...dosePatternOptions, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
@@ -5291,12 +5292,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </div>
                             {regimenHint(it, idx, 'frequency')}
                           </td>
-                          <td className="px-3 py-2 align-top">
+                          <td className={rx.when}>
                             <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                               if (v === '__CUSTOM__') { openCustomDialog('timing', idx); return; }
                               updateItem(idx, { timing: v });
                             }}>
-                              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger className={rxSelect} aria-label={`When for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="When" /></SelectTrigger>
                               <SelectContent>
                                 {Array.from(new Set([...getTimingOptionsForFrequency(it.frequency), it.timing].filter((t): t is string => Boolean(t)))).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -5306,14 +5307,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </Select>
                             {regimenHint(it, idx, 'timing')}
                           </td>
-                          <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-[5rem_6rem] gap-2">
-                              <Input type="number" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
+                          <td className={rx.duration}>
+                            <div className="flex items-start gap-1">
+                              <Input type="number" className="w-10 shrink-0 px-1 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
                               <Select value={it.durationUnit} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: DurationUnit) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('durationUnit', idx); return; }
                                 updateItem(idx, { durationUnit: v });
                               }}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger className={`${rxSelect} min-w-0 flex-1`} aria-label={`Duration unit for ${rowDescription(it.drugName, idx)}`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {Array.from(new Set([...durationUnitOptions, it.durationUnit].filter(Boolean))).map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
@@ -5324,9 +5325,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             </div>
                             {regimenHint(it, idx, 'duration')}
                           </td>
-                          <td className="min-w-[190px] px-3 py-2 align-top relative">
+                          <td className={rx.instructions}>
                             <div className="space-y-1">
-                              <Input
+                              <WrappingTextField
+                                aria-label={`Instructions for ${it.drugName || 'new medicine'}`}
                                 value={it.instructions || ''}
                                 onFocus={() => { setInstrFocusIdx(idx); setActiveRowIdx(idx); }}
                                 onBlur={(e) => {
@@ -5335,12 +5337,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
                                   pushRecent(byDrugKey, e.target.value);
                                 }}
-                                onChange={(e) => updateItem(idx, { instructions: e.target.value })}
+                                onValueChange={(value) => updateItem(idx, { instructions: value })}
                                 placeholder="e.g., Avoid alcohol"
                               />
                               {regimenHint(it, idx, 'instructions')}
                               {instrFocusIdx === idx && !!getInstructionSuggestions(it.drugName, it.instructions || '').length && (
-                                <div className="absolute z-50 mt-1 w-[260px] bg-white border rounded-md shadow-sm max-h-48 overflow-auto">
+                                <div tabIndex={-1} className="absolute z-50 mt-1 w-[260px] bg-white border rounded-md shadow-sm max-h-48 overflow-auto">
                                   {getInstructionSuggestions(it.drugName, it.instructions || '').map((s) => (
                                     <div
                                       key={s}
@@ -5360,8 +5362,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               )}
                             </div>
                           </td>
-                          <td className="px-3 py-2 align-top text-right">
-                            <Button size="sm" variant="outline" onClick={() => removeItem(idx)}>Remove</Button>
+                          <td className={rx.actions}>
+                            <div className="flex items-start justify-end gap-1">
+                              <AddRowBelowButton medicineName={it.drugName} index={idx} onClick={() => insertRowBelow(idx)} />
+                              <RemoveRowButton medicineName={it.drugName} index={idx} onClick={() => removeItem(idx)} />
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -5967,7 +5972,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 )}
 
                 {/* Histories */}
-                {!!(pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length) && (
+                {!!(pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length) && (
                   <div className={`${printBlockPadding} text-sm`}>
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">History:</span>
@@ -6012,11 +6017,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           </div>
                           {validItems.map((it: any, idx: number) => (
                             <div key={`rx-row-${idx}`} className="rx-row" style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', padding: rxRowPadding }}>
-                              <div style={{ flex: rxColumnFlex.medicine, padding: rxCellPadding }}>{printedMedicineName(it.drugName)}</div>
+                              <div style={{ flex: rxColumnFlex.medicine, padding: rxCellPadding, overflowWrap: 'anywhere' }}>{printedMedicineName(it.drugName)}</div>
                               <div style={{ flex: rxColumnFlex.frequency, padding: rxCellPadding }}>{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</div>
                               <div style={{ flex: rxColumnFlex.timing, padding: rxCellPadding }}>{it.timing || '—'}</div>
                               <div style={{ flex: rxColumnFlex.duration, padding: rxCellPadding }}>{`${it.duration ?? '—'} ${String(it.durationUnit || '').toLowerCase()}`}</div>
-                              <div style={{ flex: rxColumnFlex.instructions, padding: rxCellPadding }}>{it.instructions ? tt(`items.${idx}.instructions`, it.instructions) : '—'}</div>
+                              <div style={{ flex: rxColumnFlex.instructions, padding: rxCellPadding, overflowWrap: 'anywhere' }}>{it.instructions ? tt(`items.${items.indexOf(it)}.instructions`, it.instructions) : '—'}</div>
                             </div>
                           ))}
                         </div>
@@ -6026,7 +6031,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             <div key={`rx-${idx}`} className="rx-row" style={{ padding: '3px 0' }}>
                               <span style={{ fontWeight: 500 }}>{idx + 1}. {printedMedicineName(it.drugName)}</span>
                               {it.dosage ? ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}` : ''} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
-                              {it.instructions && <span> — {tt(`items.${idx}.instructions`, it.instructions)}</span>}
+                              {it.instructions && <span> — {tt(`items.${items.indexOf(it)}.instructions`, it.instructions)}</span>}
                             </div>
                           ))}
                         </div>
@@ -6580,7 +6585,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     ))}
                   </div>
                 </div>
-                {/* Triggers and prior treatments removed from template form */}
                 <div>
                   <div className="text-xs text-gray-600 mb-1">Skin Concerns</div>
                   <div className="flex flex-wrap gap-2">
@@ -6635,31 +6639,39 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="text-sm text-gray-600">Total items: {newTplItems.length}</div>
                   <Button size="sm" variant="outline" onClick={addNewTplItem}>Add Row</Button>
                 </div>
-                <div className="overflow-auto border rounded-md">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-700">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Medicine</th>
-                        <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
-                        <th className="px-3 py-2 text-left font-medium">When</th>
-                        <th className="px-3 py-2 text-left font-medium">Duration</th>
-                        <th className="px-3 py-2 text-left font-medium">Instructions</th>
-                        <th className="px-3 py-2 text-right font-medium">Actions</th>
+                <div className={`${rxTemplate.wrapper} border rounded-md`}>
+                  <table data-own-cell-spacing className={rxTemplate.table}>
+                    <colgroup className={rxTemplate.columns}>
+                      <col className="w-[22%]" />
+                      <col className="w-[16.5rem]" />
+                      <col className="w-[11.25rem]" />
+                      <col className="w-[10.5rem]" />
+                      <col />
+                      <col className="w-[6rem]" />
+                    </colgroup>
+                    <thead className={rxTemplate.head}>
+                      <tr className={rxTemplate.headRow}>
+                        <th className={`${rxTemplate.medicine} text-left font-medium`}>Medicine</th>
+                        <th className={`${rxTemplate.frequency} text-left font-medium`}>Frequency (0-1-0)</th>
+                        <th className={`${rxTemplate.when} text-left font-medium`}>When</th>
+                        <th className={`${rxTemplate.duration} text-left font-medium`}>Duration</th>
+                        <th className={`${rxTemplate.instructions} text-left font-medium`}>Instructions</th>
+                        <th className={`${rxTemplate.actionsHead} text-right font-medium`}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className={rxTemplate.body}>
                       {newTplItems.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
+                          <td colSpan={6} className={rxTemplate.empty}>No items added yet</td>
                         </tr>
                       )}
                       {newTplItems.map((it: any, idx: number) => (
-                        <tr key={`newtpl-row-${idx}`} className="border-t">
-                          <td className="px-3 py-2 align-top">
-                            <Input value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
+                        <tr key={`newtpl-row-${idx}`} className={rxTemplate.row}>
+                          <td className={rxTemplate.medicine}>
+                            <Input ref={(el) => { newTplMedicineRefs.current[idx] = el; }} value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
                           </td>
-                          <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-2 gap-1">
+                          <td className={rxTemplate.frequency}>
+                            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] gap-1">
                               <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx, true); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
@@ -6673,7 +6685,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 }
                                 updateNewTplItem(idx, patch);
                               }}>
-                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectTrigger className={rxSelect} aria-label={`Dose pattern for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="Pattern" /></SelectTrigger>
                                 <SelectContent>
                                   {dosePatternOptions.map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
@@ -6688,7 +6700,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 if (it.timing && !allowed.includes(it.timing)) patch.timing = '';
                                 updateNewTplItem(idx, patch);
                               }}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger className={rxSelect} aria-label={`Frequency for ${rowDescription(it.drugName, idx)}`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {frequencyOptions.map(f => (
                                     <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
@@ -6698,12 +6710,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </Select>
                             </div>
                           </td>
-                          <td className="px-3 py-2 align-top">
+                          <td className={rxTemplate.when}>
                             <Select value={it.timing || ''} onValueChange={(v: string) => {
                               if (v === '__CUSTOM__') { openCustomDialog('timing', idx, true); return; }
                               updateNewTplItem(idx, { timing: v });
                             }}>
-                              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger className={rxSelect} aria-label={`When for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="When" /></SelectTrigger>
                               <SelectContent>
                                 {getTimingOptionsForFrequency(it.frequency).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -6712,14 +6724,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </SelectContent>
                             </Select>
                           </td>
-                          <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-2 gap-1">
-                              <Input type="number" value={it.duration ?? ''} onChange={(e) => updateNewTplItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
+                          <td className={rxTemplate.duration}>
+                            <div className="flex items-start gap-1">
+                              <Input type="number" className="w-10 shrink-0 px-1 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration ?? ''} onChange={(e) => updateNewTplItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
                               <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('durationUnit', idx, true); return; }
                                 updateNewTplItem(idx, { durationUnit: v });
                               }}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger className={`${rxSelect} min-w-0 flex-1`} aria-label={`Duration unit for ${rowDescription(it.drugName, idx)}`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {durationUnitOptions.map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
@@ -6729,11 +6741,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </Select>
                             </div>
                           </td>
-                          <td className="px-3 py-2 align-top">
-                            <Input value={it.instructions || ''} onChange={(e) => updateNewTplItem(idx, { instructions: e.target.value })} placeholder="e.g., Avoid alcohol" />
+                          <td className={rxTemplate.instructions}>
+                            <WrappingTextField aria-label={`Instructions for ${it.drugName || 'new medicine'}`} value={it.instructions || ''} onValueChange={(value) => updateNewTplItem(idx, { instructions: value })} placeholder="e.g., Avoid alcohol" />
                           </td>
-                          <td className="px-3 py-2 align-top text-right">
-                            <Button size="sm" variant="outline" onClick={() => removeNewTplRxItem(idx)}>Remove</Button>
+                          <td className={rxTemplate.actions}>
+                            <div className="flex items-start justify-end gap-1">
+                              <AddRowBelowButton medicineName={it.drugName} index={idx} onClick={() => insertNewTplRowBelow(idx)} />
+                              <RemoveRowButton medicineName={it.drugName} index={idx} onClick={() => removeNewTplRxItem(idx)} />
+                            </div>
                           </td>
                         </tr>
                       ))}
