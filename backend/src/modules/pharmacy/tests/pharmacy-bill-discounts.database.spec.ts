@@ -417,6 +417,32 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
     expect((await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: gel.id } })).totalAmount).toBe(89.6);
   }, 60000);
 
+  it('keeps refund and payment request keys apart, so a reused key never returns the other kind', async () => {
+    const sold = await invoices.checkout({ ...cream(1), paymentMethod: 'INSURANCE' as any, requestKey: 'insured-cream' }, 'branch', 'asha');
+    const receipt = await invoices.addPayment(sold.id, { requestKey: 'same-key', amount: 56, method: 'CASH' }, 'branch');
+    await invoices.reviseDiscount(
+      sold.id,
+      { expectedVersion: (await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: sold.id } })).mutationVersion, billDiscount: { kind: 'PERCENT', value: 10 }, lines: [], reason: 'Insurer discount' },
+      'branch',
+      'asha',
+    );
+    const asRefund = await failure(invoices.recordRefund(sold.id, { requestKey: 'same-key', amount: 56, method: 'CASH' }, 'branch'));
+    const refund = await invoices.recordRefund(sold.id, { requestKey: 'same-key', amount: 5.6, method: 'CASH' }, 'branch');
+    const refundReplay = await invoices.recordRefund(sold.id, { requestKey: 'same-key', amount: 5.6, method: 'CASH' }, 'branch');
+    const receiptReplay = await invoices.addPayment(sold.id, { requestKey: 'same-key', amount: 56, method: 'CASH' }, 'branch');
+    expect([
+      asRefund,
+      [refund.status, refund.amount, refundReplay.id === refund.id],
+      [receiptReplay.id === receipt.id, receiptReplay.status, receiptReplay.amount],
+      await db.pharmacyPayment.count({ where: { invoiceId: sold.id } }),
+    ]).toEqual([
+      '400: Only ₹5.60 is due back on this bill. Reload it to see the latest amounts.',
+      ['REFUNDED', -5.6, true],
+      [true, 'COMPLETED', 56],
+      2,
+    ]);
+  });
+
   it('applies a bill discount before tax, keeps it on the draft, and revises a paid bill into a refund due', async () => {
     const discounted = {
       ...bill,

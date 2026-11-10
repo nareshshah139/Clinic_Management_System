@@ -2524,6 +2524,7 @@ export class PharmacyInvoiceService {
    * recorded as a REFUNDED ledger entry of minus the amount in the chosen method, with the bill's paid,
    * balance and status recomputed from the ledger in the same transaction. The same request key and
    * payload MUST return the original entry; a changed payload MUST conflict without refunding again.
+   * Refund keys live apart from payment keys, so a key reused across the two never returns the other kind.
    */
   async recordRefund(
     invoiceId: string,
@@ -2531,7 +2532,8 @@ export class PharmacyInvoiceService {
     branchId: string,
   ) {
     this.assertRequestKey(dto.requestKey);
-    const { requestKey, ...payload } = dto;
+    const { requestKey: clientKey, ...payload } = dto;
+    const requestKey = `refund:${clientKey}`;
     const payloadHash = this.payloadHash(payload);
     return this.prisma.$transaction(async (tx) => {
       await this.lockInvoice(tx, invoiceId, branchId);
