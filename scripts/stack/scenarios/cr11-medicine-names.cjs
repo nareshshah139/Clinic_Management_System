@@ -264,7 +264,7 @@ const FORM_REFUSAL = "Choose the form: tablet, capsule, syrup, cream and so on."
       const result = page.locator("div[title]").filter({ has: page.getByRole("button", { name: "Select" }) }).filter({ hasText: expected }).first();
       await result.waitFor({ timeout: 60000 });
       const text = clean(await result.innerText());
-      await result.getByRole("button", { name: "Select" }).click();
+      await result.locator(".font-medium").first().dispatchEvent("click");
       await page.waitForFunction(([i, value]) => document.querySelectorAll('input[placeholder="Search medicine name..."]')[i]?.value === value, [index, expected], { timeout: 30000 });
       return text;
     };
