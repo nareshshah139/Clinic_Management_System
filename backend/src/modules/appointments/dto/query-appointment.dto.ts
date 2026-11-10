@@ -3,12 +3,14 @@ import {
   IsString,
   IsEnum,
   IsDateString,
+  IsIn,
   IsInt,
   Min,
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AppointmentStatus, VisitType } from '@prisma/client';
+import { type AppointmentCalendar, CALENDARS } from '../appointment-calendar';
 
 // Runtime enums for validator
 export enum AppointmentStatusEnum {
@@ -118,4 +120,8 @@ export class AvailableSlotsDto {
   @Min(1)
   @Max(24)
   endHour?: number;
+
+  @IsOptional()
+  @IsIn(CALENDARS)
+  calendar?: AppointmentCalendar = 'SCHEDULED';
 }

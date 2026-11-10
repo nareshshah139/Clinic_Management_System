@@ -673,6 +673,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                   <div class="bg-orange-50 p-2 rounded-md text-xs mt-2">
                     <p class="font-semibold text-orange-900 mb-1">Available actions:</p>
                     <ul class="space-y-1 text-orange-800 ml-3">
+                      <li>• <strong>Confirm:</strong> Move a Scheduled patient to the Confirmed calendar after they confirm on the call</li>
                       <li>• <strong>Edit:</strong> Change time, duration, or notes</li>
                       <li>• <strong>Reschedule:</strong> Move to different date/time</li>
                       <li>• <strong>Check-in:</strong> Mark patient as arrived</li>

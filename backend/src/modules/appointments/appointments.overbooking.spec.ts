@@ -4,6 +4,8 @@ import { AppointmentsService } from './appointments.service';
 const DAY = '2099-05-04';
 const SLOT = '11:00-11:30';
 const MOVING = 'apt-moving';
+const MOVING_SLOT = '11:15-11:45';
+const movingRow = { id: MOVING, doctorId: 'doc-1', roomId: null, date: new Date(`${DAY}T00:00:00.000Z`), slot: MOVING_SLOT, status: 'SCHEDULED', notes: null, tokenNumber: 1 };
 
 type Row = { id: string; slot: string; doctorId: string; roomId: string | null };
 
@@ -11,8 +13,8 @@ function setup({ limit, booked, roomBooked = false, moving = false }: { limit: u
   const events: string[] = [];
   const rows: Row[] = [
     ...Array.from({ length: booked }, (_, i) => ({ id: `apt-${i}`, slot: SLOT, doctorId: 'doc-1', roomId: null })),
-    // A rescheduled appointment already sits in the slot; it must never count against itself.
-    ...(moving ? [{ id: MOVING, slot: SLOT, doctorId: 'doc-1', roomId: null }] : []),
+    // A rescheduled appointment holds an overlapping slot; it must never count against itself.
+    ...(moving ? [{ id: MOVING, slot: MOVING_SLOT, doctorId: 'doc-1', roomId: null }] : []),
     ...(roomBooked ? [{ id: 'apt-room', slot: SLOT, doctorId: 'doc-2', roomId: 'room-1' }] : []),
   ];
   const findMany = jest.fn(async ({ where }: any) => rows
@@ -26,9 +28,10 @@ function setup({ limit, booked, roomBooked = false, moving = false }: { limit: u
     user: { findUnique: jest.fn(async () => { events.push('limit'); return { maxBookingsPerSlot: limit }; }) },
     appointment: {
       findMany: jest.fn(async (args: any) => { events.push('count'); return findMany(args); }),
-      findFirst: jest.fn().mockResolvedValue({ tokenNumber: 9 }),
+      findFirst: jest.fn(async ({ where }: any) => (where.id === MOVING ? movingRow : { tokenNumber: 9 })),
       create: jest.fn(async ({ data }: any) => ({ id: 'apt-new', ...data, doctor: {}, patient: {} })),
-      update: jest.fn(async ({ data }: any) => ({ id: MOVING, ...data })),
+      updateMany: jest.fn(async () => ({ count: 1 })),
+      findUniqueOrThrow: jest.fn(async () => movingRow),
     },
   };
   // The root client has no limit lookup: the limit must be read through the transaction.
@@ -40,7 +43,7 @@ function setup({ limit, booked, roomBooked = false, moving = false }: { limit: u
     doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
     appointment: {
       findMany,
-      findFirst: jest.fn().mockResolvedValue({ id: MOVING, doctorId: 'doc-1', roomId: null, date: new Date(`${DAY}T00:00:00.000Z`), status: 'SCHEDULED', notes: null }),
+      findFirst: jest.fn().mockResolvedValue(movingRow),
     },
     $transaction: jest.fn(async (cb: any) => cb(tx)),
   };
@@ -63,7 +66,7 @@ const matrix = [1, 2, 3].flatMap((limit) => [0, 1, 2, 3].flatMap((booked) =>
 
 describe.each([
   ['create', create, (tx: any) => tx.appointment.create, false],
-  ['reschedule', reschedule, (tx: any) => tx.appointment.update, true],
+  ['reschedule', reschedule, (tx: any) => tx.appointment.updateMany, true],
 ] as const)('%s under a per-doctor overbooking limit', (_name, send, write, moving) => {
   it.each(matrix)('limit $limit, $booked already booked, allowOverbook $allowOverbook -> accepted $accepted',
     async ({ limit, booked, allowOverbook, accepted }) => {

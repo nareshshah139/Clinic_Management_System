@@ -31,7 +31,7 @@ describe('AppointmentsService.bulkUpdate', () => {
   it('throws NotFound if some appointments missing', async () => {
     prismaMock.appointment.findMany.mockResolvedValue([{ id: 'a1' }]);
     await expect(
-      service.bulkUpdate({ appointmentIds: ['a1', 'a2'], status: 'SCHEDULED' } as any, branchId),
+      service.bulkUpdate({ appointmentIds: ['a1', 'a2'], status: 'CANCELLED' } as any, branchId),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 

@@ -29,7 +29,7 @@ describe('AppointmentsService - conflict helpers', () => {
       { id: 'apt-1', slot: '10:00-10:30', patient: { name: 'Alice' } },
     ]);
 
-    const conflicts = await service['checkSchedulingConflicts']('doc-1', null, '2099-01-01', '10:15-10:45', branchId);
+    const conflicts = await service['checkSchedulingConflicts']('doc-1', null, '2099-01-01', '10:15-10:45', branchId, 'SCHEDULED');
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0].type).toBe('doctor');
   });
@@ -42,7 +42,7 @@ describe('AppointmentsService - conflict helpers', () => {
       { id: 'apt-2', slot: '11:00-11:30', patient: { name: 'Bob' } },
     ]);
 
-    const conflicts = await service['checkSchedulingConflicts']('doc-1', 'room-1', '2099-01-01', '11:00-11:30', branchId);
+    const conflicts = await service['checkSchedulingConflicts']('doc-1', 'room-1', '2099-01-01', '11:00-11:30', branchId, 'SCHEDULED');
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0].type).toBe('room');
   });
@@ -54,7 +54,7 @@ describe('AppointmentsService - conflict helpers', () => {
       { slot: '10:30-11:00' },
     ]);
 
-    const suggestions = await service['getAlternativeSlots']('doc-1', null, '2099-01-01', '10:00-10:30', branchId);
+    const suggestions = await service['getAlternativeSlots']('doc-1', null, '2099-01-01', '10:00-10:30', branchId, 'SCHEDULED');
     expect(Array.isArray(suggestions)).toBe(true);
     expect(suggestions.length).toBeGreaterThanOrEqual(1);
   });
