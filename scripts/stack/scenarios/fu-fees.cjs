@@ -132,7 +132,7 @@ async function seed(stack, today) {
       results.push({ name, pass, checks: checks.length, failed, error: error && String(error.message), errors, shots, seconds: Math.round((Date.now() - started) / 1000) });
       console.log(`${pass ? "PASS" : "FAIL"} ${name} (${checks.length - failed.length}/${checks.length})`);
       for (const c of failed) console.log(`    FAIL ${c.label}: ${c.detail}`);
-      if (error) console.log(`    EXCEPTION ${String(error.message).split("\n")[0]}`);
+      if (error) console.log(`    EXCEPTION ${String(error.message).split("\n").slice(0, 3).join(" | ")}`);
       for (const e of errors) console.log(`    ERROR ${e}`);
       for (const f of shots) console.log(`    SHOT ${f}`);
     }
@@ -180,11 +180,22 @@ async function seed(stack, today) {
       await page.waitForTimeout(300);
     };
     const chipOf = (page, patient) => page.locator("[data-appointment-block]", { has: page.locator("[data-patient-name]", { hasText: patient }) }).locator("[data-appointment-billing]");
-    const openBill = async (page, patient) => {
-      await chipOf(page, patient).click();
+    const openBill = async (page, patient, phone = false) => {
+      if (phone) {
+        await page.locator("[data-appointment-block]", { has: page.locator("[data-patient-name]", { hasText: patient }) }).getByRole("button", { name: new RegExp(`^${patient}, `) }).click();
+        await page.getByRole("dialog", { name: "Appointment Details" }).getByRole("button", { name: "Create bill" }).click();
+      } else await chipOf(page, patient).click();
       const dialog = page.getByRole("dialog", { name: `Bill for ${patient}` });
       await dialog.getByRole("heading", { name: "Create bill" }).waitFor();
       return dialog;
+    };
+    // A success toast is the top layer, so the first Escape dismisses the toast and the next one the dialog.
+    const closeBill = async (page, dialog) => {
+      for (let tries = 0; tries < 4 && (await dialog.isVisible()); tries++) {
+        await page.keyboard.press("Escape");
+        await dialog.waitFor({ state: "hidden", timeout: 3000 }).catch(() => {});
+      }
+      await dialog.waitFor({ state: "hidden" });
     };
     const feeSource = async (dialog) => clean(await dialog.getByTestId("fee-source").innerText());
     const invoiceOf = (appointmentId) => stack.db.newInvoice.findFirst({ where: { appointmentId }, include: { items: true, payments: true } });
@@ -231,8 +242,7 @@ async function seed(stack, today) {
       await dialog.getByRole("button", { name: "Create bill and record ₹1,280" }).click();
       await dialog.getByRole("region", { name: /^Bill INV-/ }).waitFor();
       s.check("stored as the list's fee, paid in cash", invoiceShape(await invoiceOf("fee-a-meera")), [1280, 1280, 0, [["First consultation", 1280, 1280, 0]], [["CASH", 1280]]]);
-      await o.page.keyboard.press("Escape");
-      await dialog.waitFor({ state: "hidden" });
+      await closeBill(o.page, dialog);
 
       dialog = await openBill(o.page, "Ravi Kumar");
       s.check("review: fee and source", [await dialog.getByRole("textbox", { name: "Fee" }).inputValue(), await feeSource(dialog)], ["390", "From fee list: Review ₹390"]);
@@ -243,8 +253,7 @@ async function seed(stack, today) {
       await dialog.getByRole("button", { name: "Create bill", exact: true }).click();
       await dialog.getByRole("region", { name: /^Bill INV-/ }).waitFor();
       s.check("stored with the edited amount, nothing paid", invoiceShape(await invoiceOf("fee-a-ravi")), [450, 0, 450, [["Review consultation", 450, 450, 0]], []]);
-      await o.page.keyboard.press("Escape");
-      await dialog.waitFor({ state: "hidden" });
+      await closeBill(o.page, dialog);
 
       dialog = await openBill(o.page, "Lakshmi Devi");
       s.check("procedure without a fee: empty, said in words, no link for the desk", [await dialog.getByRole("textbox", { name: "Fee" }).inputValue(), await feeSource(dialog), await dialog.getByRole("link", { name: "Set fees" }).count(), await dialog.getByRole("button", { name: "Create bill" }).isDisabled()],
@@ -263,15 +272,14 @@ async function seed(stack, today) {
       s.opened.push(o);
       await calendar(o.page);
       s.ok("no sideways scroll on the calendar", await noSideways(o.page));
-      const dialog = await openBill(o.page, "Suresh Babu");
+      const dialog = await openBill(o.page, "Suresh Babu", true);
       s.check("review fee on the phone", [await dialog.getByRole("textbox", { name: "Fee" }).inputValue(), await feeSource(dialog)], ["390", "From fee list: Review ₹390"]);
       await dialog.getByTestId("fee-source").scrollIntoViewIfNeeded();
       const box = await dialog.boundingBox();
       s.ok("the bill fits the phone", box && box.x >= 0 && box.x + box.width <= 390, box);
       s.ok("no sideways scroll", await noSideways(o.page));
       await s.shot(o.page, "reception-prefilled-review-390");
-      await o.page.keyboard.press("Escape");
-      await dialog.waitFor({ state: "hidden" });
+      await closeBill(o.page, dialog);
       s.check("no Fee list in reception's phone menu", (await menuLinks(o.page, true)).includes("Fee list"), false);
       s.ok("no refused calls", o.refused.length === 0, o.refused);
     });
