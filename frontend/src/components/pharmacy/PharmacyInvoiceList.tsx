@@ -1,5 +1,6 @@
 'use client';
 
+import { billLineName } from '@/lib/bill-line-name';
 import { displayClinicDate } from '@/lib/date-display';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PageHeader } from '@/components/ui/page-header';
@@ -514,7 +515,7 @@ export function PharmacyInvoiceList() {
                         <div className="space-y-1">
                           {invoice.items.slice(0, 2).map((item) => (
                             <p key={item.id} className="text-sm text-gray-600">
-                              • {((item as any)?.drug?.name) || ((item as any)?.package?.name) || 'Item'} - Qty: {item.quantity} - ₹{item.totalAmount.toFixed(2)}
+                              • {billLineName(item as any)} - Qty: {item.quantity} - ₹{item.totalAmount.toFixed(2)}
                             </p>
                           ))}
                           {invoice.items.length > 2 && (

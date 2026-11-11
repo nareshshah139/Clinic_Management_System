@@ -6,7 +6,7 @@ import { WorkflowActor } from './inventory-workflow.types';
 import { readStockGaps } from './inventory-stock-query';
 import { money } from './inventory-stock';
 import { displayDay } from './supplier-return';
-import { prescriptionNameKey, stockIdentityKey } from '../pharmacy/pharmacy-stock-identity';
+import { productKey } from '../pharmacy/pharmacy-stock-identity';
 import {
   classifyStock,
   draftLines,
@@ -22,14 +22,6 @@ const wholeRupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency
 const OPEN_RETURN = ['DRAFT', 'AWAITING_APPROVAL', 'APPROVED'];
 const SENT_RETURN = ['CHALLAN', 'POSTED'];
 const gstinOf = (value: string | null | undefined) => (value ?? '').trim().toUpperCase();
-/**
- * The product a batch belongs to, so a batch is judged on its product's sales: its linked drug, or for a batch with no
- * single linked drug, its standard name, stock unit and pack. Sales take the earliest expiry first, so a later batch of a
- * product that sells every day may itself never sell.
- */
-const productKey = (item: { name: string; unit: string; packSize: number | null; packUnit: string | null; drugs: { id: string }[] }) =>
-  item.drugs.length === 1 ? stockIdentityKey(item) : `name:${JSON.stringify([prescriptionNameKey(item.name), item.unit, item.packSize ?? null, item.packUnit ?? null])}`;
-
 /** What is left to return of a purchase line. Returns that put free units under quantity are taken from the free units. */
 function unreturnedOf(bought: { quantityPurchased: number; freeQuantity: number }, sent = { paid: 0, free: 0 }) {
   let paid = bought.quantityPurchased - sent.paid;

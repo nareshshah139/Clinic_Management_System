@@ -20,10 +20,10 @@ import { Label } from '@/components/ui/label';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { billLineName } from '@/lib/bill-line-name';
 import { BillDiscountInput } from './BillDiscountInput';
 import {
   clinicOf,
-  lineName,
   previewDiscount,
   revisionRequest,
   settlementOf,
@@ -119,7 +119,7 @@ function EditDiscountDialog({ bill, open, onOpenChange, onSaved, onReload }: {
           {bill.items.map((line, index) => (
             <div key={line.id} className="flex min-w-0 items-center gap-3">
               <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{lineName(line)}</div>
+                <div className="truncate font-medium">{billLineName(line)}</div>
                 <div className="text-xs text-muted-foreground tabular-nums">
                   {line.quantity} × {formatRupees(line.unitPrice)} · {line.taxPercent}% GST
                   {preview.ok ? ` · ${formatRupees(preview.price.lines[index].total)}` : ''}
@@ -131,7 +131,7 @@ function EditDiscountDialog({ bill, open, onOpenChange, onSaved, onReload }: {
                 min={0}
                 max={100}
                 step="0.01"
-                aria-label={`Discount % for ${lineName(line)}`}
+                aria-label={`Discount % for ${billLineName(line)}`}
                 value={lineText[line.id]}
                 onChange={(event) => setLineText((current) => ({ ...current, [line.id]: event.target.value }))}
                 className="w-24 shrink-0 text-right tabular-nums"
@@ -345,7 +345,7 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
             {bill.items.map((line) => (
               <li key={line.id} className="flex min-w-0 items-start justify-between gap-3 p-3">
                 <div className="min-w-0">
-                  <div className="font-medium [overflow-wrap:anywhere]">{lineName(line)}</div>
+                  <div className="font-medium [overflow-wrap:anywhere]">{billLineName(line)}</div>
                   <div className="text-xs text-muted-foreground tabular-nums">
                     {line.quantity} × {formatRupees(line.unitPrice)}
                     {line.discountPercent ? ` · ${line.discountPercent}% off` : ''}

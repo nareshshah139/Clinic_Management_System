@@ -1,3 +1,4 @@
+import { billLineName } from '@/lib/bill-line-name';
 import { displayCalendarDate, displayClinicDate } from '@/lib/date-display';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import { billNumberLabel } from '@/lib/bill-number';
@@ -128,7 +129,7 @@ export function renderPharmacyInvoiceHtml(invoice: any, clinic?: ClinicIdentity 
       { label: 'Amount', align: 'right', width: '120px' },
     ],
     rows: (invoice.items || []).map((item: any) => [
-      item.itemType === 'PACKAGE' ? item.package?.name || 'Unknown Package' : item.drug?.name || 'Unknown Drug',
+      billLineName(item),
       String(item.quantity ?? ''),
       formatRupees(item.unitPrice),
       percent(item.discountPercent),
