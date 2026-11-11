@@ -51,7 +51,7 @@ import {
 } from 'lucide-react';
 import { PrescriptionInventoryLink } from './PrescriptionInventoryLink';
 import { apiClient } from '@/lib/api';
-import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
+import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { billLineName, prescribedNameShown } from '@/lib/bill-line-name';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
@@ -955,19 +955,9 @@ export function PharmacyInvoiceBuilderFixed({
     }
 
     try {
-      const response = await apiClient.get('/drugs', {
-        search: query,
-        limit: 50, // Increased limit to get more results for better relevance sorting
-        isActive: true,
-      });
-      if (response && Array.isArray((response as any).data)) {
-        // Apply relevance-based sorting
-        const sortedResults = sortDrugsByRelevance(
-          (response as any).data,
-          query
-        );
-        // Take top 20 most relevant results
-        setSearchResults(sortedResults.slice(0, 20));
+      const response = await apiClient.get<Drug[]>('/drugs/autocomplete', { q: query, limit: 20 });
+      if (Array.isArray(response)) {
+        setSearchResults(response);
         setShowDrugSearchResults(true);
       } else {
         console.warn('Invalid drugs response format:', response);

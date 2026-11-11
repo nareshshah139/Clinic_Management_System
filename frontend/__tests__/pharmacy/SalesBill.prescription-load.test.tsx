@@ -57,7 +57,8 @@ beforeEach(() => {
     if (url === '/pharmacy/prescription-queue') return { data: saved ? entries.slice(1) : entries, pagination: { page: 1, limit: 20, total: saved ? 1 : 2, pages: 1 } };
     if (url.includes('/stock-check')) return { items: url.includes('rx-0') ? stock : [{ drugName: 'Unmatched cream', prescriptionVersion, matchedDrug: null, stockStatus: 'UNMATCHED', totalNonExpiredStock: 0, lowStock: true, alternatives: [] }] };
     if (url.startsWith('/drugs/')) return drugs.find(d => url === `/drugs/${d.id}`) || drugs;
-    if (url === '/drugs') return { data: query?.search ? drugs.filter(d => d.name.toLowerCase().includes(query.search.toLowerCase())) : drugs };
+    if (url === '/drugs') return { data: drugs };
+    if (url === '/drugs/autocomplete') return drugs.filter(d => d.name.toLowerCase().includes(query.q.toLowerCase()));
     if (url.startsWith('/visits/')) return { patient, doctor, prescription: { id: 'rx-0' } };
     return {};
   });
@@ -108,7 +109,7 @@ it('loads inside StrictMode when effects are mounted again', async () => {
 
 it('uses the inventory-matched ID even when search returns another medicine first', async () => {
   const get = api.get.getMockImplementation()!;
-  api.get.mockImplementation(async (url, query) => url === '/drugs' ? { data: [{ ...drugs[0], id: 'wrong-drug', name: 'Wrong medicine' }, ...drugs] } as any : get(url, query));
+  api.get.mockImplementation(async (url, query) => url === '/drugs/autocomplete' ? [{ ...drugs[0], id: 'wrong-drug', name: 'Wrong medicine' }, ...drugs] as any : get(url, query));
   render(<SalesBillPage />);
   await loadPatient();
   expect(await screen.findByRole('heading', { name: names[0], level: 4 })).toBeInTheDocument();
@@ -373,7 +374,7 @@ it('heads each prescribed line with the stock name and adds "Prescribed" only wh
 it('lists and adds a searched product under its stock name', async () => {
   const flutas = { id: 'drug-flutas', name: 'Flutas 150', stockName: 'Tab. Flutas 150 mg', price: 20, gstRate: 12, manufacturerName: 'Test', packSizeLabel: '10 tablets', totalStock: 27 };
   const get = api.get.getMockImplementation()!;
-  api.get.mockImplementation(async (url, query) => url === '/drugs' && (query as any)?.search ? { data: [flutas] } as any : get(url, query));
+  api.get.mockImplementation(async (url, query) => url === '/drugs/autocomplete' && (query as any)?.q === '13 74 | Flutas' ? [flutas] as any : get(url, query));
   render(<SalesBillPage />);
   fireEvent.change(await screen.findByPlaceholderText(/Search by drug name/), { target: { value: '13 74 | Flutas' } });
   const row = await screen.findByRole('button', { name: /Tab\. Flutas 150 mg/ });
