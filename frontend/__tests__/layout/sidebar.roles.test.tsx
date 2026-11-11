@@ -77,3 +77,15 @@ describe('Daily Collection in the main menu', () => {
     expect(current()).toEqual(['Pharmacy Report']);
   });
 });
+
+it.each([
+  ['OWNER', ['Dashboard', 'Daily Collection', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Pharmacy Report', 'Reports', 'Users', 'Fee list', 'Test Transcribe']],
+  ['MANAGER', ['Dashboard', 'Daily Collection', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Inventory', 'Pharmacy Report', 'Reports', 'Users']],
+  ['NURSE', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Rooms']],
+  ['RECEPTION', ['Dashboard', 'Patients', 'Appointments', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],
+  ['ACCOUNTANT', ['Dashboard', 'Daily Collection', 'Pharmacy Report']],
+])('gives %s only pages its grants open, so no page refuses it on load', (role, expected) => {
+  mockRole = role as string;
+  render(<Sidebar />);
+  expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getAllByRole('link').map((a) => a.textContent)).toEqual(expected);
+});

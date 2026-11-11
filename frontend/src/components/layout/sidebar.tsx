@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useDashboardUser } from "./dashboard-user-context";
 import { usePendingItemRequestCount } from "@/components/inventory/use-pending-item-requests";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
+import { APPOINTMENT_READ_ROLES, ROOM_READ_ROLES } from "@/lib/appointment-access";
 import type { LucideIcon } from "lucide-react";
 import {
   Calendar,
@@ -26,7 +27,9 @@ import {
   ShoppingBag,
   FileBarChart,
   Wallet,
+  ReceiptIndianRupee,
 } from "lucide-react";
+import { FEE_EDITOR_ROLES, FEE_LIST_PATH } from "@/components/appointments/appointment-billing-view";
 
 type PharmacySidebarSection = "desk" | "counter";
 
@@ -79,7 +82,7 @@ const navigation: NavigationItem[] = [
     name: "Appointments", section: "Clinical",
     href: "/dashboard/appointments",
     icon: Calendar,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
+    allowedRoles: APPOINTMENT_READ_ROLES,
   },
   {
     name: "Visits", section: "Clinical",
@@ -97,7 +100,7 @@ const navigation: NavigationItem[] = [
     name: "Rooms", section: "Clinical",
     href: "/dashboard/rooms",
     icon: MapPin,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
+    allowedRoles: ROOM_READ_ROLES,
   },
   {
     name: "Pharmacy Desk", section: "Pharmacy",
@@ -142,6 +145,12 @@ const navigation: NavigationItem[] = [
     href: "/dashboard/users",
     icon: UserIcon,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER"],
+  },
+  {
+    name: "Fee list", section: "Admin",
+    href: FEE_LIST_PATH,
+    icon: ReceiptIndianRupee,
+    allowedRoles: FEE_EDITOR_ROLES,
   },
   {
     name: "Test Transcribe", section: "Admin",

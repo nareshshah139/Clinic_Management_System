@@ -56,3 +56,17 @@ describe('AppointmentsCalendar booking flow', () => {
     expect((await screen.findByText('Appointment Successfully Booked!')).parentElement).toHaveTextContent('Synthetic Patient scheduled for 14:00-14:15 in the Confirmed calendar');
   });
 });
+
+describe('AppointmentsCalendar room filter', () => {
+  const roomFilterShown = async (readsRooms: boolean) => {
+    const { unmount } = render(<AppointmentsCalendar controlledDoctorId="d1" controlledDate="2099-01-01" hideHeaderControls readsRooms={readsRooms} />);
+    await screen.findByRole('region', { name: 'Confirmed' });
+    const shown = screen.queryByText('Room', { selector: 'label' }) !== null;
+    unmount();
+    return shown;
+  };
+
+  it('offers the room filter only to a role that may read rooms', async () => {
+    expect([await roomFilterShown(true), await roomFilterShown(false)]).toEqual([true, false]);
+  });
+});

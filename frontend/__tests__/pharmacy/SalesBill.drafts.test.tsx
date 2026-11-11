@@ -59,7 +59,8 @@ beforeEach(() => {
   api.get.mockImplementation(async (url: string, query?: any) => {
     if (url === '/pharmacy/prescription-queue') return { data: [], pagination: { page: 1, limit: 20, total: 0, pages: 1 } };
     if (url === '/pharmacy/invoices/d-1') return JSON.parse(JSON.stringify(invoice));
-    if (url === '/drugs') return { data: query?.search ? [cream, tablet].filter((d) => d.name.toLowerCase().includes(query.search.toLowerCase())) : [cream, tablet] };
+    if (url === '/drugs') return { data: [cream, tablet] };
+    if (url === '/drugs/autocomplete') return [cream, tablet].filter((d) => d.name.toLowerCase().includes(query.q.toLowerCase()));
     return {};
   });
 });

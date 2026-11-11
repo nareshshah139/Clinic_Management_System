@@ -1,6 +1,8 @@
 import { IsOptional, IsString, IsDateString, IsEnum, IsNumber, IsBoolean, IsArray, ValidateNested, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PaymentMode } from '@prisma/client';
+import { IsPaymentMode } from '../../billing/dto/payment-mode';
 
 export enum ReportType {
   REVENUE = 'REVENUE',
@@ -29,14 +31,7 @@ export enum ExportFormat {
   JSON = 'JSON'
 }
 
-export enum PaymentMode {
-  CASH = 'CASH',
-  CARD = 'CARD',
-  UPI = 'UPI',
-  BNPL = 'BNPL',
-  NET_BANKING = 'NET_BANKING',
-  CHEQUE = 'CHEQUE'
-}
+export { PaymentMode };
 
 export enum AppointmentStatus {
   SCHEDULED = 'SCHEDULED',
@@ -131,7 +126,7 @@ export class BaseReportQueryDto {
 export class RevenueReportQueryDto extends BaseReportQueryDto {
   @ApiPropertyOptional({ description: 'Payment mode filter', enum: PaymentMode, example: 'CASH' })
   @IsOptional()
-  @IsEnum(PaymentMode)
+  @IsPaymentMode()
   paymentMode?: PaymentMode;
 
   @ApiPropertyOptional({ description: 'Service type filter', example: 'Consultation' })
@@ -866,7 +861,7 @@ export class TopSellingItemDto {
 export class PaymentReportQueryDto extends BaseReportQueryDto {
   @ApiPropertyOptional({ description: 'Payment mode filter', enum: PaymentMode, example: 'CASH' })
   @IsOptional()
-  @IsEnum(PaymentMode)
+  @IsPaymentMode()
   paymentMode?: PaymentMode;
 
   @ApiPropertyOptional({ description: 'Payment gateway filter', example: 'Razorpay' })

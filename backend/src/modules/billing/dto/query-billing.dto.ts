@@ -9,7 +9,9 @@ import {
   Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { InvoiceStatus, PaymentMethod, PaymentStatus } from './invoice.dto';
+import { PaymentMode } from '@prisma/client';
+import { InvoiceStatus, PaymentStatus } from './invoice.dto';
+import { IsPaymentMode } from './payment-mode';
 import { UUID_OR_CUID_REGEX } from './ids';
 
 
@@ -82,8 +84,8 @@ export class QueryPaymentsDto {
   patientId?: string;
 
   @IsOptional()
-  @IsEnum(PaymentMethod)
-  method?: PaymentMethod;
+  @IsPaymentMode()
+  method?: PaymentMode;
 
   @IsOptional()
   @IsEnum(PaymentStatus)
@@ -133,8 +135,8 @@ export class PaymentSummaryDto {
   endDate?: string;
 
   @IsOptional()
-  @IsEnum(PaymentMethod)
-  method?: PaymentMethod;
+  @IsPaymentMode()
+  method?: PaymentMode;
 
   @IsOptional()
   @Matches(UUID_OR_CUID_REGEX, { message: 'patientId must be a UUID or CUID' })

@@ -1,5 +1,6 @@
 import { BillPricingError, priceBill, type BillDiscount, type BillPrice } from '@/lib/bill-pricing';
 import type { ClinicIdentity } from '@/lib/pharmacy-invoice-print';
+import { billLineName } from '@/lib/bill-line-name';
 
 export type BillPayment = { id: string; amount: number; method: string; status: string; reference?: string | null; paymentDate: string };
 export type BillRevision = {
@@ -21,6 +22,7 @@ export type BillLine = {
   taxPercent: number;
   taxAmount: number;
   totalAmount: number;
+  name?: string | null;
   drug: { name: string } | null;
   package: { name: string } | null;
 };
@@ -60,8 +62,6 @@ export type FinishedBill = {
 const LEDGER = new Set(['COMPLETED', 'REFUNDED']);
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-export const lineName = (line: Pick<BillLine, 'drug' | 'package'>) => line.drug?.name ?? line.package?.name ?? 'Item';
-
 /** The bill's ledger: receipts plus refunds (negative entries); paid above the total is a refund due. */
 export function settlementOf(bill: { totalAmount: number; payments: { status: string; amount: number }[] }, total = bill.totalAmount) {
   const paid = money(bill.payments.filter((payment) => LEDGER.has(payment.status)).reduce((sum, payment) => sum + payment.amount, 0));
@@ -81,7 +81,7 @@ export type DiscountPreview =
 export function previewDiscount(bill: FinishedBill, edit: DiscountEdit): DiscountPreview {
   const percents = bill.items.map((line) => edit.lineDiscounts[line.id] ?? line.discountPercent);
   const invalid = percents.findIndex((value) => !Number.isFinite(value) || value < 0 || value > 100);
-  if (invalid >= 0) return { ok: false, problem: `Discount for ${lineName(bill.items[invalid])} must be between 0 and 100%.` };
+  if (invalid >= 0) return { ok: false, problem: `Discount for ${billLineName(bill.items[invalid])} must be between 0 and 100%.` };
   try {
     const price = priceBill(
       bill.items.map((line, index) => ({ quantity: line.quantity, unitPrice: line.unitPrice, discountPercent: percents[index], taxPercent: line.taxPercent })),
