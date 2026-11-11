@@ -84,6 +84,19 @@ async function raiseReturn(page, seed, reference) {
 }
 
 const CENSUS_ROLES = ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION", "PHARMACIST", "ACCOUNTANT"];
+const DC = "/dashboard/pharmacy/reports?report=daily-collection";
+const DESK = "/dashboard/pharmacy?section=desk";
+const COUNTER = "/dashboard/pharmacy?section=counter";
+const MENU = {
+  OWNER: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users", "/test-transcribe"],
+  ADMIN: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", DESK, COUNTER, "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users", "/test-transcribe"],
+  MANAGER: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users"],
+  DOCTOR: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", DESK, COUNTER, "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/test-transcribe"],
+  NURSE: ["/dashboard", "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/rooms"],
+  RECEPTION: ["/dashboard", "/dashboard/patients", "/dashboard/appointments", "/dashboard/rooms", DESK, COUNTER, "/dashboard/inventory"],
+  PHARMACIST: ["/dashboard", DC, DESK, COUNTER, "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports"],
+  ACCOUNTANT: ["/dashboard", DC, "/dashboard/pharmacy/reports"],
+};
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function censusUsers(stack) {
@@ -116,7 +129,8 @@ async function census(stack, browser, who, role, viewport) {
   }
   const nav = home.getByRole("navigation", { name: "Main navigation" });
   await home.goto(`${stack.base}/dashboard`, { waitUntil: "domcontentloaded", timeout: 240000 });
-  await nav.getByRole("link").first().waitFor({ timeout: 120000 });
+  await home.getByText(stack.users[who].firstName, { exact: false }).first().waitFor({ timeout: 180000 });
+  await nav.getByRole("link", { name: "Dashboard" }).waitFor({ timeout: 120000 });
   const hrefs = await nav.getByRole("link").evaluateAll((links) => links.map((a) => a.getAttribute("href")));
   await home.close();
   const visited = [];
@@ -226,7 +240,8 @@ async function visit(stack, context, who, target) {
     const people = await censusUsers(stack);
     for (const role of CENSUS_ROLES) {
       const visited = await census(stack, browser, people[role], role, { width: 1440, height: 900 });
-      check(`${role}: the menu lists pages to visit`, visited.length > 0, visited);
+      const menu = visited.map((v) => v.href);
+      check(`${role}: the menu offers exactly the pages its grants open`, JSON.stringify(menu) === JSON.stringify(MENU[role]), menu);
       for (const { href, refused } of visited) check(`${role} ${href}: no refused request on load`, JSON.stringify(refused) === "[]", refused);
       console.log(`CENSUS ${role} pages=${JSON.stringify(visited.map((v) => v.href))}`);
       await pause(15000);

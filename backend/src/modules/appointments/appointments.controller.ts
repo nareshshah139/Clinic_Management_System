@@ -59,7 +59,7 @@ export class AppointmentsController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION, UserRole.MANAGER)
   @Permissions('appointments:read')
   findAll(
     @Query() query: QueryAppointmentsDto,
@@ -79,7 +79,7 @@ export class AppointmentsController {
   }
 
   @Get('doctor/:doctorId/schedule')
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION, UserRole.MANAGER)
   @Permissions('appointments:read')
   getDoctorSchedule(
     @Param('doctorId') doctorId: string,

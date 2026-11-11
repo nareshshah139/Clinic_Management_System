@@ -28,6 +28,8 @@ interface AppointmentsCalendarProps {
   controlledDoctorId?: string;
   controlledDate?: string;
   hideHeaderControls?: boolean;
+  /** False for a viewer the server refuses rooms; the room filter then stays empty and rooms are never asked for. */
+  readsRooms?: boolean;
 }
 
 /**
@@ -56,6 +58,7 @@ export default function AppointmentsCalendar({
   controlledDoctorId,
   controlledDate,
   hideHeaderControls,
+  readsRooms = true,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
   const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
@@ -162,7 +165,7 @@ export default function AppointmentsCalendar({
     if (doctorId && date) {
       void fetchRooms();
     }
-  }, [doctorId, date]);
+  }, [doctorId, date, readsRooms]);
 
   useEffect(() => {
     void fetchGoogleConfigured();
@@ -190,6 +193,7 @@ export default function AppointmentsCalendar({
   };
 
   const fetchRooms = async () => {
+    if (!readsRooms) return;
     try {
       const res: any = await apiClient.getRooms();
       setRooms(res.rooms || []);
