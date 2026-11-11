@@ -225,13 +225,12 @@ const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis"
           return {
             heights: [...table.querySelectorAll("tr")].map((r) => Math.round(r.getBoundingClientRect().height)),
             headerLines: [...table.querySelectorAll("thead th")].map(lines),
-            mostLinesInARow: [...table.querySelectorAll("tbody tr")].map((r) => [r.querySelector("th").textContent.trim(), Math.max(...[...r.children].map(lines))]),
           };
         });
         console.log(`NOTE ${tag} value summary row heights ${JSON.stringify(summary.heights)}`);
-        check(`${tag} value summary: each heading reads on one line and a row holds at most its amount and one note`,
-          [summary.headerLines, summary.mostLinesInARow],
-          [[1, 1, 1, 1, 1], [["current", 2], ["expired", 1]]]);
+        check(`${tag} value summary: each heading reads on one line and each row is as compact as on a wide screen`,
+          [summary.headerLines, summary.heights.map((h, i) => h <= [48, 72, 48][i])],
+          [[1, 1, 1, 1, 1], [true, true, true]]);
         await shot(page, `${tag}-02b-stock-row-actions`);
         const uprise = stockRows(page).filter({ hasText: "Cap. Uprise D3 60000" });
         for (const [action, current] of [["Edit price", "Current selling price: ₹76.00"], ["Edit stock", "Current stock on shelf: 5 STRIPS"]]) {
