@@ -6,6 +6,18 @@ export const BILL_TYPE_LABEL: Record<BillType, string> = {
   PROCEDURE: 'Procedure',
 };
 
+/** "500", "1,200.50", "₹ 500" → number; empty → null; anything else → NaN. */
+export function parseRupees(text: string): number | null {
+  const cleaned = text.replace(/[₹,\s]/g, '');
+  if (!cleaned) return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return Number.NaN;
+  return Number(cleaned);
+}
+
+/** The roles the fee list admits (OWNER and ADMIN); every other role gets the fee only through Create bill. */
+export const FEE_EDITOR_ROLES = ['OWNER', 'ADMIN'];
+export const FEE_LIST_PATH = '/dashboard/fees';
+
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 export const rupee = (value: number) => rupees.format(value);
 

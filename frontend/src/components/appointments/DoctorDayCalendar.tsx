@@ -34,7 +34,7 @@ import CalendarColumn, { type SlotAction } from './CalendarColumn';
 import { AppointmentBillDialog } from './AppointmentBillDialog';
 import { BILL_TYPE_LABEL, billingChip } from './appointment-billing-view';
 
-const NO_BILL_ACCESS: ClinicBillAccess = { read: false, createBill: false, takePayment: false };
+const NO_BILL_ACCESS: ClinicBillAccess = { read: false, createBill: false, takePayment: false, editFees: false };
 
 /**
  * @cc [owner:nareshshah139,label:product] optimistic-booking-origin
@@ -261,6 +261,7 @@ function DoctorDayCalendarForSelection({
           visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
           billType: a.billType,
           billing: a.billing,
+          fee: a.fee,
           notes: a.notes ?? undefined,
           tokenNumber: a.tokenNumber ?? undefined,
         }));

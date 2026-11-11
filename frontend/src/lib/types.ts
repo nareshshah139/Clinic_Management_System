@@ -113,6 +113,8 @@ export interface AppointmentInSlot {
   visit?: { id: string; status?: string | null };
   billType?: BillType;
   billing?: AppointmentBilling;
+  /** The fee list's amount for this bill type; null when none is set; absent when the viewer cannot create bills. */
+  fee?: number | null;
   notes?: string;
   tokenNumber?: number;
 }
@@ -134,6 +136,17 @@ export interface ClinicBillAccess {
   read: boolean;
   createBill: boolean;
   takePayment: boolean;
+  editFees: boolean;
+}
+
+/** One row of the branch's fee list; version 0 means it has never been saved. */
+export interface ClinicFee {
+  billType: BillType;
+  label: string;
+  amount: number | null;
+  version: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
 }
 
 // Available Slots
@@ -274,6 +287,7 @@ export interface GetDoctorScheduleResponse {
     calendar: AppointmentCalendar;
     billType?: BillType;
     billing?: AppointmentBilling;
+    fee?: number | null;
     patient?: NonNullable<Appointment['patient']> & { gender?: string | null; dob?: string | null; age?: number | null };
   }>;
   doctorId: string;

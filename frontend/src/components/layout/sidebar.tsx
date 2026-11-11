@@ -26,7 +26,9 @@ import {
   ShoppingBag,
   FileBarChart,
   Wallet,
+  ReceiptIndianRupee,
 } from "lucide-react";
+import { FEE_EDITOR_ROLES, FEE_LIST_PATH } from "@/components/appointments/appointment-billing-view";
 
 type PharmacySidebarSection = "desk" | "counter";
 
@@ -142,6 +144,12 @@ const navigation: NavigationItem[] = [
     href: "/dashboard/users",
     icon: UserIcon,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER"],
+  },
+  {
+    name: "Fee list", section: "Admin",
+    href: FEE_LIST_PATH,
+    icon: ReceiptIndianRupee,
+    allowedRoles: FEE_EDITOR_ROLES,
   },
   {
     name: "Test Transcribe", section: "Admin",
