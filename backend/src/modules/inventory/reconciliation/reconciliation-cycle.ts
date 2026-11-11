@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { collator, isCalendarDay } from '../../pharmacy/register-utils';
+import { addDays, collator, isCalendarDay } from '../../pharmacy/register-utils';
 
 export type ReconciliationSettings = {
   enabled: boolean;
@@ -22,7 +22,6 @@ const withinRange = (value: unknown, range: Range) => {
 const ids = (value: unknown) =>
   Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === 'string' && id.trim() !== '').map((id) => id.trim()))] : [];
 
-export const addDays = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 export const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
 
 /**
