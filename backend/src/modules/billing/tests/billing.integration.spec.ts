@@ -4,7 +4,8 @@ import request from 'supertest';
 import { BillingModule } from '../billing.module';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
-import { InvoiceStatus, PaymentMethod, PaymentStatus } from '../dto/invoice.dto';
+import { PaymentMode } from '@prisma/client';
+import { InvoiceStatus, PaymentStatus } from '../dto/invoice.dto';
 
 describe('BillingController (Integration)', () => {
   let app: INestApplication;
@@ -389,7 +390,7 @@ describe('BillingController (Integration)', () => {
       const paymentDto = {
         invoiceId: 'invoice-123',
         amount: 500,
-        method: PaymentMethod.CASH,
+        method: PaymentMode.CASH,
         transactionId: 'TXN-123',
         notes: 'Cash payment',
       };
@@ -435,7 +436,7 @@ describe('BillingController (Integration)', () => {
         id: 'payment-123',
         invoiceId: 'invoice-123',
         amount: 500,
-        method: PaymentMethod.CASH,
+        method: PaymentMode.CASH,
         status: PaymentStatus.PENDING,
       });
     });
@@ -444,7 +445,7 @@ describe('BillingController (Integration)', () => {
       const paymentDto = {
         invoiceId: 'invoice-123',
         amount: 600,
-        method: PaymentMethod.CASH,
+        method: PaymentMode.CASH,
       };
 
       const mockInvoice = {
@@ -474,7 +475,7 @@ describe('BillingController (Integration)', () => {
       const bulkPaymentDto = {
         invoiceIds: ['invoice-1', 'invoice-2'],
         totalAmount: 1000,
-        method: PaymentMethod.UPI,
+        method: PaymentMode.UPI,
         transactionId: 'BULK-TXN-123',
         notes: 'Bulk payment',
       };
@@ -497,14 +498,14 @@ describe('BillingController (Integration)', () => {
           id: 'payment-1',
           invoiceId: 'invoice-1',
           amount: 500,
-          method: PaymentMethod.UPI,
+          method: PaymentMode.UPI,
           status: PaymentStatus.PENDING,
         },
         {
           id: 'payment-2',
           invoiceId: 'invoice-2',
           amount: 500,
-          method: PaymentMethod.UPI,
+          method: PaymentMode.UPI,
           status: PaymentStatus.PENDING,
         },
       ];
@@ -565,7 +566,7 @@ describe('BillingController (Integration)', () => {
         {
           id: 'payment-1',
           amount: 500,
-          method: PaymentMethod.CASH,
+          method: PaymentMode.CASH,
           status: PaymentStatus.COMPLETED,
           invoice: {
             id: 'invoice-1',
@@ -596,8 +597,8 @@ describe('BillingController (Integration)', () => {
         totalAmount: 10000,
         paymentCount: 20,
         methodBreakdown: [
-          { method: PaymentMethod.CASH, amount: 5000, count: 10 },
-          { method: PaymentMethod.UPI, amount: 5000, count: 10 },
+          { method: PaymentMode.CASH, amount: 5000, count: 10 },
+          { method: PaymentMode.UPI, amount: 5000, count: 10 },
         ],
         dailyBreakdown: [
           { date: '2024-12-01T00:00:00.000Z', amount: 1000, count: 2 },
@@ -613,8 +614,8 @@ describe('BillingController (Integration)', () => {
       mockPrismaService.payment.count.mockResolvedValue(20);
       mockPrismaService.payment.groupBy
         .mockResolvedValueOnce([
-          { method: PaymentMethod.CASH, _sum: { amount: 5000 }, _count: { id: 10 } },
-          { method: PaymentMethod.UPI, _sum: { amount: 5000 }, _count: { id: 10 } },
+          { method: PaymentMode.CASH, _sum: { amount: 5000 }, _count: { id: 10 } },
+          { method: PaymentMode.UPI, _sum: { amount: 5000 }, _count: { id: 10 } },
         ])
         .mockResolvedValueOnce([
           { createdAt: new Date('2024-12-01'), _sum: { amount: 1000 }, _count: { id: 2 } },
@@ -654,7 +655,7 @@ describe('BillingController (Integration)', () => {
         id: 'payment-refund-1',
         invoiceId: 'invoice-123',
         amount: -100,
-        method: PaymentMethod.CASH,
+        method: PaymentMode.CASH,
         status: PaymentStatus.COMPLETED,
       } as any;
 

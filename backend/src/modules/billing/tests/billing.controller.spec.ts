@@ -2,7 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BillingController } from '../billing.controller';
 import { BillingService } from '../billing.service';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
-import { InvoiceStatus, PaymentMethod, PaymentStatus } from '../dto/invoice.dto';
+import { PaymentMode } from '@prisma/client';
+import { InvoiceStatus, PaymentStatus } from '../dto/invoice.dto';
 
 describe('BillingController', () => {
   let controller: BillingController;
@@ -216,7 +217,7 @@ describe('BillingController', () => {
       const paymentDto = {
         invoiceId: 'invoice-123',
         amount: 500,
-        method: PaymentMethod.CASH,
+        method: PaymentMode.CASH,
         transactionId: 'TXN-123',
         notes: 'Cash payment',
       };
@@ -241,7 +242,7 @@ describe('BillingController', () => {
       const bulkPaymentDto = {
         invoiceIds: ['invoice-1', 'invoice-2'],
         totalAmount: 1000,
-        method: PaymentMethod.UPI,
+        method: PaymentMode.UPI,
         transactionId: 'BULK-TXN-123',
         notes: 'Bulk payment',
       };
@@ -290,7 +291,7 @@ describe('BillingController', () => {
       const query = {
         page: 1,
         limit: 20,
-        method: PaymentMethod.CASH,
+        method: PaymentMode.CASH,
       };
 
       const mockResult = {
@@ -317,14 +318,14 @@ describe('BillingController', () => {
       const query = {
         startDate: '2024-12-01',
         endDate: '2024-12-31',
-        method: PaymentMethod.CASH,
+        method: PaymentMode.CASH,
       };
 
       const mockSummary = {
         totalAmount: 10000,
         paymentCount: 20,
         methodBreakdown: [
-          { method: PaymentMethod.CASH, amount: 10000, count: 20 },
+          { method: PaymentMode.CASH, amount: 10000, count: 20 },
         ],
         dailyBreakdown: [],
         period: {
@@ -355,7 +356,7 @@ describe('BillingController', () => {
         id: 'payment-refund-1',
         invoiceId: 'invoice-123',
         amount: -100,
-        method: PaymentMethod.CASH,
+        method: PaymentMode.CASH,
         status: PaymentStatus.COMPLETED,
       } as any;
 

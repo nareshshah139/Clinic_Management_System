@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PaymentMode, Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { addDays, clinicDay, clinicInstants } from '../pharmacy/register-utils';
 import { InvoiceNumbersService } from '../../shared/numbering/invoice-numbers.service';
@@ -10,7 +10,6 @@ import {
   RefundDto, 
   BulkPaymentDto,
   // InvoiceStatus,
-  PaymentMethod,
   // PaymentStatus,
 } from './dto/invoice.dto';
 import { 
@@ -361,7 +360,7 @@ export class BillingService {
     tx: Prisma.TransactionClient,
     invoice: { id: string; invoiceNo: string },
     amount: number,
-    method: PaymentMethod,
+    method: PaymentMode,
     reference?: string,
   ) {
     await this.receive(tx, invoice, amount, BadRequestException);
@@ -927,7 +926,7 @@ export class BillingService {
             data: {
               invoiceId: invoice.id,
               amount: invoice.total,
-              mode: PaymentMethod.CASH as any,
+              mode: PaymentMode.CASH,
               reference: 'SAMPLE',
               createdAt: paymentDate,
               reconStatus: 'COMPLETED',
@@ -942,7 +941,7 @@ export class BillingService {
             data: {
               invoiceId: invoice.id,
               amount: part,
-              mode: PaymentMethod.UPI as any,
+              mode: PaymentMode.UPI,
               reference: 'SAMPLE',
               createdAt: paymentDate,
               reconStatus: 'COMPLETED',

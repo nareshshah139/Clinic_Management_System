@@ -20,6 +20,7 @@ export const COLLECTION_MODES = [
   'UPI',
   'CARD',
   'NETBANKING',
+  'CHEQUE',
   'WALLET',
   'INSURANCE',
   'OTHER',
@@ -32,14 +33,16 @@ export const MODE_LABEL: Record<CollectionMode, string> = {
   CASH: 'Cash',
   UPI: 'UPI',
   CARD: 'Card',
-  NETBANKING: 'Net banking',
+  NETBANKING: 'Net banking / NEFT',
+  CHEQUE: 'Cheque',
   WALLET: 'Wallet',
   INSURANCE: 'Insurance',
   OTHER: 'Other',
 };
 
+/** The clinic stores a bank transfer as NET_BANKING, the pharmacy as NETBANKING; both reach the same account. */
 export function collectionMode(value: unknown): CollectionMode {
-  const mode = typeof value === 'string' ? value.trim().toUpperCase() : '';
+  const mode = typeof value === 'string' ? value.trim().toUpperCase().replace('NET_BANKING', 'NETBANKING') : '';
   return (COLLECTION_MODES as readonly string[]).includes(mode)
     ? (mode as CollectionMode)
     : 'OTHER';
