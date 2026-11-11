@@ -110,3 +110,10 @@ it('shows the plain reason when the bill has a sales return', async () => {
   expect(await within(dialog).findByRole('alert')).toHaveTextContent(message);
   expect(within(dialog).queryByRole('button', { name: 'Reload bill' })).not.toBeInTheDocument();
 });
+
+it('names each sold line by the stock it sold, not the catalogue name', async () => {
+  current = { ...sold, items: [{ ...line('l1', 'Flutas 150', 3, 20, 0, 12, 67.2), name: 'Tab. Flutas 150 mg' }] };
+  open('bill=inv-1');
+  expect(await screen.findAllByText('Tab. Flutas 150 mg')).not.toHaveLength(0);
+  expect(screen.queryByText('Flutas 150')).not.toBeInTheDocument();
+});

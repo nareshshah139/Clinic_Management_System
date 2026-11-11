@@ -345,3 +345,38 @@ it.each(['2026-10-05T10:00:01.000Z', prescriptionVersion, undefined])('rejects r
     expect(within(row).getByLabelText('Quantity')).toHaveValue(quantities[index]);
   }
 });
+
+it('heads each prescribed line with the stock name and adds "Prescribed" only when the prescription said something else', async () => {
+  const flutas = { id: 'drug-flutas', name: 'Flutas 150', stockName: 'Tab. Flutas 150 mg', price: 20, gstRate: 12, manufacturerName: 'Test', packSizeLabel: '10 tablets', totalStock: 27 };
+  const itin = { id: 'drug-itin', name: 'Itin 12', stockName: 'Cap. Itin 12 mg', price: 20, gstRate: 12, manufacturerName: 'Test', packSizeLabel: '10 capsules', totalStock: 15 };
+  const prescribed = ['Tab. Flutas 150 mg', '1100 | Itin 12Mg Cap'];
+  const original = api.getPrescription.getMockImplementation()!;
+  api.getPrescription.mockImplementation(async id => ({ ...await original(id) as any, items: prescribed.map(drugName => ({ drugName, quantity: 1 })) }));
+  const get = api.get.getMockImplementation()!;
+  api.get.mockImplementation(async (url, query) => {
+    if (url.endsWith('/stock-check')) return { items: [
+      { drugName: prescribed[0], prescriptionVersion, inventoryItemId: 'flutas-a', stockName: 'Tab. Flutas 150 mg', matchedDrug: flutas, stockStatus: 'IN_STOCK', totalNonExpiredStock: 27 },
+      { drugName: prescribed[1], prescriptionVersion, inventoryItemId: 'itin-a', stockName: 'Cap. Itin 12 mg', matchedDrug: itin, stockStatus: 'IN_STOCK', totalNonExpiredStock: 15 },
+    ] } as any;
+    if (url === '/drugs/drug-flutas') return flutas as any;
+    if (url === '/drugs/drug-itin') return itin as any;
+    return get(url, query);
+  });
+  render(<SalesBillPage />);
+  await loadPatient();
+  const card = async (name: string) => (await screen.findByRole('heading', { name, level: 4 })).closest('[data-invoice-item]') as HTMLElement;
+  expect((await card('Tab. Flutas 150 mg')).textContent).not.toContain('Prescribed');
+  expect(within(await card('Cap. Itin 12 mg')).getByText('Prescribed: 1100 | Itin 12Mg Cap')).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Flutas 150', level: 4 })).not.toBeInTheDocument();
+});
+
+it('lists and adds a searched product under its stock name', async () => {
+  const flutas = { id: 'drug-flutas', name: 'Flutas 150', stockName: 'Tab. Flutas 150 mg', price: 20, gstRate: 12, manufacturerName: 'Test', packSizeLabel: '10 tablets', totalStock: 27 };
+  const get = api.get.getMockImplementation()!;
+  api.get.mockImplementation(async (url, query) => url === '/drugs' && (query as any)?.search ? { data: [flutas] } as any : get(url, query));
+  render(<SalesBillPage />);
+  fireEvent.change(await screen.findByPlaceholderText(/Search by drug name/), { target: { value: '13 74 | Flutas' } });
+  const row = await screen.findByRole('button', { name: /Tab\. Flutas 150 mg/ });
+  fireEvent.click(row);
+  expect(await screen.findByRole('heading', { name: 'Tab. Flutas 150 mg', level: 4 })).toBeInTheDocument();
+});
