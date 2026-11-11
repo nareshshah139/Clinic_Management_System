@@ -551,18 +551,20 @@ export default function AppointmentsCalendar({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <label className="text-sm text-gray-700">Room</label>
-              <Select value={roomFilter} onValueChange={setRoomFilter}>
-                <SelectTrigger><SelectValue placeholder="All Rooms" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Rooms</SelectItem>
-                  {rooms.map((room) => (
-                    <SelectItem key={room.id} value={room.id}>{room.name} ({room.type})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {readsRooms && (
+              <div>
+                <label className="text-sm text-gray-700">Room</label>
+                <Select value={roomFilter} onValueChange={setRoomFilter}>
+                  <SelectTrigger><SelectValue placeholder="All Rooms" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Rooms</SelectItem>
+                    {rooms.map((room) => (
+                      <SelectItem key={room.id} value={room.id}>{room.name} ({room.type})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <label className="text-sm text-gray-700">Patient</label>
               <Input placeholder="Search patient by name/phone" value={patientSearch} onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }} />

@@ -36,15 +36,26 @@ it("shows a pharmacist today's sales on the desk", async () => {
   expect(figuresAsked()).toBe(1);
 });
 
-it("never asks for the pharmacy's figures for reception, and shows no zero figures in their place", async () => {
+const offered = () => ['New sale', 'Invoices', 'Drugs', 'Refresh', 'Pharmacy Counter', 'Inventory Control']
+  .filter((name) => screen.queryByRole('button', { name: new RegExp(`^${name}`) }));
+
+it("offers a pharmacist the desk's sale actions", async () => {
+  section = 'desk';
+  role = 'PHARMACIST';
+  render(<PharmacyWorkspace />);
+  await screen.findByText('₹1240.00');
+  expect(offered()).toEqual(['New sale', 'Invoices', 'Drugs', 'Refresh', 'Pharmacy Counter', 'Inventory Control']);
+});
+
+it("never asks for the pharmacy's figures for reception, and offers no sale it would be refused", async () => {
   section = 'desk';
   role = 'RECEPTION';
   render(<PharmacyWorkspace />);
-  expect(await screen.findByText('New sale')).toBeInTheDocument();
+  expect(await screen.findByText('Pharmacy Counter')).toBeInTheDocument();
   await waitFor(() => expect(asked()).toContain('/auth/me'));
   expect(figuresAsked()).toBe(0);
   expect(screen.queryByText('Sales')).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+  expect(offered()).toEqual(['Pharmacy Counter', 'Inventory Control']);
 });
 
 it('loads no desk figures on the counter, for any role', async () => {
