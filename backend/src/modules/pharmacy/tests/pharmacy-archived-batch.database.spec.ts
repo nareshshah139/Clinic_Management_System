@@ -5,6 +5,7 @@ import { PharmacyInvoiceService } from '../pharmacy-invoice.service';
 import { PharmacyPrescriptionQueueService } from '../pharmacy-prescription-queue.service';
 import { queueStatusPage } from '../pharmacy-prescription-queue-query';
 import { resolvePrescriptionInventory } from '../pharmacy-stock-identity';
+import { DrugService } from '../drug.service';
 
 const databaseTests = process.env.QUEUE_COVERAGE_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -101,5 +102,28 @@ databaseTests('Prescription lines saved on a batch that is no longer sellable', 
     ]);
     const [page] = await db.$queryRaw<{ ids: string[] }[]>(queueStatusPage(branchId, 'partial' as any, 1, 10, new Date()));
     expect(page.ids).toEqual(['rx']);
+  });
+  it('names every bill line, print line and billing product by the standard name of the stock it sells', async () => {
+    expect((await queue.stockCheck('rx', branchId)).items.map((line: any) => [line.drugName, line.stockName])).toEqual([
+      ['Tab. Flutas 150 mg', 'Tab. Flutas 150 mg'],
+      ['Cap. Sotret 10 mg', 'Cap. Sotret 10 mg'],
+      ['Cap. Itin 12 mg', 'Cap. Itin 12 mg'],
+      ['Cwin lotion', 'Cwin lotion'],
+    ]);
+    const drugs = new DrugService(db as any);
+    expect([(await drugs.findOne('flutas', branchId)).stockName, (await drugs.findOne('sotret', branchId)).stockName]).toEqual(['Tab. Flutas 150 mg', null]);
+    expect((await drugs.findAll({ search: 'Flutas', isActive: true } as any, branchId)).data.map((drug: any) => [drug.name, drug.stockName]))
+      .toEqual([['Flutas 150', 'Tab. Flutas 150 mg'], ['Flutas 50', 'Tab. Flutas 50 mg']]);
+    const draft = await invoices.create({ patientId: 'patient', paymentMethod: 'CASH', billingName: 'Meera Shah', billingPhone: '9876543210', items: [
+      { drugId: 'flutas', inventoryItemId: 'flutas-a', itemType: 'DRUG', quantity: 1, unitPrice: 20, discountPercent: 0, taxPercent: 12 },
+      { drugId: 'itin', itemType: 'DRUG', quantity: 1, unitPrice: 20, discountPercent: 0, taxPercent: 12 },
+      { drugId: 'sotret', itemType: 'DRUG', quantity: 1, unitPrice: 20, discountPercent: 0, taxPercent: 12 },
+    ] } as any, branchId, 'asha');
+    expect((await invoices.findOne(draft.id, branchId)).items.map((item: any) => [item.drug.name, item.name]))
+      .toEqual([['Flutas 150', 'Tab. Flutas 150 mg'], ['Itin 12', 'Cap. Itin 12 mg'], ['Sotret 10', 'Sotret 10']]);
+    expect((await invoices.findAll({ limit: 50 } as any, branchId)).data.find((invoice: any) => invoice.id === draft.id)!.items.map((item: any) => item.name))
+      .toEqual(['Tab. Flutas 150 mg', 'Cap. Itin 12 mg', 'Sotret 10']);
+    expect((await invoices.getPrintData(draft.id, branchId)).lines.map((line: any) => line.name))
+      .toEqual(['Tab. Flutas 150 mg', 'Cap. Itin 12 mg', 'Sotret 10']);
   });
 });
