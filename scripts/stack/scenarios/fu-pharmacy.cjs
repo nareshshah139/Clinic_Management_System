@@ -160,7 +160,7 @@ async function seed(stack) {
       const rows = page.locator("div[title]").filter({ has: page.getByRole("button", { name: "Select" }) });
       await rows.first().waitFor({ timeout: 60000 }).catch(() => {});
       await page.waitForTimeout(800);
-      return (await rows.locator(".font-medium").allInnerTexts()).map(clean).map((t) => t.replace(/ Strength missing$/, ""));
+      return (await rows.evaluateAll((els) => els.map((el) => el.querySelector(".font-medium")?.innerText ?? ""))).map(clean);
     };
     const billSearch = async (page, query) => {
       await page.getByLabel("Search Drugs").fill(query);
@@ -171,7 +171,10 @@ async function seed(stack) {
     const finish = async (page) => {
       for (const input of await page.locator('input[id^="gst-"]').all()) if (!(await input.inputValue())) await input.fill("12");
       await page.getByRole("button", { name: "Print Preview" }).click();
-      const preview = clean(await page.getByRole("dialog").last().innerText());
+      await page.getByRole("button", { name: "Confirm Invoice" }).waitFor({ timeout: 120000 });
+      const frame = page.frameLocator('[role="dialog"] iframe').first();
+      await frame.locator("table").first().waitFor({ timeout: 60000 });
+      const preview = clean(await frame.locator("body").innerText());
       await page.getByRole("button", { name: "Confirm Invoice" }).click();
       await page.getByRole("button", { name: "Invoice Confirmed" }).waitFor({ timeout: 120000 });
       return preview;
@@ -190,7 +193,7 @@ async function seed(stack) {
     {
       const { page, context, seen } = await open("doctor", "1280");
       await openPrescription(page, visits.newVisit, patients.meera);
-      await page.getByLabel("Diagnosis").first().fill("Tinea corporis");
+      await page.locator('input[aria-label="Diagnosis"]').first().fill("Tinea corporis");
       const filled = await page.waitForFunction((name) => [...document.querySelectorAll('input[placeholder="Search medicine name..."]')].some((el) => el.value === name), FLUTAS, { timeout: 120000 }).then(() => true, () => false);
       const values = await page.locator('input[placeholder="Search medicine name..."]').evaluateAll((els) => els.map((el) => el.value).filter(Boolean));
       check("doctor-1280 the diagnosis brings back the patient's last plan on the archived batches", [filled, values], [true, [FLUTAS, SOTRET]]);
@@ -295,12 +298,15 @@ async function seed(stack) {
       const found = [];
       for (const search of ["13 74 | Flutas", "74 |"]) {
         await go(page, `/dashboard/inventory?area=stock&view=list&${q({ search })}`);
-        await page.getByText(/\d+ matching batch/).first().waitFor({ timeout: 240000 });
+        await page.getByText(/\d+ matching batches/).first().waitFor({ timeout: 240000 });
         await settle(page);
-        found.push(clean(await page.getByText(/\d+ matching batch/).first().innerText()));
+        const rows = page.locator("table").filter({ has: page.getByRole("columnheader", { name: "Product / batch" }) }).locator("tbody tr");
+        const names = (await rows.locator("td:nth-child(2) button").allInnerTexts()).map(clean);
+        console.log(`NOTE ${tag} stock list "${search}": ${clean(await page.getByText(/\d+ matching batches/).first().innerText())} ${JSON.stringify(names)}`);
+        found.push([...new Set(names)]);
         if (search === "13 74 | Flutas") await shot(page, `${tag}-07-stock-list-pipe`);
       }
-      check(`${tag} the stock list finds the Flutas 150 batches by part of the recorded name`, found.map((t) => t.match(/\d+ matching batch/)[0]), ["2 matching batch", "2 matching batch"]);
+      check(`${tag} the stock list finds the Flutas 150 batches by part of the recorded name`, found, [[FLUTAS], [FLUTAS]]);
       check(`${tag} stock list: no page overflow`, await overflow(page), 0);
       check(`${tag} stock list: no console error or refused call`, [seen.errors, seen.refused], [[], []]);
       await context.close();
