@@ -38,4 +38,5 @@ it('names net banking and cheque payments the way the desk does', async () => {
 
   await screen.findByText('Payment Mode Breakdown');
   expect(screen.getAllByText(/^(CASH|NET_BANKING|CHEQUE|Cash|Net banking \/ NEFT|Cheque)$/).map((el) => el.textContent)).toEqual(['Cash', 'Net banking / NEFT', 'Cheque']);
+  expect(screen.getAllByText(/^\d+ transactions?$/).map((el) => el.textContent)).toEqual(['4 transactions', '1 transaction', '1 transaction']);
 });

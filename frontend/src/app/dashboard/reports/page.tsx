@@ -446,7 +446,7 @@ export default function ReportsPage() {
                     </div>
                     <div className="mt-1">
                       <p className="text-lg font-bold">{formatCurrency(payment.amount)}</p>
-                      <p className="text-sm text-gray-600">{payment.transactionCount} transactions</p>
+                      <p className="text-sm text-gray-600">{payment.transactionCount} {payment.transactionCount === 1 ? 'transaction' : 'transactions'}</p>
                     </div>
                   </div>
                 ))}
@@ -1031,7 +1031,7 @@ export default function ReportsPage() {
                     </div>
                     <div>
                       <p className="text-lg font-bold">{formatCurrency(mode.totalAmount)}</p>
-                      <p className="text-sm text-gray-600">{mode.transactionCount} transactions</p>
+                      <p className="text-sm text-gray-600">{mode.transactionCount} {mode.transactionCount === 1 ? 'transaction' : 'transactions'}</p>
                       <p className="text-sm text-green-600">Success: {formatPercentage(mode.successRate)}</p>
                     </div>
                   </div>
