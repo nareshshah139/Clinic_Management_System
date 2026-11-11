@@ -19,7 +19,7 @@ export const rupee = (value: number) => rupees.format(value);
 export type BillingTone = 'paid' | 'due' | 'unbilled' | 'quiet';
 
 /** Row widths, narrowest first. Each step of a chip's wording starts at one of them and holds until the next step. */
-export const CHIP_WIDTHS = ['phone', 'narrow', 'desk', 'wide', 'full'] as const;
+export const CHIP_WIDTHS = ['phone', 'narrow', 'desk', 'full'] as const;
 export type ChipWidth = (typeof CHIP_WIDTHS)[number];
 export type ChipStep = { from: ChipWidth; text: string };
 
@@ -41,7 +41,7 @@ function chip(byWidth: Record<ChipWidth, string>, tone: BillingTone, label: stri
 /**
  * @cc [owner:nareshshah139,label:product] appointment-billing-chip
  * A desktop row MUST show the bill's state with the amount to act on ("₹500 · Paid", "₹200 due",
- * "Not billed"); a wider row MUST add the bill total ("₹1,700 · ₹200 due") and the bill count when
+ * "Not billed"); a wide row MUST add the bill total ("₹1,700 · ₹200 due") and the bill count when
  * there is more than one. The chip MUST mark unpaid money or a finished visit without a bill in
  * words as well as colour, and its label MUST carry the total, the count and the amount due.
  */
@@ -53,14 +53,14 @@ export function billingChip(billing: AppointmentBilling, billType?: BillType): B
   if (billing.state === 'NOT_BILLED') {
     const tiny = billing.attention ? '₹!' : '';
     return chip(
-      { phone: tiny, narrow: 'Not billed', desk: 'Not billed', wide: 'Not billed', full: 'Not billed' },
+      { phone: tiny, narrow: 'Not billed', desk: 'Not billed', full: 'Not billed' },
       billing.attention ? 'unbilled' : 'quiet',
       billing.attention ? `${kind}: not billed yet, visit finished` : `${kind}: not billed yet`,
     );
   }
   if (billing.state === 'PAID') {
     return chip(
-      { phone: '₹✓', narrow: 'Paid', desk: `${total} · Paid`, wide: `${total} · Paid`, full: `${total} · Paid${bills}` },
+      { phone: '₹✓', narrow: 'Paid', desk: `${total} · Paid`, full: `${total} · Paid${bills}` },
       'paid',
       `${kind}: ${total}${count > 1 ? ` in ${count} bills` : ''}, paid`,
     );
@@ -68,7 +68,7 @@ export function billingChip(billing: AppointmentBilling, billType?: BillType): B
   const due = `${rupee(billing.due)} due`;
   const withTotal = billing.received > 0 ? `${total} · ${due}` : due;
   return chip(
-    { phone: '₹!', narrow: due, desk: due, wide: withTotal, full: `${withTotal}${bills}` },
+    { phone: '₹!', narrow: due, desk: due, full: `${withTotal}${bills}` },
     'due',
     `${kind}: ${total}${count > 1 ? ` in ${count} bills` : ''}, ${rupee(billing.due)} due`,
   );

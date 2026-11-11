@@ -124,10 +124,12 @@ async function census(stack, browser, who, role, viewport) {
     const page = await context.newPage();
     const refused = [];
     page.on("response", (r) => r.url().includes("/api/") && r.status() >= 400 && refused.push(`${r.status()} ${new URL(r.url()).pathname}`));
-    await page.goto(`${stack.base}${href}`, { waitUntil: "domcontentloaded", timeout: 240000 });
-    await page.getByText(stack.users[who].firstName, { exact: false }).first().waitFor({ timeout: 120000 });
+    const started = Date.now();
+    await page.goto(`${stack.base}${href}`, { waitUntil: "load", timeout: 240000 });
+    if (href.startsWith("/dashboard")) await page.getByText(stack.users[who].firstName, { exact: false }).first().waitFor({ timeout: 180000 });
     await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
     await page.waitForTimeout(500);
+    console.log(`    VISIT ${role} ${href} ${Math.round((Date.now() - started) / 1000)}s refused=${JSON.stringify(refused)}`);
     if (href === "/dashboard/appointments") await page.screenshot({ path: path.join(out, `census-${role.toLowerCase()}-appointments.png`) });
     visited.push({ href, refused });
     await page.close();

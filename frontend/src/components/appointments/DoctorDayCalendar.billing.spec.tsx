@@ -61,7 +61,7 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(screen.getByRole('button', { name: 'Review bill: not billed yet, visit finished' })).toHaveAttribute('data-attention', 'true');
 
     const two = screen.getByRole('button', { name: 'Review bill: ₹1,700 in 2 bills, ₹200 due' });
-    expect(Array.from(two.querySelectorAll('span')).map((n) => n.textContent)).toEqual(['₹!', '₹200 due', '₹1,700 · ₹200 due', '₹1,700 · ₹200 due · 2 bills']);
+    expect(Array.from(two.querySelectorAll('span')).map((n) => n.textContent)).toEqual(['₹!', '₹200 due', '₹1,700 · ₹200 due · 2 bills']);
 
     const types = Array.from(document.querySelectorAll('[data-bill-type]')).map((n) => [n.getAttribute('title'), ...Array.from(n.children).map((c) => c.textContent)]);
     expect(types).toEqual([

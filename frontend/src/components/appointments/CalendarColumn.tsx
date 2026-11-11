@@ -57,15 +57,22 @@ const CHIP_SHOWN_FROM: Record<ChipWidth, string> = {
   phone: 'inline',
   narrow: 'hidden @min-[12rem]:inline',
   desk: 'hidden @min-[24rem]:inline',
-  wide: 'hidden @min-[29rem]:inline',
   full: 'hidden @min-[38rem]:inline',
 };
 const CHIP_HIDDEN_FROM: Record<ChipWidth, string> = {
   phone: '',
   narrow: '@min-[12rem]:hidden',
   desk: '@min-[24rem]:hidden',
-  wide: '@min-[29rem]:hidden',
   full: '@min-[38rem]:hidden',
+};
+
+/**
+ * Block widths from which a row names its status in words instead of a coloured dot. Every row of a
+ * column switches together, and a row without a bill chip has the room sooner.
+ */
+const STATUS_IN_WORDS = {
+  withChip: { dot: '@min-[30rem]/row:hidden', words: 'hidden @min-[30rem]/row:inline-flex' },
+  withoutChip: { dot: '@min-[22rem]/row:hidden', words: 'hidden @min-[22rem]/row:inline-flex' },
 };
 
 const BILLING_TONE: Record<BillingTone, string> = {
@@ -228,11 +235,12 @@ export default function CalendarColumn({
             status.label,
           ].filter(Boolean).join(', ');
           const chip = apt.billing ? billingChip(apt.billing, apt.billType) : null;
+          const statusFit = chip ? STATUS_IN_WORDS.withChip : STATUS_IN_WORDS.withoutChip;
           return (
             <div
               key={key}
               data-appointment-block={apt.id || apt.slot}
-              className="@container group absolute p-px"
+              className="@container/row group absolute p-px"
               style={{
                 top: `${topPct}%`,
                 height: `${heightPct}%`,
@@ -268,13 +276,13 @@ export default function CalendarColumn({
                       </span>
                       {apt.billType && (
                         <span data-bill-type title={BILL_TYPE_LABEL[apt.billType]} className={`hidden shrink-0 font-semibold @min-[18em]:inline ${BILL_TYPE_TONE[apt.billType]}`}>
-                          <span className="@min-[32em]:hidden">{BILL_TYPE_SHORT[apt.billType]}</span>
-                          <span className="hidden @min-[32em]:inline">{BILL_TYPE_LABEL[apt.billType]}</span>
+                          <span className="@min-[38rem]/row:hidden">{BILL_TYPE_SHORT[apt.billType]}</span>
+                          <span className="hidden @min-[38rem]/row:inline">{BILL_TYPE_LABEL[apt.billType]}</span>
                         </span>
                       )}
                       <span data-appointment-status title={status.label} className="hidden shrink-0 items-center @min-[10em]:inline-flex">
-                        <span className={`size-2 rounded-full ${status.dotClassName} @min-[26em]:hidden`} aria-hidden="true" />
-                        <Badge variant={status.badgeVariant} className="hidden whitespace-nowrap px-1.5 py-0 text-[10px] leading-4 @min-[26em]:inline-flex">
+                        <span className={`size-2 rounded-full ${status.dotClassName} ${statusFit.dot}`} aria-hidden="true" />
+                        <Badge variant={status.badgeVariant} className={`whitespace-nowrap px-1.5 py-0 text-[10px] leading-3.5 ${statusFit.words}`}>
                           {status.label}
                         </Badge>
                       </span>

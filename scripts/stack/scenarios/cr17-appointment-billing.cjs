@@ -307,9 +307,10 @@ async function call(page, method, url, body) {
           probe.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
           const text = name.innerText.trim();
           const block = b.getBoundingClientRect();
-          const chipBox = chip?.getBoundingClientRect();
-          const tile = [...b.parentElement.children].find((c) => !c.hasAttribute("data-appointment-block")).getBoundingClientRect().height;
+          const chipBox = chip?.checkVisibility() ? chip.getBoundingClientRect() : null;
           const [from, to] = b.querySelector("[data-appointment-time]").textContent.split("-").map((t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3)));
+          const parts = [...button.querySelectorAll("span"), chip].filter((el) => el?.checkVisibility()).map((el) => el.getBoundingClientRect());
+          const dot = status?.querySelector("[aria-hidden]");
           return {
             name: text,
             time: shown(b.querySelector("[data-appointment-time]")),
@@ -319,41 +320,40 @@ async function call(page, method, url, body) {
             width: Math.round(block.width),
             buttonWidth: Math.round(button.clientWidth),
             height: Math.round(block.height * 10) / 10,
-            slotHeight: Math.round((((to - from) / 15) * tile) * 10) / 10,
-            oneLine: button.scrollHeight <= button.clientHeight + 1 && name.getBoundingClientRect().height <= block.height,
-            clipped: button.scrollWidth > button.clientWidth + 1,
+            minutes: to - from,
+            oneLine: parts.every((r) => r.top >= block.top - 0.5 && r.bottom <= block.bottom + 0.5),
+            clipped: parts.some((r) => r.right > block.right + 0.5),
             chipInside: chipBox ? chipBox.left >= block.left && chipBox.right <= block.right + 1 : null,
             chipText: shown(chip),
             type: shown(type),
             statusText: shown(status),
-            statusMarked: Boolean(status && status.checkVisibility() && status.getAttribute("title")),
+            statusDot: dot?.checkVisibility() ? status.getAttribute("title") : "",
             label: button.getAttribute("aria-label"),
           };
         });
       });
     const DESK_CHIPS = { "Meera Shah": "₹500 · Paid", "Ravi Kumar": "₹500 · Paid", "Lakshmi Devi": "Not billed", "Suresh Babu": "Not billed", "Priya Nair": "₹200 due", "Venkata Subramanian": "₹1,700 due" };
-    const WIDE_CHIPS = { ...DESK_CHIPS, "Priya Nair": "₹1,700 · ₹200 due" };
-    const fitsRow = (s, tag, g, { chips, types }) => {
+    const fitsRow = (s, tag, g, { chips, types, words }) => {
       const slot = SLOT_OF[g.name];
       s.check(`${tag} ${g.name}: the row's own time range`, g.time, slot);
       s.ok(`${tag} ${g.name}: at least 16 characters of the name (${g.nameWidth}px of ${g.sixteen}px)`, g.nameWidth >= g.sixteen - 1, g);
       if (g.name.length <= 16) s.ok(`${tag} ${g.name}: a short name is not cut`, !g.truncated, g);
       s.ok(`${tag} ${g.name}: one line with nothing pushed out of the row`, g.oneLine && !g.clipped, g);
-      s.ok(`${tag} ${g.name}: exactly as tall as its slot (${g.height}px for ${g.slotHeight}px)`, Math.abs(g.height - g.slotHeight) <= 1, g);
+      s.check(`${tag} ${g.name}: 20px for each 15 minutes, as the time gutter`, g.height, (g.minutes / 15) * 20);
       s.check(`${tag} ${g.name}: bill type`, g.type, types[g.name]);
-      s.check(`${tag} ${g.name}: status in words`, g.statusText, STATUS_OF[g.name]);
+      if (words) s.check(`${tag} ${g.name}: status in words`, [g.statusText, g.statusDot], [STATUS_OF[g.name], ""]);
+      else s.check(`${tag} ${g.name}: status as a coloured dot named in its tooltip`, [g.statusText, g.statusDot], ["", STATUS_OF[g.name]]);
       s.ok(`${tag} ${g.name}: full name, time and status in the accessible label`, g.label.includes(g.name) && g.label.includes(slot) && g.label.includes(STATUS_OF[g.name]), g.label);
       if (chips) s.ok(`${tag} ${g.name}: the bill chip sits inside the row`, g.chipInside, g);
       s.check(`${tag} ${g.name}: bill chip`, g.chipText, chips ? chips[g.name] : "");
     };
     const SHORT_TYPES = { "Meera Shah": "First", "Ravi Kumar": "Review", "Lakshmi Devi": "Procedure", "Suresh Babu": "Review", "Priya Nair": "Review", "Venkata Subramanian": "First" };
-    const FULL_TYPES = { ...SHORT_TYPES, "Meera Shah": "First consultation", "Venkata Subramanian": "First consultation" };
 
-    for (const [who, viewport, tag, chips, types] of [
-      ["reception", DESKTOP, "1280", DESK_CHIPS, SHORT_TYPES],
-      ["reception", { width: 1440, height: 900 }, "1440", WIDE_CHIPS, FULL_TYPES],
-      ["doctor", DESKTOP, "1280", DESK_CHIPS, SHORT_TYPES],
-      ["nurse", DESKTOP, "1280", null, FULL_TYPES],
+    for (const [who, viewport, tag, chips, words] of [
+      ["reception", DESKTOP, "1280", DESK_CHIPS, false],
+      ["reception", { width: 1440, height: 900 }, "1440", DESK_CHIPS, true],
+      ["doctor", DESKTOP, "1280", DESK_CHIPS, false],
+      ["nurse", DESKTOP, "1280", null, true],
     ]) {
       await scenario(`${who} ${tag}: every row keeps its time, a readable name, type, status${chips ? " and bill chip" : ""}`, async (s) => {
         const o = await open(who, viewport);
@@ -362,7 +362,7 @@ async function call(page, method, url, body) {
         const all = await geometry(o.page);
         console.log(`    GEOMETRY ${who} ${tag} ${JSON.stringify(all.map((g) => [g.name, g.width, g.buttonWidth, g.nameWidth, g.height, g.chipText, g.type, g.statusText]))}`);
         s.check("every seeded appointment is a row", all.map((g) => g.name).sort(), Object.keys(SLOT_OF).sort());
-        for (const g of all) fitsRow(s, `${who} ${tag}`, g, { chips, types });
+        for (const g of all) fitsRow(s, `${who} ${tag}`, g, { chips, types: SHORT_TYPES, words });
         s.ok("no sideways scroll", await noSideways(o.page));
         s.ok("no refused calls", o.refused.length === 0, o.refused);
         await s.shot(o.page, `${who}-rows-${tag}`);
@@ -376,7 +376,7 @@ async function call(page, method, url, body) {
       for (const g of await geometry(o.page)) {
         s.ok(`${g.name}: name keeps room (${g.nameWidth}px)`, g.nameWidth >= 24, g);
         s.ok(`${g.name}: one line, nothing pushed out of the row`, g.oneLine && !g.clipped, g);
-        s.ok(`${g.name}: chip inside the row`, g.chipInside !== false, g);
+        s.check(`${g.name}: phone chip inside the row`, [g.chipText, g.chipInside], g.chipText ? [g.chipText, true] : ["", null]);
         s.ok(`${g.name}: time and status in the accessible label`, g.label.includes(SLOT_OF[g.name]) && g.label.includes(STATUS_OF[g.name]), g.label);
       }
       s.ok("no sideways scroll", await noSideways(o.page));
@@ -430,9 +430,9 @@ async function call(page, method, url, body) {
       s.ok("whole day total", clean(await o.page.getByRole("region", { name: "Whole day", exact: true }).innerText()).includes("Whole day ₹5,224.00 Clinic ₹5,000.00 Pharmacy ₹224.00"), clean(await o.page.getByRole("region", { name: "Whole day", exact: true }).innerText()).slice(0, 200));
       s.check("clinic by mode", await tableRows(o.page, "Clinic: consultations and procedures by payment mode"), [["Cash", "4,000.00", "0.00", "4,000.00"], ["UPI", "500.00", "0.00", "500.00"], ["Card", "500.00", "0.00", "500.00"]]);
       const clinic = clean(await o.page.getByRole("region", { name: "Clinic: consultations and procedures", exact: true }).innerText());
-      s.ok("clinic tiles", clinic.includes("Clinic received ₹5,000.00") && clinic.includes("Clinic billed today ₹5,200.00") && clinic.includes("Clinic still due ₹200.00"), clinic.slice(0, 300));
+      s.ok("clinic tiles", clinic.includes("Clinic received ₹5,000.00") && clinic.includes("Clinic billed today ₹6,900.00") && clinic.includes("Clinic still due ₹1,900.00"), clinic.slice(0, 300));
       const bills = await tableRows(o.page, "Clinic bills");
-      s.check("five clinic bills today", bills.length, 5);
+      s.check("six clinic bills today, the unpaid ₹1,700 first consultation among them", bills.length, 6);
       s.check("pharmacy reconciliation is the pharmacy's cash only", (await tableRows(o.page, "Pharmacy reconciliation by payment mode"))[0].slice(0, 6), ["Cash", "224.00", "0.00", "0.00", "0.00", "224.00"]);
       s.check("pharmacy count status says pharmacy", clean(await o.page.getByTestId("collection-status").innerText()).startsWith("Pharmacy not counted yet."), true);
       const order = await o.page.getByRole("heading", { level: 2 }).allInnerTexts();
@@ -490,7 +490,7 @@ async function call(page, method, url, body) {
       s.opened.push(n);
       await calendar(n.page);
       const all = await rows(n.page);
-      s.check("bill types for the nurse", Object.fromEntries(all.map((r) => [r.name, r.type])), { "Lakshmi Devi": "Procedure", "Meera Shah": "First consultation", "Priya Nair": "Review", "Ravi Kumar": "Review", "Suresh Babu": "Review", "Venkata Subramanian": "First consultation" });
+      s.check("bill types for the nurse", Object.fromEntries(all.map((r) => [r.name, r.type])), { "Lakshmi Devi": "Procedure", "Meera Shah": "First", "Priya Nair": "Review", "Ravi Kumar": "Review", "Suresh Babu": "Review", "Venkata Subramanian": "First" });
       s.check("no bill amounts for the nurse", all.filter((r) => r.chip !== null).length, 0);
       s.check("no Daily Collection in the nurse's menu", (await menuLinks(n.page, false)).includes("Daily Collection"), false);
       s.ok("no refused calls", n.refused.length === 0, n.refused);

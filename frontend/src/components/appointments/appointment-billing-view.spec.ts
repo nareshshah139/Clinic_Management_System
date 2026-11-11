@@ -3,7 +3,7 @@ import { billingChip } from './appointment-billing-view';
 const invoice = (id: string, total: number, received: number) => ({ id, invoiceNo: id, total, received, due: total - received });
 
 describe('the bill chip on an appointment row', () => {
-  it('names the amount to collect on a desktop row and adds the total and bill count as the row widens', () => {
+  it('names the amount to collect on a desktop row and adds the total and bill count on a wide row', () => {
     const chip = billingChip(
       { state: 'DUE', total: 1700, received: 1500, due: 200, attention: true, invoices: [invoice('INV-2', 500, 500), invoice('INV-3', 1200, 1000)] },
       'REVIEW',
@@ -12,7 +12,6 @@ describe('the bill chip on an appointment row', () => {
       steps: [
         { from: 'phone', text: '₹!' },
         { from: 'narrow', text: '₹200 due' },
-        { from: 'wide', text: '₹1,700 · ₹200 due' },
         { from: 'full', text: '₹1,700 · ₹200 due · 2 bills' },
       ],
       text: '₹1,700 · ₹200 due · 2 bills',
