@@ -7,6 +7,7 @@ import {
 } from '../../shared/search/product-search';
 import { inventoryNameAliases } from './inventory-names';
 import { money } from './inventory-stock';
+import { STRENGTH_REQUIRED_FORMS } from './medicine-names';
 
 type StockDatabase = Pick<
   Prisma.TransactionClient,
@@ -51,9 +52,39 @@ const issues = {
   'Expiry missing': Prisma.sql`i."expiryDate" IS NULL`,
   'Purchase price missing': Prisma.sql`i."costPrice" = 0`,
   'MRP missing': Prisma.sql`coalesce(i.mrp, 0) = 0`,
+  'Strength missing': Prisma.sql`i.form::text IN (${Prisma.join(STRENGTH_REQUIRED_FORMS)}) AND NOT i."isCombination" AND coalesce(trim(i.strength), '') = ''`,
 };
 const truthy = (value: Prisma.Sql) =>
   Prisma.sql`coalesce(${value}, 'null'::jsonb) NOT IN ('null'::jsonb, 'false'::jsonb, '0'::jsonb, '""'::jsonb)`;
+const mappingState = Prisma.sql`CASE WHEN i.meta->>'mappingStatus' = 'PENDING' OR ${truthy(Prisma.sql`i.meta->'mappingPending'`)} THEN 'PENDING'
+    WHEN EXISTS (SELECT 1 FROM "_DrugToInventoryItem" link WHERE link."B" = i.id) THEN 'MAPPED' ELSE 'UNMAPPED' END`;
+const blank = (value: Prisma.Sql) => Prisma.sql`btrim(coalesce(${value}, '')) = ''`;
+/** The data-quality strip: each gap's count and its stock-list filter share this one condition. */
+export const QUALITY_GAPS = {
+  LOCATION: blank(column('storageLocation')),
+  CATEGORY: blank(column('category')),
+  HSN: blank(column('hsnCode')),
+  MIN_MAX: Prisma.sql`(i."minStockLevel" IS NULL OR i."maxStockLevel" IS NULL)`,
+  UNMAPPED: Prisma.sql`${mappingState} = 'UNMAPPED'`,
+};
+export type QualityGap = keyof typeof QUALITY_GAPS;
+const branchItems = (branchId: string) => Prisma.sql`WITH branch_items AS (
+    SELECT i.*, inventory_read_json(i.metadata) AS meta FROM inventory_items i WHERE i."branchId" = ${branchId}
+  )`;
+
+/**
+ * @cc [owner:nareshshah139,label:product] stock-gap-counts-match-filter
+ * Each data-quality gap count MUST cover every batch in the branch, zero included, and the stock
+ * list filtered by that gap MUST list exactly the batches counted.
+ */
+export async function readStockGaps(db: StockDatabase, branchId: string): Promise<Record<QualityGap, number>> {
+  const [row] = await db.$queryRaw<{ gaps: Record<QualityGap, number> }[]>(Prisma.sql`${branchItems(branchId)}
+    SELECT jsonb_build_object(${Prisma.join(Object.entries(QUALITY_GAPS).flatMap(([gap, condition]) => [Prisma.sql`${gap}`, Prisma.sql`count(*) FILTER (WHERE ${condition})`]))}) AS gaps
+    FROM branch_items i`);
+  const ordered = {} as Record<QualityGap, number>;
+  for (const gap of Object.keys(QUALITY_GAPS) as QualityGap[]) ordered[gap] = Number(row.gaps[gap]);
+  return ordered;
+}
 const totals = Prisma.sql`jsonb_build_object(
   'batches', count(*), 'units', coalesce(sum(i."currentStock"), 0),
   'PTR', coalesce(sum(i."currentStock" * i."costPrice"), 0),
@@ -136,9 +167,7 @@ export async function readStockPage(
   const sortOrder = q.sortOrder || (sortBy === 'relevance' ? 'desc' : 'asc');
   const page = Math.max(1, Math.floor(Number(q.page) || 1)),
     limit = Math.min(100, Math.max(1, Math.floor(Number(q.limit) || 30)));
-  const base = Prisma.sql`WITH branch_items AS (
-    SELECT i.*, inventory_read_json(i.metadata) AS meta FROM inventory_items i WHERE i."branchId" = ${branchId}
-  )`;
+  const base = branchItems(branchId);
   const [summary] = await db.$queryRaw<
     { facets: Record<string, string[]>; quality: Record<string, number> }[]
   >(Prisma.sql`${base}
@@ -191,9 +220,12 @@ export async function readStockPage(
     filters.push(
       Prisma.sql`i."currentStock" > 0 AND i."expiryDate" >= ${expiryStart} AND i."expiryDate" <= ${future}`,
     );
-  if (q.mapping)
-    filters.push(Prisma.sql`CASE WHEN i.meta->>'mappingStatus' = 'PENDING' OR ${truthy(Prisma.sql`i.meta->'mappingPending'`)} THEN 'PENDING'
-    WHEN EXISTS (SELECT 1 FROM "_DrugToInventoryItem" link WHERE link."B" = i.id) THEN 'MAPPED' ELSE 'UNMAPPED' END = ${q.mapping}`);
+  if (q.mapping) filters.push(Prisma.sql`${mappingState} = ${q.mapping}`);
+  if (q.gap) {
+    if (!Object.hasOwn(QUALITY_GAPS, q.gap))
+      throw new BadRequestException('Unknown data-quality gap');
+    filters.push(QUALITY_GAPS[q.gap as QualityGap]);
+  }
   if (q.missing) {
     const matching = Object.entries(issues)
       .filter(([name]) =>
@@ -247,6 +279,7 @@ export async function readStockPage(
     for (;;) {
       const candidates = await db.$queryRaw<any[]>(Prisma.sql`${filtered()}
         SELECT i.id, i.name, i."brandName", i."genericName", i.manufacturer, i.category, i."packSize", i."packUnit",
+          i.form, i.strength, i."isCombination", i."itemCode", i.unit,
           i."batchNumber", i.barcode, i.sku, i.meta AS metadata,
           coalesce((SELECT jsonb_agg(jsonb_build_object('id', d.id, 'name', d.name, 'packSizeLabel', d."packSizeLabel", 'composition1', d.composition1,
             'composition2', d.composition2, 'manufacturerName', d."manufacturerName", 'strength', d.strength, 'dosageForm', d."dosageForm") ORDER BY d.id)
@@ -284,6 +317,7 @@ export async function readStockPage(
             i.barcode,
             i.sku,
             i.metadata.sourceItemCode,
+            i.itemCode,
           ],
         });
         if (match) matches.set(i.id, match);

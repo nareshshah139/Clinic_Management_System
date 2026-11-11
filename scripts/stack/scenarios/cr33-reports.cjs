@@ -206,7 +206,7 @@ async function tableData(page, name) {
       await page.goto(`${reports}?report=daily-collection`, { waitUntil: "networkidle" });
       await page.getByTestId("collection-status").waitFor();
       assert.equal(await page.getByTestId("collection-status").getAttribute("data-status"), "NOT_COUNTED");
-      const table = await tableData(page, "Reconciliation by payment mode");
+      const table = await tableData(page, "Pharmacy reconciliation by payment mode");
       const expectedOf = (label) => num(table.rows.find((r) => r[0] === label)[5]);
       near(expectedOf("Cash"), expected.today.CASH, "cash expected");
       near(expectedOf("UPI"), expected.today.UPI, "upi expected");
@@ -218,7 +218,7 @@ async function tableData(page, name) {
       await page.getByRole("textbox", { name: "Card counted" }).fill(String(expected.today.CARD));
       assert.equal(await page.getByTestId("difference-total").innerText(), "-50.00");
       await page.getByRole("button", { name: "Save count" }).click();
-      await page.getByText(/Count saved\. Short by ₹50\.00/).waitFor();
+      await page.getByText(/Count saved\. Pharmacy short by ₹50\.00/).waitFor();
       assert.equal(await page.getByTestId("collection-status").getAttribute("data-status"), "SHORT");
       await shot(page, "daily-collection-short-1440");
     });
@@ -230,7 +230,7 @@ async function tableData(page, name) {
       await page.reload({ waitUntil: "networkidle" });
       await page.getByRole("textbox", { name: "Cash counted" }).fill(String(expected.today.CASH));
       await page.getByRole("button", { name: "Save recount" }).click();
-      await page.getByText(/Count saved\. Balanced/).waitFor();
+      await page.getByText(/Count saved\. Pharmacy balanced/).waitFor();
       await doctor.page.getByRole("button", { name: "Save recount" }).click();
       await doctor.page.getByText(/Someone else saved a count/).waitFor();
       assert.equal(await doctor.page.getByRole("textbox", { name: "Cash counted" }).inputValue(), String(expected.today.CASH));
@@ -269,19 +269,19 @@ async function tableData(page, name) {
       const text = () => role.page.locator("main").innerText();
       await check(`${who}: a refund handed back on Tuesday for Monday's revised bill takes 50 out of Tuesday's expected cash`, async () => {
         await role.page.goto(`${reports}?report=daily-collection&from=${tuesday}`, { waitUntil: "networkidle" });
-        const modes = await tableData(role.page, "Reconciliation by payment mode");
+        const modes = await tableData(role.page, "Pharmacy reconciliation by payment mode");
         const mode = (label) => modes.rows.find((r) => r[0] === label);
         assert.deepEqual([mode("Cash").slice(0, 6), mode("Card").slice(0, 6)], [
           ["Cash", "0.00", "0.00", "0.00", "-50.00", "-50.00"],
           ["Card", "1,008.00", "0.00", "0.00", "0.00", "1,008.00"],
         ]);
-        const documents = await tableData(role.page, "Bills, counter sales and returns");
+        const documents = await tableData(role.page, "Pharmacy bills, counter sales and returns");
         const refunded = documents.rows.find((r) => r[0] === "PHI-2024-001");
         assert.deepEqual([refunded[1], refunded[5], refunded[6]], ["Bill of 11/03/2024", "-50.00", "Refund · Cash"]);
         assert.ok(!(await text()).includes("DRAFT-"), "no draft placeholder on the page");
         await shot(role.page, `refund-day-${who}-1440`);
         await role.page.goto(`${reports}?report=daily-collection&from=${monday}`, { waitUntil: "networkidle" });
-        const mondayModes = await tableData(role.page, "Reconciliation by payment mode");
+        const mondayModes = await tableData(role.page, "Pharmacy reconciliation by payment mode");
         assert.deepEqual(mondayModes.rows.find((r) => r[0] === "Cash").slice(0, 6), ["Cash", "200.00", "0.00", "0.00", "0.00", "200.00"]);
       });
       await check(`${who}: the bill-discounted bill reads taxable 900 on 1000 at 12% with a 10% bill discount, in the Sales Register and GSTR-1`, async () => {

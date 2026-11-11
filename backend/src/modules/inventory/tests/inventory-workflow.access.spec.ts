@@ -8,6 +8,7 @@ import { InventoryWorkflowScheduler } from '../inventory-workflow-scheduler.serv
 import { InventoryWorkflowService } from '../inventory-workflow.service';
 import { InventoryWorkspaceService } from '../inventory-workspace.service';
 import { InventoryReconciliationService } from '../reconciliation/inventory-reconciliation.service';
+import { InventoryOptimizationService } from '../stock-optimization.service';
 import { PharmacySupplierCreditService } from '../../pharmacy/pharmacy-supplier-credit.service';
 import { accessApp } from './inventory-access-app';
 
@@ -36,6 +37,7 @@ describe('/inventory/workspace access control', () => {
       { provide: InventoryLabelService, useValue: {} },
       { provide: InventoryReconciliationService, useValue: {} },
       { provide: PharmacySupplierCreditService, useValue: {} },
+      InventoryOptimizationService,
     ]);
   });
   afterAll(() => app.close());
@@ -63,6 +65,22 @@ describe('/inventory/workspace access control', () => {
     await read('patient').expect(403);
     await batchChange('patient').expect(403);
     await bulkChange('patient').expect(403);
+  });
+
+  it.each(['receptionNoGrants', 'nurseNoGrants'])(
+    'refuses %s the data-quality counts, the optimization run and its rules',
+    async (user) => {
+      await http().get(`${base}/stock/gaps`).set('x-user', user).expect(403);
+      await http().post(`${base}/optimization/run`).set('x-user', user).expect(403);
+      await http().patch(`${base}/optimization/rules`).set('x-user', user).send({ nonMovingDays: 60, version: 0 }).expect(403);
+    },
+  );
+
+  it('lets a stock reader see counts but not set optimization rules or draft a return', async () => {
+    const rules = await http().patch(`${base}/optimization/rules`).set('x-user', 'receptionReader').send({ nonMovingDays: 60, version: 0 });
+    expect([rules.status, rules.body.message]).toEqual([403, 'This action requires inventory:transaction:create']);
+    const draft = await http().post(`${base}/optimization/return-drafts`).set('x-user', 'receptionReader').send({ distributorGstin: 'X', requestKey: 'k' });
+    expect([draft.status, draft.body.message]).toEqual([403, 'This action requires inventory:transaction:create']);
   });
 
   it('lets a non-manager with the read permission read but not change stock', async () => {

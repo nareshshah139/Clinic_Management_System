@@ -14,6 +14,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ItemRequestDuplicateWarning } from './ItemRequestDuplicateWarning';
 import { isPendingApproval, type PossibleDuplicates } from '@/lib/inventory-item-requests';
 import { apiClient } from '@/lib/api';
+import { medicineNameProblems, normalizeStrength, standardMedicineName } from '@/lib/medicine-names';
+import { MedicineNameFields } from './MedicineNameFields';
 
 
 interface AddInventoryItemDialogProps {
@@ -28,6 +30,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
   const [error, setError] = useState<string | null>(null);
   const [sentForApproval, setSentForApproval] = useState(false);
   const [duplicates, setDuplicates] = useState<PossibleDuplicates | null>(null);
+  const [nameErrors, setNameErrors] = useState<Partial<Record<'form' | 'name' | 'strength', string>>>({});
 
   // Form state
   const [formData, setFormData] = useState({
@@ -37,6 +40,10 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
     description: '',
     genericName: '',
     brandName: '',
+    form: '',
+    strength: '',
+    isCombination: false,
+    itemCode: '',
     type: 'MEDICINE',
     category: '',
     subCategory: '',
@@ -79,13 +86,21 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const medicine = formData.type === 'MEDICINE';
+    const naming = { type: formData.type, form: formData.form || null, name: formData.name, strength: formData.strength, isCombination: formData.isCombination };
+    const problems = medicine ? medicineNameProblems(naming) : [];
+    setNameErrors(Object.fromEntries(problems.map(p => [p.field, p.message])));
+    if (problems.length) {
+      document.getElementById(`medicine-${problems[0].field}`)?.focus();
+      return;
+    }
     setLoading(true);
     setError(null);
 
     try {
       // Prepare data, converting strings to numbers where needed
       const payload: Record<string, unknown> = {
-        name: formData.name,
+        name: medicine ? standardMedicineName(naming) : formData.name,
         type: formData.type,
         costPrice: parseFloat(formData.costPrice),
         sellingPrice: parseFloat(formData.sellingPrice),
@@ -96,7 +111,13 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
       // Add optional string fields
       if (formData.description) payload.description = formData.description;
       if (formData.genericName) payload.genericName = formData.genericName;
-      if (formData.brandName) payload.brandName = formData.brandName;
+      if (medicine) {
+        payload.brandName = formData.name.trim();
+        payload.form = formData.form;
+        if (!formData.isCombination && formData.strength.trim()) payload.strength = normalizeStrength(formData.strength);
+        payload.isCombination = formData.isCombination;
+      } else if (formData.brandName) payload.brandName = formData.brandName;
+      if (formData.itemCode.trim()) payload.itemCode = formData.itemCode.trim();
       if (formData.category) payload.category = formData.category;
       if (formData.subCategory) payload.subCategory = formData.subCategory;
       if (formData.manufacturer) payload.manufacturer = formData.manufacturer;
@@ -143,6 +164,10 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
         description: '',
         genericName: '',
         brandName: '',
+        form: '',
+        strength: '',
+        isCombination: false,
+        itemCode: '',
         type: 'MEDICINE',
         category: '',
         subCategory: '',
@@ -210,24 +235,11 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {formData.type === 'MEDICINE' && <InventoryRegimenFields value={formData}
-            onChange={patch => setFormData(prev => ({ ...prev, ...patch } as typeof prev))} />}
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Basic Information</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Item Name *</Label>
-                <Input
-                  id="name"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Paracetamol 500mg"
-                />
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="type">Type *</Label>
                 <Select value={formData.type} onValueChange={(value: string) => setFormData({ ...formData, type: value })}>
@@ -242,7 +254,36 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
                   </SelectContent>
                 </Select>
               </div>
+              {formData.type !== 'MEDICINE' && (
+                <div className="space-y-2">
+                  <Label htmlFor="name">Item Name *</Label>
+                  <Input
+                    id="name"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g., Cotton roll"
+                  />
+                </div>
+              )}
             </div>
+
+            {formData.type === 'MEDICINE' && (
+              <MedicineNameFields
+                value={{ form: formData.form, brandName: formData.name, strength: formData.strength, isCombination: formData.isCombination }}
+                errors={nameErrors}
+                onChange={(patch) => {
+                  setNameErrors({});
+                  setFormData(prev => ({
+                    ...prev,
+                    ...(patch.form !== undefined && { form: patch.form || '' }),
+                    ...(patch.brandName !== undefined && { name: patch.brandName || '' }),
+                    ...(patch.strength !== undefined && { strength: patch.strength || '' }),
+                    ...(patch.isCombination !== undefined && { isCombination: Boolean(patch.isCombination) }),
+                  }));
+                }}
+              />
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
@@ -266,7 +307,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
                 />
               </div>
 
-              <div className="space-y-2">
+              {formData.type !== 'MEDICINE' && <div className="space-y-2">
                 <Label htmlFor="brandName">Brand Name</Label>
                 <Input
                   id="brandName"
@@ -274,7 +315,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
                   onChange={(e) => setFormData({ ...formData, brandName: e.target.value })}
                   placeholder="e.g., Crocin"
                 />
-              </div>
+              </div>}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -322,11 +363,26 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
             </div>
           </div>
 
+          {formData.type === 'MEDICINE' && <InventoryRegimenFields value={formData}
+            onChange={patch => setFormData(prev => ({ ...prev, ...patch } as typeof prev))} />}
+
           {/* Identification */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Identification</h3>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="itemCode">Item code</Label>
+                <Input
+                  id="itemCode"
+                  value={formData.itemCode}
+                  onChange={(e) => setFormData({ ...formData, itemCode: e.target.value })}
+                  placeholder="e.g., 13 74"
+                  aria-describedby="itemCode-hint"
+                />
+                <p id="itemCode-hint" className="text-xs text-muted-foreground">Never printed</p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="barcode">Barcode</Label>
                 <Input

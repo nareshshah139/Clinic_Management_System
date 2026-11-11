@@ -25,6 +25,7 @@ import { PharmacyPurchaseInvoiceService } from '../pharmacy/pharmacy-purchase-in
 import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { InventoryItemRequestService } from '../inventory/inventory-item-request.service';
+import { ITEM_NAMING_INSTRUCTIONS, ITEM_NAMING_SCHEMA, nameProposedItem, ProposedItemNaming } from './proposed-item-naming';
 import { ReportsService } from '../reports/reports.service';
 import { grantsForRole, parsePermissionList, permissionGranted } from '../../shared/access/permission-grants';
 import {
@@ -55,6 +56,7 @@ type CodexProposalAction = {
   preview?: Record<string, unknown>;
   inputJson?: string;
   previewJson?: string;
+  itemNaming?: ProposedItemNaming;
 };
 
 type CodexProposal = {
@@ -137,6 +139,7 @@ const CODEX_OUTPUT_SCHEMA = {
                 expectedVersion: { type: 'string' },
                 inputJson: { type: 'string' },
                 previewJson: { type: 'string' },
+                itemNaming: ITEM_NAMING_SCHEMA,
               },
               required: [
                 'actionType',
@@ -146,6 +149,7 @@ const CODEX_OUTPUT_SCHEMA = {
                 'expectedVersion',
                 'inputJson',
                 'previewJson',
+                'itemNaming',
               ],
             },
           },
@@ -517,30 +521,32 @@ export class PharmacyAgentService implements OnModuleInit {
         });
       }
 
-      const proposals = await this.stageProposals({
+      const { staged: proposals, questions } = await this.stageProposals({
         sessionId: session.id,
         runId: run.id,
         branchId: user.branchId,
         userId: user.id,
         proposals: output.proposals || [],
       });
+      const followUpQuestion = questions.length ? questions.join('\n\n') : output.followUpQuestion;
 
       const assistantStructured = {
         chart: output.chart || null,
         report: output.report || null,
         proposals: proposals.map((proposal: any) => proposal.id),
-        needsFollowUp: Boolean(output.needsFollowUp),
-        followUpQuestion: output.followUpQuestion || null,
+        needsFollowUp: Boolean(output.needsFollowUp || questions.length),
+        followUpQuestion: followUpQuestion || null,
       };
       const assistantMessage = await prisma.pharmacyAgentMessage.create({
         data: {
           sessionId: session.id,
           branchId: user.branchId,
           role: 'ASSISTANT',
-          content:
-            output.answer ||
-            output.followUpQuestion ||
-            'I reviewed the pharmacy context and prepared the result.',
+          content: questions.length
+            ? [proposals.length ? output.answer : '', ...questions].filter(Boolean).join('\n\n')
+            : output.answer ||
+              output.followUpQuestion ||
+              'I reviewed the pharmacy context and prepared the result.',
           structured: assistantStructured,
         },
       });
@@ -1196,6 +1202,7 @@ export class PharmacyAgentService implements OnModuleInit {
       'If you need more app data, use dataRequests with names from: pharmacy_dashboard, low_stock, recent_invoices, prescription_queue, purchase_invoices, inventory_report, drug_search, drug_catalog.',
       'For drug master questions about all drugs, prices, cheapest/most expensive drugs, names starting with a prefix, or ordering by price, request drug_catalog. Example paramsJson: {"sortBy":"price","sortOrder":"desc","limit":100}. Use {"startsWith":"A"} for prefix questions.',
       'Allowed proposal actionType values are: create_drug, update_drug, create_inventory_item, update_inventory_item, adjust_stock, create_purchase_invoice_draft, review_purchase_invoice, commit_purchase_invoice_stock.',
+      ITEM_NAMING_INSTRUCTIONS,
       'For charts, return a Recharts-compatible chart object with type, title, xKey, yKeys, and data.',
       'Do not mention secrets, tokens, filesystem internals, or implementation details.',
       '',
@@ -1289,8 +1296,17 @@ export class PharmacyAgentService implements OnModuleInit {
   }) {
     const prisma = this.prisma as any;
     const staged: any[] = [];
+    const questions: string[] = [];
     for (const rawProposal of (input.proposals || []).slice(0, 5)) {
-      const actions = this.normalizeProposalActions(rawProposal.actions || []);
+      const actions = this.normalizeProposalActions(rawProposal.actions || []).flatMap((action) => {
+        if (action.actionType !== 'create_inventory_item') return [action];
+        const named = nameProposedItem(action.input, action.itemNaming);
+        if ('question' in named) {
+          questions.push(named.question);
+          return [];
+        }
+        return [{ ...action, input: named.input }];
+      });
       if (actions.length === 0) continue;
       const proposal = await prisma.pharmacyAgentProposal.create({
         data: {
@@ -1330,7 +1346,7 @@ export class PharmacyAgentService implements OnModuleInit {
       });
       staged.push(proposal);
     }
-    return staged;
+    return { staged, questions };
   }
 
   private normalizeProposalActions(actions: CodexProposalAction[]) {
@@ -1348,6 +1364,7 @@ export class PharmacyAgentService implements OnModuleInit {
         expectedVersion: action.expectedVersion || null,
         input: action.input || {},
         preview: action.preview || {},
+        itemNaming: action.itemNaming,
       }));
   }
 
@@ -1420,7 +1437,9 @@ export class PharmacyAgentService implements OnModuleInit {
           throw new BadRequestException('targetId is required');
         return this.drugService.update(action.targetId, input, user.branchId);
       case 'create_inventory_item': {
-        const outcome = await this.itemRequestService.createOrRequest(input, {
+        const named = nameProposedItem(input);
+        if ('question' in named) throw new BadRequestException(named.question);
+        const outcome = await this.itemRequestService.createOrRequest(named.input as any, {
           id: user.id,
           branchId: user.branchId,
           role: String(user.role),

@@ -254,11 +254,11 @@ const istToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkat
           paise(cashBefore.expected) - paise(cashAfter.expected), paise(cashAfter.refunds) - paise(cashBefore.refunds),
         ], [paise(refund), paise(refund)]);
         await go(page, `/dashboard/pharmacy/reports?report=daily-collection&from=${today}`);
-        const documents = page.getByRole("table", { name: "Bills, counter sales and returns", exact: true });
+        const documents = page.getByRole("table", { name: "Pharmacy bills, counter sales and returns", exact: true });
         await documents.locator("tbody tr").first().waitFor({ timeout: 120000 });
         const refundShown = (await documents.locator("tbody tr").filter({ hasText: sold.invoiceNumber }).allInnerTexts()).some((text) => clean(text).includes("Refund · Cash"));
         if (width === "1280") {
-          const cashRow = page.getByRole("table", { name: "Reconciliation by payment mode", exact: true }).locator("tbody tr").filter({ has: page.getByRole("rowheader", { name: "Cash", exact: true }) });
+          const cashRow = page.getByRole("table", { name: "Pharmacy reconciliation by payment mode", exact: true }).locator("tbody tr").filter({ has: page.getByRole("rowheader", { name: "Cash", exact: true }) });
           const cashCells = (await cashRow.locator("td").allInnerTexts()).map(clean);
           check(`${tag} Daily Collection shows the refund and the reduced expected cash on screen`, [cashCells[3], cashCells[4], refundShown], [
             `-${money(cashAfter.refunds)}`, money(cashAfter.expected), true,

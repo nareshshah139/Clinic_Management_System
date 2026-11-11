@@ -16,9 +16,24 @@ import { ReportTable } from "./ReportTable";
 import { ReportError, ReportNotes, ReportTiles } from "./TableReport";
 import { ReportToolbar } from "./ReportToolbar";
 import { countPayload, draftChanged, initialDraft, previewCount, statusMessage, type CountDraft } from "./collection-model";
-import type { DailyCollectionReport as Report } from "./report-types";
+import type { DailyCollectionReport as Report, ReportTile } from "./report-types";
 
 const never = () => false;
+
+const CLINIC_SECTIONS = ["whole-day", "clinic-modes", "clinic-bills"];
+
+function SectionTable({ report, id }: { report: Report; id: string }) {
+  const section = report.sections.find((s) => s.id === id);
+  if (!section) return null;
+  return (
+    <section className="space-y-2" aria-labelledby={`collection-${section.id}`}>
+      <h4 id={`collection-${section.id}`} className="text-base font-semibold">
+        {section.title}
+      </h4>
+      <ReportTable section={section} />
+    </section>
+  );
+}
 
 const COLUMN_LABEL = { onTodaysBills: "Today's bills", onEarlierBills: "Earlier bills", counterSales: "Counter", refunds: "Refunds", expected: "Expected" } as const;
 
@@ -31,9 +46,10 @@ const COLUMN_HELP = {
 };
 
 /**
- * CR-33 section A: the day's collection reconciled per payment mode. Staff count the drawer and
- * the UPI and card settlements and enter them in the same table, so the difference shows beside
- * what was expected, the same day.
+ * CR-33 section A and CR-17: the clinic's whole daily take. Consultation and procedure bills sit
+ * beside the pharmacy's collection, with one whole-day total. Pharmacy staff count the pharmacy
+ * drawer and the UPI and card settlements in the same table, so the difference shows beside what
+ * was expected, the same day.
  */
 export function DailyCollectionReport({ entry, params, today, onApply }: { entry: ReportEntry; params: ReportParams; today: string; onApply: (params: ReportParams) => void }) {
   const [state, run] = useReport<Report>(never);
@@ -110,6 +126,38 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
       {state.status === "error" && <ReportError message={state.message} httpStatus={state.httpStatus} />}
       {report && collection && status && preview && (
         <>
+          {report.clinic && report.wholeDay && (
+            <>
+              <section aria-labelledby="collection-whole" className="space-y-3">
+                <h2 id="collection-whole" className="text-xl font-semibold">
+                  Whole day
+                </h2>
+                <ReportTiles
+                  tiles={[
+                    { label: "Whole day", value: report.wholeDay.total, kind: "money", help: "Clinic receipts less refunds, plus what the pharmacy expects in hand." },
+                    { label: "Clinic", value: report.wholeDay.clinic, kind: "money" },
+                    { label: "Pharmacy", value: report.wholeDay.pharmacy, kind: "money" },
+                  ] satisfies ReportTile[]}
+                />
+                <SectionTable report={report} id="whole-day" />
+              </section>
+              <section aria-labelledby="collection-clinic" className="space-y-3">
+                <h2 id="collection-clinic" className="text-xl font-semibold">
+                  Clinic: consultations and procedures
+                </h2>
+                <ReportTiles
+                  tiles={[
+                    { label: "Clinic received", value: report.clinic.net, kind: "money", help: "Payments received today on clinic bills, whichever day the bill is from, less refunds." },
+                    { label: "Clinic billed today", value: report.clinic.billed, kind: "money" },
+                    { label: "Clinic still due", value: report.clinic.dueAtDayEnd, kind: "money", tone: report.clinic.dueAtDayEnd > 0 ? "warning" : undefined },
+                  ] satisfies ReportTile[]}
+                />
+                <SectionTable report={report} id="clinic-modes" />
+                <SectionTable report={report} id="clinic-bills" />
+              </section>
+              <h2 className="text-xl font-semibold">Pharmacy</h2>
+            </>
+          )}
           <p
             role="status"
             data-testid="collection-status"
@@ -128,9 +176,9 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
 
           <section aria-labelledby="collection-modes" className="space-y-2">
             <h3 id="collection-modes" className="text-lg font-semibold">
-              Reconciliation by payment mode
+              Pharmacy reconciliation by payment mode
             </h3>
-            <ul className="space-y-3 md:hidden" aria-label="Count by payment mode">
+            <ul className="space-y-3 md:hidden" aria-label="Pharmacy count by payment mode">
               {collection.modes.map((line, index) => {
                 const p = preview.lines[index];
                 return (
@@ -174,7 +222,7 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
               </li>
             </ul>
             <div className="hidden overflow-x-auto rounded-md border md:block">
-              <table aria-label="Reconciliation by payment mode" className="w-full min-w-[52rem] border-separate border-spacing-0 text-base">
+              <table aria-label="Pharmacy reconciliation by payment mode" className="w-full min-w-[52rem] border-separate border-spacing-0 text-base">
                 <thead>
                   <tr className="[&>th]:border-b [&>th]:bg-muted [&>th]:px-3 [&>th]:py-2.5 [&>th]:font-semibold">
                     <th scope="col" className="sticky left-0 z-10 whitespace-nowrap text-left">Mode</th>
@@ -287,7 +335,7 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
           </section>
 
           {report.sections
-            .filter((section) => section.id !== "modes")
+            .filter((section) => section.id !== "modes" && !CLINIC_SECTIONS.includes(section.id))
             .map((section) => (
               <section key={section.id} className="space-y-2" aria-labelledby={`collection-${section.id}`}>
                 <h3 id={`collection-${section.id}`} className="text-lg font-semibold">

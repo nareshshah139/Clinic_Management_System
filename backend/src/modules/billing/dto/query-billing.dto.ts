@@ -1,7 +1,6 @@
 import {
   IsOptional,
   IsString,
-  IsUUID,
   IsDateString,
   IsInt,
   Min,
@@ -11,9 +10,8 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { InvoiceStatus, PaymentMethod, PaymentStatus } from './invoice.dto';
+import { UUID_OR_CUID_REGEX } from './ids';
 
-// Allow either UUID (v1-5) or CUID (e.g., cxxxxxxxxxxxxxxxxxxxxxxx) for patient identifiers
-const UUID_OR_CUID_REGEX = /(^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$)|(^c[0-9a-z]{24}$)/i;
 
 export class QueryInvoicesDto {
   @IsOptional()
@@ -21,11 +19,11 @@ export class QueryInvoicesDto {
   patientId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'visitId must be a UUID or CUID' })
   visitId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'appointmentId must be a UUID or CUID' })
   appointmentId?: string;
 
   @IsOptional()
@@ -76,7 +74,7 @@ export class QueryInvoicesDto {
 
 export class QueryPaymentsDto {
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'invoiceId must be a UUID or CUID' })
   invoiceId?: string;
 
   @IsOptional()
@@ -157,7 +155,7 @@ export class RevenueReportDto {
   groupBy?: 'day' | 'week' | 'month' | 'year' = 'day';
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'doctorId must be a UUID or CUID' })
   doctorId?: string;
 
   @IsOptional()

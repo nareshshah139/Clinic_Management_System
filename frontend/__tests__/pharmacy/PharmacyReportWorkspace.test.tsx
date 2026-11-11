@@ -86,7 +86,7 @@ beforeEach(() => {
 });
 
 // jsdom applies no CSS, so the phone cards and the desk table are both present; scope to the table.
-const desk = () => within(screen.getByRole('table', { name: 'Reconciliation by payment mode' }));
+const desk = () => within(screen.getByRole('table', { name: 'Pharmacy reconciliation by payment mode' }));
 
 describe('Pharmacy Report', () => {
   it('opens on the common reports with the categories down the side', () => {
@@ -193,7 +193,7 @@ describe('Daily Collection', () => {
     await userEvent.click(save);
 
     expect(api.post).toHaveBeenCalledWith('/pharmacy/reports/daily-collection/2026-11-05/counts', { counted: { CASH: 1100, UPI: 500 }, basedOnSequence: 0 });
-    expect(await screen.findByText(/Count saved\. Short by ₹40\.00/)).toBeInTheDocument();
+    expect(await screen.findByText(/Count saved\. Pharmacy short by ₹40\.00/)).toBeInTheDocument();
     expect(screen.getByTestId('collection-status')).toHaveAttribute('data-status', 'SHORT');
     expect(screen.getByTestId('count-history')).toHaveTextContent('Counted by Asha Rao');
     expect(screen.getByRole('button', { name: 'Save recount' })).toBeDisabled();
@@ -228,6 +228,40 @@ describe('Daily Collection', () => {
     expect(await screen.findByTestId('collection-status')).toHaveAttribute('data-status', 'BALANCED');
     expect(screen.queryByRole('textbox', { name: /counted/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Save/ })).not.toBeInTheDocument();
+  });
+
+  it('puts the whole day and the clinic’s consultations and procedures above the pharmacy count', async () => {
+    const money = (key: string, label: string) => ({ key, label, kind: 'money' });
+    const whole = {
+      id: 'whole-day', title: 'Whole day by payment mode',
+      columns: [{ key: 'mode', label: 'Payment mode', kind: 'text' }, money('clinic', 'Clinic'), money('pharmacy', 'Pharmacy'), money('total', 'Total')],
+      rows: [{ key: 'CASH', cells: { mode: 'Cash', clinic: 500, pharmacy: 1140, total: 1640 } }, { key: 'UPI', cells: { mode: 'UPI', clinic: 300, pharmacy: 500, total: 800 } }],
+      totals: { mode: 'Total', clinic: 800, pharmacy: 1640, total: 2440 },
+    };
+    const clinicBills = {
+      id: 'clinic-bills', title: 'Clinic bills',
+      columns: [{ key: 'number', label: 'Bill No.', kind: 'text' }, money('amount', 'Amount'), money('due', 'Due')],
+      rows: [{ key: 'b1', cells: { number: 'INV-20261105-001', amount: 800, due: 500 } }],
+      totals: { number: 'Total', amount: 800, due: 500 },
+    };
+    const report = collection();
+    api.get.mockResolvedValue({
+      ...report,
+      headline: { label: 'Whole day', value: 2440 },
+      clinic: { day: '2026-11-05', modes: [], billCount: 2, billed: 1300, collectedOnTodaysBills: 800, dueAtDayEnd: 500, received: 800, refunds: 0, net: 800 },
+      wholeDay: { modes: [], clinic: 800, pharmacy: 1640, total: 2440 },
+      sections: [whole, clinicBills, ...report.sections],
+    } as any);
+    render(<PharmacyReportWorkspace />);
+    await screen.findByTestId('collection-status');
+    const blocks = ['Whole day', 'Clinic: consultations and procedures', 'Pharmacy'];
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).filter((t) => blocks.includes(t ?? ''))).toEqual(blocks);
+    expect(screen.getByRole('heading', { name: 'Pharmacy' }).compareDocumentPosition(screen.getByTestId('collection-status')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const wholeTable = within(screen.getByRole('table', { name: 'Whole day by payment mode' }));
+    expect(wholeTable.getByRole('row', { name: /^Cash/ })).toHaveTextContent('Cash500.001,140.001,640.00');
+    expect(within(screen.getByRole('region', { name: 'Clinic: consultations and procedures' })).getByRole('table', { name: 'Clinic bills' })).toHaveTextContent('INV-20261105-001');
+    expect(screen.getByRole('region', { name: 'Whole day' })).toHaveTextContent('Whole day₹2,440.00');
+    expect(screen.getByRole('region', { name: 'Clinic: consultations and procedures' })).toHaveTextContent('Clinic still due₹500.00');
   });
 
   it('steps a day at a time and never past today', async () => {

@@ -24,6 +24,8 @@ import { ReplenishmentCenter } from "./ReplenishmentCenter";
 import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
 import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
 import { WorkspaceStock } from "./WorkspaceStock";
+import { DataQualityStrip } from "./optimization/DataQualityStrip";
+import { StockOptimization } from "./optimization/StockOptimization";
 import { PurchaseBills } from "./purchase/PurchaseBills";
 import { canRecordSupplierPayments } from "./purchase/purchase-register-model";
 import { StockCounts } from "./counts/StockCounts";
@@ -68,6 +70,7 @@ const menus: Record<string, string[][]> = {
   ],
   stock: [
     ["list", "Stock list"],
+    ["optimize", "Stock optimization"],
     ["ledger", "Stock ledger"],
     ["approvals", "Approve corrections"],
     ["COUNT", "Stock counts"],
@@ -247,7 +250,7 @@ export function InventoryWorkspace() {
   const availableTasks = (menus[area] || []).filter((task) => taskVisible(task)
     && (task[0] !== "ledger" || area !== "purchases" || caps?.ledger)
     && (task[0] !== "COUNT" || caps?.kinds?.COUNT?.read));
-  const primaryCount = area === "stock" ? 4 : 3;
+  const primaryCount = area === "stock" ? 5 : 3;
   const primaryTasks = availableTasks.slice(0, primaryCount);
   const moreTasks = availableTasks.slice(primaryCount);
   const switchTask = (id: string, extra: Record<string, string> = {}) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1", ...extra });
@@ -353,6 +356,12 @@ export function InventoryWorkspace() {
           </select>}
         </nav>
       )}
+      {caps && (area === "today" || (area === "stock" && ["list", "optimize"].includes(view) && !query.item)) && (
+        <DataQualityStrip
+          active={area === "stock" && view === "list" ? query.gap : undefined}
+          onOpen={(gap) => router.push(`${path}?area=stock&view=list${gap ? `&gap=${gap}` : ""}`, { scroll: false })}
+        />
+      )}
       {error && (
         <p
           role="alert"
@@ -378,6 +387,15 @@ export function InventoryWorkspace() {
               onTask={task}
               onDocument={open}
               onInvoice={invoice}
+            />
+          )}
+          {area === "stock" && view === "optimize" && (
+            <StockOptimization
+              canWrite={Boolean(caps.kinds?.SUPPLIER_RETURN?.write)}
+              ran={query.run === "1"}
+              onRan={() => navigate({ run: "1" })}
+              onDocument={open}
+              onReturns={() => router.push(`${path}?area=purchases&view=register&tab=returns`, { scroll: false })}
             />
           )}
           {area === "stock" && view === "COUNT" && (

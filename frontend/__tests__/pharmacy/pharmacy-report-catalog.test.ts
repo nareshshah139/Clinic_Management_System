@@ -193,7 +193,7 @@ describe('counting the day', () => {
   });
 
   it('says what a short or over day means in rupees', () => {
-    expect(statusMessage('SHORT', -40).text).toMatch(/^Short by ₹40\.00/);
+    expect(statusMessage('SHORT', -40).text).toMatch(/^Pharmacy short by ₹40\.00/);
     expect(statusMessage('OVER', 12.5)).toMatchObject({ tone: 'warning' });
     expect(statusMessage('BALANCED', 0).tone).toBe('good');
   });

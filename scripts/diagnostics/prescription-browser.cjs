@@ -91,8 +91,7 @@ fs.mkdirSync(output, { recursive: true });
     for (const [label, value] of Object.entries({
       'Chief Complaints': 'BROWSER TEST complaint', 'Diagnosis': 'BROWSER TEST diagnosis',
       'Past History': 'BROWSER TEST past history', 'Medication History': 'BROWSER TEST medication history',
-      'Menstrual History': 'BROWSER TEST menstrual history', 'Triggers': 'BROWSER TEST triggers',
-      'Prior Treatments': 'BROWSER TEST prior treatment', 'Procedures': 'BROWSER TEST procedure',
+      'Menstrual History': 'BROWSER TEST menstrual history', 'Procedures': 'BROWSER TEST procedure',
       'Procedure Planned': 'BROWSER TEST planned procedure', 'Follow-up Instructions': 'BROWSER TEST follow up',
     })) await field(label, value);
     await page.type('textarea[placeholder="Detailed physical examination findings..."]', 'BROWSER TEST examination');
@@ -116,7 +115,7 @@ fs.mkdirSync(output, { recursive: true });
     await page.waitForFunction(() => document.querySelectorAll('input[placeholder="Search medicine name..."]').length === 3);
     const remove = await page.evaluateHandle(() => {
       const inputs = [...document.querySelectorAll('input[placeholder="Search medicine name..."]')];
-      return [...inputs[1].closest('tr').querySelectorAll('button')].find(e => e.textContent.trim() === 'Remove');
+      return [...inputs[1].closest('tr').querySelectorAll('button')].find(e => e.getAttribute('aria-label')?.startsWith('Remove '));
     });
     await remove.asElement().asLocator().click();
     await page.waitForFunction(() => document.querySelectorAll('input[placeholder="Search medicine name..."]').length === 2);

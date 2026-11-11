@@ -333,11 +333,64 @@ function normalizeDrugKey(value: unknown): string {
   return normalizeText(value).replace(/\s+/g, ' ').trim();
 }
 
-function drugNamesMatch(left: unknown, right: unknown): boolean {
-  const a = normalizeDrugKey(left);
-  const b = normalizeDrugKey(right);
-  if (!a || !b) return false;
-  return a === b || a.includes(b) || b.includes(a);
+/** A product's identity for one prescription line: equal keys are the same medicine. */
+type ProductKey = (line: Record<string, unknown>) => string;
+
+function productTokens(line: Record<string, unknown>): string[] {
+  const drugId = normalizeWhitespace(line.drugId);
+  const inventoryItemId = normalizeWhitespace(line.inventoryItemId);
+  const name = normalizeDrugKey(extractDrugName(line));
+  return [drugId && `drug:${drugId}`, inventoryItemId && `inventory:${inventoryItemId}`, name && `name:${name}`].filter(Boolean);
+}
+
+/**
+ * Lines are the same product when they share the drug their stocked item links, a stocked item
+ * (batch) id or a standard name, so history survives a batch change and a rename. Two different
+ * linked drugs never join; a name or batch seen with both stays only with its own lines.
+ */
+function productIdentity(lines: Array<Record<string, unknown>>): ProductKey {
+  const parent = new Map<string, string>();
+  const drugOf = new Map<string, string>();
+  const contested = new Set<string>();
+  const find = (token: string): string => {
+    const up = parent.get(token);
+    if (up === undefined) {
+      parent.set(token, token);
+      if (token.startsWith('drug:')) drugOf.set(token, token);
+      return token;
+    }
+    if (up === token) return token;
+    const root = find(up);
+    parent.set(token, root);
+    return root;
+  };
+  for (const line of lines) {
+    const [first, ...rest] = productTokens(line);
+    for (const token of rest) {
+      const a = find(first);
+      const b = find(token);
+      if (a === b) continue;
+      if (drugOf.has(a) && drugOf.has(b)) {
+        contested.add(token);
+        continue;
+      }
+      parent.set(b, a);
+      if (drugOf.has(b)) drugOf.set(a, drugOf.get(b)!);
+    }
+  }
+  return (line) => {
+    const [first] = productTokens(line);
+    if (!first) return '';
+    if (contested.has(first)) return first;
+    const root = find(first);
+    return drugOf.get(root) ?? root;
+  };
+}
+
+function linesOf(records: unknown[] | undefined, ...fields: string[]): Array<Record<string, unknown>> {
+  return (records || [])
+    .filter((record): record is Record<string, unknown> => Boolean(record && typeof record === 'object'))
+    .flatMap((record) => normalizeItems(fields.map((field) => record[field]).find(Boolean)));
 }
 
 /**
@@ -353,25 +406,22 @@ function normalizeItems(value: unknown): Array<Record<string, unknown>> {
     .map((entry) => ({ ...entry }));
 }
 
-function buildSignature(items: Array<Record<string, unknown>>): string {
-  const names = uniqCaseInsensitive(items.map((entry) => extractDrugName(entry)).filter(Boolean))
-    .map((entry) => normalizeText(entry))
-    .sort();
-  return names.join('|');
+function buildSignature(items: Array<Record<string, unknown>>, productKey: ProductKey): string {
+  return [...new Set(items.map(productKey).filter(Boolean))].sort().join('|');
 }
 
 function extractComboDrugNames(items: Array<Record<string, unknown>>): string[] {
   return uniqCaseInsensitive(items.map((entry) => extractDrugName(entry)).filter(Boolean));
 }
 
-function buildMedicationSignature(item: Record<string, unknown>): string {
+function buildMedicationSignature(item: Record<string, unknown>, productKey: ProductKey): string {
   const durationRaw = item.duration;
   const duration =
     typeof durationRaw === 'number'
       ? String(durationRaw)
       : normalizeWhitespace(durationRaw);
   return [
-    normalizeDrugKey(extractDrugName(item)),
+    productKey(item),
     normalizeWhitespace(item.dosage),
     normalizeText(item.dosageUnit),
     normalizeText(item.frequency),
@@ -438,7 +488,8 @@ function buildPatientRecord(
   visit: Record<string, unknown>,
   diagnosis: string,
   currentVisitId: string | null | undefined,
-  doctorId: string | undefined
+  doctorId: string | undefined,
+  productKey: ProductKey
 ): FlatPlanRecord | null {
   if (normalizeWhitespace(visit.id) === normalizeWhitespace(currentVisitId || '')) return null;
   const items = normalizeItems(visit.prescriptionItems || visit.items);
@@ -484,14 +535,15 @@ function buildPatientRecord(
     followUpInstructions,
     reviewDays,
     comboDrugNames: extractComboDrugNames(items),
-    signature: buildSignature(items),
+    signature: buildSignature(items, productKey),
     createdAtMs,
   };
 }
 
 function buildTemplateRecord(
   template: Record<string, unknown>,
-  diagnosis: string
+  diagnosis: string,
+  productKey: ProductKey
 ): FlatPlanRecord | null {
   const items = normalizeItems(template.items);
   if (!items.length) return null;
@@ -521,14 +573,15 @@ function buildTemplateRecord(
     followUpInstructions,
     reviewDays,
     comboDrugNames: extractComboDrugNames(items),
-    signature: buildSignature(items),
+    signature: buildSignature(items, productKey),
     createdAtMs: parseDateMs(template.updatedAt || template.createdAt),
   };
 }
 
 function buildDoctorPatternRecords(
   prescriptions: unknown[],
-  diagnosis: string
+  diagnosis: string,
+  productKey: ProductKey
 ): FlatPlanRecord[] {
   const rawRecords = prescriptions
     .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
@@ -564,7 +617,7 @@ function buildDoctorPatternRecords(
           followUpInstructions,
         }),
         comboDrugNames: extractComboDrugNames(items),
-        signature: buildSignature(items),
+        signature: buildSignature(items, productKey),
         createdAtMs: parseDateMs(record.createdAt || asObject(record.visit).createdAt),
       } satisfies FlatPlanRecord;
     })
@@ -615,7 +668,8 @@ function buildDoctorPatternRecords(
 function buildPatientMedicationRecords(input: {
   visits: unknown[];
   diagnosis: string;
-  drugName: string;
+  product: string;
+  productKey: ProductKey;
   currentVisitId?: string | null;
   doctorId?: string;
 }): FlatMedicationRecord[] {
@@ -635,7 +689,7 @@ function buildPatientMedicationRecords(input: {
         : 0;
 
       return normalizeItems(visit.prescriptionItems || visit.items)
-        .filter((item) => drugNamesMatch(extractDrugName(item), input.drugName))
+        .filter((item) => input.productKey(item) === input.product)
         .map<FlatMedicationRecord>((item) => ({
           sourceKind: 'patient-last-plan',
           sourceLabel: sameDoctor
@@ -646,7 +700,7 @@ function buildPatientMedicationRecords(input: {
           confidence: Math.min(0.98, diagnosisScore * 0.8 + recentBoost + (sameDoctor ? 0.08 : 0) + 0.06),
           evidenceCount: 1,
           item,
-          signature: buildMedicationSignature(item),
+          signature: buildMedicationSignature(item, input.productKey),
           createdAtMs,
         }));
     })
@@ -659,7 +713,8 @@ function buildPatientMedicationRecords(input: {
 function buildDoctorMedicationRecords(input: {
   prescriptions: unknown[];
   diagnosis: string;
-  drugName: string;
+  product: string;
+  productKey: ProductKey;
 }): FlatMedicationRecord[] {
   const rawRecords = (input.prescriptions || [])
     .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
@@ -671,7 +726,7 @@ function buildDoctorMedicationRecords(input: {
 
       const createdAtMs = parseDateMs(record.createdAt || asObject(record.visit).createdAt);
       return normalizeItems(record.items)
-        .filter((item) => drugNamesMatch(extractDrugName(item), input.drugName))
+        .filter((item) => input.productKey(item) === input.product)
         .map<FlatMedicationRecord>((item) => ({
           sourceKind: 'doctor-pattern',
           sourceLabel: '',
@@ -680,7 +735,7 @@ function buildDoctorMedicationRecords(input: {
           confidence: 0,
           evidenceCount: 1,
           item,
-          signature: buildMedicationSignature(item),
+          signature: buildMedicationSignature(item, input.productKey),
           createdAtMs,
         }));
     });
@@ -764,11 +819,16 @@ export function buildLearnedPrescriptionPlan(input: {
 }): LearnedPlanSuggestion | null {
   const diagnosis = normalizeWhitespace(input.diagnosis);
   if (diagnosis.length < 3) return null;
+  const productKey = productIdentity([
+    ...linesOf(input.patientVisits, 'prescriptionItems', 'items'),
+    ...linesOf(input.doctorPrescriptions, 'items'),
+    ...linesOf(input.templates, 'items'),
+  ]);
 
   const patientCandidate = (input.patientVisits || [])
     .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
     .filter((entry): entry is Record<string, unknown> => Boolean(entry))
-    .map((visit) => buildPatientRecord(visit, diagnosis, input.currentVisitId, input.doctorId))
+    .map((visit) => buildPatientRecord(visit, diagnosis, input.currentVisitId, input.doctorId, productKey))
     .filter((entry): entry is FlatPlanRecord => Boolean(entry))
     .sort((a, b) => {
       if (b.confidence !== a.confidence) return b.confidence - a.confidence;
@@ -778,14 +838,14 @@ export function buildLearnedPrescriptionPlan(input: {
   const templateCandidate = (input.templates || [])
     .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
     .filter((entry): entry is Record<string, unknown> => Boolean(entry))
-    .map((template) => buildTemplateRecord(template, diagnosis))
+    .map((template) => buildTemplateRecord(template, diagnosis, productKey))
     .filter((entry): entry is FlatPlanRecord => Boolean(entry))
     .sort((a, b) => {
       if (b.confidence !== a.confidence) return b.confidence - a.confidence;
       return b.createdAtMs - a.createdAtMs;
     })[0] || null;
 
-  const doctorPatternCandidate = buildDoctorPatternRecords(input.doctorPrescriptions || [], diagnosis)[0] || null;
+  const doctorPatternCandidate = buildDoctorPatternRecords(input.doctorPrescriptions || [], diagnosis, productKey)[0] || null;
 
   const candidates = [patientCandidate, doctorPatternCandidate, templateCandidate]
     .filter((entry): entry is FlatPlanRecord => Boolean(entry))
@@ -832,14 +892,17 @@ export function buildLearnedPrescriptionPlan(input: {
 }
 
 /**
- * @cc [owner:nareshshah139,label:safety;target] suggested-sig-belongs-to-the-typed-drug
- * A suggested dose, frequency and duration MUST be learned only from entries of the typed drug and
- * the same diagnosis, never from a different drug whose name merely contains it, and MUST return
- * null for a short drug name or diagnosis. This is a target obligation, not a pass claim: drug
- * names match by substring in both directions, so Cetirizine receives the sig of Levocetirizine.
+ * @cc [owner:nareshshah139,label:safety] suggested-sig-belongs-to-the-typed-drug
+ * A suggested dose, frequency and duration MUST be learned only from entries of the typed product
+ * and the same diagnosis, never from a different drug whose name merely contains it, and MUST
+ * return null for a short drug name or diagnosis. A product is the drug its stocked item links,
+ * else its standard name ignoring case and spacing; lines of another batch or an earlier name of
+ * the same stocked item are the same product, lines linked to a different drug never are.
  */
 export function buildLearnedMedicationSuggestion(input: {
   drugName: string;
+  drugId?: string | null;
+  inventoryItemId?: string | null;
   diagnosis: string;
   patientVisits?: unknown[];
   doctorPrescriptions?: unknown[];
@@ -849,11 +912,19 @@ export function buildLearnedMedicationSuggestion(input: {
   const drugName = normalizeWhitespace(input.drugName);
   const diagnosis = normalizeWhitespace(input.diagnosis);
   if (drugName.length < 2 || diagnosis.length < 3) return null;
+  const typed = { drugName, drugId: input.drugId, inventoryItemId: input.inventoryItemId };
+  const productKey = productIdentity([
+    typed,
+    ...linesOf(input.patientVisits, 'prescriptionItems', 'items'),
+    ...linesOf(input.doctorPrescriptions, 'items'),
+  ]);
+  const product = productKey(typed);
 
   const patientCandidate = buildPatientMedicationRecords({
     visits: input.patientVisits || [],
     diagnosis,
-    drugName,
+    product,
+    productKey,
     currentVisitId: input.currentVisitId,
     doctorId: input.doctorId,
   })[0] || null;
@@ -861,7 +932,8 @@ export function buildLearnedMedicationSuggestion(input: {
   const doctorCandidate = buildDoctorMedicationRecords({
     prescriptions: input.doctorPrescriptions || [],
     diagnosis,
-    drugName,
+    product,
+    productKey,
   })[0] || null;
 
   const primary = [patientCandidate, doctorCandidate]

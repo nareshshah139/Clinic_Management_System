@@ -227,3 +227,9 @@ export function returnChangeNote(events: readonly ReturnEvent[], sinceVersion: n
       return `it is now ${statusLabel}`;
   }
 }
+
+/** A return drafted across several bills names the first and counts the rest, so the reference column keeps its width. */
+export function sourceBills(sourceBillNo: string) {
+  const bills = sourceBillNo.split(', ').filter(Boolean);
+  return { count: bills.length, shown: bills.length > 1 ? `${bills[0]} +${bills.length - 1}` : sourceBillNo };
+}

@@ -14,7 +14,8 @@ function fillDefaults() {
 it('saves optional defaults when adding inventory and resets them after saving', async () => {
   (apiClient.createInventoryItem as jest.Mock).mockResolvedValue({ id: 'item' });
   render(<AddInventoryItemDialog open onOpenChange={jest.fn()} onSuccess={jest.fn()} />);
-  fireEvent.change(screen.getByLabelText(/Item Name/), { target: { value: 'Cream' } });
+  fireEvent.change(screen.getByLabelText(/^Form/), { target: { value: 'CREAM' } });
+  fireEvent.change(screen.getByLabelText(/Medicine name/), { target: { value: 'Fucibet' } });
   fireEvent.change(screen.getByLabelText(/Cost Price/), { target: { value: '1' } });
   fireEvent.change(screen.getByLabelText(/Selling Price/), { target: { value: '2' } });
   fillDefaults();

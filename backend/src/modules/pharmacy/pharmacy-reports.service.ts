@@ -9,6 +9,15 @@ import { issuedBillNumber } from './bill-number';
 import { CLINIC_TIME_ZONE } from './clinic-day';
 import { money } from './gst-slabs';
 import { PharmacyComplianceService } from './pharmacy-compliance.service';
+import { clinicBillAccess } from '../billing/billing-access';
+import {
+  ClinicBill,
+  ClinicCollection,
+  WholeDay,
+  buildClinicCollection,
+  buildWholeDay,
+  clinicCollectionSections,
+} from './daily-collection-clinic';
 import { LEDGER_STATUSES } from './pharmacy-ledger';
 import {
   CashCount,
@@ -96,7 +105,12 @@ type Period = { from: string; to: string };
 export type DailyCollectionResponse = PharmacyReport & {
   collection: DailyCollection;
   canRecordCount: boolean;
+  /** Null for a viewer the clinic bill routes refuse. */
+  clinic: ClinicCollection | null;
+  wholeDay: WholeDay | null;
 };
+
+type ReportActor = { branchId: string; role?: string; id?: string };
 
 @Injectable()
 export class PharmacyReportsService {
@@ -478,7 +492,7 @@ export class PharmacyReportsService {
   async report(
     id: PharmacyReportId,
     query: PharmacyReportQueryDto,
-    actor: { branchId: string; role?: string },
+    actor: ReportActor,
   ): Promise<PharmacyReport> {
     const period = this.period(query);
     const branchId = actor.branchId;
@@ -1015,26 +1029,71 @@ export class PharmacyReportsService {
     return { bills: collectionBills, counterSales, returns, history };
   }
 
+  private async clinicBills(branchId: string, day: string): Promise<ClinicBill[]> {
+    const range = clinicDayRange(day, day);
+    const bills = await this.prisma.newInvoice.findMany({
+      where: { branchId, OR: [{ createdAt: range }, { payments: { some: { createdAt: range, reconStatus: 'COMPLETED' } } }] },
+      select: {
+        id: true,
+        invoiceNo: true,
+        createdAt: true,
+        status: true,
+        total: true,
+        patient: { select: { name: true } },
+        payments: { where: { reconStatus: 'COMPLETED' }, select: { mode: true, amount: true, createdAt: true } },
+      },
+    });
+    return bills.map((bill) => ({
+      id: bill.id,
+      number: bill.invoiceNo,
+      day: clinicDay(bill.createdAt),
+      entryAt: bill.createdAt.toISOString(),
+      customer: bill.patient?.name ?? null,
+      total: money(bill.total),
+      cancelled: bill.status === 'CANCELLED',
+      payments: bill.payments.map((p) => ({ mode: p.mode, amount: money(p.amount), day: clinicDay(p.createdAt) })),
+    }));
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product;security] daily-collection-whole-day
+   * Daily Collection MUST show the clinic's consultation and procedure takings and the whole-day
+   * total beside the pharmacy collection to a viewer the clinic bill routes admit, and to no one
+   * else. The clinic takings MUST count only COMPLETED payments, as the revenue report does, so a
+   * gateway payment counts once confirmed. The cash count MUST stay a reconciliation of the
+   * pharmacy's money only.
+   */
   async dailyCollection(
     day: string,
-    actor: { branchId: string; role?: string },
+    actor: ReportActor,
   ): Promise<DailyCollectionResponse> {
     if (!isCalendarDay(day))
       throw new BadRequestException('Choose a real calendar day');
-    const inputs = await this.collectionInputs(actor.branchId, day);
+    const access = actor.id
+      ? await clinicBillAccess(this.prisma, { id: actor.id, role: actor.role ?? '' })
+      : null;
+    const [inputs, clinicBills] = await Promise.all([
+      this.collectionInputs(actor.branchId, day),
+      access?.read ? this.clinicBills(actor.branchId, day) : Promise.resolve(null),
+    ]);
     const collection = buildDailyCollection({ day, ...inputs });
-    const { sections, tiles } = dailyCollectionSections(collection, inputs);
+    const pharmacy = dailyCollectionSections(collection, inputs);
+    const clinic = clinicBills ? buildClinicCollection(day, clinicBills) : null;
+    const wholeDay = clinic ? buildWholeDay(clinic, collection) : null;
+    const clinicSections = clinic && wholeDay && clinicBills ? clinicCollectionSections(clinic, wholeDay, clinicBills) : [];
     const report = this.envelope(
       'daily-collection',
       { from: day, to: day },
       {
-        headline: {
-          label: 'Expected in hand',
-          value: collection.expectedTotal,
-        },
-        tiles,
-        sections,
+        headline: wholeDay
+          ? { label: 'Whole day', value: wholeDay.total }
+          : { label: 'Pharmacy expected in hand', value: collection.expectedTotal },
+        tiles: pharmacy.tiles,
+        sections: [...clinicSections, ...pharmacy.sections],
         notes: [
+          clinic
+            ? 'Clinic is consultation and procedure bills: received is payments dated this day, less refunds, whichever day the bill is from. The cash count below reconciles the pharmacy drawer only.'
+            : 'Consultation and procedure takings are shown to the roles that can read clinic bills.',
           'Billed is bills dated this day. Received is payments dated this day, whichever day their bill is from. Refunds handed back on a bill or for a customer return leave their mode on the day they are paid out; refunds as store credit move no money.',
           collection.outsideBills.count
             ? `${collection.outsideBills.count} payment(s) of ${collection.outsideBills.amount.toFixed(2)} were received on bills that are not final (draft or cancelled); they are counted in the mode where the money came in.`
@@ -1046,6 +1105,8 @@ export class PharmacyReportsService {
       ...report,
       collection,
       canRecordCount: COUNT_ROLES.includes(actor.role ?? ''),
+      clinic,
+      wholeDay,
     };
   }
 
@@ -1124,7 +1185,7 @@ export class PharmacyReportsService {
   async file(
     id: PharmacyReportId,
     query: PharmacyReportQueryDto,
-    actor: { branchId: string; role?: string },
+    actor: ReportActor,
     format: ReportFormat,
   ): Promise<ReportFile> {
     const [report, clinic] = await Promise.all([

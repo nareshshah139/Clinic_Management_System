@@ -150,6 +150,7 @@ describe('AppointmentsController', () => {
         doctorId,
         date,
         mockRequest.user.branchId,
+        mockRequest.user,
       );
     });
   });

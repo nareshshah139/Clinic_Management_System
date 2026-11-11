@@ -7,7 +7,11 @@ import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { nextItemRequestStatus } from '../inventory-item-request.state';
 
 const payload = {
-  name: 'Cetaphil Cleanser 125ml',
+  name: 'Cetaphil Cleanser face wash',
+  brandName: 'Cetaphil Cleanser',
+  form: 'FACE_WASH',
+  strength: null,
+  isCombination: false,
   type: 'MEDICINE',
   unit: 'BOTTLES',
   costPrice: 100,
@@ -71,7 +75,7 @@ describe('inventory item requests', () => {
         data: expect.objectContaining({
           branchId: 'b1',
           requestedById: 'rec-1',
-          itemName: 'Cetaphil Cleanser 125ml',
+          itemName: 'Cetaphil Cleanser face wash',
           payload,
         }),
       }),

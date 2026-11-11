@@ -25,6 +25,11 @@ import {
 
 export type PurchaseReturnsActor = { branchId: string };
 
+const payloadLines = (payload: unknown) => {
+  const lines = payload && typeof payload === 'object' ? (payload as { lines?: unknown }).lines : undefined;
+  return Array.isArray(lines) ? lines : [];
+};
+
 const DOC_SELECT = {
   id: true,
   kind: true,
@@ -125,7 +130,9 @@ export class PharmacyPurchaseReturnsRegisterService {
     const ids = (pick: (doc: (typeof docs)[number]) => string | null) => [
       ...new Set(docs.map(pick).filter((id): id is string => Boolean(id))),
     ];
-    const [credits, suppliers, bills, people] = await Promise.all([
+    const lineIds = (doc: (typeof docs)[number]) =>
+      doc.purchaseInvoiceId ? [] : (((payloadLines(doc.payload) as { sourceLineId?: string }[]).map((line) => line.sourceLineId).filter(Boolean)) as string[]);
+    const [credits, suppliers, bills, people, sourceLines] = await Promise.all([
       this.prisma.inventorySupplierCredit.findMany({
         where: { branchId: actor.branchId, documentId: { in: docs.map((doc) => doc.id) } },
         select: { ...SUPPLIER_CREDIT_BALANCE_SELECT, id: true, documentId: true, creditNoteDate: true },
@@ -139,7 +146,14 @@ export class PharmacyPurchaseReturnsRegisterService {
         select: { id: true, invoiceNumber: true, distributorName: true },
       }),
       peopleById(this.prisma, docs.map((doc) => doc.createdBy)),
+      docs.some((doc) => lineIds(doc).length)
+        ? this.prisma.pharmacyPurchaseInvoiceItem.findMany({
+            where: { id: { in: docs.flatMap(lineIds) }, purchaseInvoice: { branchId: actor.branchId } },
+            select: { id: true, purchaseInvoice: { select: { invoiceNumber: true } } },
+          })
+        : [],
     ]);
+    const billOfLine = new Map(sourceLines.map((line) => [line.id, line.purchaseInvoice.invoiceNumber]));
     const creditOf = new Map(credits.map((credit) => [credit.documentId, credit]));
     const supplierName = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
     const billOf = new Map(bills.map((bill) => [bill.id, bill]));
@@ -149,7 +163,7 @@ export class PharmacyPurchaseReturnsRegisterService {
         {
           ...doc,
           distributorName: (doc.supplierId && supplierName.get(doc.supplierId)) || bill?.distributorName || null,
-          sourceBillNo: bill?.invoiceNumber ?? null,
+          sourceBillNo: bill?.invoiceNumber ?? ([...new Set(lineIds(doc).map((id) => billOfLine.get(id)).filter(Boolean))].join(', ') || null),
           credit: creditOf.get(doc.id) ?? null,
         },
         doc.createdBy ? (people.get(doc.createdBy) ?? null) : null,

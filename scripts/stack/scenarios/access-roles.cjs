@@ -9,6 +9,7 @@ const out = path.resolve(__dirname, "../../../output/stack/access-roles");
 const GSTIN = "36ABCDE1234F1Z5";
 const DENIED = /Forbidden|don.t have access|do not have access|access denied|not allowed|not authori[sz]ed|insufficient permission/i;
 const PHARMACY_LINKS = ["Pharmacy Desk", "Pharmacy Counter", "Sales", "Inventory"];
+const REPORT_LINKS = ["Daily Collection", "Pharmacy Report"];
 
 const PAGES = [
   { name: "Pharmacy Desk", route: "/dashboard/pharmacy?section=desk", actions: [] },
@@ -108,6 +109,7 @@ async function visit(stack, context, who, target) {
       refused,
       actions,
       links: nav.map((t) => t.trim()).filter((t) => PHARMACY_LINKS.includes(t)),
+      reportLinks: nav.map((t) => t.trim()).filter((t) => REPORT_LINKS.includes(t)),
     };
   } finally {
     await page.close();
@@ -155,6 +157,7 @@ async function visit(stack, context, who, target) {
         check(`${label}: stays on the page`, !seen.url.includes("/login"), seen.url);
         for (const [action, offered] of Object.entries(seen.actions)) check(`${label}: ${action} offered`, offered, seen.actions);
         if (target.name === "Pharmacy Desk") check(`${who}: sidebar lists every Pharmacy entry, with Sales in place of Pharmacy Billing`, JSON.stringify(seen.links) === JSON.stringify(PHARMACY_LINKS), seen.links);
+        if (target.name === "Pharmacy Desk") check(`${who}: sidebar offers Daily Collection and Pharmacy Report`, JSON.stringify(seen.reportLinks) === JSON.stringify(REPORT_LINKS), seen.reportLinks);
       }
       await context.close();
     }
@@ -162,6 +165,7 @@ async function visit(stack, context, who, target) {
     for (const target of PAGES) {
       const seen = await visit(stack, reception, "reception", target);
       console.log(`NOTE reception ${target.name}: denied=${JSON.stringify(seen.denied)} refused=${JSON.stringify(seen.refused)} actions=${JSON.stringify(seen.actions)} links=${JSON.stringify(seen.links)}`);
+      if (target.name === "Pharmacy Desk") check("reception: no report link it would be refused", seen.reportLinks.length === 0, seen.reportLinks);
     }
   } finally {
     await browser?.close();

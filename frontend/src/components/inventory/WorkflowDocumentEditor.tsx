@@ -1256,6 +1256,7 @@ export function WorkflowDocumentEditor({
                       <td key={f} className="p-2 text-right tabular-nums">
                         <input
                           className={`${inputClass} w-24`}
+                          style={{ minWidth: "5.5rem" }}
                           type="number"
                           min="0"
                           step={
