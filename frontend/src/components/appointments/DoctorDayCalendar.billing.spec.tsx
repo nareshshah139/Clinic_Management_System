@@ -54,19 +54,23 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(paid).not.toHaveAttribute('data-attention');
 
     const due = screen.getByRole('button', { name: 'Review bill: ₹500, ₹200 due' });
-    expect(within(due).getByText('₹500 · ₹200 due')).toBeInTheDocument();
-    expect(within(due).getByText('₹200 due')).toBeInTheDocument();
+    expect(Array.from(due.querySelectorAll('span')).map((n) => n.textContent)).toEqual(['₹!', '₹200 due', '₹500 · ₹200 due']);
     expect(due).toHaveAttribute('data-attention', 'true');
 
     expect(screen.getByRole('button', { name: 'Procedure bill: not billed yet' })).not.toHaveAttribute('data-attention');
     expect(screen.getByRole('button', { name: 'Review bill: not billed yet, visit finished' })).toHaveAttribute('data-attention', 'true');
 
     const two = screen.getByRole('button', { name: 'Review bill: ₹1,700 in 2 bills, ₹200 due' });
-    expect(within(two).getByText('₹1,700 · ₹200 due')).toBeInTheDocument();
-    expect(within(two).getByText('₹1,700 · ₹200 due · 2 bills')).toBeInTheDocument();
+    expect(Array.from(two.querySelectorAll('span')).map((n) => n.textContent)).toEqual(['₹!', '₹200 due', '₹1,700 · ₹200 due', '₹1,700 · ₹200 due · 2 bills']);
 
-    const types = Array.from(document.querySelectorAll('[data-bill-type]')).map((n) => n.textContent);
-    expect(types).toEqual(['First consultation', 'Review', 'Procedure', 'Review', 'Review']);
+    const types = Array.from(document.querySelectorAll('[data-bill-type]')).map((n) => [n.getAttribute('title'), ...Array.from(n.children).map((c) => c.textContent)]);
+    expect(types).toEqual([
+      ['First consultation', 'First', 'First consultation'],
+      ['Review', 'Review', 'Review'],
+      ['Procedure', 'Procedure', 'Procedure'],
+      ['Review', 'Review', 'Review'],
+      ['Review', 'Review', 'Review'],
+    ]);
     expect(confirmed().getByRole('button', { name: 'Meera Shah, 09:00-09:15, Confirmed' })).toHaveTextContent('34y');
   });
 
@@ -79,7 +83,7 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(first).toHaveAttribute('title', 'Token 5, Venkata Subramanian, 09:00-09:15, Confirmed');
     expect(first.querySelector('[data-appointment-time]')).toHaveTextContent('09:00-09:15');
     expect(first.querySelector('[data-patient-name]')).toHaveTextContent('Venkata Subramanian');
-    expect(first.querySelector('[data-bill-type]')).toHaveTextContent('First consultation');
+    expect(first.querySelector('[data-bill-type]')).toHaveAttribute('title', 'First consultation');
     expect(first.querySelector('[data-appointment-status]')).toHaveAttribute('title', 'Confirmed');
     expect(first.querySelector('[data-appointment-status]')).toHaveTextContent('Confirmed');
     const second = screen.getByRole('button', { name: 'Priya Nair, 09:15-09:30, In progress' });
@@ -177,7 +181,7 @@ describe('DoctorDayCalendar billing on each row', () => {
   it('shows the bill type but no money to a viewer who cannot read bills', async () => {
     renderDay([row('a1', '09:00-09:15', 'Meera Shah', { billType: 'FIRST_CONSULTATION' })], { read: false, createBill: false, takePayment: false });
     await screen.findByRole('button', { name: 'Meera Shah, 09:00-09:15, Confirmed' });
-    expect(document.querySelector('[data-bill-type]')?.textContent).toBe('First consultation');
+    expect(document.querySelector('[data-bill-type]')).toHaveAttribute('title', 'First consultation');
     expect(document.querySelector('[data-appointment-billing]')).toBeNull();
   });
 });

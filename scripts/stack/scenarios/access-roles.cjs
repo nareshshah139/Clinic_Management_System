@@ -114,7 +114,7 @@ async function census(stack, browser, who, role, viewport) {
       await pause(20000);
     }
   }
-  const nav = viewport.width >= 1024 ? home.getByRole("navigation", { name: "Main navigation" }) : null;
+  const nav = home.getByRole("navigation", { name: "Main navigation" });
   await home.goto(`${stack.base}/dashboard`, { waitUntil: "domcontentloaded", timeout: 240000 });
   await nav.getByRole("link").first().waitFor({ timeout: 120000 });
   const hrefs = await nav.getByRole("link").evaluateAll((links) => links.map((a) => a.getAttribute("href")));
@@ -125,9 +125,9 @@ async function census(stack, browser, who, role, viewport) {
     const refused = [];
     page.on("response", (r) => r.url().includes("/api/") && r.status() >= 400 && refused.push(`${r.status()} ${new URL(r.url()).pathname}`));
     await page.goto(`${stack.base}${href}`, { waitUntil: "domcontentloaded", timeout: 240000 });
-    await page.getByText("Census", { exact: false }).first().waitFor({ timeout: 120000 }).catch(() => {});
+    await page.getByText(stack.users[who].firstName, { exact: false }).first().waitFor({ timeout: 120000 });
     await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(500);
     if (href === "/dashboard/appointments") await page.screenshot({ path: path.join(out, `census-${role.toLowerCase()}-appointments.png`) });
     visited.push({ href, refused });
     await page.close();
