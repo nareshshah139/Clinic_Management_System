@@ -88,8 +88,8 @@ const DC = "/dashboard/pharmacy/reports?report=daily-collection";
 const DESK = "/dashboard/pharmacy?section=desk";
 const COUNTER = "/dashboard/pharmacy?section=counter";
 const MENU = {
-  OWNER: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users", "/test-transcribe"],
-  ADMIN: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", DESK, COUNTER, "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users", "/test-transcribe"],
+  OWNER: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users", "/dashboard/fees", "/test-transcribe"],
+  ADMIN: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", DESK, COUNTER, "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users", "/dashboard/fees", "/test-transcribe"],
   MANAGER: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users"],
   DOCTOR: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", DESK, COUNTER, "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/test-transcribe"],
   NURSE: ["/dashboard", "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/rooms"],

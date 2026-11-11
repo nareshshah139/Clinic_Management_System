@@ -79,7 +79,7 @@ describe('Daily Collection in the main menu', () => {
 });
 
 it.each([
-  ['OWNER', ['Dashboard', 'Daily Collection', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Pharmacy Report', 'Reports', 'Users', 'Test Transcribe']],
+  ['OWNER', ['Dashboard', 'Daily Collection', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Pharmacy Report', 'Reports', 'Users', 'Fee list', 'Test Transcribe']],
   ['MANAGER', ['Dashboard', 'Daily Collection', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Inventory', 'Pharmacy Report', 'Reports', 'Users']],
   ['NURSE', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Rooms']],
   ['RECEPTION', ['Dashboard', 'Patients', 'Appointments', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],

@@ -382,10 +382,10 @@ const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : val
           s.check("and the long instruction is still whole", await page.locator("textarea").evaluateAll((els, text) => els.filter((el) => el.value === text).length, LONG_NOTE), 1);
 
           await page.getByRole("button", { name: "Print Preview" }).click();
-          const printed = page.locator("#pagedjs-container .rx-row");
-          await printed.first().waitFor({ timeout: 120000 });
-          await page.waitForTimeout(1200);
-          const rows = await page.locator("#pagedjs-container .rx-row").evaluateAll((els) => els.map((el) => [...el.children].map((c) => c.textContent.trim())));
+          const rows = await (await page.waitForFunction(() => {
+            const els = [...document.querySelectorAll("#pagedjs-container .rx-row")];
+            return els.length === 4 && els.map((el) => [...el.children].map((c) => c.textContent.trim()));
+          }, null, { timeout: 120000 })).jsonValue();
           s.check("print preview lists the medicines in screen order", rows.map((r) => r[0]), ["Fucibet cream", "Tretinoin gel", "Cetaphil cleanser", "Sunscreen SPF 50"]);
           s.check("print preview shows both long instructions in full", [rows[0][4], rows[2][4]], [FUCIBET_NOTE, LONG_NOTE]);
           s.check("print preview shows each duration with its medicine", rows.map((r) => r[3]), ["30 days", "45 days", "15 days", "60 days"]);

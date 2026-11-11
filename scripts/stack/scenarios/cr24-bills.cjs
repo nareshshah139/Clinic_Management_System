@@ -70,8 +70,8 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
       const page = await context.newPage();
       page.setDefaultTimeout(60000);
       const seen = { errors: [], refused: [], expected: false };
-      page.on("pageerror", (e) => seen.errors.push(`pageerror ${e.message.slice(0, 200)}`));
-      page.on("console", (m) => m.type() === "error" && !(seen.expected && /status of 409/.test(m.text())) && seen.errors.push(m.text().slice(0, 200)));
+      page.on("pageerror", (e) => seen.errors.push(`pageerror ${e.message.slice(0, 2000)}`));
+      page.on("console", (m) => m.type() === "error" && !(seen.expected && /status of 409/.test(m.text())) && seen.errors.push(m.text().slice(0, 2000)));
       page.on("response", (r) => r.url().includes("/api/") && [401, 403].includes(r.status()) && seen.refused.push(`${r.status()} ${new URL(r.url()).pathname}`));
       if (!sessions.has(who)) {
         await browserLogin(stack, page, who);

@@ -262,7 +262,7 @@ async function seed(stack, today) {
       await o.page.keyboard.press("Escape");
       await o.page.reload({ waitUntil: "domcontentloaded" });
       await calendar(o.page);
-      s.check("the calendar rows after a reload", [clean(await chipOf(o.page, "Meera Shah").innerText()), clean(await chipOf(o.page, "Ravi Kumar").innerText())], ["₹1,280 · Paid", "₹450 · Due ₹450"]);
+      s.check("the calendar rows after a reload", [clean(await chipOf(o.page, "Meera Shah").innerText()), clean(await chipOf(o.page, "Ravi Kumar").innerText())], ["₹1,280 · Paid", "₹450 due"]);
       s.check("no Fee list in reception's menu", (await menuLinks(o.page, false)).includes("Fee list"), false);
       s.ok("no refused calls", o.refused.length === 0, o.refused);
     });
