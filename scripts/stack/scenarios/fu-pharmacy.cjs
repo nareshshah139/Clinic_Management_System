@@ -68,7 +68,17 @@ async function seed(stack) {
     const { items, patients, visits, older } = await seed(stack);
     const db = stack.db;
     const tokens = {};
-    const call = async (who, method, url, body) => api(stack, (tokens[who] ??= await tokenFor(stack, who)), method, url, body);
+    const call = async (who, method, url, body) => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await api(stack, (tokens[who] ??= await tokenFor(stack, who)), method, url, body);
+        } catch (error) {
+          if (error.status !== 429 || attempt >= 6) throw error;
+          console.log(`  ${who} ${url}: throttled, waiting`);
+          await new Promise((r) => setTimeout(r, 15000));
+        }
+      }
+    };
     const q = (params) => new URLSearchParams(params).toString();
     const stockOf = async () => Object.fromEntries((await db.inventoryItem.findMany({ select: { batchNumber: true, currentStock: true, status: true } })).map((i) => [i.batchNumber, [i.currentStock, i.status]]));
 
@@ -77,8 +87,8 @@ async function seed(stack) {
       await call("admin", "PATCH", `/inventory/items/${item.id}`, { status: "INACTIVE", reason: "Batch sold out; archived", updatedAt: fresh.updatedAt.toISOString() });
       console.log(`NOTE archived ${key}`);
     }
-    check("admin archives the sold-out batches FA-01 and SA-01 through the API", Object.fromEntries(Object.entries(await stockOf()).map(([b, [, s]]) => [b, s])),
-      { "FA-01": "INACTIVE", "FB-01": "ACTIVE", "FB-02": "ACTIVE", "F50-01": "ACTIVE", "SA-01": "INACTIVE", "S20-01": "ACTIVE" });
+    check("admin archives the sold-out batches FA-01 and SA-01 through the API", Object.entries(await stockOf()).map(([b, [, s]]) => [b, s]).sort(),
+      [["F50-01", "ACTIVE"], ["FA-01", "INACTIVE"], ["FB-01", "ACTIVE"], ["FB-02", "ACTIVE"], ["S20-01", "ACTIVE"], ["SA-01", "INACTIVE"]]);
 
     const searches = {
       doctor: async (query) => (await call("doctor", "GET", `/prescriptions/drugs/autocomplete?${q({ q: query, limit: "10" })}`)).map((r) => r.name),
