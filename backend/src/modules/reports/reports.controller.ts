@@ -1,4 +1,4 @@
-import { Roles } from '../../shared/decorators/roles.decorator';
+import { Authenticated, Roles } from '../../shared/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { Controller, Get, Post, Body, Query, Request, UseGuards, HttpStatus, HttpCode } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
@@ -212,11 +212,11 @@ export class ReportsController {
   }
 
   @Get('alerts')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER, UserRole.DOCTOR, UserRole.PHARMACIST)
+  @Authenticated()
   @ApiOperation({ summary: 'Get system alerts and notifications' })
   @ApiResponse({ status: 200, description: 'System alerts retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getSystemAlerts(@Request() req: AuthenticatedRequest): Promise<any> {
-    return this.reportsService.getSystemAlerts(req.user.branchId, req.user.role);
+    return this.reportsService.getSystemAlerts(req.user.branchId, req.user);
   }
 }

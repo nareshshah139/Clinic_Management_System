@@ -34,9 +34,9 @@ GET /appointments | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointme
 GET /appointments/:id | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
 GET /appointments/available-slots | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
 GET /appointments/doctor/:doctorId/schedule | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
-GET /appointments/room/:roomId/schedule | roles: ADMIN,RECEPTION,DOCTOR | permissions: appointments:read
-GET /appointments/rooms | roles: ADMIN,RECEPTION,DOCTOR | permissions: rooms:read
-GET /appointments/rooms/all | roles: ADMIN,DOCTOR,RECEPTION | permissions: rooms:read
+GET /appointments/room/:roomId/schedule | roles: ADMIN,RECEPTION,DOCTOR,NURSE | permissions: appointments:read
+GET /appointments/rooms | roles: ADMIN,RECEPTION,DOCTOR,NURSE | permissions: rooms:read
+GET /appointments/rooms/all | roles: ADMIN,DOCTOR,RECEPTION,NURSE | permissions: rooms:read
 GET /audit-logs | roles: ADMIN,OWNER | permissions: audit:read
 GET /audit-logs/:id | roles: ADMIN,OWNER | permissions: audit:read
 GET /audit-logs/entity/:entity/:entityId | roles: ADMIN,OWNER,DOCTOR | permissions: audit:read
@@ -218,7 +218,7 @@ GET /prescriptions/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTIO
 GET /prescriptions/templates | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/templates/:templateId/versions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/translations | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
-GET /reports/alerts | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST | permissions: -
+GET /reports/alerts | roles: any signed-in user | permissions: -
 GET /reports/appointments | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/dashboard | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/doctors | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
