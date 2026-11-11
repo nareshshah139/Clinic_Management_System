@@ -16,10 +16,13 @@ import { getISTDateString } from '@/lib/utils';
 import { Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
+import { ROOM_READ_ROLES } from '@/lib/appointment-access';
 
 function AppointmentsPageInner() {
   const search = useSearchParams();
   const prefillPatientId = search.get('patientId') || undefined;
+  const { user } = useDashboardUser();
   const [doctors, setDoctors] = useState<User[]>([]);
   const [doctorId, setDoctorId] = useState<string>('');
   const [date, setDate] = useState<string>(() => {
@@ -132,6 +135,7 @@ function AppointmentsPageInner() {
           controlledDoctorId={doctorId}
           controlledDate={date}
           hideHeaderControls
+          readsRooms={ROOM_READ_ROLES.includes(user?.role ?? '')}
         />
       </TabsContent>
       <TabsContent value="slots">

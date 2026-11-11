@@ -30,13 +30,13 @@ DELETE /visits/:id/photos/legacy | roles: DOCTOR,ADMIN,OWNER | permissions: -
 DELETE /visits/photos/draft/:patientId/:dateStr/:attachmentId | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 DELETE /whatsapp/templates/:id | roles: ADMIN,DOCTOR | permissions: -
 GET / | public
-GET /appointments | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
+GET /appointments | roles: ADMIN,DOCTOR,NURSE,RECEPTION,MANAGER | permissions: appointments:read
 GET /appointments/:id | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
 GET /appointments/available-slots | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
-GET /appointments/doctor/:doctorId/schedule | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
-GET /appointments/room/:roomId/schedule | roles: ADMIN,RECEPTION,DOCTOR | permissions: appointments:read
-GET /appointments/rooms | roles: ADMIN,RECEPTION,DOCTOR | permissions: rooms:read
-GET /appointments/rooms/all | roles: ADMIN,DOCTOR,RECEPTION | permissions: rooms:read
+GET /appointments/doctor/:doctorId/schedule | roles: ADMIN,DOCTOR,NURSE,RECEPTION,MANAGER | permissions: appointments:read
+GET /appointments/room/:roomId/schedule | roles: ADMIN,RECEPTION,DOCTOR,NURSE | permissions: appointments:read
+GET /appointments/rooms | roles: ADMIN,RECEPTION,DOCTOR,NURSE | permissions: rooms:read
+GET /appointments/rooms/all | roles: ADMIN,DOCTOR,RECEPTION,NURSE | permissions: rooms:read
 GET /audit-logs | roles: ADMIN,OWNER | permissions: audit:read
 GET /audit-logs/:id | roles: ADMIN,OWNER | permissions: audit:read
 GET /audit-logs/entity/:entity/:entityId | roles: ADMIN,OWNER,DOCTOR | permissions: audit:read
@@ -57,9 +57,9 @@ GET /billing/payments/summary | roles: ADMIN | permissions: billing:payment:summ
 GET /billing/reports/revenue | roles: ADMIN | permissions: billing:revenue:read
 GET /billing/statistics | roles: ADMIN | permissions: billing:statistics:read
 GET /clinic-investigations | roles: DOCTOR,ADMIN,OWNER,NURSE | permissions: -
-GET /doctor-availability/:doctorId | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
-GET /doctor-availability/:doctorId/day | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
-GET /doctor-availability/holidays | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
+GET /doctor-availability/:doctorId | roles: ADMIN,DOCTOR,MANAGER,NURSE,RECEPTION | permissions: appointments:read
+GET /doctor-availability/:doctorId/day | roles: ADMIN,DOCTOR,MANAGER,NURSE,RECEPTION | permissions: appointments:read
+GET /doctor-availability/holidays | roles: ADMIN,DOCTOR,MANAGER,NURSE,RECEPTION | permissions: appointments:read
 GET /drugs | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:read
 GET /drugs/:id | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:read
 GET /drugs/:id/alternatives | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:read
@@ -219,7 +219,7 @@ GET /prescriptions/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTIO
 GET /prescriptions/templates | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/templates/:templateId/versions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/translations | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
-GET /reports/alerts | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST | permissions: -
+GET /reports/alerts | roles: any signed-in user | permissions: -
 GET /reports/appointments | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/dashboard | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/doctors | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -

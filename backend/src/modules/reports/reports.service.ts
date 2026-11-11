@@ -4,6 +4,7 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { addDays, clinicDay, clinicDayOf, clinicInstants } from '../pharmacy/register-utils';
 import { reportRange, type ReportRange } from './report-range';
 import { Prisma } from '@prisma/client';
+import { viewerGrants } from '../../shared/access/viewer-grants';
 import {
   RevenueReportResponseDto,
   PaymentBreakdownDto,
@@ -1120,32 +1121,46 @@ export class ReportsService {
    * A pharmacist MUST receive only the stock alerts (low stock and expiry), never invoices,
    * payments or appointments.
    */
-  async getSystemAlerts(branchId: string, role?: string): Promise<any> {
-    const stockOnly = role === 'PHARMACIST';
+  /**
+   * @cc [owner:nareshshah139,label:security] alerts-by-grant
+   * Every signed-in user MUST get a 200 from system alerts, holding only the sections whose own
+   * permission the user holds: overdue invoices need billing:invoice:read, pending payments
+   * billing:payment:read, appointments appointments:read, low stock and expiry their inventory
+   * alert permissions. A user with no matching grant, or no record, MUST get empty sections.
+   */
+  async getSystemAlerts(branchId: string, viewer: { id?: string; role?: string }): Promise<any> {
+    const grants = await viewerGrants(this.prisma, viewer);
+    const sees = {
+      invoices: grants.has('billing:invoice:read'),
+      payments: grants.has('billing:payment:read'),
+      appointments: grants.has('appointments:read'),
+      lowStock: grants.has('inventory:alerts:lowStock'),
+      expiry: grants.has('inventory:alerts:expiry'),
+    };
     const now = new Date();
     const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const in48Hours = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
     const [overdueInvoices, lowStockAlerts, expiryAlerts, pendingPaymentsList, upcomingAppointments] = await Promise.all([
-      stockOnly ? [] : this.prisma.newInvoice.findMany({
+      !sees.invoices ? [] : this.prisma.newInvoice.findMany({
         where: { branchId, status: 'OVERDUE' },
         select: { id: true, invoiceNo: true, total: true, dueDate: true, patient: { select: { id: true, name: true } } },
         orderBy: { dueDate: 'asc' },
         take: 10,
       }),
-      this.prisma.inventoryItem.findMany({
+      !sees.lowStock ? [] : this.prisma.inventoryItem.findMany({
         where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] },
         select: { id: true, name: true, currentStock: true, minStockLevel: true },
         orderBy: { currentStock: 'asc' },
         take: 10,
       }),
-      this.prisma.inventoryItem.findMany({
+      !sees.expiry ? [] : this.prisma.inventoryItem.findMany({
         where: { branchId, expiryDate: { gt: now, lt: in30Days } },
         select: { id: true, name: true, expiryDate: true, currentStock: true },
         orderBy: { expiryDate: 'asc' },
         take: 10,
       }),
-      stockOnly ? [] : this.prisma.newPayment.findMany({
+      !sees.payments ? [] : this.prisma.newPayment.findMany({
         where: { 
           reconStatus: 'PENDING',
           invoice: { branchId }
@@ -1154,7 +1169,7 @@ export class ReportsService {
         orderBy: { createdAt: 'desc' },
         take: 10,
       }),
-      stockOnly ? [] : this.prisma.appointment.findMany({
+      !sees.appointments ? [] : this.prisma.appointment.findMany({
         where: { branchId, date: { gt: now, lt: in48Hours }, status: { notIn: ['CANCELLED'] } },
         select: { 
           id: true, 

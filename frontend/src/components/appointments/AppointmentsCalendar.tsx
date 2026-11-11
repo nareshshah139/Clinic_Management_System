@@ -28,6 +28,8 @@ interface AppointmentsCalendarProps {
   controlledDoctorId?: string;
   controlledDate?: string;
   hideHeaderControls?: boolean;
+  /** False for a viewer the server refuses rooms; the room filter then stays empty and rooms are never asked for. */
+  readsRooms?: boolean;
 }
 
 /**
@@ -56,6 +58,7 @@ export default function AppointmentsCalendar({
   controlledDoctorId,
   controlledDate,
   hideHeaderControls,
+  readsRooms = true,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
   const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
@@ -162,7 +165,7 @@ export default function AppointmentsCalendar({
     if (doctorId && date) {
       void fetchRooms();
     }
-  }, [doctorId, date]);
+  }, [doctorId, date, readsRooms]);
 
   useEffect(() => {
     void fetchGoogleConfigured();
@@ -190,6 +193,7 @@ export default function AppointmentsCalendar({
   };
 
   const fetchRooms = async () => {
+    if (!readsRooms) return;
     try {
       const res: any = await apiClient.getRooms();
       setRooms(res.rooms || []);
@@ -547,18 +551,20 @@ export default function AppointmentsCalendar({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <label className="text-sm text-gray-700">Room</label>
-              <Select value={roomFilter} onValueChange={setRoomFilter}>
-                <SelectTrigger><SelectValue placeholder="All Rooms" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Rooms</SelectItem>
-                  {rooms.map((room) => (
-                    <SelectItem key={room.id} value={room.id}>{room.name} ({room.type})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {readsRooms && (
+              <div>
+                <label className="text-sm text-gray-700">Room</label>
+                <Select value={roomFilter} onValueChange={setRoomFilter}>
+                  <SelectTrigger><SelectValue placeholder="All Rooms" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Rooms</SelectItem>
+                    {rooms.map((room) => (
+                      <SelectItem key={room.id} value={room.id}>{room.name} ({room.type})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <label className="text-sm text-gray-700">Patient</label>
               <Input placeholder="Search patient by name/phone" value={patientSearch} onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }} />

@@ -13,28 +13,29 @@ import {
   addMinutesToHHMM,
 } from '@/lib/utils';
 import { CircleAlert } from 'lucide-react';
-import type { AppointmentInSlot, AppointmentCalendar } from '@/lib/types';
+import type { AppointmentInSlot, AppointmentCalendar, BillType } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 import { layoutDay } from './day-layout';
 import { CALENDARS, canMove } from './appointment-calendars';
-import { BILL_TYPE_LABEL, billingChip, type BillingTone } from './appointment-billing-view';
+import { BILL_TYPE_LABEL, BILL_TYPE_SHORT, billingChip, type BillingTone, type ChipWidth } from './appointment-billing-view';
 
 type StatusStyle = {
   label: string;
   badgeVariant: NonNullable<VariantProps<typeof badgeVariants>['variant']>;
   accentClassName: string;
+  dotClassName: string;
   muted: boolean;
   strikeName: boolean;
 };
 
 const APPOINTMENT_STATUS_STYLE: Record<AppointmentStatus, StatusStyle> = {
-  [AppointmentStatus.SCHEDULED]: { label: 'Scheduled', badgeVariant: 'neutral', accentClassName: 'border-l-slate-400', muted: false, strikeName: false },
-  [AppointmentStatus.CONFIRMED]: { label: 'Confirmed', badgeVariant: 'info', accentClassName: 'border-l-sky-500', muted: false, strikeName: false },
-  [AppointmentStatus.CHECKED_IN]: { label: 'Checked in', badgeVariant: 'warning', accentClassName: 'border-l-amber-500', muted: false, strikeName: false },
-  [AppointmentStatus.IN_PROGRESS]: { label: 'In progress', badgeVariant: 'success', accentClassName: 'border-l-emerald-500', muted: false, strikeName: false },
-  [AppointmentStatus.COMPLETED]: { label: 'Completed', badgeVariant: 'neutral', accentClassName: 'border-l-slate-300', muted: true, strikeName: false },
-  [AppointmentStatus.NO_SHOW]: { label: 'No-show', badgeVariant: 'danger', accentClassName: 'border-l-red-500', muted: true, strikeName: true },
-  [AppointmentStatus.CANCELLED]: { label: 'Cancelled', badgeVariant: 'danger', accentClassName: 'border-l-red-300', muted: true, strikeName: true },
+  [AppointmentStatus.SCHEDULED]: { label: 'Scheduled', badgeVariant: 'neutral', accentClassName: 'border-l-slate-400', dotClassName: 'bg-slate-400', muted: false, strikeName: false },
+  [AppointmentStatus.CONFIRMED]: { label: 'Confirmed', badgeVariant: 'info', accentClassName: 'border-l-sky-500', dotClassName: 'bg-sky-500', muted: false, strikeName: false },
+  [AppointmentStatus.CHECKED_IN]: { label: 'Checked in', badgeVariant: 'warning', accentClassName: 'border-l-amber-500', dotClassName: 'bg-amber-500', muted: false, strikeName: false },
+  [AppointmentStatus.IN_PROGRESS]: { label: 'In progress', badgeVariant: 'success', accentClassName: 'border-l-emerald-500', dotClassName: 'bg-emerald-500', muted: false, strikeName: false },
+  [AppointmentStatus.COMPLETED]: { label: 'Completed', badgeVariant: 'neutral', accentClassName: 'border-l-slate-300', dotClassName: 'bg-slate-400', muted: true, strikeName: false },
+  [AppointmentStatus.NO_SHOW]: { label: 'No-show', badgeVariant: 'danger', accentClassName: 'border-l-red-500', dotClassName: 'bg-red-500', muted: true, strikeName: true },
+  [AppointmentStatus.CANCELLED]: { label: 'Cancelled', badgeVariant: 'danger', accentClassName: 'border-l-red-300', dotClassName: 'bg-red-400', muted: true, strikeName: true },
 };
 
 const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> = {
@@ -44,6 +45,35 @@ const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> =
 };
 
 const FLEX_STEP_MIN = 15;
+
+const BILL_TYPE_TONE: Record<BillType, string> = {
+  FIRST_CONSULTATION: 'text-teal-700',
+  REVIEW: 'text-sky-700',
+  PROCEDURE: 'text-purple-700',
+};
+
+/** Container widths of the appointment block at which each step of the chip's wording appears, and gives way to the next. */
+const CHIP_SHOWN_FROM: Record<ChipWidth, string> = {
+  phone: 'inline',
+  narrow: 'hidden @min-[12rem]:inline',
+  desk: 'hidden @min-[24rem]:inline',
+  full: 'hidden @min-[38rem]:inline',
+};
+const CHIP_HIDDEN_FROM: Record<ChipWidth, string> = {
+  phone: '',
+  narrow: '@min-[12rem]:hidden',
+  desk: '@min-[24rem]:hidden',
+  full: '@min-[38rem]:hidden',
+};
+
+/**
+ * Block widths from which a row names its status in words instead of a coloured dot. Every row of a
+ * column switches together, and a row without a bill chip has the room sooner.
+ */
+const STATUS_IN_WORDS = {
+  withChip: { dot: '@min-[30rem]/row:hidden', words: 'hidden @min-[30rem]/row:inline-flex' },
+  withoutChip: { dot: '@min-[22rem]/row:hidden', words: 'hidden @min-[22rem]/row:inline-flex' },
+};
 
 const BILLING_TONE: Record<BillingTone, string> = {
   paid: 'flex bg-emerald-50 text-emerald-800 ring-emerald-300',
@@ -205,11 +235,12 @@ export default function CalendarColumn({
             status.label,
           ].filter(Boolean).join(', ');
           const chip = apt.billing ? billingChip(apt.billing, apt.billType) : null;
+          const statusFit = chip ? STATUS_IN_WORDS.withChip : STATUS_IN_WORDS.withoutChip;
           return (
             <div
               key={key}
               data-appointment-block={apt.id || apt.slot}
-              className="@container group absolute p-px"
+              className="@container/row group absolute p-px"
               style={{
                 top: `${topPct}%`,
                 height: `${heightPct}%`,
@@ -229,14 +260,14 @@ export default function CalendarColumn({
                     title={accessibleName}
                     onClick={() => onOpen(apt)}
                     disabled={isOptimistic}
-                    className="@container flex h-full w-full items-start overflow-hidden px-1.5 py-0.5 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                    className="@container flex h-full w-full items-start overflow-hidden px-1.5 py-0 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                     style={{ fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))' }}
                   >
-                    <span className={`flex w-full min-w-0 items-center gap-1.5 whitespace-nowrap ${status.muted ? 'text-gray-500' : 'text-gray-900'}`}>
+                    <span className={`flex w-full min-w-0 items-center gap-1 whitespace-nowrap ${status.muted ? 'text-gray-500' : 'text-gray-900'}`}>
                       {apt.tokenNumber != null && (
                         <span className="shrink-0 font-semibold text-gray-500">#{apt.tokenNumber}</span>
                       )}
-                      <span data-appointment-time className="hidden shrink-0 font-bold text-blue-700 @min-[24rem]:inline">{`${start}-${end}`}</span>
+                      <span data-appointment-time className="hidden shrink-0 font-bold tabular-nums text-blue-700 @min-[15em]:inline">{`${start}-${end}`}</span>
                       <span
                         data-patient-name
                         className={`min-w-0 flex-auto truncate font-semibold ${status.strikeName ? 'line-through' : ''}`}
@@ -244,11 +275,18 @@ export default function CalendarColumn({
                         {patientName}
                       </span>
                       {apt.billType && (
-                        <span data-bill-type className={`hidden shrink-0 font-semibold @min-[10rem]:inline ${apt.billType === 'PROCEDURE' ? 'text-purple-700' : apt.billType === 'REVIEW' ? 'text-sky-700' : 'text-teal-700'}`}>
-                          {BILL_TYPE_LABEL[apt.billType]}
+                        <span data-bill-type title={BILL_TYPE_LABEL[apt.billType]} className={`hidden shrink-0 font-semibold @min-[18em]:inline ${BILL_TYPE_TONE[apt.billType]}`}>
+                          <span className="@min-[38rem]/row:hidden">{BILL_TYPE_SHORT[apt.billType]}</span>
+                          <span className="hidden @min-[38rem]/row:inline">{BILL_TYPE_LABEL[apt.billType]}</span>
                         </span>
                       )}
-                      <span className="hidden min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden @min-[28rem]:flex">
+                      <span data-appointment-status title={status.label} className="hidden shrink-0 items-center @min-[10em]:inline-flex">
+                        <span className={`size-2 rounded-full ${status.dotClassName} ${statusFit.dot}`} aria-hidden="true" />
+                        <Badge variant={status.badgeVariant} className={`whitespace-nowrap px-1.5 py-0 text-[10px] leading-3.5 ${statusFit.words}`}>
+                          {status.label}
+                        </Badge>
+                      </span>
+                      <span className="hidden min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden @min-[36em]:flex">
                         {apt.visitType === 'PROCEDURE' && apt.notes && (
                           <span className="truncate font-medium text-purple-700">({apt.notes})</span>
                         )}
@@ -257,9 +295,6 @@ export default function CalendarColumn({
                         {apt.patient?.gender && <span className="rounded bg-gray-100 px-1 text-gray-600">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
                         {apt.room?.name && <span className="truncate font-medium text-green-600">{apt.room.name}</span>}
                       </span>
-                      <Badge variant={status.badgeVariant} className="hidden shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] leading-4 @min-[9rem]:inline-flex">
-                        {status.label}
-                      </Badge>
                     </span>
                   </button>
 
@@ -316,9 +351,11 @@ export default function CalendarColumn({
                     className={`my-0.5 mr-0.5 shrink-0 items-center gap-1 self-start whitespace-nowrap rounded px-1.5 text-[11px] font-semibold leading-4 ring-1 ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${BILLING_TONE[chip.tone]}`}
                   >
                     {(chip.tone === 'due' || chip.tone === 'unbilled') && <CircleAlert className="hidden size-3 shrink-0 @min-[12rem]:block" aria-hidden="true" />}
-                    <span className="@min-[12rem]:hidden">{chip.tiny}</span>
-                    <span className="hidden @min-[12rem]:inline @min-[22rem]:hidden">{chip.short}</span>
-                    <span className="hidden @min-[22rem]:inline">{chip.text}</span>
+                    {chip.steps.map((step, i) => (
+                      <span key={step.from} className={`${CHIP_SHOWN_FROM[step.from]} ${i + 1 < chip.steps.length ? CHIP_HIDDEN_FROM[chip.steps[i + 1].from] : ''}`}>
+                        {step.text}
+                      </span>
+                    ))}
                   </button>
                 )}
               </div>

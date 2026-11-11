@@ -1,12 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DashboardPage from './page';
 import { apiClient } from '@/lib/api';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
 jest.mock('@/components/dashboard/DoctorPatientPanels', () => ({ DoctorPatientPanels: () => null }));
+let mockRole = 'RECEPTION';
 jest.mock('@/components/layout/dashboard-user-context', () => ({
-  useDashboardUser: () => ({ user: { id: 'reception-1', role: 'RECEPTION' }, loading: false }),
+  useDashboardUser: () => ({ user: { id: 'user-1', role: mockRole }, loading: false }),
 }));
 jest.mock('@/lib/api', () => ({
   apiClient: {
@@ -22,6 +23,7 @@ const httpError = (status: number) => Object.assign(new Error(`HTTP ${status}`),
 const appointment = { id: 'a1', slot: '10:00-10:30', status: 'SCHEDULED', patient: { name: 'Aarav Reddy' } };
 
 beforeEach(() => {
+  mockRole = 'RECEPTION';
   jest.resetAllMocks();
   api.getSystemStatistics.mockRejectedValue(httpError(403));
   api.getSystemAlerts.mockResolvedValue({});
@@ -60,4 +62,19 @@ it('still shows a genuinely empty day as empty', async () => {
   render(<DashboardPage />);
 
   expect(await screen.findByText('No appointments scheduled for today')).toBeInTheDocument();
+});
+
+it.each(['PHARMACIST', 'ACCOUNTANT'])('never asks for appointments for %s, whose grants hold none, and shows no appointments card', async (role) => {
+  mockRole = role;
+  render(<DashboardPage />);
+
+  await waitFor(() => expect(api.getSystemAlerts.mock.calls.length).toBe(1));
+  expect([screen.getByText('System Alerts').textContent, api.getAppointments.mock.calls.length, screen.queryByText("Today's Appointments")]).toEqual(['System Alerts', 0, null]);
+});
+
+it("shows a manager today's appointments", async () => {
+  mockRole = 'MANAGER';
+  render(<DashboardPage />);
+
+  expect(await screen.findByText('Aarav Reddy')).toBeInTheDocument();
 });

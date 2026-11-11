@@ -128,6 +128,7 @@ databaseTests('Doctor availability access and scheduling contracts', () => {
       'appointments:read',
     ]);
     await make('receptionNoGrant', 'RECEPTION');
+    await make('managerWithAppointments', 'MANAGER', branchId, ['appointments:*']);
     await make('pharmacist', 'PHARMACIST', branchId, ['appointments:read']);
     await make('patientUser', 'PATIENT', branchId, ['appointments:read']);
     patient = await db.patient.create({
@@ -189,6 +190,7 @@ databaseTests('Doctor availability access and scheduling contracts', () => {
       'doctorA',
       'nurseWithRead',
       'receptionWithRead',
+      'managerWithAppointments',
     ])('lets %s read availability, a day and holidays', async (name) => {
       await as(name)
         .get(`/doctor-availability/${people.doctorB.id}`)
@@ -212,6 +214,7 @@ databaseTests('Doctor availability access and scheduling contracts', () => {
     it.each([
       'nurseWithRead',
       'receptionWithRead',
+      'managerWithAppointments',
       'receptionNoGrant',
       'pharmacist',
       'patientUser',
