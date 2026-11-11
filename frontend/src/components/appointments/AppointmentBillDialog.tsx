@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useId, useState } from 'react';
+import Link from 'next/link';
 import { CircleAlert, CheckCircle2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,7 @@ import { displayCalendarDate, displayClinicDateTime } from '@/lib/date-display';
 import { useToast } from '@/hooks/use-toast';
 import type { AppointmentInSlot, ClinicBillAccess } from '@/lib/types';
 import { DESK_PAYMENT_MODES, paymentModeLabel, type DeskPaymentMode } from '@/lib/clinic-payment-modes';
-import { BILL_TYPE_LABEL, defaultBillLine, rupee } from './appointment-billing-view';
+import { BILL_TYPE_LABEL, FEE_LIST_PATH, defaultBillLine, parseRupees, rupee } from './appointment-billing-view';
 
 type InvoiceDetail = {
   id: string;
@@ -29,14 +30,6 @@ type Mode = DeskPaymentMode;
 function referenceLabel(mode: Mode): string | undefined {
   const found = DESK_PAYMENT_MODES.find((m) => m.value === mode);
   return found && 'reference' in found ? found.reference : undefined;
-}
-
-/** "500", "1,200.50", "₹ 500" → number; empty → null; anything else → NaN. */
-export function parseRupees(text: string): number | null {
-  const cleaned = text.replace(/[₹,\s]/g, '');
-  if (!cleaned) return null;
-  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return Number.NaN;
-  return Number(cleaned);
 }
 
 function ModePicker({ value, onChange, label, reference, onReference }: {
@@ -80,8 +73,10 @@ function ModePicker({ value, onChange, label, reference, onReference }: {
  * @cc [owner:nareshshah139,label:product] appointment-bill-dialog
  * The calendar's bill opens the appointment's clinic bills with their lines, payments and what is
  * due. A user who may take payments records one against a bill with something due; a user who may
- * create bills creates one prefilled with the patient, appointment, visit and bill type. Every
- * change is saved on the server and the calendar row is reloaded from it.
+ * create bills creates one prefilled with the patient, appointment, visit and bill type, and with
+ * the fee list's fee for that bill type, named as its source and still editable; without a fee the
+ * field is empty and says so, with a way to the fee list for a user who may edit it. Every change is
+ * saved on the server and the calendar row is reloaded from it.
  */
 export function AppointmentBillDialog({
   appointment,
@@ -129,7 +124,7 @@ export function AppointmentBillDialog({
     if (!appointment) return;
     setAdding(false);
     setLine(defaultBillLine(appointment.billType, appointment.visitType === 'PROCEDURE' ? appointment.notes : undefined));
-    setFee('');
+    setFee(appointment.fee != null ? String(appointment.fee) : '');
     setPaidNow(null);
     setMode('CASH');
     setReference('');
@@ -154,6 +149,7 @@ export function AppointmentBillDialog({
   if (!appointment) return null;
   const patient = formatPatientName(appointment.patient);
   const kind = appointment.billType ? BILL_TYPE_LABEL[appointment.billType] : 'Consultation';
+  const listFee = appointment.fee ?? null;
   const feeValue = parseRupees(fee);
   const paidText = paidNow ?? fee;
   const paidValue = parseRupees(paidText);
@@ -323,13 +319,31 @@ export function AppointmentBillDialog({
             <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1 text-sm font-medium">
                 Fee
-                <Input inputMode="decimal" placeholder="500" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={feeInvalid || undefined} className="h-10 text-base" />
+                <Input inputMode="decimal" placeholder="Type the fee" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={feeInvalid || undefined} aria-describedby={`${ids}-fee-source`} className="h-10 text-base" />
               </label>
               <label className="flex flex-col gap-1 text-sm font-medium">
                 Paid now
                 <Input inputMode="decimal" placeholder="0" value={paidText} onChange={(e) => setPaidNow(e.target.value)} aria-invalid={paidInvalid || undefined} className="h-10 text-base" />
               </label>
             </div>
+            <p id={`${ids}-fee-source`} data-testid="fee-source" className="flex flex-wrap items-center gap-x-2 text-sm text-gray-700">
+              {listFee === null ? (
+                <>
+                  <span>No fee set for {kind}.</span>
+                  {access.editFees && ' '}
+                  {access.editFees && <Link href={FEE_LIST_PATH} className="font-medium text-blue-700 underline underline-offset-2">Set fees</Link>}
+                </>
+              ) : feeValue === listFee ? (
+                <span>From fee list: {kind} {rupee(listFee)}</span>
+              ) : (
+                <>
+                  <span>Fee list: {kind} {rupee(listFee)}, changed for this bill.</span>{' '}
+                  <button type="button" className="font-medium text-blue-700 underline underline-offset-2" onClick={() => setFee(String(listFee))}>
+                    Use {rupee(listFee)}
+                  </button>
+                </>
+              )}
+            </p>
             {feeInvalid && <p className="text-sm text-red-700">Enter the fee as an amount above 0, for example 500.</p>}
             {paidInvalid && <p className="text-sm text-red-700">Paid now can be from 0 up to the fee.</p>}
             {(paidValue ?? 0) > 0 && <ModePicker value={mode} onChange={setMode} label="Payment mode" reference={reference} onReference={setReference} />}

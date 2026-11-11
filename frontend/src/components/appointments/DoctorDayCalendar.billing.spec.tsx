@@ -20,7 +20,7 @@ jest.mock('@/lib/api', () => ({
 }));
 
 const api = apiClient as unknown as Record<string, jest.Mock>;
-const ALL = { read: true, createBill: true, takePayment: true };
+const ALL = { read: true, createBill: true, takePayment: true, editFees: false };
 const bill = (state: string, total: number, received: number, attention: boolean, invoices = state === 'NOT_BILLED' ? [] : [{ id: 'cinv1', invoiceNo: 'INV-1', total, received, due: total - received }]) =>
   ({ state, total, received, due: total - received, attention, invoices });
 const row = (id: string, slot: string, name: string, extra: object) => ({
@@ -35,7 +35,10 @@ function renderDay(appointments: object[], billingAccess = ALL) {
 const confirmed = () => within(screen.getByRole('region', { name: 'Confirmed' }));
 
 describe('DoctorDayCalendar billing on each row', () => {
-  beforeEach(() => jest.resetAllMocks());
+  beforeEach(() => {
+    jest.resetAllMocks();
+    (global.IntersectionObserver as unknown as jest.Mock).mockImplementation(() => ({ observe: () => {}, unobserve: () => {}, disconnect: () => {} }));
+  });
 
   it('shows amount and state with the bill type, and marks unpaid rows in words', async () => {
     renderDay([
@@ -164,6 +167,55 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(stableToast).toHaveBeenCalledWith({ variant: 'success', title: 'Bill INV-9 created and ₹2,500 Net banking / NEFT recorded' });
   });
 
+  it('starts the fee from the fee list, names where it came from, and bills the amount the desk changed it to', async () => {
+    renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', fee: 390, billing: bill('NOT_BILLED', 0, 0, false) })]);
+    api.createInvoice.mockResolvedValue({ id: 'cinv7', invoiceNo: 'INV-7' });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Review bill: not billed yet' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill for Ravi Kumar' });
+    const fee = within(dialog).getByRole('textbox', { name: 'Fee' });
+    expect([(fee as HTMLInputElement).value, within(dialog).getByRole('textbox', { name: 'Paid now' }).getAttribute('value')]).toEqual(['390', '390']);
+    expect(within(dialog).getByTestId('fee-source')).toHaveTextContent('From fee list: Review ₹390');
+    expect(fee).toHaveAccessibleDescription('From fee list: Review ₹390');
+
+    fireEvent.change(fee, { target: { value: '450' } });
+    expect(within(dialog).getByTestId('fee-source')).toHaveTextContent('Fee list: Review ₹390, changed for this bill. Use ₹390');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Use ₹390' }));
+    expect(fee).toHaveValue('390');
+    expect(within(dialog).getByTestId('fee-source')).toHaveTextContent('From fee list: Review ₹390');
+
+    fireEvent.change(fee, { target: { value: '450' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Paid now' }), { target: { value: '0' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create bill' }));
+    await waitFor(() => expect(api.createInvoice).toHaveBeenCalledWith({
+      patientId: 'p-a2',
+      appointmentId: 'a2',
+      items: [{ name: 'Review consultation', description: 'Review consultation', quantity: 1, unitPrice: 450, gstRate: 0, discount: 0 }],
+    }));
+    expect(api.processPayment).not.toHaveBeenCalled();
+    expect(stableToast).toHaveBeenCalledWith({ variant: 'success', title: 'Bill INV-7 created' });
+  });
+
+  it('leaves the fee empty and says so when the bill type has no fee, and only offers the fee list to a user who may edit it', async () => {
+    const lakshmi = row('a3', '09:30-09:45', 'Lakshmi Devi', { billType: 'PROCEDURE', visitType: 'PROCEDURE', fee: null, billing: bill('NOT_BILLED', 0, 0, false) });
+    renderDay([lakshmi]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Procedure bill: not billed yet' }));
+    let dialog = await screen.findByRole('dialog', { name: 'Bill for Lakshmi Devi' });
+    expect(within(dialog).getByRole('textbox', { name: 'Fee' })).toHaveValue('');
+    expect(within(dialog).getByTestId('fee-source')).toHaveTextContent(/^No fee set for Procedure\.$/);
+    expect(within(dialog).queryByRole('link', { name: 'Set fees' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Create bill' })).toBeDisabled();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    document.body.innerHTML = '';
+    renderDay([lakshmi], { ...ALL, editFees: true });
+    fireEvent.click(await screen.findByRole('button', { name: 'Procedure bill: not billed yet' }));
+    dialog = await screen.findByRole('dialog', { name: 'Bill for Lakshmi Devi' });
+    expect(within(dialog).getByTestId('fee-source')).toHaveTextContent('No fee set for Procedure. Set fees');
+    expect(within(dialog).getByRole('link', { name: 'Set fees' })).toHaveAttribute('href', '/dashboard/fees');
+  });
+
   it('refuses a payment above what is due without calling the server', async () => {
     renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', billing: bill('DUE', 500, 300, true) })]);
     api.getInvoiceById.mockResolvedValue({ id: 'cinv1', invoiceNo: 'INV-1', total: 500, received: 300, balance: 200, items: [], payments: [] });
@@ -197,7 +249,7 @@ describe('DoctorDayCalendar billing on each row', () => {
   });
 
   it('shows the bill type but no money to a viewer who cannot read bills', async () => {
-    renderDay([row('a1', '09:00-09:15', 'Meera Shah', { billType: 'FIRST_CONSULTATION' })], { read: false, createBill: false, takePayment: false });
+    renderDay([row('a1', '09:00-09:15', 'Meera Shah', { billType: 'FIRST_CONSULTATION' })], { read: false, createBill: false, takePayment: false, editFees: false });
     await screen.findByRole('button', { name: 'Meera Shah, 09:00-09:15, Confirmed' });
     expect(document.querySelector('[data-bill-type]')?.textContent).toBe('First consultation');
     expect(document.querySelector('[data-appointment-billing]')).toBeNull();

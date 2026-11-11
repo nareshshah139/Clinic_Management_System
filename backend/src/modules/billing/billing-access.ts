@@ -5,6 +5,7 @@ import { ROLES_KEY } from '../../shared/decorators/roles.decorator';
 import { PERMISSIONS_KEY, PermissionRequirement } from '../../shared/decorators/permissions.decorator';
 import { grantsForRole, parsePermissionList, permissionGrants, PermissionGrants } from '../../shared/access/permission-grants';
 import { BillingController } from './billing.controller';
+import { canEditFees } from './clinic-fees.service';
 
 type RoutePolicy = { roles: readonly UserRole[]; permissions: readonly PermissionRequirement[] };
 
@@ -20,8 +21,8 @@ const ROUTES = {
   pay: policyOf(BillingController.prototype.processPayment),
 };
 
-export type ClinicBillAccess = { read: boolean; createBill: boolean; takePayment: boolean };
-export const NO_CLINIC_BILL_ACCESS: ClinicBillAccess = { read: false, createBill: false, takePayment: false };
+export type ClinicBillAccess = { read: boolean; createBill: boolean; takePayment: boolean; editFees: boolean };
+export const NO_CLINIC_BILL_ACCESS: ClinicBillAccess = { read: false, createBill: false, takePayment: false, editFees: false };
 
 const holds = (grants: PermissionGrants, requirement: PermissionRequirement) =>
   typeof requirement === 'string' ? grants.has(requirement) : requirement.some((p) => grants.has(p));
@@ -31,6 +32,7 @@ const holds = (grants: PermissionGrants, requirement: PermissionRequirement) =>
  * A screen MUST show clinic bill amounts, offer Create bill, or offer Record payment only to a
  * user the matching billing route (invoice list, invoice create, payment) admits: its role list,
  * then OWNER from the token, ADMIN or DOCTOR from the stored role, or the stored grants of any other role.
+ * It MUST offer the fee list only to a user the fee list itself admits.
  */
 export async function clinicBillAccess(
   prisma: PrismaService,
@@ -46,5 +48,5 @@ export async function clinicBillAccess(
   const admits = (route: RoutePolicy) =>
     roleMeetsRoles(viewer.role, route.roles) &&
     (viewer.role === UserRole.OWNER || route.permissions.every((requirement) => holds(grants, requirement)));
-  return { read: admits(ROUTES.read), createBill: admits(ROUTES.create), takePayment: admits(ROUTES.pay) };
+  return { read: admits(ROUTES.read), createBill: admits(ROUTES.create), takePayment: admits(ROUTES.pay), editFees: canEditFees(viewer.role) };
 }

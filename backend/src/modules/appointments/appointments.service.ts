@@ -32,6 +32,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { WhatsAppTemplatesService } from '../whatsapp-templates/whatsapp-templates.service';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
 import { clinicBillAccess } from '../billing/billing-access';
+import { feeAmounts } from '../billing/clinic-fees.service';
 import {
   appointmentStart,
   billTypeOf,
@@ -746,7 +747,9 @@ export class AppointmentsService {
    * @cc [owner:nareshshah139,label:product;security] doctor-schedule-billing
    * Every appointment on the day MUST carry its bill type. Its billing (live clinic invoices linked
    * by appointment or through its visit, each counted once) MUST be included only for a viewer who
-   * can read clinic bills, and the response MUST say what that viewer may do with bills.
+   * can read clinic bills, and the response MUST say what that viewer may do with bills. A viewer
+   * who may create bills MUST get each row's fee from the branch's fee list for its bill type, or
+   * null when that bill type has no fee.
    */
   async getDoctorSchedule(doctorId: string, date: string, branchId: string, viewer: { id: string; role: string }) {
     // Validate doctor exists and belongs to branch
@@ -790,7 +793,7 @@ export class AppointmentsService {
     const billingAccess = await clinicBillAccess(this.prisma, viewer);
     const patientIds = [...new Set(appointments.map((a) => a.patientId))];
     const visitIds = appointments.flatMap((a) => (a.visit ? [a.visit.id] : []));
-    const [priorVisits, invoices] = await Promise.all([
+    const [priorVisits, invoices, fees] = await Promise.all([
       patientIds.length
         ? this.prisma.visit.findMany({
             where: { patientId: { in: patientIds }, deletedAt: null, patient: { branchId }, createdAt: { lt: new Date(`${date}T23:59:59.999+05:30`) } },
@@ -808,6 +811,7 @@ export class AppointmentsService {
             orderBy: { createdAt: 'asc' },
           })
         : [],
+      billingAccess.createBill ? feeAmounts(this.prisma, branchId) : null,
     ]);
     const billsOf = invoicesByAppointment(
       appointments.map((a) => ({ id: a.id, visitId: a.visit?.id ?? null })),
@@ -827,6 +831,7 @@ export class AppointmentsService {
           calendar: calendarOf(a.status),
           billType,
           ...(billingAccess.read ? { billing: billingSummary(a.status, a.visit?.status ?? null, billsOf.get(a.id) ?? []) } : {}),
+          ...(fees ? { fee: fees[billType] ?? null } : {}),
         };
       }),
     };

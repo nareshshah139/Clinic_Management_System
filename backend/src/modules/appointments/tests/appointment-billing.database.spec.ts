@@ -23,6 +23,7 @@ databaseTests('Doctor schedule billing on PostgreSQL', () => {
     nurse: { id: 'nurse', role: 'NURSE' },
     bare: { id: 'bare-reception', role: 'RECEPTION' },
     doctor: { id: 'doc', role: 'DOCTOR' },
+    admin: { id: 'admin', role: 'ADMIN' },
   };
 
   beforeAll(async () => {
@@ -40,6 +41,7 @@ databaseTests('Doctor schedule billing on PostgreSQL', () => {
     const user = (id: string, role: any, permissions: string[]) =>
       db.user.create({ data: { id, firstName: id, lastName: 'Synthetic', email: `${id}@example.test`, password: 'x', role, branchId: 'branch', permissions: JSON.stringify(permissions) } });
     await user('doc', 'DOCTOR', []);
+    await user('admin', 'ADMIN', []);
     await user('reception', 'RECEPTION', ['appointments:read', 'billing:invoice:create', 'billing:invoice:read', 'billing:payment:process']);
     await user('bare-reception', 'RECEPTION', ['appointments:read']);
     await user('nurse', 'NURSE', ['appointments:read', 'billing:invoice:read']);
@@ -101,7 +103,7 @@ databaseTests('Doctor schedule billing on PostgreSQL', () => {
 
   it('sums each appointment’s live bills, linked either way, once each', async () => {
     const { schedule, rows } = await day(viewers.reception);
-    expect(schedule.billingAccess).toEqual({ read: true, createBill: true, takePayment: true });
+    expect(schedule.billingAccess).toEqual({ read: true, createBill: true, takePayment: true, editFees: false });
     expect({
       notBilled: money(rows.review),
       partlyPaid: money(rows.first),
@@ -131,14 +133,35 @@ databaseTests('Doctor schedule billing on PostgreSQL', () => {
   it('keeps bill amounts from a viewer the bill routes refuse, and still gives the bill type', async () => {
     for (const viewer of [viewers.nurse, viewers.bare]) {
       const { schedule, rows } = await day(viewer);
-      expect(schedule.billingAccess).toEqual({ read: false, createBill: false, takePayment: false });
+      expect(schedule.billingAccess).toEqual({ read: false, createBill: false, takePayment: false, editFees: false });
       expect([rows.first.billType, 'billing' in rows.first]).toEqual(['FIRST_CONSULTATION', false]);
     }
   });
 
   it('lets a doctor read and take payment through the role guard', async () => {
     const { schedule, rows } = await day(viewers.doctor);
-    expect(schedule.billingAccess).toEqual({ read: true, createBill: true, takePayment: true });
+    expect(schedule.billingAccess).toEqual({ read: true, createBill: true, takePayment: true, editFees: false });
     expect(money(rows.paid)).toEqual(['PAID', 700, 700, 0, 1, false]);
+  });
+
+  it('gives each row the fee its bill type has in this branch, null without one, and offers the fee list to an admin only', async () => {
+    const fee = (rows: any) => [rows.first.fee, rows.review.fee, rows.procedure.fee];
+    expect(fee((await day(viewers.reception)).rows)).toEqual([null, null, null]);
+    await db.clinicFee.create({ data: { branchId: 'branch', billType: 'FIRST_CONSULTATION', amount: 1280, updatedById: 'admin' } });
+    await db.clinicFee.create({ data: { branchId: 'branch', billType: 'PROCEDURE', amount: null, updatedById: 'admin' } });
+    await db.clinicFee.create({ data: { branchId: 'other', billType: 'REVIEW', amount: 999, updatedById: 'admin' } });
+    expect(fee((await day(viewers.reception)).rows)).toEqual([1280, null, null]);
+    await db.clinicFee.create({ data: { branchId: 'branch', billType: 'REVIEW', amount: 390, updatedById: 'admin' } });
+    expect(fee((await day(viewers.doctor)).rows)).toEqual([1280, 390, null]);
+    const asAdmin = await day(viewers.admin);
+    expect([asAdmin.schedule.billingAccess, fee(asAdmin.rows)]).toEqual([{ read: true, createBill: true, takePayment: true, editFees: true }, [1280, 390, null]]);
+    const nurse = await day(viewers.nurse);
+    expect(['fee' in nurse.rows.first, 'fee' in nurse.rows.review]).toEqual([false, false]);
+  });
+
+  it('never changes a bill already made when the fee changes', async () => {
+    await db.clinicFee.update({ where: { branchId_billType: { branchId: 'branch', billType: 'FIRST_CONSULTATION' } }, data: { amount: 2000, version: { increment: 1 } } });
+    const { rows } = await day(viewers.reception);
+    expect([rows.first.fee, money(rows.first)]).toEqual([2000, ['DUE', 500, 300, 200, 1, true]]);
   });
 });

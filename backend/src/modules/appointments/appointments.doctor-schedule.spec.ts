@@ -52,7 +52,7 @@ describe('AppointmentsService.getDoctorSchedule', () => {
     expect(result.appointments[0].slot).toBe('10:00-10:30');
     expect(result.appointments.map((a) => a.calendar)).toEqual(['SCHEDULED', 'CONFIRMED']);
     expect(result.appointments.map((a) => a.billType)).toEqual(['FIRST_CONSULTATION', 'PROCEDURE']);
-    expect(result.billingAccess).toEqual({ read: false, createBill: false, takePayment: false });
+    expect(result.billingAccess).toEqual({ read: false, createBill: false, takePayment: false, editFees: false });
     expect(prismaMock.appointment.findMany.mock.calls[0][0].where.status).toEqual({ not: 'CANCELLED' });
   });
 });
