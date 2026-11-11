@@ -2,7 +2,7 @@ import { autocompleteDrugCatalog } from '../../shared/search/drug-search';
 import { loadInventoryGstRates } from './pharmacy-inventory-gst';
 import { purchaseCatalogIssues } from './purchase-product-catalog';
 import { writeStockMovement } from '../inventory/inventory-stock';
-import { availableStock, stockIdentityKey } from './pharmacy-stock-identity';
+import { availableStock, drugStockNames, stockIdentityKey } from './pharmacy-stock-identity';
 import { isDeepStrictEqual } from 'node:util';
 import {
   Injectable,
@@ -219,6 +219,7 @@ export class DrugService {
       ]);
 
       const gstRates = await loadInventoryGstRates(this.prisma, drugs.map(drug => drug.id), branchId);
+      const stockNames = await drugStockNames(this.prisma, branchId, drugs.map(drug => drug.id));
       const enrichedDrugs = drugs.map((drug) => {
         const inventoryItems = drug.inventoryItems || [];
         const totalStock = inventoryItems.reduce(
@@ -229,6 +230,7 @@ export class DrugService {
         return {
           ...drug,
           gstRate: gstRates.get(drug.id) ?? null,
+          stockName: stockNames.get(drug.id) ?? null,
           totalStock,
           primaryInventoryItemId: primaryInventoryItem?.id || null,
           primaryStockStatus: primaryInventoryItem?.stockStatus || null,
@@ -316,7 +318,8 @@ export class DrugService {
       }
 
       const rates = await loadInventoryGstRates(this.prisma, [drug.id], branchId);
-      return { ...drug, gstRate: rates.get(drug.id) ?? null };
+      const stockNames = await drugStockNames(this.prisma, branchId, [drug.id]);
+      return { ...drug, gstRate: rates.get(drug.id) ?? null, stockName: stockNames.get(drug.id) ?? null };
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

@@ -143,6 +143,7 @@ type InventoryBatch = {
 type StockCheckResult = {
   sourceLineKey?: string;
   inventoryItemId?: string | null;
+  stockName?: string;
   unit?: string | null;
   packSize?: number | null;
   packUnit?: string | null;
@@ -1253,7 +1254,7 @@ export class PharmacyPrescriptionQueueService {
     const threshold = thresholds.length ? Math.max(...thresholds) : drug?.minStockLevel ?? 0;
     const lowStock = quantity > 0 && quantity <= threshold;
     return {
-      drugName: medication.drugName, inventoryItemId: anchor.id, unit: anchor.unit,
+      drugName: medication.drugName, inventoryItemId: anchor.id, stockName: (batches[0] ?? anchor).name, unit: anchor.unit,
       packSize: anchor.packSize ?? null, packUnit: anchor.packUnit ?? null,
       matchedDrug: drug ? { id: drug.id, name: drug.name, manufacturerName: drug.manufacturerName } : null,
       stockStatus: quantity === 0 ? 'OUT_OF_STOCK' : lowStock ? 'LOW_STOCK' : 'IN_STOCK',

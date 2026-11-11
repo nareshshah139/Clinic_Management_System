@@ -236,3 +236,44 @@ export async function resolvePrescriptionInventory(
         })).filter((batch: any) => productKey(batch) === productKey(anchor));
   return { anchor, drug, batches };
 }
+
+/**
+ * @cc [owner:nareshshah139,label:product] bill-line-stock-name
+ * A bill line and a billing product MUST be named by the standard name of the stock they sell: the line's saved
+ * inventory item, else the one name its drug's active stock carries in the branch, else the catalogue name.
+ * Names are read live; a bill is never rewritten to rename it.
+ */
+export async function drugStockNames(db: any, branchId: string, drugIds: (string | null | undefined)[]) {
+  const ids = [...new Set(drugIds.filter((id): id is string => !!id))];
+  const names = new Map<string, Set<string>>();
+  if (ids.length)
+    for (const row of await db.inventoryItem.findMany({
+      where: { branchId, status: 'ACTIVE', drugs: { some: { id: { in: ids } } } },
+      select: { name: true, drugs: { select: { id: true } } },
+    }))
+      if (row.drugs.length === 1) names.set(row.drugs[0].id, (names.get(row.drugs[0].id) ?? new Set()).add(row.name));
+  return new Map([...names].filter(([, found]) => found.size === 1).map(([id, found]) => [id, [...found][0]]));
+}
+
+type NamedLine = {
+  itemType?: string | null;
+  drugId?: string | null;
+  inventoryItemId?: string | null;
+  drug?: { name: string } | null;
+  package?: { name: string } | null;
+};
+export async function withStockNames<T extends NamedLine>(db: any, branchId: string, lines: T[]): Promise<(T & { name: string | null })[]> {
+  const saved = new Map<string, string>(
+    (await db.inventoryItem.findMany({
+      where: { branchId, id: { in: [...new Set(lines.map((line) => line.inventoryItemId).filter(Boolean))] } },
+      select: { id: true, name: true },
+    })).map((item: { id: string; name: string }) => [item.id, item.name]),
+  );
+  const byDrug = await drugStockNames(db, branchId, lines.filter((line) => !saved.has(line.inventoryItemId ?? '')).map((line) => line.drugId));
+  return lines.map((line) => ({
+    ...line,
+    name: line.itemType === 'PACKAGE'
+      ? line.package?.name ?? null
+      : saved.get(line.inventoryItemId ?? '') ?? byDrug.get(line.drugId ?? '') ?? line.drug?.name ?? null,
+  }));
+}

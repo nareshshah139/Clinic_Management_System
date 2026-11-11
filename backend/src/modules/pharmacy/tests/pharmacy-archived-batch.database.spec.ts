@@ -123,7 +123,11 @@ databaseTests('Prescription lines saved on a batch that is no longer sellable', 
       .toEqual([['Flutas 150', 'Tab. Flutas 150 mg'], ['Itin 12', 'Cap. Itin 12 mg'], ['Sotret 10', 'Sotret 10']]);
     expect((await invoices.findAll({ limit: 50 } as any, branchId)).data.find((invoice: any) => invoice.id === draft.id)!.items.map((item: any) => item.name))
       .toEqual(['Tab. Flutas 150 mg', 'Cap. Itin 12 mg', 'Sotret 10']);
-    expect((await invoices.getPrintData(draft.id, branchId)).lines.map((line: any) => line.name))
-      .toEqual(['Tab. Flutas 150 mg', 'Cap. Itin 12 mg', 'Sotret 10']);
+    const sold = await invoices.checkout({ patientId: 'patient', paymentMethod: 'CASH', billingName: 'Meera Shah', billingPhone: '9876543210', requestKey: 'names-key-0001', items: [
+      { drugId: 'flutas', inventoryItemId: 'flutas-a', itemType: 'DRUG', quantity: 1, unitPrice: 20, discountPercent: 0, taxPercent: 12 },
+      { drugId: 'itin', itemType: 'DRUG', quantity: 1, unitPrice: 20, discountPercent: 0, taxPercent: 12 },
+    ] } as any, branchId, 'asha');
+    expect((await invoices.getPrintData(sold.id, branchId)).lines.map((line: any) => [line.name, line.batchAllocations.map((batch: any) => batch.batchNumber)]))
+      .toEqual([['Tab. Flutas 150 mg', ['FLUTAS-B2']], ['Cap. Itin 12 mg', ['ITIN-B']]]);
   });
 });
