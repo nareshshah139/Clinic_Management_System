@@ -2563,7 +2563,7 @@ export function PharmacyInvoiceBuilderFixed({
                   <div className="space-y-4">
                     {items.map((item) => (
                       <Card key={item.id} data-invoice-item={item.id} className="p-4">
-                        <div className="flex justify-between items-start gap-2 mb-3">
+                        <div className="mb-3 flex flex-col-reverse gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               {isPrescriptionItem(item.id) && (
@@ -2669,7 +2669,7 @@ export function PharmacyInvoiceBuilderFixed({
                               </div>
                             )}
                           </div>
-                          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                          <div className="flex shrink-0 flex-wrap justify-end gap-1 self-end sm:self-auto">
                             {item.itemType === 'DRUG' && (
                               <Button variant="outline" size="sm" aria-label={`Substitute ${billLineName(item)}`}
                                 onClick={() => {

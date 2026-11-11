@@ -163,9 +163,13 @@ async function seed(stack) {
       return (await rows.evaluateAll((els) => els.map((el) => el.querySelector(".font-medium")?.innerText ?? ""))).map(clean);
     };
     const billSearch = async (page, query) => {
-      await page.getByLabel("Search Drugs").fill(query);
-      await page.waitForTimeout(1200);
-      await settle(page);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const answered = page.waitForResponse((r) => r.url().includes("/drugs/autocomplete") && new URL(r.url()).searchParams.get("q") === query, { timeout: 30000 }).then(() => true, () => false);
+        await page.getByLabel("Search Drugs").fill(query);
+        if (await answered) break;
+        console.log(`  search "${query}" was not sent; typing it again`);
+      }
+      await page.waitForTimeout(500);
       return (await page.locator('[role="button"] h4.font-medium').allInnerTexts()).map(clean);
     };
     const finish = async (page) => {
@@ -235,16 +239,16 @@ async function seed(stack) {
       sold = await db.pharmacyInvoice.findFirst({ where: { prescriptionId: prescription.id, status: "CONFIRMED" }, include: { items: true } });
       const sales = await db.stockTransaction.findMany({ where: { type: "SALE", reference: { contains: sold.invoiceNumber } }, select: { itemId: true, quantity: true, batchNumber: true } });
       const after = await stockOf();
-      check("pharmacist-1280 the bill keeps the saved line identity and sells the earliest-expiring in-stock batch FB-02",
-        [sold.items.map((i) => [i.inventoryItemId === items.flutasA.id, i.quantity]), sales.map((s) => [s.batchNumber, s.quantity]), after["FB-02"][0] - before["FB-02"][0], after["FB-01"][0] - before["FB-01"][0], after["FA-01"], after["F50-01"]],
-        [[[true, 1]], [["FB-02", 1]], -1, 0, [0, "INACTIVE"], [30, "ACTIVE"]]);
+      check("pharmacist-1280 the bill keeps the saved line identity and sells 10 strips earliest expiry first: all 8 of FB-02, then 2 of FB-01, none of the archived FA-01 or of Flutas 50",
+        [sold.items.map((i) => [i.inventoryItemId === items.flutasA.id, i.quantity]), sales.map((s) => [s.batchNumber, s.quantity]).sort(), after["FB-02"][0] - before["FB-02"][0], after["FB-01"][0] - before["FB-01"][0], after["FA-01"], after["F50-01"]],
+        [[[true, 10]], [["FB-01", 2], ["FB-02", 8]], -8, -2, [0, "INACTIVE"], [30, "ACTIVE"]]);
       check("pharmacist-1280 billing: no console error or refused call", [seen.errors, seen.refused], [[], []]);
       await context.close();
     }
     const entry = await call("pharmacist", "GET", `/pharmacy/prescription-queue/${prescription.id}`);
     check("the queue counts the Flutas line covered by the bill and leaves Sotret open", entry.medications.map((m) => [m.drugName, m.coverageStatus]), [[FLUTAS, "covered"], [SOTRET, "not_started"]]);
     const printed = await call("pharmacist", "GET", `/pharmacy/invoices/${sold.id}/print-data?${q({ format: "A5" })}`);
-    check("the bill's print data names the line by its stock name and batch", printed.lines.map((l) => [l.name, l.batchAllocations.map((b) => b.batchNumber)]), [[FLUTAS, ["FB-02"]]]);
+    check("the bill's print data names the line by its stock name and batch", printed.lines.map((l) => [l.name, l.batchAllocations.map((b) => b.batchNumber).sort()]), [[FLUTAS, ["FB-01", "FB-02"]]]);
 
     for (const width of ["1280", "390"]) {
       const { page, context, seen } = await open("pharmacist", width);
@@ -277,6 +281,7 @@ async function seed(stack) {
       const { page, context, seen } = await open(who, width);
       await go(page, "/dashboard/pharmacy/sales/bill");
       await page.getByLabel("Search Drugs").waitFor({ timeout: 240000 });
+      await settle(page);
       const found = [];
       for (const query of ["13 74 | Flutas", "| Flutas", "Tab. Flutas 150", "%"]) {
         found.push(await billSearch(page, query));
