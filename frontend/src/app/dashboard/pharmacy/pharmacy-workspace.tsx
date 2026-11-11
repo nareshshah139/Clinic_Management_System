@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { billHref, type BillPrefill } from '@/components/pharmacy/sales/sales-bill-model';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 
 const AgenticPharmacyDock = dynamic(
   () =>
@@ -44,6 +45,9 @@ const AgenticPharmacyDock = dynamic(
 );
 
 type PharmacySideTab = 'desk' | 'counter';
+
+/** The roles GET /pharmacy/dashboard admits; the desk asks for today's figures only for them. */
+const PHARMACY_FIGURES_ROLES = ['OWNER', 'ADMIN', 'DOCTOR', 'PHARMACIST'];
 
 interface PharmacyDashboardData {
   todaySales?: number;
@@ -76,6 +80,8 @@ function PharmacyPageContent() {
   const [isAgentDockOpen, setIsAgentDockOpen] = useState(false);
   const requestedTab = searchParams.get('section') || searchParams.get('tab');
   const pharmacyTab: PharmacySideTab = requestedTab === 'counter' ? 'counter' : 'desk';
+  const { user } = useDashboardUser();
+  const showsFigures = PHARMACY_FIGURES_ROLES.includes(user?.role ?? '');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -97,7 +103,7 @@ function PharmacyPageContent() {
 
   useEffect(() => {
     const loadDashboard = async () => {
-      if (!isAuthenticated) return;
+      if (!isAuthenticated || pharmacyTab !== 'desk' || !showsFigures) return;
       try {
         const data = await apiClient.get<PharmacyDashboardData>('/pharmacy/dashboard');
         setDash(data ?? null);
@@ -107,7 +113,7 @@ function PharmacyPageContent() {
       }
     };
     void loadDashboard();
-  }, [isAuthenticated, dashReloadKey]);
+  }, [isAuthenticated, pharmacyTab, showsFigures, dashReloadKey]);
 
   useEffect(() => {
     const handler = () => setDashReloadKey((k) => k + 1);
@@ -159,6 +165,7 @@ function PharmacyPageContent() {
           {pharmacyTab === 'counter' && <PageHeader title="Pharmacy Counter" />}
           {pharmacyTab === 'desk' ? (
             <PharmacyDeskPanel
+              showsFigures={showsFigures}
               todaySales={todaySales}
               todayGrowth={todayGrowth}
               invoicesToday={invoicesToday}
@@ -197,6 +204,7 @@ function PharmacyPageLoading() {
 }
 
 function PharmacyDeskPanel({
+  showsFigures,
   todaySales,
   todayGrowth,
   invoicesToday,
@@ -212,6 +220,7 @@ function PharmacyDeskPanel({
   onOpenInvoices,
   onOpenDrugs,
 }: {
+  showsFigures: boolean;
   todaySales: number;
   todayGrowth: number;
   invoicesToday: number;
@@ -243,48 +252,54 @@ function PharmacyDeskPanel({
             </p>
           </div>
 
-          <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricStrip
-              label="Sales"
-              value={`₹${todaySales.toFixed(2)}`}
-              detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`}
-              icon={<DollarSign className="h-4 w-4" />}
-              intent="green"
-            />
-            <MetricStrip
-              label="Invoices"
-              value={invoicesToday}
-              detail={`${pendingInvoices} pending`}
-              icon={<Receipt className="h-4 w-4" />}
-              intent="blue"
-            />
-            <MetricStrip
-              label="Stock"
-              value={totalDrugs}
-              detail={`${lowStockDrugs} low`}
-              icon={<Pill className="h-4 w-4" />}
-              intent="purple"
-            />
-            <MetricStrip
-              label="Packages"
-              value={packagesCount}
-              detail="bundles"
-              icon={<Package className="h-4 w-4" />}
-              intent="amber"
-            />
-          </div>
+          {showsFigures ? (
+            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricStrip
+                label="Sales"
+                value={`₹${todaySales.toFixed(2)}`}
+                detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`}
+                icon={<DollarSign className="h-4 w-4" />}
+                intent="green"
+              />
+              <MetricStrip
+                label="Invoices"
+                value={invoicesToday}
+                detail={`${pendingInvoices} pending`}
+                icon={<Receipt className="h-4 w-4" />}
+                intent="blue"
+              />
+              <MetricStrip
+                label="Stock"
+                value={totalDrugs}
+                detail={`${lowStockDrugs} low`}
+                icon={<Pill className="h-4 w-4" />}
+                intent="purple"
+              />
+              <MetricStrip
+                label="Packages"
+                value={packagesCount}
+                detail="bundles"
+                icon={<Package className="h-4 w-4" />}
+                intent="amber"
+              />
+            </div>
+          ) : (
+            <div />
+          )}
 
           <div className="flex flex-wrap justify-start gap-1.5 xl:justify-end">
             <PharmacyGuide />
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
-              onClick={() => window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'))}
-            >
-              <RefreshCcw className="h-4 w-4" />
-              Refresh
-            </Button>
+            {showsFigures && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+                onClick={() => window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'))}
+              >
+                <RefreshCcw className="h-4 w-4" />
+                Refresh
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
