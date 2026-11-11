@@ -217,12 +217,21 @@ const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis"
         if (width === "1440") check(`${tag} stock list: the product column takes the spare width, so every Recorded as line fits on one line`, rows.filter((r) => r.recordedLines.length).map((r) => [r.name, r.recordedLines]), [["Cap. Uprise D3 60000", [1]], ["Tab. Acnosis", [1]], ["Tab. Thyronorm 50", [1]]]);
         const summary = await page.evaluate(() => {
           const table = [...document.querySelectorAll("main table")].find((t) => t.caption?.textContent.includes("Value of matching batches"));
+          const lines = (node) => {
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            return new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top))).size;
+          };
           return {
-            rows: [...table.querySelectorAll("tr")].map((r) => [r.querySelector("th").textContent.trim(), Math.round(r.getBoundingClientRect().height) <= 64]),
-            header: Math.round([...table.querySelectorAll("thead th")].find((th) => th.textContent === "MRP excluding GST").getBoundingClientRect().height) <= 40,
+            heights: [...table.querySelectorAll("tr")].map((r) => Math.round(r.getBoundingClientRect().height)),
+            headerLines: [...table.querySelectorAll("thead th")].map(lines),
+            mostLinesInARow: [...table.querySelectorAll("tbody tr")].map((r) => [r.querySelector("th").textContent.trim(), Math.max(...[...r.children].map(lines))]),
           };
         });
-        check(`${tag} value summary: every row and the MRP excluding GST header stay compact`, summary, { rows: [["Scope", true], ["current", true], ["expired", true]], header: true });
+        console.log(`NOTE ${tag} value summary row heights ${JSON.stringify(summary.heights)}`);
+        check(`${tag} value summary: each heading reads on one line and a row holds at most its amount and one note`,
+          [summary.headerLines, summary.mostLinesInARow],
+          [[1, 1, 1, 1, 1], [["current", 2], ["expired", 1]]]);
         await shot(page, `${tag}-02b-stock-row-actions`);
         const uprise = stockRows(page).filter({ hasText: "Cap. Uprise D3 60000" });
         for (const [action, current] of [["Edit price", "Current selling price: ₹76.00"], ["Edit stock", "Current stock on shelf: 5 STRIPS"]]) {
