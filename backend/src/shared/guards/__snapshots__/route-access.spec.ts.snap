@@ -48,6 +48,7 @@ GET /audit-logs/user/:userId | roles: ADMIN,OWNER | permissions: audit:read
 GET /auth/backup/:jobId | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /auth/me | roles: any signed-in user | permissions: -
 GET /auth/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /billing/fees | roles: ADMIN | permissions: -
 GET /billing/invoices | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
 GET /billing/invoices/:id | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
 GET /billing/invoices/outstanding | roles: ADMIN,RECEPTION | permissions: billing:invoice:read
@@ -455,6 +456,7 @@ POST /visits/translate | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARM
 POST /whatsapp/templates | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/:id/test | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/generate | roles: ADMIN,DOCTOR | permissions: -
+PUT /billing/fees/:billType | roles: ADMIN | permissions: -
 PUT /doctor-availability/:doctorId/booking-limit | roles: ADMIN,OWNER,DOCTOR | permissions: -
 PUT /doctor-availability/:doctorId/hours | roles: ADMIN,OWNER,DOCTOR | permissions: -
 PUT /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR | permissions: -"
