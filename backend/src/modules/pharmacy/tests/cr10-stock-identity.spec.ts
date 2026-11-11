@@ -58,3 +58,17 @@ it('finds an old prescription line by the name the item had before it was standa
     [undefined, { contains: '13 74 | Flutas 150Mg(Pc)', mode: 'insensitive' }],
   ]);
 });
+
+it('offers the standard name when the picker query is part of the recorded name with its code', async () => {
+  const flutas = { id: 'flutas', name: 'Tab. Flutas 150 mg', unit: 'STRIPS', packSize: 10, packUnit: 'tablets', status: 'ACTIVE', currentStock: 30, drugs: [], metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc)'] } }) };
+  const fifty = { ...flutas, id: 'flutas-50', name: 'Tab. Flutas 50 mg', metadata: null };
+  const prisma: any = { inventoryItem: { findMany: jest.fn().mockResolvedValue([flutas, fifty]) } };
+  const names = async (query: string) => (await searchClinicInventory(prisma, query, 'clinic')).map((row: any) => row.name);
+  expect(await Promise.all(['13 74 | Flutas', '74 |', '| Flutas', 'Tab. Flutas 150', 'Flutas'].map(names))).toEqual([
+    ['Tab. Flutas 150 mg'],
+    ['Tab. Flutas 150 mg'],
+    ['Tab. Flutas 150 mg', 'Tab. Flutas 50 mg'],
+    ['Tab. Flutas 150 mg'],
+    ['Tab. Flutas 150 mg', 'Tab. Flutas 50 mg'],
+  ]);
+});

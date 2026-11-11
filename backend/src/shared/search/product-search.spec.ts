@@ -127,6 +127,38 @@ describe('shared product matching', () => {
     });
     expect(match('tyrodni', product)).not.toBeNull();
   });
+  it('finds part of a recorded name with its code and "|" separator, and still refuses a different dose', () => {
+    const flutas = { names: ['Tab. Flutas 150 mg'], aliases: ['13 74 | Flutas 150Mg(Pc)'] };
+    const found = (query: string) => {
+      const hit = match(query, flutas);
+      return hit && [hit.kind, hit.matchedText];
+    };
+    expect(['13 74 | Flutas', 'Flutas', '| Flutas', '74 |', 'Tab. Flutas 150', '13 74 Flutas'].map(found)).toEqual([
+      ['prefix', '13 74 | Flutas 150Mg(Pc)'],
+      ['phrase', 'Tab. Flutas 150 mg'],
+      ['phrase', 'Tab. Flutas 150 mg'],
+      ['phrase', '13 74 | Flutas 150Mg(Pc)'],
+      ['prefix', 'Tab. Flutas 150 mg'],
+      ['prefix', '13 74 | Flutas 150Mg(Pc)'],
+    ]);
+    expect(['Flutas 50', 'Flutas 74', '13 Flutas', 'Tab. Flutas 50'].map(found)).toEqual([null, null, null, null]);
+  });
+  it('treats quotes, wildcards, slashes and operators in a query as plain text', () => {
+    const products = [
+      { names: ['Tab. Flutas 150 mg'], aliases: ['13 74 | Flutas 150Mg(Pc)'] },
+      { names: ['Adapalene 0.1% gel'] },
+      { names: ["Johnson's baby lotion"] },
+      { names: ['Cap. Antoxid-HC'] },
+    ];
+    const names = (query: string) => products.filter((p) => match(query, p)).map((p) => p.names[0]);
+    expect(['"', '%', '_', '\\', "'", '|', '&', '!', '(', ')', '%_%', ".*", "' OR 1=1 --"].map(names)).toEqual([
+      [], ['Adapalene 0.1% gel'], [], [], [], [], [], [], [], [], ['Adapalene 0.1% gel'], [], [],
+    ]);
+    expect(names('"Flutas"')).toEqual(['Tab. Flutas 150 mg']);
+    expect(names("johnson's")).toEqual(["Johnson's baby lotion"]);
+    expect(names('(Antoxid)')).toEqual(['Cap. Antoxid-HC']);
+    expect(names('0.1%')).toEqual(['Adapalene 0.1% gel']);
+  });
   it('only omits the explicit supplier annotation for OCR suggestion lookup', () => {
     expect(ocrProductSearchQuery('FOLITRAX 7.5MG(DPC)')).toEqual({
       query: 'FOLITRAX 7.5MG',
