@@ -26,7 +26,7 @@ export type PharmacyReport = {
   search: string | null;
 };
 
-export const COLLECTION_MODES = ["CASH", "UPI", "CARD", "NETBANKING", "WALLET", "INSURANCE", "OTHER"] as const;
+export const COLLECTION_MODES = ["CASH", "UPI", "CARD", "NETBANKING", "CHEQUE", "WALLET", "INSURANCE", "OTHER"] as const;
 export type CollectionMode = (typeof COLLECTION_MODES)[number];
 
 export type CashCount = {

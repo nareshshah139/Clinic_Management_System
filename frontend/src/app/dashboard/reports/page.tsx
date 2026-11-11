@@ -29,6 +29,9 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { paymentModeLabel } from '@/lib/clinic-payment-modes';
+import { addDays } from '@/lib/date-ranges';
+import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
 
 type ReportType = 'revenue' | 'patients' | 'doctors' | 'appointments' | 'inventory' | 'payments';
 type ExportFormat = 'JSON' | 'CSV' | 'PDF' | 'EXCEL';
@@ -200,9 +203,9 @@ interface SystemAlerts {
 export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [selectedReport, setSelectedReport] = useState<ReportType>('revenue');
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days ago
-    endDate: new Date().toISOString().split('T')[0], // today
+  const [dateRange, setDateRange] = useState(() => {
+    const today = clinicToday();
+    return { startDate: addDays(today, -30), endDate: today };
   });
   const [reportData, setReportData] = useState<ReportData>({});
   const [systemAlerts, setSystemAlerts] = useState<SystemAlerts | null>(null);
@@ -438,7 +441,7 @@ export default function ReportsPage() {
                 {data.paymentBreakdown.map((payment: PaymentBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-gray-50 rounded-lg">
                     <div className="flex justify-between items-center">
-                      <span className="font-medium">{payment.mode}</span>
+                      <span className="font-medium">{paymentModeLabel(payment.mode)}</span>
                       <Badge variant="secondary">{formatPercentage(payment.percentage)}</Badge>
                     </div>
                     <div className="mt-1">
@@ -1023,7 +1026,7 @@ export default function ReportsPage() {
                 {data.paymentModeBreakdown.map((mode: PaymentModeBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-gray-50 rounded-lg">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium">{mode.mode}</span>
+                      <span className="font-medium">{paymentModeLabel(mode.mode)}</span>
                       <Badge variant="secondary">{formatPercentage(mode.percentage)}</Badge>
                     </div>
                     <div>
