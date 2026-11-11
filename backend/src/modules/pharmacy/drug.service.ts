@@ -745,12 +745,29 @@ export class DrugService {
    * @cc [owner:nareshshah139,label:product] drug-autocomplete-shared-search
    * Autocomplete MUST use the shared product matcher and branch-scoped active catalogue
    * candidates. Ingredient/name modes MUST restrict matches to their requested fields. It MUST
-   * rank before limiting results and MUST NOT change products, prices, mappings or stock.
+   * rank before limiting results and MUST NOT change products, prices, mappings or stock. Each product carries
+   * its stock's standard name and the units available to sell in the branch.
    */
   async autocomplete(query: DrugAutocompleteDto, branchId: string) {
     const drugs = await autocompleteDrugCatalog(this.prisma, query, branchId);
-    const gstRates = await loadInventoryGstRates(this.prisma, drugs.map(drug => drug.id), branchId);
-    return drugs.map(drug => ({ ...drug, gstRate: gstRates.get(drug.id) ?? null }));
+    const ids = drugs.map(drug => drug.id);
+    const [gstRates, stockNames, batches] = await Promise.all([
+      loadInventoryGstRates(this.prisma, ids, branchId),
+      drugStockNames(this.prisma, branchId, ids),
+      this.prisma.inventoryItem.findMany({
+        where: { branchId, status: InventoryStatus.ACTIVE, drugs: { some: { id: { in: ids } } } },
+        select: { status: true, currentStock: true, heldStock: true, expiryDate: true, drugs: { select: { id: true } } },
+      }),
+    ]);
+    const available = new Map<string, number>();
+    for (const batch of batches)
+      if (batch.drugs.length === 1) available.set(batch.drugs[0].id, (available.get(batch.drugs[0].id) ?? 0) + availableStock(batch));
+    return drugs.map(drug => ({
+      ...drug,
+      gstRate: gstRates.get(drug.id) ?? null,
+      stockName: stockNames.get(drug.id) ?? null,
+      totalStock: available.get(drug.id) ?? 0,
+    }));
   }
 
   async getCategories(branchId: string) {

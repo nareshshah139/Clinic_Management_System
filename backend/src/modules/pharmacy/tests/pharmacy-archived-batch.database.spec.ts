@@ -44,6 +44,7 @@ databaseTests('Prescription lines saved on a batch that is no longer sellable', 
       } });
     await batch('flutas-a', 'Tab. Flutas 150 mg', 'flutas', 5, '2027-01-31', 'INACTIVE');
     await batch('flutas-b1', 'Tab. Flutas 150 mg', 'flutas', 20, '2028-06-30');
+    await db.inventoryItem.update({ where: { id: 'flutas-b1' }, data: { metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc)'] } }) } });
     await batch('flutas-b2', 'Tab. Flutas 150 mg', 'flutas', 7, '2027-09-30');
     await batch('flutas-50', 'Tab. Flutas 50 mg', 'flutas-50', 40, '2028-01-31');
     await batch('sotret-a', 'Cap. Sotret 10 mg', 'sotret', 4, '2027-03-31', 'DISCONTINUED');
@@ -114,6 +115,12 @@ databaseTests('Prescription lines saved on a batch that is no longer sellable', 
     expect([(await drugs.findOne('flutas', branchId)).stockName, (await drugs.findOne('sotret', branchId)).stockName]).toEqual(['Tab. Flutas 150 mg', null]);
     expect((await drugs.findAll({ search: 'Flutas', isActive: true } as any, branchId)).data.map((drug: any) => [drug.name, drug.stockName]))
       .toEqual([['Flutas 150', 'Tab. Flutas 150 mg'], ['Flutas 50', 'Tab. Flutas 50 mg']]);
+    expect(await Promise.all(['13 74 | Flutas', 'Tab. Flutas 150', '| Flutas'].map(async (q) =>
+      (await drugs.autocomplete({ q, limit: 5 } as any, branchId)).map((drug: any) => [drug.name, drug.stockName, drug.totalStock])))).toEqual([
+      [['Flutas 150', 'Tab. Flutas 150 mg', 24]],
+      [['Flutas 150', 'Tab. Flutas 150 mg', 24]],
+      [['Flutas 150', 'Tab. Flutas 150 mg', 24], ['Flutas 50', 'Tab. Flutas 50 mg', 40]],
+    ]);
     const draft = await invoices.create({ patientId: 'patient', paymentMethod: 'CASH', billingName: 'Meera Shah', billingPhone: '9876543210', items: [
       { drugId: 'flutas', inventoryItemId: 'flutas-a', itemType: 'DRUG', quantity: 1, unitPrice: 20, discountPercent: 0, taxPercent: 12 },
       { drugId: 'itin', itemType: 'DRUG', quantity: 1, unitPrice: 20, discountPercent: 0, taxPercent: 12 },
