@@ -1226,18 +1226,22 @@ export default function ReportsPage() {
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4 items-end">
-            <div className="flex-1">
+            <div className="w-full min-w-0 sm:flex-1">
               <label className="text-sm font-medium text-gray-700 mb-2 block">
                 Date Range
               </label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Input
                   type="date"
+                  aria-label="From date"
+                  className="min-w-0"
                   value={dateRange.startDate}
                   onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
                 />
                 <Input
                   type="date"
+                  aria-label="To date"
+                  className="min-w-0"
                   value={dateRange.endDate}
                   onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
                 />

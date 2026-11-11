@@ -377,6 +377,10 @@ async function ok(page, method, url, body) {
       await o.page.reload({ waitUntil: "domcontentloaded" });
       const again = await reportsPage(o.page);
       s.check("after a reload", [again.to, clean(await again.total.innerText())], [today, "Total Revenue ₹3,700.00"]);
+      const dateBoxes = await o.page.locator('input[type="date"]').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right)]; }));
+      s.ok("both dates sit inside the phone", dateBoxes.every(([left, right]) => left >= 0 && right <= 390), dateBoxes);
+      await o.page.locator('input[type="date"]').first().scrollIntoViewIfNeeded();
+      await s.shot(o.page, "admin-reports-dates-390");
       await again.total.scrollIntoViewIfNeeded();
       s.ok("no sideways scroll", await noSideways(o.page));
       await s.shot(o.page, "admin-reports-390");
