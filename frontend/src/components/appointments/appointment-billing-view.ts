@@ -41,8 +41,8 @@ function chip(byWidth: Record<ChipWidth, string>, tone: BillingTone, label: stri
 /**
  * @cc [owner:nareshshah139,label:product] appointment-billing-chip
  * A desktop row MUST show the bill's state with the amount to act on ("₹500 · Paid", "₹200 due",
- * "Not billed"); a wide row MUST add the bill total ("₹1,700 · ₹200 due") and the bill count when
- * there is more than one. The chip MUST mark unpaid money or a finished visit without a bill in
+ * "Not billed"); a wide row MUST add the bill total once part is paid ("₹1,700 · ₹200 due") and the
+ * bill count when there is more than one. The chip MUST mark unpaid money or a finished visit without a bill in
  * words as well as colour, and its label MUST carry the total, the count and the amount due.
  */
 export function billingChip(billing: AppointmentBilling, billType?: BillType): BillingChip {
