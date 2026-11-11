@@ -215,6 +215,14 @@ const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis"
           check(`${tag} stock list: a row whose Recorded as wraps is at most 140px tall`, rows.map((r) => [r.name, r.height <= 140]), rows.map((r) => [r.name, true]));
         }
         if (width === "1440") check(`${tag} stock list: the product column takes the spare width, so every Recorded as line fits on one line`, rows.filter((r) => r.recordedLines.length).map((r) => [r.name, r.recordedLines]), [["Cap. Uprise D3 60000", [1]], ["Tab. Acnosis", [1]], ["Tab. Thyronorm 50", [1]]]);
+        const summary = await page.evaluate(() => {
+          const table = [...document.querySelectorAll("main table")].find((t) => t.caption?.textContent.includes("Value of matching batches"));
+          return {
+            rows: [...table.querySelectorAll("tr")].map((r) => [r.querySelector("th").textContent.trim(), Math.round(r.getBoundingClientRect().height) <= 64]),
+            header: Math.round([...table.querySelectorAll("thead th")].find((th) => th.textContent === "MRP excluding GST").getBoundingClientRect().height) <= 40,
+          };
+        });
+        check(`${tag} value summary: every row and the MRP excluding GST header stay compact`, summary, { rows: [["Scope", true], ["current", true], ["expired", true]], header: true });
         await shot(page, `${tag}-02b-stock-row-actions`);
         const uprise = stockRows(page).filter({ hasText: "Cap. Uprise D3 60000" });
         for (const [action, current] of [["Edit price", "Current selling price: ₹76.00"], ["Edit stock", "Current stock on shelf: 5 STRIPS"]]) {
