@@ -15,6 +15,7 @@ import {
 import { Type } from 'class-transformer';
 import { PaymentMode } from '@prisma/client';
 import { UUID_OR_CUID_REGEX } from './ids';
+import { IsPaymentMode } from './payment-mode';
 
 export enum InvoiceStatus {
   DRAFT = 'DRAFT',
@@ -24,15 +25,6 @@ export enum InvoiceStatus {
   OVERDUE = 'OVERDUE',
   CANCELLED = 'CANCELLED',
   REFUNDED = 'REFUNDED',
-}
-
-export enum PaymentMethod {
-  CASH = 'CASH',
-  UPI = 'UPI',
-  CARD = 'CARD',
-  NET_BANKING = 'NET_BANKING',
-  BNPL = 'BNPL',
-  CHEQUE = 'CHEQUE',
 }
 
 export enum PaymentStatus {
@@ -126,7 +118,7 @@ export class CreateInvoiceDto {
 
 export class UpdateInvoiceDto {
   @IsOptional()
-  @IsEnum(PaymentMode)
+  @IsPaymentMode()
   mode?: PaymentMode;
 
   @IsOptional()
@@ -177,8 +169,8 @@ export class PaymentDto {
   @Min(0.01)
   amount: number;
 
-  @IsEnum(PaymentMethod)
-  method: PaymentMethod;
+  @IsPaymentMode()
+  method: PaymentMode;
 
   @IsOptional()
   @IsString()
@@ -235,8 +227,8 @@ export class BulkPaymentDto {
   @Min(0.01)
   totalAmount: number;
 
-  @IsEnum(PaymentMethod)
-  method: PaymentMethod;
+  @IsPaymentMode()
+  method: PaymentMode;
 
   @IsOptional()
   @IsString()

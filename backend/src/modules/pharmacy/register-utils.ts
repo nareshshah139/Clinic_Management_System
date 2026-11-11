@@ -47,6 +47,29 @@ export function clinicDayRange(from: string, to: string) {
   };
 }
 
+/**
+ * @cc [owner:nareshshah139,label:calculation] clinic-date-bounds
+ * A date-only from MUST start at 00:00 Asia/Kolkata on that day and a date-only to MUST run up to
+ * 00:00 Asia/Kolkata on the next day, exclusive. A timestamp bound MUST be that instant, inclusive,
+ * read as clinic time when it has no zone. A missing bound leaves that side open.
+ */
+export function clinicInstants(from?: string, to?: string): { gte?: Date; lt?: Date } {
+  return {
+    ...(from ? { gte: clinicBound(from, 0) } : {}),
+    ...(to ? { lt: clinicBound(to, 1) } : {}),
+  };
+}
+
+function clinicBound(value: string, after: 0 | 1): Date {
+  const text = value.trim();
+  if (isCalendarDay(text)) return new Date(clinicDayStart(text).getTime() + after * DAY_MS);
+  const at = new Date(ZONELESS_TIMESTAMP.test(text) ? `${text}+05:30` : text);
+  return new Date(at.getTime() + after);
+}
+
+export const addDays = (day: string, days: number) =>
+  new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+
 export function financialYear(day: string) {
   const [year, month] = day.split('-').map(Number);
   const start = month >= 4 ? year : year - 1;

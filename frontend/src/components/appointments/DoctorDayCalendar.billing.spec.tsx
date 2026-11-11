@@ -124,6 +124,46 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(stableToast).toHaveBeenCalledWith({ variant: 'success', title: 'Bill INV-9 created and ₹1,000 Cash recorded' });
   });
 
+  it('takes a cheque at the desk with its number, and lists a bank transfer by name with its reference', async () => {
+    renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', billing: bill('DUE', 500, 300, true) })]);
+    api.getInvoiceById.mockResolvedValue({
+      id: 'cinv1', invoiceNo: 'INV-1', total: 500, received: 300, balance: 200,
+      items: [{ id: 'i1', name: 'Review consultation', qty: 1, total: 500 }],
+      payments: [{ id: 'pay1', amount: 300, mode: 'NET_BANKING', reference: 'UTR 4521', createdAt: '2099-01-01T04:00:00.000Z' }],
+    });
+    api.processPayment.mockResolvedValue({ id: 'pay2' });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Review bill: ₹500, ₹200 due' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill for Ravi Kumar' });
+    expect(await within(dialog).findByRole('list', { name: 'Payments on INV-1' })).toHaveTextContent('₹300 Net banking / NEFT · UTR 4521 · 01 Jan 2099, 09:30 am');
+    const modes = within(dialog).getByRole('radiogroup', { name: 'Payment mode' });
+    expect(within(modes).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Cash', 'UPI', 'Card', 'Net banking / NEFT', 'Cheque']);
+    expect(within(dialog).queryByRole('textbox', { name: /reference|number/i })).toBeNull();
+
+    fireEvent.click(within(modes).getByRole('radio', { name: 'Cheque' }));
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Cheque number (optional)' }), { target: { value: ' 004512 ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record ₹200 payment' }));
+
+    await waitFor(() => expect(api.processPayment).toHaveBeenCalledWith({ invoiceId: 'cinv1', amount: 200, method: 'CHEQUE', reference: '004512' }));
+    expect(stableToast).toHaveBeenCalledWith({ variant: 'success', title: '₹200 Cheque recorded on INV-1' });
+  });
+
+  it('creates a bill paid by bank transfer without a reference', async () => {
+    renderDay([row('a3', '09:30-09:45', 'Lakshmi Devi', { billType: 'PROCEDURE', visitType: 'PROCEDURE', notes: 'Chemical peel', billing: bill('NOT_BILLED', 0, 0, true) })]);
+    api.createInvoice.mockResolvedValue({ id: 'cinv9', invoiceNo: 'INV-9' });
+    api.processPayment.mockResolvedValue({ id: 'pay9' });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Procedure bill: not billed yet, visit finished' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill for Lakshmi Devi' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Fee' }), { target: { value: '2500' } });
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Net banking / NEFT' }));
+    expect(within(dialog).getByRole('textbox', { name: 'Bank reference / UTR (optional)' })).toHaveValue('');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create bill and record ₹2,500' }));
+
+    await waitFor(() => expect(api.processPayment).toHaveBeenCalledWith({ invoiceId: 'cinv9', amount: 2500, method: 'NET_BANKING' }));
+    expect(stableToast).toHaveBeenCalledWith({ variant: 'success', title: 'Bill INV-9 created and ₹2,500 Net banking / NEFT recorded' });
+  });
+
   it('refuses a payment above what is due without calling the server', async () => {
     renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', billing: bill('DUE', 500, 300, true) })]);
     api.getInvoiceById.mockResolvedValue({ id: 'cinv1', invoiceNo: 'INV-1', total: 500, received: 300, balance: 200, items: [], payments: [] });

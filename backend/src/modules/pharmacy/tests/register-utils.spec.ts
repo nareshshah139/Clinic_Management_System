@@ -2,6 +2,7 @@ import {
   clinicDay,
   clinicDayOf,
   clinicDayRange,
+  clinicInstants,
   compareValues,
   mobileDigits,
   money,
@@ -22,6 +23,21 @@ describe('register utilities', () => {
     expect([range.gte.toISOString(), range.lt.toISOString()]).toEqual([
       '2026-03-31T18:30:00.000Z',
       '2026-04-02T18:30:00.000Z',
+    ]);
+  });
+
+  it('reads a date-only bound as the whole clinic day and a timestamp bound as that instant', () => {
+    const iso = (range: { gte?: Date; lt?: Date }) => [range.gte?.toISOString(), range.lt?.toISOString()];
+    expect([
+      iso(clinicInstants('2026-11-11', '2026-11-11')),
+      iso(clinicInstants('2026-11-11T04:30:00.000Z', '2026-11-11T12:00:00+05:30')),
+      iso(clinicInstants('2026-11-11T10:00', undefined)),
+      iso(clinicInstants(undefined, '2026-11-12')),
+    ]).toEqual([
+      ['2026-11-10T18:30:00.000Z', '2026-11-11T18:30:00.000Z'],
+      ['2026-11-11T04:30:00.000Z', '2026-11-11T06:30:00.001Z'],
+      ['2026-11-11T04:30:00.000Z', undefined],
+      [undefined, '2026-11-12T18:30:00.000Z'],
     ]);
   });
 

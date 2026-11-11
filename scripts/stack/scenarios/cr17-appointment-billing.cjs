@@ -508,8 +508,7 @@ async function call(page, method, url, body) {
       const o = await open("admin", DESKTOP);
       s.opened.push(o);
       await o.page.goto(`${stack.base}/dashboard`, { waitUntil: "domcontentloaded" });
-      const window = `startDate=${encodeURIComponent(new Date(Date.now() - 86400000).toISOString())}&endDate=${encodeURIComponent(new Date(Date.now() + 3600000).toISOString())}`;
-      const revenue = await call(o.page, "GET", `/reports/revenue?${window}&includePaymentBreakdown=true`);
+      const revenue = await call(o.page, "GET", `/reports/revenue?startDate=${today}&endDate=${today}&includePaymentBreakdown=true`);
       const collection = await call(o.page, "GET", `/pharmacy/reports/daily-collection?from=${today}`);
       const summary = await call(o.page, "GET", "/billing/payments/summary");
       s.check("revenue report, Daily Collection's clinic block and the payment summary agree", [revenue.totalRevenue, collection.clinic.net, summary.totalAmount], [6000, 6000, 6000]);
@@ -521,13 +520,10 @@ async function call(page, method, url, body) {
       const dates = o.page.locator('input[type="date"]');
       await dates.nth(1).waitFor({ timeout: 120000 });
       const revenueCard = () => o.page.getByText("Total Revenue", { exact: true }).first().locator("xpath=../..");
-      await revenueCard().waitFor({ timeout: 60000 }).catch(() => {});
-      const defaultRevenue = clean(await revenueCard().innerText().catch(() => "not shown"));
-      console.log(`    NOTE revenue page with its default range ${await dates.nth(0).inputValue()}..${await dates.nth(1).inputValue()}: ${defaultRevenue}`);
-      await dates.nth(1).fill(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
-      await o.page.getByRole("button", { name: "Generate Report" }).click();
-      await o.page.getByText("Total Revenue", { exact: true }).first().locator("xpath=../..").filter({ hasText: "6,000" }).waitFor({ timeout: 60000 });
-      s.ok("the Reports page shows the same ₹6,000", clean(await revenueCard().innerText()).includes("6,000"));
+      const monthAgo = new Date(Date.parse(`${today}T00:00:00Z`) - 30 * 86400000).toISOString().slice(0, 10);
+      s.check("the Reports page opens on the 30 clinic days up to today", [await dates.nth(0).inputValue(), await dates.nth(1).inputValue()], [monthAgo, today]);
+      await revenueCard().filter({ hasText: "6,000" }).waitFor({ timeout: 60000 });
+      s.check("the Reports page shows the same ₹6,000 with its default range", clean(await revenueCard().innerText()), "Total Revenue ₹6,000.00");
       await revenueCard().scrollIntoViewIfNeeded();
       await s.shot(o.page, "admin-revenue-report-1280");
       s.ok("no refused calls", o.refused.length === 0, o.refused);

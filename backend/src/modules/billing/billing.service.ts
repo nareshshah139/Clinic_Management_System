@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PaymentMode, Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { addDays, clinicDay, clinicInstants } from '../pharmacy/register-utils';
 import { InvoiceNumbersService } from '../../shared/numbering/invoice-numbers.service';
 import { 
   CreateInvoiceDto, 
@@ -9,7 +10,6 @@ import {
   RefundDto, 
   BulkPaymentDto,
   // InvoiceStatus,
-  PaymentMethod,
   // PaymentStatus,
 } from './dto/invoice.dto';
 import { 
@@ -360,7 +360,7 @@ export class BillingService {
     tx: Prisma.TransactionClient,
     invoice: { id: string; invoiceNo: string },
     amount: number,
-    method: PaymentMethod,
+    method: PaymentMode,
     reference?: string,
   ) {
     await this.receive(tx, invoice, amount, BadRequestException);
@@ -549,11 +549,7 @@ export class BillingService {
     if (method) where.mode = method;
     if (status) where.reconStatus = status;
 
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
+    if (startDate || endDate) where.createdAt = clinicInstants(startDate, endDate);
 
     if (search) {
       where.OR = [
@@ -600,11 +596,7 @@ export class BillingService {
       reconStatus: 'COMPLETED',
     };
 
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
+    if (startDate || endDate) where.createdAt = clinicInstants(startDate, endDate);
 
     if (method) where.mode = method;
     if (patientId) where.invoice = { patient: { id: patientId, branchId } };
@@ -633,11 +625,7 @@ export class BillingService {
       reconStatus: 'COMPLETED',
     };
 
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
+    if (startDate || endDate) where.createdAt = clinicInstants(startDate, endDate);
 
     const payments = await this.prisma.newPayment.findMany({ where, orderBy: { createdAt: 'asc' } });
 
@@ -794,27 +782,12 @@ export class BillingService {
     const groups: Record<string, any> = {};
 
     payments.forEach(payment => {
-      const date = new Date(payment.createdAt);
-      let key: string;
-
-      switch (groupBy) {
-        case 'day':
-          key = date.toISOString().split('T')[0];
-          break;
-        case 'week':
-          const weekStart = new Date(date);
-          weekStart.setDate(date.getDate() - date.getDay());
-          key = weekStart.toISOString().split('T')[0];
-          break;
-        case 'month':
-          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-          break;
-        case 'year':
-          key = String(date.getFullYear());
-          break;
-        default:
-          key = date.toISOString().split('T')[0];
-      }
+      const day = clinicDay(payment.createdAt);
+      const key =
+        groupBy === 'week' ? addDays(day, -new Date(`${day}T00:00:00Z`).getUTCDay())
+        : groupBy === 'month' ? day.slice(0, 7)
+        : groupBy === 'year' ? day.slice(0, 4)
+        : day;
 
       if (!groups[key]) {
         groups[key] = {
@@ -953,7 +926,7 @@ export class BillingService {
             data: {
               invoiceId: invoice.id,
               amount: invoice.total,
-              mode: PaymentMethod.CASH as any,
+              mode: PaymentMode.CASH,
               reference: 'SAMPLE',
               createdAt: paymentDate,
               reconStatus: 'COMPLETED',
@@ -968,7 +941,7 @@ export class BillingService {
             data: {
               invoiceId: invoice.id,
               amount: part,
-              mode: PaymentMethod.UPI as any,
+              mode: PaymentMode.UPI,
               reference: 'SAMPLE',
               createdAt: paymentDate,
               reconStatus: 'COMPLETED',

@@ -719,7 +719,7 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
     await expect(
       reports.recordCount(
         '2026-11-04',
-        { counted: { CHEQUE: 1 }, basedOnSequence: 0 },
+        { counted: { BITCOIN: 1 }, basedOnSequence: 0 },
         actor,
         now,
       ),

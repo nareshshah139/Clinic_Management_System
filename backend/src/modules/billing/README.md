@@ -6,7 +6,7 @@ This module handles all billing and invoicing functionality for the Clinic Manag
 
 ### Core Functionality
 - **Invoice Management**: Create, update, cancel invoices with comprehensive item management
-- **Payment Processing**: Process payments through multiple methods (Cash, UPI, Card, BNPL)
+- **Payment Processing**: Process payments through multiple methods (Cash, UPI, Card, Net banking / NEFT, Cheque, BNPL)
 - **Refund Management**: Process refunds with proper tracking and reconciliation
 - **Bulk Operations**: Process bulk payments for multiple invoices
 - **Financial Reporting**: Comprehensive revenue reports and analytics
@@ -21,7 +21,7 @@ This module handles all billing and invoicing functionality for the Clinic Manag
 - **Invoice Numbering**: Automatic sequential invoice number generation
 
 ### Payment Processing
-- **Multiple Payment Methods**: Cash, UPI, Card, Net Banking, BNPL, Cheque
+- **Multiple Payment Methods**: Cash, UPI, Card, Net banking / NEFT, Cheque and BNPL, the values of Prisma's `PaymentMode`; desk payments in any of them are COMPLETED at once
 - **Payment Status Tracking**: Pending, Processing, Completed, Failed, Refunded, Cancelled
 - **Transaction Management**: Transaction ID and reference tracking
 - **Gateway Integration**: Ready for payment gateway integration
@@ -106,7 +106,7 @@ GET    /billing/statistics                         # Get billing statistics
 {
   invoiceId: string;           // Invoice UUID
   amount: number;              // Payment amount
-  method: PaymentMethod;       // Payment method
+  method: PaymentMode;         // Prisma PaymentMode: CASH, CARD, UPI, BNPL, NET_BANKING or CHEQUE; anything else is a 400
   transactionId?: string;     // Transaction ID
   reference?: string;         // Payment reference
   notes?: string;             // Payment notes
@@ -269,7 +269,7 @@ const invoice = await billingService.createInvoice({
 const payment = await billingService.processPayment({
   invoiceId: 'invoice-123',
   amount: 743.4,
-  method: PaymentMethod.UPI,
+  method: PaymentMode.UPI,
   transactionId: 'TXN-123456',
   reference: 'REF-789',
   notes: 'UPI payment',

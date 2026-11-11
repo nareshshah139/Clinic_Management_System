@@ -1,6 +1,8 @@
 import { displayClinicDateTime } from '../../common/date-display';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { addDays, clinicDay, clinicDayOf, clinicInstants } from '../pharmacy/register-utils';
+import { reportRange, type ReportRange } from './report-range';
 import { Prisma } from '@prisma/client';
 import {
   RevenueReportResponseDto,
@@ -59,6 +61,17 @@ import {
   DashboardQueryDto as DashboardQuery,
 } from './dto/query-reports.dto';
 
+/** groupBy rows keyed by instant, summed into clinic days, oldest first. */
+function byClinicDay<T extends { createdAt: Date }>(groups: T[], amount: (g: T) => number, count: (g: T) => number) {
+  const days = new Map<string, { amount: number; count: number }>();
+  for (const g of groups) {
+    const day = clinicDay(g.createdAt);
+    const total = days.get(day) ?? { amount: 0, count: 0 };
+    days.set(day, { amount: total.amount + amount(g), count: total.count + count(g) });
+  }
+  return [...days].sort(([a], [b]) => a.localeCompare(b)).map(([date, total]) => ({ date, ...total }));
+}
+
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -70,11 +83,11 @@ export class ReportsService {
    */
   async generateRevenueReport(query: RevenueQueryDto, branchId: string): Promise<RevenueReportResponseDto> {
     const { startDate, endDate, period, doctorId, paymentMode, serviceType, includePaymentBreakdown } = query;
-    const dateRange = this.calculateDateRange(startDate, endDate, period);
+    const dateRange = reportRange({ startDate, endDate, period });
 
     const wherePayments: any = {
       reconStatus: 'COMPLETED',
-      createdAt: { gte: dateRange.start, lte: dateRange.end },
+      createdAt: dateRange.instants,
       invoice: {
         branchId,
         ...(doctorId ? { OR: [{ visit: { doctorId } }, { appointment: { doctorId } }] } : {}),
@@ -105,11 +118,11 @@ export class ReportsService {
       transactionCount: g._count._all,
     }));
 
-    const dailyBreakdown: DailyRevenueDto[] = dailyGroups.map((g) => ({
-      date: new Date(g.createdAt).toISOString().split('T')[0],
-      revenue: g._sum.amount ?? 0,
-      invoiceCount: g._count._all,
-      averageInvoiceValue: g._count._all ? (g._sum.amount ?? 0) / g._count._all : 0,
+    const dailyBreakdown: DailyRevenueDto[] = byClinicDay(dailyGroups, (g) => g._sum.amount ?? 0, (g) => g._count._all).map((d) => ({
+      date: d.date,
+      revenue: d.amount,
+      invoiceCount: d.count,
+      averageInvoiceValue: d.count ? d.amount / d.count : 0,
     }));
 
     // Each payment carries the invoice's GST in proportion to the share of the invoice it paid.
@@ -138,7 +151,7 @@ export class ReportsService {
       doctorBreakdown,
       serviceBreakdown,
       generatedAt: new Date(),
-      period: this.formatPeriod(dateRange),
+      period: dateRange.period,
     };
   }
 
@@ -213,7 +226,7 @@ export class ReportsService {
   // PATIENT REPORTS
   async generatePatientReport(query: PatientQueryDto, branchId: string): Promise<PatientReportResponseDto> {
     const { startDate, endDate, period, minAge, maxAge, gender, city } = query;
-    const dateRange = this.calculateDateRange(startDate, endDate, period);
+    const dateRange = reportRange({ startDate, endDate, period });
 
     const wherePatients: any = { branchId };
     if (gender) wherePatients.gender = gender;
@@ -221,8 +234,8 @@ export class ReportsService {
 
     const [patients, newPatientsCount, visitsInRange, totalPatientsCount] = await Promise.all([
       this.prisma.patient.findMany({ where: wherePatients }),
-      this.prisma.patient.count({ where: { ...wherePatients, createdAt: { gte: dateRange.start, lte: dateRange.end } } }),
-      this.prisma.visit.findMany({ where: { createdAt: { gte: dateRange.start, lte: dateRange.end }, patient: { branchId } }, select: { patientId: true } }),
+      this.prisma.patient.count({ where: { ...wherePatients, createdAt: dateRange.instants } }),
+      this.prisma.visit.findMany({ where: { createdAt: dateRange.instants, patient: { branchId } }, select: { patientId: true } }),
       this.prisma.patient.count({ where: wherePatients }),
     ]);
 
@@ -283,12 +296,12 @@ export class ReportsService {
     // Registration trends (by createdAt)
     const createdGroups = await this.prisma.patient.groupBy({
       by: ['createdAt'],
-      where: { ...wherePatients, createdAt: { gte: dateRange.start, lte: dateRange.end } },
+      where: { ...wherePatients, createdAt: dateRange.instants },
       _count: { id: true },
     });
-    const registrationTrends: RegistrationTrendDto[] = createdGroups.map((g) => ({
-      date: new Date(g.createdAt).toISOString().split('T')[0],
-      registrations: g._count.id,
+    const registrationTrends: RegistrationTrendDto[] = byClinicDay(createdGroups, () => 0, (g) => g._count.id).map((d) => ({
+      date: d.date,
+      registrations: d.count,
     }));
 
     const distinctPatientsInVisits = new Set(visitsInRange.map((v) => v.patientId));
@@ -304,7 +317,7 @@ export class ReportsService {
       registrationTrends,
       topVisitingPatients: await this.getTopVisitingPatients(branchId, dateRange),
       generatedAt: new Date(),
-      period: this.formatPeriod(dateRange),
+      period: dateRange.period,
     };
   }
 
@@ -324,10 +337,10 @@ export class ReportsService {
     return age >= 0 ? age : null;
   }
 
-  private async getTopVisitingPatients(branchId: string, dateRange: { start: Date; end: Date }): Promise<TopVisitingPatientDto[]> {
+  private async getTopVisitingPatients(branchId: string, dateRange: ReportRange): Promise<TopVisitingPatientDto[]> {
     const visits = await this.prisma.visit.groupBy({
       by: ['patientId'],
-      where: { createdAt: { gte: dateRange.start, lte: dateRange.end }, patient: { branchId } },
+      where: { createdAt: dateRange.instants, patient: { branchId } },
       _count: { patientId: true },
     });
     const top = visits.sort((a, b) => b._count.patientId - a._count.patientId).slice(0, 10);
@@ -337,12 +350,12 @@ export class ReportsService {
     const [patients, lastVisits, payments] = await Promise.all([
       this.prisma.patient.findMany({ where: { id: { in: patientIds } }, select: { id: true, name: true } }),
       this.prisma.visit.findMany({
-        where: { patientId: { in: patientIds }, createdAt: { gte: dateRange.start, lte: dateRange.end } },
+        where: { patientId: { in: patientIds }, createdAt: dateRange.instants },
         orderBy: { createdAt: 'desc' },
         select: { patientId: true, createdAt: true },
       }),
       this.prisma.newPayment.findMany({
-        where: { reconStatus: 'COMPLETED', createdAt: { gte: dateRange.start, lte: dateRange.end }, invoice: { patientId: { in: patientIds } } },
+        where: { reconStatus: 'COMPLETED', createdAt: dateRange.instants, invoice: { patientId: { in: patientIds } } },
         select: { amount: true, invoice: { select: { patientId: true } } },
       }),
     ]);
@@ -365,7 +378,7 @@ export class ReportsService {
   // DOCTOR REPORTS
   async generateDoctorReport(query: DoctorQueryDto, branchId: string): Promise<DoctorReportResponseDto> {
     const { startDate, endDate, period, department, includePerformanceMetrics, includeRevenueMetrics } = query;
-    const dateRange = this.calculateDateRange(startDate, endDate, period);
+    const dateRange = reportRange({ startDate, endDate, period });
 
     const whereDoctors: any = { branchId, role: 'DOCTOR' };
     if (department) whereDoctors.department = department;
@@ -378,7 +391,7 @@ export class ReportsService {
     const doctorMetrics: DoctorMetricsDto[] = includePerformanceMetrics
       ? await Promise.all(
           doctors.map(async (d) => {
-            const apptWhere = { doctorId: d.id, date: { gte: dateRange.start, lte: dateRange.end }, branchId } as any;
+            const apptWhere = { doctorId: d.id, date: dateRange.instants, branchId } as any;
             const [total, completed, cancelled, noShow, payments] = await Promise.all([
               this.prisma.appointment.count({ where: apptWhere }),
               this.prisma.appointment.count({ where: { ...apptWhere, status: 'COMPLETED' } }),
@@ -387,7 +400,7 @@ export class ReportsService {
               this.prisma.newPayment.aggregate({
                 where: {
                   reconStatus: 'COMPLETED',
-                  createdAt: { gte: dateRange.start, lte: dateRange.end },
+                  createdAt: dateRange.instants,
                   invoice: { branchId, OR: [{ visit: { doctorId: d.id } }, { appointment: { doctorId: d.id } }] },
                 },
                 _sum: { amount: true },
@@ -437,7 +450,7 @@ export class ReportsService {
       departmentBreakdown,
       topPerformers,
       generatedAt: new Date(),
-      period: this.formatPeriod(dateRange),
+      period: dateRange.period,
     };
   }
 
@@ -455,9 +468,9 @@ export class ReportsService {
   // APPOINTMENT REPORTS
   async generateAppointmentReport(query: AppointmentQueryDto, branchId: string): Promise<AppointmentReportResponseDto> {
     const { startDate, endDate, period, doctorId, status, visitType, roomId, includePeakHours, includeRoomUtilization, includeWaitTimes, includeCancellationReasons } = query as any;
-    const dateRange = this.calculateDateRange(startDate, endDate, period);
+    const dateRange = reportRange({ startDate, endDate, period });
 
-    const where: any = { branchId, date: { gte: dateRange.start, lte: dateRange.end } };
+    const where: any = { branchId, date: dateRange.instants };
     if (doctorId) where.doctorId = doctorId;
     if (status) where.status = status;
     if (visitType) where.visitType = visitType;
@@ -479,7 +492,7 @@ export class ReportsService {
     // Daily trends (bucket by YYYY-MM-DD)
     const trendMap = new Map<string, { total: number; completed: number; cancelled: number }>();
     for (const a of appts) {
-      const key = new Date(a.date).toISOString().split('T')[0];
+      const key = clinicDay(a.date);
       const entry = trendMap.get(key) || { total: 0, completed: 0, cancelled: 0 };
       entry.total += 1;
       if (a.status === 'COMPLETED') entry.completed += 1;
@@ -600,14 +613,14 @@ export class ReportsService {
       peakHours,
       cancellationReasons,
       generatedAt: new Date(),
-      period: this.formatPeriod(dateRange),
+      period: dateRange.period,
     };
   }
 
   // INVENTORY REPORTS
   async generateInventoryReport(query: InventoryQueryDto, branchId: string): Promise<InventoryReportResponseDto> {
     const { startDate, endDate, period, itemType, category, manufacturer, includeLowStock, includeExpired, includeTransactionHistory } = query;
-    const dateRange = this.calculateDateRange(startDate, endDate, period);
+    const dateRange = reportRange({ startDate, endDate, period });
 
     const whereItem: any = { branchId };
     if (itemType) whereItem.type = itemType as any;
@@ -693,13 +706,13 @@ export class ReportsService {
       transactionSummary,
       supplierBreakdown,
       generatedAt: new Date(),
-      period: this.formatPeriod(dateRange),
+      period: dateRange.period,
     };
   }
 
-  private async getTopSellingItems(branchId: string, dateRange: { start: Date; end: Date }): Promise<TopSellingItemDto[]> {
+  private async getTopSellingItems(branchId: string, dateRange: ReportRange): Promise<TopSellingItemDto[]> {
     const tx = await this.prisma.stockTransaction.findMany({
-      where: { branchId, type: 'SALE', createdAt: { gte: dateRange.start, lte: dateRange.end } },
+      where: { branchId, type: 'SALE', createdAt: dateRange.instants },
       select: { itemId: true, quantity: true, unitPrice: true, item: { select: { name: true } } },
     });
     const map = new Map<string, { name: string; qty: number; revenue: number }>();
@@ -715,8 +728,8 @@ export class ReportsService {
       .slice(0, 10);
   }
 
-  private async getTransactionSummary(branchId: string, dateRange: { start: Date; end: Date }): Promise<TransactionSummaryDto> {
-    const where = { branchId, createdAt: { gte: dateRange.start, lte: dateRange.end } } as any;
+  private async getTransactionSummary(branchId: string, dateRange: ReportRange): Promise<TransactionSummaryDto> {
+    const where = { branchId, createdAt: dateRange.instants } as any;
     const [total, purchase, sale, ret, adj] = await Promise.all([
       this.prisma.stockTransaction.count({ where }),
       this.prisma.stockTransaction.count({ where: { ...where, type: 'PURCHASE' } }),
@@ -741,11 +754,11 @@ export class ReportsService {
    */
   async generatePaymentReport(query: PaymentQueryDto, branchId: string): Promise<PaymentReportResponseDto> {
     const { startDate, endDate, period, paymentMode, gateway, includeReconciliation, includeRefunds } = query;
-    const dateRange = this.calculateDateRange(startDate, endDate, period);
+    const dateRange = reportRange({ startDate, endDate, period });
 
     const where: any = {
       invoice: { branchId },
-      createdAt: { gte: dateRange.start, lte: dateRange.end },
+      createdAt: dateRange.instants,
     };
     if (paymentMode) where.mode = paymentMode as any; // Fixed: use 'mode' instead of 'method'
     if (gateway) where.gateway = gateway;
@@ -767,15 +780,13 @@ export class ReportsService {
     const paymentModeBreakdown: PaymentModeBreakdownDto[] = modeGroups.map((g) => ({ mode: g.mode as any, transactionCount: g._count._all, totalAmount: g._sum.amount || 0, percentage: totalAmount ? (100 * (g._sum.amount || 0)) / totalAmount : 0, successRate: totalPayments ? (100 * successfulPayments) / totalPayments : 0 }));
     const gatewayBreakdown: GatewayBreakdownDto[] = gatewayGroups.map((g) => ({ gateway: g.gateway || 'N/A', transactionCount: g._count._all, totalAmount: g._sum.amount || 0, successRate: successfulPayments ? (100 * successfulPayments) / totalPayments : 0, averageTransactionAmount: g._count._all ? (g._sum.amount || 0) / g._count._all : 0 }));
 
-    const successMap = new Map<string, number>();
-    for (const g of dailySuccess) successMap.set(new Date(g.createdAt).toISOString().split('T')[0], g._count._all);
-    const failedMap = new Map<string, number>();
-    for (const g of dailyFailed) failedMap.set(new Date(g.createdAt).toISOString().split('T')[0], g._count._all);
+    const countsByDay = (groups: typeof dailySuccess) => new Map(byClinicDay(groups, () => 0, (g) => g._count._all).map((d) => [d.date, d.count]));
+    const successMap = countsByDay(dailySuccess);
+    const failedMap = countsByDay(dailyFailed);
 
-    const dailyTrends: DailyPaymentTrendDto[] = dailyGroups.map((g) => {
-      const key = new Date(g.createdAt).toISOString().split('T')[0];
-      return { date: key, paymentCount: g._count._all, totalAmount: g._sum.amount || 0, successfulPayments: successMap.get(key) || 0, failedPayments: failedMap.get(key) || 0 };
-    });
+    const dailyTrends: DailyPaymentTrendDto[] = byClinicDay(dailyGroups, (g) => g._sum.amount || 0, (g) => g._count._all).map((d) => (
+      { date: d.date, paymentCount: d.count, totalAmount: d.amount, successfulPayments: successMap.get(d.date) || 0, failedPayments: failedMap.get(d.date) || 0 }
+    ));
 
     const reconciliationSummary: ReconciliationSummaryDto = includeReconciliation
       ? { totalTransactions: totalPayments, reconciledTransactions: successfulPayments, pendingReconciliation: pendingPayments, reconciliationRate: totalPayments ? (100 * successfulPayments) / totalPayments : 0, discrepancyAmount: Math.max(0, totalAmount - (modeGroups.reduce((s, g) => s + ((g._sum?.amount as number) || 0), 0))) }
@@ -784,7 +795,7 @@ export class ReportsService {
     let refundSummary: RefundSummaryDto = { totalRefunds: 0, totalRefundAmount: 0, refundRate: 0, averageRefundAmount: 0, refundReasons: [] };
     if (includeRefunds) {
       const refundWhere: Prisma.NewPaymentWhereInput = {
-        invoice: { branchId }, createdAt: { gte: dateRange.start, lte: dateRange.end },
+        invoice: { branchId }, createdAt: dateRange.instants,
         reconStatus: 'COMPLETED', ...(paymentMode ? { mode: paymentMode as any } : {}), ...(gateway ? { gateway } : {}),
       };
       const [refunds, positivePayments] = await Promise.all([
@@ -821,7 +832,7 @@ export class ReportsService {
       reconciliationSummary,
       refundSummary,
       generatedAt: new Date(),
-      period: this.formatPeriod(dateRange),
+      period: dateRange.period,
     };
   }
 
@@ -831,20 +842,20 @@ export class ReportsService {
    * Payment groups MUST count matching branch payments without ambiguous joined-column references.
    */
   async generateDashboard(query: DashboardQuery, branchId: string): Promise<DashboardResponseDto> {
-    const target = query.date ? new Date(query.date) : new Date();
-    const start = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-    const end = new Date(target.getFullYear(), target.getMonth(), target.getDate(), 23, 59, 59);
+    const day = (query.date && clinicDayOf(query.date)) || clinicDay(new Date());
+    const today = clinicInstants(day, day);
+    const lastSevenDays = clinicInstants(addDays(day, -6), day);
 
     const [appointments, completed, revenueAgg, patients, activeDoctors, lowStockAlerts, pendingPayments, recentAppointmentsRaw, revenueLast7] = await Promise.all([
-      this.prisma.appointment.count({ where: { branchId, date: { gte: start, lte: end } } }),
-      this.prisma.appointment.count({ where: { branchId, date: { gte: start, lte: end }, status: 'COMPLETED' } }),
-      this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: { gte: start, lte: end } }, _sum: { amount: true } }),
-      this.prisma.patient.count({ where: { branchId, createdAt: { gte: start, lte: end } } }),
-      this.prisma.appointment.groupBy({ by: ['doctorId'], where: { branchId, date: { gte: start, lte: end } }, _count: { doctorId: true } }),
+      this.prisma.appointment.count({ where: { branchId, date: today } }),
+      this.prisma.appointment.count({ where: { branchId, date: today, status: 'COMPLETED' } }),
+      this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: today }, _sum: { amount: true } }),
+      this.prisma.patient.count({ where: { branchId, createdAt: today } }),
+      this.prisma.appointment.groupBy({ by: ['doctorId'], where: { branchId, date: today }, _count: { doctorId: true } }),
       this.prisma.inventoryItem.count({ where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] } }),
       this.prisma.newPayment.count({ where: { invoice: { branchId }, reconStatus: 'PENDING' } }),
       this.prisma.appointment.findMany({ where: { branchId }, orderBy: { date: 'desc' }, take: 10, select: { id: true, date: true, status: true, visitType: true, patient: { select: { name: true } }, doctor: { select: { firstName: true, lastName: true } } } }),
-      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), lte: end } }, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: lastSevenDays }, _sum: { amount: true }, _count: { _all: true } }),
     ]);
 
     const recentAppointments: RecentAppointmentDto[] = recentAppointmentsRaw.map((a) => ({
@@ -856,9 +867,8 @@ export class ReportsService {
       visitType: a.visitType as any,
     }));
 
-    const revenueTrends: RevenueTrendDto[] = revenueLast7
-      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
-      .map((g) => ({ date: new Date(g.createdAt).toISOString().split('T')[0], revenue: g._sum.amount || 0, invoiceCount: g._count._all }));
+    const revenueTrends: RevenueTrendDto[] = byClinicDay(revenueLast7, (g) => g._sum.amount || 0, (g) => g._count._all)
+      .map((d) => ({ date: d.date, revenue: d.amount, invoiceCount: d.count }));
 
     const topDoctors: TopDoctorDto[] = activeDoctors
       .sort((a, b) => b._count.doctorId - a._count.doctorId)
@@ -1035,10 +1045,9 @@ export class ReportsService {
 
   // SYSTEM STATISTICS
   async getSystemStatistics(branchId: string): Promise<any> {
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const day = clinicDay(new Date());
+    const today = clinicInstants(day, day);
+    const thisMonth = clinicInstants(`${day.slice(0, 7)}-01`, day);
 
     const [
       totalPatients,
@@ -1060,9 +1069,9 @@ export class ReportsService {
       this.prisma.appointment.count({ where: { branchId, status: 'COMPLETED' as any } }),
       this.prisma.appointment.count({ where: { branchId, status: 'CANCELLED' as any } }),
       this.prisma.appointment.count({ where: { branchId, status: 'NO_SHOW' as any } }),
-      this.prisma.appointment.count({ where: { branchId, date: { gte: startOfDay, lte: endOfDay } } }),
-      this.prisma.appointment.count({ where: { branchId, date: { gte: startOfDay, lte: endOfDay }, status: 'COMPLETED' as any } }),
-      this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: { gte: startOfMonth, lte: now } }, _sum: { amount: true } }),
+      this.prisma.appointment.count({ where: { branchId, date: today } }),
+      this.prisma.appointment.count({ where: { branchId, date: today, status: 'COMPLETED' as any } }),
+      this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: thisMonth }, _sum: { amount: true } }),
       this.prisma.newPayment.count({ where: { invoice: { branchId }, reconStatus: 'PENDING' } }),
       this.prisma.newInvoice.count({ where: { branchId, status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] } } }),
       this.prisma.inventoryItem.count({ where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] } }),
@@ -1196,29 +1205,4 @@ export class ReportsService {
   }
 
   // UTILITIES
-  private calculateDateRange(startDate?: string, endDate?: string, period?: ReportPeriod): { start: Date; end: Date } {
-    const now = new Date();
-    if (startDate && endDate) return { start: new Date(startDate), end: new Date(endDate) };
-    switch (period) {
-      case 'DAILY':
-        return { start: new Date(now.getFullYear(), now.getMonth(), now.getDate()), end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59) };
-      case 'WEEKLY':
-        const sow = new Date(now);
-        sow.setDate(now.getDate() - now.getDay());
-        return { start: new Date(sow.getFullYear(), sow.getMonth(), sow.getDate()), end: new Date(sow.getFullYear(), sow.getMonth(), sow.getDate() + 6, 23, 59, 59) };
-      case 'MONTHLY':
-        return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59) };
-      case 'QUARTERLY':
-        const q = Math.floor(now.getMonth() / 3);
-        return { start: new Date(now.getFullYear(), q * 3, 1), end: new Date(now.getFullYear(), q * 3 + 3, 0, 23, 59, 59) };
-      case 'YEARLY':
-        return { start: new Date(now.getFullYear(), 0, 1), end: new Date(now.getFullYear(), 11, 31, 23, 59, 59) };
-      default:
-        return { start: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), end: now };
-    }
-  }
-
-  private formatPeriod(range: { start: Date; end: Date }): string {
-    return `${range.start.toISOString().split('T')[0]} to ${range.end.toISOString().split('T')[0]}`;
-  }
 }
