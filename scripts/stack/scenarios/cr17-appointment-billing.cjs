@@ -13,12 +13,6 @@ const clinicToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kol
 const DESKTOP = { width: 1280, height: 900 };
 const PHONE = { width: 390, height: 844 };
 const results = [];
-// Refusals that predate CR-17 and are tracked on their own, so they are noted here rather than failed:
-// the header asks every role for system alerts (RECEPTION and NURSE are refused), and the calendar's
-// room filter asks for rooms, which NURSE is refused.
-const KNOWN_REFUSALS = { "/api/reports/alerts": { roles: ["reception", "nurse"], console: null }, "/api/appointments/rooms": { roles: ["nurse"], console: "Failed to fetch rooms" } };
-const known = (who, where) => KNOWN_REFUSALS[where]?.roles.includes(who);
-
 async function seed(stack, today) {
   const db = stack.db;
   const branchId = stack.branch.id;
@@ -29,6 +23,7 @@ async function seed(stack, today) {
   await patient("cr17-lakshmi", "Lakshmi Devi", "F", "1978-11-02");
   await patient("cr17-suresh", "Suresh Babu", "M", "1969-01-25");
   await patient("cr17-priya", "Priya Nair", "F", "1996-09-30");
+  await patient("cr17-venkata", "Venkata Subramanian", "M", "1975-05-12");
   const appointment = (id, patientId, slot, status, extra = {}) =>
     db.appointment.create({ data: { id, branchId, doctorId, patientId, date: new Date(today), slot, status, ...extra } });
   await appointment("cr17-a-meera", "cr17-meera", "09:00-09:15", "CONFIRMED", { tokenNumber: 1 });
@@ -36,6 +31,7 @@ async function seed(stack, today) {
   await appointment("cr17-a-lakshmi", "cr17-lakshmi", "10:00-10:30", "COMPLETED", { tokenNumber: 3, visitType: "PROCEDURE", notes: "Chemical peel" });
   await appointment("cr17-a-suresh", "cr17-suresh", "10:30-10:45", "SCHEDULED");
   await appointment("cr17-a-priya", "cr17-priya", "11:00-11:15", "IN_PROGRESS", { tokenNumber: 4 });
+  await appointment("cr17-a-venkata", "cr17-venkata", "11:30-11:45", "CONFIRMED", { tokenNumber: 5 });
   const earlier = new Date("2026-10-01T05:00:00Z");
   for (const patientId of ["cr17-ravi", "cr17-suresh", "cr17-priya"])
     await db.visit.create({ data: { patientId, doctorId, complaints: "[]", status: "COMPLETED", createdAt: earlier } });
@@ -94,6 +90,7 @@ async function call(page, method, url, body) {
     const meeraBill = await bill("cr17-meera", "cr17-a-meera", "First consultation", 500, 500, "CASH");
     const raviBill = await bill("cr17-ravi", "cr17-a-ravi", "Review consultation", 500, 300, "UPI");
     await bill("cr17-priya", "cr17-a-priya", "Review consultation", 500, 500, "CARD");
+    await bill("cr17-venkata", "cr17-a-venkata", "First consultation", 1700, 0, "CASH");
     const priyaVisitBill = await bill("cr17-priya", null, "Laser session", 1200, 1000, "CASH", { visitId: "cr17-v-priya" });
     const stored = await stack.db.newInvoice.findMany({ where: { id: { in: [meeraBill.id, priyaVisitBill.id] } }, select: { id: true, appointmentId: true, visitId: true } });
     console.log(`SEED today=${today} invoices linked=${JSON.stringify(stored.map((s) => [s.appointmentId, s.visitId]))}`);
@@ -107,15 +104,10 @@ async function call(page, method, url, body) {
       const page = await context.newPage();
       page.setDefaultTimeout(60000);
       page.on("pageerror", (e) => sink.push(`${who} pageerror ${e.message.slice(0, 200)}`));
-      const knownConsole = (m) =>
-        Object.entries(KNOWN_REFUSALS).some(([where, k]) => k.roles.includes(who) && ((m.location()?.url ?? "").includes(where) || (k.console && m.text().startsWith(k.console))));
-      page.on("console", (m) => m.type() === "error" && !knownConsole(m) && sink.push(`${who} console ${m.text().slice(0, 200)}`));
+      page.on("console", (m) => m.type() === "error" && sink.push(`${who} console ${m.text().slice(0, 200)}`));
       const refused = [];
       page.on("response", (r) => {
-        if (!r.url().includes("/api/") || ![401, 403].includes(r.status())) return;
-        const where = new URL(r.url()).pathname;
-        if (known(who, where)) console.log(`    NOTE ${who} ${r.status()} ${where} (predates CR-17)`);
-        else refused.push(`${r.status()} ${where}`);
+        if (r.url().includes("/api/") && [401, 403].includes(r.status())) refused.push(`${r.status()} ${new URL(r.url()).pathname}`);
       });
       if (!sessions.has(who)) {
         await stack.login(page, who);
@@ -186,7 +178,7 @@ async function call(page, method, url, body) {
     const calendar = async (page) => {
       await page.goto(`${stack.base}/dashboard/appointments`, { waitUntil: "domcontentloaded", timeout: 240000 });
       await page.locator("[data-appointment-block]").first().waitFor({ timeout: 240000 });
-      await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]') && document.querySelectorAll("[data-appointment-block]").length >= 5, null, { timeout: 120000 });
+      await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]') && document.querySelectorAll("[data-appointment-block]").length >= 6, null, { timeout: 120000 });
       await page.getByRole("region", { name: "Scheduled" }).scrollIntoViewIfNeeded();
       await page.waitForTimeout(300);
     };
@@ -275,7 +267,7 @@ async function call(page, method, url, body) {
       await calendar(o.page);
       const all = await rows(o.page);
       s.check("phone chips: ₹ with a tick when paid, with ! when money is to be collected", Object.fromEntries(all.map((r) => [r.name, r.chip])), {
-        "Lakshmi Devi": "₹!", "Meera Shah": "₹✓", "Priya Nair": "₹!", "Ravi Kumar": "₹✓", "Suresh Babu": "",
+        "Lakshmi Devi": "₹!", "Meera Shah": "₹✓", "Priya Nair": "₹!", "Ravi Kumar": "₹✓", "Suresh Babu": "", "Venkata Subramanian": "₹!",
       });
       const names = await o.page.locator("[data-patient-name]").evaluateAll((n) => n.map((el) => el.getBoundingClientRect().width));
       s.ok("every patient name keeps some room on a phone", names.every((w) => w >= 24), names);
@@ -293,6 +285,86 @@ async function call(page, method, url, body) {
       await o.page.keyboard.press("Escape");
       await dialog.waitFor({ state: "hidden" });
       s.check("no Daily Collection in reception's phone menu", (await menuLinks(o.page, true)).includes("Daily Collection"), false);
+    });
+
+    const SLOT_OF = {
+      "Meera Shah": "09:00-09:15", "Ravi Kumar": "09:30-09:45", "Lakshmi Devi": "10:00-10:30",
+      "Suresh Babu": "10:30-10:45", "Priya Nair": "11:00-11:15", "Venkata Subramanian": "11:30-11:45",
+    };
+    const STATUS_OF = { "Meera Shah": "Confirmed", "Ravi Kumar": "Confirmed", "Lakshmi Devi": "Completed", "Suresh Babu": "Scheduled", "Priya Nair": "In progress", "Venkata Subramanian": "Confirmed" };
+    const geometry = (page) =>
+      page.locator("[data-appointment-block]").evaluateAll((blocks) => {
+        const probe = document.createElement("canvas").getContext("2d");
+        const shown = (el) => (el && el.checkVisibility() ? el.innerText.replace(/\s+/g, " ").trim() : "");
+        return blocks.map((b) => {
+          const name = b.querySelector("[data-patient-name]");
+          const button = name.closest("button");
+          const chip = b.querySelector("[data-appointment-billing]");
+          const status = b.querySelector("[data-appointment-status]");
+          const type = b.querySelector("[data-bill-type]");
+          const style = getComputedStyle(name);
+          probe.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+          const text = name.innerText.trim();
+          const block = b.getBoundingClientRect();
+          const chipBox = chip?.getBoundingClientRect();
+          return {
+            name: text,
+            time: shown(b.querySelector("[data-appointment-time]")),
+            nameWidth: Math.round(name.clientWidth),
+            sixteen: Math.ceil(probe.measureText(text.slice(0, 16)).width),
+            truncated: name.scrollWidth > name.clientWidth,
+            height: Math.round(block.height),
+            oneLine: button.scrollHeight <= button.clientHeight + 1,
+            clipped: button.scrollWidth > button.clientWidth + 1,
+            chipInside: chipBox ? chipBox.left >= block.left && chipBox.right <= block.right + 1 : null,
+            chipText: shown(chip),
+            type: shown(type),
+            statusText: shown(status),
+            statusMarked: Boolean(status && status.checkVisibility() && status.getAttribute("title")),
+            label: button.getAttribute("aria-label"),
+          };
+        });
+      });
+    const fitsRow = (s, tag, g, { chip }) => {
+      const slot = SLOT_OF[g.name];
+      s.check(`${tag} ${g.name}: the row's own time range`, g.time, slot);
+      s.ok(`${tag} ${g.name}: at least 16 characters of the name (${g.nameWidth}px of ${g.sixteen}px)`, g.nameWidth >= g.sixteen - 1, g);
+      if (g.name.length <= 16) s.ok(`${tag} ${g.name}: a short name is not cut`, !g.truncated, g);
+      s.ok(`${tag} ${g.name}: one line, nothing pushed out of the row, no taller than a 15 minute row (${g.height}px)`, g.oneLine && !g.clipped && (SLOT_OF[g.name].endsWith(":30") || g.height <= 24), g);
+      s.ok(`${tag} ${g.name}: bill type shown`, g.type.length > 0, g);
+      s.check(`${tag} ${g.name}: status in words`, g.statusText, STATUS_OF[g.name]);
+      s.ok(`${tag} ${g.name}: full name, time and status in the accessible label`, g.label.includes(g.name) && g.label.includes(slot) && g.label.includes(STATUS_OF[g.name]), g.label);
+      if (chip) s.ok(`${tag} ${g.name}: the bill chip is inside the row and reads "${g.chipText}"`, g.chipInside && g.chipText.length > 0, g);
+      else s.check(`${tag} ${g.name}: no bill chip`, g.chipText, "");
+    };
+
+    for (const [who, viewport, tag, chip] of [["reception", DESKTOP, "1280", true], ["reception", { width: 1440, height: 900 }, "1440", true], ["doctor", DESKTOP, "1280", true], ["nurse", DESKTOP, "1280", false]]) {
+      await scenario(`${who} ${tag}: every row keeps its time, a readable name, type, status${chip ? " and bill chip" : ""}`, async (s) => {
+        const o = await open(who, viewport);
+        s.opened.push(o);
+        await calendar(o.page);
+        const all = await geometry(o.page);
+        s.check("every seeded appointment is a row", all.map((g) => g.name).sort(), Object.keys(SLOT_OF).sort());
+        for (const g of all) fitsRow(s, `${who} ${tag}`, g, { chip });
+        s.ok("no sideways scroll", await noSideways(o.page));
+        s.ok("no refused calls", o.refused.length === 0, o.refused);
+        await s.shot(o.page, `${who}-rows-${tag}`);
+      });
+    }
+
+    await scenario("reception 390: rows keep the name, the status and the bill chip inside the column", async (s) => {
+      const o = await open("reception", PHONE);
+      s.opened.push(o);
+      await calendar(o.page);
+      for (const g of await geometry(o.page)) {
+        s.ok(`${g.name}: name keeps room (${g.nameWidth}px)`, g.nameWidth >= 24, g);
+        s.ok(`${g.name}: one line, nothing pushed out of the row`, g.oneLine && !g.clipped, g);
+        s.ok(`${g.name}: chip inside the row`, g.chipInside !== false, g);
+        s.ok(`${g.name}: time and status in the accessible label`, g.label.includes(SLOT_OF[g.name]) && g.label.includes(STATUS_OF[g.name]), g.label);
+      }
+      s.ok("no sideways scroll", await noSideways(o.page));
+      s.ok("no refused calls", o.refused.length === 0, o.refused);
+      await s.shot(o.page, "reception-rows-390");
     });
 
     await scenario("doctor 1280: creates the procedure bill from the row with payment; Daily Collection opens from the menu", async (s) => {
@@ -401,7 +473,7 @@ async function call(page, method, url, body) {
       s.opened.push(n);
       await calendar(n.page);
       const all = await rows(n.page);
-      s.check("bill types for the nurse", Object.fromEntries(all.map((r) => [r.name, r.type])), { "Lakshmi Devi": "Procedure", "Meera Shah": "First consultation", "Priya Nair": "Review", "Ravi Kumar": "Review", "Suresh Babu": "Review" });
+      s.check("bill types for the nurse", Object.fromEntries(all.map((r) => [r.name, r.type])), { "Lakshmi Devi": "Procedure", "Meera Shah": "First consultation", "Priya Nair": "Review", "Ravi Kumar": "Review", "Suresh Babu": "Review", "Venkata Subramanian": "First consultation" });
       s.check("no bill amounts for the nurse", all.filter((r) => r.chip !== null).length, 0);
       s.check("no Daily Collection in the nurse's menu", (await menuLinks(n.page, false)).includes("Daily Collection"), false);
       s.ok("no refused calls", n.refused.length === 0, n.refused);

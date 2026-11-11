@@ -54,19 +54,37 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(paid).not.toHaveAttribute('data-attention');
 
     const due = screen.getByRole('button', { name: 'Review bill: ₹500, ₹200 due' });
-    expect(within(due).getByText('₹500 · Due ₹200')).toBeInTheDocument();
-    expect(within(due).getByText('Due ₹200')).toBeInTheDocument();
+    expect(within(due).getByText('₹500 · ₹200 due')).toBeInTheDocument();
+    expect(within(due).getByText('₹200 due')).toBeInTheDocument();
     expect(due).toHaveAttribute('data-attention', 'true');
 
     expect(screen.getByRole('button', { name: 'Procedure bill: not billed yet' })).not.toHaveAttribute('data-attention');
     expect(screen.getByRole('button', { name: 'Review bill: not billed yet, visit finished' })).toHaveAttribute('data-attention', 'true');
 
     const two = screen.getByRole('button', { name: 'Review bill: ₹1,700 in 2 bills, ₹200 due' });
-    expect(within(two).getByText('₹1,700 · Due ₹200 · 2 bills')).toBeInTheDocument();
+    expect(within(two).getByText('₹1,700 · ₹200 due')).toBeInTheDocument();
+    expect(within(two).getByText('₹1,700 · ₹200 due · 2 bills')).toBeInTheDocument();
 
     const types = Array.from(document.querySelectorAll('[data-bill-type]')).map((n) => n.textContent);
     expect(types).toEqual(['First consultation', 'Review', 'Procedure', 'Review', 'Review']);
     expect(confirmed().getByRole('button', { name: 'Meera Shah, 09:00-09:15, Confirmed' })).toHaveTextContent('34y');
+  });
+
+  it('keeps the time range, full name and a named status on every row', async () => {
+    renderDay([
+      row('a1', '09:00-09:15', 'Venkata Subramanian', { tokenNumber: 5, billType: 'FIRST_CONSULTATION', billing: bill('DUE', 1700, 0, true) }),
+      row('a2', '09:15-09:30', 'Priya Nair', { status: 'IN_PROGRESS', billType: 'REVIEW', billing: bill('PAID', 500, 500, false) }),
+    ]);
+    const first = await screen.findByRole('button', { name: 'Token 5, Venkata Subramanian, 09:00-09:15, Confirmed' });
+    expect(first).toHaveAttribute('title', 'Token 5, Venkata Subramanian, 09:00-09:15, Confirmed');
+    expect(first.querySelector('[data-appointment-time]')).toHaveTextContent('09:00-09:15');
+    expect(first.querySelector('[data-patient-name]')).toHaveTextContent('Venkata Subramanian');
+    expect(first.querySelector('[data-bill-type]')).toHaveTextContent('First consultation');
+    expect(first.querySelector('[data-appointment-status]')).toHaveAttribute('title', 'Confirmed');
+    expect(first.querySelector('[data-appointment-status]')).toHaveTextContent('Confirmed');
+    const second = screen.getByRole('button', { name: 'Priya Nair, 09:15-09:30, In progress' });
+    expect(second.querySelector('[data-appointment-status]')).toHaveAttribute('title', 'In progress');
+    expect(second.querySelector('[data-appointment-time]')).toHaveTextContent('09:15-09:30');
   });
 
   it('records a payment from the row and shows Paid after the schedule reloads', async () => {

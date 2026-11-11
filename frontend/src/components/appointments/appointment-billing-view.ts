@@ -12,8 +12,10 @@ export const rupee = (value: number) => rupees.format(value);
 export type BillingTone = 'paid' | 'due' | 'unbilled' | 'quiet';
 
 export type BillingChip = {
-  /** Shown when the row has room: amount and state together. */
+  /** Shown on a wide row: amount and state together, with the bill count. */
   text: string;
+  /** Shown on a desktop row: amount and state together. */
+  compact: string;
   /** Shown on a narrow row: the state, with the amount still due. */
   short: string;
   /** Shown on a phone-width row: ₹ with a tick when paid, or with ! when money is to be collected. */
@@ -25,7 +27,7 @@ export type BillingChip = {
 
 /**
  * @cc [owner:nareshshah139,label:product] appointment-billing-chip
- * The row MUST show the bill's amount and state together ("₹500 · Paid", "₹500 · Due ₹200",
+ * The row MUST show the bill's amount and state together ("₹500 · Paid", "₹500 · ₹200 due",
  * "Not billed"), with the bill count when there is more than one, and MUST mark unpaid money or a
  * finished visit without a bill in words as well as colour.
  */
@@ -36,6 +38,7 @@ export function billingChip(billing: AppointmentBilling, billType?: BillType): B
   if (billing.state === 'NOT_BILLED') {
     return {
       text: 'Not billed',
+      compact: 'Not billed',
       short: 'Not billed',
       tiny: billing.attention ? '₹!' : '',
       tone: billing.attention ? 'unbilled' : 'quiet',
@@ -45,6 +48,7 @@ export function billingChip(billing: AppointmentBilling, billType?: BillType): B
   if (billing.state === 'PAID') {
     return {
       text: `${rupee(billing.total)} · Paid${bills}`,
+      compact: `${rupee(billing.total)} · Paid`,
       short: 'Paid',
       tiny: '₹✓',
       tone: 'paid',
@@ -52,8 +56,9 @@ export function billingChip(billing: AppointmentBilling, billType?: BillType): B
     };
   }
   return {
-    text: `${rupee(billing.total)} · Due ${rupee(billing.due)}${bills}`,
-    short: `Due ${rupee(billing.due)}`,
+    text: `${rupee(billing.total)} · ${rupee(billing.due)} due${bills}`,
+    compact: `${rupee(billing.total)} · ${rupee(billing.due)} due`,
+    short: `${rupee(billing.due)} due`,
     tiny: '₹!',
     tone: 'due',
     label: `${kind}: ${rupee(billing.total)}${count > 1 ? ` in ${count} bills` : ''}, ${rupee(billing.due)} due`,
