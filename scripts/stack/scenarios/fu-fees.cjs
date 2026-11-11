@@ -182,7 +182,7 @@ async function seed(stack, today) {
     const chipOf = (page, patient) => page.locator("[data-appointment-block]", { has: page.locator("[data-patient-name]", { hasText: patient }) }).locator("[data-appointment-billing]");
     const openBill = async (page, patient, phone = false) => {
       if (phone) {
-        await page.locator("[data-appointment-block]", { has: page.locator("[data-patient-name]", { hasText: patient }) }).getByRole("button", { name: new RegExp(`^${patient}, `) }).click();
+        await page.locator("[data-appointment-block]", { has: page.locator("[data-patient-name]", { hasText: patient }) }).getByRole("button", { name: new RegExp(`^(Token \\d+, )?${patient}, `) }).click();
         await page.getByRole("dialog", { name: "Appointment Details" }).getByRole("button", { name: "Create bill" }).click();
       } else await chipOf(page, patient).click();
       const dialog = page.getByRole("dialog", { name: `Bill for ${patient}` });
