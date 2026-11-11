@@ -260,7 +260,7 @@ export default function CalendarColumn({
                     title={accessibleName}
                     onClick={() => onOpen(apt)}
                     disabled={isOptimistic}
-                    className="@container flex h-full w-full items-start overflow-hidden px-1.5 py-0.5 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                    className="@container flex h-full w-full items-start overflow-hidden px-1.5 py-0 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                     style={{ fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))' }}
                   >
                     <span className={`flex w-full min-w-0 items-center gap-1 whitespace-nowrap ${status.muted ? 'text-gray-500' : 'text-gray-900'}`}>

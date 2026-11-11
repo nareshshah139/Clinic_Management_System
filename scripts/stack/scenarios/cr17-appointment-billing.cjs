@@ -322,6 +322,7 @@ async function call(page, method, url, body) {
             height: Math.round(block.height * 10) / 10,
             minutes: to - from,
             oneLine: parts.every((r) => r.top >= block.top - 0.5 && r.bottom <= block.bottom + 0.5),
+            overhang: Math.round(Math.max(...parts.map((r) => Math.max(r.bottom - block.bottom, block.top - r.top))) * 10) / 10,
             clipped: parts.some((r) => r.right > block.right + 0.5),
             chipInside: chipBox ? chipBox.left >= block.left && chipBox.right <= block.right + 1 : null,
             chipText: shown(chip),
