@@ -1051,7 +1051,7 @@ export function PharmacyInvoiceBuilderFixed({
       return (
         <Badge
           variant="default"
-          className="text-xs ml-2 bg-green-100 text-green-800"
+          className="text-xs ml-2 whitespace-nowrap bg-green-100 text-green-800"
         >
           Best Match
         </Badge>
@@ -1060,7 +1060,7 @@ export function PharmacyInvoiceBuilderFixed({
       return (
         <Badge
           variant="secondary"
-          className="text-xs ml-2 bg-blue-100 text-blue-800"
+          className="text-xs ml-2 whitespace-nowrap bg-blue-100 text-blue-800"
         >
           High Match
         </Badge>
@@ -2410,9 +2410,9 @@ export function PharmacyInvoiceBuilderFixed({
                                 }
                               }}
                             >
-                              <div className="flex justify-between items-start gap-3">
-                                <div className="flex-1">
-                                  <div className="flex items-center">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-y-1">
                                     <h4 className="font-medium">
                                       {highlightMatch(
                                         drug.stockName || drug.name,
@@ -2441,7 +2441,7 @@ export function PharmacyInvoiceBuilderFixed({
                                     </p>
                                   )}
                                 </div>
-                                <div className="flex shrink-0 items-start gap-3 text-right">
+                                <div className="flex shrink-0 items-start justify-between gap-3 text-right sm:justify-end">
                                   <div>
                                     <div className="font-semibold">
                                       ₹{getDrugUnitPrice(drug).toFixed(2)}
