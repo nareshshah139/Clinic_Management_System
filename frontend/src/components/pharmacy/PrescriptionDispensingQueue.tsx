@@ -343,7 +343,7 @@ export function PrescriptionDispensingQueue({
                       ) : null}
                     </div>
                   </TableCell>
-                  <TableCell className="whitespace-normal">
+                  <TableCell className="whitespace-normal [overflow-wrap:anywhere]">
                     {stockErrors[entry.prescriptionId] ? <p role="alert" className="text-sm text-destructive">{stockErrors[entry.prescriptionId]}</p> : <StockWarnings
                       items={stockByPrescription[entry.prescriptionId] || []}
                       prescriptionId={entry.prescriptionId} onLinked={loadQueue} canLink={entry.dispensingEligible !== false}
