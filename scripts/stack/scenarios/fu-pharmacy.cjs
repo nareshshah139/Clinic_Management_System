@@ -142,6 +142,7 @@ async function seed(stack) {
       await page.setViewportSize(viewport);
     };
     const line = (page, name) => page.locator("[data-invoice-item]").filter({ has: page.getByRole("heading", { name, level: 4, exact: true }) });
+    const inputValues = (locator) => locator.locator("input").evaluateAll((els) => els.map((el) => el.value));
     const lineHeadings = async (page) => (await page.locator("[data-invoice-item] h4").allInnerTexts()).map(clean);
     const pickerRow = (page, index) => page.getByPlaceholder("Search medicine name...").nth(index);
     const openPrescription = async (page, visit, patient) => {
@@ -234,7 +235,7 @@ async function seed(stack) {
         [await lineHeadings(page), flutasCard.includes("No match"), flutasCard.includes("Out of stock"), flutasCard.includes("Prescribed:"), sotretCard.includes("Out of stock"), CATALOGUE_ONLY.test(flutasCard)],
         [[FLUTAS, SOTRET], false, false, false, true, false]);
       check("pharmacist-1280 the 10-tablet Flutas course loads as Quantity 1 strip at Rs 44.80 including 12% GST, not 10 strips at Rs 448",
-        [await line(page, FLUTAS).getByLabel("Quantity").inputValue(), flutasCard.includes("44.80"), flutasCard.includes("448.00")], ["1", true, false]);
+        [await line(page, FLUTAS).getByLabel("Quantity").inputValue(), (await inputValues(line(page, FLUTAS))).filter((v) => v.startsWith("₹"))], ["1", ["₹44.80"]]);
       await shot(page, "pharmacist-1280-02-bill-from-learned-plan");
       await line(page, SOTRET).getByRole("button", { name: `Remove ${SOTRET}` }).click();
       const before = await stockOf();
@@ -275,7 +276,7 @@ async function seed(stack) {
       check("pharmacist-390 an older prescription on the archived batch loads matched, in stock, under the stock name with what was prescribed",
         [await lineHeadings(page), card.includes("No match"), card.includes("Out of stock"), card.includes("Prescribed: 13 74 | Flutas 150Mg(Pc)")], [[FLUTAS], false, false, true]);
       check("pharmacist-390 the older prescription's 10 tablets load as Quantity 1 strip at Rs 44.80",
-        [await page.locator("[data-invoice-item]").first().getByLabel("Quantity").inputValue(), card.includes("44.80")], ["1", true]);
+        [await page.locator("[data-invoice-item]").first().getByLabel("Quantity").inputValue(), (await inputValues(page.locator("[data-invoice-item]").first())).filter((v) => v.startsWith("₹"))], ["1", ["₹44.80"]]);
       check("pharmacist-390 bill from the older prescription: no page overflow", await overflow(page), 0);
       await shot(page, "pharmacist-390-05-older-prescription-bill");
       check("pharmacist-390 loading: no console error or refused call", [seen.errors, seen.refused], [[], []]);
