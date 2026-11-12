@@ -282,6 +282,26 @@ it('keeps tele-video metadata in preview, print, PDF, WhatsApp and Email, and re
   }
 });
 
+it.each([false, true])('prints Diagnosis only once one is entered (space-optimized: %j)', async (spaceOptimized) => {
+  paginateSourceContent = true;
+  render(<PrescriptionBuilder patientId={`diagnosis-${spaceOptimized}`} visitId={null} doctorId="d1" />);
+  await openPreview();
+  if (spaceOptimized) fireEvent.click(screen.getByRole('checkbox', { name: 'Space-optimized layout' }));
+  await settlePreviewPagination();
+  const printed = () => document.querySelector('#prescription-print-root [data-print-diagnosis]');
+  const diagnosisInput = () => document.querySelector('input[aria-label="Diagnosis"]')!;
+  expect(printed()).toBeNull();
+  expect(document.getElementById('prescription-print-root')).not.toHaveTextContent('Diagnosis:');
+
+  fireEvent.change(diagnosisInput(), { target: { value: 'Acne vulgaris' } });
+  await settlePreviewPagination();
+  expect(printed()).toHaveTextContent(/^Diagnosis:\s*Acne vulgaris$/);
+
+  fireEvent.change(diagnosisInput(), { target: { value: '   ' } });
+  await settlePreviewPagination();
+  expect(printed()).toBeNull();
+});
+
 function pxToMm(px: number): number {
   // Component rounds to 0.1mm: Math.round((px/3.78)*10)/10
   return Math.round((px / 3.78) * 10) / 10;
