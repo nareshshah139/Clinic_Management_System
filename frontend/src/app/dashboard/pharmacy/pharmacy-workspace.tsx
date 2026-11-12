@@ -239,10 +239,10 @@ function PharmacyDeskPanel({
   return (
     <div className="space-y-3">
       <section className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-white shadow-sm">
-        <div className="grid gap-2 xl:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)_auto] xl:items-center">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <PageHeader title="Pharmacy Desk" />
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <PageHeader title="Pharmacy Desk" titleClassName="text-xl leading-7 text-white sm:text-2xl sm:leading-8" />
               <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-100">
                 Command center
               </span>
@@ -252,42 +252,7 @@ function PharmacyDeskPanel({
             </p>
           </div>
 
-          {sells ? (
-            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricStrip
-                label="Sales"
-                value={`₹${todaySales.toFixed(2)}`}
-                detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`}
-                icon={<DollarSign className="h-4 w-4" />}
-                intent="green"
-              />
-              <MetricStrip
-                label="Invoices"
-                value={invoicesToday}
-                detail={`${pendingInvoices} pending`}
-                icon={<Receipt className="h-4 w-4" />}
-                intent="blue"
-              />
-              <MetricStrip
-                label="Stock"
-                value={totalDrugs}
-                detail={`${lowStockDrugs} low`}
-                icon={<Pill className="h-4 w-4" />}
-                intent="purple"
-              />
-              <MetricStrip
-                label="Packages"
-                value={packagesCount}
-                detail="bundles"
-                icon={<Package className="h-4 w-4" />}
-                intent="amber"
-              />
-            </div>
-          ) : (
-            <div />
-          )}
-
-          <div className="flex flex-wrap justify-start gap-1.5 xl:justify-end">
+          <div className="flex flex-wrap justify-start gap-1.5 sm:justify-end">
             <PharmacyGuide />
             {sells && (
               <Button
@@ -325,6 +290,39 @@ function PharmacyDeskPanel({
           </div>
         </div>
 
+        {sells && (
+          <div className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricStrip
+              label="Sales"
+              value={`₹${todaySales.toFixed(2)}`}
+              detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`}
+              icon={<DollarSign className="h-4 w-4" />}
+              intent="green"
+            />
+            <MetricStrip
+              label="Invoices"
+              value={invoicesToday}
+              detail={`${pendingInvoices} pending`}
+              icon={<Receipt className="h-4 w-4" />}
+              intent="blue"
+            />
+            <MetricStrip
+              label="Stock"
+              value={totalDrugs}
+              detail={`${lowStockDrugs} low`}
+              icon={<Pill className="h-4 w-4" />}
+              intent="purple"
+            />
+            <MetricStrip
+              label="Packages"
+              value={packagesCount}
+              detail="bundles"
+              icon={<Package className="h-4 w-4" />}
+              intent="amber"
+            />
+          </div>
+        )}
+
         <div className={`mt-2 grid gap-1.5 ${sells ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
           <QuickAction
             icon={<ClipboardCheck className="h-4 w-4" />}
@@ -355,10 +353,8 @@ function PharmacyDeskPanel({
         <AgenticPharmacyLauncher onOpen={onOpenAgent} />
       )}
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        <PartnerDailySync />
-        <PackagesPanel />
-      </div>
+      <PartnerDailySync />
+      <PackagesPanel />
     </div>
   );
 }

@@ -314,9 +314,10 @@ export function PartnerDailySync() {
     }
   };
 
+  // Laid out by its own width (container queries), not the viewport: the desk can give it less than the full page.
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="@container/partner space-y-6">
+      <div className="flex flex-col gap-3 @sm/partner:flex-row @sm/partner:items-center @sm/partner:justify-between">
         <div>
           <h2 className="text-2xl font-semibold tracking-normal">
             Partner Daily Sync
@@ -340,7 +341,7 @@ export function PartnerDailySync() {
         </Alert>
       )}
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 @2xl/partner:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Partners</CardDescription>
@@ -367,14 +368,14 @@ export function PartnerDailySync() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-        <Card>
+      <div className="grid grid-cols-1 gap-6 @5xl/partner:grid-cols-[minmax(0,1fr)_20rem]">
+        <Card className="@container/entry min-w-0">
           <CardHeader>
             <CardTitle>Manual Daily Entry</CardTitle>
             <CardDescription>{displayCalendarDate(date)}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 @sm/entry:grid-cols-2 @2xl/entry:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)]">
               <div className="space-y-2">
                 <Label htmlFor="partner-date">Date</Label>
                 <Input
@@ -417,126 +418,131 @@ export function PartnerDailySync() {
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[180px]">Medicine</TableHead>
-                    <TableHead className="min-w-[120px]">Batch</TableHead>
-                    <TableHead className="w-[96px]">Qty</TableHead>
-                    <TableHead className="w-[120px]">MRP</TableHead>
-                    <TableHead className="w-[120px]">Discount</TableHead>
-                    <TableHead className="w-[130px]">Payment</TableHead>
-                    <TableHead className="w-[52px]" />
+            {/* Owns its cell spacing (the global main th/td padding would squeeze the inputs); the
+                inputs' min widths keep each column usable, and the table scrolls in its own box when narrower. */}
+            <Table data-own-cell-spacing className="[&_td]:px-2 [&_td]:py-2 [&_th]:h-10 [&_th]:px-2">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Medicine</TableHead>
+                  <TableHead>Batch</TableHead>
+                  <TableHead className="w-24">Qty</TableHead>
+                  <TableHead className="w-28">MRP</TableHead>
+                  <TableHead className="w-28">Discount</TableHead>
+                  <TableHead className="w-32">Payment</TableHead>
+                  <TableHead className="w-12" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.localId}>
+                    <TableCell>
+                      <Input
+                        value={item.medicineName}
+                        onChange={(event) =>
+                          updateItem(
+                            item.localId,
+                            'medicineName',
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Medicine name"
+                        className="min-w-40"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={item.batchNumber}
+                        onChange={(event) =>
+                          updateItem(
+                            item.localId,
+                            'batchNumber',
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Batch"
+                        className="min-w-24"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="1"
+                        className="min-w-16"
+                        value={item.quantitySold}
+                        onChange={(event) =>
+                          updateItem(
+                            item.localId,
+                            'quantitySold',
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="0"
+                        className="min-w-20"
+                        value={item.mrp}
+                        onChange={(event) =>
+                          updateItem(item.localId, 'mrp', event.target.value)
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="0"
+                        className="min-w-20"
+                        value={item.discountGiven}
+                        onChange={(event) =>
+                          updateItem(
+                            item.localId,
+                            'discountGiven',
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={item.paymentMode}
+                        onValueChange={(value: string) =>
+                          updateItem(
+                            item.localId,
+                            'paymentMode',
+                            value as PaymentMode,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="min-w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CASH">Cash</SelectItem>
+                          <SelectItem value="CARD">Card</SelectItem>
+                          <SelectItem value="UPI">UPI</SelectItem>
+                          <SelectItem value="BNPL">BNPL</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeItem(item.localId)}
+                        disabled={items.length === 1}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((item) => (
-                    <TableRow key={item.localId}>
-                      <TableCell>
-                        <Input
-                          value={item.medicineName}
-                          onChange={(event) =>
-                            updateItem(
-                              item.localId,
-                              'medicineName',
-                              event.target.value,
-                            )
-                          }
-                          placeholder="Medicine name"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          value={item.batchNumber}
-                          onChange={(event) =>
-                            updateItem(
-                              item.localId,
-                              'batchNumber',
-                              event.target.value,
-                            )
-                          }
-                          placeholder="Batch"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={item.quantitySold}
-                          onChange={(event) =>
-                            updateItem(
-                              item.localId,
-                              'quantitySold',
-                              event.target.value,
-                            )
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={item.mrp}
-                          onChange={(event) =>
-                            updateItem(item.localId, 'mrp', event.target.value)
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={item.discountGiven}
-                          onChange={(event) =>
-                            updateItem(
-                              item.localId,
-                              'discountGiven',
-                              event.target.value,
-                            )
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={item.paymentMode}
-                          onValueChange={(value: string) =>
-                            updateItem(
-                              item.localId,
-                              'paymentMode',
-                              value as PaymentMode,
-                            )
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="CASH">Cash</SelectItem>
-                            <SelectItem value="CARD">Card</SelectItem>
-                            <SelectItem value="UPI">UPI</SelectItem>
-                            <SelectItem value="BNPL">BNPL</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeItem(item.localId)}
-                          disabled={items.length === 1}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 @sm/entry:flex-row @sm/entry:items-center @sm/entry:justify-between">
               <Button
                 type="button"
                 variant="outline"
