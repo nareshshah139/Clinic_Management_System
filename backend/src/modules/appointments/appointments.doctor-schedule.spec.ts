@@ -8,9 +8,11 @@ describe('AppointmentsService.getDoctorSchedule', () => {
   let service: AppointmentsService;
   const branchId = 'branch-1';
 
+  const nurse = { id: 'nurse-1', role: 'NURSE' };
   const prismaMock: any = {
     user: { findFirst: jest.fn() },
     appointment: { findMany: jest.fn() },
+    visit: { findMany: jest.fn().mockResolvedValue([]) },
   };
 
   beforeEach(async () => {
@@ -28,17 +30,17 @@ describe('AppointmentsService.getDoctorSchedule', () => {
 
   it('throws NotFound if doctor missing', async () => {
     prismaMock.user.findFirst.mockResolvedValue(null);
-    await expect(service.getDoctorSchedule('doc-1', '2099-01-01', branchId)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.getDoctorSchedule('doc-1', '2099-01-01', branchId, nurse)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('returns ordered appointments with doctor name', async () => {
     prismaMock.user.findFirst.mockResolvedValue({ id: 'doc-1', firstName: 'Do', lastName: 'Ctor' });
     prismaMock.appointment.findMany.mockResolvedValue([
-      { slot: '10:00-10:30', status: 'SCHEDULED' },
-      { slot: '11:00-11:30', status: 'CHECKED_IN' },
+      { id: 'a1', patientId: 'p1', visitType: 'OPD', slot: '10:00-10:30', status: 'SCHEDULED' },
+      { id: 'a2', patientId: 'p2', visitType: 'PROCEDURE', slot: '11:00-11:30', status: 'CHECKED_IN' },
     ]);
 
-    const result = await service.getDoctorSchedule('doc-1', '2099-01-01', branchId);
+    const result = await service.getDoctorSchedule('doc-1', '2099-01-01', branchId, nurse);
     expect(result.doctorId).toBe('doc-1');
     expect(result.doctorName).toBe('Do Ctor');
     // Ensure the query requested ascending slot order
@@ -49,6 +51,8 @@ describe('AppointmentsService.getDoctorSchedule', () => {
     );
     expect(result.appointments[0].slot).toBe('10:00-10:30');
     expect(result.appointments.map((a) => a.calendar)).toEqual(['SCHEDULED', 'CONFIRMED']);
+    expect(result.appointments.map((a) => a.billType)).toEqual(['FIRST_CONSULTATION', 'PROCEDURE']);
+    expect(result.billingAccess).toEqual({ read: false, createBill: false, takePayment: false, editFees: false });
     expect(prismaMock.appointment.findMany.mock.calls[0][0].where.status).toEqual({ not: 'CANCELLED' });
   });
 });

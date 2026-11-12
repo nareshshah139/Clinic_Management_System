@@ -72,7 +72,7 @@ it('saves all parent-form sections together, including independent subjective an
   localStorage.setItem('clinic:visit-draft:d:p:visit-v', JSON.stringify({ version: 1, visitId: 'v', data: {
     complaints: ['Complaint'], subjective: 'Subjective narrative', objective: 'Objective narrative', assessment: 'Assessment narrative', plan: 'Treatment narrative',
     vitals: { bpS: '120', bpD: '80', hr: '72', temp: '98.6', weight: '60', height: '160', spo2: '99', rr: '16' },
-    skinConcerns: ['Dryness'], painScore: '0', skinType: 'III', morphology: ['Papules'], distribution: ['Face'], acneSeverity: 'Mild', itchScore: '0', triggers: 'Sun', priorTx: 'Prior cream', dermDx: ['Diagnosis'],
+    skinConcerns: ['Dryness'], painScore: '0', skinType: 'III', morphology: ['Papules'], distribution: ['Face'], acneSeverity: 'Mild', itchScore: '0', dermDx: ['Diagnosis'],
     procType: 'Laser', fluence: '12', spotSize: '4', passes: '2', topicals: 'Topical plan', systemics: 'Systemic plan', counseling: 'Advice', reviewDate: '2026-10-01',
     labSelections: ['CBC'], labResults: { CBC: { value: '12', unit: 'g/dL', notes: 'Result note' } }, completedSections: [],
   } }));
@@ -82,7 +82,7 @@ it('saves all parent-form sections together, including independent subjective an
   expect(payload).toMatchObject({
     complaints: [{ complaint: 'Complaint' }], history: { subjective: 'Subjective narrative' }, scribeJson: { assessment: 'Assessment narrative' },
     vitals: { systolicBP: 120, diastolicBP: 80, heartRate: 72, temperature: 37, weight: 60, height: 160, oxygenSaturation: 99, respiratoryRate: 16 },
-    examination: { generalAppearance: 'Objective narrative', dermatology: { skinType: 'III', morphology: ['Papules'], distribution: ['Face'], acneSeverity: 'Mild', itchScore: 0, painScore: 0, triggers: 'Sun', priorTreatments: 'Prior cream', skinConcerns: ['Dryness'] } },
+    examination: { generalAppearance: 'Objective narrative', dermatology: { skinType: 'III', morphology: ['Papules'], distribution: ['Face'], acneSeverity: 'Mild', itchScore: 0, painScore: 0, skinConcerns: ['Dryness'] } },
     diagnosis: [{ diagnosis: 'Diagnosis' }], treatmentPlan: { notes: 'Treatment narrative', followUpDate: '2026-10-01', dermatology: { procedures: [{ type: 'Laser', fluence: 12, spotSize: 4, passes: 2 }], medications: { topicals: 'Topical plan', systemics: 'Systemic plan' }, counseling: 'Advice', investigations: ['CBC'], labResults: { CBC: { value: '12', unit: 'g/dL', notes: 'Result note' } } } },
   });
 });

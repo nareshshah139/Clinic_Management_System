@@ -486,6 +486,40 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
     expect(report.canRecordCount).toBe(true);
   });
 
+  it('adds the clinic’s consultation and procedure takings and the whole day for a doctor, and not for a pharmacist', async () => {
+    const clinicBill = (id: string, branchId: string, createdAt: string, total: number, payments: [string, number, string][], status = 'DRAFT') =>
+      db.newInvoice.create({
+        data: {
+          id, invoiceNo: id, branchId, patientId: `patient-${branchId}`, total, balance: total, status, createdAt: new Date(createdAt),
+          payments: { create: payments.map(([mode, amount, at]) => ({ mode: mode as any, amount, reconStatus: 'COMPLETED', createdAt: new Date(at) })) },
+        },
+      });
+    await clinicBill('INV-C1', 'branch', '2026-11-05T04:00:00Z', 500, [['CASH', 500, '2026-11-05T04:05:00Z']]);
+    await clinicBill('INV-C2', 'branch', '2026-11-05T05:00:00Z', 800, [['UPI', 300, '2026-11-05T05:05:00Z']]);
+    await clinicBill('INV-C3', 'branch', '2026-11-04T05:00:00Z', 1000, [['CARD', 200, '2026-11-04T05:05:00Z'], ['CARD', 800, '2026-11-05T06:00:00Z']]);
+    await clinicBill('INV-C4', 'branch', '2026-11-05T07:00:00Z', 900, [], 'CANCELLED');
+    // 00:30 on 6 Nov in the clinic's time zone.
+    await clinicBill('INV-C5', 'branch', '2026-11-05T19:00:00Z', 700, [['CASH', 700, '2026-11-05T19:00:00Z']]);
+    await clinicBill('INV-O1', 'other-branch', '2026-11-05T04:00:00Z', 999, [['CASH', 999, '2026-11-05T04:00:00Z']]);
+
+    const doctor = await reports.dailyCollection('2026-11-05', { branchId: 'branch', id: 'doc', role: 'DOCTOR' });
+    expect(doctor.clinic!.modes.map((m) => [m.mode, m.net])).toEqual([['CASH', 500], ['UPI', 300], ['CARD', 800]]);
+    expect([doctor.clinic!.billCount, doctor.clinic!.billed, doctor.clinic!.dueAtDayEnd, doctor.clinic!.net]).toEqual([2, 1300, 500, 1600]);
+    expect(doctor.wholeDay!.modes.map((m) => [m.mode, m.clinic, m.pharmacy, m.total])).toEqual([
+      ['CASH', 500, 112, 612],
+      ['UPI', 300, 224, 524],
+      ['CARD', 800, 112, 912],
+    ]);
+    expect([doctor.wholeDay!.total, doctor.headline]).toEqual([2048, { label: 'Whole day', value: 2048 }]);
+    expect(doctor.sections.map((s) => s.id)).toEqual(['whole-day', 'clinic-modes', 'clinic-bills', 'modes', 'billing', 'documents']);
+    expect(doctor.sections[2].rows.map((r) => r.cells.number)).toEqual(['INV-C3', 'INV-C1', 'INV-C2']);
+    expect(doctor.collection.expectedTotal).toBe(448);
+
+    const pharmacist = await reports.dailyCollection('2026-11-05', actor);
+    expect([pharmacist.clinic, pharmacist.wholeDay, pharmacist.headline]).toEqual([null, null, { label: 'Pharmacy expected in hand', value: 448 }]);
+    expect(pharmacist.sections.map((s) => s.id)).toEqual(['modes', 'billing', 'documents']);
+  });
+
   it('takes a cash refund on Tuesday for Monday’s revised bill out of Tuesday’s expected cash', async () => {
     await db.pharmacyInvoice.create({
       data: {
@@ -685,7 +719,7 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
     await expect(
       reports.recordCount(
         '2026-11-04',
-        { counted: { CHEQUE: 1 }, basedOnSequence: 0 },
+        { counted: { BITCOIN: 1 }, basedOnSequence: 0 },
         actor,
         now,
       ),

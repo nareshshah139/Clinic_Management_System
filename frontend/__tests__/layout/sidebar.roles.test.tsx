@@ -2,7 +2,9 @@ import { render, screen, within } from '@testing-library/react';
 import { Sidebar } from '@/components/layout/sidebar';
 
 let mockRole = 'PHARMACIST';
-jest.mock('next/navigation', () => ({ usePathname: () => '/dashboard', useSearchParams: () => new URLSearchParams() }));
+let mockPath = '/dashboard';
+let mockQuery = '';
+jest.mock('next/navigation', () => ({ usePathname: () => mockPath, useSearchParams: () => new URLSearchParams(mockQuery) }));
 jest.mock('@/components/layout/dashboard-user-context', () => ({
   useDashboardUser: () => ({ user: { id: 'u', firstName: 'Asha', lastName: 'Rao', role: mockRole }, logout: jest.fn(), loading: false }),
 }));
@@ -37,4 +39,53 @@ it.each([
 ])('leaves %s with its other Pharmacy entries', (role, expected) => {
   mockRole = role;
   expect(pharmacyLinks()).toEqual(expected);
+});
+
+describe('Daily Collection in the main menu', () => {
+  afterEach(() => {
+    mockPath = '/dashboard';
+    mockQuery = '';
+  });
+
+  it.each([
+    ['OWNER', true], ['ADMIN', true], ['MANAGER', true], ['DOCTOR', true], ['PHARMACIST', true], ['ACCOUNTANT', true],
+    ['RECEPTION', false], ['NURSE', false],
+  ])('is offered to %s: %s, exactly the roles that can open the report', (role, shown) => {
+    mockRole = role as string;
+    render(<Sidebar />);
+    const link = within(screen.getByRole('navigation', { name: 'Main navigation' })).queryByRole('link', { name: 'Daily Collection' });
+    expect(link?.getAttribute('href') ?? null).toBe(shown ? '/dashboard/pharmacy/reports?report=daily-collection' : null);
+  });
+
+  it('sits under Overview, right after Dashboard', () => {
+    mockRole = 'ADMIN';
+    render(<Sidebar />);
+    const texts = Array.from(screen.getByRole('navigation', { name: 'Main navigation' }).querySelectorAll('p, a')).map((el) => el.textContent);
+    expect(texts.slice(0, 3)).toEqual(['Overview', 'Dashboard', 'Daily Collection']);
+  });
+
+  it('marks Daily Collection, not Pharmacy Report, as the current page on the daily collection report only', () => {
+    mockRole = 'DOCTOR';
+    mockPath = '/dashboard/pharmacy/reports';
+    mockQuery = 'report=daily-collection&from=2026-11-11';
+    const { unmount } = render(<Sidebar />);
+    const current = () => within(screen.getByRole('navigation', { name: 'Main navigation' })).getAllByRole('link').filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.textContent);
+    expect(current()).toEqual(['Daily Collection']);
+    unmount();
+    mockQuery = 'report=gstr-1';
+    render(<Sidebar />);
+    expect(current()).toEqual(['Pharmacy Report']);
+  });
+});
+
+it.each([
+  ['OWNER', ['Dashboard', 'Daily Collection', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Pharmacy Report', 'Reports', 'Users', 'Fee list', 'Test Transcribe']],
+  ['MANAGER', ['Dashboard', 'Daily Collection', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Inventory', 'Pharmacy Report', 'Reports', 'Users']],
+  ['NURSE', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Rooms']],
+  ['RECEPTION', ['Dashboard', 'Patients', 'Appointments', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],
+  ['ACCOUNTANT', ['Dashboard', 'Daily Collection', 'Pharmacy Report']],
+])('gives %s only pages its grants open, so no page refuses it on load', (role, expected) => {
+  mockRole = role as string;
+  render(<Sidebar />);
+  expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getAllByRole('link').map((a) => a.textContent)).toEqual(expected);
 });

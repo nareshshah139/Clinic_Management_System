@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { DoctorPatientPanels } from '@/components/dashboard/DoctorPatientPanels';
 import { formatPatientName, getISTDateString } from '@/lib/utils';
+import { APPOINTMENT_READ_ROLES } from '@/lib/appointment-access';
 
 type LoadFailure = 'forbidden' | 'unavailable';
 
@@ -46,6 +47,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [backupLoading, setBackupLoading] = useState(false);
   const { user: currentUser, loading: userLoading } = useDashboardUser();
+  const readsAppointments = APPOINTMENT_READ_ROLES.includes(currentUser?.role ?? '');
   const router = useRouter();
 
   const showAdminControls = useMemo(() => {
@@ -165,7 +167,7 @@ export default function DashboardPage() {
           console.warn('Unable to load system statistics', error);
         }
 
-        await Promise.all([loadAlerts(), loadTodaysAppointments()]);
+        await Promise.all([loadAlerts(), readsAppointments ? loadTodaysAppointments() : undefined]);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         // Set fallback data on error
@@ -181,7 +183,7 @@ export default function DashboardPage() {
     };
 
     void fetchDashboardData();
-  }, [loadAlerts, loadTodaysAppointments, userLoading]);
+  }, [loadAlerts, loadTodaysAppointments, readsAppointments, userLoading]);
 
   const handleBackup = async () => {
     try {
@@ -393,61 +395,62 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Today's Appointments */}
-        <Card data-tour="appointments-list">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Clock className="h-5 w-5 text-blue-500 mr-2" />
-              Today&apos;s Appointments
-            </CardTitle>
-            <CardDescription>
-              Upcoming appointments for today
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {appointmentsFailure ? (
-              <LoadFailureState failure={appointmentsFailure} subject="today's appointments" onRetry={() => void loadTodaysAppointments()} />
-            ) : todaysAppointments.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No appointments scheduled for today</p>
-            ) : (
-              <div className="space-y-3">
-                {todaysAppointments.map((appointment, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {formatPatientName(appointment.patient)}
-                      </p>
-                      <p className="text-xs text-gray-600">
-                        {appointment.slot}
-                      </p>
+        {readsAppointments && (
+          <Card data-tour="appointments-list">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Clock className="h-5 w-5 text-blue-500 mr-2" />
+                Today&apos;s Appointments
+              </CardTitle>
+              <CardDescription>
+                Upcoming appointments for today
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {appointmentsFailure ? (
+                <LoadFailureState failure={appointmentsFailure} subject="today's appointments" onRetry={() => void loadTodaysAppointments()} />
+              ) : todaysAppointments.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">No appointments scheduled for today</p>
+              ) : (
+                <div className="space-y-3">
+                  {todaysAppointments.map((appointment, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {formatPatientName(appointment.patient)}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {appointment.slot}
+                        </p>
+                      </div>
+                      <Badge variant={
+                        appointment.status === 'CONFIRMED' 
+                          ? 'default' 
+                          : appointment.status === 'IN_PROGRESS'
+                          ? 'warning'
+                          : appointment.status === 'COMPLETED'
+                          ? 'default'
+                          : 'outline'
+                      }>
+                        {appointment.status}
+                      </Badge>
                     </div>
-                    <Badge variant={
-                      appointment.status === 'CONFIRMED' 
-                        ? 'default' 
-                        : appointment.status === 'IN_PROGRESS'
-                        ? 'warning'
-                        : appointment.status === 'COMPLETED'
-                        ? 'default'
-                        : 'outline'
-                    }>
-                      {appointment.status}
-                    </Badge>
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  className="w-full mt-4"
-                  onClick={() => router.push('/dashboard/appointments')}
-                >
-                  View All Appointments
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                  <Button
+                    variant="outline"
+                    className="w-full mt-4"
+                    onClick={() => router.push('/dashboard/appointments')}
+                  >
+                    View All Appointments
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

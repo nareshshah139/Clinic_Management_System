@@ -11,6 +11,7 @@ import { InventoryWorkflowController } from './inventory-workflow.controller';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { InventoryWorkspaceService } from './inventory-workspace.service';
 import { InventoryReconciliationService } from './reconciliation/inventory-reconciliation.service';
+import { InventoryOptimizationService } from './stock-optimization.service';
 import { Module } from '@nestjs/common';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
@@ -22,7 +23,7 @@ import { PrismaModule } from '../../shared/database/prisma.module';
 @Module({
   imports: [PrismaModule, PharmacyModule],
   controllers: [InventoryItemRequestController, InventoryStocktakeController, InventoryPurchaseActionsController, InventoryController, InventoryWorkflowController],
-  providers: [InventoryItemRequestService, InventoryIdentityRecoveryService, InventoryPurchaseActionsService, InventoryReplenishmentService, InventoryService, InventoryImportService, InventoryWorkflowService, InventoryWorkspaceService, InventoryWorkflowScheduler, InventoryIntakeService, InventoryLabelService, InventoryReconciliationService],
+  providers: [InventoryItemRequestService, InventoryIdentityRecoveryService, InventoryPurchaseActionsService, InventoryReplenishmentService, InventoryService, InventoryImportService, InventoryWorkflowService, InventoryWorkspaceService, InventoryWorkflowScheduler, InventoryIntakeService, InventoryLabelService, InventoryReconciliationService, InventoryOptimizationService],
   exports: [InventoryService, InventoryItemRequestService],
 })
 export class InventoryModule {}

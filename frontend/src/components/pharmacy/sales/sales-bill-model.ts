@@ -50,6 +50,7 @@ type SavedInvoiceLine = Omit<BillLineInput, 'drugId' | 'inventoryItemId' | 'pack
   frequency: string | null;
   duration: string | null;
   instructions: string | null;
+  name?: string | null;
   drug: { id: string; name: string; manufacturerName?: string | null; packSizeLabel?: string | null } | null;
   package: {
     id: string;
@@ -147,15 +148,15 @@ export function billPayload(fields: BillFields, lines: BillLineInput[], billDisc
   };
 }
 
-type DraftLine = BillLineInput & { drug?: { name?: string }; package?: { name?: string } };
+type DraftLine = BillLineInput & { name?: string | null; drug?: { name?: string }; package?: { name?: string } };
 
 export function draftProblem(fields: BillFields, lines: DraftLine[]): string | null {
   if (!fields.patientId) return 'Select a patient before saving the draft.';
   if (!lines.length) return 'Add at least one medicine before saving the draft.';
   const unmatched = lines.find((line) => line.itemType === 'DRUG' && (!line.drugId || line.drugId.startsWith('temp_')));
-  if (unmatched) return `Choose a stocked product for ${unmatched.drug?.name ?? 'the unmatched medicine'} or remove it before saving the draft.`;
+  if (unmatched) return `Choose a stocked product for ${unmatched.name || unmatched.drug?.name || 'the unmatched medicine'} or remove it before saving the draft.`;
   const noGst = lines.find((line) => line.taxPercent === null);
-  if (noGst) return `Enter Tax % for ${noGst.drug?.name ?? noGst.package?.name ?? 'every item'} before saving the draft.`;
+  if (noGst) return `Enter Tax % for ${noGst.name || noGst.drug?.name || noGst.package?.name || 'every item'} before saving the draft.`;
   return null;
 }
 

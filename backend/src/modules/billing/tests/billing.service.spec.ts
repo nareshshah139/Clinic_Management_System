@@ -3,7 +3,8 @@ import { BadRequestException, NotFoundException, ConflictException } from '@nest
 import { BillingService } from '../billing.service';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { InvoiceNumbersService } from '../../../shared/numbering/invoice-numbers.service';
-import { InvoiceStatus, PaymentMethod, PaymentStatus } from '../dto/invoice.dto';
+import { PaymentMode } from '@prisma/client';
+import { InvoiceStatus, PaymentStatus } from '../dto/invoice.dto';
 
 describe('BillingService', () => {
   let service: BillingService;
@@ -361,7 +362,7 @@ describe('BillingService', () => {
       const paymentDto = {
         invoiceId: 'invoice-123',
         amount: 500,
-        method: PaymentMethod.CASH,
+        method: PaymentMode.CASH,
         transactionId: 'TXN-123',
         notes: 'Cash payment',
       };
@@ -416,7 +417,7 @@ describe('BillingService', () => {
       const paymentDto = {
         invoiceId: 'invoice-123',
         amount: 600,
-        method: PaymentMethod.CASH,
+        method: PaymentMode.CASH,
       };
 
       const mockInvoice = {
@@ -496,7 +497,7 @@ describe('BillingService', () => {
         id: 'payment-123',
         invoiceId: 'invoice-123',
         amount: 500,
-        mode: PaymentMethod.CASH,
+        mode: PaymentMode.CASH,
         reconStatus: 'COMPLETED',
         invoice: { id: 'invoice-123' },
       } as any;
@@ -505,7 +506,7 @@ describe('BillingService', () => {
         id: 'payment-refund-1',
         invoiceId: 'invoice-123',
         amount: -100,
-        mode: PaymentMethod.CASH,
+        mode: PaymentMode.CASH,
         reconStatus: 'COMPLETED',
       } as any;
 
@@ -523,7 +524,7 @@ describe('BillingService', () => {
         data: expect.objectContaining({
           invoiceId: 'invoice-123',
           amount: -100,
-          mode: PaymentMethod.CASH,
+          mode: PaymentMode.CASH,
           reconStatus: 'COMPLETED',
         }),
         include: expect.any(Object),
@@ -567,8 +568,8 @@ describe('BillingService', () => {
         totalAmount: 10000,
         paymentCount: 20,
         methodBreakdown: [
-          { method: PaymentMethod.CASH, amount: 5000, count: 10 },
-          { method: PaymentMethod.UPI, amount: 5000, count: 10 },
+          { method: PaymentMode.CASH, amount: 5000, count: 10 },
+          { method: PaymentMode.UPI, amount: 5000, count: 10 },
         ],
         dailyBreakdown: [
           { date: new Date('2024-12-01'), amount: 1000, count: 2 },
@@ -584,8 +585,8 @@ describe('BillingService', () => {
       mockPrisma.payment.count.mockResolvedValue(20);
       mockPrisma.payment.groupBy
         .mockResolvedValueOnce([
-          { method: PaymentMethod.CASH, _sum: { amount: 5000 }, _count: { id: 10 } },
-          { method: PaymentMethod.UPI, _sum: { amount: 5000 }, _count: { id: 10 } },
+          { method: PaymentMode.CASH, _sum: { amount: 5000 }, _count: { id: 10 } },
+          { method: PaymentMode.UPI, _sum: { amount: 5000 }, _count: { id: 10 } },
         ])
         .mockResolvedValueOnce([
           { createdAt: new Date('2024-12-01'), _sum: { amount: 1000 }, _count: { id: 2 } },

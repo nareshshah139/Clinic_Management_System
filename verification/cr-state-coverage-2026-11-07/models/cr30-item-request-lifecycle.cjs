@@ -270,7 +270,7 @@ const driver = {
     shared.existingSku = `CR30-EXIST-${stamp}`;
     shared.existingName = `CR30 Existing ${stamp}`;
     const r = await api({ apiUrl, shared }, "admin", "POST", "/inventory/items", {
-      name: shared.existingName, type: "MEDICINE", costPrice: 5, sellingPrice: 6, unit: "PIECES", sku: shared.existingSku,
+      name: shared.existingName, type: "MEDICINE", form: "OTHER", costPrice: 5, sellingPrice: 6, unit: "PIECES", sku: shared.existingSku,
     });
     if (r.status !== 201) throw Error(`fixture item: ${r.status} ${JSON.stringify(r.body)}`);
     const XLSX = require(path.resolve(__dirname, "../../../node_modules/xlsx"));
@@ -328,7 +328,7 @@ const driver = {
     },
     doctorOpensDuplicateRequest: async (ctx) => {
       const other = await api(ctx, "pharmacist", "POST", "/inventory/items", {
-        name: ctx.vars.dupOtherName, type: "MEDICINE", costPrice: 8, sellingPrice: 9, unit: "PIECES", sku: `${ctx.vars.sku}-B`,
+        name: ctx.vars.dupOtherName, type: "MEDICINE", form: "OTHER", costPrice: 8, sellingPrice: 9, unit: "PIECES", sku: `${ctx.vars.sku}-B`,
       });
       if (other.status !== 202) throw Error(`pharmacist request: ${other.status} ${JSON.stringify(other.body)}`);
       await as(ctx, "doctor");
@@ -338,8 +338,8 @@ const driver = {
     otherRequestTakesSku: async (ctx) => {
       const sku = `${ctx.vars.sku}-SHARED`;
       ctx.vars.collisionName = `CR30 Collide ${ctx.pathIndex}${Math.random().toString(36).slice(2, 6)}`;
-      const first = await api(ctx, "staff", "POST", "/inventory/items", { name: `${ctx.vars.collisionName} first`, type: "MEDICINE", costPrice: 1, sellingPrice: 2, unit: "PIECES", sku });
-      const second = await api(ctx, "staff", "POST", "/inventory/items", { name: ctx.vars.collisionName, type: "MEDICINE", costPrice: 1, sellingPrice: 2, unit: "PIECES", sku });
+      const first = await api(ctx, "staff", "POST", "/inventory/items", { name: `${ctx.vars.collisionName} first`, type: "MEDICINE", form: "OTHER", costPrice: 1, sellingPrice: 2, unit: "PIECES", sku });
+      const second = await api(ctx, "staff", "POST", "/inventory/items", { name: ctx.vars.collisionName, type: "MEDICINE", form: "OTHER", costPrice: 1, sellingPrice: 2, unit: "PIECES", sku });
       if (first.status !== 202 || second.status !== 202) throw Error(`collision fixtures: ${first.status}/${second.status}`);
       const approved = await api(ctx, "admin", "POST", `/inventory/item-requests/${first.body.request.id}/approve`, {});
       if (approved.status !== 200) throw Error(`approve first: ${approved.status}`);

@@ -1,6 +1,8 @@
 import { IsOptional, IsString, IsDateString, IsEnum, IsNumber, IsBoolean, IsInt, Min, Max } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { PaymentMode } from '@prisma/client';
+import { IsPaymentMode } from '../../billing/dto/payment-mode';
 import { ReportPeriod, ExportFormat } from './reports.dto';
 
 // Transform decorator for converting string "true"/"false" to boolean
@@ -84,10 +86,10 @@ export class QueryReportsDto {
 }
 
 export class RevenueQueryDto extends QueryReportsDto {
-  @ApiPropertyOptional({ description: 'Payment mode filter', example: 'CASH' })
+  @ApiPropertyOptional({ description: 'Payment mode filter', enum: PaymentMode, example: 'CASH' })
   @IsOptional()
-  @IsString()
-  paymentMode?: string;
+  @IsPaymentMode()
+  paymentMode?: PaymentMode;
 
   @ApiPropertyOptional({ description: 'Service type filter', example: 'Consultation' })
   @IsOptional()
@@ -298,10 +300,10 @@ export class InventoryQueryDto extends QueryReportsDto {
 }
 
 export class PaymentQueryDto extends QueryReportsDto {
-  @ApiPropertyOptional({ description: 'Payment mode filter', example: 'CASH' })
+  @ApiPropertyOptional({ description: 'Payment mode filter', enum: PaymentMode, example: 'CASH' })
   @IsOptional()
-  @IsString()
-  paymentMode?: string;
+  @IsPaymentMode()
+  paymentMode?: PaymentMode;
 
   @ApiPropertyOptional({ description: 'Payment gateway filter', example: 'Razorpay' })
   @IsOptional()

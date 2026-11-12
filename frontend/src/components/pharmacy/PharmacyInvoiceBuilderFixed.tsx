@@ -51,8 +51,9 @@ import {
 } from 'lucide-react';
 import { PrescriptionInventoryLink } from './PrescriptionInventoryLink';
 import { apiClient } from '@/lib/api';
-import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
+import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { billLineName, prescribedNameShown } from '@/lib/bill-line-name';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import { BillPricingError, priceBill, type BillDiscount } from '@/lib/bill-pricing';
 import { BillDiscountInput } from './sales/BillDiscountInput';
@@ -84,6 +85,7 @@ interface Drug {
   dosageForm?: string;
   strength?: string;
   totalStock?: number;
+  stockName?: string | null;
 }
 
 interface PharmacyPackage {
@@ -146,6 +148,7 @@ interface InvoiceItem {
   frequency?: string;
   duration?: string;
   instructions?: string;
+  name?: string;
   prescribedDrugName?: string;
   stockStatus?: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK' | 'CHECK_FAILED';
   availableStock?: number;
@@ -169,6 +172,7 @@ const checkoutStorageKey = 'pharmacy-checkout-attempt-v1';
 type PrescriptionStockItem = {
   prescriptionVersion?: string;
   inventoryItemId?: string;
+  stockName?: string;
   prescribedQuantity?: number | null;
   billingQuantity?: {
     quantity: number;
@@ -229,6 +233,7 @@ function savedLines(draft: SavedDraft): InvoiceItem[] {
       id: `saved_${line.id}`,
       itemType: line.itemType,
       drugId: line.drugId ?? undefined,
+      name: line.name ?? undefined,
       inventoryItemId: line.inventoryItemId ?? undefined,
       packageId: line.packageId ?? undefined,
       drug: line.drug ? { ...line.drug, price: line.unitPrice, manufacturerName: line.drug.manufacturerName ?? '', packSizeLabel: line.drug.packSizeLabel ?? '' } : undefined,
@@ -619,6 +624,7 @@ export function PharmacyInvoiceBuilderFixed({
               const invoiceItem: InvoiceItem = {
                 id: invoiceItemId,
                 drugId: reviewedDrug?.id,
+                name: substituted ? existingItem?.name : stock?.stockName || reviewedDrug?.stockName || undefined,
                 prescriptionLineIndex: index,
                 prescriptionVersion: stock?.prescriptionVersion,
                 inventoryItemId: substituted ? existingItem?.inventoryItemId : stock?.inventoryItemId,
@@ -949,19 +955,9 @@ export function PharmacyInvoiceBuilderFixed({
     }
 
     try {
-      const response = await apiClient.get('/drugs', {
-        search: query,
-        limit: 50, // Increased limit to get more results for better relevance sorting
-        isActive: true,
-      });
-      if (response && Array.isArray((response as any).data)) {
-        // Apply relevance-based sorting
-        const sortedResults = sortDrugsByRelevance(
-          (response as any).data,
-          query
-        );
-        // Take top 20 most relevant results
-        setSearchResults(sortedResults.slice(0, 20));
+      const response = await apiClient.get<Drug[]>('/drugs/autocomplete', { q: query, limit: 20 });
+      if (Array.isArray(response)) {
+        setSearchResults(response);
         setShowDrugSearchResults(true);
       } else {
         console.warn('Invalid drugs response format:', response);
@@ -1055,7 +1051,7 @@ export function PharmacyInvoiceBuilderFixed({
       return (
         <Badge
           variant="default"
-          className="text-xs ml-2 bg-green-100 text-green-800"
+          className="text-xs ml-2 whitespace-nowrap bg-green-100 text-green-800"
         >
           Best Match
         </Badge>
@@ -1064,7 +1060,7 @@ export function PharmacyInvoiceBuilderFixed({
       return (
         <Badge
           variant="secondary"
-          className="text-xs ml-2 bg-blue-100 text-blue-800"
+          className="text-xs ml-2 whitespace-nowrap bg-blue-100 text-blue-800"
         >
           High Match
         </Badge>
@@ -1082,7 +1078,7 @@ export function PharmacyInvoiceBuilderFixed({
       setItems(current => current.map(item => {
         if (item.id !== substitutingItemId) return item;
         const replacement: InvoiceItem = {
-          ...item, drugId: drug.id, drug, unitPrice: getDrugUnitPrice(drug),
+          ...item, drugId: drug.id, drug, name: drug.stockName || undefined, unitPrice: getDrugUnitPrice(drug),
           taxPercent: getDrugGstRate(drug), availableStock: drug.totalStock,
           inventoryItemId: undefined,
           substituted: true,
@@ -1111,6 +1107,7 @@ export function PharmacyInvoiceBuilderFixed({
       const newItem: InvoiceItem = {
         id: generateItemId(),
         drugId: drug.id,
+        name: drug.stockName || undefined,
         itemType: 'DRUG',
         drug,
         quantity: 1,
@@ -1664,10 +1661,7 @@ export function PharmacyInvoiceBuilderFixed({
           .join('')
       : itemsData
           .map((item) => {
-            const itemName =
-              item.itemType === 'PACKAGE'
-                ? item.package?.name || 'Unknown Package'
-                : item.drug?.name || 'Unknown Drug';
+            const itemName = billLineName(item);
 
             return `
         <tr>
@@ -2374,7 +2368,7 @@ export function PharmacyInvoiceBuilderFixed({
                     <div ref={drugSearchRef} className="space-y-2">
                       {substitutingItemId && (
                         <div role="status" className="flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-                          <span>Choose a replacement for {items.find(item => item.id === substitutingItemId)?.drug?.name}. The prescribed quantity will be kept.</span>
+                          <span>Choose a replacement for {billLineName(items.find(item => item.id === substitutingItemId) ?? {})}. The prescribed quantity will be kept.</span>
                           <Button variant="ghost" size="sm" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
                         </div>
                       )}
@@ -2416,12 +2410,12 @@ export function PharmacyInvoiceBuilderFixed({
                                 }
                               }}
                             >
-                              <div className="flex justify-between items-start gap-3">
-                                <div className="flex-1">
-                                  <div className="flex items-center">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-y-1">
                                     <h4 className="font-medium">
                                       {highlightMatch(
-                                        drug.name,
+                                        drug.stockName || drug.name,
                                         drugSearchQuery
                                       )}
                                     </h4>
@@ -2447,7 +2441,7 @@ export function PharmacyInvoiceBuilderFixed({
                                     </p>
                                   )}
                                 </div>
-                                <div className="flex shrink-0 items-start gap-3 text-right">
+                                <div className="flex shrink-0 items-start justify-between gap-3 text-right sm:justify-end">
                                   <div>
                                     <div className="font-semibold">
                                       ₹{getDrugUnitPrice(drug).toFixed(2)}
@@ -2569,7 +2563,7 @@ export function PharmacyInvoiceBuilderFixed({
                   <div className="space-y-4">
                     {items.map((item) => (
                       <Card key={item.id} data-invoice-item={item.id} className="p-4">
-                        <div className="flex justify-between items-start gap-2 mb-3">
+                        <div className="mb-3 flex flex-col-reverse gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               {isPrescriptionItem(item.id) && (
@@ -2585,11 +2579,7 @@ export function PharmacyInvoiceBuilderFixed({
                               ) : (
                                 <PackageIcon className="h-4 w-4 text-green-500" />
                               )}
-                              <h4 className="font-medium">
-                                {item.itemType === 'DRUG'
-                                  ? item.drug?.name
-                                  : item.package?.name}
-                              </h4>
+                              <h4 className="font-medium">{billLineName(item)}</h4>
                               {item.stockStatus === 'CHECK_FAILED' ? (
                                 <Badge variant="destructive">Inventory check failed</Badge>
                               ) : item.itemType === 'DRUG' && !item.drugId ? (
@@ -2642,8 +2632,8 @@ export function PharmacyInvoiceBuilderFixed({
                                 </Button>
                               </div>
                             )}
-                            {item.prescribedDrugName && item.prescribedDrugName !== item.drug?.name && (
-                              <p className="text-sm text-blue-700">Prescribed: {item.prescribedDrugName}</p>
+                            {prescribedNameShown(item) && (
+                              <p className="text-sm text-blue-700">Prescribed: {prescribedNameShown(item)}</p>
                             )}
                             {item.itemType === 'PACKAGE' && item.package && (
                               <p className="text-sm text-gray-600">
@@ -2679,9 +2669,9 @@ export function PharmacyInvoiceBuilderFixed({
                               </div>
                             )}
                           </div>
-                          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                          <div className="flex shrink-0 flex-wrap justify-end gap-1 self-end sm:self-auto">
                             {item.itemType === 'DRUG' && (
-                              <Button variant="outline" size="sm" aria-label={`Substitute ${item.drug?.name}`}
+                              <Button variant="outline" size="sm" aria-label={`Substitute ${billLineName(item)}`}
                                 onClick={() => {
                                   setSubstitutingItemId(item.id);
                                   setSelectedTab('drugs');
@@ -2697,7 +2687,7 @@ export function PharmacyInvoiceBuilderFixed({
                             <Button
                               variant="ghost"
                               size="sm"
-                              aria-label={`Remove ${item.drug?.name || item.package?.name}`}
+                              aria-label={`Remove ${billLineName(item)}`}
                               onClick={() => removeItem(item.id)}
                               className="text-red-600 hover:text-red-700"
                             >

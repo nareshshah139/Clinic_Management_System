@@ -5,10 +5,11 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 const { bootStack } = require("../boot.cjs");
 
-const out = path.resolve(__dirname, "../../../output/stack/access-roles");
+const out = process.env.SHOTS_DIR || path.resolve(__dirname, "../../../output/stack/access-roles");
 const GSTIN = "36ABCDE1234F1Z5";
 const DENIED = /Forbidden|don.t have access|do not have access|access denied|not allowed|not authori[sz]ed|insufficient permission/i;
 const PHARMACY_LINKS = ["Pharmacy Desk", "Pharmacy Counter", "Sales", "Inventory"];
+const REPORT_LINKS = ["Daily Collection", "Pharmacy Report"];
 
 const PAGES = [
   { name: "Pharmacy Desk", route: "/dashboard/pharmacy?section=desk", actions: [] },
@@ -82,6 +83,75 @@ async function raiseReturn(page, seed, reference) {
   return api(page, "POST", `/inventory/workspace/documents/${draft.id}/transition`, { action: "CHALLAN", version: draft.version });
 }
 
+const CENSUS_ROLES = ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION", "PHARMACIST", "ACCOUNTANT"];
+const DC = "/dashboard/pharmacy/reports?report=daily-collection";
+const DESK = "/dashboard/pharmacy?section=desk";
+const COUNTER = "/dashboard/pharmacy?section=counter";
+const MENU = {
+  OWNER: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users", "/dashboard/fees", "/test-transcribe"],
+  ADMIN: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", DESK, COUNTER, "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users", "/dashboard/fees", "/test-transcribe"],
+  MANAGER: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/dashboard/reports", "/dashboard/users"],
+  DOCTOR: ["/dashboard", DC, "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/procedures", "/dashboard/rooms", DESK, COUNTER, "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports", "/test-transcribe"],
+  NURSE: ["/dashboard", "/dashboard/patients", "/dashboard/appointments", "/dashboard/visits", "/dashboard/rooms"],
+  RECEPTION: ["/dashboard", "/dashboard/patients", "/dashboard/appointments", "/dashboard/rooms", DESK, COUNTER, "/dashboard/inventory"],
+  PHARMACIST: ["/dashboard", DC, DESK, COUNTER, "/dashboard/pharmacy/sales", "/dashboard/inventory", "/dashboard/pharmacy/reports"],
+  ACCOUNTANT: ["/dashboard", DC, "/dashboard/pharmacy/reports"],
+};
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function censusUsers(stack) {
+  const { ROLE_PERMISSIONS } = require(path.resolve(__dirname, "../../../backend/src/shared/access/role-permissions.ts"));
+  const owner = await stack.db.user.findUnique({ where: { id: stack.users.owner.id } });
+  const users = { OWNER: "owner" };
+  for (const role of CENSUS_ROLES.filter((r) => r !== "OWNER")) {
+    const key = `census-${role.toLowerCase()}`;
+    const email = `census.${role.toLowerCase()}@stack.example.invalid`;
+    const user = await stack.db.user.create({
+      data: { branchId: stack.branch.id, email, firstName: "Census", lastName: role, role, password: owner.password, permissions: JSON.stringify(ROLE_PERMISSIONS[role]) },
+    });
+    stack.users[key] = { id: user.id, email, password: stack.users.owner.password, role, firstName: "Census", lastName: role };
+    users[role] = key;
+  }
+  return users;
+}
+
+async function census(stack, browser, who, role, viewport) {
+  const context = await browser.newContext({ viewport });
+  const home = await context.newPage();
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await stack.login(home, who);
+      break;
+    } catch (error) {
+      if (attempt === 5 || !String(error.message).includes("429")) throw error;
+      await pause(20000);
+    }
+  }
+  const nav = home.getByRole("navigation", { name: "Main navigation" });
+  await home.goto(`${stack.base}/dashboard`, { waitUntil: "domcontentloaded", timeout: 240000 });
+  await home.getByText(stack.users[who].firstName, { exact: false }).first().waitFor({ timeout: 180000 });
+  await nav.getByRole("link", { name: "Dashboard" }).waitFor({ timeout: 120000 });
+  const hrefs = await nav.getByRole("link").evaluateAll((links) => links.map((a) => a.getAttribute("href")));
+  await home.close();
+  const visited = [];
+  for (const href of hrefs) {
+    const page = await context.newPage();
+    const refused = [];
+    page.on("response", (r) => r.url().includes("/api/") && r.status() >= 400 && refused.push(`${r.status()} ${new URL(r.url()).pathname}`));
+    const started = Date.now();
+    await page.goto(`${stack.base}${href}`, { waitUntil: "load", timeout: 240000 });
+    if (href.startsWith("/dashboard")) await page.getByText(stack.users[who].firstName, { exact: false }).first().waitFor({ timeout: 180000 });
+    await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    console.log(`    VISIT ${role} ${href} ${Math.round((Date.now() - started) / 1000)}s refused=${JSON.stringify(refused)}`);
+    if (href === "/dashboard/appointments") await page.screenshot({ path: path.join(out, `census-${role.toLowerCase()}-appointments.png`) });
+    visited.push({ href, refused });
+    await page.close();
+  }
+  await context.close();
+  return visited;
+}
+
 async function signedIn(stack, browser, who) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await stack.login(await context.newPage(), who);
@@ -108,6 +178,7 @@ async function visit(stack, context, who, target) {
       refused,
       actions,
       links: nav.map((t) => t.trim()).filter((t) => PHARMACY_LINKS.includes(t)),
+      reportLinks: nav.map((t) => t.trim()).filter((t) => REPORT_LINKS.includes(t)),
     };
   } finally {
     await page.close();
@@ -155,6 +226,7 @@ async function visit(stack, context, who, target) {
         check(`${label}: stays on the page`, !seen.url.includes("/login"), seen.url);
         for (const [action, offered] of Object.entries(seen.actions)) check(`${label}: ${action} offered`, offered, seen.actions);
         if (target.name === "Pharmacy Desk") check(`${who}: sidebar lists every Pharmacy entry, with Sales in place of Pharmacy Billing`, JSON.stringify(seen.links) === JSON.stringify(PHARMACY_LINKS), seen.links);
+        if (target.name === "Pharmacy Desk") check(`${who}: sidebar offers Daily Collection and Pharmacy Report`, JSON.stringify(seen.reportLinks) === JSON.stringify(REPORT_LINKS), seen.reportLinks);
       }
       await context.close();
     }
@@ -162,6 +234,17 @@ async function visit(stack, context, who, target) {
     for (const target of PAGES) {
       const seen = await visit(stack, reception, "reception", target);
       console.log(`NOTE reception ${target.name}: denied=${JSON.stringify(seen.denied)} refused=${JSON.stringify(seen.refused)} actions=${JSON.stringify(seen.actions)} links=${JSON.stringify(seen.links)}`);
+      if (target.name === "Pharmacy Desk") check("reception: no report link it would be refused", seen.reportLinks.length === 0, seen.reportLinks);
+    }
+
+    const people = await censusUsers(stack);
+    for (const role of CENSUS_ROLES) {
+      const visited = await census(stack, browser, people[role], role, { width: 1440, height: 900 });
+      const menu = visited.map((v) => v.href);
+      check(`${role}: the menu offers exactly the pages its grants open`, JSON.stringify(menu) === JSON.stringify(MENU[role]), menu);
+      for (const { href, refused } of visited) check(`${role} ${href}: no refused request on load`, JSON.stringify(refused) === "[]", refused);
+      console.log(`CENSUS ${role} pages=${JSON.stringify(visited.map((v) => v.href))}`);
+      await pause(15000);
     }
   } finally {
     await browser?.close();

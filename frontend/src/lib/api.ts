@@ -440,6 +440,15 @@ export class ApiClient {
     return this.get<import('./types').GetRoomsResponse>('/appointments/rooms');
   }
 
+  // Fee list
+  async getClinicFees() {
+    return this.get<{ fees: import('./types').ClinicFee[] }>('/billing/fees');
+  }
+
+  async setClinicFee(billType: import('./types').BillType, amount: number | null, version: number) {
+    return this.put<import('./types').ClinicFee>(`/billing/fees/${billType}`, { amount, version });
+  }
+
   // Clinic investigations
   async getClinicInvestigations() {
     return this.get<Array<{ id: string; name: string }>>('/clinic-investigations');

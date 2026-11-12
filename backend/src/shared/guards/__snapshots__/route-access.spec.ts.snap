@@ -30,13 +30,13 @@ DELETE /visits/:id/photos/legacy | roles: DOCTOR,ADMIN,OWNER | permissions: -
 DELETE /visits/photos/draft/:patientId/:dateStr/:attachmentId | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 DELETE /whatsapp/templates/:id | roles: ADMIN,DOCTOR | permissions: -
 GET / | public
-GET /appointments | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
+GET /appointments | roles: ADMIN,DOCTOR,NURSE,RECEPTION,MANAGER | permissions: appointments:read
 GET /appointments/:id | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
 GET /appointments/available-slots | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
-GET /appointments/doctor/:doctorId/schedule | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
-GET /appointments/room/:roomId/schedule | roles: ADMIN,RECEPTION,DOCTOR | permissions: appointments:read
-GET /appointments/rooms | roles: ADMIN,RECEPTION,DOCTOR | permissions: rooms:read
-GET /appointments/rooms/all | roles: ADMIN,DOCTOR,RECEPTION | permissions: rooms:read
+GET /appointments/doctor/:doctorId/schedule | roles: ADMIN,DOCTOR,NURSE,RECEPTION,MANAGER | permissions: appointments:read
+GET /appointments/room/:roomId/schedule | roles: ADMIN,RECEPTION,DOCTOR,NURSE | permissions: appointments:read
+GET /appointments/rooms | roles: ADMIN,RECEPTION,DOCTOR,NURSE | permissions: rooms:read
+GET /appointments/rooms/all | roles: ADMIN,DOCTOR,RECEPTION,NURSE | permissions: rooms:read
 GET /audit-logs | roles: ADMIN,OWNER | permissions: audit:read
 GET /audit-logs/:id | roles: ADMIN,OWNER | permissions: audit:read
 GET /audit-logs/entity/:entity/:entityId | roles: ADMIN,OWNER,DOCTOR | permissions: audit:read
@@ -48,6 +48,7 @@ GET /audit-logs/user/:userId | roles: ADMIN,OWNER | permissions: audit:read
 GET /auth/backup/:jobId | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /auth/me | roles: any signed-in user | permissions: -
 GET /auth/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /billing/fees | roles: ADMIN | permissions: -
 GET /billing/invoices | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
 GET /billing/invoices/:id | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
 GET /billing/invoices/outstanding | roles: ADMIN,RECEPTION | permissions: billing:invoice:read
@@ -56,9 +57,9 @@ GET /billing/payments/summary | roles: ADMIN | permissions: billing:payment:summ
 GET /billing/reports/revenue | roles: ADMIN | permissions: billing:revenue:read
 GET /billing/statistics | roles: ADMIN | permissions: billing:statistics:read
 GET /clinic-investigations | roles: DOCTOR,ADMIN,OWNER,NURSE | permissions: -
-GET /doctor-availability/:doctorId | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
-GET /doctor-availability/:doctorId/day | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
-GET /doctor-availability/holidays | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:read
+GET /doctor-availability/:doctorId | roles: ADMIN,DOCTOR,MANAGER,NURSE,RECEPTION | permissions: appointments:read
+GET /doctor-availability/:doctorId/day | roles: ADMIN,DOCTOR,MANAGER,NURSE,RECEPTION | permissions: appointments:read
+GET /doctor-availability/holidays | roles: ADMIN,DOCTOR,MANAGER,NURSE,RECEPTION | permissions: appointments:read
 GET /drugs | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:read
 GET /drugs/:id | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:read
 GET /drugs/:id/alternatives | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:read
@@ -110,6 +111,7 @@ GET /inventory/workspace/gmail/status | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,
 GET /inventory/workspace/hold-sources | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/intake | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/labels/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /inventory/workspace/optimization/rules | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/overview | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/owners | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/purchases/:id/actions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -128,6 +130,7 @@ GET /inventory/workspace/sale-movements | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURS
 GET /inventory/workspace/settings | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/stock | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/stock/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /inventory/workspace/stock/gaps | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/suppliers | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /inventory/workspace/timeline | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /patients | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -216,7 +219,7 @@ GET /prescriptions/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTIO
 GET /prescriptions/templates | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/templates/:templateId/versions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/translations | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
-GET /reports/alerts | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST | permissions: -
+GET /reports/alerts | roles: any signed-in user | permissions: -
 GET /reports/appointments | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/dashboard | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/doctors | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
@@ -264,6 +267,7 @@ PATCH /inventory/purchase-orders/:id | roles: ADMIN,PHARMACIST,RECEPTION | permi
 PATCH /inventory/suppliers/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:supplier:update
 PATCH /inventory/transactions/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:transaction:update
 PATCH /inventory/workspace/documents/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+PATCH /inventory/workspace/optimization/rules | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /inventory/workspace/purchases/:id/metadata | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /inventory/workspace/reconciliation/counts/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /inventory/workspace/settings | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -342,6 +346,8 @@ POST /inventory/workspace/gmail/import | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE
 POST /inventory/workspace/intake | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/intake/csv | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/movement-corrections | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /inventory/workspace/optimization/return-drafts | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /inventory/workspace/optimization/run | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/purchases/:id/originals | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/reconciliation/counts/:id/approve | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/workspace/reconciliation/counts/:id/reject | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -450,6 +456,7 @@ POST /visits/translate | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARM
 POST /whatsapp/templates | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/:id/test | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/generate | roles: ADMIN,DOCTOR | permissions: -
+PUT /billing/fees/:billType | roles: ADMIN | permissions: -
 PUT /doctor-availability/:doctorId/booking-limit | roles: ADMIN,OWNER,DOCTOR | permissions: -
 PUT /doctor-availability/:doctorId/hours | roles: ADMIN,OWNER,DOCTOR | permissions: -
 PUT /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR | permissions: -"

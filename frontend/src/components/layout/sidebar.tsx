@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useDashboardUser } from "./dashboard-user-context";
 import { usePendingItemRequestCount } from "@/components/inventory/use-pending-item-requests";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
+import { APPOINTMENT_READ_ROLES, ROOM_READ_ROLES } from "@/lib/appointment-access";
 import type { LucideIcon } from "lucide-react";
 import {
   Calendar,
@@ -25,7 +26,10 @@ import {
   Mic,
   ShoppingBag,
   FileBarChart,
+  Wallet,
+  ReceiptIndianRupee,
 } from "lucide-react";
+import { FEE_EDITOR_ROLES, FEE_LIST_PATH } from "@/components/appointments/appointment-billing-view";
 
 type PharmacySidebarSection = "desk" | "counter";
 
@@ -37,6 +41,9 @@ type NavigationItem = {
   allowedRoles: string[];
   pharmacySection?: PharmacySidebarSection;
 };
+
+/** The roles GET /pharmacy/reports/:reportId admits, so neither report link leads to a refusal. */
+const PHARMACY_REPORT_ROLES = ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "ACCOUNTANT"];
 
 /**
  * @cc [owner:nareshshah139,label:product] single-inventory-entry
@@ -60,6 +67,12 @@ const navigation: NavigationItem[] = [
     ],
   },
   {
+    name: "Daily Collection", section: "Overview",
+    href: "/dashboard/pharmacy/reports?report=daily-collection",
+    icon: Wallet,
+    allowedRoles: PHARMACY_REPORT_ROLES,
+  },
+  {
     name: "Patients", section: "Clinical",
     href: "/dashboard/patients",
     icon: Users,
@@ -69,7 +82,7 @@ const navigation: NavigationItem[] = [
     name: "Appointments", section: "Clinical",
     href: "/dashboard/appointments",
     icon: Calendar,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
+    allowedRoles: APPOINTMENT_READ_ROLES,
   },
   {
     name: "Visits", section: "Clinical",
@@ -87,7 +100,7 @@ const navigation: NavigationItem[] = [
     name: "Rooms", section: "Clinical",
     href: "/dashboard/rooms",
     icon: MapPin,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
+    allowedRoles: ROOM_READ_ROLES,
   },
   {
     name: "Pharmacy Desk", section: "Pharmacy",
@@ -119,7 +132,7 @@ const navigation: NavigationItem[] = [
     name: "Pharmacy Report", section: "Pharmacy",
     href: "/dashboard/pharmacy/reports",
     icon: FileBarChart,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "ACCOUNTANT"],
+    allowedRoles: PHARMACY_REPORT_ROLES,
   },
   {
     name: "Reports", section: "Admin",
@@ -132,6 +145,12 @@ const navigation: NavigationItem[] = [
     href: "/dashboard/users",
     icon: UserIcon,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER"],
+  },
+  {
+    name: "Fee list", section: "Admin",
+    href: FEE_LIST_PATH,
+    icon: ReceiptIndianRupee,
+    allowedRoles: FEE_EDITOR_ROLES,
   },
   {
     name: "Test Transcribe", section: "Admin",
@@ -180,6 +199,21 @@ function getActivePharmacySection(
   return requested === "counter" ? "counter" : "desk";
 }
 
+/** A link with a query is active only on that query; a deeper link to the same page wins over the plain one. */
+function linkIsActive(
+  item: NavigationItem,
+  pathname: string,
+  searchParams: Pick<URLSearchParams, "get">,
+  activePharmacySection: PharmacySidebarSection | null,
+): boolean {
+  const [itemPath, query] = item.href.split("?");
+  if (item.pharmacySection) return activePharmacySection === item.pharmacySection;
+  if (query)
+    return pathname === itemPath && [...new URLSearchParams(query).entries()].every(([key, value]) => searchParams.get(key) === value);
+  if (itemPath === "/dashboard") return pathname === itemPath;
+  return pathname === itemPath || pathname.startsWith(itemPath + "/");
+}
+
 /**
  * @cc [owner:nareshshah139,label:product] grouped-navigation-permissions
  * Navigation sections MUST contain only the role-filtered links. Grouping MUST
@@ -219,22 +253,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       {/* Navigation */}
       <nav aria-label="Main navigation" className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {navigationItems.map((item, index) => {
-          const itemPath = item.href.split("?")[0];
-          const targetParams = new URLSearchParams(
-            item.href.split("?")[1] || "",
-          );
-          const isActive =
-            targetParams.size > 0 && !item.pharmacySection
-              ? pathname === itemPath &&
-                [...targetParams.entries()].every(
-                  ([key, value]) => searchParams.get(key) === value,
-                )
-              : item.pharmacySection
-                ? activePharmacySection === item.pharmacySection
-                : itemPath === "/dashboard"
-                  ? pathname === itemPath
-                  : pathname === itemPath ||
-                    pathname.startsWith(itemPath + "/");
+          const isActive = linkIsActive(item, pathname, searchParams, activePharmacySection) &&
+            !navigationItems.some((other) => other !== item && other.href.startsWith(`${item.href}?`) && linkIsActive(other, pathname, searchParams, activePharmacySection));
           return (
             <Fragment key={item.name}>
               {(index === 0 || navigationItems[index - 1].section !== item.section) && (

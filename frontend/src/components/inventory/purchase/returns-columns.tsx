@@ -14,6 +14,7 @@ import {
   canCorrectCreditNote,
   canRecordCreditNote,
   canSetOff,
+  sourceBills,
   type PurchaseReturnRow,
   type ReturnSortKey,
 } from './purchase-returns-model';
@@ -124,10 +125,19 @@ export function returnView({ today, canWrite, actionId, openId, undo, onOpen, on
         </button>
       )}
       {row.sourceBillNo && (
-        <span className="whitespace-nowrap">
+        <span className="whitespace-nowrap" title={sourceBills(row.sourceBillNo).count > 1 ? row.sourceBillNo : undefined}>
           <span aria-hidden="true">· </span>
-          <span className="sr-only">against bill </span>
-          {row.sourceBillNo}
+          {sourceBills(row.sourceBillNo).count > 1 ? (
+            <>
+              <span className="sr-only">against bills {row.sourceBillNo}</span>
+              <span aria-hidden="true">{sourceBills(row.sourceBillNo).shown}</span>
+            </>
+          ) : (
+            <>
+              <span className="sr-only">against bill </span>
+              {row.sourceBillNo}
+            </>
+          )}
         </span>
       )}
     </span>

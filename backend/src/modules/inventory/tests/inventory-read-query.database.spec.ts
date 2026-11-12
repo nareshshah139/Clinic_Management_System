@@ -684,7 +684,7 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
   it('preserves prescription line identity for legacy duplicates, stock, edits and removal', async () => {
     const items = [5, 10].map(dosage => ({ drugName: 'Drug X', dosage, dosageUnit: 'MG', quantity: 3, inventoryItemId: `identity-stock-${dosage}` }));
     await db.inventoryItem.createMany({ data: [5, 10].map(dosage => ({
-      id: `identity-stock-${dosage}`, branchId, name: 'Drug X', type: 'MEDICINE', unit: 'PIECES',
+      id: `identity-stock-${dosage}`, branchId, name: `Drug X ${dosage} mg`, type: 'MEDICINE', unit: 'PIECES',
       currentStock: dosage, costPrice: 1, sellingPrice: 2, batchNumber: `DOSE-${dosage}`,
     })) });
     await rx('line-identity', { items, task: 'IN_REVIEW' });

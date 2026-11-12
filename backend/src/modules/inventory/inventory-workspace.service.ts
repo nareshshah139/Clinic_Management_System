@@ -11,7 +11,7 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { INVENTORY_APPROVERS, WorkflowActor } from './inventory-workflow.types';
 import { batchDeleteBlock, jsonObject, money, movementDelta, writeStockMovement } from './inventory-stock';
-import { inventoryProductName } from './inventory-names';
+import { inventoryNamePresentation, inventoryProductName } from './inventory-names';
 import { displayDay } from './supplier-return';
 import { clinicDay, peopleById } from '../pharmacy/register-utils';
 import { PharmacySupplierCreditService } from '../pharmacy/pharmacy-supplier-credit.service';
@@ -83,13 +83,14 @@ export class InventoryWorkspaceService {
     const packQuantity = packUnits ? item.currentStock : Number.isSafeInteger(unitsPerPack) && unitsPerPack > 0 ? item.currentStock / unitsPerPack : null;
     const packEquivalentUnit = packUnits ? item.unit : packQuantity != null ? metadata.packLabel || (/strip/i.test(item.packUnit||'')?'STRIPS':`packs of ${unitsPerPack} ${item.unit}`) : null;
     const mappingStatus = metadata.mappingStatus === 'PENDING' || metadata.mappingPending ? 'PENDING' : (item._count?.drugs || item.drugs?.length) ? 'MAPPED' : 'UNMAPPED';
-    return { ...item, metadata, productName, packLabel, available, mappingStatus, packQuantity, packEquivalentUnit, unitsPerPack:packUnits?baseFactor:unitsPerPack||null, baseFactor, baseQuantity: baseFactor ? item.currentStock * baseFactor : null,
+    const naming = inventoryNamePresentation(item, metadata, productName);
+    return { ...item, metadata, productName, ...naming, packLabel, available, mappingStatus, packQuantity, packEquivalentUnit, unitsPerPack:packUnits?baseFactor:unitsPerPack||null, baseFactor, baseQuantity: baseFactor ? item.currentStock * baseFactor : null,
       margin: item.mrp > 0 ? money((item.mrp - item.costPrice) / item.mrp * 100) : null,
       priceBasis: priceBasis || 'Historical purchase cost per stock unit; landing-cost allocation unknown',
       issues: [!item.category && 'Category missing', !item.hsnCode && 'HSN missing', item.gstRate == null && 'GST missing', !item.storageLocation && 'Location missing',
         item.minStockLevel == null && 'Minimum missing', item.maxStockLevel == null && 'Maximum missing',
         !item.packSize && 'Pack size missing', !item.batchNumber && 'Batch missing', !item.expiryDate && 'Expiry missing',
-        !item.costPrice && 'Purchase price missing', !item.mrp && 'MRP missing'].filter(Boolean),
+        !item.costPrice && 'Purchase price missing', !item.mrp && 'MRP missing', naming.strengthMissing && 'Strength missing'].filter(Boolean),
     };
   }
   /**

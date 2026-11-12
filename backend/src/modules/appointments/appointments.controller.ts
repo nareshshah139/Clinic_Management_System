@@ -59,7 +59,7 @@ export class AppointmentsController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION, UserRole.MANAGER)
   @Permissions('appointments:read')
   findAll(
     @Query() query: QueryAppointmentsDto,
@@ -79,7 +79,7 @@ export class AppointmentsController {
   }
 
   @Get('doctor/:doctorId/schedule')
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION, UserRole.MANAGER)
   @Permissions('appointments:read')
   getDoctorSchedule(
     @Param('doctorId') doctorId: string,
@@ -90,11 +90,12 @@ export class AppointmentsController {
       doctorId,
       date,
       req.user.branchId,
+      req.user,
     );
   }
 
   @Get('room/:roomId/schedule')
-  @Roles(UserRole.ADMIN, UserRole.RECEPTION, UserRole.DOCTOR)
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION, UserRole.DOCTOR, UserRole.NURSE)
   @Permissions('appointments:read')
   getRoomSchedule(
     @Param('roomId') roomId: string,
@@ -109,14 +110,14 @@ export class AppointmentsController {
   }
 
   @Get('rooms')
-  @Roles(UserRole.ADMIN, UserRole.RECEPTION, UserRole.DOCTOR)
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION, UserRole.DOCTOR, UserRole.NURSE)
   @Permissions('rooms:read')
   getRooms(@Request() req: AuthenticatedRequest) {
     return this.appointmentsService.getRooms(req.user.branchId);
   }
 
   @Get('rooms/all')
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.RECEPTION, UserRole.NURSE)
   @Permissions('rooms:read')
   getAllRooms(@Request() req: AuthenticatedRequest) {
     return this.appointmentsService.getAllRooms(req.user.branchId);

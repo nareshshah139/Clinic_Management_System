@@ -12,27 +12,30 @@ import {
   minutesToHHMM,
   addMinutesToHHMM,
 } from '@/lib/utils';
-import type { AppointmentInSlot, AppointmentCalendar } from '@/lib/types';
+import { CircleAlert } from 'lucide-react';
+import type { AppointmentInSlot, AppointmentCalendar, BillType } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 import { layoutDay } from './day-layout';
 import { CALENDARS, canMove } from './appointment-calendars';
+import { BILL_TYPE_LABEL, BILL_TYPE_SHORT, billingChip, type BillingTone, type ChipWidth } from './appointment-billing-view';
 
 type StatusStyle = {
   label: string;
   badgeVariant: NonNullable<VariantProps<typeof badgeVariants>['variant']>;
   accentClassName: string;
+  dotClassName: string;
   muted: boolean;
   strikeName: boolean;
 };
 
 const APPOINTMENT_STATUS_STYLE: Record<AppointmentStatus, StatusStyle> = {
-  [AppointmentStatus.SCHEDULED]: { label: 'Scheduled', badgeVariant: 'neutral', accentClassName: 'border-l-slate-400', muted: false, strikeName: false },
-  [AppointmentStatus.CONFIRMED]: { label: 'Confirmed', badgeVariant: 'info', accentClassName: 'border-l-sky-500', muted: false, strikeName: false },
-  [AppointmentStatus.CHECKED_IN]: { label: 'Checked in', badgeVariant: 'warning', accentClassName: 'border-l-amber-500', muted: false, strikeName: false },
-  [AppointmentStatus.IN_PROGRESS]: { label: 'In progress', badgeVariant: 'success', accentClassName: 'border-l-emerald-500', muted: false, strikeName: false },
-  [AppointmentStatus.COMPLETED]: { label: 'Completed', badgeVariant: 'neutral', accentClassName: 'border-l-slate-300', muted: true, strikeName: false },
-  [AppointmentStatus.NO_SHOW]: { label: 'No-show', badgeVariant: 'danger', accentClassName: 'border-l-red-500', muted: true, strikeName: true },
-  [AppointmentStatus.CANCELLED]: { label: 'Cancelled', badgeVariant: 'danger', accentClassName: 'border-l-red-300', muted: true, strikeName: true },
+  [AppointmentStatus.SCHEDULED]: { label: 'Scheduled', badgeVariant: 'neutral', accentClassName: 'border-l-slate-400', dotClassName: 'bg-slate-400', muted: false, strikeName: false },
+  [AppointmentStatus.CONFIRMED]: { label: 'Confirmed', badgeVariant: 'info', accentClassName: 'border-l-sky-500', dotClassName: 'bg-sky-500', muted: false, strikeName: false },
+  [AppointmentStatus.CHECKED_IN]: { label: 'Checked in', badgeVariant: 'warning', accentClassName: 'border-l-amber-500', dotClassName: 'bg-amber-500', muted: false, strikeName: false },
+  [AppointmentStatus.IN_PROGRESS]: { label: 'In progress', badgeVariant: 'success', accentClassName: 'border-l-emerald-500', dotClassName: 'bg-emerald-500', muted: false, strikeName: false },
+  [AppointmentStatus.COMPLETED]: { label: 'Completed', badgeVariant: 'neutral', accentClassName: 'border-l-slate-300', dotClassName: 'bg-slate-400', muted: true, strikeName: false },
+  [AppointmentStatus.NO_SHOW]: { label: 'No-show', badgeVariant: 'danger', accentClassName: 'border-l-red-500', dotClassName: 'bg-red-500', muted: true, strikeName: true },
+  [AppointmentStatus.CANCELLED]: { label: 'Cancelled', badgeVariant: 'danger', accentClassName: 'border-l-red-300', dotClassName: 'bg-red-400', muted: true, strikeName: true },
 };
 
 const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> = {
@@ -42,6 +45,42 @@ const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> =
 };
 
 const FLEX_STEP_MIN = 15;
+
+const BILL_TYPE_TONE: Record<BillType, string> = {
+  FIRST_CONSULTATION: 'text-teal-700',
+  REVIEW: 'text-sky-700',
+  PROCEDURE: 'text-purple-700',
+};
+
+/** Container widths of the appointment block at which each step of the chip's wording appears, and gives way to the next. */
+const CHIP_SHOWN_FROM: Record<ChipWidth, string> = {
+  phone: 'inline',
+  narrow: 'hidden @min-[12rem]:inline',
+  desk: 'hidden @min-[24rem]:inline',
+  full: 'hidden @min-[38rem]:inline',
+};
+const CHIP_HIDDEN_FROM: Record<ChipWidth, string> = {
+  phone: '',
+  narrow: '@min-[12rem]:hidden',
+  desk: '@min-[24rem]:hidden',
+  full: '@min-[38rem]:hidden',
+};
+
+/**
+ * Block widths from which a row names its status in words instead of a coloured dot. Every row of a
+ * column switches together, and a row without a bill chip has the room sooner.
+ */
+const STATUS_IN_WORDS = {
+  withChip: { dot: '@min-[30rem]/row:hidden', words: 'hidden @min-[30rem]/row:inline-flex' },
+  withoutChip: { dot: '@min-[22rem]/row:hidden', words: 'hidden @min-[22rem]/row:inline-flex' },
+};
+
+const BILLING_TONE: Record<BillingTone, string> = {
+  paid: 'flex bg-emerald-50 text-emerald-800 ring-emerald-300',
+  due: 'flex bg-amber-100 text-amber-900 ring-amber-400',
+  unbilled: 'flex bg-amber-100 text-amber-900 ring-amber-400',
+  quiet: 'hidden bg-white/70 text-gray-600 ring-gray-300 @min-[14rem]:flex',
+};
 
 export type SlotAction =
   | { kind: 'book'; patientMissing: boolean }
@@ -73,6 +112,7 @@ interface CalendarColumnProps {
   onOpen: (appointment: AppointmentInSlot) => void;
   onReschedule: (appointment: AppointmentInSlot) => void;
   onStartVisit: (appointment: AppointmentInSlot) => void;
+  onOpenBill?: (appointment: AppointmentInSlot) => void;
   onBook: (slot: string) => void;
   onMove: (slot: string) => void;
 }
@@ -100,6 +140,7 @@ export default function CalendarColumn({
   onOpen,
   onReschedule,
   onStartVisit,
+  onOpenBill,
   onBook,
   onMove,
 }: CalendarColumnProps) {
@@ -193,11 +234,13 @@ export default function CalendarColumn({
             `${start}-${end}`,
             status.label,
           ].filter(Boolean).join(', ');
+          const chip = apt.billing ? billingChip(apt.billing, apt.billType) : null;
+          const statusFit = chip ? STATUS_IN_WORDS.withChip : STATUS_IN_WORDS.withoutChip;
           return (
             <div
               key={key}
               data-appointment-block={apt.id || apt.slot}
-              className="@container group absolute p-px"
+              className="@container/row group absolute p-px"
               style={{
                 top: `${topPct}%`,
                 height: `${heightPct}%`,
@@ -206,84 +249,115 @@ export default function CalendarColumn({
                 zIndex: 2,
               }}
             >
-              <button
-                type="button"
-                aria-label={accessibleName}
-                title={accessibleName}
-                onClick={() => onOpen(apt)}
-                disabled={isOptimistic}
-                className={`@container flex h-full w-full items-start overflow-hidden rounded-md border-l-[3px] px-1.5 py-0.5 text-left leading-tight shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${status.accentClassName} ${apt.slot === recentBookedSlot ? 'ring-2 ring-green-500/60' : ''}`}
-                style={{
-                  backgroundColor: blockBackground(apt),
-                  fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))',
-                }}
+              <div
+                className={`flex h-full w-full overflow-hidden rounded-md border-l-[3px] shadow-sm ${status.accentClassName} ${apt.slot === recentBookedSlot ? 'ring-2 ring-green-500/60' : ''}`}
+                style={{ backgroundColor: blockBackground(apt) }}
               >
-                <span className={`flex w-full min-w-0 items-center gap-1.5 whitespace-nowrap ${status.muted ? 'text-gray-500' : 'text-gray-900'}`}>
-                  {apt.tokenNumber != null && (
-                    <span className="shrink-0 font-semibold text-gray-500">#{apt.tokenNumber}</span>
-                  )}
-                  <span data-appointment-time className="hidden shrink-0 font-bold text-blue-700 @min-[14rem]:inline">{`${start}-${end}`}</span>
-                  <span
-                    data-patient-name
-                    className={`min-w-0 flex-auto truncate font-semibold ${status.strikeName ? 'line-through' : ''}`}
-                  >
-                    {patientName}
-                  </span>
-                  <span className="hidden min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden @min-[24rem]:flex">
-                    {apt.visitType === 'PROCEDURE' && apt.notes && (
-                      <span className="truncate font-medium text-purple-700">({apt.notes})</span>
-                    )}
-                    {apt.isFollowUp && <span className="font-semibold text-amber-600">FOLLOW-UP</span>}
-                    <span className="font-medium text-purple-600">{apt.visitType || 'OPD'}</span>
-                    {apt.patient?.age !== undefined && <span className="text-gray-600">{apt.patient.age}y</span>}
-                    {apt.patient?.gender && <span className="rounded bg-gray-100 px-1 text-gray-600">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
-                    {apt.room?.name && <span className="truncate font-medium text-green-600">{apt.room.name}</span>}
-                  </span>
-                  <Badge variant={status.badgeVariant} className="hidden shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] leading-4 @min-[9rem]:inline-flex">
-                    {status.label}
-                  </Badge>
-                </span>
-              </button>
-
-              <div data-appointment-actions className="pointer-events-none absolute right-1 top-0.5 hidden gap-1 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 @min-[16rem]:flex">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpen(apt);
-                  }}
-                  className="bg-gray-500 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                  title="View Appointment Details"
-                  disabled={isOptimistic}
-                >
-                  INFO
-                </button>
-                {canMove(apt.status) && (
+                <div className="relative h-full min-w-0 flex-1">
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onReschedule(apt);
-                    }}
-                    className="bg-amber-700 hover:bg-amber-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                    title="Reschedule Appointment"
+                    aria-label={accessibleName}
+                    title={accessibleName}
+                    onClick={() => onOpen(apt)}
                     disabled={isOptimistic}
+                    className="@container flex h-full w-full items-start overflow-hidden px-1.5 py-0 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                    style={{ fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))' }}
                   >
-                    RESCHED
+                    <span className={`flex w-full min-w-0 items-center gap-1 whitespace-nowrap ${status.muted ? 'text-gray-500' : 'text-gray-900'}`}>
+                      {apt.tokenNumber != null && (
+                        <span className="shrink-0 font-semibold text-gray-500">#{apt.tokenNumber}</span>
+                      )}
+                      <span data-appointment-time className="hidden shrink-0 font-bold tabular-nums text-blue-700 @min-[15em]:inline">{`${start}-${end}`}</span>
+                      <span
+                        data-patient-name
+                        className={`min-w-0 flex-auto truncate font-semibold ${status.strikeName ? 'line-through' : ''}`}
+                      >
+                        {patientName}
+                      </span>
+                      {apt.billType && (
+                        <span data-bill-type title={BILL_TYPE_LABEL[apt.billType]} className={`hidden shrink-0 font-semibold @min-[18em]:inline ${BILL_TYPE_TONE[apt.billType]}`}>
+                          <span className="@min-[38rem]/row:hidden">{BILL_TYPE_SHORT[apt.billType]}</span>
+                          <span className="hidden @min-[38rem]/row:inline">{BILL_TYPE_LABEL[apt.billType]}</span>
+                        </span>
+                      )}
+                      <span data-appointment-status title={status.label} className="hidden shrink-0 items-center @min-[10em]:inline-flex">
+                        <span className={`size-2 rounded-full ${status.dotClassName} ${statusFit.dot}`} aria-hidden="true" />
+                        <Badge variant={status.badgeVariant} className={`whitespace-nowrap px-1.5 py-0 text-[10px] leading-3.5 ${statusFit.words}`}>
+                          {status.label}
+                        </Badge>
+                      </span>
+                      <span className="hidden min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden @min-[36em]:flex">
+                        {apt.visitType === 'PROCEDURE' && apt.notes && (
+                          <span className="truncate font-medium text-purple-700">({apt.notes})</span>
+                        )}
+                        {(!apt.billType || apt.visitType === 'TELEMED') && <span className="font-medium text-purple-600">{apt.visitType || 'OPD'}</span>}
+                        {apt.patient?.age !== undefined && <span className="text-gray-600">{apt.patient.age}y</span>}
+                        {apt.patient?.gender && <span className="rounded bg-gray-100 px-1 text-gray-600">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
+                        {apt.room?.name && <span className="truncate font-medium text-green-600">{apt.room.name}</span>}
+                      </span>
+                    </span>
+                  </button>
+
+                  <div data-appointment-actions className="pointer-events-none absolute right-1 top-0.5 hidden gap-1 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 @min-[16rem]:flex">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpen(apt);
+                      }}
+                      className="bg-gray-500 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                      title="View Appointment Details"
+                      disabled={isOptimistic}
+                    >
+                      INFO
+                    </button>
+                    {canMove(apt.status) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onReschedule(apt);
+                        }}
+                        className="bg-amber-700 hover:bg-amber-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                        title="Reschedule Appointment"
+                        disabled={isOptimistic}
+                      >
+                        RESCHED
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStartVisit(apt);
+                      }}
+                      className="bg-blue-700 hover:bg-blue-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                      title={apt.visit?.id ? 'Continue Visit' : 'Start Visit'}
+                      disabled={isOptimistic}
+                    >
+                      {apt.visit?.id ? 'CONT' : 'START'}
+                    </button>
+                  </div>
+                </div>
+                {chip && (
+                  <button
+                    type="button"
+                    data-appointment-billing={apt.billing?.state}
+                    data-attention={apt.billing?.attention || undefined}
+                    aria-label={chip.label}
+                    title={chip.label}
+                    onClick={() => onOpenBill?.(apt)}
+                    disabled={isOptimistic || !onOpenBill}
+                    className={`my-0.5 mr-0.5 shrink-0 items-center gap-1 self-start whitespace-nowrap rounded px-1.5 text-[11px] font-semibold leading-4 ring-1 ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${BILLING_TONE[chip.tone]}`}
+                  >
+                    {(chip.tone === 'due' || chip.tone === 'unbilled') && <CircleAlert className="hidden size-3 shrink-0 @min-[12rem]:block" aria-hidden="true" />}
+                    {chip.steps.map((step, i) => (
+                      <span key={step.from} className={`${CHIP_SHOWN_FROM[step.from]} ${i + 1 < chip.steps.length ? CHIP_HIDDEN_FROM[chip.steps[i + 1].from] : ''}`}>
+                        {step.text}
+                      </span>
+                    ))}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStartVisit(apt);
-                  }}
-                  className="bg-blue-700 hover:bg-blue-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                  title={apt.visit?.id ? 'Continue Visit' : 'Start Visit'}
-                  disabled={isOptimistic}
-                >
-                  {apt.visit?.id ? 'CONT' : 'START'}
-                </button>
               </div>
             </div>
           );

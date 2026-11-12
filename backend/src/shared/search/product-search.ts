@@ -126,13 +126,19 @@ export function productStrengthConflict(
   );
   if (wanted.length && actual.length)
     return wanted.some((s) => !actual.includes(s));
-  const tokens = normalizeProductSearch(query).split(' '),
+  const text = normalizeProductSearch(query),
+    tokens = text.split(' '),
     numbers = tokens.filter((t) => /^\d+(\.\d+)?$/.test(t)).map(Number);
-  // A bare dose such as "Folitrax 5" must not be satisfied by a 5-tablet pack of 10 mg.
+  // A bare dose such as "Folitrax 5" must not be satisfied by a 5-tablet pack of 10 mg, but numbers typed as part of a
+  // recorded name, such as its item code in "13 74 | Flutas", are that name's text.
+  const typedName = [...product.names, ...(product.aliases || [])].some((name) =>
+    ` ${normalizeProductSearch(name)} `.includes(` ${text} `),
+  );
   if (
     !wanted.length &&
     actual.length &&
     numbers.length &&
+    !typedName &&
     !tokens.some((t) =>
       ['g', 'ml', 'pack', 'strip', 'box', 'bottle', 'tube'].includes(t),
     )
@@ -191,7 +197,8 @@ export function ocrProductSearchQuery(original: string): {
  * Exact codes and names MUST outrank aliases, prefixes, word matches and typo suggestions.
  * Every query token MUST be accounted for; numbers MUST match entire tokens outside literal code
  * lookups. Code fragments MAY match literally but MUST rank below name matches. Explicit strength
- * conflicts MUST be excluded from name/ingredient matching. Names/aliases/ingredients use one scorer across Inventory, Drug
+ * conflicts MUST be excluded from name/ingredient matching; a bare number is a dose unless the query is a
+ * whole-word part of a recorded name or alias. Punctuation in a query is text, never a pattern. Names/aliases/ingredients use one scorer across Inventory, Drug
  * Search and OCR suggestions; a score MUST NOT authorize identity changes or stock posting.
  * Numeric tokens, forms and words shorter than four letters MUST NOT receive typo substitutions.
  */

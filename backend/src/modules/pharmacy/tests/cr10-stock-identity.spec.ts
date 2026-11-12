@@ -26,7 +26,7 @@ it('honors expiry through its UTC calendar day and subtracts held units regardle
 it('does not replace an invalid explicit inventory ID with a same-name item', async () => {
   const prisma: any = { inventoryItem: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn() }, prescriptionInventoryLink: { findUnique: jest.fn() } };
   expect(await resolvePrescriptionInventory(prisma, { inventoryItemId: 'foreign-id', drugName: 'Cream' }, 'clinic')).toBeNull();
-  expect(prisma.inventoryItem.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'foreign-id', branchId: 'clinic', status: 'ACTIVE' } }));
+  expect(prisma.inventoryItem.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'foreign-id', branchId: 'clinic' } }));
   expect(prisma.inventoryItem.findMany).not.toHaveBeenCalled();
 });
 it('rejects same-name products with different identities instead of taking the first', async () => {
@@ -45,4 +45,32 @@ it('counts billed quantities by saved identity when the prescription display nam
   const result = await new PharmacyPrescriptionQueueService(prisma, {} as any).findOne('rx', 'clinic');
   expect(result.medications[0].dispensedQuantity).toBe(3);
   expect(result.status).toBe('dispensed');
+});
+
+it('finds an old prescription line by the name the item had before it was standardised', async () => {
+  const flutas = { id: 'flutas', name: 'Tab. Flutas 150 mg', status: 'ACTIVE', drugs: [], metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc)'] } }) };
+  const lookalike = { id: 'other', name: 'Tab. Flutas 50 mg', status: 'ACTIVE', drugs: [], metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc) old'] } }) };
+  const prisma: any = { prescriptionInventoryLink: { findUnique: jest.fn().mockResolvedValue(null) }, inventoryItem: { findMany: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([flutas, lookalike]).mockResolvedValueOnce([flutas]) } };
+  const resolved = await resolvePrescriptionInventory(prisma, { drugName: '13 74 | Flutas 150Mg(Pc)' }, 'clinic');
+  expect(resolved?.anchor.id).toBe('flutas');
+  expect(prisma.inventoryItem.findMany.mock.calls.map((call: any) => [call[0].where.name, call[0].where.metadata])).toEqual([
+    [{ equals: '13 74 | Flutas 150Mg(Pc)', mode: 'insensitive' }, undefined],
+    [undefined, { contains: '13 74 | Flutas 150Mg(Pc)', mode: 'insensitive' }],
+    [{ equals: 'Tab. Flutas 150 mg', mode: 'insensitive' }, undefined],
+  ]);
+  expect(resolved?.batches.map((batch: any) => batch.id)).toEqual(['flutas']);
+});
+
+it('offers the standard name when the picker query is part of the recorded name with its code', async () => {
+  const flutas = { id: 'flutas', name: 'Tab. Flutas 150 mg', unit: 'STRIPS', packSize: 10, packUnit: 'tablets', status: 'ACTIVE', currentStock: 30, drugs: [], metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc)'] } }) };
+  const fifty = { ...flutas, id: 'flutas-50', name: 'Tab. Flutas 50 mg', metadata: null };
+  const prisma: any = { inventoryItem: { findMany: jest.fn().mockResolvedValue([flutas, fifty]) } };
+  const names = async (query: string) => (await searchClinicInventory(prisma, query, 'clinic')).map((row: any) => row.name);
+  expect(await Promise.all(['13 74 | Flutas', '74 |', '| Flutas', 'Tab. Flutas 150', 'Flutas'].map(names))).toEqual([
+    ['Tab. Flutas 150 mg'],
+    ['Tab. Flutas 150 mg'],
+    ['Tab. Flutas 150 mg', 'Tab. Flutas 50 mg'],
+    ['Tab. Flutas 150 mg'],
+    ['Tab. Flutas 150 mg', 'Tab. Flutas 50 mg'],
+  ]);
 });

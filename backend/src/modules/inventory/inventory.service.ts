@@ -1,4 +1,5 @@
 import { saveInventoryItemMetadata } from './inventory-item-metadata';
+import { withStandardName } from './inventory-names';
 import { performStockOperation, registerStockOperation, requireStockOperationId, stockRequestFingerprint } from './inventory-stock-operations';
 import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
 import { batchDeleteBlock, writeStockMovement, movementDelta, money } from './inventory-stock';
@@ -74,7 +75,7 @@ export class InventoryService {
 
     const item = await db.inventoryItem.create({
       data: {
-        ...createItemDto,
+        ...withStandardName(createItemDto),
         ...inventoryRegimenDefaults(createItemDto),
         branchId,
         currentStock: 0,

@@ -111,9 +111,42 @@ export interface AppointmentInSlot {
   status: AppointmentStatus;
   calendar: AppointmentCalendar;
   visit?: { id: string; status?: string | null };
-  isFollowUp?: boolean;
+  billType?: BillType;
+  billing?: AppointmentBilling;
+  /** The fee list's amount for this bill type; null when none is set; absent when the viewer cannot create bills. */
+  fee?: number | null;
   notes?: string;
   tokenNumber?: number;
+}
+
+/** CR-17: decided by the server from the visit type and the patient's earlier visits. */
+export type BillType = 'FIRST_CONSULTATION' | 'REVIEW' | 'PROCEDURE';
+
+/** The clinic bills of one appointment, linked by appointment or through its visit. */
+export interface AppointmentBilling {
+  state: 'NOT_BILLED' | 'DUE' | 'PAID';
+  total: number;
+  received: number;
+  due: number;
+  attention: boolean;
+  invoices: { id: string; invoiceNo: string; total: number; received: number; due: number }[];
+}
+
+export interface ClinicBillAccess {
+  read: boolean;
+  createBill: boolean;
+  takePayment: boolean;
+  editFees: boolean;
+}
+
+/** One row of the branch's fee list; version 0 means it has never been saved. */
+export interface ClinicFee {
+  billType: BillType;
+  label: string;
+  amount: number | null;
+  version: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
 }
 
 // Available Slots
@@ -250,9 +283,16 @@ export interface GetAvailableSlotsResponse {
 }
 
 export interface GetDoctorScheduleResponse {
-  appointments: Array<Appointment & { calendar: AppointmentCalendar }>;
+  appointments: Array<Omit<Appointment, 'patient'> & {
+    calendar: AppointmentCalendar;
+    billType?: BillType;
+    billing?: AppointmentBilling;
+    fee?: number | null;
+    patient?: NonNullable<Appointment['patient']> & { gender?: string | null; dob?: string | null; age?: number | null };
+  }>;
   doctorId: string;
   date: string;
+  billingAccess?: ClinicBillAccess;
 }
 
 export interface RescheduleAppointmentPayload {

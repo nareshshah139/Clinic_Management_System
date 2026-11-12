@@ -33,7 +33,8 @@ describe('AddInventoryItemDialog', () => {
         />
       );
 
-      expect(screen.getByText(/Item Name \*/)).toBeInTheDocument();
+      expect(screen.getByText(/Medicine name \*/)).toBeInTheDocument();
+      expect(screen.getByText(/Form \*/)).toBeInTheDocument();
       expect(screen.getByText(/Type \*/)).toBeInTheDocument();
       expect(screen.getByText(/Cost Price.*\*/)).toBeInTheDocument();
       expect(screen.getByText(/Selling Price.*\*/)).toBeInTheDocument();
@@ -70,7 +71,8 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill required fields
-      const nameInput = screen.getByLabelText(/Item Name/i);
+      const nameInput = screen.getByLabelText(/Medicine name/i);
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(nameInput, { target: { value: 'Paracetamol 500mg' } });
 
       const costPriceInput = screen.getByLabelText(/Cost Price/i);
@@ -102,9 +104,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill form
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10.50' },
       });
@@ -140,9 +143,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill required fields
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -194,9 +198,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill required + GST fields
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -232,9 +237,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill required fields
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -269,9 +275,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill only required fields
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -301,9 +308,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill required fields
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -338,9 +346,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill required fields
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -375,9 +384,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill required fields
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -469,17 +479,15 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill all fields
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
-        target: { value: 'Amoxicillin 500mg' },
-      });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CAPSULE' } });
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), { target: { value: 'Amoxil' } });
+      fireEvent.change(screen.getByLabelText(/^Strength/i), { target: { value: '500Mg' } });
+      fireEvent.change(screen.getByLabelText(/Item code/i), { target: { value: '13 74' } });
       fireEvent.change(screen.getByLabelText(/Description/i), {
         target: { value: 'Antibiotic medication' },
       });
       fireEvent.change(screen.getByLabelText(/Generic Name/i), {
         target: { value: 'Amoxicillin' },
-      });
-      fireEvent.change(screen.getByLabelText(/Brand Name/i), {
-        target: { value: 'Amoxil' },
       });
       fireEvent.change(screen.getByLabelText(/^Category$/i), {
         target: { value: 'Antibiotics' },
@@ -551,7 +559,11 @@ describe('AddInventoryItemDialog', () => {
 
       await waitFor(() => {
         expect(apiClient.createInventoryItem).toHaveBeenCalledWith({
-          name: 'Amoxicillin 500mg',
+          name: 'Cap. Amoxil 500 mg',
+          form: 'CAPSULE',
+          strength: '500 mg',
+          isCombination: false,
+          itemCode: '13 74',
           type: 'MEDICINE',
           costPrice: 25.0,
           sellingPrice: 35.0,
@@ -599,9 +611,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill required fields and submit
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -629,7 +642,8 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill and submit
-      const nameInput = screen.getByLabelText(/Item Name/i);
+      const nameInput = screen.getByLabelText(/Medicine name/i);
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(nameInput, { target: { value: 'Test Medicine' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
@@ -654,7 +668,7 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Form should be reset
-      expect(screen.getByLabelText(/Item Name/i)).toHaveValue('');
+      expect(screen.getByLabelText(/Medicine name/i)).toHaveValue('');
     });
   });
 
@@ -673,9 +687,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill and submit
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -704,9 +719,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill and submit
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -741,9 +757,10 @@ describe('AddInventoryItemDialog', () => {
       );
 
       // Fill and submit
-      fireEvent.change(screen.getByLabelText(/Item Name/i), {
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), {
         target: { value: 'Test Medicine' },
       });
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
       fireEvent.change(screen.getByLabelText(/Cost Price/i), {
         target: { value: '10' },
       });
@@ -756,6 +773,85 @@ describe('AddInventoryItemDialog', () => {
 
       // Button should be disabled during submission
       expect(submitButton).toBeDisabled();
+    });
+  });
+
+  describe('Standard medicine name', () => {
+    const open = () => render(<AddInventoryItemDialog open={true} onOpenChange={mockOnOpenChange} onSuccess={mockOnSuccess} />);
+    const prices = () => {
+      fireEvent.change(screen.getByLabelText(/Cost Price/i), { target: { value: '10' } });
+      fireEvent.change(screen.getByLabelText(/Selling Price/i), { target: { value: '15' } });
+    };
+
+    it('previews the printed name while typing', () => {
+      open();
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'TABLET' } });
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), { target: { value: 'Flutas' } });
+      expect(screen.getByTestId('medicine-name-preview')).toHaveTextContent('Tab. Flutas');
+      expect(screen.getByText('Strength missing')).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText(/^Strength/i), { target: { value: '150Mg' } });
+      expect(screen.getByTestId('medicine-name-preview')).toHaveTextContent('Tab. Flutas 150 mg');
+      expect(screen.queryByText('Strength missing')).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
+      fireEvent.change(screen.getByLabelText(/^Strength/i), { target: { value: '' } });
+      expect(screen.getByTestId('medicine-name-preview')).toHaveTextContent('Flutas cream');
+    });
+
+    it('refuses a tablet without a strength and names the field', async () => {
+      open();
+      prices();
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'TABLET' } });
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), { target: { value: 'Flutas' } });
+      fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Enter the strength, for example 150 mg, or tick Combination product.');
+      expect(screen.getByLabelText(/^Strength/i)).toHaveFocus();
+      expect(apiClient.createInventoryItem).not.toHaveBeenCalled();
+    });
+
+    it('never adds a unit to a bare number: the pharmacist picks it and the preview shows it', async () => {
+      (apiClient.createInventoryItem as jest.Mock).mockResolvedValue({ id: 'item-1' });
+      open();
+      prices();
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'TABLET' } });
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), { target: { value: 'Thyronorm' } });
+      fireEvent.change(screen.getByLabelText(/^Strength/i), { target: { value: '50' } });
+      expect(screen.getByTestId('medicine-name-preview')).toHaveTextContent(/^Tab\. Thyronorm 50$/);
+      expect(screen.getByRole('group', { name: 'Unit of 50' })).toHaveTextContent('Which unit?mgmcggIU%');
+      fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Add the unit to the strength, for example 50 mg, 50 mcg, 1 g, 60000 IU or 1%.');
+      expect(apiClient.createInventoryItem).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'mcg' }));
+      expect(screen.getByLabelText(/^Strength/i)).toHaveValue('50 mcg');
+      expect(screen.getByTestId('medicine-name-preview')).toHaveTextContent('Tab. Thyronorm 50 mcg');
+      expect(screen.queryByRole('group', { name: 'Unit of 50' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
+      await waitFor(() => expect(apiClient.createInventoryItem).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Tab. Thyronorm 50 mcg', brandName: 'Thyronorm', form: 'TABLET', strength: '50 mcg',
+      })));
+    });
+
+    it('refuses a medicine without a form', async () => {
+      open();
+      prices();
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), { target: { value: 'Flutas' } });
+      fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Choose the form: tablet, capsule, syrup, cream and so on.');
+      expect(apiClient.createInventoryItem).not.toHaveBeenCalled();
+    });
+
+    it('saves a combination capsule without a strength', async () => {
+      (apiClient.createInventoryItem as jest.Mock).mockResolvedValue({ id: 'item-1' });
+      open();
+      prices();
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CAPSULE' } });
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), { target: { value: 'Antoxid-HC' } });
+      fireEvent.click(screen.getByLabelText(/Combination product/i));
+      expect(screen.getByLabelText(/^Strength/i)).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
+      await waitFor(() => expect(apiClient.createInventoryItem).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Cap. Antoxid-HC', brandName: 'Antoxid-HC', form: 'CAPSULE', isCombination: true,
+      })));
+      expect((apiClient.createInventoryItem as jest.Mock).mock.calls[0][0]).not.toHaveProperty('strength');
     });
   });
 });

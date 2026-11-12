@@ -149,7 +149,7 @@ it('does not apply a removed row’s pending suggestion to the row that replaces
   get.mockImplementation(url => url.endsWith('/regimen-defaults') ? new Promise(done => { resolve = done; })
     : Promise.resolve(url === '/prescriptions/drugs/autocomplete' ? [drug] : {}));
   const row = await mount(); await select(row);
-  fireEvent.click(within(row).getByRole('button', { name: 'Remove' }));
+  fireEvent.click(within(row).getByRole('button', { name: 'Remove Fucibet cream' }));
   await act(async () => resolve({ values: usual, source: 'doctor' }));
   expect(screen.getByPlaceholderText('#')).toHaveValue(null);
   expect(screen.queryByText('Suggested · Accept')).not.toBeInTheDocument();

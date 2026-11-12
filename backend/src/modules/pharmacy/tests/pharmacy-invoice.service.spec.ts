@@ -52,6 +52,9 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
       pharmacyInvoice: {
         findFirst: jest.fn(),
       },
+      inventoryItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       stockTransaction: {
         findMany: jest.fn(),
       },

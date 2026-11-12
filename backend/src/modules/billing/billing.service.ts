@@ -1,5 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import { PaymentMode, Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { addDays, clinicDay, clinicInstants } from '../pharmacy/register-utils';
 import { InvoiceNumbersService } from '../../shared/numbering/invoice-numbers.service';
 import { 
   CreateInvoiceDto, 
@@ -8,7 +10,6 @@ import {
   RefundDto, 
   BulkPaymentDto,
   // InvoiceStatus,
-  PaymentMethod,
   // PaymentStatus,
 } from './dto/invoice.dto';
 import { 
@@ -18,6 +19,9 @@ import {
   RevenueReportDto,
   OutstandingInvoicesDto,
 } from './dto/query-billing.dto';
+
+const RUPEES = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const PAYMENT_INVOICE = { invoice: { select: { id: true, invoiceNo: true, total: true } } } as const;
 
 @Injectable()
 export class BillingService {
@@ -37,7 +41,7 @@ export class BillingService {
         discount: createInvoiceDto.discount
       });
 
-      const { patientId, visitId, items, discount, discountReason, notes, dueDate, metadata, mode, gstin, hsn } = createInvoiceDto as any;
+      const { patientId, visitId, appointmentId, items, discount, discountReason, notes, dueDate, metadata, mode, gstin, hsn } = createInvoiceDto as any;
 
       if (!items || items.length === 0) {
         console.error('❌ No items provided for invoice');
@@ -55,16 +59,7 @@ export class BillingService {
       throw new NotFoundException('Patient not found');
     }
 
-    // Verify visit exists and belongs to branch (if provided)
-    if (visitId) {
-      const visit = await this.prisma.visit.findFirst({
-        where: { id: visitId, patientId, patient: { branchId } },
-      });
-
-      if (!visit) {
-        throw new NotFoundException('Visit not found');
-      }
-    }
+    const links = await this.invoiceLinks(patientId, branchId, visitId, appointmentId);
 
     const invoiceNumber = await this.generateInvoiceNumber(branchId);
 
@@ -86,7 +81,8 @@ export class BillingService {
       items: { create: invoiceItemsData },
     };
     
-    if (visitId) data.visitId = visitId;
+    if (links.visitId) data.visitId = links.visitId;
+    if (links.appointmentId) data.appointmentId = links.appointmentId;
     if (mode) data.mode = mode;
     if (gstin) data.gstin = gstin;
     if (hsn) data.hsn = hsn;
@@ -135,6 +131,35 @@ export class BillingService {
       // Re-throw the error so it can be handled by the controller
       throw error;
     }
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security;product] invoice-appointment-link
+   * A supplied appointment MUST belong to the invoice patient in the authenticated branch, and a
+   * supplied visit MUST be that appointment's visit; otherwise nothing is written. The bill keeps
+   * both links: the appointment's visit when only the appointment is given, and the visit's
+   * appointment when only the visit is given.
+   */
+  private async invoiceLinks(patientId: string, branchId: string, visitId?: string, appointmentId?: string) {
+    const visit = visitId
+      ? await this.prisma.visit.findFirst({ where: { id: visitId, patientId, patient: { branchId } }, select: { id: true, appointmentId: true } })
+      : null;
+    if (visitId && !visit) throw new NotFoundException('Visit not found');
+    const appointment = appointmentId
+      ? await this.prisma.appointment.findFirst({
+          where: { id: appointmentId, patientId, branchId },
+          select: { id: true, visit: { select: { id: true, deletedAt: true } } },
+        })
+      : null;
+    if (appointmentId && !appointment) throw new NotFoundException('Appointment not found');
+    if (visit && appointment && visit.appointmentId !== appointment.id) {
+      throw new BadRequestException('The visit belongs to a different appointment');
+    }
+    const appointmentVisit = appointment?.visit && !appointment.visit.deletedAt ? appointment.visit.id : null;
+    return {
+      visitId: visit?.id ?? appointmentVisit,
+      appointmentId: appointment?.id ?? visit?.appointmentId ?? null,
+    };
   }
 
   async findAllInvoices(query: QueryInvoicesDto, branchId: string) {
@@ -308,38 +333,41 @@ export class BillingService {
 
   /**
    * @cc [owner:nareshshah139,label:calculation;security] payment-balance-application
-   * A payment MUST add its amount to the invoice received and set balance to total minus received,
-   * never below 0, so partial payments leave the remainder and full payment settles at 0. The
-   * invoice MUST belong to the authenticated branch, otherwise nothing is written.
+   * A payment taken at the desk (no gateway) MUST be recorded COMPLETED and, in the same transaction,
+   * add its amount to the invoice received and take it off the balance. A gateway payment MUST stay
+   * PENDING and leave the invoice unchanged until confirmPayment completes it, which applies it once
+   * however often it is called. So received MUST equal the invoice's COMPLETED payments less refunds.
+   * An amount at or below 0 or above the balance MUST fail naming what is due, with nothing written,
+   * also when two payments race for the same balance. The invoice MUST belong to the authenticated
+   * branch, otherwise nothing is written.
    */
   async processPayment(paymentDto: PaymentDto, branchId: string) {
-    const { invoiceId, amount, method, reference, gateway } = paymentDto as any;
-
+    const { invoiceId, amount, method, reference, gateway } = paymentDto;
+    if (!(amount > 0)) throw new BadRequestException('Enter a payment above ₹0.');
     const invoice = await this.findInvoiceById(invoiceId, branchId);
 
-    // Create payment with supported fields
-    const payment = await this.prisma.newPayment.create({
-      data: {
-        invoiceId,
-        amount,
-        mode: method as any,
-        reference: reference ?? null,
-        gateway: gateway ?? null,
-      },
-      include: {
-        invoice: { select: { id: true, invoiceNo: true, total: true } },
-      },
-    });
+    if (gateway) {
+      if (amount > invoice.balance) throw new BadRequestException(this.overDue(invoice, invoice.balance, amount));
+      return this.prisma.newPayment.create({
+        data: { invoiceId, amount, mode: method as any, reference: reference ?? null, gateway, reconStatus: 'PENDING' },
+        include: PAYMENT_INVOICE,
+      });
+    }
+    return this.prisma.$transaction((tx) => this.payAtDesk(tx, invoice, amount, method, reference));
+  }
 
-    // Update invoice received/balance
-    const newReceived = (invoice.received ?? 0) + amount;
-    const newBalance = Math.max((invoice.total ?? 0) - newReceived, 0);
-    await this.prisma.newInvoice.update({
-      where: { id: invoiceId },
-      data: { received: newReceived, balance: newBalance },
+  private async payAtDesk(
+    tx: Prisma.TransactionClient,
+    invoice: { id: string; invoiceNo: string },
+    amount: number,
+    method: PaymentMode,
+    reference?: string,
+  ) {
+    await this.receive(tx, invoice, amount, BadRequestException);
+    return tx.newPayment.create({
+      data: { invoiceId: invoice.id, amount, mode: method as any, reference: reference ?? null, reconStatus: 'COMPLETED' },
+      include: PAYMENT_INVOICE,
     });
-
-    return payment;
   }
 
   async confirmPayment(paymentId: string, branchId: string, _gatewayResponse?: Record<string, any>) {
@@ -348,32 +376,61 @@ export class BillingService {
         id: paymentId,
         invoice: { branchId },
       },
+      include: { invoice: { select: { id: true, invoiceNo: true } } },
     });
 
     if (!payment) {
       throw new NotFoundException('Payment not found');
     }
 
-    const confirmed = await this.prisma.newPayment.update({
-      where: { id: paymentId },
-      data: { reconStatus: 'COMPLETED' },
+    return this.prisma.$transaction(async (tx) => {
+      const completed = await tx.newPayment.updateMany({
+        where: { id: paymentId, reconStatus: 'PENDING' },
+        data: { reconStatus: 'COMPLETED' },
+      });
+      if (completed.count === 1) await this.receive(tx, payment.invoice, payment.amount, ConflictException);
+      return tx.newPayment.findUniqueOrThrow({ where: { id: paymentId } });
     });
+  }
 
-    return confirmed;
+  /**
+   * Adds money in hand to an invoice. The balance check and the write are one conditional update,
+   * so of two payments racing for the same balance the second finds it already taken.
+   */
+  private async receive(
+    tx: Prisma.TransactionClient,
+    invoice: { id: string; invoiceNo: string },
+    amount: number,
+    Refusal: new (message: string) => Error,
+  ) {
+    const applied = await tx.newInvoice.updateMany({
+      where: { id: invoice.id, balance: { gte: amount } },
+      data: { received: { increment: amount }, balance: { decrement: amount } },
+    });
+    if (applied.count === 1) return;
+    const { balance } = await tx.newInvoice.findUniqueOrThrow({ where: { id: invoice.id }, select: { balance: true } });
+    throw new Refusal(this.overDue(invoice, balance, amount));
+  }
+
+  private overDue(invoice: { invoiceNo: string }, balance: number, amount: number) {
+    const refused = `so ${RUPEES.format(amount)} cannot be recorded.`;
+    return balance > 0
+      ? `Only ${RUPEES.format(balance)} is due on bill ${invoice.invoiceNo}, ${refused}`
+      : `Bill ${invoice.invoiceNo} is already paid in full, ${refused}`;
   }
 
   /**
    * @cc [owner:nareshshah139,label:calculation;security] refund-bounds
    * A refund MUST target a COMPLETED, non-refund payment in the authenticated branch and MUST be
-   * above 0, at most the payment amount, and at most what the invoice still holds as received.
-   * Any other request MUST fail with nothing written. A valid refund MUST add a negative payment
-   * and lower received and raise balance by that amount.
+   * above 0, at most the payment amount, and at most what the invoice still holds as received,
+   * also when two refunds race for the same received amount. Any other request MUST fail with
+   * nothing written. A valid refund MUST add a negative payment and lower received and raise
+   * balance by that amount, in one transaction.
    */
   /**
    * @cc [owner:nareshshah139,label:calculation;target] refund-total-per-payment
-   * The refunds of one payment MUST NOT add up to more than that payment, and two concurrent refunds
-   * MUST NOT both pass the received cap. Today refund rows carry no link to their payment and the
-   * cap is read outside a transaction, so neither holds. This is a target obligation, not a pass claim.
+   * The refunds of one payment MUST NOT add up to more than that payment. Today refund rows carry
+   * no link to their payment, so this does not hold. This is a target obligation, not a pass claim.
    */
   async processRefund(refundDto: RefundDto, branchId: string) {
     const { paymentId, amount, reason, notes, gatewayResponse } = refundDto as any;
@@ -404,40 +461,29 @@ export class BillingService {
       throw new BadRequestException('Refund amount exceeds original payment amount');
     }
 
-    if (amount > (payment.invoice?.received ?? 0)) {
-      throw new BadRequestException('Refund amount exceeds the amount still received on the invoice');
-    }
-
     // Represent refund as a negative payment (cash refund)
-    const refundPayment = await this.prisma.newPayment.create({
-      data: {
-        invoiceId: payment.invoiceId,
-        amount: -amount,
-        mode: payment.mode,
-        reference: (notes ? `REFUND: ${notes}` : 'REFUND') as any,
-        gateway: null,
-        reconStatus: 'COMPLETED',
-      },
-      include: {
-        invoice: { select: { id: true, invoiceNo: true, total: true } },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const applied = await tx.newInvoice.updateMany({
+        where: { id: payment.invoiceId, received: { gte: amount } },
+        data: { received: { decrement: amount }, balance: { increment: amount } },
+      });
+      if (applied.count === 0) throw new BadRequestException('Refund amount exceeds the amount still received on the invoice');
+      return tx.newPayment.create({
+        data: {
+          invoiceId: payment.invoiceId,
+          amount: -amount,
+          mode: payment.mode,
+          reference: (notes ? `REFUND: ${notes}` : 'REFUND') as any,
+          gateway: null,
+          reconStatus: 'COMPLETED',
+        },
+        include: PAYMENT_INVOICE,
+      });
     });
-
-    // Update invoice received/balance (subtract refunded amount)
-    const invoice = await this.prisma.newInvoice.findFirst({ where: { id: payment.invoiceId, branchId } });
-    const newReceived = Math.max(0, (invoice?.received ?? 0) - amount);
-    const newBalance = Math.max((invoice?.total ?? 0) - newReceived, 0);
-
-    await this.prisma.newInvoice.update({
-      where: { id: payment.invoiceId },
-      data: { received: newReceived, balance: newBalance },
-    });
-
-    return refundPayment;
   }
 
   async processBulkPayment(bulkPaymentDto: BulkPaymentDto, branchId: string) {
-    const { invoiceIds, totalAmount, method, transactionId, reference, notes } = bulkPaymentDto;
+    const { invoiceIds, totalAmount, method, reference } = bulkPaymentDto;
 
     // Verify all invoices exist and belong to the branch
     const invoices = await this.prisma.newInvoice.findMany({
@@ -445,7 +491,6 @@ export class BillingService {
         id: { in: invoiceIds },
         branchId,
       },
-      include: { payments: true },
     });
 
     if (invoices.length !== invoiceIds.length) {
@@ -453,35 +498,19 @@ export class BillingService {
     }
 
     // Calculate total amount for all invoices based on current balance
-    const calculatedTotal = invoices.reduce((sum, invoice) => {
-      const balance = Math.max((invoice.total ?? 0) - (invoice.received ?? 0), 0);
-      return sum + balance;
-    }, 0);
+    const calculatedTotal = invoices.reduce((sum, invoice) => sum + Math.max(invoice.balance, 0), 0);
 
     if (totalAmount !== calculatedTotal) {
       throw new BadRequestException(`Total amount mismatch. Expected: ${calculatedTotal}, Provided: ${totalAmount}`);
     }
 
-    // Process payments for each invoice
-    const payments = [] as any[];
-    for (const invoice of invoices) {
-      const remainingAmount = Math.max((invoice.total ?? 0) - (invoice.received ?? 0), 0);
-
-      if (remainingAmount > 0) {
-        const payment = await this.processPayment(
-          {
-            invoiceId: invoice.id,
-            amount: remainingAmount,
-            method,
-            transactionId,
-            reference,
-            notes,
-          } as any,
-          branchId,
-        );
-        payments.push(payment);
+    const payments = await this.prisma.$transaction(async (tx) => {
+      const recorded = [] as Awaited<ReturnType<BillingService['payAtDesk']>>[];
+      for (const invoice of invoices) {
+        if (invoice.balance > 0) recorded.push(await this.payAtDesk(tx, invoice, invoice.balance, method, reference));
       }
-    }
+      return recorded;
+    });
 
     return {
       payments,
@@ -520,11 +549,7 @@ export class BillingService {
     if (method) where.mode = method;
     if (status) where.reconStatus = status;
 
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
+    if (startDate || endDate) where.createdAt = clinicInstants(startDate, endDate);
 
     if (search) {
       where.OR = [
@@ -571,11 +596,7 @@ export class BillingService {
       reconStatus: 'COMPLETED',
     };
 
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
+    if (startDate || endDate) where.createdAt = clinicInstants(startDate, endDate);
 
     if (method) where.mode = method;
     if (patientId) where.invoice = { patient: { id: patientId, branchId } };
@@ -583,15 +604,15 @@ export class BillingService {
     const [sumAgg, count, methodBreakdown, dailyBreakdown] = await Promise.all([
       this.prisma.newPayment.aggregate({ where, _sum: { amount: true } }),
       this.prisma.newPayment.count({ where }),
-      this.prisma.newPayment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { id: true } }),
-      this.prisma.newPayment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { id: true } }),
+      this.prisma.newPayment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { _all: true } }),
     ]);
 
     return {
       totalAmount: sumAgg._sum.amount ?? 0,
       paymentCount: count,
-      methodBreakdown: methodBreakdown.map(m => ({ method: m.mode, amount: m._sum.amount ?? 0, count: m._count.id })),
-      dailyBreakdown: dailyBreakdown.map(d => ({ date: d.createdAt, amount: d._sum.amount ?? 0, count: d._count.id })),
+      methodBreakdown: methodBreakdown.map(m => ({ method: m.mode, amount: m._sum.amount ?? 0, count: m._count._all })),
+      dailyBreakdown: dailyBreakdown.map(d => ({ date: d.createdAt, amount: d._sum.amount ?? 0, count: d._count._all })),
       period: { startDate: startDate || null, endDate: endDate || null },
     };
   }
@@ -604,11 +625,7 @@ export class BillingService {
       reconStatus: 'COMPLETED',
     };
 
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
+    if (startDate || endDate) where.createdAt = clinicInstants(startDate, endDate);
 
     const payments = await this.prisma.newPayment.findMany({ where, orderBy: { createdAt: 'asc' } });
 
@@ -765,27 +782,12 @@ export class BillingService {
     const groups: Record<string, any> = {};
 
     payments.forEach(payment => {
-      const date = new Date(payment.createdAt);
-      let key: string;
-
-      switch (groupBy) {
-        case 'day':
-          key = date.toISOString().split('T')[0];
-          break;
-        case 'week':
-          const weekStart = new Date(date);
-          weekStart.setDate(date.getDate() - date.getDay());
-          key = weekStart.toISOString().split('T')[0];
-          break;
-        case 'month':
-          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-          break;
-        case 'year':
-          key = String(date.getFullYear());
-          break;
-        default:
-          key = date.toISOString().split('T')[0];
-      }
+      const day = clinicDay(payment.createdAt);
+      const key =
+        groupBy === 'week' ? addDays(day, -new Date(`${day}T00:00:00Z`).getUTCDay())
+        : groupBy === 'month' ? day.slice(0, 7)
+        : groupBy === 'year' ? day.slice(0, 4)
+        : day;
 
       if (!groups[key]) {
         groups[key] = {
@@ -924,7 +926,7 @@ export class BillingService {
             data: {
               invoiceId: invoice.id,
               amount: invoice.total,
-              mode: PaymentMethod.CASH as any,
+              mode: PaymentMode.CASH,
               reference: 'SAMPLE',
               createdAt: paymentDate,
               reconStatus: 'COMPLETED',
@@ -939,7 +941,7 @@ export class BillingService {
             data: {
               invoiceId: invoice.id,
               amount: part,
-              mode: PaymentMethod.UPI as any,
+              mode: PaymentMode.UPI,
               reference: 'SAMPLE',
               createdAt: paymentDate,
               reconStatus: 'COMPLETED',

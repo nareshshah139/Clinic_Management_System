@@ -9,6 +9,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateInventoryItemDto } from './dto/inventory.dto';
+import { assertNewItemNaming, withStandardName } from './inventory-names';
 import { InventoryService } from './inventory.service';
 import {
   canReviewItemRequests,
@@ -41,10 +42,18 @@ export class InventoryItemRequestService {
     private readonly inventoryService: InventoryService,
   ) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:product] new-item-standard-name
+   * A new item submitted by staff MUST state its form when it is a medicine, a name, and a strength
+   * where the standard format prints one, unless it is a combination product. The request and the
+   * created item MUST carry the standard name.
+   */
   async createOrRequest(
-    dto: CreateInventoryItemDto,
+    submitted: CreateInventoryItemDto,
     actor: ItemRequestActor,
   ) {
+    assertNewItemNaming(submitted);
+    const dto = withStandardName(submitted);
     if (canReviewItemRequests(actor.role)) {
       const item = await this.inventoryService.createInventoryItem(
         dto,

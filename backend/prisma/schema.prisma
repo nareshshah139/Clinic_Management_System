@@ -165,6 +165,7 @@ model Branch {
   doctorWorkingHours       DoctorWorkingHours[]
   doctorTimeOff            DoctorTimeOff[]
   clinicInvestigations     ClinicInvestigation[]
+  clinicFees               ClinicFee[]
 
   @@map("branches")
 }
@@ -218,6 +219,27 @@ model ClinicInvestigation {
 
   @@unique([branchId, normalizedName])
   @@map("clinic_investigations")
+}
+
+/// The fee the bill dialog starts from, one per branch and bill type. A null amount is a fee
+/// someone cleared. Bills copy the amount they were made with, so a change here never moves them.
+model ClinicFee {
+  branchId    String
+  billType    ClinicBillType
+  amount      Float?
+  version     Int            @default(1)
+  updatedAt   DateTime       @updatedAt
+  updatedById String
+  branch      Branch         @relation(fields: [branchId], references: [id])
+
+  @@id([branchId, billType])
+  @@map("clinic_fees")
+}
+
+enum ClinicBillType {
+  FIRST_CONSULTATION
+  REVIEW
+  PROCEDURE
 }
 
 model Permission {
@@ -991,6 +1013,10 @@ model InventoryItem {
   description          String?
   genericName          String?
   brandName            String?
+  form                 MedicineForm?
+  strength             String?
+  isCombination        Boolean            @default(false)
+  itemCode             String?
   type                 InventoryItemType
   category             String?
   subCategory          String?
@@ -2218,6 +2244,8 @@ enum PaymentMode {
   CARD
   UPI
   BNPL
+  NET_BANKING
+  CHEQUE
 }
 
 enum ConsentType {
@@ -2231,6 +2259,22 @@ enum Language {
   EN
   TE
   HI
+}
+
+enum MedicineForm {
+  TABLET
+  CAPSULE
+  SYRUP
+  CREAM
+  OINTMENT
+  SOLUTION
+  LOTION
+  GEL
+  SHAMPOO
+  FACE_WASH
+  SERUM
+  SUNSCREEN
+  OTHER
 }
 
 enum InventoryItemType {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { resolvePrescriptionInventory } from './pharmacy-stock-identity';
+import { resolvePrescriptionInventory, withStockNames } from './pharmacy-stock-identity';
 import {
   Injectable,
   NotFoundException,
@@ -667,8 +667,10 @@ export class PharmacyInvoiceService {
         this.prisma.pharmacyInvoice.count({ where }),
       ]);
 
+      const named = await withStockNames(this.prisma, branchId, invoices.flatMap((invoice) => invoice.items));
+      const nameOf = new Map(named.map((item) => [item.id, item.name]));
       return {
-        data: invoices,
+        data: invoices.map((invoice) => ({ ...invoice, items: invoice.items.map((item) => ({ ...item, name: nameOf.get(item.id) ?? null })) })),
         pagination: {
           page: safePage,
           limit: safeLimit,
@@ -787,7 +789,7 @@ export class PharmacyInvoiceService {
         throw new NotFoundException('Invoice not found');
       }
 
-      return invoice;
+      return { ...invoice, items: await withStockNames(this.prisma, branchId, invoice.items) };
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -924,7 +926,7 @@ export class PharmacyInvoiceService {
         },
       });
 
-      const lines = invoice.items.map((item: any, index: number) =>
+      const lines = (await withStockNames(this.prisma, branchId, invoice.items)).map((item: any, index: number) =>
         this.toPrintLineItem(item, index + 1, stockTransactions),
       );
       const gstSummary = this.buildGstSummary(lines);
@@ -1662,10 +1664,7 @@ export class PharmacyInvoiceService {
     const unitPrice = this.money(item.unitPrice);
     const value = storedLineValue({ ...item, quantity, unitPrice });
     const taxPercent = this.money(item.taxPercent);
-    const itemName =
-      item.itemType === 'PACKAGE'
-        ? item.package?.name
-        : item.drug?.name || item.drug?.composition1;
+    const itemName = item.name || item.drug?.composition1;
 
     const matchingTransactions =
       item.itemType === 'DRUG' && item.drugId
