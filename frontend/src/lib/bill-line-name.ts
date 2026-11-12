@@ -15,5 +15,4 @@ export const prescribedNameShown = (line: NamedLine & { prescribedDrugName?: str
 
 type StockCheckLine = { drugName: string; stockName?: string | null };
 
-/** The name a stock-checked prescription line gets as a bill line when "Load" fills the bill: its stock's name, else what was prescribed. */
 export const stockCheckLineName = (line: StockCheckLine) => billLineName({ name: line.stockName, drug: { name: line.drugName } });

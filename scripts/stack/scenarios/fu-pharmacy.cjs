@@ -274,7 +274,6 @@ async function seed(stack) {
       check("pharmacist-390 loading: no console error or refused call", [seen.errors, seen.refused], [[], []]);
       await context.close();
     }
-    // The queue names each line's stock the way the bill line "Load" makes, and its status badges stay on one line.
     for (const [who, width] of [["pharmacist", "1280"], ["pharmacist", "1440"], ["pharmacist", "390"], ["doctor", "1280"], ["admin", "1280"]]) {
       const tag = `${who}-${width}`;
       const { page, context, seen } = await open(who, width);
