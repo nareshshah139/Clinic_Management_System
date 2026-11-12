@@ -54,7 +54,12 @@ describe('billing quantity from stockCheck', () => {
     expect(items[0].billingQuantity).toMatchObject({ quantity: 1, unit: 'BOTTLES', review: { reason: 'pack_item' } });
     expect(items[1]).toMatchObject({ prescribedQuantity: 16, billingQuantity: { quantity: 16, unit: 'PIECES', review: { reason: 'schedule_conflict' } } });
     expect(items[2].billingQuantity).toEqual({ quantity: 3, unit: 'STRIPS', review: null });
-    expect(items[3].billingQuantity).toEqual({ quantity: 5, unit: 'STRIPS', review: null });
+    expect(items[3].billingQuantity).toEqual({ quantity: 1, unit: 'STRIPS', review: null });
+  });
+
+  it('bills the fu-pharmacy Flutas line of 10 tablets as 1 strip', async () => {
+    const [item] = await stockCheck([{ drugName: 'Folvite 5mg', inventoryItemId: 'inv-folvite', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 10, durationUnit: 'DAYS', quantity: 10 }]);
+    expect(item).toMatchObject({ prescribedQuantity: 10, billingQuantity: { quantity: 1, unit: 'STRIPS', review: null } });
   });
 
   it('bills a countable item in pieces when the inventory sells pieces', async () => {
@@ -80,6 +85,48 @@ describe('billing quantity from stockCheck', () => {
   it('fills 1 pack with no unit for an unmatched serum', async () => {
     const [item] = await stockCheck([{ drugName: 'Mystery Hair Serum', ...tablet }]);
     expect(item.billingQuantity).toMatchObject({ quantity: 1, unit: null, review: { reason: 'pack_item' } });
+  });
+});
+
+describe('an explicit prescribed quantity', () => {
+  const strip = { unit: 'STRIPS', packSize: 10, packUnit: 'tablets' };
+  const flutas = { drugName: 'Tab. Flutas 150 mg', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 10, durationUnit: 'DAYS' };
+
+  it('bills 10 tablets of a 10-per-strip pack as 1 strip', () => {
+    expect(billingQuantity({ ...flutas, quantity: 10 }, strip, 'Tab. Flutas 150 mg'))
+      .toEqual({ quantity: 1, unit: 'STRIPS', review: null });
+  });
+
+  it('bills 15 tablets of a 10-per-strip pack as 2 strips', () => {
+    expect(billingQuantity({ ...flutas, quantity: 15 }, strip, 'Tab. Flutas 150 mg'))
+      .toEqual({ quantity: 2, unit: 'STRIPS', review: null });
+  });
+
+  it('bills the stated count of tubes and bottles with no pack size', () => {
+    expect(billingQuantity({ dosageUnit: 'APPLICATION', quantity: 2 }, { unit: 'TUBES', packSize: null, packUnit: null }, 'Fucibet cream'))
+      .toEqual({ quantity: 2, unit: 'TUBES', review: null });
+    expect(billingQuantity({ dosageUnit: 'TABLET', quantity: 3 }, { unit: 'BOTTLES', packSize: null, packUnit: null }, 'Ketoconazole 2%'))
+      .toEqual({ quantity: 3, unit: 'BOTTLES', review: null });
+  });
+
+  it('keeps a quantity the doctor entered in strips as entered', () => {
+    expect(billingQuantity({ ...flutas, quantity: 2, quantityUnit: 'STRIPS' }, strip, 'Tab. Flutas 150 mg'))
+      .toEqual({ quantity: 2, unit: 'STRIPS', review: null });
+  });
+
+  it('bills tablets one for one when the product sells single tablets', () => {
+    expect(billingQuantity({ ...flutas, quantity: 15 }, { unit: 'PIECES', packSize: 1, packUnit: 'tablets' }, 'Tab. Flutas 150 mg'))
+      .toEqual({ quantity: 15, unit: 'PIECES', review: null });
+  });
+
+  it('fills 1 and flags a tablet count on a strip product with no pack size', () => {
+    expect(billingQuantity({ ...flutas, quantity: 10 }, { unit: 'STRIPS', packSize: null, packUnit: null }, 'Tab. Flutas 150 mg'))
+      .toMatchObject({ quantity: 1, unit: 'STRIPS', review: { reason: 'pack_size_unknown' } });
+  });
+
+  it('keeps a strip count on a product sold in pieces and flags the unit', () => {
+    expect(billingQuantity({ ...flutas, quantity: 2, quantityUnit: 'STRIPS' }, { unit: 'PIECES', packSize: 1, packUnit: 'tablets' }, 'Tab. Flutas 150 mg'))
+      .toMatchObject({ quantity: 2, unit: 'PIECES', review: { reason: 'quantity_unit_mismatch' } });
   });
 });
 

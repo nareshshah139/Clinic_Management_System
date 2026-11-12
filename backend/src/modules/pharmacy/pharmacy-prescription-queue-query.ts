@@ -9,6 +9,7 @@ import {
   doseTolerance,
   quantityScale,
   queueDurationDays,
+  sellingUnits,
   queueFrequencyPerDay,
   queueInstructionSchedules,
 } from './pharmacy-billing-quantity';
@@ -99,6 +100,8 @@ export function queueStatusPage(
   const explicit = positiveNumber(
     Prisma.sql`coalesce(item->>'quantity', item->>'prescribedQuantity', item->>'totalQuantity', item->>'qty')`,
   );
+  const statedUnit = Prisma.sql`(btrim(coalesce(item->>'quantityUnit', ''), ' ') ~ '^[A-Za-z]+$'
+    AND upper(btrim(item->>'quantityUnit', ' ')) = ANY(${textArray(sellingUnits)}))`;
   const duration = positiveNumber(Prisma.sql`item->>'duration'`);
   const frequency = Prisma.sql`coalesce(${instructionLookup(
     normalized(Prisma.sql`coalesce(item->>'instructions', '')`),
@@ -129,12 +132,13 @@ export function queueStatusPage(
       WHERE patient."branchId" = ${branchId} AND coalesce(to_jsonb(p)->>'status', 'ACTIVE') NOT IN ('DRAFT', 'CANCELLED')
         AND to_jsonb(v)->>'deletedAt' IS NULL
     ), lines AS (
-      SELECT p.id, item, ordinal, ${explicit} AS explicit, ${doses} AS doses, ${lineMeasured} AS measured,
-        ${medicationName} AS name
+      SELECT p.id, item, ordinal, ${explicit} AS explicit, ${statedUnit} AS stated_unit, ${doses} AS doses,
+        ${lineMeasured} AS measured, ${medicationName} AS name
       FROM branch_prescriptions p
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.items) = 'array' THEN p.items ELSE '[]'::jsonb END) WITH ORDINALITY AS source(item, ordinal)
     ), medications AS (
-      SELECT id, item, ordinal, name, measured, explicit IS NULL AND doses IS NOT NULL AS need_in_doses,
+      SELECT id, item, ordinal, name, measured, explicit IS NOT NULL AS explicit_need,
+        CASE WHEN explicit IS NOT NULL THEN NOT (stated_unit OR measured) ELSE doses IS NOT NULL END AS need_in_doses,
         CASE WHEN explicit IS NOT NULL THEN explicit WHEN doses IS NOT NULL THEN doses WHEN measured THEN 1 END AS quantity
       FROM lines
     ), invoice_pool AS (
@@ -172,7 +176,8 @@ export function queueStatusPage(
             FROM (
               SELECT invoice, position, matched, CASE WHEN matched THEN greatest(0, (invoice->>'remaining')::double precision) ELSE 0 END AS available, CASE
                 WHEN NOT m.need_in_doses THEN 1::double precision
-                WHEN m.measured OR (invoice->>'measured')::boolean THEN m.quantity
+                WHEN m.measured OR (invoice->>'measured')::boolean THEN
+                  CASE WHEN m.explicit_need THEN 1::double precision ELSE m.quantity END
                 WHEN (invoice->>'packs')::boolean THEN
                   CASE WHEN (invoice->>'packSize')::double precision > 0 THEN (invoice->>'packSize')::double precision ELSE m.quantity END
                 ELSE 1::double precision END AS per_unit

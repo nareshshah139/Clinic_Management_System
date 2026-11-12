@@ -219,6 +219,9 @@ async function seed(stack) {
     check("stock check: the archived Flutas batch reads the product's in-stock batches, earliest expiry first; Sotret is out of stock and never Sotret 20",
       stock.items.map((l) => [l.drugName, l.inventoryItemId === items.flutasA.id || l.inventoryItemId === items.sotretA.id, l.stockName, l.stockStatus, l.totalNonExpiredStock, l.batches.map((b) => b.batchNumber)]),
       [[FLUTAS, true, FLUTAS, "IN_STOCK", 28, ["FB-02", "FB-01"]], [SOTRET, true, SOTRET, "OUT_OF_STOCK", 0, []]]);
+    check("stock check: the 10 prescribed Flutas tablets bill as 1 strip of 10 and the 10 Sotret capsules as 1 strip of 10",
+      stock.items.map((l) => [l.drugName, l.prescribedQuantity, l.billingQuantity]),
+      [[FLUTAS, 10, { quantity: 1, unit: "STRIPS", review: null }], [SOTRET, 10, { quantity: 1, unit: "STRIPS", review: null }]]);
 
     let sold;
     {
@@ -230,6 +233,8 @@ async function seed(stack) {
       check("pharmacist-1280 the bill heads the lines with the stock names, Flutas matched and in stock, Sotret out of stock, no Prescribed repeat",
         [await lineHeadings(page), flutasCard.includes("No match"), flutasCard.includes("Out of stock"), flutasCard.includes("Prescribed:"), sotretCard.includes("Out of stock"), CATALOGUE_ONLY.test(flutasCard)],
         [[FLUTAS, SOTRET], false, false, false, true, false]);
+      check("pharmacist-1280 the 10-tablet Flutas course loads as Quantity 1 strip at Rs 44.80 including 12% GST, not 10 strips at Rs 448",
+        [await line(page, FLUTAS).getByLabel("Quantity").inputValue(), flutasCard.includes("44.80"), flutasCard.includes("448.00")], ["1", true, false]);
       await shot(page, "pharmacist-1280-02-bill-from-learned-plan");
       await line(page, SOTRET).getByRole("button", { name: `Remove ${SOTRET}` }).click();
       const before = await stockOf();
@@ -239,16 +244,16 @@ async function seed(stack) {
       sold = await db.pharmacyInvoice.findFirst({ where: { prescriptionId: prescription.id, status: "CONFIRMED" }, include: { items: true } });
       const sales = await db.stockTransaction.findMany({ where: { type: "SALE", reference: { contains: sold.invoiceNumber } }, select: { itemId: true, quantity: true, batchNumber: true } });
       const after = await stockOf();
-      check("pharmacist-1280 the bill keeps the saved line identity and sells 10 strips earliest expiry first: all 8 of FB-02, then 2 of FB-01, none of the archived FA-01 or of Flutas 50",
-        [sold.items.map((i) => [i.inventoryItemId === items.flutasA.id, i.quantity]), sales.map((s) => [s.batchNumber, s.quantity]).sort(), after["FB-02"][0] - before["FB-02"][0], after["FB-01"][0] - before["FB-01"][0], after["FA-01"], after["F50-01"]],
-        [[[true, 10]], [["FB-01", 2], ["FB-02", 8]], -8, -2, [0, "INACTIVE"], [30, "ACTIVE"]]);
+      check("pharmacist-1280 the bill keeps the saved line identity and sells the 10 tablets as 1 strip from the earliest-expiring batch FB-02, none of FB-01, the archived FA-01 or Flutas 50, for Rs 44.80",
+        [sold.items.map((i) => [i.inventoryItemId === items.flutasA.id, i.quantity]), sales.map((s) => [s.batchNumber, s.quantity]).sort(), after["FB-02"][0] - before["FB-02"][0], after["FB-01"][0] - before["FB-01"][0], after["FA-01"], after["F50-01"], Number(sold.totalAmount)],
+        [[[true, 1]], [["FB-02", 1]], -1, 0, [0, "INACTIVE"], [30, "ACTIVE"], 44.8]);
       check("pharmacist-1280 billing: no console error or refused call", [seen.errors, seen.refused], [[], []]);
       await context.close();
     }
     const entry = await call("pharmacist", "GET", `/pharmacy/prescription-queue/${prescription.id}`);
     check("the queue counts the Flutas line covered by the bill and leaves Sotret open", entry.medications.map((m) => [m.drugName, m.coverageStatus]), [[FLUTAS, "covered"], [SOTRET, "not_started"]]);
     const printed = await call("pharmacist", "GET", `/pharmacy/invoices/${sold.id}/print-data?${q({ format: "A5" })}`);
-    check("the bill's print data names the line by its stock name and batch", printed.lines.map((l) => [l.name, l.batchAllocations.map((b) => b.batchNumber).sort()]), [[FLUTAS, ["FB-01", "FB-02"]]]);
+    check("the bill's print data names the line by its stock name and batch", printed.lines.map((l) => [l.name, l.batchAllocations.map((b) => b.batchNumber).sort()]), [[FLUTAS, ["FB-02"]]]);
 
     for (const width of ["1280", "390"]) {
       const { page, context, seen } = await open("pharmacist", width);
@@ -269,6 +274,8 @@ async function seed(stack) {
       const card = clean(await page.locator("[data-invoice-item]").first().innerText());
       check("pharmacist-390 an older prescription on the archived batch loads matched, in stock, under the stock name with what was prescribed",
         [await lineHeadings(page), card.includes("No match"), card.includes("Out of stock"), card.includes("Prescribed: 13 74 | Flutas 150Mg(Pc)")], [[FLUTAS], false, false, true]);
+      check("pharmacist-390 the older prescription's 10 tablets load as Quantity 1 strip at Rs 44.80",
+        [await page.locator("[data-invoice-item]").first().getByLabel("Quantity").inputValue(), card.includes("44.80")], ["1", true]);
       check("pharmacist-390 bill from the older prescription: no page overflow", await overflow(page), 0);
       await shot(page, "pharmacist-390-05-older-prescription-bill");
       check("pharmacist-390 loading: no console error or refused call", [seen.errors, seen.refused], [[], []]);

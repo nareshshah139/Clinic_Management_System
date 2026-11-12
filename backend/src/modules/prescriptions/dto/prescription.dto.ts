@@ -16,7 +16,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-import { PrescriptionStatus, RefillStatus } from '@prisma/client';
+import { PrescriptionStatus, RefillStatus, UnitType } from '@prisma/client';
 export { PrescriptionStatus, RefillStatus };
 
 export enum PrescriptionLanguage {
@@ -115,10 +115,16 @@ export class PrescriptionItemDto {
   @IsString()
   timing?: string; // Before meals, After meals, etc.
 
+  /** Without quantityUnit this counts dose units (tablets, capsules); the bill converts it to packs. */
   @IsOptional()
   @IsNumber()
   @Min(0)
   quantity?: number;
+
+  /** Set only when the doctor counted the quantity in packs (STRIPS, BOXES, TUBES...); the bill keeps it as entered. */
+  @IsOptional()
+  @IsEnum(UnitType)
+  quantityUnit?: UnitType;
 
   @IsOptional()
   @IsBoolean()
@@ -408,10 +414,16 @@ export class PrescriptionTemplateItemDto {
   @IsString()
   timing?: string;
 
+  /** Without quantityUnit this counts dose units (tablets, capsules); the bill converts it to packs. */
   @IsOptional()
   @IsNumber()
   @Min(0)
   quantity?: number;
+
+  /** Set only when the doctor counted the quantity in packs (STRIPS, BOXES, TUBES...); the bill keeps it as entered. */
+  @IsOptional()
+  @IsEnum(UnitType)
+  quantityUnit?: UnitType;
 
   @IsOptional()
   @IsString()

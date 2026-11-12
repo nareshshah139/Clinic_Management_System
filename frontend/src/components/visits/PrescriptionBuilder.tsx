@@ -96,6 +96,8 @@ interface PrescriptionItemForm extends RegimenRow {
   route?: string;
   timing?: string;
   quantity?: number | '';
+  /** Absent when quantity counts tablets or capsules; a pack unit (STRIPS, TUBES...) when the doctor counted packs. */
+  quantityUnit?: string;
   notes?: string;
   isGeneric?: boolean;
   applicationSite?: string;
@@ -1813,6 +1815,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       dosage: numberOrBlank(restoreLegacyDosage(raw?.dosage)),
       dosageUnit,
       quantity: numberOrBlank(raw?.quantity),
+      quantityUnit: raw?.quantityUnit ? String(raw.quantityUnit) : undefined,
       route: raw?.route ? String(raw.route) : '',
       notes: raw?.notes ? String(raw.notes) : '',
       isGeneric: Boolean(raw?.isGeneric),
@@ -1857,6 +1860,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         durationUnit: String(entry.durationUnit || '').trim(),
         instructions: String(entry.instructions || '').trim(),
         quantity: entry.quantity === '' ? '' : Number(entry.quantity || 0),
+        quantityUnit: entry.quantityUnit || '',
       })),
     investigations: Array.from(new Set((snapshot.investigations || []).map((entry) => String(entry || '').trim()).filter(Boolean))).sort(),
     followUpInstructions: String(snapshot.followUpInstructions || '').trim(),
@@ -2549,6 +2553,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           route: it.route || undefined,
           timing: it.timing || undefined,
           quantity: it.quantity ? Number(it.quantity) : undefined,
+          quantityUnit: it.quantity && it.quantityUnit ? it.quantityUnit : undefined,
           isGeneric: it.isGeneric ?? true,
           applicationSite: it.applicationSite || undefined,
           applicationAmount: it.applicationAmount || undefined,
@@ -2817,6 +2822,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         route: x.route,
         timing: x.timing,
         quantity: x.quantity,
+        quantityUnit: x.quantityUnit,
         notes: x.notes,
         isGeneric: x.isGeneric,
         applicationSite: x.applicationSite,
@@ -3140,6 +3146,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           route: it.route,
           timing: it.timing,
           quantity: it.quantity ? Number(it.quantity) : undefined,
+          quantityUnit: it.quantity && it.quantityUnit ? it.quantityUnit : undefined,
           notes: it.notes,
           isGeneric: it.isGeneric ?? true,
         })),
@@ -3204,6 +3211,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               route: it.route,
               timing: it.timing,
               quantity: it.quantity ? Number(it.quantity) : undefined,
+              quantityUnit: it.quantity && it.quantityUnit ? it.quantityUnit : undefined,
               notes: it.notes,
               isGeneric: it.isGeneric ?? true,
             })),

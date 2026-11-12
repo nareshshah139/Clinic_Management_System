@@ -31,23 +31,27 @@ def ceil(x):
     return -z3.ToInt(-x)
 
 
-explicit, doses_known, line_measured, inv_measured, inv_packs = z3.Bools(
-    'explicit doses_known line_measured inv_measured inv_packs')
+explicit, stated_unit, doses_known, line_measured, inv_measured, inv_packs = z3.Bools(
+    'explicit stated_unit doses_known line_measured inv_measured inv_packs')
 E = z3.Real('E')
 D, p = z3.Ints('D p')
 facts = z3.And(E > 0, D >= 1)
 
+# explicit: the item states a quantity E. stated_unit: its quantityUnit names a selling unit
+# (the doctor counted strips, tubes...). Without stated_unit, E counts dose units (tablets).
+measured = z3.Or(line_measured, inv_measured)
 known = z3.Or(explicit, doses_known, line_measured, inv_measured)
 need = z3.If(explicit, E, z3.If(doses_known, z3.ToReal(D), z3.RealVal(1)))
-in_selling_units = z3.Or(explicit, z3.And(z3.Not(doses_known), z3.Or(line_measured, inv_measured)))
+in_selling_units = z3.If(explicit, z3.Or(stated_unit, line_measured),
+                         z3.And(z3.Not(doses_known), measured))
 value = z3.If(in_selling_units, z3.RealVal(1),
-              z3.If(z3.Or(line_measured, inv_measured), need,
+              z3.If(measured, z3.If(explicit, z3.RealVal(1), need),
                     z3.If(inv_packs, z3.If(p > 0, z3.ToReal(p), need), z3.RealVal(1))))
-billed = z3.If(explicit, E,
-               z3.If(z3.Or(line_measured, inv_measured), z3.RealVal(1),
-                     z3.If(z3.Not(doses_known), z3.RealVal(1),
+billed = z3.If(z3.And(explicit, z3.Or(stated_unit, measured)), E,
+               z3.If(measured, z3.RealVal(1),
+                     z3.If(z3.And(z3.Not(explicit), z3.Not(doses_known)), z3.RealVal(1),
                            z3.If(z3.And(inv_packs, z3.Not(p > 0)), z3.RealVal(1),
-                                 z3.ToReal(ceil(z3.ToReal(D) / value))))))
+                                 z3.ToReal(ceil(need / value))))))
 
 prove('selling unit value is positive',
       *implies(z3.And(facts, known), value > 0))
@@ -58,8 +62,23 @@ prove('billing one unit fewer leaves the line short',
 prove('a strip course bills ceil(doses / pack size) strips',
       *implies(z3.And(facts, z3.Not(explicit), doses_known, z3.Not(line_measured), z3.Not(inv_measured), inv_packs, p > 0),
                  z3.And(value == z3.ToReal(p), billed == z3.ToReal(ceil(z3.ToReal(D) / z3.ToReal(p))))))
-prove('one measured pack covers a measured line',
-      *implies(z3.And(facts, known, z3.Not(explicit), z3.Or(line_measured, inv_measured)), 1 * value >= need))
+prove('an explicit tablet count bills ceil(count / pack size) strips',
+      *implies(z3.And(facts, explicit, z3.Not(stated_unit), z3.Not(line_measured), z3.Not(inv_measured), inv_packs, p > 0),
+                 z3.And(value == z3.ToReal(p), billed == z3.ToReal(ceil(E / z3.ToReal(p))))))
+prove('an explicit tablet count of a strip with no pack size bills 1 strip',
+      *implies(z3.And(facts, explicit, z3.Not(stated_unit), z3.Not(measured), inv_packs, z3.Not(p > 0)),
+                 billed == 1))
+prove('an explicit count in a stated selling unit bills as entered',
+      *implies(z3.And(facts, explicit, stated_unit), z3.And(value == 1, billed == E)))
+prove('an explicit count on a measured item bills the stated count of packs',
+      *implies(z3.And(facts, explicit, measured), z3.And(value == 1, billed == E)))
+prove('one measured pack covers a measured line with no explicit quantity',
+      *implies(z3.And(facts, known, z3.Not(explicit), measured), 1 * value >= need))
+EXAMPLES = [(10, 10, 1), (15, 10, 2), (20, 10, 2), (21, 10, 3), (1, 10, 1)]
+for count, pack, strips in EXAMPLES:
+    prove(f'{count} tablets of a {pack}-per-strip pack bill {strips} strip(s)',
+          *implies(z3.And(explicit, z3.Not(stated_unit), z3.Not(measured), inv_packs, E == count, p == pack, facts),
+                     billed == strips))
 
 N, R, S, x, r, v = z3.Reals('N R S x r v')
 taken = z3.If(x < R, x, R)

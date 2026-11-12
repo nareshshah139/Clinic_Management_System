@@ -134,6 +134,26 @@ it('fills the stock check billing quantity when an older prescription omitted ex
   expect(within(screen.getByRole('heading', { name: names[0], level: 4 }).closest('[data-invoice-item]') as HTMLElement).queryByText(review.message)).not.toBeInTheDocument();
 });
 
+it('bills a prescribed tablet count in the selling units the stock check returns', async () => {
+  const original = api.getPrescription.getMockImplementation()!;
+  const course = { dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 10, durationUnit: 'DAYS' };
+  api.getPrescription.mockImplementation(async id => ({ ...await original(id) as any, items: [
+    { drugName: names[0], ...course, quantity: 10 },
+    { drugName: names[1], dosageUnit: 'APPLICATION', quantity: 2 },
+    { drugName: names[2], ...course, quantity: 15 },
+    { drugName: names[3], ...course, quantity: 2, quantityUnit: 'STRIPS' },
+  ] }));
+  const get = api.get.getMockImplementation()!;
+  const billed = [[1, 'STRIPS'], [2, 'TUBES'], [2, 'STRIPS'], [2, 'STRIPS']] as const;
+  api.get.mockImplementation(async (url, query) => url.endsWith('/stock-check') ? { items: stock.map((item, index) => ({
+    ...item, billingQuantity: { quantity: billed[index][0], unit: billed[index][1], review: null },
+  })) } as any : get(url, query));
+  render(<SalesBillPage />);
+  await loadPatient();
+  await screen.findByRole('heading', { name: names[0], level: 4 });
+  expect(screen.getAllByLabelText('Quantity').map(input => (input as HTMLInputElement).value)).toEqual(['1', '2', '2', '2']);
+});
+
 it('retrying an inventory failure preserves removed lines and reviewed quantities', async () => {
   const get = api.get.getMockImplementation()!;
   let fail = true;

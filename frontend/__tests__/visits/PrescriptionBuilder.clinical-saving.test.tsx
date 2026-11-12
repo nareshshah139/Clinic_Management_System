@@ -63,3 +63,19 @@ it('does not duplicate shortcut diagnoses when reopening a saved combined diagno
   render(<PrescriptionBuilder patientId="synthetic" visitId={null} doctorId="doctor" onClinicalDataChange={onClinicalDataChange} />);
   await waitFor(() => expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({ diagnosis: [{ diagnosis: 'Acne vulgaris, Psoriasis' }] })));
 });
+it('keeps the pack unit of a quantity counted in strips and sends a tablet count without one', async () => {
+  const course = { dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 10, durationUnit: 'DAYS' };
+  const saved = { id: 'visit-1', prescription: { id: 'rx-1', items: [
+    { drugName: 'Tab. Flutas 150 mg', ...course, quantity: 2, quantityUnit: 'STRIPS' },
+    { drugName: 'Cap. Sotret 10 mg', ...course, dosageUnit: 'CAPSULE', quantity: 10 },
+  ] } };
+  const onClinicalDataChange = jest.fn();
+  render(<PrescriptionBuilder patientId="synthetic" visitId="visit-1" doctorId="doctor" initialVisitSnapshot={saved as any} onClinicalDataChange={onClinicalDataChange} />);
+  const [flutasDuration] = await screen.findAllByPlaceholderText('#');
+  await waitFor(() => expect(flutasDuration).toHaveValue(10));
+  fireEvent.change(flutasDuration, { target: { value: '14' } });
+  await waitFor(() => {
+    const plan = onClinicalDataChange.mock.calls.map(([patch]) => patch?.treatmentPlan?.dermatology?.medicationPlan).filter(Boolean).at(-1);
+    expect(plan?.map((medicine: { quantity?: number; quantityUnit?: string }) => [medicine.quantity, medicine.quantityUnit])).toEqual([[2, 'STRIPS'], [10, undefined]]);
+  });
+});

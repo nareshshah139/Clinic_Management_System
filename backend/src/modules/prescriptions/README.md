@@ -131,7 +131,8 @@ GET    /prescriptions/doctor/:doctorId/statistics # Get doctor prescription stat
   instructions?: string;      // Medication instructions
   route?: string;             // Administration route (Oral, Topical, etc.)
   timing?: string;            // Timing instructions (Before meals, etc.)
-  quantity?: number;          // Quantity prescribed
+  quantity?: number;          // Quantity prescribed, in dose units (tablets, capsules) unless quantityUnit is set
+  quantityUnit?: UnitType;    // Set when the quantity counts packs (STRIPS, BOXES, TUBES...)
   notes?: string;             // Additional notes
   isGeneric?: boolean;        // Whether generic is preferred
   hsnCode?: string;          // HSN code for billing

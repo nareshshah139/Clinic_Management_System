@@ -1,3 +1,5 @@
+import { UnitType } from '@prisma/client';
+
 export const queueFrequencyPerDay: Record<string, number> = {
   once_daily: 1,
   od: 1,
@@ -44,7 +46,8 @@ export type BillingQuantityReview =
   | 'pack_item'
   | 'schedule_conflict'
   | 'schedule_unknown'
-  | 'pack_size_unknown';
+  | 'pack_size_unknown'
+  | 'quantity_unit_mismatch';
 
 export type BillingQuantity = {
   quantity: number;
@@ -66,6 +69,7 @@ export type BillingPrescriptionItem = {
   durationUnit?: string | null;
   instructions?: string | null;
   quantity?: string | number | null;
+  quantityUnit?: unknown;
   prescribedQuantity?: string | number | null;
   totalQuantity?: string | number | null;
   qty?: string | number | null;
@@ -73,10 +77,13 @@ export type BillingPrescriptionItem = {
 
 export type PrescribedSchedule = { doses: number | null; conflict: boolean };
 
-export type LineNeed = { amount: number; unit: 'doses' | 'selling_units' };
+/** `explicit` marks a need the prescription stated as a quantity rather than one counted from the schedule. */
+export type LineNeed = { amount: number; unit: 'doses' | 'selling_units'; explicit: boolean };
 
 export const measuredSellingUnits = ['BOTTLES', 'TUBES'];
 export const packSellingUnits = ['STRIPS', 'BOXES', 'PACKS'];
+/** Every inventory selling unit; a prescription item's quantityUnit names one of these when the doctor counted packs. */
+export const sellingUnits: string[] = Object.values(UnitType);
 export const measuredPackUnits = ['ml', 'l', 'ltr', 'litre', 'g', 'gm', 'gms', 'gram', 'grams', 'kg'];
 export const measuredDosageUnits = [
   'ml', 'g', 'gm', 'drop', 'drops', 'application', 'applications',
@@ -92,6 +99,7 @@ export const doseTolerance = 1e-9;
 
 const MEASURED_SELLING_UNITS = new Set(measuredSellingUnits);
 const PACK_SELLING_UNITS = new Set(packSellingUnits);
+const SELLING_UNITS = new Set(sellingUnits);
 const MEASURED_PACK_UNITS = new Set(measuredPackUnits);
 const MEASURED_DOSAGE_UNITS = new Set(measuredDosageUnits);
 const MEASURED_NAME_WORDS = new Set(measuredNameWords);
@@ -122,6 +130,13 @@ const positiveNumber = (value: unknown): number | null => {
 
 const explicitQuantity = (item: BillingPrescriptionItem) =>
   positiveNumber(item.quantity ?? item.prescribedQuantity ?? item.totalQuantity ?? item.qty);
+
+/** The selling unit the prescription counted its quantity in, or null when it counted doses. */
+export const statedSellingUnit = (item: BillingPrescriptionItem): string | null => {
+  const text = jsonText(item.quantityUnit).replace(/^ +| +$/g, '');
+  const unit = /^[A-Za-z]+$/.test(text) ? text.toUpperCase() : '';
+  return SELLING_UNITS.has(unit) ? unit : null;
+};
 
 const sameRate = (a: number | null, b: number | null) =>
   a !== null && b !== null && Math.abs(a - b) < 1e-9;
@@ -168,10 +183,11 @@ const isMeasured = (
 
 /**
  * @cc [owner:nareshshah139,label:product] prescription-line-need
- * A line's need MUST be its explicit quantity in selling units, else its dose count, else
- * 1 selling unit when the line is measured or any invoice item billed for it is a measured
- * item. Lines with none of these MUST have an unknown need. Only a line with no explicit
- * quantity and no dose count may take its need from what it was billed as.
+ * A line's explicit quantity MUST count selling units when the item names a selling unit as its
+ * quantityUnit or the line is measured, and MUST count doses otherwise. With no explicit quantity
+ * the need MUST be the line's dose count, else 1 selling unit when the line is measured or any
+ * invoice item billed for it is a measured item. Lines with none of these MUST have an unknown
+ * need. Only a line with no explicit quantity and no dose count may take its need from what it was billed as.
  */
 export function prescribedNeed(
   item: BillingPrescriptionItem,
@@ -179,19 +195,23 @@ export function prescribedNeed(
   billedAs: Array<BillingInventory | null> = [],
 ): LineNeed | null {
   const explicit = explicitQuantity(item);
-  if (explicit !== null) return { amount: explicit, unit: 'selling_units' };
+  if (explicit !== null) {
+    const packs = statedSellingUnit(item) !== null || lineIsMeasured(item, drugName);
+    return { amount: explicit, unit: packs ? 'selling_units' : 'doses', explicit: true };
+  }
   const { doses } = prescribedSchedule(item);
-  if (doses !== null) return { amount: doses, unit: 'doses' };
+  if (doses !== null) return { amount: doses, unit: 'doses', explicit: false };
   return lineIsMeasured(item, drugName) || billedAs.some(inventoryIsMeasured)
-    ? { amount: 1, unit: 'selling_units' }
+    ? { amount: 1, unit: 'selling_units', explicit: false }
     : null;
 }
 
 /**
  * @cc [owner:nareshshah139,label:product] selling-unit-need-value
  * One selling unit of an inventory item MUST cover this much of a line's need: 1 for a need in
- * selling units; the whole dose count for a measured item or a pack with no pack size; the pack
- * size for strips, boxes and packs; else 1 dose. Billing ceil(need / value) units MUST cover the need.
+ * selling units; 1 for an explicit quantity billed as a measured item; the whole dose count for a
+ * measured item or a pack with no pack size; the pack size for strips, boxes and packs; else 1 dose.
+ * Billing ceil(need / value) units MUST cover the need.
  */
 export function sellingUnitValue(
   need: LineNeed,
@@ -200,7 +220,7 @@ export function sellingUnitValue(
   drugName: string,
 ): number {
   if (need.unit === 'selling_units') return 1;
-  if (isMeasured(item, inventory, drugName)) return need.amount;
+  if (isMeasured(item, inventory, drugName)) return need.explicit ? 1 : need.amount;
   if (inventory && PACK_SELLING_UNITS.has(inventory.unit)) {
     return inventory.packSize && inventory.packSize > 0 ? inventory.packSize : need.amount;
   }
@@ -210,6 +230,13 @@ export function sellingUnitValue(
 const unitSingular = (unit: string | null) => (unit && UNIT_SINGULAR[unit]) || 'pack';
 const unitPlural = (unit: string | null) => (unit ? unit.toLowerCase() : 'packs');
 
+/**
+ * @cc [owner:nareshshah139,label:product] explicit-quantity-selling-units
+ * An explicit quantity with no selling-unit quantityUnit MUST count dose units (tablets, capsules)
+ * and bill ceil(count / pack size) strips, boxes or packs. A quantity stated in a selling unit, or
+ * on a measured item (tube, bottle), MUST bill as stated; a stated unit other than the product's
+ * selling unit MUST be flagged.
+ */
 export function billingQuantity(
   item: BillingPrescriptionItem,
   inventory: BillingInventory | null,
@@ -217,7 +244,19 @@ export function billingQuantity(
 ): BillingQuantity {
   const unit = inventory?.unit ?? null;
   const explicit = explicitQuantity(item);
-  if (explicit !== null) return { quantity: explicit, unit, review: null };
+  const stated = statedSellingUnit(item);
+  if (explicit !== null && (stated !== null || isMeasured(item, inventory, drugName))) {
+    return {
+      quantity: explicit,
+      unit,
+      review: stated && unit && stated !== unit
+        ? {
+            reason: 'quantity_unit_mismatch',
+            message: `Prescribed as ${explicit} ${unitPlural(stated)}; this product sells in ${unitPlural(unit)}. Confirm the quantity.`,
+          }
+        : null,
+    };
+  }
 
   if (isMeasured(item, inventory, drugName)) {
     return {

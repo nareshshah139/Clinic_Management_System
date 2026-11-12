@@ -140,8 +140,13 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
       ['weekly-15-pieces', [line('foitrax', weekly)], confirmed(bill('foitrax', 15)), PrescriptionQueueStatus.PARTIAL, [[16, 15, 'partial']]],
       ['alternate-2-strips', [line('tricogroStrips', alternate)], confirmed(bill('tricogroStrips', 2)), PrescriptionQueueStatus.DISPENSED, [[15, 15, 'covered']]],
       ['alternate-1-strip', [line('tricogroStrips', alternate)], confirmed(bill('tricogroStrips', 1)), PrescriptionQueueStatus.PARTIAL, [[15, 10, 'partial']]],
-      ['explicit-5-strips', [line('folvite', { ...tablet, quantity: 5 })], confirmed(bill('folvite', 5)), PrescriptionQueueStatus.DISPENSED, [[5, 5, 'covered']]],
-      ['explicit-4-strips', [line('folvite', { ...tablet, quantity: 5 })], confirmed(bill('folvite', 4)), PrescriptionQueueStatus.PARTIAL, [[5, 4, 'partial']]],
+      ['explicit-10-tablets-1-strip', [line('folvite', { ...tablet, quantity: 10 })], confirmed(bill('folvite', 1)), PrescriptionQueueStatus.DISPENSED, [[10, 10, 'covered']]],
+      ['explicit-15-tablets-2-strips', [line('folvite', { ...tablet, quantity: 15 })], confirmed(bill('folvite', 2)), PrescriptionQueueStatus.DISPENSED, [[15, 15, 'covered']]],
+      ['explicit-15-tablets-1-strip', [line('folvite', { ...tablet, quantity: 15 })], confirmed(bill('folvite', 1)), PrescriptionQueueStatus.PARTIAL, [[15, 10, 'partial']]],
+      ['explicit-5-strips-stated', [line('folvite', { ...tablet, quantity: 5, quantityUnit: 'STRIPS' })], confirmed(bill('folvite', 5)), PrescriptionQueueStatus.DISPENSED, [[5, 5, 'covered']]],
+      ['explicit-4-of-5-strips-stated', [line('folvite', { ...tablet, quantity: 5, quantityUnit: 'strips' })], confirmed(bill('folvite', 4)), PrescriptionQueueStatus.PARTIAL, [[5, 4, 'partial']]],
+      ['explicit-2-bottles', [line('ketoconazole', { dosageUnit: 'TABLET', quantity: 2 })], confirmed(bill('ketoconazole', 2)), PrescriptionQueueStatus.DISPENSED, [[2, 2, 'covered']]],
+      ['explicit-1-of-2-bottles', [line('ketoconazole', { dosageUnit: 'TABLET', quantity: 2 })], confirmed(bill('ketoconazole', 1)), PrescriptionQueueStatus.PARTIAL, [[2, 1, 'partial']]],
       ['two-lines-5-strips', [line('tricogroStrips', tablet), line('tricogroStrips', tablet)], confirmed(bill('tricogroStrips', 5)), PrescriptionQueueStatus.PARTIAL, [[30, 30, 'covered'], [30, 20, 'partial']]],
       ['two-lines-6-strips', [line('tricogroStrips', tablet), line('tricogroStrips', tablet)], confirmed(bill('tricogroStrips', 6)), PrescriptionQueueStatus.DISPENSED, [[30, 30, 'covered'], [30, 30, 'covered']]],
       ['two-lines-share-a-cut-strip', [line('tricogroStrips', { ...tablet, duration: 25 }), line('tricogroStrips', { ...tablet, duration: 25 })], confirmed(bill('tricogroStrips', 5)), PrescriptionQueueStatus.DISPENSED, [[25, 25, 'covered'], [25, 25, 'covered']]],
@@ -180,12 +185,15 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
       line('foitrax', { dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 16, durationUnit: 'WEEKS', instructions: 'weekly once- Sunday' }),
       line('azithral', { dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 5, durationUnit: 'DAYS' }),
       line('minoxidil', { dosageUnit: 'APPLICATION', frequency: 'TWICE_DAILY', duration: 3, durationUnit: 'MONTHS' }),
+      line('folvite', { dosage: 1, dosageUnit: 'TABLET', ...thirtyDays, quantity: 15 }),
+      line('folvite', { dosage: 1, dosageUnit: 'TABLET', ...thirtyDays, quantity: 2, quantityUnit: 'STRIPS' }),
+      line('ketoconazole', { dosageUnit: 'TABLET', quantity: 2 }),
     ]);
     const suggested = (await queue.stockCheck('billed-as-suggested', at.branchId)).items
       .map(item => ({ inventoryItemId: item.inventoryItemId, quantity: item.billingQuantity.quantity, unit: item.billingQuantity.unit }));
-    expect(suggested.map(({ quantity, unit }) => [quantity, unit])).toEqual([[3, 'STRIPS'], [1, 'BOTTLES'], [16, 'PIECES'], [4, 'BOXES'], [1, 'PACKS']]);
+    expect(suggested.map(({ quantity, unit }) => [quantity, unit])).toEqual([[3, 'STRIPS'], [1, 'BOTTLES'], [16, 'PIECES'], [4, 'BOXES'], [1, 'PACKS'], [2, 'STRIPS'], [2, 'STRIPS'], [2, 'BOTTLES']]);
 
-    const keys = ['tricogroStrips', 'serum', 'foitrax', 'azithral', 'minoxidil'];
+    const keys = ['tricogroStrips', 'serum', 'foitrax', 'azithral', 'minoxidil', 'folvite', 'folvite', 'ketoconazole'];
     await db.pharmacyInvoice.create({
       data: {
         branchId: at.branchId, prescriptionId: 'billed-as-suggested', patientId: at.patientId, doctorId,
@@ -197,7 +205,7 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     expect((await listed(at.branchId)).get('billed-as-suggested')).toBe(PrescriptionQueueStatus.DISPENSED);
     const detail = await queue.findOne('billed-as-suggested', at.branchId);
     expect(detail.status).toBe(PrescriptionQueueStatus.DISPENSED);
-    expect(detail.medications.map(m => m.coverageStatus)).toEqual(['covered', 'covered', 'covered', 'covered', 'covered']);
+    expect(detail.medications.map(m => m.coverageStatus)).toEqual(Array(8).fill('covered'));
   });
 
   it('agrees with detail coverage on every prescription in a seeded random branch', async () => {
@@ -218,6 +226,11 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
       { frequency: 'ONCE_DAILY' },
       { quantity: 2 },
       { quantity: '1.5' },
+      { quantity: 15, frequency: 'ONCE_DAILY', duration: 15 },
+      { quantity: 2, quantityUnit: 'STRIPS' },
+      { quantity: 3, quantityUnit: ' bottles ' },
+      { quantity: 4, quantityUnit: 'TABLET' },
+      { quantity: 2, quantityUnit: '\tSTRIPS' },
       { quantity: 0, frequency: 'ONCE_DAILY', duration: 9 },
       { frequency: 'ONCE_DAILY', duration: 10, instructions: 7 },
       { frequency: 'ONCE_DAILY', duration: 30, instructions: ['every alternate day'] },

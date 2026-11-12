@@ -88,6 +88,7 @@ type PrescriptionItem = {
   durationUnit?: string | null;
   instructions?: string | null;
   quantity?: string | number | null;
+  quantityUnit?: string | null;
   prescribedQuantity?: string | number | null;
   totalQuantity?: string | number | null;
   qty?: string | number | null;
@@ -341,10 +342,12 @@ export class PharmacyPrescriptionQueueService {
 
   /**
    * @cc [owner:nareshshah139,label:product] stock-check-billing-quantity
-   * Stock checks MUST return each line's billingQuantity. An explicit prescribed quantity MUST win.
-   * Measured items (bottles, tubes, creams, serums and similar) MUST fill 1 selling pack and be flagged.
-   * Countable items MUST bill in the inventory selling unit (doses divided by pack size for strips,
-   * boxes and packs). Free-text instruction schedules MUST override the structured frequency and flag
+   * Stock checks MUST return each line's billingQuantity. An explicit prescribed quantity MUST win
+   * over the schedule. It counts dose units (tablets, capsules) unless the item's quantityUnit names a
+   * selling unit; a quantity in a selling unit or on a measured item MUST bill as stated.
+   * Measured items (bottles, tubes, creams, serums and similar) with no explicit quantity MUST fill
+   * 1 selling pack and be flagged. Countable items MUST bill in the inventory selling unit
+   * (ceil(doses / pack size) for strips, boxes and packs, explicit dose counts included). Free-text instruction schedules MUST override the structured frequency and flag
    * a conflict. Lines with no computable schedule MUST fill 1 and be flagged. Flags MUST NOT block billing.
    */
   /**

@@ -618,7 +618,8 @@ export function PharmacyInvoiceBuilderFixed({
               const substituted = existingItem?.substituted === true;
               const reviewedDrug = substituted ? existingItem.drug : drug;
               const sameProduct = Boolean(existingItem?.drugId && existingItem.drugId === reviewedDrug?.id);
-              const filledQuantity = firstPositiveNumber(item.quantity, item.prescribedQuantity, item.totalQuantity, item.qty, stock?.billingQuantity?.quantity) || 1;
+              // The stock check converts the prescribed count (tablets unless the item names a pack unit) into selling units.
+              const filledQuantity = firstPositiveNumber(stock?.billingQuantity?.quantity, item.quantity, item.prescribedQuantity, item.totalQuantity, item.qty) || 1;
               const keepQuantity = Boolean(existingItem && (existingItem.quantityConfirmed || substituted || !stock));
 
               const invoiceItem: InvoiceItem = {
