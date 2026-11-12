@@ -12,3 +12,7 @@ const nameKey = (name: string) => name.normalize('NFKC').toLowerCase().trim().re
 /** What the prescription called the line, when that is not already the name the line shows. */
 export const prescribedNameShown = (line: NamedLine & { prescribedDrugName?: string }) =>
   line.prescribedDrugName && nameKey(line.prescribedDrugName) !== nameKey(billLineName(line)) ? line.prescribedDrugName : null;
+
+type StockCheckLine = { drugName: string; stockName?: string | null };
+
+export const stockCheckLineName = (line: StockCheckLine) => billLineName({ name: line.stockName, drug: { name: line.drugName } });
