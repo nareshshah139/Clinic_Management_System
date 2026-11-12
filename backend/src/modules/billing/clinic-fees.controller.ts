@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, ParseEnumPipe, Put, Request, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ClinicBillType, UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
@@ -21,8 +21,10 @@ export class ClinicFeesController {
 
   @Put(':billType')
   @Roles(UserRole.ADMIN)
+  @ApiParam({ name: 'billType', enum: ClinicBillType })
   set(
-    @Param('billType', new ParseEnumPipe(ClinicBillType)) billType: ClinicBillType,
+    // Typed as the string union, not ClinicBillType: that name is also Prisma's runtime object, which Swagger would walk as a class and crash startup.
+    @Param('billType', new ParseEnumPipe(ClinicBillType)) billType: `${ClinicBillType}`,
     @Body() dto: SetClinicFeeDto,
     @Request() req: { user: FeeActor },
   ) {
