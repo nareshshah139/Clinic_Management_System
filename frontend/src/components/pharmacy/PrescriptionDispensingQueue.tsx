@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/table';
 import { PrescriptionInventoryLink, type InventorySuggestion } from './PrescriptionInventoryLink';
 import { apiClient } from '@/lib/api';
+import { stockCheckLineName } from '@/lib/bill-line-name';
 
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
 
@@ -80,6 +81,7 @@ type QueueResponse = {
 
 type StockCheckItem = {
   drugName: string;
+  stockName?: string | null;
   prescriptionVersion?: string;
   expiredStock?: number;
   inventoryItemId?: string | null;
@@ -273,7 +275,7 @@ export function PrescriptionDispensingQueue({
               <TableHead>Patient</TableHead>
               <TableHead>Doctor</TableHead>
               <TableHead>Medication</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="min-w-[8rem]">Status</TableHead>
               <TableHead>Stock</TableHead>
               <TableHead className="sticky right-0 bg-muted text-right">Actions</TableHead>
             </TableRow>
@@ -333,7 +335,7 @@ export function PrescriptionDispensingQueue({
                       {entry.isOverTwoHours && entry.status !== 'dispensed' ? (
                         <Badge
                           variant="outline"
-                          className="gap-1 text-amber-700"
+                          className="gap-1 whitespace-nowrap text-amber-700"
                         >
                           <AlertTriangle className="size-3" />
                           Over 2h
@@ -435,7 +437,7 @@ function QueueStatusBadge({ status }: { status: QueueStatus }) {
   const Icon = config[status].icon;
 
   return (
-    <StatusBadge domain="prescription" status={status}>
+    <StatusBadge domain="prescription" status={status} className="whitespace-nowrap">
       <Icon className="size-3" />
       {config[status].label}
     </StatusBadge>
@@ -450,10 +452,10 @@ function QueueStatusBadge({ status }: { status: QueueStatus }) {
 function StockWarnings({ items, prescriptionId, onLinked, canLink }: { items: StockCheckItem[]; prescriptionId: string; onLinked: () => Promise<void>; canLink: boolean }) {
   if (!items.length) return <span className="text-sm text-muted-foreground">Checking…</span>;
   return <div className="flex flex-col gap-2">{items.map((item, index) => <div key={`${index}-${item.drugName}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-    <StatusBadge domain="stock" status={item.stockStatus}>
+    <StatusBadge domain="stock" status={item.stockStatus} className="whitespace-nowrap">
       {{ UNMATCHED: 'Not linked', OUT_OF_STOCK: 'Out', LOW_STOCK: 'Low', IN_STOCK: 'In stock' }[item.stockStatus]}
     </StatusBadge>
-    <span>{item.drugName} ({item.stockStatus === 'UNMATCHED' ? '—' : `${item.totalNonExpiredStock}${item.unit ? ` ${item.unit.toLowerCase()}` : ''}`})</span>
+    <span data-stock-name={stockCheckLineName(item)}>{stockCheckLineName(item)} ({item.stockStatus === 'UNMATCHED' ? '—' : `${item.totalNonExpiredStock}${item.unit ? ` ${item.unit.toLowerCase()}` : ''}`})</span>
     {!!(item.heldStock || item.expiredStock) && <span className="ml-1 text-muted-foreground">{item.totalOnHandStock} on hand · {item.heldStock || 0} held · {item.expiredStock || 0} expired</span>}
     {item.nearExpiry && <span className="ml-1 text-amber-700">Near expiry</span>}
     {canLink && <PrescriptionInventoryLink prescriptionId={prescriptionId} lineIndex={index} linked={!!item.inventoryItemId} prescriptionVersion={item.prescriptionVersion} name={item.drugName} suggestions={item.suggestions} onLinked={onLinked} />}

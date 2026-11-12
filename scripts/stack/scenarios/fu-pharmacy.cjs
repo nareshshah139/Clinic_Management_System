@@ -6,7 +6,7 @@ const { api, tokenFor, browserLogin, addUser } = require("./cr31-seed.cjs");
 
 const root = path.resolve(__dirname, "../../..");
 const out = process.env.SHOTS_DIR || path.join(root, "output/stack/fu-pharmacy");
-const VIEWPORTS = { 1280: { width: 1280, height: 800 }, 390: { width: 390, height: 844 } };
+const VIEWPORTS = { 1280: { width: 1280, height: 800 }, 1440: { width: 1440, height: 900 }, 390: { width: 390, height: 844 } };
 const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g, " ").trim();
 const FLUTAS = "Tab. Flutas 150 mg";
 const FLUTAS_50 = "Tab. Flutas 50 mg";
@@ -272,6 +272,36 @@ async function seed(stack) {
       check("pharmacist-390 bill from the older prescription: no page overflow", await overflow(page), 0);
       await shot(page, "pharmacist-390-05-older-prescription-bill");
       check("pharmacist-390 loading: no console error or refused call", [seen.errors, seen.refused], [[], []]);
+      await context.close();
+    }
+    // The queue names each line's stock the way the bill line "Load" makes, and its status badges stay on one line.
+    for (const [who, width] of [["pharmacist", "1280"], ["pharmacist", "1440"], ["pharmacist", "390"], ["doctor", "1280"], ["admin", "1280"]]) {
+      const tag = `${who}-${width}`;
+      const { page, context, seen } = await open(who, width);
+      await go(page, "/dashboard/pharmacy/sales/bill");
+      const queue = page.locator("table").filter({ has: page.getByRole("columnheader", { name: "Medication" }) });
+      const row = queue.locator("tbody tr").filter({ hasText: patients.pooja.name }).first();
+      await row.locator("td:nth-child(5)").filter({ hasNotText: "Checking…" }).waitFor({ timeout: 240000 });
+      await settle(page);
+      const badges = await queue.locator("tbody tr td:nth-child(4) [data-slot=badge]").evaluateAll((els) =>
+        els.map((el) => {
+          const css = getComputedStyle(el);
+          const box = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"].reduce((n, k) => n + parseFloat(css[k]), 0);
+          return [el.innerText.trim(), Math.round((el.getBoundingClientRect().height - box) / parseFloat(css.lineHeight))];
+        }),
+      );
+      console.log(`NOTE ${tag} queue status badges ${JSON.stringify(badges)}`);
+      check(`${tag} queue: every status badge sits on one line`, [badges.length > 0, badges.filter(([, lines]) => lines !== 1)], [true, []]);
+      const stockNames = (await row.locator("[data-stock-name]").evaluateAll((els) => els.map((el) => el.getAttribute("data-stock-name")))).map(clean);
+      check(`${tag} queue: the Stock cell names the older prescription's stock by its standard name, the Medication cell keeps what was prescribed`,
+        [stockNames, clean(await row.locator("td:nth-child(3)").innerText()).startsWith("13 74 | Flutas 150Mg(Pc)")], [[FLUTAS], true]);
+      check(`${tag} queue: no page overflow`, await overflow(page), 0);
+      await shot(page, `${tag}-09-queue`);
+      await row.getByRole("button", { name: "Load" }).click();
+      await page.getByRole("heading", { name: "Linked Prescription" }).waitFor({ timeout: 120000 });
+      await page.locator("[data-invoice-item]").first().waitFor({ timeout: 120000 });
+      check(`${tag} queue: the Stock cell's name is the name of the bill line Load makes`, await lineHeadings(page), stockNames);
+      check(`${tag} queue: no console error or refused call`, [seen.errors, seen.refused], [[], []]);
       await context.close();
     }
     check("the older prescription is unchanged in the database", JSON.parse((await db.prescription.findUnique({ where: { id: older.id } })).items).map((it) => [it.drugName, it.inventoryItemId === items.flutasA.id]), [["13 74 | Flutas 150Mg(Pc)", true]]);
