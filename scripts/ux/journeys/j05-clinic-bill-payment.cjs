@@ -1,0 +1,56 @@
+const { journey } = require("./lib.cjs");
+
+module.exports = journey(
+  { id: "j05", title: "Bill a consultation and collect a balance", story: "CLINIC-BILLING-01/02", persona: "reception" },
+  async (ui) => {
+    const page = ui.page;
+    const sneha = page.locator('[data-appointment-block="ux-appt-today-5"]');
+    const rohan = page.locator('[data-appointment-block="ux-appt-today-2"]');
+    const dialog = page.getByRole("dialog");
+
+    await ui.start("/dashboard");
+    await ui.screen("dashboard");
+    await ui.click(page.getByRole("link", { name: "Appointments" }), "Menu: Appointments");
+    await page.getByText("Doctor Calendar").waitFor();
+    await sneha.waitFor();
+    await ui.screen("calendar-before-billing");
+
+    await ui.click(sneha.locator("button[data-appointment-billing]"), "Calendar row (Sneha): bill chip 'Not billed'");
+    await dialog.getByRole("heading", { name: /Bill for/ }).waitFor();
+    await dialog.getByText("Create bill").first().waitFor();
+    await ui.screen("sneha-create-bill-dialog");
+    ui.decide("Bill line (consultation type)", true);
+    ui.decide("Fee amount", true);
+    ui.decide("Paid now amount", true);
+    ui.decide("Payment mode", true);
+    await ui.click(dialog.getByRole("button", { name: /^Create bill and record/ }), "Bill dialog: Create bill and record payment");
+    await dialog.getByText("Paid", { exact: true }).waitFor();
+    await ui.screen("sneha-paid-dialog");
+    await ui.click(page.getByRole("button", { name: "Close" }), "Bill dialog: Close");
+    await sneha.locator('button[data-appointment-billing="PAID"]').waitFor();
+    await ui.screen("calendar-sneha-paid");
+
+    await ui.click(rohan.locator("button[data-appointment-billing]"), "Calendar row (Rohan): bill chip with balance due");
+    await dialog.getByText("Record payment").waitFor();
+    await ui.screen("rohan-record-payment-dialog");
+    ui.decide("Amount received", true);
+    ui.decide("Payment mode (UPI, not the Cash default)", false);
+    await ui.click(dialog.getByRole("radio", { name: "UPI" }), "Bill dialog: mode UPI");
+    await ui.click(dialog.getByRole("button", { name: /^Record .* payment$/ }), "Bill dialog: Record payment");
+    await dialog.getByText("Paid", { exact: true }).waitFor();
+    await ui.screen("rohan-paid-dialog");
+    await ui.click(page.getByRole("button", { name: "Close" }), "Bill dialog: Close");
+    await rohan.locator('button[data-appointment-billing="PAID"]').waitFor();
+    await ui.screen("calendar-both-paid");
+
+    const sneeInvoices = (await ui.api("GET", "/billing/invoices?patientId=ux-patient-5&limit=50")) || {};
+    const list = (b) => b?.invoices || b?.data || b?.items || (Array.isArray(b) ? b : []);
+    const forSneha = list(sneeInvoices).filter((i) => i.appointmentId === "ux-appt-today-5");
+    const rohanInvoice = await ui.api("GET", "/billing/invoices/ux-invoice-2");
+    ui.goal(
+      forSneha.length === 1 && Number(forSneha[0].balance) === 0 && Number(rohanInvoice.balance) === 0,
+      "Sneha's consultation invoice and Rohan's part-paid invoice both have zero balance",
+    );
+  },
+);
+if (require.main === module) module.exports.cli();

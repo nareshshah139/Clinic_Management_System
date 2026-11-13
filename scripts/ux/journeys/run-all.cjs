@@ -12,7 +12,7 @@ const label = args[0] && !args[0].startsWith("--") ? args[0] : "scratch";
 const flag = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
 const only = flag("--only")?.split(",");
 const scoreFile = (name) => path.join(root, "docs/ux-flow/scorecards", `${name}.json`);
-const RAW_INTERACTION = /\b(?!ui\.)[\w.()'"` \[\]]+\.(click|fill|press|pressSequentially|type|check|uncheck|selectOption|tap|dblclick|setInputFiles|dispatchEvent|hover)\(/;
+const RAW_INTERACTION = /(?<!\bui)\.(click|fill|press|pressSequentially|type|check|uncheck|selectOption|tap|dblclick|setInputFiles|dispatchEvent|hover|evaluate)\(/;
 
 function journeyFiles() {
   return fs.readdirSync(__dirname).filter((f) => /^j\d+-.*\.cjs$/.test(f)).sort();
