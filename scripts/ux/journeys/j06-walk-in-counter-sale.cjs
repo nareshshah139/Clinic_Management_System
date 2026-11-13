@@ -51,7 +51,7 @@ module.exports = journey(
     await ui.click(page.getByRole("button", { name: "Confirm & Print" }), "Preview: Confirm & Print");
     await page.getByRole("button", { name: "Invoice Confirmed" }).waitFor();
     await ui.screen("confirmed-preview");
-    console.log("CLOSE", await page.getByRole("button", { name: "Close" }).evaluateAll((els) => els.map((e) => e.outerHTML.slice(0, 160)))); await ui.click(page.getByRole("button", { name: "Close", exact: true }).last(), "Preview: Close");
+    await ui.click(page.getByRole("button", { name: "Close", exact: true }).first(), "Preview: Close");
     await ui.screen("bill-confirmed");
 
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
