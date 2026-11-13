@@ -22,11 +22,8 @@ module.exports = journey(
     ui.decide("Payment method", true);
     const method = page.locator("label", { hasText: "Payment Method" }).locator("xpath=..").getByRole("combobox");
     await ui.click(method, "Bill: Payment Method");
-    await page.waitForTimeout(1500);
-    console.log("DBG", await page.locator("label", { hasText: "Payment Method" }).count(), await method.count(), await page.getByRole("option").allInnerTexts(), await page.locator("[role=listbox]").count());
     await ui.screen("payment-options");
-    { const o = page.getByRole("option", { name: "UPI" }); console.log("DBG2", await o.count(), await o.isVisible(), JSON.stringify(await o.boundingBox())); }
-    await ui.click(page.getByRole("option", { name: "UPI" }), "Bill: Payment Method, choose UPI");
+    await ui.click(page.locator("[role=option]", { hasText: /^UPI$/ }), "Bill: Payment Method, choose UPI");
     await ui.click(page.getByRole("button", { name: /Print Preview/ }), "Bill: Print Preview");
     await page.getByRole("button", { name: "Confirm & Print" }).waitFor();
     await ui.screen("print-preview");
