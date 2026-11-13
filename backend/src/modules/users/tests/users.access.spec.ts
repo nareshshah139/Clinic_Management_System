@@ -49,12 +49,13 @@ describe('/users access control', () => {
   };
   const roleRecord = { id: 'role-admin', name: 'ADMIN', permissions: null };
   const branchRecord = { id: 'empty-branch', name: 'Empty' };
-  const permissionRecord = { id: 'perm', name: 'perm' };
+  const permissionRecord = { id: 'perm', name: 'appointments:read' };
   const byWhere = (where: any) => Object.values(users).find(user => matches(user, where)) ?? null;
   const db: any = {
     user: {
       findMany: jest.fn(async () => Object.values(users)),
       count: jest.fn(async ({ where }) => Object.values(users).filter(user => matches(user, where)).length),
+      groupBy: jest.fn(async () => []),
       findFirst: jest.fn(async ({ where }) => byWhere(where)),
       findUnique: jest.fn(async ({ where }) => users[where.id] ?? null),
       create: jest.fn(async ({ data }) => ({ ...data, id: 'created' })),
@@ -64,6 +65,8 @@ describe('/users access control', () => {
     },
     role: {
       findFirst: jest.fn(async ({ where }) => where.name === roleRecord.name ? roleRecord : null),
+      findMany: jest.fn(async () => [roleRecord]),
+      count: jest.fn(async () => 1),
       findUnique: jest.fn(async ({ where }) => where.id === roleRecord.id ? roleRecord : null),
       create: jest.fn(async ({ data }) => ({ ...data, id: 'created' })),
       update: jest.fn(async ({ data }) => ({ ...roleRecord, ...data })),
@@ -71,6 +74,8 @@ describe('/users access control', () => {
     },
     branch: {
       findFirst: jest.fn(async () => null),
+      findMany: jest.fn(async () => [branchRecord]),
+      count: jest.fn(async () => 1),
       findUnique: jest.fn(async ({ where }) => where.id === branchRecord.id ? branchRecord : null),
       create: jest.fn(async ({ data }) => ({ ...data, id: 'created' })),
       update: jest.fn(async ({ data }) => ({ ...branchRecord, ...data })),
@@ -78,6 +83,8 @@ describe('/users access control', () => {
     },
     permission: {
       findFirst: jest.fn(async () => null),
+      findMany: jest.fn(async () => [permissionRecord]),
+      count: jest.fn(async () => 1),
       findUnique: jest.fn(async ({ where }) => where.id === permissionRecord.id ? permissionRecord : null),
       create: jest.fn(async ({ data }) => ({ ...data, id: 'created' })),
       update: jest.fn(async ({ data }) => ({ ...permissionRecord, ...data })),
@@ -183,6 +190,53 @@ describe('/users access control', () => {
     await request(app.getHttpServer()).patch('/users/reception/profile').set(as('admin')).send({ firstName: 'Riya' }).expect(200);
     await request(app.getHttpServer()).post('/users/admin/change-password').set(as('reception'))
       .send({ currentPassword: 'Password1!', newPassword: 'Password2!', confirmPassword: 'Password2!' }).expect(403);
+  });
+
+  describe('list routes that share a path shape with /users/:id', () => {
+    it.each([
+      ['/users/roles?limit=100', 'roles', roleRecord],
+      ['/users/permissions?limit=100', 'permissions', permissionRecord],
+      ['/users/branches?limit=100', 'branches', branchRecord],
+    ] as const)('GET %s returns the list, not a user lookup', async (path, key, record) => {
+      const res = await request(app.getHttpServer()).get(path).set(as('admin')).expect(200);
+      expect(res.body[key]).toEqual([record]);
+      expect(res.body.pagination).toMatchObject({ total: 1, totalPages: 1 });
+      expect(db.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it.each(['/users/statistics', '/users/dashboard'])('GET %s returns counts, not a user lookup', async (path) => {
+      const res = await request(app.getHttpServer()).get(path).set(as('admin')).expect(200);
+      expect(res.body.totalUsers ?? res.body.summary.totalUsers).toBe(Object.keys(users).length);
+      expect(db.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('still serves one user by id', async () => {
+      const res = await request(app.getHttpServer()).get('/users/target').set(as('admin')).expect(200);
+      expect(res.body).toMatchObject({ id: 'target', role: 'NURSE' });
+    });
+  });
+
+  describe('status on the user form', () => {
+    it('saves the status sent with an edit', async () => {
+      const res = await send('patch', '/users/target', 'admin', { firstName: 'Tara', status: 'INACTIVE' }).expect(200);
+      expect(res.body).toMatchObject({ id: 'target', firstName: 'Tara', status: 'INACTIVE' });
+      expect(db.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'target' }, data: { firstName: 'Tara', status: 'INACTIVE' } }));
+    });
+
+    it('creates a user with the chosen status, and ACTIVE when none is sent', async () => {
+      const body = { firstName: 'New', lastName: 'Person', email: 'new@example.test', password: 'Password1!', role: 'NURSE' };
+      await send('post', '/users', 'admin', { ...body, status: 'PENDING' }).expect(201);
+      await send('post', '/users', 'admin', body).expect(201);
+      expect(db.user.create.mock.calls.map(([{ data }]: any) => data.status)).toEqual(['PENDING', 'ACTIVE']);
+    });
+
+    it.each([
+      ['patch', '/users/target', { status: 'RETIRED' }],
+      ['post', '/users', { firstName: 'New', lastName: 'Person', email: 'new@example.test', password: 'Password1!', role: 'NURSE', status: 'RETIRED' }],
+    ] as const)('rejects an unknown status on %s %s without a write', async (method, path, body) => {
+      await send(method, path, 'admin', body).expect(400);
+      expect(writes()).toEqual([]);
+    });
   });
 
   describe('/users/me assets', () => {

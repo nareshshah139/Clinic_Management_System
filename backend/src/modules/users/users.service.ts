@@ -116,7 +116,7 @@ export class UsersService {
         ...createUserDto,
         password: hashedPassword,
         branchId: createUserDto.branchId || branchId,
-        status: UserStatus.ACTIVE,
+        status: createUserDto.status ?? UserStatus.ACTIVE,
         permissions: createUserDto.permissions ? JSON.stringify(createUserDto.permissions) : null,
         metadata: createUserDto.metadata ? JSON.stringify(createUserDto.metadata) : null,
       },

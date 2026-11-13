@@ -49,6 +49,10 @@ export class CreateUserDto {
   @IsEnum(UserRoleEnum)
   role: UserRole;
 
+  @IsEnum(UserStatusEnum)
+  @IsOptional()
+  status?: UserStatus;
+
   @IsUUID()
   @IsOptional()
   branchId?: string;
@@ -125,6 +129,10 @@ export class UpdateUserDto {
   @IsEnum(UserRoleEnum)
   @IsOptional()
   role?: UserRole;
+
+  @IsEnum(UserStatusEnum)
+  @IsOptional()
+  status?: UserStatus;
 
   @IsString()
   @IsOptional()

@@ -27,6 +27,11 @@ import {
   validateWhatsAppTemplateChoice,
 } from '@/lib/whatsapp-settings';
 
+type UserForm = { id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string };
+const EMPTY_FORM: UserForm = { firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE' };
+// The API serves at most 100 permissions per page.
+const PERMISSIONS_PAGE_SIZE = 100;
+
 export default function UsersManagement() {
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
@@ -36,6 +41,8 @@ export default function UsersManagement() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [allPermissions, setAllPermissions] = useState<string[]>([]);
   const [rolePerms, setRolePerms] = useState<string[]>([]);
+  // Permissions can be saved only once the lists have loaded; saving an unloaded list would erase them.
+  const [permLoad, setPermLoad] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [roleSelect, setRoleSelect] = useState<string>('ADMIN');
   const [waOpen, setWaOpen] = useState(false);
   const [waAutoConfirm, setWaAutoConfirm] = useState(false);
@@ -74,9 +81,7 @@ export default function UsersManagement() {
   const [genHints, setGenHints] = useState('');
   const [whOpen, setWhOpen] = useState(false);
   const [holidaysOpen, setHolidaysOpen] = useState(false);
-  const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string }>({
-    firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE',
-  });
+  const [form, setForm] = useState<UserForm>(EMPTY_FORM);
 
   // Group permissions by resource (e.g., appointments, billing, etc.)
   const groupedPermissions = useMemo(() => {
@@ -127,11 +132,17 @@ export default function UsersManagement() {
         await apiClient.createUser(payload);
       }
       setOpen(false);
-      setForm({ firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE' });
+      setForm(EMPTY_FORM);
       await fetchUsers();
     } finally {
       setLoading(false);
     }
+  };
+
+  // "New User" always starts blank, even after an edit was cancelled.
+  const onCreate = () => {
+    setForm(EMPTY_FORM);
+    setOpen(true);
   };
 
   const onEdit = (u: User) => {
@@ -357,25 +368,38 @@ export default function UsersManagement() {
     }
   };
 
+  const loadAllPermissionNames = async () => {
+    const names: string[] = [];
+    for (let page = 1; ; page++) {
+      const res: any = await apiClient.getPermissions({ page, limit: PERMISSIONS_PAGE_SIZE });
+      const rows: any[] = res?.data || res?.permissions || [];
+      names.push(...rows.map((p) => p.name || p));
+      if (rows.length === 0 || page >= (res?.pagination?.totalPages ?? 1)) return names;
+    }
+  };
+
   const openRolePerms = async (u: User) => {
     setSelectedUser(u);
     setPermOpen(true);
     setRoleSelect(u.role as any);
+    setPermLoad('loading');
+    setAllPermissions([]);
+    setRolePerms([]);
     try {
-      const [rolesRes, permsRes] = await Promise.all([
+      const [rolesRes, perms] = await Promise.all([
         apiClient.getRoles({ limit: 100 }),
-        apiClient.getPermissions({ limit: 1000 }),
+        loadAllPermissionNames(),
       ]);
-      const perms = ((permsRes as any)?.data || (permsRes as any)?.permissions || []).map((p: any) => p.name || p);
       setAllPermissions(perms);
       // Suggest defaults based on current role from backend roles
       const role = ((rolesRes as any)?.data || (rolesRes as any)?.roles || []).find((r: any) => r.name === u.role);
       const defaults = role?.permissions ? JSON.parse(role.permissions) : [];
       setRolePerms(defaults);
+      setPermLoad('ready');
     } catch (e) {
-      // fallback: empty
       setAllPermissions([]);
       setRolePerms([]);
+      setPermLoad('failed');
     }
   };
 
@@ -429,7 +453,7 @@ export default function UsersManagement() {
         </Dialog>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> New User</Button>
+            <Button onClick={onCreate}><Plus className="h-4 w-4 mr-2" /> New User</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{form.id ? 'Edit User' : 'Create User'}</DialogTitle></DialogHeader>
@@ -573,6 +597,9 @@ export default function UsersManagement() {
                                   </div>
                                 </div>
                                 <div className="md:col-span-8">
+                                  {permLoad === 'failed' && (
+                                    <p role="alert" className="text-sm text-red-600">Could not load roles and permissions. Close this window and try again.</p>
+                                  )}
                                   <div className="mt-2 max-h-80 overflow-auto space-y-4 pr-1">
                                     {Object.entries(groupedPermissions).map(([group, perms]) => (
                                       <div key={group}>
@@ -615,7 +642,7 @@ export default function UsersManagement() {
                                     ))}
                                   </div>
                                   <div className="flex justify-end mt-3">
-                                    <Button onClick={() => void applyPermissions(rolePerms)}>Save Permissions</Button>
+                                    <Button disabled={permLoad !== 'ready'} onClick={() => void applyPermissions(rolePerms)}>Save Permissions</Button>
                                   </div>
                                 </div>
                               </div>
