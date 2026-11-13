@@ -114,7 +114,7 @@ describe('Pharmacy Report', () => {
     mockQuery = 'report=sales-register&from=2026-10-01&to=2026-10-31&q=Meera';
     api.get.mockResolvedValue(salesRegister as any);
     render(<PharmacyReportWorkspace />);
-    expect(api.get).toHaveBeenCalledWith('/pharmacy/reports/sales-register', { from: '2026-10-01', to: '2026-10-31', type: 'SALES', q: 'Meera' });
+    expect(api.get).toHaveBeenCalledWith('/pharmacy/reports/sales-register', { from: '2026-10-01', to: '2026-10-31', type: 'SALES', gst: 'ALL', q: 'Meera' });
     const table = await screen.findByRole('table', { name: 'Sales Register' });
     expect(within(screen.getByTestId('report-totals-row')).getAllByRole('cell').map((c) => c.textContent)).toEqual(['Total', '', '1,59,656.74']);
     expect(screen.getByTestId('report-headline')).toHaveTextContent('₹1,59,656.74');
@@ -127,9 +127,9 @@ describe('Pharmacy Report', () => {
     await userEvent.click(screen.getByRole('button', { name: /Download/ }));
     const links = await screen.findAllByRole('menuitem');
     expect(links.map((l) => [l.textContent, l.getAttribute('href')])).toEqual([
-      ['Excel (.xlsx)', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&q=Meera&format=xlsx'],
-      ['CSV', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&q=Meera&format=csv'],
-      ['PDF', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&q=Meera&format=pdf'],
+      ['Excel (.xlsx)', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&gst=ALL&q=Meera&format=xlsx'],
+      ['CSV', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&gst=ALL&q=Meera&format=csv'],
+      ['PDF', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&gst=ALL&q=Meera&format=pdf'],
     ]);
   });
 
@@ -142,7 +142,61 @@ describe('Pharmacy Report', () => {
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search this report' }), 'Ravi');
     expect(mockRouter.replace).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Go' }));
-    expect(mockRouter.replace).toHaveBeenCalledWith('/dashboard/pharmacy/reports?report=sales-register&from=2026-10-01&to=2026-10-31&type=RETURNS&q=Ravi', { scroll: false });
+    expect(mockRouter.replace).toHaveBeenCalledWith('/dashboard/pharmacy/reports?report=sales-register&from=2026-10-01&to=2026-10-31&type=RETURNS&gst=ALL&q=Ravi', { scroll: false });
+  });
+
+  it('counts the More filters, lists the report’s doctors, and applies them with Go', async () => {
+    mockQuery = 'report=sales-register&from=2026-10-01&to=2026-10-31';
+    api.get.mockResolvedValue({ ...salesRegister, options: { doctors: ['Dr. Asha Rao', 'Dr. Vikram Sen'] } } as any);
+    render(<PharmacyReportWorkspace />);
+    await screen.findByRole('table', { name: 'Sales Register' });
+    const more = screen.getByRole('button', { name: /More filters/ });
+    expect(more).toHaveTextContent(/^More filters$/);
+
+    await userEvent.click(more);
+    const panel = within(screen.getByRole('group', { name: 'More filters' }));
+    expect(panel.getAllByRole('option', { hidden: false }).map((o) => o.textContent)).toEqual([
+      'All sources', 'Prescription bills', 'Counter sales', 'All doctors', 'Dr. Asha Rao', 'Dr. Vikram Sen', 'All bills', 'Discounted only',
+    ]);
+    await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Source' }), 'COUNTER_SALE');
+    await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Doctor' }), 'Dr. Asha Rao');
+    expect(more).toHaveTextContent('More filters2 active');
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Go' }));
+    expect(mockRouter.replace).toHaveBeenCalledWith(
+      '/dashboard/pharmacy/reports?report=sales-register&from=2026-10-01&to=2026-10-31&type=SALES&gst=ALL&source=COUNTER_SALE&doctor=Dr.+Asha+Rao',
+      { scroll: false },
+    );
+  });
+
+  it('keeps an applied doctor in the list when the period has none, and Clear empties the filters', async () => {
+    mockQuery = 'report=sales-register&from=2026-10-01&to=2026-10-31&source=BILL&doctor=Dr.+Gone&discount=DISCOUNTED';
+    api.get.mockResolvedValue({ ...salesRegister, options: { doctors: [] } } as any);
+    render(<PharmacyReportWorkspace />);
+    await screen.findByRole('table', { name: 'Sales Register' });
+    expect(api.get).toHaveBeenCalledWith('/pharmacy/reports/sales-register', expect.objectContaining({ source: 'BILL', doctor: 'Dr. Gone', discount: 'DISCOUNTED' }));
+    const more = screen.getByRole('button', { name: /More filters/ });
+    expect(more).toHaveTextContent('More filters3 active');
+    await userEvent.click(more);
+    const panel = within(screen.getByRole('group', { name: 'More filters' }));
+    expect(panel.getByRole('combobox', { name: 'Doctor' })).toHaveValue('Dr. Gone');
+
+    await userEvent.click(panel.getByRole('button', { name: 'Clear' }));
+    expect(more).toHaveTextContent(/^More filters$/);
+    await userEvent.click(screen.getByRole('button', { name: 'Go' }));
+    expect(mockRouter.replace).toHaveBeenCalledWith('/dashboard/pharmacy/reports?report=sales-register&from=2026-10-01&to=2026-10-31&type=SALES&gst=ALL', { scroll: false });
+  });
+
+  it('carries the applied filters into Print and Download', async () => {
+    mockQuery = 'report=sales-register&from=2026-10-01&to=2026-10-31&gst=WITH_GST&source=BILL&doctor=Dr.+Asha+Rao&discount=DISCOUNTED';
+    api.get.mockResolvedValue(salesRegister as any);
+    render(<PharmacyReportWorkspace />);
+    await screen.findByRole('table', { name: 'Sales Register' });
+    await userEvent.click(screen.getByRole('button', { name: /Download/ }));
+    expect((await screen.findByRole('menuitem', { name: 'CSV' })).getAttribute('href')).toBe(
+      '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&gst=WITH_GST&source=BILL&doctor=Dr.+Asha+Rao&discount=DISCOUNTED&format=csv',
+    );
   });
 
   it('sorts a column from its heading without touching the totals', async () => {

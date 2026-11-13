@@ -72,6 +72,23 @@ export class PharmacyReportQueryDto {
   @IsIn(['ALL', 'WITH_GST', 'WITHOUT_GST'])
   gst?: 'ALL' | 'WITH_GST' | 'WITHOUT_GST';
 
+  @ApiPropertyOptional({ enum: ['ALL', 'BILL', 'COUNTER_SALE'], description: 'Sales register: prescription bills or counter sales' })
+  @IsOptional()
+  @IsIn(['ALL', 'BILL', 'COUNTER_SALE'])
+  source?: 'ALL' | 'BILL' | 'COUNTER_SALE';
+
+  @ApiPropertyOptional({ description: 'Sales register: only this doctor, exact name' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Transform(trimmed)
+  doctor?: string;
+
+  @ApiPropertyOptional({ enum: ['ALL', 'DISCOUNTED'], description: 'Sales register: only bills with a discount' })
+  @IsOptional()
+  @IsIn(['ALL', 'DISCOUNTED'])
+  discount?: 'ALL' | 'DISCOUNTED';
+
   @ApiPropertyOptional({
     description:
       'Customer, bill number or mobile (sales); distributor, bill number or GSTIN (purchases); item (margin)',

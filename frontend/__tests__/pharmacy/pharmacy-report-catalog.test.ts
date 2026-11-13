@@ -1,6 +1,7 @@
 import {
   CATEGORIES,
   REPORTS,
+  activeMoreFilters,
   apiParams,
   commonReports,
   defaultRange,
@@ -84,10 +85,38 @@ describe('filters in the address bar', () => {
 
   it('reads valid filters and falls back to defaults for anything missing or invalid', () => {
     expect(readParams(sales, new URLSearchParams('from=2026-09-01&to=2026-09-30&type=RETURNS&q=Meera'), TODAY)).toEqual({
-      from: '2026-09-01', to: '2026-09-30', type: 'RETURNS', q: 'Meera', gst: undefined, window: undefined, rate: undefined,
+      from: '2026-09-01', to: '2026-09-30', type: 'RETURNS', q: 'Meera', gst: 'ALL', source: undefined, doctor: undefined, discount: undefined, window: undefined, rate: undefined,
     });
     expect(readParams(sales, new URLSearchParams('from=2026-02-30&type=BOGUS'), TODAY)).toMatchObject({ from: '2026-10-01', to: '2026-10-31', type: 'SALES' });
     expect(readParams(sales, new URLSearchParams('from=2026-10-20&to=2026-10-01'), TODAY)).toMatchObject({ from: '2026-10-20', to: '2026-10-31' });
+  });
+
+  it('reads the Sales Register More filters, treating anything invalid as no filter', () => {
+    const read = (query: string) => readParams(sales, new URLSearchParams(`from=2026-09-01&to=2026-09-30&${query}`), TODAY);
+    expect(read('gst=WITH_GST&source=COUNTER_SALE&doctor=Dr.+Asha+Rao&discount=DISCOUNTED')).toMatchObject({
+      gst: 'WITH_GST', source: 'COUNTER_SALE', doctor: 'Dr. Asha Rao', discount: 'DISCOUNTED',
+    });
+    const invalid = read('gst=MAYBE&source=ONLINE&doctor=%20&discount=SOME');
+    expect([invalid.gst, invalid.source, invalid.doctor, invalid.discount]).toEqual(['ALL', undefined, undefined, undefined]);
+    const bills = readParams(reportById('purchase-bills')!, new URLSearchParams('source=COUNTER_SALE&doctor=x'), TODAY);
+    expect(bills.source).toBeUndefined();
+    expect(bills.doctor).toBeUndefined();
+  });
+
+  it('sends the More filters to the server and to every download, and leaves unset ones out', () => {
+    const params = readParams(sales, new URLSearchParams('from=2026-09-01&to=2026-09-30&source=BILL&doctor=Dr.+Asha+Rao&discount=DISCOUNTED'), TODAY);
+    expect(apiParams(sales, params)).toEqual({ from: '2026-09-01', to: '2026-09-30', type: 'SALES', gst: 'ALL', source: 'BILL', doctor: 'Dr. Asha Rao', discount: 'DISCOUNTED' });
+    expect(exportHref(sales, params, 'pdf')).toBe(
+      '/api/pharmacy/reports/sales-register?from=2026-09-01&to=2026-09-30&type=SALES&gst=ALL&source=BILL&doctor=Dr.+Asha+Rao&discount=DISCOUNTED&format=pdf',
+    );
+    expect(Object.keys(apiParams(sales, readParams(sales, new URLSearchParams(''), TODAY)))).toEqual(['from', 'to', 'type', 'gst']);
+  });
+
+  it('counts only the More filters that are set', () => {
+    const base = readParams(sales, new URLSearchParams(''), TODAY);
+    expect(activeMoreFilters(sales, base)).toBe(0);
+    expect(activeMoreFilters(sales, { ...base, source: 'BILL', doctor: 'Dr. Asha Rao' })).toBe(2);
+    expect(activeMoreFilters(reportById('gstr-1')!, { ...base, source: 'BILL' })).toBe(0);
   });
 
   it('keeps a single day for the daily collection', () => {
@@ -96,9 +125,9 @@ describe('filters in the address bar', () => {
 
   it('builds the page link, the API query and every download from the same filters', () => {
     const params = readParams(sales, new URLSearchParams('from=2026-09-01&to=2026-09-30&q=Meera Shah'), TODAY);
-    expect(reportHref('sales-register', params)).toBe('/dashboard/pharmacy/reports?report=sales-register&from=2026-09-01&to=2026-09-30&type=SALES&q=Meera+Shah');
-    expect(apiParams(sales, params)).toEqual({ from: '2026-09-01', to: '2026-09-30', type: 'SALES', q: 'Meera Shah' });
-    expect(exportHref(sales, params, 'xlsx')).toBe('/api/pharmacy/reports/sales-register?from=2026-09-01&to=2026-09-30&type=SALES&q=Meera+Shah&format=xlsx');
+    expect(reportHref('sales-register', params)).toBe('/dashboard/pharmacy/reports?report=sales-register&from=2026-09-01&to=2026-09-30&type=SALES&gst=ALL&q=Meera+Shah');
+    expect(apiParams(sales, params)).toEqual({ from: '2026-09-01', to: '2026-09-30', type: 'SALES', gst: 'ALL', q: 'Meera Shah' });
+    expect(exportHref(sales, params, 'xlsx')).toBe('/api/pharmacy/reports/sales-register?from=2026-09-01&to=2026-09-30&type=SALES&gst=ALL&q=Meera+Shah&format=xlsx');
     expect(apiParams(reportById('daily-collection')!, { from: '2026-11-05', to: '2026-11-05' })).toEqual({ from: '2026-11-05' });
   });
 });

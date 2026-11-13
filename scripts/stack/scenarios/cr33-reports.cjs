@@ -158,6 +158,107 @@ async function tableData(page, name) {
       assert.ok(text.includes(salesScreen.totals[11]), "pdf carries the total");
     });
 
+    const wed = expected.filterDay;
+    const seededDoctor = await stack.db.user.findUnique({ where: { id: users.doctor.id } }).then((u) => `${u.firstName} ${u.lastName}`.trim());
+    const filteredRegister = async (target, { gst, source, doctor, discount }) => {
+      await target.goto(`${reports}?report=sales-register&from=${wed}&to=${wed}`, { waitUntil: "networkidle" });
+      await target.getByRole("table", { name: "Sales Register" }).waitFor();
+      if (gst) await target.getByRole("combobox", { name: "GST" }).selectOption(gst);
+      if (source || doctor || discount) {
+        await target.getByRole("button", { name: /More filters/ }).click();
+        const panel = target.getByRole("group", { name: "More filters" });
+        if (source) await panel.getByRole("combobox", { name: "Source" }).selectOption(source);
+        if (doctor) await panel.getByRole("combobox", { name: "Doctor" }).selectOption(doctor);
+        if (discount) await panel.getByRole("combobox", { name: "Discount" }).selectOption(discount);
+        await target.keyboard.press("Escape");
+      }
+      if (gst || source || doctor || discount) {
+        const applied = target.waitForResponse((r) => r.url().includes("/api/pharmacy/reports/sales-register") && r.request().method() === "GET");
+        await target.getByRole("button", { name: "Go", exact: true }).click();
+        await applied;
+      }
+      await target.waitForLoadState("networkidle");
+      const data = await tableData(target, "Sales Register");
+      return { data, numbers: data.rows.map((r) => r[0]), headline: num(await target.getByTestId("report-headline").innerText()) };
+    };
+
+    await check("Sales Register GST dropdown: with GST and without GST split the day, and the headline follows the rows", async () => {
+      const all = await filteredRegister(page, {});
+      assert.deepEqual(all.numbers, ["PHI-2024-003", "PHI-2024-004", "CS-2024-001", "CS-2024-002"]);
+      near(all.headline, 1241.1, "headline, all bills");
+      const withGst = await filteredRegister(page, { gst: "WITH_GST" });
+      assert.deepEqual(withGst.numbers, ["PHI-2024-003", "PHI-2024-004", "CS-2024-002"]);
+      near(withGst.headline, 1070.1, "headline, with GST");
+      near(num(withGst.data.totals[11]), 1070.1, "totals row, with GST");
+      const without = await filteredRegister(page, { gst: "WITHOUT_GST" });
+      assert.deepEqual(without.numbers, ["CS-2024-001"]);
+      near(without.headline, 171, "headline, without GST");
+    });
+
+    await check("Sales Register More filters: source, doctor and discount each narrow the rows and the headline, and the badge counts them", async () => {
+      const counter = await filteredRegister(page, { source: "COUNTER_SALE" });
+      assert.deepEqual(counter.numbers, ["CS-2024-001", "CS-2024-002"]);
+      near(counter.headline, 360, "headline, counter sales");
+      assert.match(await page.getByRole("button", { name: /More filters/ }).innerText(), /^More filters\s+1\s+active$/);
+      const bills = await filteredRegister(page, { source: "BILL" });
+      assert.deepEqual(bills.numbers, ["PHI-2024-003", "PHI-2024-004"]);
+      near(bills.headline, 881.1, "headline, prescription bills");
+      const doctor = await filteredRegister(page, { doctor: seededDoctor });
+      assert.deepEqual(doctor.numbers, ["PHI-2024-003", "PHI-2024-004"]);
+      const visiting = await filteredRegister(page, { doctor: "Dr. Visiting" });
+      assert.deepEqual(visiting.numbers, ["CS-2024-001"]);
+      near(visiting.headline, 171, "headline, Dr. Visiting");
+      const discounted = await filteredRegister(page, { discount: "DISCOUNTED" });
+      assert.deepEqual(discounted.numbers, ["PHI-2024-004", "CS-2024-001"]);
+      near(discounted.headline, 648.9, "headline, discounted");
+      const both = await filteredRegister(page, { gst: "WITH_GST", source: "BILL", discount: "DISCOUNTED" });
+      assert.deepEqual(both.numbers, ["PHI-2024-004"]);
+      near(both.headline, 477.9, "headline, with GST, bills, discounted");
+      assert.match(await page.getByRole("button", { name: /More filters/ }).innerText(), /^More filters\s+2\s+active$/);
+      const choices = await page.getByRole("button", { name: /More filters/ }).click().then(() => page.getByRole("combobox", { name: "Doctor" }).locator("option").allInnerTexts());
+      assert.deepEqual(choices, ["All doctors", "Dr. Visiting", seededDoctor].sort((a, b) => (a === "All doctors" ? -1 : b === "All doctors" ? 1 : a.localeCompare(b))));
+      await page.getByRole("group", { name: "More filters" }).getByRole("button", { name: "Clear" }).click();
+      assert.equal(await page.getByRole("button", { name: /More filters/ }).innerText(), "More filters");
+      await page.keyboard.press("Escape");
+    });
+
+    await check("a filtered Sales Register prints and downloads only the filtered rows and names the filters", async () => {
+      await filteredRegister(page, { gst: "WITH_GST", source: "BILL", discount: "DISCOUNTED" });
+      await page.getByRole("button", { name: "Download" }).click();
+      const csvLink = await page.getByRole("menuitem", { name: "CSV" }).getAttribute("href");
+      const query = new URL(csvLink, stack.base).searchParams;
+      assert.deepEqual([query.get("gst"), query.get("source"), query.get("discount"), query.get("doctor")], ["WITH_GST", "BILL", "DISCOUNTED", null]);
+      const [file] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: "CSV" }).click()]);
+      const target = path.join(out, `filtered-${file.suggestedFilename()}`);
+      await file.saveAs(target);
+      const csv = fs.readFileSync(target, "utf8").replace(/^﻿/, "").trim().split("\r\n");
+      assert.equal(csv.length, 3, "header, totals and one bill");
+      assert.ok(csv[2].startsWith("PHI-2024-004"));
+      await page.getByRole("button", { name: "Download" }).click();
+      const [pdfFile] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: "PDF" }).click()]);
+      const pdfTarget = path.join(out, `filtered-${pdfFile.suggestedFilename()}`);
+      await pdfFile.saveAs(pdfTarget);
+      const text = execFileSync("pdftotext", ["-layout", pdfTarget, "-"], { encoding: "utf8" }).replace(/\s+/g, " ");
+      assert.ok(text.includes("Showing only: bills with GST, prescription bills, discounted bills."), "pdf names the filters");
+      assert.ok(!text.includes("PHI-2024-003"), "pdf holds no bill outside the filters");
+    });
+
+    await check("Sales Register filter controls at 1440 and 390 px", async () => {
+      await filteredRegister(page, { gst: "WITH_GST", source: "BILL", discount: "DISCOUNTED" });
+      await page.getByRole("button", { name: /More filters/ }).click();
+      await shot(page, "sales-register-more-filters-1440");
+      await page.keyboard.press("Escape");
+      const phone = await open("pharmacist", { width: 390, height: 844 });
+      await phone.page.goto(`${reports}?report=sales-register&from=${wed}&to=${wed}&gst=WITH_GST&source=BILL&discount=DISCOUNTED`, { waitUntil: "networkidle" });
+      await phone.page.getByRole("button", { name: /More filters/ }).click();
+      await phone.page.getByRole("group", { name: "More filters" }).waitFor();
+      const box = await phone.page.getByRole("group", { name: "More filters" }).boundingBox();
+      assert.ok(box.x >= 0 && box.x + box.width <= 390, `panel stays on screen (${box.x}, ${box.width})`);
+      assert.ok(await phone.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth) <= 0, "no sideways scroll");
+      await shot(phone.page, "sales-register-more-filters-390");
+      await phone.context.close();
+    });
+
     await check("Purchase Bills (CR-33a): slab bands, frozen identifying columns while the money scrolls", async () => {
       await page.goto(`${reports}?report=purchase-bills`, { waitUntil: "networkidle" });
       const data = await tableData(page, "Purchase Bills");

@@ -24,6 +24,8 @@ export type PharmacyReport = {
   sections: ReportSection[];
   notes: string[];
   search: string | null;
+  /** Choices for filters drawn from the period's own data. */
+  options?: { doctors: string[] };
 };
 
 export const COLLECTION_MODES = ["CASH", "UPI", "CARD", "NETBANKING", "CHEQUE", "WALLET", "INSURANCE", "OTHER"] as const;

@@ -5,9 +5,10 @@ import { ChevronLeft, ChevronRight, FileDown, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DayField } from "@/components/inventory/DayField";
+import { MoreFilters } from "@/components/register/RegisterFilters";
 import { inputClass } from "@/components/inventory/workspace-model";
 import { cn } from "@/lib/utils";
-import { exportHref, periodPresets, presetFor, shiftDay, type ReportEntry, type ReportParams } from "./report-catalog";
+import { activeMoreFilters, exportHref, moreFilterValue, periodPresets, presetFor, shiftDay, type ReportEntry, type ReportParams } from "./report-catalog";
 
 const fieldLabel = "text-base font-medium";
 
@@ -168,6 +169,7 @@ export function ReportToolbar({
   canExport,
   onApply,
   extra,
+  choices,
 }: {
   entry: ReportEntry;
   params: ReportParams;
@@ -176,6 +178,8 @@ export function ReportToolbar({
   canExport: boolean;
   onApply: (params: ReportParams) => void;
   extra?: ReactNode;
+  /** Names for the More filters that list what the loaded report holds, by filter key. */
+  choices?: Record<string, string[] | undefined>;
 }) {
   const [draft, setDraft] = useState(params);
   useEffect(() => setDraft(params), [params]);
@@ -230,6 +234,33 @@ export function ReportToolbar({
             onChange={(event) => setDraft({ ...draft, q: event.target.value })}
           />
         </div>
+      )}
+      {entry.moreFilters && (
+        <MoreFilters count={activeMoreFilters(entry, draft)} className="h-11 px-4 text-base">
+          {entry.moreFilters.map((filter) => {
+            const current = moreFilterValue(filter, draft);
+            const listed = filter.options ?? (choices?.[filter.key] ?? []).map((name) => ({ value: name, label: name }));
+            const options = current !== filter.defaultValue && !listed.some((option) => option.value === current) ? [{ value: current, label: current }, ...listed] : listed;
+            return (
+              <Select
+                key={filter.key}
+                label={filter.label}
+                value={current}
+                options={[{ value: filter.defaultValue, label: filter.allLabel }, ...options]}
+                onChange={(value) => setDraft({ ...draft, [filter.key]: value === filter.defaultValue ? undefined : value })}
+              />
+            );
+          })}
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-11 text-base"
+            disabled={activeMoreFilters(entry, draft) === 0}
+            onClick={() => setDraft({ ...draft, ...Object.fromEntries(entry.moreFilters!.map((filter) => [filter.key, undefined])) })}
+          >
+            Clear
+          </Button>
+        </MoreFilters>
       )}
       {entry.period !== "day" && (
         <Button type="submit" className="h-11 px-6 text-base" disabled={loading || invalid}>

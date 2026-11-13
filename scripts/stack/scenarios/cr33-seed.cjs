@@ -132,11 +132,11 @@ async function seedRows(db, { branchId, doctorId, pharmacistId, today }) {
   const older = await bill(590, addDays(today, -2), "12:00", [[ITEMS[2], 10, 0]], [["UPI", 1, today]]);
   const counter = { taxable: 2 * ITEMS[3].price, tax: r2((2 * ITEMS[3].price * 12) / 100) };
   const refund = { taxable: ITEMS[0].price, tax: r2((ITEMS[0].price * 12) / 100) };
-  const wf = (id, kind, payload, totals) =>
+  const wf = (id, kind, payload, totals, day = today) =>
     db.inventoryWorkflowDocument.create({
       data: {
-        id, branchId, kind, status: "POSTED", reference: id, requestKey: id, createdBy: pharmacistId, createdAt: at(today, "12:30"), totalAmount: r2(totals.taxable + totals.tax),
-        payload: { date: today, ...payload, lines: [{ inventoryId: payload.item.id, name: payload.item.name, unit: "PIECES", quantity: payload.qty, unitPrice: payload.item.price, taxable: totals.taxable, tax: totals.tax, total: r2(totals.taxable + totals.tax), gstRate: payload.item.rate }] },
+        id, branchId, kind, status: "POSTED", reference: id, requestKey: id, createdBy: pharmacistId, createdAt: at(day, "12:30"), totalAmount: r2(totals.taxable + totals.tax),
+        payload: { date: day, ...payload, lines: [{ inventoryId: payload.item.id, name: payload.item.name, unit: "PIECES", quantity: payload.qty, unitPrice: payload.item.price, taxable: totals.taxable, tax: totals.tax, total: r2(totals.taxable + totals.tax), gstRate: payload.item.rate }] },
       },
     });
   await wf("CS-2026-001", "COUNTER_SALE", { paymentMode: "CASH", customerName: "Walk-in", item: ITEMS[3], qty: 2 }, counter);
@@ -182,7 +182,23 @@ async function seedRows(db, { branchId, doctorId, pharmacistId, today }) {
     subtotal: 180, taxAmount: 21.6, totalAmount: 201.6, status: "CANCELLED",
     items: { create: [{ drugId: `${ITEMS[0].id}-drug`, inventoryItemId: ITEMS[0].id, quantity: 1, unitPrice: 180, taxPercent: 12, taxAmount: 21.6, totalAmount: 201.6 }] },
   });
+  // A Wednesday for the Sales Register filters: two bills under the seeded doctor (one discounted), a
+  // nil-rated discounted counter sale under another doctor, and a counter sale with GST and no doctor.
+  const WED = "2024-03-13";
+  await doc("cr33-wed-1", "PHI-2024-003", WED, {
+    subtotal: 360, taxAmount: 43.2, totalAmount: 403.2, status: "CONFIRMED",
+    items: { create: [{ drugId: `${ITEMS[0].id}-drug`, inventoryItemId: ITEMS[0].id, quantity: 2, unitPrice: 180, taxPercent: 12, taxAmount: 43.2, totalAmount: 403.2 }] },
+    payments: { create: [{ requestKey: "cr33-wed-1", method: "CASH", amount: 403.2, status: "COMPLETED", paymentDate: at(WED, "10:02") }] },
+  });
+  await doc("cr33-wed-2", "PHI-2024-004", WED, {
+    subtotal: 450, discountAmount: 45, taxAmount: 72.9, totalAmount: 477.9, status: "CONFIRMED",
+    items: { create: [{ drugId: `${ITEMS[1].id}-drug`, inventoryItemId: ITEMS[1].id, quantity: 1, unitPrice: 450, discountPercent: 10, discountAmount: 45, taxPercent: 18, taxAmount: 72.9, totalAmount: 477.9 }] },
+    payments: { create: [{ requestKey: "cr33-wed-2", method: "CASH", amount: 477.9, status: "COMPLETED", paymentDate: at(WED, "10:03") }] },
+  });
+  await wf("CS-2024-001", "COUNTER_SALE", { paymentMode: "CASH", customerName: "Walk-in", doctorName: "Dr. Visiting", item: { ...ITEMS[3], rate: 0 }, qty: 2 }, { taxable: 171, tax: 0 }, WED);
+  await wf("CS-2024-002", "COUNTER_SALE", { paymentMode: "CASH", customerName: "Walk-in", item: ITEMS[2], qty: 5 }, { taxable: 180, tax: 9 }, WED);
   expected.refundDay = { monday: MON, tuesday: TUE };
+  expected.filterDay = WED;
   return expected;
 }
 

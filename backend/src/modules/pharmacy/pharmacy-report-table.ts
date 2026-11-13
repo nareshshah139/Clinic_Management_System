@@ -56,6 +56,8 @@ export type PharmacyReport = {
   notes: string[];
   scope: { statuses: string[]; draftsExcluded: boolean; dateBasis: string };
   search: string | null;
+  /** Choices for a filter drawn from the period's own data, so no option leads to an empty report. */
+  options?: { doctors: string[] };
 };
 
 export const summable = (column: ReportColumn) =>

@@ -505,14 +505,23 @@ export class PharmacyReportsService {
           query.type === 'RETURNS' || query.type === 'ALL'
             ? query.type
             : 'SALES';
-        const result = salesRegister(docs, { type, search: query.q });
+        const result = salesRegister(docs, {
+          type,
+          search: query.q,
+          gst: query.gst ?? 'ALL',
+          source: query.source ?? 'ALL',
+          doctor: query.doctor || null,
+          discount: query.discount ?? 'ALL',
+        });
         return this.envelope(
           id,
           period,
           {
             headline: { label: 'Total for the period', value: result.total },
             sections: [result.section],
+            options: { doctors: result.doctors },
             notes: [
+              ...(result.filterNote ? [result.filterNote] : []),
               'Taxable = Gross - Disc.; Total = Taxable + CESS + SGST + CGST + IGST. Customer returns show as negative rows.',
             ],
           },

@@ -249,6 +249,153 @@ describe('CR-33b Sales Register', () => {
   });
 });
 
+describe('CR-33b Sales Register filters', () => {
+  const docs: SaleDoc[] = [
+    bill({
+      id: 'a',
+      number: 'PHI-2026-001',
+      doctor: 'Dr. Asha Rao',
+      lines: [sale(100, 2, 0, 12)],
+    }),
+    bill({
+      id: 'b',
+      number: 'PHI-2026-002',
+      doctor: ' dr. asha rao ',
+      lines: [sale(250, 1, 10, 18), sale(40, 5, 0, 0)],
+    }),
+    bill({
+      id: 'c',
+      kind: 'COUNTER_SALE',
+      number: 'CS-1',
+      doctor: null,
+      lines: [sale(50, 2, 0, 0)],
+    }),
+    bill({
+      id: 'd',
+      kind: 'COUNTER_SALE',
+      number: 'CS-2',
+      doctor: 'Dr. Vikram Sen',
+      lines: [sale(100, 1, 20, 0)],
+    }),
+    bill({
+      id: 'r',
+      kind: 'SALES_RETURN',
+      number: 'RET-1',
+      doctor: 'Dr. Asha Rao',
+      lines: [signedLine(sale(100, 1, 0, 12), -1)],
+    }),
+  ];
+  const numbers = (result: ReturnType<typeof salesRegister>) =>
+    result.section.rows.map((row) => row.cells.billNo);
+
+  it('shows every sale when no filter is set, with no note', () => {
+    const result = salesRegister(docs, { type: 'SALES' });
+    expect(numbers(result)).toEqual([
+      'CS-1',
+      'CS-2',
+      'PHI-2026-001',
+      'PHI-2026-002',
+    ]);
+    expect(result.total).toBe(869.5);
+    expect(result.filterNote).toBeNull();
+  });
+
+  it('GST filter keeps bills that carry tax, or only those that do not', () => {
+    const withGst = salesRegister(docs, { type: 'SALES', gst: 'WITH_GST' });
+    expect(numbers(withGst)).toEqual(['PHI-2026-001', 'PHI-2026-002']);
+    expect(withGst.total).toBe(689.5);
+    const without = salesRegister(docs, { type: 'SALES', gst: 'WITHOUT_GST' });
+    expect(numbers(without)).toEqual(['CS-1', 'CS-2']);
+    expect(without.total).toBe(180);
+  });
+
+  it('source filter splits bills from counter sales and never matches a customer return', () => {
+    const counter = salesRegister(docs, {
+      type: 'ALL',
+      source: 'COUNTER_SALE',
+    });
+    expect(numbers(counter)).toEqual(['CS-1', 'CS-2']);
+    expect(counter.total).toBe(180);
+    const bills = salesRegister(docs, { type: 'ALL', source: 'BILL' });
+    expect(numbers(bills)).toEqual(['PHI-2026-001', 'PHI-2026-002']);
+    expect(bills.total).toBe(689.5);
+  });
+
+  it('doctor filter ignores case and spaces, and a return carries the doctor it was billed under', () => {
+    const result = salesRegister(docs, { type: 'ALL', doctor: 'DR. ASHA RAO' });
+    expect(numbers(result)).toEqual([
+      'PHI-2026-001',
+      'PHI-2026-002',
+      'RET-1 (return)',
+    ]);
+    expect(result.total).toBe(577.5);
+  });
+
+  it('discount filter keeps bills with a discount', () => {
+    const result = salesRegister(docs, {
+      type: 'SALES',
+      discount: 'DISCOUNTED',
+    });
+    expect(numbers(result)).toEqual(['CS-2', 'PHI-2026-002']);
+    expect(result.total).toBe(545.5);
+  });
+
+  it('two filters together keep only rows that pass both, and the totals follow', () => {
+    const gstAndDiscount = salesRegister(docs, {
+      type: 'SALES',
+      gst: 'WITH_GST',
+      discount: 'DISCOUNTED',
+    });
+    expect(numbers(gstAndDiscount)).toEqual(['PHI-2026-002']);
+    expect(gstAndDiscount.total).toBe(465.5);
+    expect(gstAndDiscount.section.totals!.discount).toBe(25);
+    const counterAndDoctor = salesRegister(docs, {
+      type: 'SALES',
+      source: 'COUNTER_SALE',
+      doctor: 'Dr. Asha Rao',
+    });
+    expect(numbers(counterAndDoctor)).toEqual([]);
+  });
+
+  it('filters combine with the customer search', () => {
+    const result = salesRegister(docs, {
+      type: 'SALES',
+      search: 'PHI-2026-001',
+      discount: 'DISCOUNTED',
+    });
+    expect(numbers(result)).toEqual([]);
+  });
+
+  it('lists the period’s doctors once each, sorted, whatever the other filters say', () => {
+    const all = salesRegister(docs, { type: 'SALES' }).doctors;
+    expect(all).toEqual(['Dr. Asha Rao', 'Dr. Vikram Sen']);
+    expect(
+      salesRegister(docs, {
+        type: 'SALES',
+        doctor: 'Dr. Vikram Sen',
+        gst: 'WITH_GST',
+      }).doctors,
+    ).toEqual(all);
+  });
+
+  it('names every active filter in one sentence', () => {
+    expect(
+      salesRegister(docs, {
+        type: 'SALES',
+        gst: 'WITH_GST',
+        source: 'BILL',
+        doctor: 'Dr. Asha Rao',
+        discount: 'DISCOUNTED',
+      }).filterNote,
+    ).toBe(
+      'Showing only: bills with GST, prescription bills, Dr. Asha Rao, discounted bills.',
+    );
+    expect(
+      salesRegister(docs, { type: 'SALES', gst: 'WITHOUT_GST' }).filterNote,
+    ).toBe('Showing only: bills without GST.');
+  });
+});
+
 describe('CR-33a Purchase Bills (slab bands)', () => {
   // The clinic's worked example: 5% Base 27,317.10 SGST 533.64 CGST 533.64 IGST 298.58; 18% Base 1,59,656.74
   // SGST 14,369.11 CGST 14,369.11; grand total Base 1,86,973.84 SGST 14,902.75 CGST 14,902.75 IGST 298.58.

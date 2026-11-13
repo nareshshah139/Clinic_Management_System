@@ -71,7 +71,7 @@ export function TableReport({ entry, params, today, onApply }: { entry: ReportEn
   const report = state.status === "loaded" || state.status === "empty" ? state.data : null;
   return (
     <div className="space-y-4">
-      <ReportToolbar entry={entry} params={params} today={today} loading={state.status === "loading"} canExport={state.status === "loaded" || state.status === "empty"} onApply={onApply} />
+      <ReportToolbar entry={entry} params={params} today={today} loading={state.status === "loading"} canExport={state.status === "loaded" || state.status === "empty"} onApply={onApply} choices={{ doctor: report?.options?.doctors }} />
       {report?.headline && (
         <p className="flex items-baseline justify-end gap-3" aria-live="polite">
           <span className="text-base font-medium">{report.headline.label}</span>

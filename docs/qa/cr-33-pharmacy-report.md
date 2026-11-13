@@ -54,9 +54,20 @@ For one clinic day (Asia/Kolkata), stepped a day at a time and never past today:
 
 The server enforces `pharmacy:compliance:read` for reading and `pharmacy:compliance:audit` for counts. Day-wise, Item-margin, GST summary and monthly endpoints now also admit MANAGER and DOCTOR, so the whole menu has one role set.
 
+## Sales Register filters and Purchase Bills columns
+
+The reference screenshots show a second dropdown and "More Filters (n)" on the Sales Register, and "Show Columns" on Purchase Bills, without saying what they hold. These are the decisions.
+
+- **Second dropdown.** GST: All bills, With GST, Without GST. A bill is "with GST" when any line carries CGST, SGST, IGST or CESS. Purchase Bills and Sales Bills use the same dropdown.
+- **More filters.** Source (All sources, Prescription bills, Counter sales), Doctor (All doctors, then the doctors who appear in the period) and Discount (All bills, Discounted only). The button shows how many of these are set. GST is a top-level dropdown, so it is not counted. The count follows the panel as it is being edited, as in Item Wise Margin, and the filters apply on Go. "Clear" in the panel resets the three.
+- **Rows and totals.** Rows shown are the rows that match every filter. The totals row, the headline and every download cover exactly those rows. The customer search works the same way.
+- **Returns under Source.** A customer return is neither a prescription bill nor a counter sale, so picking either Source hides returns. Under Type "Returns" or "Sales net of returns" with Source "All sources", returns show as before. A doctor filter keeps a return billed under that doctor.
+- **Doctor list.** The names are the doctors on the period's documents of the chosen Type, before the other filters, spelled as first seen, sorted. A doctor in the address bar who is not in the period stays in the list so the screen never shows a filter it cannot name.
+- **Print and Download.** They carry the applied filters. The PDF lists them in its notes ("Showing only: bills with GST, counter sales."). The Excel and CSV files hold no notes today, so a filtered file shows the filtered rows and totals but does not name the filter.
+
 ## Server changes
 
-- `GET /pharmacy/reports/:reportId?from&to&type&gst&q&rate&window[&format=xlsx|csv|pdf]`. One report shape (sections, columns, rows, totals, tiles, notes) drives the screen and all three downloads, so a file always carries the figures on screen.
+- `GET /pharmacy/reports/:reportId?from&to&type&gst&source&doctor&discount&q&rate&window[&format=xlsx|csv|pdf]`. One report shape (sections, columns, rows, totals, tiles, notes) drives the screen and all three downloads, so a file always carries the figures on screen.
   - **Excel**: one sheet per section, merged GST band headings, Indian-grouped money format.
   - **CSV**: UTF-8 with BOM, formula-injection safe.
   - **PDF**: landscape. Wide tables are split into column pages that repeat the frozen bill columns and never split a GST band.
