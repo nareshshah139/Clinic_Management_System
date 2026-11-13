@@ -19,7 +19,7 @@
 
 ---
 
-## STORY-001: Scan a two-page distributor bill, fix the reading, match products and add stock
+## STORY-084: Scan a two-page distributor bill, fix the reading, match products and add stock
 
 **Type**: long
 **Topic**: Purchases, suppliers & payables
@@ -29,7 +29,7 @@
 **Ideal path**: 6 — open intake, drop both pages, scan, confirm the handful of flagged values in one pass, accept product matches in bulk, post. Everything else is machine work.
 **Alternate paths**:
 - Entry to the same workbench: Today `Scan or enter bill` button; Purchases task strip `Scan or enter bill`; Purchase bills `New purchase`; empty-register `New purchase`; denied-register `Scan or enter a bill`; Today queue row "Original files awaiting intake".
-- Other ways to bring the same bill in: `Type instead` (STORY-002), `Import CSV` and `Gmail intake` (STORY-010), `Automatic import` › `Import & Add Stock` on the same screen (skips human review when every check passes), an Inward challan followed by `Create linked purchase bill` (goods-first route, Stock/Reorder topic).
+- Other ways to bring the same bill in: `Type instead` (STORY-085), `Import CSV` and `Gmail intake` (STORY-093), `Automatic import` › `Import & Add Stock` on the same screen (skips human review when every check passes), an Inward challan followed by `Create linked purchase bill` (goods-first route, Stock/Reorder topic).
 - Posting: `Confirm reviewed values & add stock` (one button saves, reviews and commits); or `Save draft` now and `Add stock` later from the reviewed bill; or `More options` › `Save & Process` (automatic processing); review-only users get `Mark Reviewed` and a colleague presses `Add stock`.
 
 ### Steps
@@ -70,7 +70,7 @@
 - **Same GST on every line misread**: open "Apply GST or discount to selected rows" → `Select all 6 rows` → Change `GST`, GST mode `CGST + SGST`, "Total GST %" 18 → `Preview 6 selected rows` → `Apply to 6 selected rows` (with `Undo shared terms`).
 - **Goods were received earlier on an inward challan**: open "Link stock received earlier" → "Receipt reference" → `Find posted receipts` → choose in "Posted receipt"; the primary button becomes `Confirm & post bill` and the result reads "Stock received earlier · 0 added again".
 - **Review-only colleague (no stock permission)**: primary button reads "Confirm reviewed values & mark reviewed"; outcome "Review saved. Stock not added. An authorized colleague can add stock from this reviewed invoice." A second person opens the bill and presses `Add stock`.
-- **OCR garbage on a crumpled bill**: in "Finish this purchase" click `Enter complete invoice manually` → native confirm "Discard the OCR reading and type every invoice row from the complete original? …" → continues as STORY-002 with the photo kept.
+- **OCR garbage on a crumpled bill**: in "Finish this purchase" click `Enter complete invoice manually` → native confirm "Discard the OCR reading and type every invoice row from the complete original? …" → continues as STORY-085 with the photo kept.
 - **Wrong file uploaded**: `Reject this upload` → native confirm → "Upload rejected. No stock was added; the original remains in Saved uploads."
 
 ### Edge Cases
@@ -85,7 +85,7 @@
 
 ---
 
-## STORY-002: Type a small cash bill by hand, get interrupted, resume and post
+## STORY-085: Type a small cash bill by hand, get interrupted, resume and post
 
 **Type**: medium
 **Topic**: Purchases, suppliers & payables
@@ -116,7 +116,7 @@
 
 ### Variations
 - **Draft that passes validation** (every required header and line value present, some checks open): `Save draft` creates a real invoice — "Invoice DDD/1127 saved. Stock not added. Check the bill before adding stock." — and that one *does* appear in Purchase bills as "Not posted" (Bill status `Draft`).
-- **Product missing from catalogue**: inline "New product details" → `Create new item` (as STORY-001 step 23–24).
+- **Product missing from catalogue**: inline "New product details" → `Create new item` (as STORY-084 step 23–24).
 - **Reception enters, pharmacist posts**: a RECEPTION user without commit permission ends at "Confirm reviewed values & mark reviewed".
 
 ### Edge Cases
@@ -129,7 +129,7 @@
 
 ---
 
-## STORY-003: Find last month's bill from one distributor and open the original
+## STORY-086: Find last month's bill from one distributor and open the original
 
 **Type**: short
 **Topic**: Purchases, suppliers & payables
@@ -167,7 +167,7 @@
 
 ---
 
-## STORY-004: Mark a supplier bill paid from the register — and undo a wrong entry
+## STORY-087: Mark a supplier bill paid from the register — and undo a wrong entry
 
 **Type**: short
 **Topic**: Purchases, suppliers & payables
@@ -176,12 +176,12 @@
 **Preconditions**: ADMIN with ledger write (`creditWrite`). Bill MA/2611 is posted ("Stock added") and shows "Due" or "Overdue". No supplier credit held for Medline.
 **Ideal path**: 3 — click `Mark paid`, confirm mode/reference, record.
 **Alternate paths**:
-- `Payments & dues` › "Bulk Payment Allocation" (STORY-007) — the only place for a part payment or one payment across several bills.
-- Set off a credit instead of paying: `Mark paid` dialog's credit banner, Returns tab `Set off`, the distributor strip `Set off all ₹…`, `Credits & vouchers` › `Set off against bills`, the bill's `Eligible supplier credits` (STORY-006).
+- `Payments & dues` › "Bulk Payment Allocation" (STORY-090) — the only place for a part payment or one payment across several bills.
+- Set off a credit instead of paying: `Mark paid` dialog's credit banner, Returns tab `Set off`, the distributor strip `Set off all ₹…`, `Credits & vouchers` › `Set off against bills`, the bill's `Eligible supplier credits` (STORY-089).
 - Undo: 30-second `Undo` in the Payment cell or in the toast; later, `Payments & dues` › "Recorded payments" › `Reverse payment` (reason required).
 
 ### Steps
-1. In `Purchase bills` (STORY-003 step 1–2) find MA/2611 and click `Mark paid` in its Payment cell → a small dialog anchored to the row: title "Pay ₹12,480.00 to Medline Agencies", description "For bill MA/2611".
+1. In `Purchase bills` (STORY-086 step 1–2) find MA/2611 and click `Mark paid` in its Payment cell → a small dialog anchored to the row: title "Pay ₹12,480.00 to Medline Agencies", description "For bill MA/2611".
 2. "Mode" is preselected (`NEFT / RTGS` by default, or whatever he used last — remembered in the browser); "Date" shows today as text `13/11/2026`. He leaves both.
 3. Type the UTR in "Cheque / UTR no. (optional)".
 4. Click `Record payment ₹12,480.00` → dialog closes; the row's badge turns green "Paid" and an `Undo` link sits beside it for 30 seconds; focus moves to the next payable row's `Mark paid`.
@@ -205,7 +205,7 @@
 
 ---
 
-## STORY-005: Discover a mistake after posting and correct it with a linked return
+## STORY-088: Discover a mistake after posting and correct it with a linked return
 
 **Type**: medium
 **Topic**: Purchases, suppliers & payables
@@ -232,7 +232,7 @@
 9. Leave "Return price basis" on `Purchase rate per stock unit`; check the footer "Taxable ₹… + GST ₹… Total ₹1,321.60".
 10. Click `Create return challan` → heading "Return challan saved"; outcome text "Stock has already been sent back to the supplier on this return challan." and "When the distributor’s credit note arrives, choose Record credit note …". Ten tubes are now deducted from the batch.
 11. Click the back arrow ("Back to supplier returns") → lands on a plain "Supplier returns" list (the generic workflow register, heading + `New document` + Status filter) — **not** on Purchase bills › Returns, and not on the bill she came from.
-12. Navigate `Purchase bills` → tab `Returns` → the return shows "Credit note awaited · today"; when Sri Venkateshwara sends the credit note she continues as STORY-006 step 9.
+12. Navigate `Purchase bills` → tab `Returns` → the return shows "Credit note awaited · today"; when Sri Venkateshwara sends the credit note she continues as STORY-089 step 9.
 
 ### Variations
 - **Price was wrong, quantity right**: step 5 uses `Record linked supplier credit` → a "Credit notes" document prefilled with one line "Price adjustment credit" (qty 1, rate 0); enter "Credit note no.", "Credit note date", the amount as the line rate, then `Post supplier credit`.
@@ -251,7 +251,7 @@
 
 ---
 
-## STORY-006: Return expired stock, record the distributor's credit note and set it off against a bill
+## STORY-089: Return expired stock, record the distributor's credit note and set it off against a bill
 
 **Type**: medium
 **Topic**: Purchases, suppliers & payables
@@ -300,7 +300,7 @@
 
 ---
 
-## STORY-007: Month-end — one cheque across three bills, a part payment, and reversing a wrong entry
+## STORY-090: Month-end — one cheque across three bills, a part payment, and reversing a wrong entry
 
 **Type**: medium
 **Topic**: Purchases, suppliers & payables
@@ -310,7 +310,7 @@
 **Ideal path**: 5 — open the supplier account, enter cheque details once, tick the bills (auto-fill oldest first), record; for the fix: open the payment, move it, give a reason.
 **Alternate paths**:
 - Reach the ledger: `More tasks…` › `Payments & dues`; Purchase bills `More` ▾ › `Payments & dues`; the register footer link "Outstanding in these N bills ₹…"; Today row "Overdue supplier bills" or button `Check overdue supplier balances`; Suppliers › `Account & dues`.
-- Pay single bills in full with `Mark paid` × 2 from the register (STORY-004) — but the part payment still needs this screen.
+- Pay single bills in full with `Mark paid` × 2 from the register (STORY-087) — but the part payment still needs this screen.
 - Reverse: register `Undo` (30 s only); here `Reverse payment` / `Reallocate payment`.
 
 ### Steps
@@ -342,7 +342,7 @@
 
 ---
 
-## STORY-008: Add a new distributor and record the terms the rep agreed
+## STORY-091: Add a new distributor and record the terms the rep agreed
 
 **Type**: medium
 **Topic**: Purchases, suppliers & payables
@@ -379,12 +379,12 @@
 - **Invalid term value**: "Check {field}." under the product box; `Next` / `Save terms` disabled.
 - **Supplier vs Distributor in one flow**: task "Suppliers", button `Add supplier`, then "Find distributor", "Distributor: …", "No distributor matches. Add distributors under Suppliers."
 - **Supplier "Payment terms" vs Terms of Trade**: two unrelated things with near-identical names; the supplier's "Payment terms" text is not shown in Terms of Trade, and neither visibly drives a bill's Due Date.
-- **Terms are advisory**: a bill that violates them (STORY-001 step 25) is only hinted, never blocked or listed anywhere for follow-up.
+- **Terms are advisory**: a bill that violates them (STORY-084 step 25) is only hinted, never blocked or listed anywhere for follow-up.
 - **No suppliers yet**: "No suppliers yet. Add a supplier to start recording purchases." / without permission "Ask an administrator to add a supplier."
 
 ---
 
-## STORY-009: Check whether a distributor has quietly cut the discount
+## STORY-092: Check whether a distributor has quietly cut the discount
 
 **Type**: short
 **Topic**: Purchases, suppliers & payables
@@ -417,7 +417,7 @@
 
 ---
 
-## STORY-010: Bring in an e-mailed bill through Gmail (or a CSV) and review it
+## STORY-093: Bring in an e-mailed bill through Gmail (or a CSV) and review it
 
 **Type**: medium
 **Topic**: Purchases, suppliers & payables
@@ -426,7 +426,7 @@
 **Preconditions**: RECEPTION with purchase create permission. Gmail integration configured on the server (`GMAIL_*`); not yet connected for the clinic account.
 **Ideal path**: 4 — open Gmail intake, see new invoice e-mails already listed, click the attachment, land in the review draft.
 **Alternate paths**:
-- Download the PDF and use `Scan or enter bill` (STORY-001).
+- Download the PDF and use `Scan or enter bill` (STORY-084).
 - `Import CSV` when the distributor sends a spreadsheet (see Variations).
 - All three converge on the same workbench review and the same `Confirm reviewed values & add stock`.
 
@@ -437,7 +437,7 @@
 4. The search box is prefilled with Gmail syntax `newer_than:30d` (placeholder "from:supplier@example.com newer_than:30d"). She edits it to `from:accounts@medlineagencies.in newer_than:7d` *(hesitates: this is raw Gmail query syntax)*.
 5. Click `Find invoice attachments` → list of messages (subject, sender, date) each with buttons `Review {file name}`.
 6. Click `Review MA-2648.pdf` → the app switches to `Scan or enter bill` with the notice "Imported draft ready for review. The original is saved; stock has not changed." and the PDF in the "Original invoice" viewer.
-7. Review as in STORY-001 steps 6–27 (supplier, flagged fields, product matches, totals).
+7. Review as in STORY-084 steps 6–27 (supplier, flagged fields, product matches, totals).
 8. Kavya has no stock permission, so the primary button reads `Confirm reviewed values & mark reviewed` → click → "Review saved. Stock not added. An authorized colleague can add stock from this reviewed invoice."
 9. The pharmacist later opens the bill from Purchase bills (Payment status `Not posted`, Bill status `Reviewed`) and clicks `Add stock`.
 

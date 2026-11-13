@@ -24,7 +24,7 @@
 
 ---
 
-## STORY-001: Collect a first-consultation fee in cash from the calendar row
+## STORY-032: Collect a first-consultation fee in cash from the calendar row
 
 **Type**: short
 **Topic**: Consultation billing & fee list
@@ -35,7 +35,7 @@
 **Alternate paths**:
 - Click the patient's name on the row (or the hover button `INFO`) → dialog "Appointment Details" → `Create bill` next to "Bill: Not billed" → same bill dialog (one extra click; the details dialog closes itself).
 - Appointments › **Slots** tab renders the same day calendar (`DoctorDayCalendar`) beneath its own filters, so the same chip and dialog are reachable there.
-- No other route creates a clinic bill. The Patients progress tracker `Bill` button and `/dashboard/billing` look like alternates but open the **pharmacy** bill (see STORY-008).
+- No other route creates a clinic bill. The Patients progress tracker `Bill` button and `/dashboard/billing` look like alternates but open the **pharmacy** bill (see STORY-039).
 
 ### Steps
 1. Click the chip "Not billed" at the right end of Kavya Reddy's row (tooltip and screen-reader label "First consultation bill: not billed yet") → dialog "Bill for Kavya Reddy" opens with the description "First consultation · 13 Nov 2026 · 10:15-10:30". Because there is no bill yet, a section "Create bill" is shown with `Bill line` = "First consultation", `Fee` = "700", `Paid now` = "700", the line "From fee list: First consultation ₹700", a "Payment mode" radio group (`Cash` selected, `UPI`, `Card`, `Net banking / NEFT`, `Cheque`) and the note "Consultation and procedure fees are billed without GST."
@@ -61,7 +61,7 @@
 
 ---
 
-## STORY-002: Procedure bill with part payment by UPI now and the balance by card later
+## STORY-033: Procedure bill with part payment by UPI now and the balance by card later
 
 **Type**: medium
 **Topic**: Consultation billing & fee list
@@ -99,12 +99,12 @@
 - **Paid now above the fee**: "Paid now can be from 0 up to the fee."
 - **Fee typed as text or 0**: "Enter the fee as an amount above 0, for example 500." ("1,200.50" and "₹ 500" are accepted; three decimals are not.)
 - **Two desks take the same balance**: the second save fails with "Bill INV-… is already paid in full, so ₹1,500 cannot be recorded. Nothing was saved." and the calendar row reloads.
-- **Wrong mode recorded**: there is no way to correct a payment's mode afterwards (see STORY-006).
+- **Wrong mode recorded**: there is no way to correct a payment's mode afterwards (see STORY-037).
 - **Mode resets**: after every successful save the mode returns to `Cash`; a desk taking several UPI payments must re-select UPI each time.
 
 ---
 
-## STORY-003: Charge less than the fee list, change her mind, and record a bank transfer with its UTR
+## STORY-034: Charge less than the fee list, change her mind, and record a bank transfer with its UTR
 
 **Type**: medium
 **Topic**: Consultation billing & fee list
@@ -142,7 +142,7 @@
 
 ---
 
-## STORY-004: Add a second bill to the same appointment for an add-on procedure
+## STORY-035: Add a second bill to the same appointment for an add-on procedure
 
 **Type**: medium
 **Topic**: Consultation billing & fee list
@@ -179,7 +179,7 @@
 
 ---
 
-## STORY-005: Set and maintain the clinic fee list
+## STORY-036: Set and maintain the clinic fee list
 
 **Type**: short
 **Topic**: Consultation billing & fee list
@@ -213,7 +213,7 @@
 
 ---
 
-## STORY-006: A wrong bill, a refund and a receipt — the three things the desk cannot do
+## STORY-037: A wrong bill, a refund and a receipt — the three things the desk cannot do
 
 **Type**: medium
 **Topic**: Consultation billing & fee list
@@ -231,7 +231,7 @@
 5. Type `-6300` in `Fee` → "Enter the fee as an amount above 0, for example 500." (and "Paid now can be from 0 up to the fee.", since `Paid now` mirrors it); the button is disabled.
 6. Click `Cancel` → back to the read-only bill. The record cannot be corrected from the app.
 7. Lakshmi asks for a receipt for the ₹700 she paid. Look for Print / Download / WhatsApp on the dialog → none. The browser's own print (Ctrl+P) prints the calendar page with the dialog over it, showing the wrong ₹7,000.
-8. Close the dialog. Riya writes a paper receipt and a note for the administrator. The chip keeps saying "₹7,000 · Paid", and tonight's Daily Collection will show Cash ₹6,300 higher than the drawer (see STORY-007), with no cancelled or corrected marker on the bill.
+8. Close the dialog. Riya writes a paper receipt and a note for the administrator. The chip keeps saying "₹7,000 · Paid", and tonight's Daily Collection will show Cash ₹6,300 higher than the drawer (see STORY-038), with no cancelled or corrected marker on the bill.
 
 ### Variations
 - **Under-billed instead of over-billed** (₹70 instead of ₹700): workable — `Add another bill` for the missing ₹630 with a line such as "First consultation (balance)"; the appointment then carries two bills.
@@ -247,7 +247,7 @@
 
 ---
 
-## STORY-007: End-of-day check of consultation takings in Daily Collection
+## STORY-038: End-of-day check of consultation takings in Daily Collection
 
 **Type**: medium
 **Topic**: Consultation billing & fee list
@@ -281,14 +281,14 @@
 ### Edge Cases
 - **Accountant or pharmacist opens the same page**: ACCOUNTANT, PHARMACIST and MANAGER have the sidebar entry but cannot read clinic bills, so the "Whole day" and "Clinic" blocks are absent and the notes say "Consultation and procedure takings are shown to the roles that can read clinic bills." The person who reconciles money cannot see the clinic's.
 - **Receptionist**: the person who took the money has no "Daily Collection" entry, and the report route does not list RECEPTION, so opening the URL shows the report's error state.
-- **Mistaken bill** (STORY-006): it stays in "Clinic billed today" and "Clinic received"; the difference from the envelope has to be explained on paper.
+- **Mistaken bill** (STORY-037): it stays in "Clinic billed today" and "Clinic received"; the difference from the envelope has to be explained on paper.
 - **No bills on the day**: "Clinic bills" shows "No consultation or procedure bills were raised or paid on this day."
 - **Clinic refunds**: the Refunds column exists and is subtracted in Net, but no screen creates a clinic refund, so it is ₹0 in practice.
 - **Two people saving a pharmacy count**: "Someone else saved a count for this day while you were entering yours. Their count is shown below; your figures are still in the boxes. Check them and save again."
 
 ---
 
-## STORY-008: Looking for the consultation bill and landing in the pharmacy bill ("two billing systems")
+## STORY-039: Looking for the consultation bill and landing in the pharmacy bill ("two billing systems")
 
 **Type**: short
 **Topic**: Consultation billing & fee list
@@ -320,7 +320,7 @@
 
 ---
 
-## STORY-009: A Saturday at the front desk — fee list, four bills, a balance, and the day's close
+## STORY-040: A Saturday at the front desk — fee list, four bills, a balance, and the day's close
 
 **Type**: long
 **Topic**: Consultation billing & fee list
@@ -383,7 +383,7 @@
 - **Fee changed while the calendar is open**: had she changed the fee in another tab, the open calendar would keep offering the old amount until the schedule reloads *(inferred)*.
 - **Typing in the dialog then clicking `Set fees`**: any line text or amount already typed is lost; the link is a plain navigation with no warning.
 - **The same information on four surfaces**: Arjun's ₹1,700 is shown on the row chip, in "Appointment Details" ("Bill: ₹1,700 · Paid · 2 bills"), in the bill dialog (summary line plus per-bill Total / Received / Due) and in Daily Collection's "Clinic bills" rows — each with slightly different wording.
-- **A slip anywhere in steps 4–28** (wrong amount or mode) cannot be undone from the app (STORY-006) and would surface only as an unexplained difference at step 31.
+- **A slip anywhere in steps 4–28** (wrong amount or mode) cannot be undone from the app (STORY-037) and would surface only as an unexplained difference at step 31.
 - **Session expiry during a save**: any 401 redirects to `/login?next=…`; on return the calendar reloads from the server, so the chip shows whether the bill was actually created.
 
 ---

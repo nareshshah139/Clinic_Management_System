@@ -20,7 +20,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 
 ---
 
-## STORY-001: Start-of-shift look at the Pharmacy Desk and a jump to the low-stock list
+## STORY-063: Start-of-shift look at the Pharmacy Desk and a jump to the low-stock list
 
 **Type**: short
 **Topic**: Pharmacy desk, counter & dispensing
@@ -38,7 +38,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 5. Clicks sidebar **Pharmacy Counter** to begin dispensing (or goes back to the Desk and uses the `Pharmacy Counter` tile — both end on `?section=counter`).
 
 ### Variations
-- **Reception (Riya)**: the Desk shows no figures and no `Refresh` / `Invoices` / `Drugs` / `New sale`; only `Quick Guide`, `Pharmacy Counter` and `Inventory Control` (two tiles). The AI assistant launcher, Partner Daily Sync form and `Create Package` button are still rendered for her (see STORY-009/010 edge cases).
+- **Reception (Riya)**: the Desk shows no figures and no `Refresh` / `Invoices` / `Drugs` / `New sale`; only `Quick Guide`, `Pharmacy Counter` and `Inventory Control` (two tiles). The AI assistant launcher, Partner Daily Sync form and `Create Package` button are still rendered for her (see STORY-071/010 edge cases).
 - **Refresh figures**: `Refresh` in the dark header re-fetches `/pharmacy/dashboard` only; Partner Daily Sync has its own `Refresh`, and the package list reloads only after a package is created.
 - **Quick Guide**: opens "Pharmacy Management Guide"; its "Inventory Controls" section still says "Use Inventory > Pharmacy Control for Excel import / invoice scanning" — an area that does not exist.
 - **Owner**: has no Pharmacy Desk/Counter sidebar entry; can only arrive by typing the URL.
@@ -50,7 +50,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 
 ---
 
-## STORY-002: Dispense a doctor's prescription from the Counter cockpit, start to finish
+## STORY-064: Dispense a doctor's prescription from the Counter cockpit, start to finish
 
 **Type**: long
 **Topic**: Pharmacy desk, counter & dispensing
@@ -59,7 +59,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 **Preconditions**: Dr. Anitha Rao created an ACTIVE prescription for Sravani Reddy (P-0412) less than 24 h ago: Isotroin 20 mg cap, Deriva-BPO gel, Photostable Gold SPF 55. All three are linked to inventory with unexpired stock. No pharmacy bill exists for it yet.
 **Ideal path**: 6 — open Counter, select the prescription, accept all lines in one action, open the bill, confirm + take payment, done (queue updates itself).
 **Alternate paths**:
-- "Prescription Queue" table under the cockpit → row `Bill` (skips review entirely — STORY-004).
+- "Prescription Queue" table under the cockpit → row `Bill` (skips review entirely — STORY-066).
 - Sales (sidebar) → `New sale` → queue at the top of the bill page → row `Load`.
 - Pharmacy Desk → `New sale` → same bill-page queue → `Load`.
 - Doctor side: prescription builder `Go to Pharmacy` / post-create dialog `Yes, go to Pharmacy`; patient progress tracker `Bill` (all open the same Sales bill prefilled).
@@ -86,7 +86,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 18. Click filter chip **All** and select the next waiting patient.
 
 ### Variations
-- **Skip the cockpit review**: scroll to "Prescription Queue" and press `Bill` on the row — no line review is required to bill (STORY-004).
+- **Skip the cockpit review**: scroll to "Prescription Queue" and press `Bill` on the row — no line review is required to bill (STORY-066).
 - **Accept directly on the auto-selected prescription**: clicking `Accept` without first clicking the queue card also creates the task; the click on the card is not required.
 - **`Paid` button**: sets the task to Paid by hand at any time (the server only refuses a manual *Dispensed*). It does not take money or check that a bill exists, and it sits next to `Ready`, so it is easy to press by mistake. A task marked Paid stays "Paid" in the cockpit even after its bill is posted, while the table below shows the same prescription as "Dispensed".
 - **Different entry button**: header `Bill` and Pick + Pay `Collect payment` do exactly what `Open bill` does.
@@ -104,7 +104,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 
 ---
 
-## STORY-003: One medicine out of stock, one not stocked at all — substitute, mark unavailable, bill the rest
+## STORY-065: One medicine out of stock, one not stocked at all — substitute, mark unavailable, bill the rest
 
 **Type**: medium
 **Topic**: Pharmacy desk, counter & dispensing
@@ -114,7 +114,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 **Ideal path**: 7 — select prescription, accept line 1, choose the substitute product for line 2 (one picker), mark line 3 unavailable with a reason, open bill (carrying those decisions), confirm, done.
 **Alternate paths**:
 - Skip the cockpit: `Bill` from the "Prescription Queue" table and handle everything on the bill with its stock warnings and `Substitute` button.
-- Fix the "not linked" line first with `Link item` in the queue table (STORY-005) instead of marking it NA.
+- Fix the "not linked" line first with `Link item` in the queue table (STORY-067) instead of marking it NA.
 - Park it: `Pause` with reason "Paused for doctor clarification" and call the doctor.
 
 ### Steps
@@ -148,7 +148,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 
 ---
 
-## STORY-004: Bill a prescription straight from the "Prescription Queue" table
+## STORY-066: Bill a prescription straight from the "Prescription Queue" table
 
 **Type**: short
 **Topic**: Pharmacy desk, counter & dispensing
@@ -178,7 +178,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 
 ---
 
-## STORY-005: Link a prescribed medicine to the right inventory item
+## STORY-067: Link a prescribed medicine to the right inventory item
 
 **Type**: medium
 **Topic**: Pharmacy desk, counter & dispensing
@@ -210,7 +210,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 
 ---
 
-## STORY-006: A walk-in customer at the counter — getting to a Sales bill
+## STORY-068: A walk-in customer at the counter — getting to a Sales bill
 
 **Type**: short
 **Topic**: Pharmacy desk, counter & dispensing
@@ -237,7 +237,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 
 ---
 
-## STORY-007: Create a treatment package and check it in the browser
+## STORY-069: Create a treatment package and check it in the browser
 
 **Type**: medium
 **Topic**: Pharmacy desk, counter & dispensing
@@ -279,7 +279,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 
 ---
 
-## STORY-008: Add a new medicine to the drug database, then correct and remove an entry
+## STORY-070: Add a new medicine to the drug database, then correct and remove an entry
 
 **Type**: medium
 **Topic**: Pharmacy desk, counter & dispensing
@@ -287,7 +287,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 **Goal**: Add "Photostable Gold SPF 55 Gel", fix a typo in its pack size, and delete a duplicate entry
 **Preconditions**: Logged in as PHARMACIST (or ADMIN); on the Pharmacy Desk
 **Ideal path**: 11 — open the drug page, `Add New Drug`, eight field entries (seven required fields + price), save. The typo fix and the delete add 3 + 2.
-**Alternate paths**: prescription builder `+ Add to Drug Database` ("Add Drug to Database" → `Save & Add`); Inventory → Stock list → `Add batch` ("Add Inventory Item", approval flow); posting a purchase bill creates products implicitly; opening-stock Excel import; AI assistant proposal "Add medicine" (STORY-010).
+**Alternate paths**: prescription builder `+ Add to Drug Database` ("Add Drug to Database" → `Save & Add`); Inventory → Stock list → `Add batch` ("Add Inventory Item", approval flow); posting a purchase bill creates products implicitly; opening-stock Excel import; AI assistant proposal "Add medicine" (STORY-072).
 
 ### Steps
 1. On the Pharmacy Desk click **Drugs** (dark header) → `/dashboard/pharmacy/drugs`. The page shows `Back`, the heading "Drug Management", and under it a second heading "Drug Database — Manage your pharmacy's drug inventory" with `Add New Drug`; tiles Total Drugs / Categories / Manufacturers / Active Drugs; a filter card (Search Drugs, Category, Manufacturer, `Clear Filters`); list "Drugs (n)".
@@ -325,7 +325,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 
 ---
 
-## STORY-009: Enter a partner pharmacy's daily sales, commit stock and resolve an unmatched batch
+## STORY-071: Enter a partner pharmacy's daily sales, commit stock and resolve an unmatched batch
 
 **Type**: long
 **Topic**: Pharmacy desk, counter & dispensing
@@ -375,7 +375,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 
 ---
 
-## STORY-010: Ask the Pharmacy AI assistant a stock question, attach a file and review a proposed change
+## STORY-072: Ask the Pharmacy AI assistant a stock question, attach a file and review a proposed change
 
 **Type**: medium
 **Topic**: Pharmacy desk, counter & dispensing
@@ -383,7 +383,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 **Goal**: Find which acne medicines expire in the next 60 days, then let the assistant add a missing medicine from a supplier price list and approve the change
 **Preconditions**: Logged in as PHARMACIST (admin and doctor also qualify; managers are admitted by the API but have no Pharmacy Desk in their sidebar); the assistant backend (Codex CLI) is configured; a supplier price list `derma-pricelist-nov.xlsx` is on her computer
 **Ideal path**: 5 — open assistant, type question + send, attach file + ask, `Apply` the proposal.
-**Alternate paths**: for the question — Pharmacy Report › Expiring Stock, Inventory › Today "Expiring in the next 3 months", Stock list expiry filter. For the change — Drug database `Add New Drug` (STORY-008). No other entry point to the assistant exists (Desk only; not on the Counter).
+**Alternate paths**: for the question — Pharmacy Report › Expiring Stock, Inventory › Today "Expiring in the next 3 months", Stock list expiry filter. For the change — Drug database `Add New Drug` (STORY-070). No other entry point to the assistant exists (Desk only; not on the Counter).
 
 ### Steps
 1. Sidebar **Pharmacy Desk** → under the dark header, the strip "Pharmacy AI assistant — Opens when needed." Click **Open AI Assistant** → "Loading pharmacy assistant…" then a three-pane panel: `Chats` rail (sections "Active", collapsible "History"), the conversation, and `Proposals` ("No pending updates."). Header badge "Checking" → "Assistant ready"; buttons `Archive` (disabled while the chat is empty) and `New chat`.

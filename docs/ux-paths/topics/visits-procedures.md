@@ -21,7 +21,7 @@ Facts that several stories rely on (read once):
 
 ---
 
-## STORY-001: Doctor opens a visit from today's appointment
+## STORY-041: Doctor opens a visit from today's appointment
 
 **Type**: short
 **Topic**: Visit documentation & procedures
@@ -34,8 +34,8 @@ Facts that several stories rely on (read once):
 - Click the tile → dialog "Appointment Details" → `Start Visit` (`DoctorDayCalendar.tsx`). The dialog button always says `Start Visit`, even when it will resume an existing visit.
 - Appointments › `Slots` tab renders the same calendar, so both routes above exist there too.
 - Header notification bell (doctor): each upcoming appointment links to `/dashboard/visits?appointmentId=…` (`header.tsx`). The Visits page ignores `appointmentId` unless `patientId` is also present, so this lands on the empty setup screen.
-- Patients list row `Start Visit`; patient detail `Start new visit`; progress tracker `Start Visit` — all open a visit that is **not** linked to the appointment (see STORY-003).
-- Sidebar `Visits` → setup screen (STORY-002), also not linked to the appointment.
+- Patients list row `Start Visit`; patient detail `Start new visit`; progress tracker `Start Visit` — all open a visit that is **not** linked to the appointment (see STORY-043).
+- Sidebar `Visits` → setup screen (STORY-042), also not linked to the appointment.
 
 ### Steps
 1. Click `Appointments` in the sidebar (Clinical) → "Doctor Calendar" for Dr. Sindhu Reddy, today, with Scheduled and Confirmed columns.
@@ -51,13 +51,13 @@ Facts that several stories rely on (read once):
 ### Edge Cases
 - **Nothing is created yet**: arriving on the form does not create the visit or change the appointment. The appointment only flips to In Progress on the first successful save (`visits.service.ts` `create`). If the doctor reads the history and leaves, the calendar tile still says `START`.
 - **Two badges for one fact**: "From Appointment" (page header) and "Linked to Appointment" (visit header card) are both on screen.
-- **Two people start the same appointment**: the second save gets HTTP 409 "Visit already exists for this appointment"; the form then looks up the existing visit id, shows "Unable to save visit", and raises the conflict banner (see STORY-009).
+- **Two people start the same appointment**: the second save gets HTTP 409 "Visit already exists for this appointment"; the form then looks up the existing visit id, shows "Unable to save visit", and raises the conflict banner (see STORY-049).
 - **Cancelled or completed appointment**: first save fails with "Cannot create a visit from a cancelled or completed appointment".
-- **Telemedicine appointment**: the form still opens with `Consultation type` = "In-person" (see STORY-008).
+- **Telemedicine appointment**: the form still opens with `Consultation type` = "In-person" (see STORY-048).
 
 ---
 
-## STORY-002: Doctor starts a visit for a walk-in from the Visits page
+## STORY-042: Doctor starts a visit for a walk-in from the Visits page
 
 **Type**: medium
 **Topic**: Visit documentation & procedures
@@ -71,7 +71,7 @@ Facts that several stories rely on (read once):
 - Appointments → tile `START` / "Appointment Details" › `Start Visit` (needs a booking first).
 - Doctor Dashboard › "Recent Visits" row (resumes an existing visit).
 - `/dashboard/prescriptions` redirects to this same setup screen.
-- Procedures › `Save Procedure` also creates a visit record (STORY-011).
+- Procedures › `Save Procedure` also creates a visit record (STORY-051).
 
 ### Steps
 1. Click `Visits` in the sidebar → page "Visit Documentation" ("Create and manage patient visits with role-based documentation") with three cards: "Your Role & Permissions" (badge `Doctor`, "Full access to all visit documentation features"), "Start New Visit", and "Available Features" (Complete Documentation / Dermatology Specific / Treatment Planning).
@@ -95,7 +95,7 @@ Facts that several stories rely on (read once):
 
 ---
 
-## STORY-003: Second doctor starts a visit from the Patients list and finds it under the wrong doctor
+## STORY-043: Second doctor starts a visit from the Patients list and finds it under the wrong doctor
 
 **Type**: short
 **Topic**: Visit documentation & procedures
@@ -103,7 +103,7 @@ Facts that several stories rely on (read once):
 **Goal**: Start documenting a visit for a patient he found in the Patients list
 **Preconditions**: Signed in as DOCTOR (Dr. Praveen Kumar). Patient Sunita Rao (F, 45) exists. Another doctor sorts first in the clinic's doctor list.
 **Ideal path**: 1 — `Start Visit` on the patient row opens a visit under the signed-in doctor.
-**Alternate paths**: patient detail `Start new visit`; patient detail progress tracker `Start Visit` (only shown when an upcoming appointment exists and no visit yet); Visits setup screen (STORY-002); appointment `START` (STORY-001).
+**Alternate paths**: patient detail `Start new visit`; patient detail progress tracker `Start Visit` (only shown when an upcoming appointment exists and no visit yet); Visits setup screen (STORY-042); appointment `START` (STORY-041).
 
 ### Steps
 1. Click `Patients` in the sidebar, type `Sunita` in the search box → her row appears.
@@ -123,7 +123,7 @@ Facts that several stories rely on (read once):
 
 ---
 
-## STORY-004: Nurse records vitals and a photo before the doctor sees the patient
+## STORY-044: Nurse records vitals and a photo before the doctor sees the patient
 
 **Type**: medium
 **Topic**: Visit documentation & procedures
@@ -167,7 +167,7 @@ Facts that several stories rely on (read once):
 
 ---
 
-## STORY-005: Doctor documents a full acne consultation from appointment to `Complete Visit`
+## STORY-045: Doctor documents a full acne consultation from appointment to `Complete Visit`
 
 **Type**: long
 **Topic**: Visit documentation & procedures
@@ -176,7 +176,7 @@ Facts that several stories rely on (read once):
 **Preconditions**: Signed in as DOCTOR. Confirmed appointment today for Ananya Sharma (F, 27). She has two earlier visits, the last with tagged photos (Front, Left, Right). Drug master and a signature are set up (prescription internals are another topic).
 **Ideal path**: 14 — open from appointment (1), four vitals (4), add three photos in one action (2), complaint + diagnosis + examination chips (3), order tests (1), prescription hand-off (1), complete (2: confirm + done).
 **Alternate paths**:
-- Starting: any route from STORY-001/002/003.
+- Starting: any route from STORY-041/002/003.
 - Vitals: `Vitals` tab **or** Prescription › "Clinical Details & Vitals" (Height, Weight, BMI, BP Sys, BP Dia, Pulse) — the two are kept in sync.
 - Diagnosis: Prescription › "Diagnosis" text box **or** Prescription › "On Examination" › "Dermatology Diagnoses" chips (merged on save).
 - Ordering tests: `Lab Tests` tab **or** Prescription › "Investigations" checklist.
@@ -231,11 +231,11 @@ Facts that several stories rely on (read once):
 - **Typing during save**: if edits land while a save is in flight the toast reads "Earlier changes saved — New edits are still waiting to save."; completing in that state fails with "New changes were entered while saving. Please save again before completing or exporting."
 - **Tracker buttons inside the form**: the compact tracker's `Continue` / `View` buttons link to the patient's *latest saved* visit; before step 9 that is the previous visit, so clicking them leaves the current form.
 - **After completion** the form remains editable and `Save Draft` still works; no read-only state was found in the form or in `visits.service.ts` `update`.
-- **Section completion is not restored from the server**: reopening this visit on another computer shows 0 % progress except Photos (auto-detected) — see STORY-010 edge cases.
+- **Section completion is not restored from the server**: reopening this visit on another computer shows 0 % progress except Photos (auto-detected) — see STORY-050 edge cases.
 
 ---
 
-## STORY-006: Doctor photographs a melasma follow-up on a tablet, compares with last visit and retakes a blurred shot
+## STORY-046: Doctor photographs a melasma follow-up on a tablet, compares with last visit and retakes a blurred shot
 
 **Type**: medium
 **Topic**: Visit documentation & procedures
@@ -274,11 +274,11 @@ Facts that several stories rely on (read once):
 - **Photos taken before the first save**: uploads go to the draft store; after the first save the viewer reloads from the visit, shows 0 photos, the Photos section loses its green dot (progress drops 20 %), and the pictures appear only under "Other saved photos" → "Unattached uploads — <date>". *(From `VisitPhotos.tsx`: `onVisitNeeded` is accepted but never called.)*
 - **Bad files**: non-images are skipped; > 25 MB is attempted with a warning; mixed outcomes give the toast "Upload completed with warnings" listing skipped/failed batches; total failure gives "Upload failed".
 - **Load failure**: "Unable to load this visit's photos. Please retry." with `Retry visit photos`; the archive has its own `Retry saved photos`.
-- **Stale version**: an upload or delete answered with 409 raises the visit conflict banner (STORY-009).
+- **Stale version**: an upload or delete answered with 409 raises the visit conflict banner (STORY-049).
 
 ---
 
-## STORY-007: Doctor enters lab results from a report photo and compares with the last visit
+## STORY-047: Doctor enters lab results from a report photo and compares with the last visit
 
 **Type**: medium
 **Topic**: Visit documentation & procedures
@@ -315,7 +315,7 @@ Facts that several stories rely on (read once):
 
 ---
 
-## STORY-008: Doctor runs a tele-video consultation and records consent
+## STORY-048: Doctor runs a tele-video consultation and records consent
 
 **Type**: medium
 **Topic**: Visit documentation & procedures
@@ -348,7 +348,7 @@ Facts that several stories rely on (read once):
 
 ---
 
-## STORY-009: Autosave stops after the same visit is edited in a second tab; doctor discards and reloads
+## STORY-049: Autosave stops after the same visit is edited in a second tab; doctor discards and reloads
 
 **Type**: medium
 **Topic**: Visit documentation & procedures
@@ -382,7 +382,7 @@ Facts that several stories rely on (read once):
 
 ---
 
-## STORY-010: Doctor checks what happened at the previous visit while documenting today's
+## STORY-050: Doctor checks what happened at the previous visit while documenting today's
 
 **Type**: short
 **Topic**: Visit documentation & procedures
@@ -418,7 +418,7 @@ Facts that several stories rely on (read once):
 
 ---
 
-## STORY-011: Doctor records a laser hair reduction session on the Procedures page
+## STORY-051: Doctor records a laser hair reduction session on the Procedures page
 
 **Type**: medium
 **Topic**: Visit documentation & procedures

@@ -17,7 +17,7 @@
 
 ---
 
-## STORY-001: Check whether a medicine is in stock and read its batches
+## STORY-094: Check whether a medicine is in stock and read its batches
 
 **Type**: short
 **Topic**: Stock control, counts & reorder
@@ -57,7 +57,7 @@
 
 ---
 
-## STORY-002: Trace why a batch went down in the Stock ledger
+## STORY-095: Trace why a batch went down in the Stock ledger
 
 **Type**: short
 **Topic**: Stock control, counts & reorder
@@ -94,7 +94,7 @@
 
 ---
 
-## STORY-003: Pharmacist requests a new item and the doctor approves it
+## STORY-096: Pharmacist requests a new item and the doctor approves it
 
 **Type**: medium
 **Topic**: Stock control, counts & reorder
@@ -106,7 +106,7 @@
 - Reception can raise the same request (`@Roles(ADMIN, PHARMACIST, RECEPTION)` on `POST /inventory/items`).
 - OWNER / ADMIN / DOCTOR using the same `Add batch` button create the item immediately — no "Sent to doctor" step.
 - Post a purchase bill containing the product (Purchases › `Scan or enter bill` — creates the item implicitly; other topic).
-- Stock › `More tasks…` › `Opening stock import` (Excel creates drugs and batches; STORY-011).
+- Stock › `More tasks…` › `Opening stock import` (Excel creates drugs and batches; STORY-104).
 - Drug database `Add New Drug` and the prescription builder's `+ Add to Drug Database` create a *drug* without a stock batch (other topics; listed as lead A.12 in `discovery.md`).
 - Reaching the approval queue: sidebar badge → Inventory → Stock → `Approve corrections (n)`; or the legacy URL `/dashboard/inventory-updates` (redirects to `?area=stock&view=approvals`).
 
@@ -136,7 +136,7 @@
 - **Naming validation**: a Tablet/Capsule/Syrup without strength is refused; focus jumps to the offending field with an inline error.
 
 ### Edge Cases
-- **The approved item has zero stock**: `createInventoryItem` sets `currentStock: 0`, so the new batch appears in the stock list as "Previous / depleted" (grey) — a brand-new item labelled as a used-up one. Sana must now do a *second* flow to enter the 6 bottles: `Edit stock` (another approval, STORY-005), a `Manual opening stock` document, a stock count, or a purchase bill.
+- **The approved item has zero stock**: `createInventoryItem` sets `currentStock: 0`, so the new batch appears in the stock list as "Previous / depleted" (grey) — a brand-new item labelled as a used-up one. Sana must now do a *second* flow to enter the 6 bottles: `Edit stock` (another approval, STORY-098), a `Manual opening stock` document, a stock count, or a purchase bill.
 - **Another approver got there first**: a 409 shows a red banner "<message>. The list below is up to date." and the dialog closes.
 - **Server error on submit**: red box at the bottom of the long form; the form keeps its values.
 - **Approver naming drift**: the dialog says "doctor", the price/stock queue says "doctor or admin", workflow documents say "manager", counts say "doctor or administrator".
@@ -144,7 +144,7 @@
 
 ---
 
-## STORY-004: Correct a batch's expiry and shelf, then set a stock alert
+## STORY-097: Correct a batch's expiry and shelf, then set a stock alert
 
 **Type**: medium
 **Topic**: Stock control, counts & reorder
@@ -156,7 +156,7 @@
 - Item page › `Batches` tab › row `Edit` (same editor, for any sibling batch).
 - Stock list: tick rows → `Set location for N selected batches` → "Rack / shelf / bin" + "Reason" → `Apply reviewed location` (location only, bulk).
 - Reorder › `More tasks…` › `Manual targets & exclusions` (min / max / reorder level for many items, with a review step and a reason).
-- Reorder › `Target proposals` → `Accept selected` (system-proposed min / max; STORY-010).
+- Reorder › `Target proposals` → `Accept selected` (system-proposed min / max; STORY-103).
 - "Data quality" strip chips `Missing location` / `Missing min/max` (Today and Stock list) → filtered list (`gap=LOCATION|MIN_MAX`) → open item.
 - Stock list `Filters` › "Missing information" select — a second, differently-keyed way (`missing=`) to list incomplete batches.
 - Min/max can also be typed at creation ("Stock Levels" in "Add Inventory Item") and arrive via the opening-stock Excel.
@@ -190,7 +190,7 @@
 
 ---
 
-## STORY-005: Propose a stock-quantity edit and get it approved
+## STORY-098: Propose a stock-quantity edit and get it approved
 
 **Type**: medium
 **Topic**: Stock control, counts & reorder
@@ -200,7 +200,7 @@
 **Ideal path**: 4 — click the quantity, type 8 and a reason, submit; approver approves from a notification.
 **Alternate paths** (lead A.14 in `discovery.md`, confirmed in code):
 - Item page action row `Edit stock` (same dialog).
-- A stock count: stock list `Count selected batches`, item page `Count this batch`, or Stock counts › `Count an item` → sign-off → `Approve and adjust stock` (STORY-006/007).
+- A stock count: stock list `Count selected batches`, item page `Count this batch`, or Stock counts › `Count an item` → sign-off → `Approve and adjust stock` (STORY-099/007).
 - `Loss & breakage` document (`Post stock loss` — posts immediately, **no approval**).
 - Item page › `Ledger` tab › row `Correct` → "Correct signed quantity" + "Reason" → `Post linked correction` (shown to approvers only; creates a `Corrections` document).
 - For price: row `Edit price` / item page `Edit price` (same dialog with "New selling price (₹ per stock unit)").
@@ -234,7 +234,7 @@
 
 ---
 
-## STORY-006: Run a stock-count cycle end to end (set up → count → sign off → approve → verify)
+## STORY-099: Run a stock-count cycle end to end (set up → count → sign off → approve → verify)
 
 **Type**: long
 **Topic**: Stock control, counts & reorder
@@ -246,7 +246,7 @@
 - Opening today's list: Today row "Stock count due today"; Stock › `Stock counts` › `My counts` › `Start counting` / `Continue counting`; a link "Open Stock counts" from workflow documents, the purchase workbench and the compliance centre (`?area=stock&view=COUNT`).
 - Approving: Today row "Counts awaiting your approval"; Stock counts › `Approvals` tab › `Review` (or click the row); `History` tab → open a count still "Awaiting approval"; `Next count` button on a record.
 - Settings: Stock counts › `Settings` tab; the "Turn it on in Settings" link on My counts; Today row "Batches not counted this cycle" (opens `tab=settings`). Reorder › Automation settings only *points* here ("Stock count settings are in Stock › Stock counts › Settings.").
-- Out-of-cycle counts: STORY-007.
+- Out-of-cycle counts: STORY-100.
 
 ### Steps
 **A. Meera turns the cycle on**
@@ -307,7 +307,7 @@
 
 ---
 
-## STORY-007: Count one shelf outside the cycle, and have the count rejected
+## STORY-100: Count one shelf outside the cycle, and have the count rejected
 
 **Type**: medium
 **Topic**: Stock control, counts & reorder
@@ -350,7 +350,7 @@
 
 ---
 
-## STORY-008: Follow an expiry alert, pull the batch from sale, then write it off
+## STORY-101: Follow an expiry alert, pull the batch from sale, then write it off
 
 **Type**: medium
 **Topic**: Stock control, counts & reorder
@@ -361,7 +361,7 @@
 **Alternate paths** (lead A.20 in `discovery.md`):
 - Today row "Expiring in the next 3 months" **and**, on the same screen, button `Check next 3 months' expiry` — identical target (`?area=stock&view=list&expiryMonths=3`). Likewise "Low stock" row + `Check low stock` button, and "Overdue supplier bills" row + `Check overdue supplier balances` button.
 - Stock list › "Expiry" select (`Within 1 / 2 / 3 / 6 months`) or "Stock level" = `Expired`.
-- Stock › `Stock optimization` (shelf life left per slow batch; STORY-009).
+- Stock › `Stock optimization` (shelf life left per slow batch; STORY-102).
 - Pharmacy Report › Expiring Stock; Dashboard "System Alerts"; Reports & Analytics alerts (other topics).
 - Starting the documents from the registers: Stock › `More tasks…` › `Blocked stock` or `Loss & breakage` › `New document` › "Add a batch" search.
 - Sending it back instead: item page button `Supplier returns` or Purchases › Purchase bills › Returns (purchases topic).
@@ -377,7 +377,7 @@
 8. Type "Reason / notes" (placeholder "Required before posting") = `Near expiry 05/12/2026 — pulled from sale, asking distributor to take back`.
 9. Click `Block stock` (primary, top right) → status heading "Posted"; "Saved stock effects record the units held out of available stock."
 10. Click the back arrow (tooltip "Back to blocked stock") → because of `return=`, he is taken back to the **item page**, not the register; header now "4 BOTTLES · 4 held · 0 available", badge "Held, on hand".
-11. Two weeks later (distributor declined): open the item again (steps as in STORY-001) → tab `Blocked stock` → "Held stock by source" lists the hold reference with "4 BOTTLES still held · POSTED".
+11. Two weeks later (distributor declined): open the item again (steps as in STORY-094) → tab `Blocked stock` → "Held stock by source" lists the hold reference with "4 BOTTLES still held · POSTED".
 12. Back on the action row click `Loss & breakage` → new LOSS document pre-filled with the batch.
 13. In "Stock source" choose the hold reference instead of "Available stock (no hold)".
 14. Set "Quantity" = `4` and "Reason / notes" = `Expired 05/12/2026 — destroyed as per SOP`.
@@ -390,7 +390,7 @@
 - **Posted the wrong quantity**: an approver uses `Correct by reversal` → "Reversal reason" → `Reverse posted effects` on the posted document; Ravi cannot.
 
 ### Edge Cases
-- **Loss with no approval**: `Post stock loss` and `Block stock` take effect immediately for a pharmacist, while `Edit stock` by one unit (STORY-005) waits for a doctor.
+- **Loss with no approval**: `Post stock loss` and `Block stock` take effect immediately for a pharmacist, while `Edit stock` by one unit (STORY-098) waits for a doctor.
 - **No reason**: the server refuses the post; the error appears above the form and "Your attempted edits remain in the form…".
 - **Interrupted post**: heading "Outcome not confirmed", `Check saved status`, a read-only "Recovery handoff" text block and a link "Open Stock counts".
 - **Search finds nothing in a new document**: "No matching batch. Add the product/batch in Stock, then return here."
@@ -398,7 +398,7 @@
 
 ---
 
-## STORY-009: Find slow stock and raise a supplier-return draft
+## STORY-102: Find slow stock and raise a supplier-return draft
 
 **Type**: medium
 **Topic**: Stock control, counts & reorder
@@ -438,7 +438,7 @@
 
 ---
 
-## STORY-010: From reorder targets to a received purchase order
+## STORY-103: From reorder targets to a received purchase order
 
 **Type**: long
 **Topic**: Stock control, counts & reorder
@@ -447,7 +447,7 @@
 **Preconditions**: A few months of sales history. Suppliers exist. No automation owner is configured (manual run).
 **Ideal path**: 8 — accept proposed targets (2), open the generated shortage list with supplier pre-chosen and create the order (2), approve (2), send (1), receive (1).
 **Alternate paths**:
-- Targets: Reorder › `More tasks…` › `Manual targets & exclusions` (type min / max / reorder per item → `Review selected changes` → "Reason (required)" → `Save reviewed targets`); item page `Set stock alert` (STORY-004); legacy `/dashboard/stock-predictions` (redirects to `?area=reorder&view=targets`); Reorder › `Monitor` › "Demand & stock coverage" › `Review proposal`.
+- Targets: Reorder › `More tasks…` › `Manual targets & exclusions` (type min / max / reorder per item → `Review selected changes` → "Reason (required)" → `Save reviewed targets`); item page `Set stock alert` (STORY-097); legacy `/dashboard/stock-predictions` (redirects to `?area=reorder&view=targets`); Reorder › `Monitor` › "Demand & stock coverage" › `Review proposal`.
 - Shortages: Shortbook › `Add manual request`; Shortbook › `Sync shortages`; ticking "Sync accepted targets to Shortbook" when accepting targets; Reorder › `Automation settings` › "Automatic PO drafts" + `Run saved settings`.
 - Orders: Purchase orders › `Add purchase order` (skips the shortbook entirely).
 - Receiving: order page `Receive remaining stock`; Today row "Orders awaiting receipt"; Purchases › `Inward challans` › new document › choose the order in "Purchase order"; or simply post the supplier's bill in `Scan or enter bill` (purchases topic). A `Receive against order` button also exists in the generic register (`WorkflowRegister` in `InventoryWorkspace.tsx`), but that register is never rendered for the Reorder area.
@@ -507,7 +507,7 @@
 
 ---
 
-## STORY-011: Load opening stock from an Excel sheet
+## STORY-104: Load opening stock from an Excel sheet
 
 **Type**: medium
 **Topic**: Stock control, counts & reorder

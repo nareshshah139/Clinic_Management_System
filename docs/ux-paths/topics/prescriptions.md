@@ -16,7 +16,7 @@
 
 ---
 
-## STORY-001: Add one medicine by search and take the usual regimen
+## STORY-052: Add one medicine by search and take the usual regimen
 
 **Type**: short
 **Topic**: Prescription writing, printing & sharing
@@ -24,7 +24,7 @@
 **Goal**: Add Doxycycline to the Treatment table with the frequency and duration she normally uses
 **Preconditions**: Visit open on the `Prescription` tab for Rohan Verma (27 M). "Doxycycline 100mg Capsule" exists in the drug master with stock. She has prescribed it before, so regimen defaults exist.
 **Ideal path**: 2 — type a few letters and pick the match; the usual regimen should arrive already filled and need no confirmation.
-**Alternate paths**: (a) `Recent meds:` chip above the table (fills the active row by name); (b) `Reuse last meds` (STORY-002); (c) apply a template (STORY-005); (d) the automatic "Treatment suggestions" learned plan once a diagnosis is typed (STORY-006); (e) type a free-text name and never pick from the list — any row with a non-empty name counts as a medicine; (f) `+ Add to Drug Database` when the product is missing; (g) frequency/duration can be set three ways: the per-row dropdowns, the `Presets:` chips (`1-0-1`, `0-1-0`, `1-1-1`, `HS`, `5d`, `7d`, `14d`, `4w`), or `+ Custom...` inside each dropdown.
+**Alternate paths**: (a) `Recent meds:` chip above the table (fills the active row by name); (b) `Reuse last meds` (STORY-053); (c) apply a template (STORY-056); (d) the automatic "Treatment suggestions" learned plan once a diagnosis is typed (STORY-057); (e) type a free-text name and never pick from the list — any row with a non-empty name counts as a medicine; (f) `+ Add to Drug Database` when the product is missing; (g) frequency/duration can be set three ways: the per-row dropdowns, the `Presets:` chips (`1-0-1`, `0-1-0`, `1-1-1`, `HS`, `5d`, `7d`, `14d`, `4w`), or `+ Custom...` inside each dropdown.
 
 ### Steps
 1. In the "Treatment" card click `Add Row` → the table stops showing "No items added yet"; a blank row appears with the cursor in the Medicine field (placeholder "Search medicine name...").
@@ -49,7 +49,7 @@
 
 ---
 
-## STORY-002: Repeat the last visit's medicines for a follow-up
+## STORY-053: Repeat the last visit's medicines for a follow-up
 
 **Type**: short
 **Topic**: Prescription writing, printing & sharing
@@ -57,7 +57,7 @@
 **Goal**: Bring forward the medicines from Meenakshi Nair's previous visit, extend one duration, and save
 **Preconditions**: Meenakshi Nair (46 F) has an earlier visit with a saved prescription. A new visit is open; the Treatment table is empty.
 **Ideal path**: 2 — one "repeat last prescription" action, then save.
-**Alternate paths**: (a) the learned plan often does the same thing automatically: once a diagnosis is typed and the table is empty, "Treatment suggestions" may prefill with the label "Auto-filled from this patient’s last similar plan" (STORY-006); (b) `Recent meds:` chips (names only, one row at a time); (c) visit `History` tab to read the old prescription and retype; (d) a saved template. The concept is called "Reuse last meds" on the button, "Previous medications" in the toast, "last plan" in the suggestions panel.
+**Alternate paths**: (a) the learned plan often does the same thing automatically: once a diagnosis is typed and the table is empty, "Treatment suggestions" may prefill with the label "Auto-filled from this patient’s last similar plan" (STORY-057); (b) `Recent meds:` chips (names only, one row at a time); (c) visit `History` tab to read the old prescription and retype; (d) a saved template. The concept is called "Reuse last meds" on the button, "Previous medications" in the toast, "last plan" in the suggestions panel.
 
 ### Steps
 1. Click the `Prescription` tab → builder loads; Treatment shows "Total items: 0" and "No items added yet".
@@ -69,7 +69,7 @@
 ### Variations
 - **Table not empty**: the button merges rather than replaces. Rows identical in name + frequency + dose pattern + when + duration are skipped; anything else is appended, so a medicine she already typed with a different duration appears twice.
 - **Drop one medicine**: click the trash icon in the row's Actions cell (tooltip "Remove {medicine name}"); no confirmation.
-- **Only investigations/follow-up needed again**: this button copies medicines only; the learned plan (STORY-006) is the route that also restores investigations and follow-up.
+- **Only investigations/follow-up needed again**: this button copies medicines only; the learned plan (STORY-057) is the route that also restores investigations and follow-up.
 
 ### Edge Cases
 - **No earlier prescription**: toast "No previous medications found — Could not find medications in the last visits for this patient."
@@ -79,7 +79,7 @@
 
 ---
 
-## STORY-003: Dictate the chief complaint instead of typing
+## STORY-054: Dictate the chief complaint instead of typing
 
 **Type**: short
 **Topic**: Prescription writing, printing & sharing
@@ -110,7 +110,7 @@
 
 ---
 
-## STORY-004: Send the finished prescription to the pharmacy bill
+## STORY-055: Send the finished prescription to the pharmacy bill
 
 **Type**: short
 **Topic**: Prescription writing, printing & sharing
@@ -138,7 +138,7 @@
 
 ---
 
-## STORY-005: Start from a template, adjust it, and save it as her own
+## STORY-056: Start from a template, adjust it, and save it as her own
 
 **Type**: medium
 **Topic**: Prescription writing, printing & sharing
@@ -146,7 +146,7 @@
 **Goal**: Fill the prescription from the tinea template, add an oral antifungal, and keep the result as a reusable template
 **Preconditions**: Visit open on the `Prescription` tab for Imran Sheikh (38 M). She has already typed a line in Chief Complaints. Templates have loaded (the bar shows the dropdown rather than "Templates will appear once loaded.").
 **Ideal path**: 5 — pick template, add one medicine, open save-as-template, name-and-confirm, save prescription.
-**Alternate paths**: Three template-saving routes sit side by side: `Save current` (medicines + complaint + diagnosis + examination), `Save fields` (complaint + diagnosis + examination only, no medicines), `New template` (a blank form in a large dialog, independent of the current visit). For prefilling: the learned plan (STORY-006) can also fill Treatment from a saved template, where it is called a "saved order set"; `Reuse last meds`; manual entry.
+**Alternate paths**: Three template-saving routes sit side by side: `Save current` (medicines + complaint + diagnosis + examination), `Save fields` (complaint + diagnosis + examination only, no medicines), `New template` (a blank form in a large dialog, independent of the current visit). For prefilling: the learned plan (STORY-057) can also fill Treatment from a saved template, where it is called a "saved order set"; `Reuse last meds`; manual entry.
 
 ### Steps
 1. Click the `Templates` dropdown (currently "Select a template") → list: `No template`; group "Saved templates" (each with a small trash icon); group "Default templates": "Acne (Mild) — Topical regimen", "Tinea (Fungal) — Topical + Hygiene", "Eczema — Emollients + Low-potency steroid".
@@ -179,7 +179,7 @@
 
 ---
 
-## STORY-006: Let the diagnosis prefill the treatment, then take control back
+## STORY-057: Let the diagnosis prefill the treatment, then take control back
 
 **Type**: medium
 **Topic**: Prescription writing, printing & sharing
@@ -187,7 +187,7 @@
 **Goal**: Use the automatic treatment suggestion for a new acne patient, but with her own choice of antibiotic
 **Preconditions**: Visit open for Ananya Sharma (24 F), Treatment empty. Dr. Reddy has several earlier prescriptions with the diagnosis "Acne vulgaris".
 **Ideal path**: 3 — enter diagnosis, glance at the proposed plan, accept it (edits optional).
-**Alternate paths**: Templates dropdown (STORY-005); `Reuse last meds` (STORY-002); per-medicine "Suggested · Accept" regimen defaults (STORY-001); manual rows. The same feature is called "Treatment suggestions" (panel badge), "learned plan" (`Reapply learned plan`), "autofill" (`Undo autofill`, "Autofill paused…"), "quick-fill" (`Undo quick-fill`) and "prefilled" (title text); its source labels call templates "saved order set".
+**Alternate paths**: Templates dropdown (STORY-056); `Reuse last meds` (STORY-053); per-medicine "Suggested · Accept" regimen defaults (STORY-052); manual rows. The same feature is called "Treatment suggestions" (panel badge), "learned plan" (`Reapply learned plan`), "autofill" (`Undo autofill`, "Autofill paused…"), "quick-fill" (`Undo quick-fill`) and "prefilled" (title text); its source labels call templates "saved order set".
 
 ### Steps
 1. Look at the dark "Treatment suggestions" panel at the top of the "Treatment" card → title "Enter a diagnosis to see treatment suggestions."; the four tiles `Combo`, `Review`, `Labs`, `Evidence` show "—".
@@ -215,7 +215,7 @@
 
 ---
 
-## STORY-007: Print the prescription in Telugu for a patient who does not read English
+## STORY-058: Print the prescription in Telugu for a patient who does not read English
 
 **Type**: medium
 **Topic**: Prescription writing, printing & sharing
@@ -250,13 +250,13 @@
 
 ---
 
-## STORY-008: Fit the prescription on one pre-printed letterhead page, signed
+## STORY-059: Fit the prescription on one pre-printed letterhead page, signed
 
 **Type**: medium
 **Topic**: Prescription writing, printing & sharing
 **Persona**: Dr. Arjun Mehta, visiting dermatologist who prints on pre-printed clinic stationery
 **Goal**: Print a five-medicine prescription on a single sheet, clear of the pre-printed header and footer, with his signature image
-**Preconditions**: Visit open with five medicines, investigations and follow-up filled for Farhan Qureshi (52 M). His signature is already uploaded (STORY-009). An A4 printer is loaded with pre-printed letterhead paper.
+**Preconditions**: Visit open with five medicines, investigations and follow-up filled for Farhan Qureshi (52 M). His signature is already uploaded (STORY-060). An A4 printer is loaded with pre-printed letterhead paper.
 **Ideal path**: 3 — open preview (remembering his last layout), confirm it fits, print.
 **Alternate paths**: Margins can be set in four places: the preview sliders `Top margin` / `Bottom margin` (per visit), the visit's `Customization` tab ("Top/Bottom/Left/Right Margin (px)", saved for the doctor with `Save Doctor Default`), a `Printer profile` (selectable in the preview; no screen to create one was found), and an enforced minimum when the built-in letterhead is used. Letterhead can be chosen in three places: header cog → "My Settings" → "Prescription letterhead"; `Customization` → "Print Background Image URL (optional)" / `Choose File`; preview `Letterhead` select. Print format is selectable both in the builder footer (`Print` → Table / Text) and in the preview ("Print Format").
 
@@ -293,7 +293,7 @@
 
 ---
 
-## STORY-009: One-time set-up of signature and letterhead
+## STORY-060: One-time set-up of signature and letterhead
 
 **Type**: medium
 **Topic**: Prescription writing, printing & sharing
@@ -310,10 +310,10 @@
 4. In "Prescription letterhead" read: "Your prescriptions print on this full-page image. Use an A4 portrait PNG or JPG, up to 5 MB." Below: "No letterhead uploaded. Prescriptions print on plain paper."
 5. Click "Upload letterhead" and choose `mehta-letterhead-a4.jpg` → "Saving letterhead…" then "Letterhead saved."; thumbnail shown; `Remove letterhead` appears.
 6. He sees `Close` and `Save` at the bottom and is unsure whether the uploads need `Save` (each section says "Changes save immediately."). He clicks `Save` anyway (it saves the working-hours and WhatsApp options, not the uploads).
-7. Open his first visit and click the `Prescription` tab; add one medicine (STORY-001) so there is something to print.
+7. Open his first visit and click the `Prescription` tab; add one medicine (STORY-052) so there is something to print.
 8. Click `Print Preview` → the page shows his letterhead as the background; the `Letterhead` select reads "Letterhead (doctor's own)". The signature is **not** shown.
 9. Tick `Show signature` in the right column → the signature appears above "Dr. Arjun Mehta"; this choice is now remembered for him on this browser.
-10. The body text overlaps the letterhead's logo band: drag `Top margin` until the text clears it (or set "Top Margin (px)" in the `Customization` tab and `Save Doctor Default` so it sticks — see STORY-008).
+10. The body text overlaps the letterhead's logo band: drag `Top margin` until the text clears it (or set "Top Margin (px)" in the `Customization` tab and `Save Doctor Default` so it sticks — see STORY-059).
 
 ### Variations
 - **Replace later**: choosing a new file under "Replace signature" / "Replace letterhead" swaps it immediately; an open preview picks up the change.
@@ -329,7 +329,7 @@
 
 ---
 
-## STORY-010: Share the prescription by WhatsApp, e-mail and PDF
+## STORY-061: Share the prescription by WhatsApp, e-mail and PDF
 
 **Type**: medium
 **Topic**: Prescription writing, printing & sharing
@@ -370,7 +370,7 @@
 
 ---
 
-## STORY-011: New acne patient — complete prescription from blank page to pharmacy bill
+## STORY-062: New acne patient — complete prescription from blank page to pharmacy bill
 
 **Type**: long
 **Topic**: Prescription writing, printing & sharing
@@ -378,7 +378,7 @@
 **Goal**: Document the consultation, prescribe four medicines (one not yet in the drug master), order hormone tests, give written advice, print and WhatsApp the prescription, and pass it to the pharmacy
 **Preconditions**: Ananya Sharma (24 F, phone 98480 12345) was booked and the visit started from the appointment (`Start Visit`). In-person consultation. Dr. Reddy's signature and letterhead are uploaded and `Show signature` was ticked on this browser earlier. The nurse has not entered vitals.
 **Ideal path**: 14 — complaint, diagnosis (plan prefills), confirm plan, add two medicines (2 actions each), add the missing product (1 dialog), tick tests, advice, follow-up, preview, one "save + print + send + hand to pharmacy" action each (4). Examination chips are optional extras.
-**Alternate paths**: Vitals can instead be entered on the visit's `Vitals` tab; investigations on the `Lab Tests` tab; procedures on the Procedures page; medicines via template / `Reuse last meds` / learned plan / manual; saving via `Create Prescription`, `Save Prescription` or any export button; pharmacy hand-off via the post-create dialog, footer `Go to Pharmacy`, or the pharmacy's own queues (STORY-004).
+**Alternate paths**: Vitals can instead be entered on the visit's `Vitals` tab; investigations on the `Lab Tests` tab; procedures on the Procedures page; medicines via template / `Reuse last meds` / learned plan / manual; saving via `Create Prescription`, `Save Prescription` or any export button; pharmacy hand-off via the post-create dialog, footer `Go to Pharmacy`, or the pharmacy's own queues (STORY-055).
 
 ### Steps
 1. In the visit form click the `Prescription` tab → the builder shows the Templates bar ("Select a template") and the section cards; the Treatment panel says "Enter a diagnosis to see treatment suggestions."
@@ -416,7 +416,7 @@
 
 ### Variations
 - **Save from the builder instead of the preview**: skip step 27, `Close` the preview and click `Create Prescription` → dialog "Go to Pharmacy?" → `Yes, go to Pharmacy`, which carries the prescription id and replaces step 31.
-- **Telugu-speaking patient**: before step 24 set `Language` to Telugu (STORY-007); steps 24–29 then use the translated preview.
+- **Telugu-speaking patient**: before step 24 set `Language` to Telugu (STORY-058); steps 24–29 then use the translated preview.
 - **Template start**: at step 1 pick "Acne (Mild) — Topical regimen" from `Templates` instead of waiting for the suggestion panel; note it would also overwrite anything already typed in complaint/diagnosis/examination.
 - **Interrupted by a phone call**: she can leave the page; the builder writes a local draft 600 ms after each change and on tab hide/unload, and restores it when the same patient + visit is reopened on the same browser.
 - **Nurse already recorded vitals**: step 2 is skipped; the values appear in the print from the visit record.

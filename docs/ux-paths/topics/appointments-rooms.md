@@ -14,7 +14,7 @@
 
 ---
 
-## STORY-001: Book a review visit for an existing patient who phones in
+## STORY-021: Book a review visit for an existing patient who phones in
 
 **Type**: medium
 **Topic**: Appointments, rooms & doctor availability
@@ -55,7 +55,7 @@
 
 ---
 
-## STORY-002: Register and book a brand-new walk-in from the calendar
+## STORY-022: Register and book a brand-new walk-in from the calendar
 
 **Type**: medium
 **Topic**: Appointments, rooms & doctor availability
@@ -93,7 +93,7 @@
 
 ---
 
-## STORY-003: Morning confirmation calls — confirm one patient, cancel another
+## STORY-023: Morning confirmation calls — confirm one patient, cancel another
 
 **Type**: medium
 **Topic**: Appointments, rooms & doctor availability
@@ -129,7 +129,7 @@
 
 ---
 
-## STORY-004: Move an appointment to another day
+## STORY-024: Move an appointment to another day
 
 **Type**: medium
 **Topic**: Appointments, rooms & doctor availability
@@ -165,13 +165,13 @@
 
 ---
 
-## STORY-005: Squeeze an urgent patient into an occupied slot (overbooking)
+## STORY-025: Squeeze an urgent patient into an occupied slot (overbooking)
 
 **Type**: short
 **Topic**: Appointments, rooms & doctor availability
 **Persona**: Riya, receptionist, doctor has just said "send him in at 12"
 **Goal**: Add Imran Sheikh to Dr. Shravya's 12:00 Confirmed slot, which already holds Kavya Nair.
-**Preconditions**: Dr. Shravya has "Allow overbooking" on with "Up to 2 patients per slot" (see STORY-009). Imran has a patient record. Today, 12:00 is still in the future.
+**Preconditions**: Dr. Shravya has "Allow overbooking" on with "Up to 2 patients per slot" (see STORY-029). Imran has a patient record. Today, 12:00 is still in the future.
 **Ideal path**: 3 — select patient, click the occupied time, one confirmation that says it is an overbook.
 **Alternate paths**: Same sequence from the **Slots** tab. Patients › "Create Patient" walk-in auto-booking can also raise the same "Overbook this slot?" dialog. Otherwise none found.
 
@@ -194,7 +194,7 @@
 
 ---
 
-## STORY-006: Book a procedure with a room from the Slots tab, then check it with the filters
+## STORY-026: Book a procedure with a room from the Slots tab, then check it with the filters
 
 **Type**: medium
 **Topic**: Appointments, rooms & doctor availability
@@ -235,7 +235,7 @@
 
 ---
 
-## STORY-007: Doctor starts the consultation from the appointment
+## STORY-027: Doctor starts the consultation from the appointment
 
 **Type**: short
 **Topic**: Appointments, rooms & doctor availability
@@ -265,7 +265,7 @@
 
 ---
 
-## STORY-008: Check room load, add a new room and take one out of service
+## STORY-028: Check room load, add a new room and take one out of service
 
 **Type**: medium
 **Topic**: Appointments, rooms & doctor availability
@@ -303,7 +303,7 @@
 
 ---
 
-## STORY-009: Doctor sets weekly hours, leave, a blocked hour and an overbooking limit
+## STORY-029: Doctor sets weekly hours, leave, a blocked hour and an overbooking limit
 
 **Type**: medium
 **Topic**: Appointments, rooms & doctor availability
@@ -343,7 +343,7 @@
 
 ---
 
-## STORY-010: Connect Google Calendar so bookings sync
+## STORY-030: Connect Google Calendar so bookings sync
 
 **Type**: short
 **Topic**: Appointments, rooms & doctor availability
@@ -372,7 +372,7 @@
 
 ---
 
-## STORY-011: Monday morning at the front desk, end to end
+## STORY-031: Monday morning at the front desk, end to end
 
 **Type**: long
 **Topic**: Appointments, rooms & doctor availability

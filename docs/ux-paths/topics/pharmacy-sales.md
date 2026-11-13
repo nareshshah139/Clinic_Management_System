@@ -18,7 +18,7 @@ Things the code does **not** have, which shape several stories below:
 
 ---
 
-## STORY-001: Bill a registered walk-in customer from scratch, print, and see it in the register
+## STORY-073: Bill a registered walk-in customer from scratch, print, and see it in the register
 
 **Type**: long
 **Topic**: Pharmacy sales, bills & returns
@@ -31,7 +31,7 @@ Things the code does **not** have, which shape several stories below:
 - Pharmacy Counter cockpit `Walk-in bill` (shown when the Rx queue is empty) / `Start billing` (no active prescription) → same bill page.
 - Legacy URLs `/dashboard/billing` and `/dashboard/pharmacy?section=billing|invoices|payments` redirect to the same bill page (`sales-bill-model.ts` `pharmacyBillingRedirect`).
 - Sales register empty state button `New sale` (only when the period has no rows and no filter is set).
-- Inventory › Sales › `Counter sales` › `New document` — a *different document type* that also sells stock and lands in the same register (see STORY-010).
+- Inventory › Sales › `Counter sales` › `New document` — a *different document type* that also sells stock and lands in the same register (see STORY-082).
 
 ### Steps
 1. Click `Sales` in the sidebar (Pharmacy group) → `/dashboard/pharmacy/sales` opens: title "Sales", tabs `Sales` / `Returns`, button `New sale`, filter bar and the register for the current financial year (Period shows "FY 2026-27").
@@ -68,7 +68,7 @@ Things the code does **not** have, which shape several stories below:
 - **Same item twice**: clicking `Add` on a drug already on the bill raises its quantity by 1 instead of adding a line.
 
 ### Edge Cases
-- **Customer is not a registered patient**: the patient dropdown shows "No patients found" only when the list is empty; there is no "create patient" link in the builder, and PHARMACIST has no `Patients` sidebar entry. `Print Preview` stays disabled until a patient is chosen. The only in-role route is a Counter sale (STORY-010).
+- **Customer is not a registered patient**: the patient dropdown shows "No patients found" only when the list is empty; there is no "create patient" link in the builder, and PHARMACIST has no `Patients` sidebar entry. `Print Preview` stays disabled until a patient is chosen. The only in-role route is a Counter sale (STORY-082).
 - **Out of stock is not shown for hand-added items**: stock badges ("Out of stock", "Insufficient stock: n available", "Low stock: n available") only appear on lines loaded from a prescription or substituted. A hand-added item with no stock fails at step 19 with toast "Error Confirming Invoice — Insufficient non-expired stock for …. Required 2, available 0."
 - **Missing phone**: patient without a phone leaves `Phone *` empty; `Print Preview` then shows toast "Validation Error — Billing phone is required".
 - **Bill discount too large**: `₹` discount above the bill gives inline alert "Bill discount ₹… is more than the bill after item discounts (₹…)." and toast "Check the bill discount" on preview.
@@ -78,7 +78,7 @@ Things the code does **not** have, which shape several stories below:
 
 ---
 
-## STORY-002: Bill a doctor's prescription from the queue, fixing stock problems on the way
+## STORY-074: Bill a doctor's prescription from the queue, fixing stock problems on the way
 
 **Type**: medium
 **Topic**: Pharmacy sales, bills & returns
@@ -123,7 +123,7 @@ Things the code does **not** have, which shape several stories below:
 
 ---
 
-## STORY-003: Park a half-finished bill as a draft and finish it later
+## STORY-075: Park a half-finished bill as a draft and finish it later
 
 **Type**: medium
 **Topic**: Pharmacy sales, bills & returns
@@ -165,7 +165,7 @@ Things the code does **not** have, which shape several stories below:
 
 ---
 
-## STORY-004: Find yesterday's bill by mobile number and reprint or WhatsApp it
+## STORY-076: Find yesterday's bill by mobile number and reprint or WhatsApp it
 
 **Type**: short
 **Topic**: Pharmacy sales, bills & returns
@@ -200,7 +200,7 @@ Things the code does **not** have, which shape several stories below:
 
 ---
 
-## STORY-005: Check the day's takings by payment mode in the Sales register
+## STORY-077: Check the day's takings by payment mode in the Sales register
 
 **Type**: medium
 **Topic**: Pharmacy sales, bills & returns
@@ -244,7 +244,7 @@ Things the code does **not** have, which shape several stories below:
 
 ---
 
-## STORY-006: Give a forgotten discount on a finished bill and hand the money back
+## STORY-078: Give a forgotten discount on a finished bill and hand the money back
 
 **Type**: medium
 **Topic**: Pharmacy sales, bills & returns
@@ -256,7 +256,7 @@ Things the code does **not** have, which shape several stories below:
 - Register row icon `Edit discount` (opens the bill with the dialog already open: `?bill=<id>&edit=discount`) — this story.
 - Click the row → finished bill view → `Edit discount`.
 - For a bill still in draft: change the discount in the builder itself (`Bill discount`, line `Discount %`).
-- Money back for returned goods (not a discount): Returns › `New return` (STORY-007).
+- Money back for returned goods (not a discount): Returns › `New return` (STORY-079).
 
 ### Steps
 1. Sidebar `Sales` → search `Bill No` = `405` (or find the row).
@@ -272,7 +272,7 @@ Things the code does **not** have, which shape several stories below:
 
 ### Variations
 - **Per-item discount**: edit a line's box under "Item discount %" instead of the bill discount.
-- **Remove a discount (total goes up)**: the preview shows "Still to collect ₹…"; after saving, the bill shows "Due ₹…" — and there is no button here to take that money (see STORY-008).
+- **Remove a discount (total goes up)**: the preview shows "Still to collect ₹…"; after saving, the bill shows "Due ₹…" — and there is no button here to take that money (see STORY-080).
 - **Refund later**: skip steps 7–9; the register row keeps an amber "Refund due ₹236.00" badge until someone records it.
 
 ### Edge Cases
@@ -286,7 +286,7 @@ Things the code does **not** have, which shape several stories below:
 
 ---
 
-## STORY-007: Take back an unopened medicine and refund the patient (sales return)
+## STORY-079: Take back an unopened medicine and refund the patient (sales return)
 
 **Type**: medium
 **Topic**: Pharmacy sales, bills & returns
@@ -299,7 +299,7 @@ Things the code does **not** have, which shape several stories below:
 - Sidebar `Inventory` › area `Sales` › `Customer returns` › `New document` — same editor, back button returns to the Inventory list instead.
 - Returns register empty state button `New return`.
 - A posted return can be undone only by an approver via `Correct by reversal` in the document.
-- Price-only correction (no goods back): `Edit discount` + `Record refund` (STORY-006).
+- Price-only correction (no goods back): `Edit discount` + `Record refund` (STORY-078).
 
 ### Steps
 1. Sidebar `Sales` → click tab `Returns` → the "Sales returns" register; the header button now reads `New return`.
@@ -326,13 +326,13 @@ Things the code does **not** have, which shape several stories below:
 - **Missing reason / other server refusals**: red alert with the server message and "Your attempted edits remain in the form and have not been saved. Correct the reported issue before trying again."
 - **No write permission**: fields are disabled and the action buttons are absent; a "Recovery handoff" text box is shown instead.
 - **Uncertain outcome (network drop while posting)**: status "Outcome not confirmed" with a `Check saved status` button; mutation buttons are hidden until settled.
-- **Discount edits blocked afterwards**: the original bill's `Edit discount` is refused once a return exists (see STORY-006).
+- **Discount edits blocked afterwards**: the original bill's `Edit discount` is refused once a return exists (see STORY-078).
 - **Naming**: the tab says "Returns", the button "New return", the register table "Sales returns", the Inventory screen "Customer returns", the print "Sales Return".
 - **Print icon on a Returns row** prints a "Sales Return <reference>" receipt; draft returns show "Finish this draft return first".
 
 ---
 
-## STORY-008: Collect the balance on a bill that shows "Due"
+## STORY-080: Collect the balance on a bill that shows "Due"
 
 **Type**: medium
 **Topic**: Pharmacy sales, bills & returns
@@ -367,7 +367,7 @@ Things the code does **not** have, which shape several stories below:
 
 ---
 
-## STORY-009: Look through the "Pharmacy Invoices" list and open one
+## STORY-081: Look through the "Pharmacy Invoices" list and open one
 
 **Type**: short
 **Topic**: Pharmacy sales, bills & returns
@@ -401,7 +401,7 @@ Things the code does **not** have, which shape several stories below:
 
 ---
 
-## STORY-010: Sell to an unnamed walk-in choosing the exact batch (Counter sale)
+## STORY-082: Sell to an unnamed walk-in choosing the exact batch (Counter sale)
 
 **Type**: medium
 **Topic**: Pharmacy sales, bills & returns
@@ -410,7 +410,7 @@ Things the code does **not** have, which shape several stories below:
 **Preconditions**: User has write permission for counter sales in Inventory. "Suncros Soft SPF 50 Gel 50 g" has two batches (expiring 03/2027 and 11/2027).
 **Ideal path**: 4 — start a quick sale, scan/search the item (batch pre-chosen by earliest expiry), choose payment mode, post-and-print.
 **Alternate paths**:
-- Sales bill builder (`New sale`) — requires a patient; batch chosen by the server, not the user (STORY-001).
+- Sales bill builder (`New sale`) — requires a patient; batch chosen by the server, not the user (STORY-073).
 - Inventory › Sales › `Quotations` › `New quotation` › `Create sale draft` → converts into a counter-sale draft.
 - Reopen an existing counter sale from the Sales register row (blue "Counter sale" badge) → same editor with a link back to Sales.
 
@@ -440,7 +440,7 @@ Things the code does **not** have, which shape several stories below:
 
 ---
 
-## STORY-011: Recover when the connection drops while confirming a bill
+## STORY-083: Recover when the connection drops while confirming a bill
 
 **Type**: short
 **Topic**: Pharmacy sales, bills & returns

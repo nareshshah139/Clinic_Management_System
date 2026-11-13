@@ -5,7 +5,7 @@
 > comes from the server payload or a component that was not read line by line.
 > Today's date in the examples is Friday 13 November 2026, so "Last month" is October 2026.
 
-## STORY-001: Pharmacist counts the pharmacy drawer at closing time
+## STORY-105: Pharmacist counts the pharmacy drawer at closing time
 
 **Type**: medium
 **Topic**: Reports, users & clinic administration
@@ -47,7 +47,7 @@
 - **Future day**: `Next day` is disabled at today; a bad `from=` in the address bar falls back to today.
 - **Same figures, other surfaces**: "Pharmacy billed today" is the same money as the Pharmacy Desk header metric `Sales` (today's sales), the Sales Register report "Total for the period" when the period is today, and today's row in Day wise Summary; each is computed by a different endpoint.
 
-## STORY-002: Accountant pulls the month's GST return figures
+## STORY-106: Accountant pulls the month's GST return figures
 
 **Type**: medium
 **Topic**: Reports, users & clinic administration
@@ -92,7 +92,7 @@
 - **Two HSN tables**: "HSN wise GST" (Type Sales) and GSTR-1's "HSN summary (Table 12)" are the same summary in two reports; the accountant has to decide which one to trust.
 - **Two "payable" numbers**: GSTR-3B "Payable in cash" (after statutory set-off) vs GST Summary "Net payable" (output minus input) are different calculations with similar names.
 
-## STORY-003: Admin answers a patient's billing query from the Sales Register
+## STORY-107: Admin answers a patient's billing query from the Sales Register
 
 **Type**: medium
 **Topic**: Reports, users & clinic administration
@@ -134,7 +134,7 @@
 - **"Sales Bills" showing purchases**: switching Type to "Purchase" keeps the page title "Sales Bills" and the search placeholder "Customer, bill no. or mobile" while the rows are supplier bills.
 - **Naming**: the same person is "Customer" (search placeholder), "Patient / customer" (Daily Collection bill table) and "Patient" (Sales register page).
 
-## STORY-004: Owner reviews item margins and the day-wise summary for October
+## STORY-108: Owner reviews item margins and the day-wise summary for October
 
 **Type**: medium
 **Topic**: Reports, users & clinic administration
@@ -178,7 +178,7 @@
 - **Three spellings**: "Item Wise Margin Report" (menu, heading), "Item-wise Margin" (card), "Item Wise Margin" (export section); "Day wise Summary" vs "Day-wise Summary".
 - **Stock column**: "Stock" is current stock now, not at period end (explained only in the column's (i) tip).
 
-## STORY-005: Pharmacist prints the near-expiry list
+## STORY-109: Pharmacist prints the near-expiry list
 
 **Type**: short
 **Topic**: Reports, users & clinic administration
@@ -208,7 +208,7 @@
 - **Supplier vs Distributor**: this table's column is "Supplier", while the purchase reports' search box says "Distributor, bill no. or GSTIN".
 - **Nothing expiring**: the section's own empty text is shown with "Choose another period and press Go." even though this report has no period.
 
-## STORY-006: Admin assembles the October month-end picture across both report centres
+## STORY-110: Admin assembles the October month-end picture across both report centres
 
 **Type**: long
 **Topic**: Reports, users & clinic administration
@@ -264,7 +264,7 @@
 - **"JSON" export** is offered to office staff alongside CSV / PDF / Excel.
 - **Date pickers**: this journey used four kinds — native date inputs (Reports, Margin, GST Summary), a month picker (Monthly Report), Period presets with dd/mm/yyyy text boxes (Sales Register, Doctorwise), and the day stepper (Daily Collection).
 
-## STORY-007: Admin onboards a new pharmacist and later issues him a reset code
+## STORY-111: Admin onboards a new pharmacist and later issues him a reset code
 
 **Type**: long
 **Topic**: Reports, users & clinic administration
@@ -315,7 +315,7 @@
 - **Guide vs screen**: the page's Quick Guide says "Click 'Add User'", lists roles "Therapist" and "Owner", says "Edit user information by clicking on a user row" and "View user activity" — none of which match the screen.
 - **Empty list text**: "No users found — Try a different search or add a user using the form above." (there is no search and no form above).
 
-## STORY-008: Admin deactivates a receptionist who has left
+## STORY-112: Admin deactivates a receptionist who has left
 
 **Type**: short
 **Topic**: Reports, users & clinic administration
@@ -343,7 +343,7 @@
 - **Cancel**: `Cancel` closes the dialog, but the form keeps the edited values until another row's `Edit` or a successful save resets it — clicking `New User` straight after shows "Edit User" with Anjali's details still loaded (as read from the code: the form is only reset after a successful submit).
 - **Raw codes**: Role and Status columns show `RECEPTION`, `INACTIVE` while the dialogs say "Receptionist", "Inactive".
 
-## STORY-009: Admin sets up a doctor's WhatsApp confirmations and a message template
+## STORY-113: Admin sets up a doctor's WhatsApp confirmations and a message template
 
 **Type**: long
 **Topic**: Reports, users & clinic administration
@@ -392,7 +392,7 @@
 - **Generation unavailable**: toast "Generation failed" with the server message.
 - **Two names for one thing**: "Template Name" here expects the approved WhatsApp template's technical name; the editor's "Name" suggests a human title ("Appointment Confirmation").
 
-## STORY-010: Admin takes a database backup before the stock take
+## STORY-114: Admin takes a database backup before the stock take
 
 **Type**: short
 **Topic**: Reports, users & clinic administration

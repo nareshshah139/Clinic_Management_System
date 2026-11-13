@@ -8,7 +8,7 @@
 > `backend/src/modules/patients/patient-deduplication.service.ts`.
 > Statements marked "per code" describe behaviour deduced from the source and are worth confirming in a walk.
 
-## STORY-001: Register a new patient from the Patients page
+## STORY-011: Register a new patient from the Patients page
 
 **Type**: medium
 **Topic**: Patient records
@@ -19,7 +19,7 @@
 **Alternate paths**:
 - Appointments › Calendar tab › type in `Search patient by name/phone` › `+ Add "<text>" as a new patient` › dialog `Add New Patient` (short form: no address, emergency contact, primary doctor, referral, patient type) — `PatientQuickCreateDialog.tsx`. The dialog also opens **by itself** the first time a search returns nothing.
 - Appointments › Slots tab › same search and same `Add New Patient` dialog (`AppointmentScheduler.tsx`).
-- Patients › `New Patient` with `Patient Type` = `Walk-in` (STORY-002) — same dialog, additionally books an appointment.
+- Patients › `New Patient` with `Patient Type` = `Walk-in` (STORY-012) — same dialog, additionally books an appointment.
 - Visits "Setup Required" card › `Manage Patients` only links to this page (not a separate create form).
 
 ### Steps
@@ -44,12 +44,12 @@
 ### Edge Cases
 - **Missing name or phone**: `Please fill in all required fields (Name, Phone)` (only first name and phone are checked; last name, age, gender are not).
 - **Phone typed as `+91 98480 12345`**: rejected for the spaces; `+919848012345` is accepted and stored as digits only (`919848012345`), which later will not be found by searching `98480` (phone search is prefix-only).
-- **Duplicate phone**: no warning at all — see STORY-009.
+- **Duplicate phone**: no warning at all — see STORY-019.
 - **Duplicate ABHA**: `abhaId` is unique in the database; the resulting error text is whatever the server returns (unverified).
 - **Dialog closed with Esc / outside click**: form is reset; nothing is saved, no "discard changes?" prompt.
 - **Quick Guide mismatch**: the page's `Quick Guide` says "Click 'Add Patient'", lists "date of birth" as required and mentions "insurance details" and a status filter — none of these exist in the form or list.
 
-## STORY-002: Register a walk-in and let the system book the next free slot
+## STORY-012: Register a walk-in and let the system book the next free slot
 
 **Type**: medium
 **Topic**: Patient records
@@ -89,7 +89,7 @@
 - **Same fields in Edit mode**: `Patient Type` and `Doctor (for walk-in)` are also present in `Edit Patient`; choosing `Walk-in` + a doctor while editing books a new appointment on `Save Changes` (per code).
 - **Naming drift inside one dialog**: `Consultation Type` (Online / Offline) vs `Appointment Type (walk-in)` (OPD Consultation / Procedure / Telemedicine) vs `Patient Type` (Walk-in / Non walk-in).
 
-## STORY-003: Find a returning patient by phone and open the record
+## STORY-013: Find a returning patient by phone and open the record
 
 **Type**: short
 **Topic**: Patient records
@@ -98,7 +98,7 @@
 **Preconditions**: Patient exists and is not archived.
 **Ideal path**: 2 — type a few digits in one search, pick the result.
 **Alternate paths**:
-- Header global search (`Search patients, appointments, doctors...`) → Patient result → lands on the Patients list, not the record (STORY-004).
+- Header global search (`Search patients, appointments, doctors...`) → Patient result → lands on the Patients list, not the record (STORY-014).
 - Row click anywhere **or** the row's `View` button — two controls, same destination `/dashboard/patients/{id}`.
 - "Did you mean" chips under the search box (only while exactly 1 character is typed; built from the rows already on screen).
 - Doctor only: Dashboard › `My Patients` (`Search by name, phone or code`) → row links straight to the record (limited to patients whose primary doctor is that doctor).
@@ -123,7 +123,7 @@
 - **Coming back**: `Back` on the record returns to `/dashboard/patients` with search and filters cleared (they are not kept in the URL), so the next lookup starts from scratch.
 - **Load failure**: red text with `Try Again`.
 
-## STORY-004: Use the header global search to reach a patient
+## STORY-014: Use the header global search to reach a patient
 
 **Type**: short
 **Topic**: Patient records
@@ -131,7 +131,7 @@
 **Goal**: Jump to Lakshmi Narayana's record without first navigating to Patients
 **Preconditions**: Desktop width (the header search is hidden on mobile). Patient exists.
 **Ideal path**: 2 — type the name, click the patient result, land on the record.
-**Alternate paths**: Sidebar `Patients` → page search → row (STORY-003, 3 steps and it does reach the record); doctor Dashboard `My Patients`.
+**Alternate paths**: Sidebar `Patients` → page search → row (STORY-013, 3 steps and it does reach the record); doctor Dashboard `My Patients`.
 
 ### Steps
 1. Click the header search box and type `Lakshmi` → after 300 ms a dropdown lists up to 5 patients (badge `Patient`, phone, "Patient • FEMALE • 34 yrs"), then appointments (`Appointment`) and staff (`Staff`); footer "Press Enter to go to first result • Type more to refine search".
@@ -151,7 +151,7 @@
 - **Roles without Patients in the sidebar** (PHARMACIST, ACCOUNTANT): the header search still returns patients and navigates them to `/dashboard/patients`.
 - **Same search, three behaviours**: header search (300 ms, links to list), Patients page search (500 ms, min-2 guard, chips), Dashboard `My Patients` search (250 ms, links to record).
 
-## STORY-005: Correct a patient's phone number and primary doctor
+## STORY-015: Correct a patient's phone number and primary doctor
 
 **Type**: medium
 **Topic**: Patient records
@@ -180,11 +180,11 @@
 ### Edge Cases
 - **Online patient edited**: because the form defaults `Consultation Type` to Offline and sends it on save, editing an Online patient changes them to Offline without the user touching the field (per code).
 - **`Unlink portal` / `Portal Linked` badge**: the list API does not return `portalUserId`, so per code the badge never shows and the menu always offers `Link portal`; trying it on an already linked patient returns "Patient is already linked to a user". The unlink confirmation itself is built as a toast with a plain `{label, onClick}` action object rather than a toast action element (rendering unverified).
-- **Invalid ABHA / phone**: same banners as STORY-001; the banner state is shared with the list behind the dialog.
+- **Invalid ABHA / phone**: same banners as STORY-011; the banner state is shared with the list behind the dialog.
 - **Two people editing**: last save wins; there is no version check on patients.
 - **Reminder number**: the reminder is sent to `+` + the stored digits, so a number saved without `91` may not be a valid WhatsApp address (per code).
 
-## STORY-006: Archive the wrong record and undo it
+## STORY-016: Archive the wrong record and undo it
 
 **Type**: short
 **Topic**: Patient records
@@ -192,7 +192,7 @@
 **Goal**: Remove the mistaken record; recover immediately when she realises she archived the one with visits
 **Preconditions**: Two "Ramesh Kumar" rows exist.
 **Ideal path**: 3 — open row menu, archive (with a confirmation naming the patient), undo.
-**Alternate paths**: none found — no archive control on the record page, no delete anywhere in the UI or API, no archived-patients view. (Exact duplicates are also archived automatically by a server job — STORY-009.)
+**Alternate paths**: none found — no archive control on the record page, no delete anywhere in the UI or API, no archived-patients view. (Exact duplicates are also archived automatically by a server job — STORY-019.)
 
 ### Steps
 1. In Patients, type `Ramesh` → two rows with different `Patient Code` values.
@@ -208,9 +208,9 @@
 - **Toast gone before `Undo`**: there is no archived filter, list or restore button; the record can only be restored through the API (`POST /patients/:id/unarchive`).
 - **Misclick risk**: `Archive` sits directly under `Edit` in the same menu and acts instantly.
 - **Archived record by URL**: `/dashboard/patients/{id}` still opens an archived patient (the detail query does not exclude archived) and shows no "archived" marker, although `isArchived` is returned.
-- **Which duplicate to keep**: the two rows look identical in the list (no last-visit column rendered, see STORY-003), so she has to open each record to compare.
+- **Which duplicate to keep**: the two rows look identical in the list (no last-visit column rendered, see STORY-013), so she has to open each record to compare.
 
-## STORY-007: Doctor reviews a patient's full record before today's consultation
+## STORY-017: Doctor reviews a patient's full record before today's consultation
 
 **Type**: long
 **Topic**: Patient records
@@ -219,7 +219,7 @@
 **Preconditions**: Aditya has Dr. Meghana as primary doctor, three earlier visits (one by Dr. Kiran Shetty), prescriptions and visit photos. Doctor is signed in on a desktop.
 **Ideal path**: 8 — open patient (2), expand the latest visit (1), open a photo (1), upload photos (3), start visit (1); history should not need a tab switch or filters to be readable.
 **Alternate paths**:
-- Reach the record: Patients list search → row / `View`; header global search (lands on list, STORY-004).
+- Reach the record: Patients list search → row / `View`; header global search (lands on list, STORY-014).
 - Read history: Visits setup screen › `Patient History` tab; visit form › `History` tab ("Patient Visit History"); visit form "Patient Context" side panel; Procedures › `Procedure History`; Dashboard › `Recent Visits` (same `usePatientHistory` / `PatientHistoryVisitCard` on three of these).
 - See / add photos: visit form › `Photos` tab (same `VisitPhotos` component, attached to that visit).
 - Open the last visit: header `Resume last visit`, tracker `Continue`, tracker `Prescribe`/`View`, history card `Resume session`, Dashboard `Recent Visits` row — five entry points, one URL.
@@ -270,7 +270,7 @@
 - **Patient missing / wrong URL**: "Patient not found." or the red error banner, each with `Back to Patients`.
 - **Identity repeated**: phone and e-mail appear in the summary card and `Info` tab; gender, age and ABHA appear as header badges and again in `Info`.
 
-## STORY-008: Follow the progress tracker's next-step buttons from booking to billing
+## STORY-018: Follow the progress tracker's next-step buttons from booking to billing
 
 **Type**: medium
 **Topic**: Patient records
@@ -311,7 +311,7 @@
 - **Three labels for one action**: `Resume last visit` (header), `Continue` (tracker), `Resume session` (history card).
 - **Bill vs Invoices vs Billing**: step is named `Billing`, button is `Bill` or `Invoices`, destination page is a "Sales bill".
 
-## STORY-009: Discover and deal with a duplicate patient
+## STORY-019: Discover and deal with a duplicate patient
 
 **Type**: medium
 **Topic**: Patient records
@@ -320,7 +320,7 @@
 **Preconditions**: A record "Sunita Agarwal", phone 9885011223, with two past visits exists. Farhan hears the name as "Sunitha".
 **Ideal path**: 2 — on entering an existing phone number the form warns "already registered" and offers the existing record; pick it.
 **Alternate paths**:
-- Manual clean-up: Patients row `More` → `Archive` on the unwanted record (STORY-006).
+- Manual clean-up: Patients row `More` → `Archive` on the unwanted record (STORY-016).
 - Automatic: server job `merge-duplicate-patients` runs every 6 hours (IST) and merges non-archived records in the same branch with the **same phone digits and same normalised name**, keeping the oldest and archiving the rest (`patient-deduplication.service.ts`). No UI, no notification.
 - Manual merge: none found (no merge action, no duplicates report).
 
@@ -348,7 +348,7 @@
 - **Auto-opened dialog dismissed**: closing `Add New Patient` clears the search text, so he has to type the name again.
 - **Portal link on the duplicate**: moved to the kept record only if the kept record has none (per service code).
 
-## STORY-010: Export last month's patients to CSV
+## STORY-020: Export last month's patients to CSV
 
 **Type**: short
 **Topic**: Patient records
@@ -370,7 +370,7 @@
 
 ### Edge Cases
 - **Meaning of the period**: `Last 1 Month` = registered **or** had a visit in the last month; the control is only labelled by its value, so Suresh may read it as "new registrations".
-- **Columns**: ID, Name, Age, Gender, Phone, Email, ABHA ID, Referral, Consultation Type, Portal Linked, Created At. Per code `Consultation Type` is always blank and `Portal Linked` always "No" (same dropped fields as STORY-003/005); `ID` is the internal ID, the patient code is not exported.
+- **Columns**: ID, Name, Age, Gender, Phone, Email, ABHA ID, Referral, Consultation Type, Portal Linked, Created At. Per code `Consultation Type` is always blank and `Portal Linked` always "No" (same dropped fields as STORY-013/005); `ID` is the internal ID, the patient code is not exported.
 - **Size**: the server caps an export at 10,000 rows with no warning when the cap is hit.
 - **Failure**: destructive toast `Export failed`.
 - **Archived patients** are never included.
