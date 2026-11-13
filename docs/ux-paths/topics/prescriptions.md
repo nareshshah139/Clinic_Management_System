@@ -145,22 +145,23 @@
 **Persona**: Dr. Kavya Reddy, dermatologist, third tinea case of the day
 **Goal**: Fill the prescription from the tinea template, add an oral antifungal, and keep the result as a reusable template
 **Preconditions**: Visit open on the `Prescription` tab for Imran Sheikh (38 M). She has already typed a line in Chief Complaints. Templates have loaded (the bar shows the dropdown rather than "Templates will appear once loaded.").
-**Ideal path**: 5 — pick template, add one medicine, name-and-save template, save prescription (two clicks for name + confirm).
+**Ideal path**: 5 — pick template, add one medicine, open save-as-template, name-and-confirm, save prescription.
 **Alternate paths**: Three template-saving routes sit side by side: `Save current` (medicines + complaint + diagnosis + examination), `Save fields` (complaint + diagnosis + examination only, no medicines), `New template` (a blank form in a large dialog, independent of the current visit). For prefilling: the learned plan (STORY-006) can also fill Treatment from a saved template, where it is called a "saved order set"; `Reuse last meds`; manual entry.
 
 ### Steps
 1. Click the `Templates` dropdown (currently "Select a template") → list: `No template`; group "Saved templates" (each with a small trash icon); group "Default templates": "Acne (Mild) — Topical regimen", "Tinea (Fungal) — Topical + Hygiene", "Eczema — Emollients + Low-potency steroid".
 2. Click "Tinea (Fungal) — Topical + Hygiene" → with no confirmation the builder is overwritten: Chief Complaints becomes "Itchy annular rash in folds", Diagnosis "Tinea corporis", On Examination gets skin type IV, Morphology Plaque + Scale, Distribution Flexures, Itch Score 5, "Detailed Examination" text; Treatment shows "Clotrimazole Cream 1%" twice daily for 4 WEEKS plus a blank row. Past/Medication/Menstrual/Family history, Investigations and Procedures are cleared as well.
-3. She notices her own typed complaint is gone and clicks `Undo` → the medicine rows revert, but Chief Complaints, Diagnosis and the examination fields stay as the template set them (Undo/Redo only track medicine rows and Follow-up Instructions). She clicks `Redo` to get the template's medicine back.
-4. Retype the complaint in "Chief Complaints": "Itchy ring-shaped rash in both groins for 3 weeks, spreading".
-5. In the blank Treatment row type `itra` and click "Itraconazole 100mg Capsule" in the dropdown.
-6. Set Frequency to `1-0-1` from the dropdown (options are dose patterns shown in capitals: 1-0-0, 0-1-0 … Q8H, PRN).
-7. Set When to `After Breakfast`.
-8. Click the `14d` preset chip → Duration becomes 14 DAYS on that row.
-9. In "Basic Information" click the chip `Follow up in 14 days` → Follow-up Instructions fills and "Review Date" jumps to today + 14 days.
-10. Scroll back to the top and click `Save current` → dialog "Save as Template" ("Provide a name to reuse this prescription layout later.", placeholder "Dermatology follow-up").
-11. Type `Tinea cruris — topical + itraconazole 2 wk` and click `Save Template` → toast "Template saved — Prescription template stored for future visits."; the name now appears under "Saved templates".
-12. Click `Create Prescription` → toast "Prescription created — 2 medications recorded for the patient."; dialog "Go to Pharmacy?" → `Stay Here`.
+3. She notices her own typed complaint is gone and clicks `Undo` hoping to get it back → the medicine rows are emptied (back to how the table was when the builder loaded), but Chief Complaints, Diagnosis and the examination fields stay as the template set them — Undo/Redo only track medicine rows and Follow-up Instructions. `Redo` does not bring the Clotrimazole row back *(inferred: the snapshot taken on template apply is the pre-apply table, lines 2835–2840, 4209–4214, 4379–4393)*.
+4. Open `Templates` again and re-select "Tinea (Fungal) — Topical + Hygiene" → the Clotrimazole row and the template fields are back.
+5. Retype the complaint in "Chief Complaints": "Itchy ring-shaped rash in both groins for 3 weeks, spreading".
+6. In the blank Treatment row type `itra` and click "Itraconazole 100mg Capsule" in the dropdown.
+7. Set Frequency to `1-0-1` from the dropdown (options are dose patterns shown in capitals: 1-0-0, 0-1-0 … Q8H, PRN).
+8. Set When to `After Breakfast`.
+9. Click the `14d` preset chip → Duration becomes 14 DAYS on that row.
+10. In "Basic Information" click the chip `Follow up in 14 days` → Follow-up Instructions fills and "Review Date" jumps to today + 14 days.
+11. Scroll back to the top and click `Save current` → dialog "Save as Template" ("Provide a name to reuse this prescription layout later.", placeholder "Dermatology follow-up").
+12. Type `Tinea cruris — topical + itraconazole 2 wk` and click `Save Template` → toast "Template saved — Prescription template stored for future visits."; the name now appears under "Saved templates".
+13. Click `Create Prescription` → toast "Prescription created — 2 medications recorded for the patient."; dialog "Go to Pharmacy?" → `Stay Here`.
 
 ### Variations
 - **Fields-only template**: `Save fields` → dialog "Save Fields as Template" ("Save only Chief Complaints, Diagnosis, and Examination as a reusable template on this device.") → name → `Save Fields Template` → toast "Fields template saved — Template stored on server." The dialog says "on this device"; the toast says "on server".
@@ -423,7 +424,7 @@
 ### Edge Cases
 - **Duplicate drug**: at step 15, if a drug with the same name and manufacturer exists: toast "Duplicate detected — A drug with the same name and manufacturer already exists."; missing name/manufacturer: "Missing details — Name and Manufacturer are required."
 - **Prefill arrives while she is typing a first medicine**: if she starts a row before the diagnosis suggestion lands, nothing is overwritten and the panel reads "Learned plan ready. Your manual edits were preserved."
-- **"Total qty" stays 0**: the footer total sums a quantity field that has no input in the table, so the pharmacy receives duration and frequency but no doctor-entered quantity.
+- **"Total qty" is not editable**: the footer total sums a per-medicine quantity that has no input in the table; it is 0 for rows she typed and non-zero only when a reused, learned or template row carried a quantity, so the doctor cannot state how many units to dispense.
 - **"Detailed Examination" text** is saved with the visit but is not printed on the prescription (see `docs/PRESCRIPTION_PDF_PIPELINE.md`).
 - **Three saves, one prescription**: steps 27–29 each call save; the second and third are updates of the same record ("Prescription updated"), each with its own toast.
 - **Visit completion**: merely opening the preview (step 24) marks the "prescription" section complete for the visit's progress bar, before anything is saved *(inferred from `onPreview`, `MedicalVisitForm.tsx:2433`)*.

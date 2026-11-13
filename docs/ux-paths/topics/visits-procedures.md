@@ -185,7 +185,7 @@ Facts that several stories rely on (read once):
 
 ### Steps
 1. Click `Appointments`, hover Ananya Sharma's tile, click `START` → visit form opens with `From Appointment` / `Linked to Appointment`, "Visit #3", badge `DRAFT`.
-2. Glance at "Patient Context" (left) → name, "ID: …", "Age: 27 • FEMALE", phone, a red "⚠️ ALLERGIES" box if recorded, and "Recent Visits" with the last two dates and diagnoses.
+2. Glance at "Patient Context" (left) → name, "ID: …", "Age: 27 • <gender as stored>", "Phone: …", a red "⚠️ ALLERGIES" box if recorded, and "Recent Visits" with the last two dates and diagnoses.
 3. Click the `Vitals` tab.
 4. Type `110` in "BP Systolic".
 5. Type `70` in "BP Diastolic".
