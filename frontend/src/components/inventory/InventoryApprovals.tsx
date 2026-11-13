@@ -7,9 +7,15 @@ import { InventoryUpdates } from './InventoryUpdates';
 
 type Tab = 'edits' | 'items';
 
-export function InventoryApprovals({ canReadEdits, pendingItems }: { canReadEdits: boolean; pendingItems: number }) {
+/**
+ * @cc [owner:nareshshah139,label:product] approvals-open-requested-tab
+ * A request for the edits or items tab MUST open that tab; without one, new-item requests
+ * open first while any are pending.
+ */
+export function InventoryApprovals({ canReadEdits, pendingItems, initialTab }: { canReadEdits: boolean; pendingItems: number; initialTab?: string }) {
   const [chosen, setTab] = useState<Tab | null>(null);
-  const tab: Tab = chosen ?? (!canReadEdits || pendingItems > 0 ? 'items' : 'edits');
+  const requested: Tab | null = initialTab === 'edits' || initialTab === 'items' ? initialTab : null;
+  const tab: Tab = chosen ?? requested ?? (!canReadEdits || pendingItems > 0 ? 'items' : 'edits');
   if (!canReadEdits) return <InventoryItemRequests />;
   return <div className="space-y-6">
     <div role="tablist" aria-label="Approval types" className="flex gap-2">

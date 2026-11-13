@@ -131,7 +131,8 @@ export function InventoryWorkspace() {
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const canSeeApprovals = canReadEdits || user?.role === "RECEPTION";
   const taskVisible = ([id]: string[]) => id !== "approvals" || canSeeApprovals;
-  const pendingItems = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""));
+  const canItemRequests = ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || "");
+  const pendingItems = usePendingItemRequestCount(canItemRequests);
   const taskLabel = (id: string, label: string) => (id === "approvals" && pendingItems > 0 ? `${label} (${pendingItems})` : label);
   const params = useSearchParams(),
     router = useRouter(),
@@ -159,6 +160,12 @@ export function InventoryWorkspace() {
     [params, path, router],
   );
   const origin = () => query.return || params.toString();
+  const qualityStrip = (
+    <DataQualityStrip
+      active={area === "stock" && view === "list" ? query.gap : undefined}
+      onOpen={(gap) => router.push(`${path}?area=stock&view=list${gap ? `&gap=${gap}` : ""}`, { scroll: false })}
+    />
+  );
   const back = () => {
     const destination = returnDestination(query.return, path, window.location.origin);
     if (destination) router.push(destination, { scroll: false });
@@ -356,12 +363,7 @@ export function InventoryWorkspace() {
           </select>}
         </nav>
       )}
-      {caps && (area === "today" || (area === "stock" && ["list", "optimize"].includes(view) && !query.item)) && (
-        <DataQualityStrip
-          active={area === "stock" && view === "list" ? query.gap : undefined}
-          onOpen={(gap) => router.push(`${path}?area=stock&view=list${gap ? `&gap=${gap}` : ""}`, { scroll: false })}
-        />
-      )}
+      {caps && area === "stock" && ["list", "optimize"].includes(view) && !query.item && qualityStrip}
       {error && (
         <p
           role="alert"
@@ -375,7 +377,7 @@ export function InventoryWorkspace() {
       {caps && (
         <>
           {area === "today" && (
-            <WorkspaceToday navigate={navigate} open={open} />
+            <WorkspaceToday navigate={navigate} open={open} pendingItems={canItemRequests ? pendingItems : null} strip={qualityStrip} />
           )}
           {area === "stock" && view === "list" && (
             <WorkspaceStock
@@ -411,7 +413,7 @@ export function InventoryWorkspace() {
             />
           )}
           {area === "stock" && view === "approvals" && (
-            canSeeApprovals ? <InventoryApprovals canReadEdits={canReadEdits} pendingItems={pendingItems} /> : <p role="alert">You do not have access to price/stock approvals.</p>
+            canSeeApprovals ? <InventoryApprovals canReadEdits={canReadEdits} pendingItems={pendingItems} initialTab={query.tab} /> : <p role="alert">You do not have access to price/stock approvals.</p>
           )}
           {area === "stock" && view === "opening" && (
             <>
@@ -640,7 +642,12 @@ export function reconciliationRows(cards: ReconciliationCards | null) {
     }] : []),
   ];
 }
-function WorkspaceToday({ navigate, open }: any) {
+/**
+ * @cc [owner:nareshshah139,label:product] today-quiet-zero-queues
+ * Queues with a zero count MUST stay reachable as links in one Nothing waiting line; unknown
+ * counts MUST NOT be shown as zero.
+ */
+function WorkspaceToday({ navigate, open, pendingItems, strip }: any) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState("");
   useEffect(() => {
@@ -672,10 +679,16 @@ function WorkspaceToday({ navigate, open }: any) {
       .reduce((n: number, q: any) => n + q._count, 0) || 0;
   const rows = [
     ...(data?.pendingEdits != null ? [{
-      label: `Price/stock edits awaiting approval (${data.pendingEdits})`,
+      label: "Price/stock edits awaiting approval",
       count: data.pendingEdits,
       detail: "Review the reason and proposed changes before updating clinic stock.",
-      target: { area: "stock", view: "approvals" },
+      target: { area: "stock", view: "approvals", tab: "edits" },
+    }] : []),
+    ...(pendingItems != null ? [{
+      label: "New items awaiting approval",
+      count: pendingItems,
+      detail: "Check each requested item before it is added to inventory.",
+      target: { area: "stock", view: "approvals", tab: "items" },
     }] : []),
     ...(data?.supplierOverdue
       ? [
@@ -730,6 +743,8 @@ function WorkspaceToday({ navigate, open }: any) {
       target: { area: "reorder", view: "PURCHASE_ORDER", status: "OPEN" },
     },
   ];
+  const waiting = rows.filter((r) => r.count !== 0);
+  const quiet = rows.filter((r) => r.count === 0);
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap gap-3" aria-label="Everyday inventory tasks">
@@ -768,7 +783,7 @@ function WorkspaceToday({ navigate, open }: any) {
       ) : (
         <>
           <ul className="divide-y border-y">
-            {rows.map((r) => (
+            {waiting.map((r) => (
               <li key={r.label}>
                 <button
                   className="flex w-full items-center gap-4 py-4 text-left hover:bg-muted/50"
@@ -787,30 +802,26 @@ function WorkspaceToday({ navigate, open }: any) {
               </li>
             ))}
           </ul>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                navigate({ area: "stock", view: "list", stock: "LOW" })
-              }
-            >
-              Check low stock
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() =>
-                navigate({ area: "stock", view: "list", expiryMonths: "3" })
-              }
-            >
-              Check next 3 months’ expiry
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate({ area: "purchases", view: "ledger" })}
-            >
-              Check overdue supplier balances
-            </Button>
-          </div>
+          {quiet.length > 0 && (
+            <p className="text-muted-foreground">
+              Nothing waiting:{" "}
+              {quiet.map((r, i) => (
+                <span key={r.label}>
+                  {i > 0 && " · "}
+                  <button
+                    type="button"
+                    className="rounded-sm text-foreground underline underline-offset-4 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    title={r.detail}
+                    onClick={() => navigate(r.target)}
+                  >
+                    {r.label}
+                  </button>
+                </span>
+              ))}
+            </p>
+          )}
+          {data.recent?.length > 0 && (
+            <>
           <h3 className="text-lg font-semibold">Recent activity</h3>
           <ul className="divide-y">
             {data.recent.map((d: any) => (
@@ -827,8 +838,11 @@ function WorkspaceToday({ navigate, open }: any) {
               </li>
             ))}
           </ul>
+            </>
+          )}
         </>
       )}
+      {strip}
     </section>
   );
 }
