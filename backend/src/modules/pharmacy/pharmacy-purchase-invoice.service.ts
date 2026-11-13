@@ -735,6 +735,13 @@ export class PharmacyPurchaseInvoiceService {
     return (await autocompleteDrugCatalog(this.prisma, { q, mode: 'name', limit: 10 }, branchId)).map(drug => this.masterDrugSummary(drug));
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-check-suggests-stock-unit
+   * For a line whose stock unit is blank, the product check MAY return the stock unit of the exactly
+   * identified saved product's most recent batch in the same branch. It MUST NOT suggest a unit for
+   * a line that declares one, for a product that was not identified exactly, or write stock,
+   * catalogue or invoice data.
+   */
   async suggestMasterMatches(
     items: CreatePharmacyPurchaseInvoiceItemDto[],
     branchId: string,
@@ -749,15 +756,18 @@ export class PharmacyPurchaseInvoiceService {
     for (const item of items) checkedProductQuery(item.productName);
     const aliases = await loadReviewedProductAliases(this.prisma, branchId);
     const candidates = new Map<string, Promise<DrugSearchCandidate[]>>();
-    const matches: { lineIndex: number; ocr: ReturnType<PharmacyPurchaseInvoiceService['masterLineSummary']>; candidates: any[]; catalogueResolution: Awaited<ReturnType<PharmacyPurchaseInvoiceService['inspectPurchaseLineDrug']>> }[] = [];
+    const matches: { lineIndex: number; ocr: ReturnType<PharmacyPurchaseInvoiceService['masterLineSummary']>; candidates: any[]; catalogueResolution: Awaited<ReturnType<PharmacyPurchaseInvoiceService['inspectPurchaseLineDrug']>>; suggestedStockUnit?: string }[] = [];
     for (let offset = 0; offset < items.length; offset += 4) {
       matches.push(...await Promise.all(items.slice(offset, offset + 4).map(async (item, index) => {
         const { query } = ocrProductSearchQuery(item.productName);
         const key = normalizeProductSearch(query);
         if (!candidates.has(key)) candidates.set(key, findDrugSearchCandidates(this.prisma, query, branchId, 'name', aliases));
+        const catalogueResolution = await this.inspectPurchaseLineDrug(this.prisma, item, branchId);
+        const product = 'product' in catalogueResolution ? catalogueResolution.product : undefined;
+        const suggestedStockUnit = product && !item.packUnitType?.trim() ? await this.latestBatchStockUnit(product.id, branchId) : undefined;
         return { lineIndex: offset + index, ocr: this.masterLineSummary(item),
           candidates: this.rankMasterMatchCandidates(item, await candidates.get(key)!),
-          catalogueResolution: await this.inspectPurchaseLineDrug(this.prisma, item, branchId) };
+          catalogueResolution, ...(suggestedStockUnit ? { suggestedStockUnit } : {}) };
       })));
     }
 

@@ -806,6 +806,46 @@ describe('PharmacyPurchaseInvoiceService', () => {
     });
   });
 
+  describe('purchase-check-suggests-stock-unit', () => {
+    const exact = (packUnitType: string) => {
+      const product = completeDrug();
+      prisma.drug.findMany.mockImplementation(({ where }: any) => Promise.resolve(where.name?.equals ? [product] : []));
+      return service.suggestMasterMatches([{ ...validDto().items[0], packUnitType }], branchId);
+    };
+
+    it('suggests the stock unit of an exactly identified product for a blank unit', async () => {
+      prisma.inventoryItem.findFirst.mockResolvedValue({ unit: 'TUBES', packUnit: 'tube' });
+      const result = await exact('');
+      expect(result.matches[0]).toMatchObject({ catalogueResolution: { state: 'ready' }, suggestedStockUnit: 'Tube' });
+      expect(result.matches[0].catalogueResolution).not.toHaveProperty('suggestedStockUnit');
+      expect(prisma.inventoryItem.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { branchId, drugs: { some: { id: 'drug-1' } } } }));
+      expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
+      expect(prisma.inventoryItem.create).not.toHaveBeenCalled();
+    });
+
+    it('suggests no unit when the line declares one', async () => {
+      prisma.inventoryItem.findFirst.mockResolvedValue({ unit: 'TUBES', packUnit: 'tube' });
+      const result = await exact('Strip');
+      expect(result.matches[0]).not.toHaveProperty('suggestedStockUnit');
+      expect(prisma.inventoryItem.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('suggests no unit when the product is not identified', async () => {
+      prisma.inventoryItem.findFirst.mockResolvedValue({ unit: 'TUBES', packUnit: 'tube' });
+      prisma.drug.findMany.mockResolvedValue([]);
+      const result = await service.suggestMasterMatches([{ ...validDto().items[0], packUnitType: '' }], branchId);
+      expect(result.matches[0].catalogueResolution).toEqual({ state: 'missing' });
+      expect(result.matches[0]).not.toHaveProperty('suggestedStockUnit');
+      expect(prisma.inventoryItem.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('omits the field when the product has no batch', async () => {
+      prisma.inventoryItem.findFirst.mockResolvedValue(null);
+      const result = await exact('');
+      expect(result.matches[0]).not.toHaveProperty('suggestedStockUnit');
+    });
+  });
+
   it('creates a new drug master only after an explicit OCR create confirmation', async () => {
     const item = {
       ...validDto().items[0],
