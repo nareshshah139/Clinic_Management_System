@@ -174,6 +174,13 @@ export function AlternateInvoiceIntake({
             product/pack, batch/expiry, paid/free quantities and reconciled
             prices and tax. Manufacturer is optional. The source CSV is retained
             in the database.</p>
+            <p>Columns, in this order:</p>
+            <p className="flex flex-wrap gap-1">
+              {Object.keys(template).map((column) => (
+                <code key={column} className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">{column}</code>
+              ))}
+            </p>
+            <p>Start from the template (Download purchase CSV template) to get every column.</p>
           </InventoryDetails>
         </div>
       ) : (

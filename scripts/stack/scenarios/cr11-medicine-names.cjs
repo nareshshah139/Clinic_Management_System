@@ -250,7 +250,7 @@ const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis"
 
     const addDialog = async (page) => {
       await stockList(page, {});
-      await page.getByRole("button", { name: "Add batch" }).click();
+      await page.getByRole("button", { name: "Add item" }).click();
       await page.getByRole("heading", { name: "Add Inventory Item" }).waitFor();
       await page.getByLabel("Cost Price (₹) *").fill("12");
       await page.getByLabel("Selling Price (₹) *").fill("20");

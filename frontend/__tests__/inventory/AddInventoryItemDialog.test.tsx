@@ -797,6 +797,23 @@ describe('AddInventoryItemDialog', () => {
       expect(screen.getByTestId('medicine-name-preview')).toHaveTextContent('Flutas cream');
     });
 
+    it('is titled Add item', () => {
+      open();
+      expect(screen.getByRole('heading', { name: 'Add item' })).toBeInTheDocument();
+    });
+
+    it('tells a pharmacist the item will have no stock until a bill or opening stock adds it', async () => {
+      (apiClient.createInventoryItem as jest.Mock).mockResolvedValue({ status: 'PENDING_APPROVAL', request: { possibleDuplicates: { inventory: [], pendingRequests: [] } } });
+      open();
+      prices();
+      fireEvent.change(screen.getByLabelText(/^Form/i), { target: { value: 'CREAM' } });
+      fireEvent.change(screen.getByLabelText(/Medicine name/i), { target: { value: 'Flutas' } });
+      fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
+      expect(await screen.findByText(/^Sent to doctor for approval\. The item will appear/)).toHaveTextContent(
+        'Sent to doctor for approval. The item will appear in inventory once approved, with no stock. Add its stock from a purchase bill or opening stock.',
+      );
+    });
+
     it('refuses a tablet without a strength and names the field', async () => {
       open();
       prices();

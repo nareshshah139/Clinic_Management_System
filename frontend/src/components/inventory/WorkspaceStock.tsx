@@ -235,7 +235,7 @@ export function WorkspaceStock({
               {capabilities?.itemCreate && (
                 <Button onClick={() => setAdd(true)}>
                   <Plus className="h-4 w-4" />
-                  Add batch
+                  Add item
                 </Button>
               )}
               <InventoryAction
@@ -663,6 +663,7 @@ export function WorkspaceStock({
                       <p className="text-xs text-muted-foreground">
                         {i.batchNumber || "Batch missing"}
                       </p>
+                      <p aria-hidden="true" className="text-sm md:hidden">{i.available} {i.unit} available · {fmtStockExpiry(i.expiryDate)} · {i.storageLocation || "Not assigned"}</p>
                     </td>
                     <td className="w-36 px-2 py-2"><ReviewStatus tone={batchReviewTone(i)}>{batchState(i)}</ReviewStatus></td>
                     <td className="whitespace-nowrap px-2 py-2">
@@ -719,7 +720,10 @@ export function WorkspaceStock({
           <AddInventoryItemDialog
             open={add}
             onOpenChange={setAdd}
-            onSuccess={load}
+            onSuccess={() => {
+              load();
+              setNotice("Item added with no stock. Add its stock from a purchase bill or opening stock.");
+            }}
           />
       </>
       {stockEdit && <StockEditDialog item={stockEdit.item} field={stockEdit.field}
