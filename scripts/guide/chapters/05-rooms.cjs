@@ -1,8 +1,16 @@
 const NEW_ROOM = "Phototherapy Room";
 
-async function removeRoom(h, name) {
-  const res = await h.api("admin", "GET", "/appointments/rooms");
-  for (const room of (res && res.rooms) || res || []) if (room.name === name) await h.api("admin", "DELETE", `/appointments/rooms/${room.id}`).catch(() => {});
+// Calls the backend with the signed-in browser's session, so no second sign-in is needed.
+const call = (page, method, route) =>
+  page.evaluate(async ({ method, route }) => {
+    const res = await fetch(`/api${route}`, { method, credentials: "include" });
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  }, { method, route });
+
+async function removeRoom(page, name) {
+  const res = await call(page, "GET", "/appointments/rooms/all");
+  for (const room of (res && res.rooms) || res || []) if (room.name === name) await call(page, "DELETE", `/appointments/rooms/${room.id}`).catch(() => {});
 }
 
 async function openCalendar(page, h) {
@@ -68,7 +76,7 @@ module.exports = {
         ["Total Rooms", "How many active rooms are shown, after the room type and search filters."],
         ["Available", "Rooms shown that have no appointment at all on this day."],
         ["Occupied", "Rooms shown that have at least one appointment on this day. A room counts as occupied for the whole day, even if it is free right now."],
-        ["Appointments", "The number of appointments booked into rooms on this day."],
+        ["Appointments", "The number of appointments booked into any room on this day. This total counts every room, even when the room type or search filter hides some of them."],
       ],
       fieldsHeading: ["Counter", "What it counts"],
       shots: [
@@ -160,6 +168,7 @@ module.exports = {
         {
           file: "procedure-filter",
           caption: "Only the procedure rooms, with a 60-minute grid.",
+          viewport: { width: 1440, height: 1250 },
           run: async (page, h) => {
             await openCalendar(page, h);
             await page.getByRole("combobox").first().click();
@@ -175,8 +184,8 @@ module.exports = {
       title: "See the list of rooms",
       who: "Admins and doctors (reception and nurses do not see this tab)",
       body: [
-        "Click the <b>Manage Rooms</b> tab. It lists every room, active or not, with its type, capacity, status and the date it was added. The boxes at the top count the active rooms: all of them, then the consultation, procedure and telemedicine rooms.",
-        "Use the search box, the type list and the status list (<b>All</b>, <b>Active</b>, <b>Inactive</b>) to find a room in a long list.",
+        "Click the <b>Manage Rooms</b> tab. It lists the clinic's active rooms with its type, capacity, status and the date it was added. The boxes at the top count the active rooms: all of them, then the consultation, procedure and telemedicine rooms.",
+        "Use the search box, the type list and the status list (<b>All</b>, <b>Active</b>, <b>Inactive</b>) to find a room in a long list. The list holds the active rooms, so <b>Inactive</b> only finds a room you switched off since you opened the page.",
       ],
       shots: [
         {
@@ -206,7 +215,7 @@ module.exports = {
         "Choose the <b>Room Type</b>. The types are listed in the table below.",
         "Type the <b>Capacity</b>: the number of people the room holds.",
         "Leave <b>Room is active</b> ticked if the room can be booked now.",
-        "Click <b>Create Room</b>. The new room appears in the list and on the room calendar.",
+        "Click <b>Add Room</b> at the bottom of the window. The new room appears in the list and on the room calendar.",
       ],
       shots: [
         {
@@ -214,7 +223,8 @@ module.exports = {
           caption: "The Add New Room window, filled in.",
           narrow: true,
           run: async (page, h) => {
-            await removeRoom(h, NEW_ROOM);
+            await h.goto("/dashboard/rooms");
+            await removeRoom(page, NEW_ROOM);
             await openManage(page, h);
             await page.getByRole("button", { name: "Add Room" }).click();
             const dialog = page.getByRole("dialog");
@@ -226,7 +236,7 @@ module.exports = {
           },
           target: '[role="dialog"]',
           after: async (page, h) => {
-            await page.getByRole("dialog").getByRole("button", { name: /Create Room|Save|Create/ }).click();
+            await page.getByRole("dialog").getByRole("button", { name: /^(Add Room|Update Room)$/ }).click();
             await page.getByRole("dialog").waitFor({ state: "hidden" }).catch(() => {});
             await h.settle(500);
           },
@@ -273,7 +283,7 @@ module.exports = {
           },
           target: '[role="dialog"]',
           after: async (page, h) => {
-            await page.getByRole("dialog").getByRole("button", { name: /Update Room|Save/ }).click();
+            await page.getByRole("dialog").getByRole("button", { name: /^(Add Room|Update Room)$/ }).click();
             await page.getByRole("dialog").waitFor({ state: "hidden" }).catch(() => {});
             await h.settle(500);
           },
@@ -289,12 +299,12 @@ module.exports = {
       steps: [
         "On <b>Manage Rooms</b>, find the room's row.",
         "Click the switch beside the <b>Active</b> badge. The badge changes to <b>Inactive</b> and a message confirms <i>Room deactivated</i>.",
-        "To bring the room back, click the switch again. The message says <i>Room activated</i>.",
+        "To bring the room back while you are still on the page, click the switch again. The message says <i>Room activated</i>.",
       ],
       shots: [
         {
           file: "deactivated",
-          caption: "The Phototherapy Room switched off.",
+          caption: "The Phototherapy Room switched off. Its badge now says Inactive.",
           run: async (page, h) => {
             await openManage(page, h);
             await roomRow(page, NEW_ROOM).getByRole("switch").click();
@@ -302,10 +312,14 @@ module.exports = {
             await h.settle(300);
             await h.mark(roomRow(page, NEW_ROOM).getByRole("switch"), 1);
           },
-          target: (page) => page.locator("div.rounded-xl, div[class*='card']").filter({ has: page.getByText("All Rooms", { exact: true }) }).last(),
+          after: async (page, h) => {
+            await roomRow(page, NEW_ROOM).getByRole("switch").click();
+            await roomRow(page, NEW_ROOM).getByText("Active", { exact: true }).waitFor();
+            await h.settle(300);
+          },
         },
       ],
-      tips: ["Use the <b>Inactive</b> status filter to find rooms that are switched off."],
+      warnings: ["The list only shows active rooms when it loads. Once you leave the page or reload it, an inactive room is no longer listed, and you cannot switch it back on from this screen. If you switched a room off by mistake, switch it on again before you leave the page."],
     },
     {
       title: "Delete a room",
@@ -330,8 +344,8 @@ module.exports = {
             await page.getByText("Room deleted").first().waitFor();
             await h.settle(400);
           },
-          after: async (page, h) => {
-            await removeRoom(h, NEW_ROOM);
+          after: async (page) => {
+            await removeRoom(page, NEW_ROOM);
           },
         },
       ],
