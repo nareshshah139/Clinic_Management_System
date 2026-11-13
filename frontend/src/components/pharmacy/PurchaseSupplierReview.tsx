@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-type Supplier = { id: string; name: string; gstNumber: string | null; updatedAt?: string };
+type Supplier = { id: string; name: string; gstNumber: string | null; updatedAt?: string; drugLicenseNo?: string | null; lastBillDrugLicenseNo?: string | null };
 const identity = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 const gstin = (value: string | null) => (value || '').trim().toUpperCase();
 
@@ -27,7 +27,7 @@ const gstin = (value: string | null) => (value || '').trim().toUpperCase();
  * invoice identity or reloading suppliers MUST invalidate confirmation; success MUST be verified
  * from the server response without silently changing invoice fields.
  */
-export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canEdit = false, readOnly, disabled, nextAction = 'Save & Process', onChange, onSaved, onBusy, onEdit }: {
+export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canEdit = false, readOnly, disabled, nextAction = 'Save & Process', drugLicenseNo, onUseDrugLicense, onChange, onSaved, onBusy, onEdit }: {
   name: string;
   gstNumber: string;
   canLoad: boolean;
@@ -36,6 +36,8 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canE
   readOnly: boolean;
   disabled: boolean;
   nextAction?: string;
+  drugLicenseNo?: string;
+  onUseDrugLicense?: (value: string) => void;
   onChange: (name: string, gstNumber: string) => void;
   onSaved: () => void;
   onBusy: (busy: boolean) => void;
@@ -78,6 +80,8 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canE
   const correcting = differentGstins.find(supplier => supplier.id === correctionId);
   const valid = name.trim().length >= 2 && !!identity(name) && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin(gstNumber));
   const locked = readOnly || disabled || saving;
+  const knownDrugLicense = matches.length === 1 && !readOnly && onUseDrugLicense && !drugLicenseNo?.trim()
+    ? matches[0].drugLicenseNo?.trim() || matches[0].lastBillDrugLicenseNo?.trim() || '' : '';
   const correctGstin = async () => {
     if (saveLock.current || locked || !canEdit || !valid || !correcting?.updatedAt || !correctionVerified || correctionReason.trim().length < 3 || loading || loadError) return;
     saveLock.current = true; setSaving(true); onBusy(true); setError(''); setMessage('');
@@ -138,6 +142,10 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canE
       </div>
       {loadError ? <div role="alert" className="space-y-2 text-sm"><p>Could not load saved suppliers. Retry to check for an existing record. Your invoice details are kept.</p><Button type="button" variant="outline" size="sm" disabled={disabled || loading} onClick={load}>Retry supplier list</Button></div>
         : !loading && differentGstins.length === 0 && <p role="status" className="text-sm"><ReviewStatus tone={matches.length === 1 ? 'success' : 'warning'}>{matches.length === 1 ? 'Matching saved supplier found. Continue with invoice review.' : matches.length > 1 ? 'More than one saved record matches. Ask a supplier administrator to remove the duplicate; manual invoice review remains available.' : related ? 'A saved supplier has this name or GSTIN with different details. Check the original and select the correct record above.' : suppliers.length ? 'No saved supplier matches these details.' : canSave && !readOnly ? 'Your supplier directory is empty. You can add this supplier below.' : 'Your supplier directory is empty.'}</ReviewStatus></p>}
+      {!loading && !loadError && knownDrugLicense && <div className="space-y-2">
+        <p className="text-sm">Drug license on file: <strong className="break-all">{knownDrugLicense}</strong>. Check it against the bill.</p>
+        <Button type="button" variant="outline" size="sm" disabled={locked} onClick={() => onUseDrugLicense?.(knownDrugLicense)}>Use this drug license</Button>
+      </div>}
     </>}
     {canLoad && !loading && !loadError && differentGstins.length > 0 && <div className={`space-y-3 rounded-md border p-3 text-sm ${reviewColors.error}`}>
       <h6 className="font-semibold"><ReviewStatus tone="error">Supplier GSTIN differs</ReviewStatus></h6>

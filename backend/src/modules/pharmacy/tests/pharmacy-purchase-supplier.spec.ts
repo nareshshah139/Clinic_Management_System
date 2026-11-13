@@ -46,4 +46,31 @@ describe('Verified supplier save from invoice review', () => {
     db.role.findFirst.mockResolvedValue({ permissions: '["inventory:supplier:create"]' });
     expect(await service.capabilities({ id: 'staff-1', role: 'RECEPTION' })).toMatchObject({ create: true, saveSupplier: true });
   });
+
+  it('offers each supplier saved and last-bill drug license from branch-scoped, non-cancelled bills', async () => {
+    db.supplier.findMany.mockResolvedValue([
+      { id: 's1', name: 'Apex', gstNumber: '36AAAAA1111A1Z5', drugLicenseNo: 'SAVED-DL', updatedAt: new Date() },
+      { id: 's2', name: 'Shree', gstNumber: '27AABCS1234F1Z5', drugLicenseNo: null, updatedAt: new Date() },
+      { id: 's3', name: 'New', gstNumber: null, drugLicenseNo: null, updatedAt: new Date() },
+    ]);
+    db.pharmacyPurchaseInvoice = { findMany: jest.fn().mockResolvedValue([{ distributorGstin: '27AABCS1234F1Z5', distributorDlNo: 'MH-PUN-SLV' }]) };
+    const rows = await service.purchaseSuppliers('branch-1');
+    expect(db.supplier.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { branchId: 'branch-1', isActive: true },
+      select: expect.objectContaining({ drugLicenseNo: true }) }));
+    expect(db.pharmacyPurchaseInvoice.findMany).toHaveBeenCalledWith({
+      where: { branchId: 'branch-1', distributorGstin: { in: ['36AAAAA1111A1Z5', '27AABCS1234F1Z5'] }, distributorDlNo: { not: '' }, status: { not: 'CANCELLED' } },
+      distinct: ['distributorGstin'], orderBy: [{ distributorGstin: 'asc' }, { createdAt: 'desc' }],
+      select: { distributorGstin: true, distributorDlNo: true },
+    });
+    expect(rows.map(r => [r.id, r.drugLicenseNo, r.lastBillDrugLicenseNo])).toEqual([
+      ['s1', 'SAVED-DL', null], ['s2', null, 'MH-PUN-SLV'], ['s3', null, null]]);
+  });
+
+  it('skips the bill query when no supplier has a GSTIN', async () => {
+    db.supplier.findMany.mockResolvedValue([{ id: 's3', name: 'New', gstNumber: null, drugLicenseNo: null, updatedAt: new Date() }]);
+    db.pharmacyPurchaseInvoice = { findMany: jest.fn() };
+    const rows = await service.purchaseSuppliers('branch-1');
+    expect(db.pharmacyPurchaseInvoice.findMany).not.toHaveBeenCalled();
+    expect(rows[0].lastBillDrugLicenseNo).toBeNull();
+  });
 });

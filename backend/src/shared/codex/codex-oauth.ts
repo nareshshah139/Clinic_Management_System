@@ -1,8 +1,10 @@
-import { ServiceUnavailableException } from '@nestjs/common';
+import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { spawn } from 'child_process';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
+
+const logger = new Logger('PurchaseBillReader');
 
 export function purchaseOcrCodexConfig() {
   return {
@@ -29,19 +31,24 @@ function run(args: string[], input: string, timeout: number): Promise<string> {
     let output = '';
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(new ServiceUnavailableException('Codex invoice extraction timed out. Try again.'));
+      logger.warn('Codex invoice extraction timed out. Raise PHARMACY_AGENT_CODEX_TIMEOUT_MS if this keeps happening.');
+      reject(new ServiceUnavailableException('The bill reader took too long. Try again, or type the bill instead.'));
     }, timeout);
     child.stdout.on('data', (chunk) => { output = (output + chunk).slice(-65536); });
     child.stderr.on('data', (chunk) => { output = (output + chunk).slice(-65536); });
     child.stdin.on('error', () => { /* Process errors are handled below. */ });
-    child.on('error', () => {
+    child.on('error', (error) => {
       clearTimeout(timer);
-      reject(new ServiceUnavailableException('Codex could not start. Check PHARMACY_AGENT_CODEX_PATH.'));
+      logger.warn(`Codex could not start (${error.message}). Check PHARMACY_AGENT_CODEX_PATH.`);
+      reject(new ServiceUnavailableException('The bill reader is not available right now. Type the bill instead, or try again later.'));
     });
     child.on('close', (code) => {
       clearTimeout(timer);
       if (code === 0) resolve(output);
-      else reject(new ServiceUnavailableException('Codex request failed. Check the server OAuth login and model availability.'));
+      else {
+        logger.warn(`Codex request failed with exit code ${code}. Check the server OAuth login and model availability.`);
+        reject(new ServiceUnavailableException('The bill reader could not read this file right now. Try again later, or type the bill instead.'));
+      }
     });
     child.stdin.end(input);
   });
@@ -50,7 +57,8 @@ function run(args: string[], input: string, timeout: number): Promise<string> {
 export async function extractWithCodexOAuth(prompt: string, images: string[]): Promise<string> {
   const status = await run(['login', 'status'], '', 10000);
   if (!/chatgpt|access token/i.test(status) || /api key/i.test(status)) {
-    throw new ServiceUnavailableException('Invoice OCR requires Codex ChatGPT OAuth login on the server.');
+    logger.warn('Invoice OCR requires Codex ChatGPT OAuth login on the server.');
+    throw new ServiceUnavailableException('The bill reader is not set up on this server. Type the bill instead, and ask your administrator to set it up.');
   }
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'purchase-ocr-'));
   try {
