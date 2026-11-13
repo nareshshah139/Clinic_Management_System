@@ -261,6 +261,7 @@ import { QuickGuide } from '@/components/common/QuickGuide';
 import { formatPatientName } from '@/lib/utils';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
 import { useRecordById } from '@/components/visits/useRecordById';
+import PatientPicker from '@/components/visits/PatientPicker';
 import type {
   Appointment,
   GetPatientsResponse,
@@ -471,12 +472,7 @@ function VisitsPageInner() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
-  // Autocomplete state for patients
-  const [patientQuery, setPatientQuery] = useState('');
-  const [patientOptions, setPatientOptions] = useState<PatientMatch[]>([]);
-  const [searchingPatients, setSearchingPatients] = useState(false);
-  const [showPatientMenu, setShowPatientMenu] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [patientOptions, setPatientOptions] = useState<PatientMatch[]>([]); // still written by loadData; WP2 removes that call, then this line
   const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
 
   const searchParams = useSearchParams();
@@ -649,27 +645,6 @@ function VisitsPageInner() {
       setRecentVisitId(visitId);
     }
   }, [appointmentData]);
-
-  // Debounced search for patients
-  useEffect(() => {
-    let timeoutRef: ReturnType<typeof setTimeout>;
-    const run = async () => {
-      try {
-        setSearchingPatients(true);
-        const res = await apiClient.getPatients({ search: patientQuery || undefined, limit: 10 });
-        const rows = extractPatients(res);
-        setPatientOptions(rows);
-      } catch (e) {
-        setPatientOptions([]);
-      } finally {
-        setSearchingPatients(false);
-      }
-    };
-    timeoutRef = setTimeout(() => {
-      void run();
-    }, 250);
-    return () => clearTimeout(timeoutRef);
-  }, [extractPatients, patientQuery]);
 
   const roleInfo = useMemo(() => {
     const permissions = {
@@ -848,78 +823,19 @@ function VisitsPageInner() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="relative">
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Select Patient
-                </label>
-                <div className="relative">
-                  <input
-                    className="w-full border rounded-md px-3 py-2 text-sm"
-                    placeholder="Search name, phone, or email"
-                    value={patientQuery}
-                    onChange={(e) => { setPatientQuery(e.target.value); setShowPatientMenu(true); setHighlightedIndex(0); }}
-                    onFocus={() => setShowPatientMenu(true)}
-                    onKeyDown={(e) => {
-                      if (!showPatientMenu) return;
-                      const max = patientOptions.length;
-                      if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedIndex(i => Math.min(max - 1, i + 1)); }
-                      if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedIndex(i => Math.max(0, i - 1)); }
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const sel = patientOptions[highlightedIndex];
-                        if (sel) {
-                          setSelectedPatientId(sel.id);
-                          setPatientQuery(sel.name || sel.phone || sel.email || sel.id);
-                          setShowPatientMenu(false);
-                        }
-                      }
-                      if (e.key === 'Escape') { setShowPatientMenu(false); }
-                    }}
-                  />
-                  {showPatientMenu && (
-                    <div className="absolute z-20 mt-1 w-full bg-white border rounded-md shadow-sm max-h-64 overflow-auto">
-                      {searchingPatients && (
-                        <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
-                      )}
-                      {!searchingPatients && patientOptions.length === 0 && (
-                        <div className="px-3 py-2 text-xs text-gray-500">No results</div>
-                      )}
-                      {!searchingPatients && patientOptions.map((p, idx) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onMouseEnter={() => setHighlightedIndex(idx)}
-                          onClick={() => {
-                            setSelectedPatientId(p.id);
-                            setPatientQuery(p.name || p.phone || p.email || p.id);
-                            setShowPatientMenu(false);
-                          }}
-                          className={`w-full text-left px-3 py-2 text-sm ${selectedPatientId === p.id ? 'bg-gray-50' : ''} ${idx === highlightedIndex ? 'bg-blue-50' : ''}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            <div className="flex flex-col">
-                              <span className="font-medium">{p.name || `Patient ${p.id?.slice(-4) || ''}`}</span>
-                              <div className="flex items-center gap-3 text-xs text-gray-500">
-                                <span>ID: {p.id}</span>
-                                {p.phone && <span>📞 {p.phone}</span>}
-                                {p.email && <span>✉️ {p.email}</span>}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <PatientPicker
+                selectedPatientId={selectedPatientId}
+                selectedLabel={selectedPatient.status === 'ready' ? formatPatientName(selectedPatient.record) : undefined}
+                onSelect={(patient) => setSelectedPatientId(patient.id)}
+                onClear={() => setSelectedPatientId('')}
+              />
 
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                <label htmlFor="visit-doctor" className="text-sm font-medium text-gray-700 mb-2 block">
                   Select Doctor
                 </label>
                 <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
-                  <SelectTrigger>
+                  <SelectTrigger id="visit-doctor">
                     <SelectValue placeholder="Choose a doctor..." />
                   </SelectTrigger>
                   <SelectContent>

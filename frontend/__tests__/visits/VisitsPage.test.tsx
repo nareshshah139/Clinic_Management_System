@@ -43,7 +43,7 @@ describe('VisitsPage', () => {
 
     render(<VisitsPage />);
     await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/users', { role: 'DOCTOR', page: 2, limit: 100 }));
-    fireEvent.click(await screen.findByRole('combobox'));
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Select Doctor' }));
     expect(await screen.findByText('Dr. Second Doctor')).toBeInTheDocument();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
   });
