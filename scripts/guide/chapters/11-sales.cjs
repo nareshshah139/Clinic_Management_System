@@ -71,25 +71,6 @@ async function newSale(page, h, patient, lines, { payment, notes, billRupees } =
   if (notes) await page.getByLabel("Notes").fill(notes);
 }
 
-/**
- * The seeded bills are numbered without moving the clinic's bill-number counter, so finishing a bill would
- * reuse PHI-<year>-001 and fail. Raise the counter past the highest existing number (never lowers it).
- */
-async function raiseBillCounter(h) {
-  const db = h.db();
-  try {
-    const year = h.seed.today.slice(0, 4);
-    const bills = await db.pharmacyInvoice.findMany({ where: { branchId: h.stack.branchId, invoiceNumber: { startsWith: `PHI-${year}-` } }, select: { invoiceNumber: true } });
-    const highest = Math.max(0, ...bills.map((b) => Number(b.invoiceNumber.split("-")[2]) || 0));
-    const key = { type: "PHARMACY", branchId: h.stack.branchId, periodKey: year };
-    const current = await db.numberSequence.findUnique({ where: { type_branchId_periodKey: key } });
-    if (!current) await db.numberSequence.create({ data: { ...key, lastNumber: highest } });
-    else if (current.lastNumber < highest) await db.numberSequence.update({ where: { type_branchId_periodKey: key }, data: { lastNumber: highest } });
-  } finally {
-    await db.$disconnect();
-  }
-}
-
 const RX_PATIENT = "Pooja Deshpande";
 
 module.exports = {
@@ -97,7 +78,6 @@ module.exports = {
   title: "Sales",
   intro: "test",
   setup: async (h) => {
-    await raiseBillCounter(h);
     const patient = h.seed.patients.find((p) => p.name === RX_PATIENT);
     const db = h.db();
     try {
