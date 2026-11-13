@@ -130,9 +130,12 @@ means the same thing was built, listed or named twice for no reason a user would
 
 Ranked by how central the journey is and how much friction goes, against effort. The first six touch the screens
 used for every patient, every day. Effort: S is under a day, M is days, L is a week or more or needs a decision
-first. These are design proposals; none has been implemented.
+first. These are design proposals; none has been implemented. The first ten are filed as GitHub issues labelled
+`ux-flow`.
 
 ### 1. Put the appointment day grid above the fold
+
+Tracked in [nareshshah139/Clinic_Management_System#89](https://github.com/nareshshah139/Clinic_Management_System/issues/89).
 
 - **Now**: On arrival no bookable row is visible. A card title, a seven-line Legend and four filters sit above
   the grid; the first tile is at y=910 on a 900 px screen. The date control is above the fold and the grid below
@@ -148,6 +151,8 @@ first. These are design proposals; none has been implemented.
 - **Evidence**: J1 changes 1, 2, 5; J2 change 9; J3 change 8. `AppointmentsCalendar.tsx`, `CalendarColumn.tsx`.
 
 ### 2. Make links go where they say
+
+Tracked in [nareshshah139/Clinic_Management_System#90](https://github.com/nareshshah139/Clinic_Management_System/issues/90).
 
 - **Now**: Header search → patient result → "No patients found"; → appointment result → a calendar with no doctor
   or date carried. The patient tracker's `Bill`, `/dashboard/billing` and the overdue-invoice alert open a
@@ -165,6 +170,8 @@ first. These are design proposals; none has been implemented.
 
 ### 3. Let the visit's own data decide when it is complete
 
+Tracked in [nareshshah139/Clinic_Management_System#91](https://github.com/nareshshah139/Clinic_Management_System/issues/91).
+
 - **Now**: `Complete Visit` is locked until the doctor presses `Mark Vitals Complete`, presses `Save Labs` (accepted
   with nothing ticked) and uploads at least one photo. The buttons check nothing, a visit without a photo can never
   be completed, and the progress resets to 0 % when a visit is reopened. Before the first field there are about
@@ -180,6 +187,8 @@ first. These are design proposals; none has been implemented.
 - **Evidence**: J3 changes 1, 2, 3, 6. `MedicalVisitForm.tsx`, `visits/page.tsx`.
 
 ### 4. One save model and a pinned action bar on the prescription
+
+Tracked in [nareshshah139/Clinic_Management_System#92](https://github.com/nareshshah139/Clinic_Management_System/issues/92).
 
 - **Now**: The preview shows 17 layout controls ahead of its eight action buttons, all of which are below the fold,
   with three at primary weight. One print-and-share session saved the same prescription six times under three
@@ -197,6 +206,8 @@ first. These are design proposals; none has been implemented.
 
 ### 5. Close the consultation bill when it is saved, and say the mode on the button
 
+Tracked in [nareshshah139/Clinic_Management_System#93](https://github.com/nareshshah139/Clinic_Management_System/issues/93).
+
 - **Now**: The standard bill is two clicks, which is ideal. After every save the dialog stays open on a read-only
   bill whose only controls are `Add another bill` and the X. The payment mode resets to Cash after each save.
   `Add another bill` opens prefilled with the bill that already exists, one click from a duplicate that cannot be
@@ -212,6 +223,8 @@ first. These are design proposals; none has been implemented.
 
 ### 6. Register a walk-in without the dialog ambushing the search
 
+Tracked in [nareshshah139/Clinic_Management_System#94](https://github.com/nareshshah139/Clinic_Management_System/issues/94).
+
 - **Now**: "Add New Patient" opens by itself on the first empty search while the receptionist is still typing, so
   the remaining digits of a phone number land in First Name. Gender defaults to "Other" and is saved if skipped.
   There are two new-patient dialogs with different fields.
@@ -224,6 +237,8 @@ first. These are design proposals; none has been implemented.
 - **Evidence**: J1 changes 3, 4; redundancy P3. `PatientQuickCreateDialog.tsx:74`, `AppointmentsCalendar.tsx:292–295`.
 
 ### 7. Show the prescription queue once, and end the bill on a "Paid" state
+
+Tracked in [nareshshah139/Clinic_Management_System#95](https://github.com/nareshshah139/Clinic_Management_System/issues/95).
 
 - **Now**: The queue appears in the cockpit, in a table under it, and above every bill. The cockpit's
   `Accept / Sub / Edit / NA` decisions are never read by the bill, so a substitution is done twice, and those
@@ -241,6 +256,8 @@ first. These are design proposals; none has been implemented.
 
 ### 8. One list of pharmacy bills
 
+Tracked in [nareshshah139/Clinic_Management_System#96](https://github.com/nareshshah139/Clinic_Management_System/issues/96).
+
 - **Now**: Four surfaces list the same bills. Discount edits and refunds exist only in the finished-bill view.
   Collecting a due exists only on "Pharmacy Invoices", which has no menu entry, so a "Due" bill dead-ends in
   Sales. Export exists only in Pharmacy Report. The invoice list also offers `Delete Invoice` on finished bills.
@@ -254,6 +271,8 @@ first. These are design proposals; none has been implemented.
 - **Evidence**: redundancy F3, P9; J6 changes 6, 14.
 
 ### 9. One selling tool
+
+Tracked in [nareshshah139/Clinic_Management_System#97](https://github.com/nareshshah139/Clinic_Management_System/issues/97).
 
 - **Now**: `New sale` requires a registered patient and has no way to add one. An unnamed walk-in, the commonest
   counter case, must be sold through Inventory › Sales › Counter sales, a different editor that nothing in Sales
@@ -269,6 +288,8 @@ first. These are design proposals; none has been implemented.
 - **Evidence**: J6 changes 1, 7, 8, 9; redundancy F4.
 
 ### 10. One product list
+
+Tracked in [nareshshah139/Clinic_Management_System#98](https://github.com/nareshshah139/Clinic_Management_System/issues/98).
 
 - **Now**: The Drug database and Inventory are separate lists. The bill and the prescription search read the Drug
   database, so an item on the shelf that is not also in it cannot be billed until someone links it; Inventory
