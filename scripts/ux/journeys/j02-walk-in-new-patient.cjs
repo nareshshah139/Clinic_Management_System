@@ -47,8 +47,8 @@ module.exports = journey(
     const mine = (Array.isArray(list) ? list : []).filter((a) => String(a.date).slice(0, 10) === today && (a.doctorId || a.doctor?.id) === doctorId);
     const booked = (Array.isArray(list) ? list : []).filter((a) => (a.doctorId || a.doctor?.id) === doctorId);
     ui.goal(
-      Boolean(patient) && booked.length === 1,
-      `Farhan Qureshi exists and has one appointment with Dr. Priya Menon, on ${booked[0] ? String(booked[0].date).slice(0, 10) : "no date"} at ${booked[0] ? booked[0].slot : "no slot"} (today is ${today}; ${mine.length === 1 ? "on today's list" : "NOT on today's list"})`,
+      Boolean(patient) && booked.length === 1 && mine.length === 1,
+      `Farhan Qureshi is registered and on today's list for Dr. Priya Menon at ${mine[0] ? mine[0].slot : "no slot"} (booked for ${booked[0] ? String(booked[0].date).slice(0, 10) : "no date"}, today is ${today})`,
     );
   },
 );

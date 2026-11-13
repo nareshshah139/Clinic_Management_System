@@ -14,7 +14,8 @@ module.exports = journey(
     await ui.start("/dashboard");
     await ui.screen("dashboard");
     await ui.click(page.getByRole("link", { name: "Appointments" }), "Menu: Appointments");
-    await page.getByText("Vikram Patil").first().waitFor();
+    await page.getByText("Doctor Calendar").waitFor();
+    await page.locator('.group:has-text("Vikram Patil")').last().waitFor();
     ui.decide("Calendar: which doctor (pre-selected to the signed-in doctor)", true);
     await ui.screen("calendar");
 
@@ -67,7 +68,7 @@ module.exports = journey(
     await ui.click(page.getByRole("tab", { name: "Photos" }), "Visit tab: Photos");
     await ui.screen("photos-tab");
     ui.decide("Photos: a photo is required to reach 80%", false);
-    await ui.upload(page.locator('input[type="file"]').first(), PHOTO, "Photos: choose a lesion photo file");
+    await ui.upload(page.locator('input[type="file"][multiple]'), PHOTO, "Photos: choose a lesion photo file");
     await page.getByText("Tag photo positions").waitFor();
     await ui.screen("tag-photo-dialog");
     await ui.click(page.getByRole("dialog").getByRole("button", { name: "Upload" }), "Tag photo dialog: Upload");
@@ -77,7 +78,8 @@ module.exports = journey(
     await page.getByText("Visit completed").first().waitFor();
     await ui.screen("visit-completed");
 
-    const visits = await ui.api("GET", "/visits?appointmentId=ux-appt-today-4");
+    const appt = ui.info.seeded.appointments.today.find((a) => a.patient === "Vikram Patil");
+    const visits = await ui.api("GET", `/visits?appointmentId=${appt.id}`);
     const visit = visits.visits[0];
     const rx = await ui.api("GET", `/prescriptions?visitId=${visit.id}`);
     const names = (rx.prescriptions[0]?.items || []).map((i) => i.drugName).join("|");

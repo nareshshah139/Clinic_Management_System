@@ -4,8 +4,8 @@ module.exports = journey(
   { id: "j05", title: "Bill a consultation and collect a balance", story: "CLINIC-BILLING-01/02", persona: "reception" },
   async (ui) => {
     const page = ui.page;
-    const sneha = page.locator('[data-appointment-block="ux-appt-today-5"]');
-    const rohan = page.locator('[data-appointment-block="ux-appt-today-2"]');
+    const sneha = page.locator('[data-appointment-block="cuxappttoday0000000000005"]');
+    const rohan = page.locator('[data-appointment-block="cuxappttoday0000000000002"]');
     const dialog = page.getByRole("dialog");
 
     await ui.start("/dashboard");
@@ -46,8 +46,8 @@ module.exports = journey(
     const list = (body) => body?.invoices || body?.data || body?.items || (Array.isArray(body) ? body : []);
     const billed = async (name, appointmentId) =>
       list(await ui.api("GET", `/billing/invoices?search=${encodeURIComponent(name)}&limit=50`)).filter((i) => i.appointmentId === appointmentId);
-    const forSneha = await billed("Sneha", "ux-appt-today-5");
-    const forRohan = await billed("Rohan", "ux-appt-today-2");
+    const forSneha = await billed("Sneha", "cuxappttoday0000000000005");
+    const forRohan = await billed("Rohan", "cuxappttoday0000000000002");
     ui.goal(
       forSneha.length === 1 && forRohan.length >= 1 && [...forSneha, ...forRohan].every((i) => Number(i.balance) === 0),
       "Sneha's consultation invoice and Rohan's part-paid invoice both have zero balance",

@@ -7,6 +7,8 @@ const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 const istDay = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(d);
 const addDays = (day, n) => new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 const at = (day, time) => new Date(`${day}T${time}:00+05:30`);
+// The API validates ids as CUIDs, so seeded ids keep that shape while staying readable.
+const cid = (kind, n = "") => `cux${kind}`.padEnd(25 - String(n).length, "0") + n;
 
 function rolePermissions(role) {
   const tsNode = ["backend", ""].map((d) => path.join(root, d, "package.json")).map((p) => { try { return createRequire(p).resolve("ts-node"); } catch { return null; } }).find(Boolean);
@@ -78,7 +80,7 @@ const TOMORROW = [["10:00-10:15", 8, "CONFIRMED", 1, 0], ["11:15-11:30", 9, "SCH
 
 const EARLIER = [
   [0, 28, "Acne on cheeks and forehead", "Acne vulgaris", true],
-  [1, 45, "Dark spots on the face", "Post-inflammatory hyperpigmentation", false],
+  [1, 45, "Dark spots on the face", "Post-inflammatory hyperpigmentation", true],
   [2, 14, "Itchy dry patches on elbows", "Atopic dermatitis", true],
   [3, 21, "Ring-shaped itchy rash on groin", "Tinea cruris", true],
   [4, 33, "Hair fall for 3 months", "Telogen effluvium", false],
@@ -106,7 +108,7 @@ async function seed(stack) {
 
   const rooms = [];
   for (const [name, type, capacity] of [["Consultation Room 1", "Consultation", 3], ["Consultation Room 2", "Consultation", 3], ["Procedure Room", "Procedure", 2]])
-    rooms.push(await db.room.create({ data: { id: `ux-room-${rooms.length + 1}`, name, type, capacity, branchId } }));
+    rooms.push(await db.room.create({ data: { id: cid("room", rooms.length + 1), name, type, capacity, branchId } }));
 
   for (let weekday = 0; weekday < 7; weekday++)
     for (const [start, end] of weekday === 0 ? [[600, 780]] : [[540, 780], [840, 1080]])
@@ -116,7 +118,7 @@ async function seed(stack) {
   for (const [i, [name, gender, dob, phone, address, pincode, allergies, medicalHistory]] of PATIENTS.entries())
     patients.push(await db.patient.create({
       data: {
-        id: `ux-patient-${i + 1}`, patientCode: `UX${String(i + 1).padStart(3, "0")}`, name, gender, dob: new Date(dob), phone, address, city: "Pune", state: "Maharashtra", pincode,
+        id: cid("patient", i + 1), patientCode: `UX${String(i + 1).padStart(3, "0")}`, name, gender, dob: new Date(dob), phone, address, city: "Pune", state: "Maharashtra", pincode,
         allergies, medicalHistory, consultationType: "OFFLINE", primaryDoctorId: i < 10 ? doctorId : null, branchId, createdAt: at(addDays(today, i < 10 ? -90 + i * 3 : -(12 - i)), "11:00"),
       },
     }));
@@ -128,13 +130,13 @@ async function seed(stack) {
 
   const medicines = [];
   for (const [i, [name, generic, form, strength, unit, mrp, gst, stock, min, manufacturer]] of MEDICINES.entries()) {
-    const drug = await db.drug.create({ data: { id: `ux-drug-${i + 1}`, name, dosageForm: form[0] + form.slice(1).toLowerCase(), strength, price: mrp, manufacturerName: manufacturer, packSizeLabel: unit === "STRIPS" ? "10 per strip" : "1 unit", composition1: generic, category: "Dermatology", minStockLevel: min, branchId } });
+    const drug = await db.drug.create({ data: { id: cid("drug", i + 1), name, dosageForm: form[0] + form.slice(1).toLowerCase(), strength, price: mrp, manufacturerName: manufacturer, packSizeLabel: unit === "STRIPS" ? "10 per strip" : "1 unit", composition1: generic, category: "Dermatology", minStockLevel: min, branchId } });
     const batches = SECOND_BATCH.has(name) ? [[Math.ceil(stock * 0.6), 1, "2027-08-31"], [Math.floor(stock * 0.4), 2, "2028-02-29"]] : [[stock, 1, name === NEAR_EXPIRY ? addDays(today, 21) : `${2027 + (i % 2)}-${String(3 + (i % 9)).padStart(2, "0")}-28`]];
     let primary;
     for (const [qty, n, expiry] of batches) {
       const item = await db.inventoryItem.create({
         data: {
-          id: `ux-inv-${i + 1}-${n}`, branchId, name, genericName: generic, brandName: name.split(" ")[0], form, strength, manufacturer, type: "MEDICINE", category: "Dermatology", costPrice: r2(mrp * 0.68), sellingPrice: mrp, mrp, unit,
+          id: cid("inv", `${i + 1}x${n}`), branchId, name, genericName: generic, brandName: name.split(" ")[0], form, strength, manufacturer, type: "MEDICINE", category: "Dermatology", costPrice: r2(mrp * 0.68), sellingPrice: mrp, mrp, unit,
           packSize: unit === "STRIPS" ? 10 : 1, currentStock: qty, minStockLevel: min, maxStockLevel: min * 6, reorderLevel: min, reorderQuantity: min * 3, expiryDate: new Date(`${expiry}T00:00:00Z`), batchNumber: `DM${String(i + 1).padStart(2, "0")}${n}25`,
           hsnCode: "30049099", gstRate: gst, requiresPrescription: ["Isotretinoin", "Doxycycline", "Fluconazole", "Terbinafine", "Clobetasol"].includes(generic), storageLocation: `Rack ${"ABC"[i % 3]}-${(i % 5) + 1}`, stockStatus: qty === 0 ? "OUT_OF_STOCK" : qty <= min ? "LOW_STOCK" : "IN_STOCK",
           status: "ACTIVE", drugs: { connect: { id: drug.id } },
@@ -147,7 +149,7 @@ async function seed(stack) {
   const medicine = (name) => medicines.find((m) => m.name.startsWith(name));
 
   for (const [i, [name, gstNumber, drugLicenseNo, address, contactPerson, phone]] of DISTRIBUTORS.entries())
-    await db.supplier.create({ data: { id: `ux-supplier-${i + 1}`, branchId, name, gstNumber, drugLicenseNo, address, city: "Pune", state: "Maharashtra", pincode: "411030", contactPerson, phone, paymentTerms: i ? "Net 15" : "Net 30" } });
+    await db.supplier.create({ data: { id: cid("supplier", i + 1), branchId, name, gstNumber, drugLicenseNo, address, city: "Pune", state: "Maharashtra", pincode: "411030", contactPerson, phone, paymentTerms: i ? "Net 15" : "Net 30" } });
 
   const visit = (patientIdx, day, time, complaint, diagnosis, extra = {}) =>
     db.visit.create({
@@ -161,11 +163,11 @@ async function seed(stack) {
   const earlierRx = [];
   for (const [i, [idx, ago, complaint, diagnosis, hasRx]] of EARLIER.entries()) {
     const day = addDays(today, -ago);
-    const appt = await db.appointment.create({ data: { id: `ux-appt-old-${i + 1}`, branchId, doctorId, patientId: patients[idx].id, date: new Date(day), slot: "10:00-10:15", status: "COMPLETED", tokenNumber: 1 + (i % 4), roomId: rooms[i % 2].id } });
-    const v = await visit(idx, day, "10:05", complaint, diagnosis, { id: `ux-visit-old-${i + 1}`, appointmentId: appt.id, status: "COMPLETED", completedAt: at(day, "10:20") });
+    const appt = await db.appointment.create({ data: { id: cid("apptold", i + 1), branchId, doctorId, patientId: patients[idx].id, date: new Date(day), slot: "10:00-10:15", status: "COMPLETED", tokenNumber: 1 + (i % 4), roomId: rooms[i % 2].id } });
+    const v = await visit(idx, day, "10:05", complaint, diagnosis, { id: cid("visitold", i + 1), appointmentId: appt.id, status: "COMPLETED", completedAt: at(day, "10:20") });
     if (hasRx) {
       const picks = [medicine("Adapalene"), medicine("Cetirizine")];
-      const rx = await db.prescription.create({ data: { id: `ux-rx-old-${i + 1}`, visitId: v.id, status: "ACTIVE", createdAt: at(day, "10:18"), items: JSON.stringify(picks.map((m) => course(m, m.id, 1, "ONCE_DAILY", 14, 1, "After meals"))) } });
+      const rx = await db.prescription.create({ data: { id: cid("rxold", i + 1), visitId: v.id, status: "ACTIVE", createdAt: at(day, "10:18"), items: JSON.stringify(picks.map((m) => course(m, m.id, 1, "ONCE_DAILY", 14, 1, "After meals"))) } });
       earlierRx.push({ rx, patientIdx: idx, day, picks });
     }
   }
@@ -174,23 +176,23 @@ async function seed(stack) {
   const todayVisits = {};
   for (const [slot, idx, status, visitType, token, roomIdx] of CLINIC_TODAY) {
     const appt = await db.appointment.create({
-      data: { id: `ux-appt-today-${appointments.today.length + 1}`, branchId, doctorId, patientId: patients[idx].id, date: new Date(today), slot, status, visitType, tokenNumber: token, roomId: rooms[visitType === "PROCEDURE" ? 2 : roomIdx].id, notes: visitType === "PROCEDURE" ? "Chemical peel, 2nd session" : null, source: idx % 3 ? "PHONE" : "WALK_IN" },
+      data: { id: cid("appttoday", appointments.today.length + 1), branchId, doctorId, patientId: patients[idx].id, date: new Date(today), slot, status, visitType, tokenNumber: appointments.today.length + 1, roomId: rooms[visitType === "PROCEDURE" ? 2 : roomIdx].id, notes: visitType === "PROCEDURE" ? "Chemical peel, 2nd session" : null, source: idx % 3 ? "PHONE" : "WALK_IN" },
     });
     appointments.today.push({ id: appt.id, patientId: appt.patientId, patient: patients[idx].name, slot, status });
     if (status === "COMPLETED")
-      todayVisits[idx] = await visit(idx, today, slot.slice(0, 5), visitType === "PROCEDURE" ? "Follow-up for chemical peel" : "Pimples on face and back", visitType === "PROCEDURE" ? "Post-inflammatory hyperpigmentation" : "Acne vulgaris", { id: `ux-visit-today-${idx + 1}`, appointmentId: appt.id, status: "COMPLETED", completedAt: new Date() });
+      todayVisits[idx] = await visit(idx, today, slot.slice(0, 5), visitType === "PROCEDURE" ? "Follow-up for chemical peel" : "Pimples on face and back", visitType === "PROCEDURE" ? "Post-inflammatory hyperpigmentation" : "Acne vulgaris", { id: cid("visittoday", idx + 1), appointmentId: appt.id, status: "COMPLETED", completedAt: new Date() });
     if (status === "IN_PROGRESS")
-      todayVisits[idx] = await db.visit.create({ data: { id: `ux-visit-today-${idx + 1}`, patientId: patients[idx].id, doctorId, appointmentId: appt.id, complaints: JSON.stringify([{ complaint: "Itchy red patches on both arms", duration: "2 weeks" }]), vitals: JSON.stringify({ systolicBP: 112, diastolicBP: 72, heartRate: 78, temperature: 36.7 }) } });
+      todayVisits[idx] = await db.visit.create({ data: { id: cid("visittoday", idx + 1), patientId: patients[idx].id, doctorId, appointmentId: appt.id, complaints: JSON.stringify([{ complaint: "Itchy red patches on both arms", duration: "2 weeks" }]), vitals: JSON.stringify({ systolicBP: 112, diastolicBP: 72, heartRate: 78, temperature: 36.7 }) } });
   }
   for (const [slot, idx, status, token, roomIdx] of TOMORROW) {
-    const appt = await db.appointment.create({ data: { id: `ux-appt-tomorrow-${appointments.tomorrow.length + 1}`, branchId, doctorId, patientId: patients[idx].id, date: new Date(tomorrow), slot, status, tokenNumber: token, roomId: rooms[roomIdx].id, source: "PHONE" } });
+    const appt = await db.appointment.create({ data: { id: cid("appttomorrow", appointments.tomorrow.length + 1), branchId, doctorId, patientId: patients[idx].id, date: new Date(tomorrow), slot, status, tokenNumber: token, roomId: rooms[roomIdx].id, source: "PHONE" } });
     appointments.tomorrow.push({ id: appt.id, patientId: appt.patientId, patient: patients[idx].name, slot, status });
   }
 
   const waitingMeds = [[medicine("Doxycycline"), "TWICE_DAILY", 30, 2], [medicine("Adapalene"), "ONCE_DAILY", 30, 1], [medicine("Sunscreen"), "ONCE_DAILY", 30, 1]];
   const waiting = await db.prescription.create({
     data: {
-      id: "ux-rx-waiting", visitId: todayVisits[0].id, status: "ACTIVE", instructions: "Avoid picking at lesions. Use sunscreen daily. Review in 4 weeks.",
+      id: cid("rxwaiting"), visitId: todayVisits[0].id, status: "ACTIVE", instructions: "Avoid picking at lesions. Use sunscreen daily. Review in 4 weeks.",
       items: JSON.stringify(waitingMeds.map(([m, frequency, duration, quantity]) => course(m, m.id, 1, frequency, duration, quantity, m.form === "GEL" ? "Apply a thin layer at night" : "After food"))),
     },
   });
@@ -201,7 +203,7 @@ async function seed(stack) {
     const received = r2(payments.reduce((s, [, amount]) => s + amount, 0));
     const invoice = await db.newInvoice.create({
       data: {
-        id: `ux-invoice-${n}`, invoiceNo: `INV-${day.replaceAll("-", "")}-${String(extra.seq ?? 1).padStart(3, "0")}`, patientId: patients[patientIdx].id, branchId, total, received, balance: r2(total - received), status: received >= total ? "PAID" : received ? "PARTIALLY_PAID" : extra.dueDate ? "OVERDUE" : "PENDING",
+        id: cid("invoice", n), invoiceNo: `INV-${day.replaceAll("-", "")}-${String(extra.seq ?? 1).padStart(3, "0")}`, patientId: patients[patientIdx].id, branchId, total, received, balance: r2(total - received), status: received >= total ? "PAID" : received ? "PARTIALLY_PAID" : extra.dueDate ? "OVERDUE" : "PENDING",
         mode: payments[0]?.[2] ?? null, dueDate: extra.dueDate ? at(extra.dueDate, "12:00") : null, createdAt: at(day, time), appointmentId: extra.appointmentId, visitId: extra.visitId,
         items: { create: items.map(([name, serviceId, price, gst, qty = 1]) => ({ serviceId, name, description: name, qty, unitPrice: price, gstRate: gst, total: price * qty })) },
         payments: { create: payments.map(([, amount, mode], j) => ({ amount, mode, reconStatus: "COMPLETED", createdAt: at(day, `${time.slice(0, 2)}:${String(Number(time.slice(3)) + 5 + j).padStart(2, "0")}`) })) },
@@ -213,7 +215,7 @@ async function seed(stack) {
 
   const services = [];
   for (const [i, [name, type, gstRate, price]] of SERVICES.entries())
-    services.push(await db.service.create({ data: { id: `ux-service-${i + 1}`, name, type, taxable: gstRate > 0, gstRate, priceMrp: price, priceNet: price, branchId } }));
+    services.push(await db.service.create({ data: { id: cid("service", i + 1), name, type, taxable: gstRate > 0, gstRate, priceMrp: price, priceNet: price, branchId } }));
   const svc = (name) => services.find((s) => s.name === name);
   const line = (name, qty = 1) => [name, svc(name).id, svc(name).priceNet, svc(name).gstRate, qty];
   await bill(1, 0, today, "09:20", [line("Dermatology Consultation")], [["x", 500, "CASH"]], { appointmentId: appointments.today[0].id, visitId: todayVisits[0].id });
@@ -252,7 +254,7 @@ async function seed(stack) {
     const earlier = earlierRx.find((e) => e.patientIdx === patientIdx);
     const inv = await db.pharmacyInvoice.create({
       data: {
-        id: `ux-sale-${n}`, invoiceNumber: `PHI-${year}-${String(n).padStart(3, "0")}`, patientId: patients[patientIdx].id, doctorId, branchId, createdById: pharmacistId, prescriptionId: earlier?.rx.id,
+        id: cid("sale", n), invoiceNumber: `PHI-${year}-${String(n).padStart(3, "0")}`, patientId: patients[patientIdx].id, doctorId, branchId, createdById: pharmacistId, prescriptionId: earlier?.rx.id,
         subtotal: r2(total - taxAmount), taxAmount, totalAmount: total, paymentMethod: method, paymentStatus: "COMPLETED", paidAmount: total, balanceAmount: 0, billingName: patients[patientIdx].name, billingPhone: patients[patientIdx].phone,
         billingCity: "Pune", status: "COMPLETED", invoiceDate: at(day, time), createdAt: at(day, time),
         items: { create: rows.map(({ m, qty, gross, tax }) => ({ drugId: m.drugId, inventoryItemId: m.id, quantity: qty, unitPrice: m.mrp, taxPercent: m.gst, taxAmount: tax, totalAmount: gross })) },
@@ -282,7 +284,7 @@ async function seed(stack) {
       const gst = r2(rows.reduce((s, r) => s + r.gst, 0));
       await tx.pharmacyPurchaseInvoice.create({
         data: {
-          id: `ux-purchase-${d + 1}`, branchId, createdBy: pharmacistId, supplierId: `ux-supplier-${d + 1}`, distributorName: DISTRIBUTORS[d][0], distributorGstin: DISTRIBUTORS[d][1], distributorDlNo: DISTRIBUTORS[d][2],
+          id: cid("purchase", d + 1), branchId, createdBy: pharmacistId, supplierId: cid("supplier", d + 1), distributorName: DISTRIBUTORS[d][0], distributorGstin: DISTRIBUTORS[d][1], distributorDlNo: DISTRIBUTORS[d][2],
           invoiceNumber: number, invoiceDate: at(day, "10:00"), goodsReceivedDate: at(day, "15:00"), createdAt: at(day, "15:30"), billType: billType === "PAID" ? "CASH" : "CREDIT", dueDate: billType === "PAID" ? null : at(addDays(today, -5), "12:00"),
           doctorNameOrRegNo: doctorName, status: "STOCK_COMMITTED", stockCommittedAt: at(day, "15:45"), grossAmount: taxable, taxableAmount: taxable, totalCgst: r2(gst / 2), totalSgst: r2(gst / 2), totalGst: gst, netPayable: r2(taxable + gst),
           items: {
@@ -297,7 +299,7 @@ async function seed(stack) {
         await tx.pharmacyPurchasePayment.create({
           data: {
             branchId, distributorGstin: DISTRIBUTORS[d][1], distributorName: DISTRIBUTORS[d][0], paymentDate: at(day, "16:00"), mode: "CASH", paidBy: pharmacistId, amount: r2(taxable + gst),
-            allocations: { create: [{ purchaseInvoiceId: `ux-purchase-${d + 1}`, amount: r2(taxable + gst) }] },
+            allocations: { create: [{ purchaseInvoiceId: cid("purchase", d + 1), amount: r2(taxable + gst) }] },
           },
         });
     }
@@ -315,10 +317,10 @@ async function seed(stack) {
     medicines: medicines.map((m) => ({ id: m.id, name: m.name, stock: m.stock })),
     medicineStates: { outOfStock: medicine("Clobetasol").name, low: [medicine("Tretinoin").name, medicine("Ketoconazole").name], nearExpiry: NEAR_EXPIRY },
     waitingPrescription: { id: waiting.id, visitId: todayVisits[0].id, appointmentId: appointments.today[0].id, patientId: patients[0].id, patient: patients[0].name, medicines: waitingMeds.map(([m]) => ({ id: m.id, name: m.name })) },
-    suppliers: DISTRIBUTORS.map(([name], i) => ({ id: `ux-supplier-${i + 1}`, name })),
+    suppliers: DISTRIBUTORS.map(([name], i) => ({ id: cid("supplier", i + 1), name })),
     services: services.map((s) => ({ id: s.id, name: s.name, type: s.type, price: s.priceNet })),
     fees: { FIRST_CONSULTATION: 700, REVIEW: 400, PROCEDURE: 2500 },
-    invoices: { clinic: bills, pharmacy: saleIds, purchases: ["ux-purchase-1", "ux-purchase-2"] },
+    invoices: { clinic: bills, pharmacy: saleIds, purchases: [cid("purchase", 1), cid("purchase", 2)] },
   };
 }
 

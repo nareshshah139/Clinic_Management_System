@@ -4,7 +4,7 @@ module.exports = journey(
   { id: "j01", title: "Book a returning patient for tomorrow", story: "FRONT-DESK-01", persona: "reception" },
   async (ui) => {
     const { page } = ui;
-    const patient = ui.info.seeded.patients.find((p) => p.id === "ux-patient-9");
+    const patient = ui.info.seeded.patients.find((p) => p.id === "cuxpatient000000000000009");
     const tomorrow = ui.info.seeded.tomorrow;
     await ui.start("/dashboard");
     await ui.screen("dashboard");

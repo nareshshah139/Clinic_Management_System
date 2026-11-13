@@ -6,7 +6,7 @@ module.exports = journey(
   { id: "j09", title: "Look up a patient's last visit and fix their phone", story: "PATIENT-RECORDS-03", persona: "doctor" },
   async (ui) => {
     const page = ui.page;
-    const patient = ui.info.seeded.patients.find((p) => p.id === "ux-patient-2");
+    const patient = ui.info.seeded.patients.find((p) => p.id === "cuxpatient000000000000002");
     await ui.start("/dashboard");
     await page.getByLabel("My patients").getByText(patient.name).waitFor();
     await ui.screen("dashboard");
