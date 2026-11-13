@@ -2755,6 +2755,17 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.getByLabelText('Exp. Month')).toHaveValue(null);
   });
 
+  it("uses the supplier's last drug license on request", async () => {
+    api.get.mockImplementation(async (url: string) => url === '/pharmacy/purchase-invoices/suppliers'
+      ? [{ id: 'sup-slv', name: 'Shree Laxmi Vitality Pharma', gstNumber: '27AABCS1234F1Z5', lastBillDrugLicenseNo: 'MH-PUN-SLV' }] : []);
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+    fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Shree Laxmi Vitality Pharma' } });
+    fireEvent.change(screen.getByLabelText('GSTIN'), { target: { value: '27AABCS1234F1Z5' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Use this drug license' }));
+    expect(screen.getByLabelText('DL No.')).toHaveValue('MH-PUN-SLV');
+  });
+
   it('names saved product gaps in plain words', async () => {
     mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true, editProduct: true } as typeof mockPurchaseAccess;
     api.suggestPharmacyPurchaseMasterMatches.mockResolvedValue(cosgloMatches());

@@ -212,6 +212,7 @@ type PurchaseInvoice = {
   updatedAt?: string;
   distributorName: string;
   distributorGstin: string;
+  distributorDlNo?: string | null;
   invoiceNumber: string;
   invoiceDate: string;
   goodsReceivedDate?: string | null;
@@ -3367,6 +3368,8 @@ function PurchaseInvoiceEditor({
             : activeInvoice.distributorName
         }
         gstNumber={supplierGstin}
+        drugLicenseNo={!activeInvoice || editingSelectedInvoice ? header.distributorDlNo : activeInvoice.distributorDlNo ?? ""}
+        onUseDrugLicense={value => updateHeader("distributorDlNo", value)}
         canLoad={access.create || access.read}
         canSave={!!access.saveSupplier}
         canEdit={!!access.editSupplier}
