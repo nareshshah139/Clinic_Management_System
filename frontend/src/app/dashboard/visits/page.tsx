@@ -28,6 +28,7 @@ import { formatPatientName } from '@/lib/utils';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
 import { useRecordById } from '@/components/visits/useRecordById';
 import { PatientHistoryTimeline } from '@/components/visits/PatientHistoryTimeline';
+import { useRef } from 'react';
 import type {
   Appointment,
   GetPatientsResponse,
@@ -45,29 +46,20 @@ type PatientMatch = Patient & { name?: string };
 const fetchPatientById = (id: string) => apiClient.getPatient(id);
 const fetchDoctorById = (id: string) => apiClient.getUser(id);
 
-const normalizePatientVisits = (payload: PatientVisitHistoryResponse): VisitTimelineEntry[] => {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-  if (payload && typeof payload === 'object') {
-    const { visits, data } = payload;
-    if (Array.isArray(visits)) return visits;
-    if (Array.isArray(data)) return data;
-  }
-  return [];
-};
+type FormSaveStatus = 'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error';
+type VisitBinding = { patientId: string; doctorId: string; visitId?: string; appointment?: AppointmentWithVisit };
+type LinkNotice = { text: string; patientId: string };
 
-const PhotosPanel = dynamic<ComponentType<{ visitId: string }>>(
-  () => import('@/components/visits/VisitPhotos'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex items-center justify-center py-6 text-sm text-gray-500">
-        Loading photos…
-      </div>
-    ),
-  }
-);
+const LINK_NOTICES = {
+  visit: 'That visit could not be opened. Search for the patient to continue.',
+  patient: 'That patient could not be loaded. Search for the patient to continue.',
+  appointment: 'That appointment could not be opened. Search for the patient to continue.',
+} as const;
+const UNSAVED_STATUSES: FormSaveStatus[] = ['unsaved', 'saving', 'autosaving', 'error'];
+
+const clearVisitLink = () => {
+  if (window.location.search) window.history.replaceState(null, '', '/dashboard/visits');
+};
 
 
 function VisitsPageInner() {
@@ -76,9 +68,22 @@ function VisitsPageInner() {
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [currentUserRole, setCurrentUserRole] = useState<string>('DOCTOR');
-  const [recentVisitId, setRecentVisitId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [binding, setBinding] = useState<VisitBinding | null>(null);
+  const [linkNotice, setLinkNotice] = useState<LinkNotice | null>(null);
+  const [openRequestPatientId, setOpenRequestPatientId] = useState<string | null>(null);
+  const [formSaveStatus, setFormSaveStatus] = useState<FormSaveStatus>('idle');
+  const [pendingLeave, setPendingLeave] = useState<'setup' | 'calendar' | null>(null);
+  const [formSession, setFormSession] = useState({ key: '', visitDate: '' });
+  const processedLinkRef = useRef<string | null>(null);
+  const currentLinkRef = useRef('');
+  const selectedPatientIdRef = useRef(selectedPatientId);
+  selectedPatientIdRef.current = selectedPatientId;
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+  // The form reports 'unsaved' on an untouched new visit (and keeps it, since autosave needs a
+  // visitId), so the leave dialog also requires an edit by the user during this form session.
+  const formTouchedRef = useRef(false);
 
   // Autocomplete state for patients
   const [patientQuery, setPatientQuery] = useState('');
@@ -139,17 +144,83 @@ function VisitsPageInner() {
     return Array.from(doctorsById.values());
   }, [extractDoctors]);
 
-  const fetchAppointmentData = useCallback(async (appointmentId: string) => {
-    try {
-      const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
-      setAppointmentData(appointment);
-      if (appointment?.doctorId) {
-        setSelectedDoctorId(appointment.doctorId);
-      }
-    } catch (error) {
-      console.error('Failed to fetch appointment data:', error);
-    }
+  const failLink = useCallback((text: string, patientId: string = selectedPatientIdRef.current) => {
+    setShowForm(false);
+    setOpenRequestPatientId(null);
+    setBinding(null);
+    setSelectedPatientId(patientId);
+    setLinkNotice({ text, patientId });
+    clearVisitLink();
   }, []);
+
+  const openBoundVisit = useCallback((next: VisitBinding) => {
+    setSelectedPatientId(next.patientId);
+    setSelectedDoctorId(next.doctorId);
+    setBinding(next);
+    setLinkNotice(null);
+    setOpenRequestPatientId(null);
+    setShowForm(true);
+  }, []);
+
+  const processVisitLink = useCallback(async (params: URLSearchParams, isCurrent: () => boolean) => {
+    const visitId = params.get('visitId');
+    const patientId = params.get('patientId') || undefined;
+    const doctorId = params.get('doctorId');
+    const appointmentId = params.get('appointmentId');
+    const fetchAppointment = (id: string) =>
+      apiClient.getAppointment<AppointmentWithVisit>(id).catch((error) => {
+        console.warn('[VisitsPage] Failed to load appointment', error);
+        return null;
+      });
+
+    if (visitId) {
+      if (!isValidId(visitId)) {
+        failLink(LINK_NOTICES.visit, patientId);
+        return;
+      }
+      try {
+        const visit = await apiClient.get<{ patient?: { id?: string }; doctor?: { id?: string }; appointment?: { id?: string } | null }>(`/visits/${visitId}`);
+        const visitPatientId = visit?.patient?.id;
+        let visitDoctorId = visit?.doctor?.id;
+        if (!visitPatientId || !visitDoctorId) throw new Error('Visit has no patient or doctor');
+        const linkedAppointmentId = visit.appointment?.id || appointmentId;
+        const fetched = linkedAppointmentId ? await fetchAppointment(linkedAppointmentId) : null;
+        const appointment = fetched && fetched.patientId === visitPatientId ? fetched : undefined;
+        if (appointment?.doctorId) visitDoctorId = appointment.doctorId;
+        if (!isCurrent()) return;
+        openBoundVisit({ patientId: visitPatientId, doctorId: visitDoctorId, visitId, appointment });
+      } catch (error) {
+        console.warn('[VisitsPage] Failed to load visit by id', error);
+        if (isCurrent()) failLink(LINK_NOTICES.visit, patientId);
+      }
+      return;
+    }
+
+    if (patientId) {
+      setLinkNotice(null);
+      setSelectedPatientId(patientId);
+      if (doctorId && isValidId(doctorId)) setSelectedDoctorId(doctorId);
+      const fetched = appointmentId ? await fetchAppointment(appointmentId) : null;
+      if (!isCurrent()) return;
+      if (fetched && fetched.patientId === patientId && fetched.doctorId) {
+        openBoundVisit({ patientId, doctorId: fetched.doctorId, visitId: fetched.visit?.id, appointment: fetched });
+        return;
+      }
+      setBinding(null);
+      setOpenRequestPatientId(patientId);
+      return;
+    }
+
+    if (appointmentId) {
+      const appointment = await fetchAppointment(appointmentId);
+      if (!isCurrent()) return;
+      if (!appointment?.patientId || !appointment.doctorId) {
+        failLink(LINK_NOTICES.appointment);
+        return;
+      }
+      openBoundVisit({ patientId: appointment.patientId, doctorId: appointment.doctorId, visitId: appointment.visit?.id, appointment });
+    }
+  }, [failLink, openBoundVisit]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -201,64 +272,20 @@ function VisitsPageInner() {
     void loadData();
   }, [loadData]);
 
-  // Deep links open documentation; selecting a patient in setup keeps history accessible.
+  // Each distinct query string is processed once. Strict Mode re-runs this effect, so in-flight
+  // work is never cancelled from a cleanup; stale results are dropped by comparing query strings.
+  const linkQuery = searchParams.toString();
   useEffect(() => {
-    if (urlPatientId && selectedPatientId === urlPatientId && selectedDoctorId) {
-      setShowForm(true);
-    }
-  }, [selectedPatientId, selectedDoctorId, urlPatientId]);
-
-  // Handle URL parameters for appointment linking
-  useEffect(() => {
-    if (urlPatientId) {
-      setSelectedPatientId(urlPatientId);
-      if (urlDoctorId && isValidId(urlDoctorId)) {
-        setSelectedDoctorId(urlDoctorId);
-      }
-      if (appointmentIdParam) {
-        void fetchAppointmentData(appointmentIdParam);
-      }
-      if (autoStartParam) {
-        setShowForm(true);
-      }
-    }
-  }, [appointmentIdParam, autoStartParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
-
-  // Handle direct visit resume via visitId in URL
-  useEffect(() => {
-    const run = async () => {
-      if (!urlVisitId || !isValidId(urlVisitId)) return;
-      try {
-        const visit: any = await apiClient.get(`/visits/${urlVisitId}`);
-        const pid = visit?.patient?.id;
-        const did = visit?.doctor?.id;
-        if (typeof pid === 'string') setSelectedPatientId(pid);
-        if (typeof did === 'string') setSelectedDoctorId(did);
-        // Populate appointment context if present (non-blocking)
-        const apptId = visit?.appointment?.id;
-        if (typeof apptId === 'string') {
-          try {
-            const appt = await apiClient.getAppointment<AppointmentWithVisit>(apptId);
-            setAppointmentData(appt);
-            if (appt?.doctorId) setSelectedDoctorId(appt.doctorId);
-          } catch {}
-        }
-        setShowForm(true);
-        setRecentVisitId(urlVisitId);
-      } catch (e) {
-        // If visit fetch fails, ignore and proceed with normal flow
-        console.warn('[VisitsPage] Failed to load visit by id', e);
-      }
-    };
-    void run();
-  }, [urlVisitId]);
+    currentLinkRef.current = linkQuery;
+    if (processedLinkRef.current === linkQuery) return;
+    processedLinkRef.current = linkQuery;
+    if (!linkQuery) return;
+    void processVisitLink(new URLSearchParams(linkQuery), () => currentLinkRef.current === linkQuery);
+  }, [linkQuery, processVisitLink]);
 
   useEffect(() => {
-    const visitId = (appointmentData?.visit && 'id' in appointmentData.visit) ? appointmentData.visit.id : undefined;
-    if (typeof visitId === 'string') {
-      setRecentVisitId(visitId);
-    }
-  }, [appointmentData]);
+    if (linkNotice && linkNotice.patientId !== selectedPatientId) setLinkNotice(null);
+  }, [linkNotice, selectedPatientId]);
 
   // Debounced search for patients
   useEffect(() => {
@@ -310,10 +337,68 @@ function VisitsPageInner() {
   const selectedPatient = useRecordById<PatientMatch>(selectedPatientId, fetchPatientById);
   const selectedDoctor = useRecordById<DoctorSummary>(selectedDoctorId, fetchDoctorById);
 
+  // A patient link opens the form once, as soon as a doctor is known.
+  useEffect(() => {
+    if (!openRequestPatientId || openRequestPatientId !== selectedPatientId || !selectedDoctorId) return;
+    setOpenRequestPatientId(null);
+    setShowForm(true);
+  }, [openRequestPatientId, selectedPatientId, selectedDoctorId]);
+
+  useEffect(() => {
+    if (selectedPatient.status !== 'missing') return;
+    if (!showForm && openRequestPatientId !== selectedPatientId) return;
+    failLink(LINK_NOTICES.patient, '');
+  }, [selectedPatient.status, showForm, openRequestPatientId, selectedPatientId, failLink]);
+
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-form-patient-binding
+   * The visit form MUST receive a linked visit or appointment only while the selected
+   * patient and doctor are the ones that visit or appointment belongs to; otherwise it
+   * MUST open as a new visit.
+   */
+  const bindingApplies = binding !== null && binding.patientId === selectedPatientId && binding.doctorId === selectedDoctorId;
+  const boundAppointment = bindingApplies ? binding.appointment : undefined;
+  const boundVisitId = bindingApplies ? binding.visitId || boundAppointment?.visit?.id || undefined : undefined;
+  const formKey = `${selectedPatientId}:${boundVisitId || boundAppointment?.id || 'new'}`;
+
+  // One visit date and a fresh save status per form opening.
+  const formSessionKey = showForm ? formKey : '';
+  if (formSession.key !== formSessionKey) {
+    setFormSession({ key: formSessionKey, visitDate: new Date().toISOString() });
+    setFormSaveStatus('idle');
+    formTouchedRef.current = false;
+  }
+
+  const handleSaveStatusChange = useCallback((status: FormSaveStatus) => {
+    if (status === 'saved') formTouchedRef.current = false;
+    setFormSaveStatus(status);
+  }, []);
+  const markFormTouched = () => { formTouchedRef.current = true; };
+  const markFormTouchedByClick = (event: { target: EventTarget }) => {
+    if (!(event.target instanceof Element && event.target.closest('[role="tab"]'))) formTouchedRef.current = true;
+  };
+
   const startNewVisit = () => {
     if (selectedPatientId && selectedDoctorId) {
+      setLinkNotice(null);
+      setOpenRequestPatientId(null);
       setShowForm(true);
     }
+  };
+
+  const leaveForm = (target: 'setup' | 'calendar') => {
+    setPendingLeave(null);
+    if (target === 'calendar') {
+      window.history.back();
+      return;
+    }
+    setShowForm(false);
+    clearVisitLink();
+  };
+
+  const requestLeave = (target: 'setup' | 'calendar') => {
+    if (formTouchedRef.current && UNSAVED_STATUSES.includes(formSaveStatus)) setPendingLeave(target);
+    else leaveForm(target);
   };
  
   if (loading) {
@@ -473,6 +558,7 @@ function VisitsPageInner() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {linkNotice && <p role="alert" className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">{linkNotice.text}</p>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="relative">
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
@@ -712,7 +798,7 @@ function VisitsPageInner() {
         <div className="min-w-0 max-w-full">
           <div className="flex flex-wrap items-center gap-2">
             <PageHeader title={<>Visit Documentation</>} />
-            {appointmentData && (
+            {boundAppointment && (
               <Badge variant="secondary" className="bg-blue-100 text-blue-700">
                 <Calendar className="h-3 w-3 mr-1" />
                 From Appointment
@@ -736,7 +822,7 @@ function VisitsPageInner() {
                 items: [
                   "Fill out sections in order: Vitals → History → Examination → Assessment → Plan",
                   "Use expandable sections to keep the form organized",
-                  "Save progress automatically as you work",
+                  "New visits are kept once you click Save Draft; after that, changes save automatically",
                   "Mark visit as complete when finished"
                 ]
               },
@@ -760,13 +846,13 @@ function VisitsPageInner() {
               }
             ]}
           />
-          {appointmentData && (
-            <Button variant="outline" onClick={() => window.history.back()}>
+          {boundAppointment && (
+            <Button variant="outline" onClick={() => requestLeave('calendar')}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Calendar
             </Button>
           )}
-          <Button variant="outline" onClick={() => setShowForm(false)}>
+          <Button variant="outline" onClick={() => requestLeave('setup')}>
             Back to Setup
           </Button>
         </div>
@@ -776,24 +862,45 @@ function VisitsPageInner() {
         <VisitIdentityBar
           patient={selectedPatient}
           doctor={selectedDoctor}
-          appointment={appointmentData}
+          appointment={boundAppointment}
         />
       </div>
 
+      <div className="contents" onInputCapture={markFormTouched} onChangeCapture={markFormTouched} onClickCapture={markFormTouchedByClick}>
       <MedicalVisitForm
-        key={`${selectedPatientId}:${urlVisitId || appointmentData?.id || "new"}`}
-        patientId={selectedPatientId} 
+        key={formKey}
+        patientId={selectedPatientId}
         doctorId={selectedDoctorId}
         userRole={currentUserRole}
         patientName={selectedPatient.status === 'ready' ? formatPatientName(selectedPatient.record) : ''}
-        visitDate={new Date().toISOString()}
-        appointmentId={appointmentData?.id}
-        appointmentData={appointmentData}
-        initialVisitId={urlVisitId || (appointmentData?.visit && 'id' in (appointmentData as any).visit ? (appointmentData as any).visit.id : undefined)}
+        visitDate={formSession.visitDate}
+        appointmentId={boundAppointment?.id}
+        appointmentData={boundAppointment}
+        initialVisitId={boundVisitId}
+        onSaveStatusChange={handleSaveStatusChange}
       />
-      
-      {/* Show standalone photos panel only when the form is not open to avoid duplicate rendering */}
-      {!showForm && recentVisitId && <PhotosPanel visitId={recentVisitId} />}
+      </div>
+
+      <Dialog open={pendingLeave !== null} onOpenChange={(open: boolean) => { if (!open) setPendingLeave(null); }}>
+        <DialogContent
+          className="max-w-md"
+          showCloseButton={false}
+          onOpenAutoFocus={(event: Event) => { event.preventDefault(); keepEditingRef.current?.focus(); }}
+        >
+          <DialogHeader>
+            <DialogTitle>Leave without saving?</DialogTitle>
+            <DialogDescription>Some changes in this visit are not saved yet. Use Save Draft to keep them.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button ref={keepEditingRef} variant="outline" className="w-full sm:w-auto" onClick={() => setPendingLeave(null)}>
+              Keep editing
+            </Button>
+            <Button variant="destructive" className="w-full sm:w-auto" onClick={() => pendingLeave && leaveForm(pendingLeave)}>
+              Leave without saving
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

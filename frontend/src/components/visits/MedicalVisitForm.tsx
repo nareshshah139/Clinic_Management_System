@@ -77,6 +77,7 @@ interface Props {
   appointmentId?: string;
   appointmentData?: { patient?: VisitPatientSummary } | null;
   initialVisitId?: string;
+  onSaveStatusChange?: (status: 'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error') => void;
 }
 
 interface PatientHistory {
@@ -211,7 +212,7 @@ const ROLE_PERMISSIONS = {
  * @cc [owner:nareshshah139,label:product] completion-progress-explanation
  * When completion is unavailable because progress is below 80%, the form identifies unfinished tracked sections and states that progress is not a clinical validation.
  */
-function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
+function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, onSaveStatusChange, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
   const automaticSaveBlocked = useRef(false);
@@ -403,6 +404,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
 
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error'>('idle');
+  useEffect(() => { onSaveStatusChange?.(saveStatus); }, [saveStatus, onSaveStatusChange]);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
