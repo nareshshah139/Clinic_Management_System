@@ -132,6 +132,13 @@ const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g
       await bill(today, "10:15", [[items[9], 30], [items[3], 1]], [["CASH", 1]], "CONFIRMED", patients[3]);
       await bill(today, "10:50", [[items[14], 1], [items[16], 1, 10]], [["CARD", 0.5]], "CONFIRMED", patients[9]);
 
+      // New bills take the next number from this counter, so it has to start after the seeded ones.
+      await tx.numberSequence.upsert({
+        where: { type_branchId_periodKey: { type: "PHARMACY", branchId, periodKey: today.slice(0, 4) } },
+        create: { type: "PHARMACY", branchId, periodKey: today.slice(0, 4), lastNumber: n },
+        update: { lastNumber: n },
+      });
+
       const purchases = [
         ["SSP/26-27/1182", "Sri Sai Pharma Distributors", "36AAAAA0000A1Z5", [[0, 40], [2, 30], [5, 20]], -38, 6, 6, 0, true],
         ["MDS-4471", "Mumbai Derma Supplies", "27BBBBB1111B1Z5", [[14, 24], [15, 48], [16, 36]], -31, 0, 0, 18, true],
