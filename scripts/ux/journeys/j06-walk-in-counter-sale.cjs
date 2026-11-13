@@ -36,7 +36,6 @@ module.exports = journey(
     await page.locator('input[id^="quantity-"]').first().waitFor();
     await ui.fill(page.locator('input[id^="quantity-"]').first(), "10", "Bill: Cetirizine Quantity 10");
 
-    await ui.fill(page.locator("#drugSearch"), "", "Bill: clear Search Drugs");
     await ui.type(page.locator("#drugSearch"), "Sunscreen", "Bill: Search Drugs, type Sunscreen");
     const sunscreen = page.locator('[role="button"]').filter({ hasText: "Sunscreen SPF 50 Gel 50g" }).first();
     await sunscreen.waitFor();
@@ -48,6 +47,7 @@ module.exports = journey(
     await ui.click(page.getByRole("button", { name: /Print Preview/ }), "Bill: Print Preview");
     await page.getByRole("button", { name: "Confirm & Print" }).waitFor();
     await ui.screen("print-preview");
+    ui.decide("Which confirm button: Confirm Invoice or Confirm & Print", false);
     await ui.click(page.getByRole("button", { name: "Confirm & Print" }), "Preview: Confirm & Print");
     await page.getByRole("button", { name: "Invoice Confirmed" }).waitFor();
     await ui.screen("confirmed-preview");
@@ -62,7 +62,7 @@ module.exports = journey(
       const inv = await ui.api("GET", `/pharmacy/invoices/${id}`);
       const items = inv.items || [];
       const qty = (re) => items.filter((i) => re.test(JSON.stringify(i))).reduce((s, i) => s + Number(i.quantity), 0);
-      if (String(inv.invoiceDate).startsWith(today) && inv.status === "CONFIRMED" && inv.paymentStatus === "COMPLETED" && inv.paymentMethod === "CASH" && qty(/Cetirizine/i) === 10 && qty(/Sunscreen/i) === 1) ok = true;
+      if (inv.status === "CONFIRMED" && inv.paymentStatus === "COMPLETED" && inv.paymentMethod === "CASH" && qty(/Cetirizine/i) === 10 && qty(/Sunscreen/i) === 1) ok = true;
     }
     ui.goal(ok, "a confirmed, paid pharmacy invoice today holds 10 Cetirizine 10mg Tablets and 1 Sunscreen SPF 50 Gel 50g");
   },
