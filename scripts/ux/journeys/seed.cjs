@@ -117,7 +117,7 @@ async function seed(stack) {
     patients.push(await db.patient.create({
       data: {
         id: `ux-patient-${i + 1}`, patientCode: `UX${String(i + 1).padStart(3, "0")}`, name, gender, dob: new Date(dob), phone, address, city: "Pune", state: "Maharashtra", pincode,
-        allergies, medicalHistory, primaryDoctorId: i < 10 ? doctorId : null, branchId, createdAt: at(addDays(today, i < 10 ? -90 + i * 3 : -(12 - i)), "11:00"),
+        allergies, medicalHistory, consultationType: "OFFLINE", primaryDoctorId: i < 10 ? doctorId : null, branchId, createdAt: at(addDays(today, i < 10 ? -90 + i * 3 : -(12 - i)), "11:00"),
       },
     }));
 
@@ -135,9 +135,9 @@ async function seed(stack) {
       const item = await db.inventoryItem.create({
         data: {
           id: `ux-inv-${i + 1}-${n}`, branchId, name, genericName: generic, brandName: name.split(" ")[0], form, strength, manufacturer, type: "MEDICINE", category: "Dermatology", costPrice: r2(mrp * 0.68), sellingPrice: mrp, mrp, unit,
-          packSize: unit === "STRIPS" ? 10 : 1, currentStock: qty, minStockLevel: min, reorderLevel: min, reorderQuantity: min * 3, expiryDate: new Date(`${expiry}T00:00:00Z`), batchNumber: `DM${String(i + 1).padStart(2, "0")}${n}25`,
+          packSize: unit === "STRIPS" ? 10 : 1, currentStock: qty, minStockLevel: min, maxStockLevel: min * 6, reorderLevel: min, reorderQuantity: min * 3, expiryDate: new Date(`${expiry}T00:00:00Z`), batchNumber: `DM${String(i + 1).padStart(2, "0")}${n}25`,
           hsnCode: "30049099", gstRate: gst, requiresPrescription: ["Isotretinoin", "Doxycycline", "Fluconazole", "Terbinafine", "Clobetasol"].includes(generic), storageLocation: `Rack ${"ABC"[i % 3]}-${(i % 5) + 1}`, stockStatus: qty === 0 ? "OUT_OF_STOCK" : qty <= min ? "LOW_STOCK" : "IN_STOCK",
-          status: "ACTIVE", drugs: n === 1 ? { connect: { id: drug.id } } : undefined,
+          status: "ACTIVE", drugs: { connect: { id: drug.id } },
         },
       });
       primary ||= item;
@@ -201,7 +201,7 @@ async function seed(stack) {
     const received = r2(payments.reduce((s, [, amount]) => s + amount, 0));
     const invoice = await db.newInvoice.create({
       data: {
-        id: `ux-invoice-${n}`, invoiceNo: `INV-${day.replaceAll("-", "")}-${String(extra.seq ?? 1).padStart(3, "0")}`, patientId: patients[patientIdx].id, branchId, total, received, balance: r2(total - received), status: received >= total ? "PAID" : received ? "PARTIAL" : "PENDING",
+        id: `ux-invoice-${n}`, invoiceNo: `INV-${day.replaceAll("-", "")}-${String(extra.seq ?? 1).padStart(3, "0")}`, patientId: patients[patientIdx].id, branchId, total, received, balance: r2(total - received), status: received >= total ? "PAID" : received ? "PARTIALLY_PAID" : extra.dueDate ? "OVERDUE" : "PENDING",
         mode: payments[0]?.[2] ?? null, dueDate: extra.dueDate ? at(extra.dueDate, "12:00") : null, createdAt: at(day, time), appointmentId: extra.appointmentId, visitId: extra.visitId,
         items: { create: items.map(([name, serviceId, price, gst, qty = 1]) => ({ serviceId, name, description: name, qty, unitPrice: price, gstRate: gst, total: price * qty })) },
         payments: { create: payments.map(([, amount, mode], j) => ({ amount, mode, reconStatus: "COMPLETED", createdAt: at(day, `${time.slice(0, 2)}:${String(Number(time.slice(3)) + 5 + j).padStart(2, "0")}`) })) },
@@ -235,11 +235,12 @@ async function seed(stack) {
     [3, 5, 2, [["Isotretinoin", 3]], "CARD", 0],
     [4, 3, 4, [["Minoxidil", 1], ["Ketoconazole", 1]], "UPI", 0],
     [5, 1, 5, [["Adapalene", 1], ["Sunscreen", 1], ["Benzoyl", 1]], "CASH", 0],
+    [6, 0, 4, [["Mometasone", 1], ["Cetirizine", 2]], "UPI", 0],
   ];
   const saleIds = [];
   for (const [n, ago, patientIdx, lines, method] of sales) {
     const day = addDays(today, -ago);
-    const time = `1${n}:25`;
+    const time = `${String(9 + (n % 3)).padStart(2, "0")}:${10 + n * 7}`;
     const rows = lines.map(([name, qty]) => {
       const m = medicine(name);
       const gross = r2(m.mrp * qty);
@@ -266,7 +267,7 @@ async function seed(stack) {
     await tx.$executeRawUnsafe("SELECT set_config('app.purchase_recovery_protocol', '2', true)");
     const purchases = [
       [0, "SLP/26/1184", 12, [["Doxycycline", 40], ["Adapalene", 30], ["Cetirizine", 60]], "PAID"],
-      [1, "AMA/2288", 5, [["Mometasone", 24], ["Sunscreen", 20], ["Minoxidil", 12]], "CREDIT"],
+      [1, "AMA/2288", 20, [["Mometasone", 24], ["Sunscreen", 20], ["Minoxidil", 12]], "CREDIT"],
     ];
     for (const [d, number, ago, lines, billType] of purchases) {
       const day = addDays(today, -ago);
@@ -282,7 +283,7 @@ async function seed(stack) {
       await tx.pharmacyPurchaseInvoice.create({
         data: {
           id: `ux-purchase-${d + 1}`, branchId, createdBy: pharmacistId, supplierId: `ux-supplier-${d + 1}`, distributorName: DISTRIBUTORS[d][0], distributorGstin: DISTRIBUTORS[d][1], distributorDlNo: DISTRIBUTORS[d][2],
-          invoiceNumber: number, invoiceDate: at(day, "10:00"), goodsReceivedDate: at(day, "15:00"), createdAt: at(day, "15:30"), billType: billType === "PAID" ? "CASH" : "CREDIT", dueDate: billType === "PAID" ? null : at(addDays(today, 10), "12:00"),
+          invoiceNumber: number, invoiceDate: at(day, "10:00"), goodsReceivedDate: at(day, "15:00"), createdAt: at(day, "15:30"), billType: billType === "PAID" ? "CASH" : "CREDIT", dueDate: billType === "PAID" ? null : at(addDays(today, -5), "12:00"),
           doctorNameOrRegNo: doctorName, status: "STOCK_COMMITTED", stockCommittedAt: at(day, "15:45"), grossAmount: taxable, taxableAmount: taxable, totalCgst: r2(gst / 2), totalSgst: r2(gst / 2), totalGst: gst, netPayable: r2(taxable + gst),
           items: {
             create: rows.map((r) => ({
@@ -292,6 +293,13 @@ async function seed(stack) {
           },
         },
       });
+      if (billType === "PAID")
+        await tx.pharmacyPurchasePayment.create({
+          data: {
+            branchId, distributorGstin: DISTRIBUTORS[d][1], distributorName: DISTRIBUTORS[d][0], paymentDate: at(day, "16:00"), mode: "CASH", paidBy: pharmacistId, amount: r2(taxable + gst),
+            allocations: { create: [{ purchaseInvoiceId: `ux-purchase-${d + 1}`, amount: r2(taxable + gst) }] },
+          },
+        });
     }
   }, { timeout: 60000, maxWait: 30000 });
 
