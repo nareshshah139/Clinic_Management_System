@@ -33,12 +33,13 @@ module.exports = journey(
     await ui.screen("bill-confirmed");
 
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-    const found = await ui.api("GET", "/pharmacy/sales-register?limit=50");
+    const found = await ui.api("GET", `/pharmacy/sales-register?register=sales&from=${today}&to=${today}&q=${encodeURIComponent(rx.patient)}&field=patient&limit=50`);
     const rows = found.items || found.rows || found.data || [];
-    const ids = rows.filter((r) => JSON.stringify(r).includes(rx.patient)).map((r) => r.id);
+    const ids = rows.filter((r) => JSON.stringify(r).includes(rx.patient)).map((r) => String(r.id).replace(/^PHARMACY_BILL:/, ""));
     let ok = false;
     for (const id of ids) {
       const inv = await ui.api("GET", `/pharmacy/invoices/${id}`);
+      console.log("DBG", JSON.stringify({ d: inv.invoiceDate, s: inv.status, p: inv.paymentStatus, pm: inv.paymentMethod, pays: inv.payments, n: (inv.items || []).map((i) => Object.keys(i).join(",")).slice(0, 1) }));
       const text = JSON.stringify(inv.items || []);
       const has = rx.medicines.every((m) => text.includes(m.name));
       if (String(inv.invoiceDate).startsWith(today) && inv.status !== "DRAFT" && inv.paymentStatus === "PAID" && has && JSON.stringify(inv.payments || inv).includes("UPI")) ok = true;
