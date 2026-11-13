@@ -1,0 +1,102 @@
+[
+  {
+    "id": "j01",
+    "title": "Book a returning patient for tomorrow",
+    "ok": true,
+    "actions": 6,
+    "decisions": 3,
+    "reentry": 1,
+    "screens": 6,
+    "goal": "an extra appointment for Kavita Naik exists tomorrow"
+  },
+  {
+    "id": "j02",
+    "title": "Walk-in new patient onto today's list",
+    "ok": true,
+    "actions": 13,
+    "decisions": 3,
+    "reentry": 0,
+    "screens": 6,
+    "goal": "Farhan Qureshi is registered and on today's list for Dr. Priya Menon at 16:30-17:00 (booked for 2026-11-13, today is 2026-11-13)"
+  },
+  {
+    "id": "j03",
+    "title": "Doctor sees the next patient",
+    "ok": true,
+    "actions": 26,
+    "decisions": 5,
+    "reentry": 0,
+    "screens": 13,
+    "goal": "visit is COMPLETED and its prescription holds Mometasone and Cetirizine"
+  },
+  {
+    "id": "j04",
+    "title": "Bill a waiting prescription, pay by UPI",
+    "ok": true,
+    "actions": 7,
+    "decisions": 1,
+    "reentry": 0,
+    "screens": 6,
+    "goal": "a confirmed, paid UPI pharmacy invoice today for Meera Shah holds Doxycycline, Adapalene and Sunscreen"
+  },
+  {
+    "id": "j05",
+    "title": "Bill a consultation and collect a balance",
+    "ok": true,
+    "actions": 8,
+    "decisions": 1,
+    "reentry": 0,
+    "screens": 8,
+    "goal": "Sneha's consultation invoice and Rohan's part-paid invoice both have zero balance"
+  },
+  {
+    "id": "j06",
+    "title": "Walk-in counter sale for cash",
+    "ok": true,
+    "actions": 15,
+    "decisions": 2,
+    "reentry": 2,
+    "screens": 9,
+    "goal": "a confirmed, paid pharmacy invoice today holds 10 Cetirizine 10mg Tablets and 1 Sunscreen SPF 50 Gel 50g"
+  },
+  {
+    "id": "j07",
+    "title": "Owner reads the day's money, dues and reorder list",
+    "ok": true,
+    "actions": 3,
+    "decisions": 3,
+    "reentry": 0,
+    "screens": 4,
+    "goal": "owner saw today's takings ₹2,199.00 split clinic/pharmacy and cash/UPI, Rohan Kulkarni owing ₹1,450.00, the ₹2,360.00 overdue total, and the reorder items Clobetasol Cream 0.05% 20g, Tretinoin Cream 0.025% 20g, Ketoconazole Shampoo 2% 100ml"
+  },
+  {
+    "id": "j08",
+    "title": "Sign in and reach today's work",
+    "ok": true,
+    "actions": 4,
+    "decisions": 0,
+    "reentry": 0,
+    "screens": 3,
+    "goal": "receptionist sees today's schedule with booked patients"
+  },
+  {
+    "id": "j09",
+    "title": "Look up a patient's last visit and fix their phone",
+    "ok": true,
+    "actions": 10,
+    "decisions": 1,
+    "reentry": 1,
+    "screens": 9,
+    "goal": "the last visit (date, complaint, diagnosis, review advice) was on screen and the patient's phone is now 9822099102"
+  },
+  {
+    "id": "j10",
+    "title": "Receive a supplier delivery by hand-typed bill",
+    "ok": true,
+    "actions": 21,
+    "decisions": 2,
+    "reentry": 4,
+    "screens": 9,
+    "goal": "Tretinoin Cream stock rose by 20 and purchase bill AMA/2026/1187 exists"
+  }
+]

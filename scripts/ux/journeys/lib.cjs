@@ -16,11 +16,18 @@ async function login(page, info, who) {
   const user = info.users[who];
   assert(user, `Unknown persona ${who}`);
   await page.goto(`${info.base}/login`, { waitUntil: "domcontentloaded" });
-  const status = await page.evaluate(
-    async ({ identifier, password }) =>
-      (await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier, password }) })).status,
-    { identifier: user.email, password: user.password },
-  );
+  const signIn = () =>
+    page.evaluate(
+      async ({ identifier, password }) =>
+        (await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier, password }) })).status,
+      { identifier: user.email, password: user.password },
+    );
+  let status = await signIn();
+  // Journeys replayed back to back trip the login rate limit; a person signing in once a day never does.
+  for (let i = 0; status === 429 && i < 8; i++) {
+    await page.waitForTimeout(10000);
+    status = await signIn();
+  }
   assert.equal(status, 201, `login ${who} returned ${status}`);
   return user;
 }

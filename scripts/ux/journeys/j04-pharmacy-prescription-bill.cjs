@@ -39,10 +39,9 @@ module.exports = journey(
     let ok = false;
     for (const id of ids) {
       const inv = await ui.api("GET", `/pharmacy/invoices/${id}`);
-      console.log("DBG", JSON.stringify({ d: inv.invoiceDate, s: inv.status, p: inv.paymentStatus, pm: inv.paymentMethod, pays: inv.payments, n: (inv.items || []).map((i) => Object.keys(i).join(",")).slice(0, 1) }));
       const text = JSON.stringify(inv.items || []);
       const has = rx.medicines.every((m) => text.includes(m.name));
-      if (String(inv.invoiceDate).startsWith(today) && inv.status !== "DRAFT" && inv.paymentStatus === "PAID" && has && JSON.stringify(inv.payments || inv).includes("UPI")) ok = true;
+      if (String(inv.invoiceDate).startsWith(today) && inv.status === "CONFIRMED" && inv.paymentStatus === "COMPLETED" && has && JSON.stringify(inv.payments || inv).includes("UPI")) ok = true;
     }
     ui.goal(ok, "a confirmed, paid UPI pharmacy invoice today for Meera Shah holds Doxycycline, Adapalene and Sunscreen");
   },

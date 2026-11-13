@@ -1,4 +1,4 @@
-// Boots a fresh seeded stack, replays every journey on it, and writes the scorecard.
+// Boots a fresh stack, replays every journey from a fresh seed, and writes the scorecard.
 // Usage: STACK_DATABASE_URL=... node scripts/ux/journeys/run-all.cjs <label> [--compare <label>] [--only id,id]
 const fs = require("node:fs");
 const path = require("node:path");
@@ -18,6 +18,13 @@ function journeyFiles() {
   return fs.readdirSync(__dirname).filter((f) => /^j\d+-.*\.cjs$/.test(f)).sort();
 }
 
+// Journeys change data, so each one starts from the seed, not from what the one before left behind.
+async function reseed(stack) {
+  const tables = await stack.db.$queryRawUnsafe(`SELECT tablename FROM pg_tables WHERE schemaname = '${stack.schema}' AND tablename NOT IN ('users', 'branches')`);
+  await stack.db.$executeRawUnsafe(`TRUNCATE ${tables.map((t) => `"${stack.schema}"."${t.tablename}"`).join(", ")}`);
+  return seed(stack);
+}
+
 function assertCounted(file) {
   const lines = fs.readFileSync(path.join(__dirname, file), "utf8").split("\n");
   const raw = lines.map((line, i) => ({ line, n: i + 1 })).filter(({ line }) => RAW_INTERACTION.test(line));
@@ -31,9 +38,10 @@ function assertCounted(file) {
   const browser = await chromium.launch();
   const rows = [];
   try {
-    const seeded = await seed(stack);
-    const info = { base: stack.base, api: stack.api, users: stack.users, branch: stack.branch, seeded };
-    for (const file of files) {
+    let seeded = await seed(stack);
+    for (const [i, file] of files.entries()) {
+      if (i) seeded = await reseed(stack);
+      const info = { base: stack.base, api: stack.api, users: stack.users, branch: stack.branch, seeded };
       const { run } = require(path.join(__dirname, file));
       const r = await run({ info, browser, label });
       rows.push({ id: r.id, title: r.title, ok: r.ok, actions: r.count, decisions: r.openDecisions, reentry: r.reentry.length, screens: r.screens.length, goal: r.goal, error: r.error });
