@@ -43,12 +43,13 @@ module.exports = journey(
     await rohan.locator('button[data-appointment-billing="PAID"]').waitFor();
     await ui.screen("calendar-both-paid");
 
-    const sneeInvoices = (await ui.api("GET", "/billing/invoices?patientId=ux-patient-5&limit=50")) || {};
-    const list = (b) => b?.invoices || b?.data || b?.items || (Array.isArray(b) ? b : []);
-    const forSneha = list(sneeInvoices).filter((i) => i.appointmentId === "ux-appt-today-5");
-    const rohanInvoice = await ui.api("GET", "/billing/invoices/ux-invoice-2");
+    const list = (body) => body?.invoices || body?.data || body?.items || (Array.isArray(body) ? body : []);
+    const billed = async (name, appointmentId) =>
+      list(await ui.api("GET", `/billing/invoices?search=${encodeURIComponent(name)}&limit=50`)).filter((i) => i.appointmentId === appointmentId);
+    const forSneha = await billed("Sneha", "ux-appt-today-5");
+    const forRohan = await billed("Rohan", "ux-appt-today-2");
     ui.goal(
-      forSneha.length === 1 && Number(forSneha[0].balance) === 0 && Number(rohanInvoice.balance) === 0,
+      forSneha.length === 1 && forRohan.length >= 1 && [...forSneha, ...forRohan].every((i) => Number(i.balance) === 0),
       "Sneha's consultation invoice and Rohan's part-paid invoice both have zero balance",
     );
   },

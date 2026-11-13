@@ -45,6 +45,7 @@ module.exports = journey(
     const list = appts ? appts.data || appts.appointments || appts.items || appts : [];
     const doctorId = ui.info.users.doctor.id;
     const mine = (Array.isArray(list) ? list : []).filter((a) => String(a.date).slice(0, 10) === today && (a.doctorId || a.doctor?.id) === doctorId);
+    console.error(JSON.stringify({found,appts}).slice(0,1800));
     ui.goal(Boolean(patient) && mine.length === 1, "Farhan Qureshi exists and has one appointment today with Dr. Priya Menon");
   },
 );
