@@ -47,21 +47,21 @@ describe('VisitsPage load and default doctor', () => {
   it('defaults to the signed-in doctor', async () => {
     mockUsers({ id: D2, role: 'DOCTOR' });
     render(<VisitsPage />);
-    const trigger = await screen.findByRole('combobox');
+    const trigger = await screen.findByRole('combobox', { name: 'Select Doctor' });
     await waitFor(() => expect(trigger).toHaveTextContent('Dr. Priya Menon'));
   });
 
   it('keeps the first doctor for a login that is not in the doctor list', async () => {
     mockUsers({ id: 'u9', role: 'RECEPTION' });
     render(<VisitsPage />);
-    const trigger = await screen.findByRole('combobox');
+    const trigger = await screen.findByRole('combobox', { name: 'Select Doctor' });
     await waitFor(() => expect(trigger).toHaveTextContent('Dr. Arjun Bhatt'));
   });
 
   it('keeps the first doctor when /auth/me fails', async () => {
     mockUsers(new Error('boom'));
     render(<VisitsPage />);
-    const trigger = await screen.findByRole('combobox');
+    const trigger = await screen.findByRole('combobox', { name: 'Select Doctor' });
     await waitFor(() => expect(trigger).toHaveTextContent('Dr. Arjun Bhatt'));
   });
 

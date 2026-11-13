@@ -145,7 +145,7 @@ const driver = {
       const { page } = ctx;
       const input = page.getByPlaceholder("Search name, phone, or email");
       await input.fill(ctx.vars.fresh.name);
-      const option = page.getByRole("button", { name: new RegExp(ctx.vars.fresh.name) });
+      const option = page.getByRole("option", { name: new RegExp(ctx.vars.fresh.name) });
       await option.waitFor({ state: "visible", timeout: 30000 });
       await option.click();
     },

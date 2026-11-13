@@ -18,6 +18,8 @@ it('keeps setup and history accessible after selecting a patient', async () => {
   const search = await screen.findByPlaceholderText('Search name, phone, or email');
   expect(screen.queryByTestId('medical-form')).not.toBeInTheDocument();
   fireEvent.focus(search);
+  await screen.findByRole('option', { name: /Synthetic Patient/ });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
   fireEvent.keyDown(search, { key: 'Enter' });
   await screen.findByRole('tab', { name: 'Patient History' });
   expect(screen.queryByTestId('medical-form')).not.toBeInTheDocument();
