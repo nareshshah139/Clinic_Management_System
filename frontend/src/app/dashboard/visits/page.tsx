@@ -479,6 +479,8 @@ function VisitsPageInner() {
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
 
+  const [loadError, setLoadError] = useState(false);
+
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get('patientId');
   const appointmentIdParam = searchParams.get('appointmentId');
@@ -542,50 +544,49 @@ function VisitsPageInner() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
-      const [patientsRes, usersRes] = await Promise.allSettled([
+      const [patientsRes, usersRes, meRes] = await Promise.allSettled([
         apiClient.getPatients({ page: 1, limit: 1 }),
-        loadDoctors()
+        loadDoctors(),
+        apiClient.get<{ id?: string; role?: string }>('/auth/me'),
       ]);
 
-      if (patientsRes.status === 'fulfilled') {
-        const patientsData = extractPatients(patientsRes.value);
-        setPatients(patientsData);
-        setPatientOptions(patientsData.slice(0, 10));
-        if (patientsData.length > 0) {
-          setSelectedPatientId((prev) => {
-            if (prev) return prev;
-            if (urlPatientId && isValidId(urlPatientId)) return urlPatientId;
-            return ''; // Require an explicit patient selection on the setup screen.
-          });
-        }
+      if (patientsRes.status === 'rejected' || usersRes.status === 'rejected') {
+        console.error('Failed to load visit setup:', patientsRes.status === 'rejected' ? patientsRes.reason : (usersRes as PromiseRejectedResult).reason);
+        setLoadError(true);
+        return;
       }
 
-      if (usersRes.status === 'fulfilled') {
-        const doctorsData = usersRes.value;
-        setDoctors(doctorsData);
-        if (doctorsData.length > 0) {
-          const candidate = doctorsData[0]?.id;
-          if (!candidate) {
-            console.warn('[VisitsPage] First doctor missing id, requiring manual selection');
-          }
-          setSelectedDoctorId((prev) => prev || (candidate || ''));
+      const patientsData = extractPatients(patientsRes.value);
+      setPatients(patientsData);
+      setPatientOptions(patientsData.slice(0, 10));
+
+      const doctorsData = usersRes.value;
+      setDoctors(doctorsData);
+      if (doctorsData.length > 0) {
+        const meId = meRes.status === 'fulfilled' ? meRes.value?.id : undefined;
+        const signedIn = meId ? doctorsData.find((doctor) => doctor.id === meId)?.id : undefined;
+        const candidate = signedIn || doctorsData[0]?.id;
+        if (!candidate) {
+          console.warn('[VisitsPage] First doctor missing id, requiring manual selection');
         }
+        setSelectedDoctorId((prev) => prev || (candidate || ''));
       }
 
-      try {
-        const currentUser = await apiClient.get<{ role?: string }>('/auth/me');
-        setCurrentUserRole(currentUser?.role ?? 'DOCTOR');
-      } catch (error) {
-        console.error('Failed to get current user:', error);
+      if (meRes.status === 'fulfilled') {
+        setCurrentUserRole(meRes.value?.role ?? 'DOCTOR');
+      } else {
+        console.error('Failed to get current user:', meRes.reason);
         setCurrentUserRole('DOCTOR');
       }
     } catch (error) {
       console.error('Failed to load data:', error);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
-  }, [loadDoctors, extractPatients, urlPatientId]);
+  }, [loadDoctors, extractPatients]);
 
   useEffect(() => {
     void loadData();
@@ -712,6 +713,22 @@ function VisitsPageInner() {
     );
   }
  
+  if (loadError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Couldn&apos;t load visit setup</CardTitle>
+          <CardDescription>
+            Patients or doctors could not be loaded. Check your connection and try again.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button size="sm" onClick={() => void loadData()}>Retry</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!patients.some(patient => patient.id) || !doctors.some(doctor => doctor.id)) {
     return (
       <Card>
