@@ -20,7 +20,7 @@ module.exports = journey(
     await ui.start("/dashboard");
     await page.getByText("System Alerts").waitFor();
     await ui.screen("dashboard-landing");
-    await visible(`Total amount: ₹{overdue.balance.toFixed(2)}`);
+    await visible(`Total amount: ₹${overdue.balance.toFixed(2)}`);
     await visible("below reorder level");
 
     ui.decide("Which menu entry shows today's money", false);

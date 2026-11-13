@@ -25,7 +25,7 @@ module.exports = journey(
     await page.waitForTimeout(1500);
     console.log("DBG", await page.locator("label", { hasText: "Payment Method" }).count(), await method.count(), await page.getByRole("option").allInnerTexts(), await page.locator("[role=listbox]").count());
     await ui.screen("payment-options");
-    try { await page.getByRole("option", { name: "UPI" }).click({ timeout: 5000, trial: true }); } catch (e) { console.log("DBG2", e.message); }
+    { const o = page.getByRole("option", { name: "UPI" }); console.log("DBG2", await o.count(), await o.isVisible(), JSON.stringify(await o.boundingBox())); }
     await ui.click(page.getByRole("option", { name: "UPI" }), "Bill: Payment Method, choose UPI");
     await ui.click(page.getByRole("button", { name: /Print Preview/ }), "Bill: Print Preview");
     await page.getByRole("button", { name: "Confirm & Print" }).waitFor();
