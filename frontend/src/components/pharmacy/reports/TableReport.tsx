@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { apiClient } from "@/lib/api";
 import { LoadingSkeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { reportErrorHint, useReport } from "../pharmacy-report-model";
 import { apiParams, type ReportEntry, type ReportParams } from "./report-catalog";
-import { formatCell, formatRupee } from "./report-format";
+import { ColumnChooser, useHiddenColumns } from "./ColumnChooser";
+import { formatCell, formatRupee, visibleColumns } from "./report-format";
 import { ReportTable } from "./ReportTable";
 import { ReportToolbar } from "./ReportToolbar";
 import type { PharmacyReport, ReportTile } from "./report-types";
@@ -68,10 +69,21 @@ export function TableReport({ entry, params, today, onApply }: { entry: ReportEn
     void load();
   }, [load]);
 
+  const [hidden, setHidden] = useHiddenColumns(entry.id);
   const report = state.status === "loaded" || state.status === "empty" ? state.data : null;
+  const sections = useMemo(() => report?.sections.map((section) => ({ ...section, columns: visibleColumns(section.columns, hidden) })) ?? [], [report, hidden]);
   return (
     <div className="space-y-4">
-      <ReportToolbar entry={entry} params={params} today={today} loading={state.status === "loading"} canExport={state.status === "loaded" || state.status === "empty"} onApply={onApply} />
+      <ReportToolbar
+        entry={entry}
+        params={params}
+        today={today}
+        loading={state.status === "loading"}
+        canExport={state.status === "loaded" || state.status === "empty"}
+        onApply={onApply}
+        choices={report?.filterChoices}
+        extra={entry.columnChooser && <ColumnChooser columns={report?.sections[0]?.columns ?? []} hidden={hidden} onChange={setHidden} />}
+      />
       {report?.headline && (
         <p className="flex items-baseline justify-end gap-3" aria-live="polite">
           <span className="text-base font-medium">{report.headline.label}</span>
@@ -88,7 +100,7 @@ export function TableReport({ entry, params, today, onApply }: { entry: ReportEn
           {state.status === "empty" && report.sections.length === 1 ? (
             <p className="rounded-md border border-dashed p-4 text-base">{report.sections[0].emptyText ?? "Nothing in this period."} Choose another period and press Go.</p>
           ) : (
-            report.sections.map((section) => (
+            sections.map((section) => (
               <section key={section.id} className="space-y-2" aria-labelledby={report.sections.length > 1 ? `section-${section.id}` : undefined}>
                 {report.sections.length > 1 && (
                   <h3 id={`section-${section.id}`} className="text-lg font-semibold">

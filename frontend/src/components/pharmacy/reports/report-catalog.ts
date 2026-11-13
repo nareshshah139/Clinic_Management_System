@@ -11,6 +11,14 @@ export type PeriodKind = "range" | "day" | "none";
 export type ReportView = "table" | "collection" | "day-wise" | "margin" | "gst-summary";
 export type Option = { value: string; label: string };
 
+export type MoreFilter = {
+  key: "source" | "doctor" | "discount";
+  label: string;
+  allLabel: string;
+  allValue: string;
+  options: Option[] | "from-report";
+};
+
 export type ReportEntry = {
   id: string;
   title: string;
@@ -25,6 +33,8 @@ export type ReportEntry = {
   types?: Option[];
   defaultType?: string;
   gstFilter?: boolean;
+  moreFilters?: MoreFilter[];
+  columnChooser?: boolean;
   searchLabel?: string;
   windows?: Option[];
   compositionRate?: boolean;
@@ -36,12 +46,27 @@ const SALES_PURCHASE: Option[] = [
   { value: "PURCHASE", label: "Purchase" },
 ];
 
+const SALES_REGISTER_FILTERS: MoreFilter[] = [
+  {
+    key: "source",
+    label: "Source",
+    allLabel: "All sources",
+    allValue: "ALL",
+    options: [
+      { value: "BILL", label: "Prescription bills" },
+      { value: "COUNTER_SALE", label: "Counter sales" },
+    ],
+  },
+  { key: "doctor", label: "Doctor", allLabel: "All doctors", allValue: "", options: "from-report" },
+  { key: "discount", label: "Discount", allLabel: "All bills", allValue: "ALL", options: [{ value: "DISCOUNTED", label: "Discounted only" }] },
+];
+
 export const REPORTS: ReportEntry[] = [
   { id: "purchase-register", title: "Purchase Register", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", searchLabel: "Distributor, bill no. or GSTIN",
     about: "Every supplier bill posted to stock, one row each, with taxable value, GST and the bill amount.", keywords: ["purchase", "supplier", "distributor", "inward", "gst"] },
-  { id: "purchase-bills", title: "Purchase Bills", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", types: SALES_PURCHASE, defaultType: "PURCHASE", gstFilter: true, searchLabel: "Distributor, bill no. or GSTIN",
+  { id: "purchase-bills", title: "Purchase Bills", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", types: SALES_PURCHASE, defaultType: "PURCHASE", gstFilter: true, columnChooser: true, searchLabel: "Distributor, bill no. or GSTIN",
     about: "Supplier bills split across GST slabs (0, 5, 12, 18, 28, 40%), each with Base, SGST, CGST and IGST.", keywords: ["purchase", "slab", "gst", "itc", "bills"] },
-  { id: "sales-register", title: "Sales Register", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", common: true, searchLabel: "Customer, bill no. or mobile",
+  { id: "sales-register", title: "Sales Register", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", common: true, searchLabel: "Customer, bill no. or mobile", gstFilter: true, moreFilters: SALES_REGISTER_FILTERS,
     types: [
       { value: "SALES", label: "Sales" },
       { value: "RETURNS", label: "Returns" },
@@ -49,7 +74,7 @@ export const REPORTS: ReportEntry[] = [
     ],
     defaultType: "SALES",
     about: "Every pharmacy bill and counter sale with Gross, Discount, Taxable, GST and Total. Search a patient to read their month.", keywords: ["sales", "bills", "outward", "gst", "customer"] },
-  { id: "sales-bills", title: "Sales Bills", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", types: SALES_PURCHASE, defaultType: "SALES", gstFilter: true, searchLabel: "Customer, bill no. or mobile",
+  { id: "sales-bills", title: "Sales Bills", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", types: SALES_PURCHASE, defaultType: "SALES", gstFilter: true, columnChooser: true, searchLabel: "Customer, bill no. or mobile",
     about: "Pharmacy bills split across GST slabs, the sales side of Purchase Bills.", keywords: ["sales", "slab", "gst", "outward"] },
   { id: "day-wise-summary", title: "Day wise Summary", category: "GST Reports", view: "day-wise", period: "range", common: true,
     about: "One row per day with the bill-number range and the GST slab split; gaps in the numbering stand out.", keywords: ["daily", "day", "summary", "slab", "gst", "bill range"] },
@@ -163,6 +188,9 @@ export type ReportParams = {
   to: string;
   type?: string;
   gst?: string;
+  source?: string;
+  doctor?: string;
+  discount?: string;
   q?: string;
   window?: string;
   rate?: string;
@@ -180,6 +208,12 @@ export function readParams(entry: ReportEntry, search: Pick<URLSearchParams, "ge
   const type = clean(search.get("type"));
   const gst = clean(search.get("gst"));
   const window = clean(search.get("window"));
+  const more: Partial<ReportParams> = {};
+  for (const filter of entry.moreFilters ?? []) {
+    const value = clean(search.get(filter.key));
+    const valid = filter.options === "from-report" || filter.options.some((o) => o.value === value);
+    more[filter.key] = valid && value !== filter.allValue ? value : undefined;
+  }
   return {
     from: validFrom,
     to: validTo,
@@ -188,8 +222,14 @@ export function readParams(entry: ReportEntry, search: Pick<URLSearchParams, "ge
     q: entry.searchLabel ? clean(search.get("q")) : undefined,
     window: entry.windows ? (entry.windows.some((o) => o.value === window) ? window : "3m") : undefined,
     rate: entry.compositionRate ? clean(search.get("rate")) ?? "1" : undefined,
+    ...more,
   };
 }
+
+export const moreFilterValue = (filter: MoreFilter, params: ReportParams) => params[filter.key] ?? filter.allValue;
+
+export const activeMoreFilters = (entry: ReportEntry, params: ReportParams) =>
+  (entry.moreFilters ?? []).filter((filter) => moreFilterValue(filter, params) !== filter.allValue).length;
 
 export function reportHref(id: string, params?: Partial<ReportParams>) {
   const search = new URLSearchParams({ report: id });
@@ -201,7 +241,7 @@ export function reportHref(id: string, params?: Partial<ReportParams>) {
 export function apiParams(entry: ReportEntry, params: ReportParams): Record<string, string> {
   const out: Record<string, string> = { from: params.from };
   if (entry.period === "range") out.to = params.to;
-  for (const key of ["type", "gst", "q", "window", "rate"] as const) if (params[key]) out[key] = params[key]!;
+  for (const key of ["type", "gst", "source", "doctor", "discount", "q", "window", "rate"] as const) if (params[key]) out[key] = params[key]!;
   return out;
 }
 

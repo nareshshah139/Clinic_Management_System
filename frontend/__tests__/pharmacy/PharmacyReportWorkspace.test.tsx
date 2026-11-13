@@ -83,6 +83,7 @@ const counted = (sequence: number, cash: number, by = 'Asha Rao') => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockQuery = '';
+  window.localStorage.clear();
 });
 
 // jsdom applies no CSS, so the phone cards and the desk table are both present; scope to the table.
@@ -114,7 +115,7 @@ describe('Pharmacy Report', () => {
     mockQuery = 'report=sales-register&from=2026-10-01&to=2026-10-31&q=Meera';
     api.get.mockResolvedValue(salesRegister as any);
     render(<PharmacyReportWorkspace />);
-    expect(api.get).toHaveBeenCalledWith('/pharmacy/reports/sales-register', { from: '2026-10-01', to: '2026-10-31', type: 'SALES', q: 'Meera' });
+    expect(api.get).toHaveBeenCalledWith('/pharmacy/reports/sales-register', { from: '2026-10-01', to: '2026-10-31', type: 'SALES', gst: 'ALL', q: 'Meera' });
     const table = await screen.findByRole('table', { name: 'Sales Register' });
     expect(within(screen.getByTestId('report-totals-row')).getAllByRole('cell').map((c) => c.textContent)).toEqual(['Total', '', '1,59,656.74']);
     expect(screen.getByTestId('report-headline')).toHaveTextContent('₹1,59,656.74');
@@ -127,9 +128,9 @@ describe('Pharmacy Report', () => {
     await userEvent.click(screen.getByRole('button', { name: /Download/ }));
     const links = await screen.findAllByRole('menuitem');
     expect(links.map((l) => [l.textContent, l.getAttribute('href')])).toEqual([
-      ['Excel (.xlsx)', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&q=Meera&format=xlsx'],
-      ['CSV', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&q=Meera&format=csv'],
-      ['PDF', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&q=Meera&format=pdf'],
+      ['Excel (.xlsx)', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&gst=ALL&q=Meera&format=xlsx'],
+      ['CSV', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&gst=ALL&q=Meera&format=csv'],
+      ['PDF', '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&gst=ALL&q=Meera&format=pdf'],
     ]);
   });
 
@@ -142,7 +143,61 @@ describe('Pharmacy Report', () => {
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search this report' }), 'Ravi');
     expect(mockRouter.replace).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Go' }));
-    expect(mockRouter.replace).toHaveBeenCalledWith('/dashboard/pharmacy/reports?report=sales-register&from=2026-10-01&to=2026-10-31&type=RETURNS&q=Ravi', { scroll: false });
+    expect(mockRouter.replace).toHaveBeenCalledWith('/dashboard/pharmacy/reports?report=sales-register&from=2026-10-01&to=2026-10-31&type=RETURNS&gst=ALL&q=Ravi', { scroll: false });
+  });
+
+  it('counts the More filters, lists the report’s doctors, and applies them with Go', async () => {
+    mockQuery = 'report=sales-register&from=2026-10-01&to=2026-10-31';
+    api.get.mockResolvedValue({ ...salesRegister, filterChoices: { doctor: ['Dr. Asha Rao', 'Dr. Vikram Sen'] } } as any);
+    render(<PharmacyReportWorkspace />);
+    await screen.findByRole('table', { name: 'Sales Register' });
+    const more = screen.getByRole('button', { name: /More filters/ });
+    expect(more).toHaveTextContent(/^More filters$/);
+
+    await userEvent.click(more);
+    const panel = within(screen.getByRole('group', { name: 'More filters' }));
+    expect(panel.getAllByRole('option', { hidden: false }).map((o) => o.textContent)).toEqual([
+      'All sources', 'Prescription bills', 'Counter sales', 'All doctors', 'Dr. Asha Rao', 'Dr. Vikram Sen', 'All bills', 'Discounted only',
+    ]);
+    await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Source' }), 'COUNTER_SALE');
+    await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Doctor' }), 'Dr. Asha Rao');
+    expect(more).toHaveTextContent('More filters2 active');
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Go' }));
+    expect(mockRouter.replace).toHaveBeenCalledWith(
+      '/dashboard/pharmacy/reports?report=sales-register&from=2026-10-01&to=2026-10-31&type=SALES&gst=ALL&source=COUNTER_SALE&doctor=Dr.+Asha+Rao',
+      { scroll: false },
+    );
+  });
+
+  it('keeps an applied doctor in the list when the period has none, and Clear empties the filters', async () => {
+    mockQuery = 'report=sales-register&from=2026-10-01&to=2026-10-31&source=BILL&doctor=Dr.+Gone&discount=DISCOUNTED';
+    api.get.mockResolvedValue({ ...salesRegister, filterChoices: { doctor: [] } } as any);
+    render(<PharmacyReportWorkspace />);
+    await screen.findByRole('table', { name: 'Sales Register' });
+    expect(api.get).toHaveBeenCalledWith('/pharmacy/reports/sales-register', expect.objectContaining({ source: 'BILL', doctor: 'Dr. Gone', discount: 'DISCOUNTED' }));
+    const more = screen.getByRole('button', { name: /More filters/ });
+    expect(more).toHaveTextContent('More filters3 active');
+    await userEvent.click(more);
+    const panel = within(screen.getByRole('group', { name: 'More filters' }));
+    expect(panel.getByRole('combobox', { name: 'Doctor' })).toHaveValue('Dr. Gone');
+
+    await userEvent.click(panel.getByRole('button', { name: 'Clear' }));
+    expect(more).toHaveTextContent(/^More filters$/);
+    await userEvent.click(screen.getByRole('button', { name: 'Go' }));
+    expect(mockRouter.replace).toHaveBeenCalledWith('/dashboard/pharmacy/reports?report=sales-register&from=2026-10-01&to=2026-10-31&type=SALES&gst=ALL', { scroll: false });
+  });
+
+  it('carries the applied filters into Print and Download', async () => {
+    mockQuery = 'report=sales-register&from=2026-10-01&to=2026-10-31&gst=WITH_GST&source=BILL&doctor=Dr.+Asha+Rao&discount=DISCOUNTED';
+    api.get.mockResolvedValue(salesRegister as any);
+    render(<PharmacyReportWorkspace />);
+    await screen.findByRole('table', { name: 'Sales Register' });
+    await userEvent.click(screen.getByRole('button', { name: /Download/ }));
+    expect((await screen.findByRole('menuitem', { name: 'CSV' })).getAttribute('href')).toBe(
+      '/api/pharmacy/reports/sales-register?from=2026-10-01&to=2026-10-31&type=SALES&gst=WITH_GST&source=BILL&doctor=Dr.+Asha+Rao&discount=DISCOUNTED&format=csv',
+    );
   });
 
   it('sorts a column from its heading without touching the totals', async () => {
@@ -169,6 +224,95 @@ describe('Pharmacy Report', () => {
     mockQuery = 'report=nonsense';
     render(<PharmacyReportWorkspace />);
     expect(screen.getByRole('alert')).toHaveTextContent('That report is not available');
+  });
+});
+
+const slab = (rate: number) => [
+  { key: `r${rate}.taxable`, label: 'Base', kind: 'money', group: `${rate}%` },
+  { key: `r${rate}.sgst`, label: 'SGST', kind: 'money', group: `${rate}%` },
+];
+const purchaseBills = {
+  id: 'purchase-bills',
+  title: 'Purchase Bills',
+  period: { startDate: '2026-10-01', endDate: '2026-10-31', timeZone: 'Asia/Kolkata' },
+  headline: { label: 'Total for the period', value: 1180 },
+  tiles: [],
+  notes: [],
+  search: null,
+  sections: [
+    {
+      id: 'purchase-bills',
+      title: 'Purchase Bills',
+      columns: [
+        { key: 'srNo', label: 'Sr No.', kind: 'number', frozen: true },
+        { key: 'billNo', label: 'Bill No.', kind: 'text', frozen: true },
+        { key: 'party', label: 'Distributor', kind: 'text' },
+        ...slab(12),
+        ...slab(28),
+        { key: 'total.amount', label: 'Amount', kind: 'money', group: 'Total' },
+      ],
+      totals: { billNo: 'Total', 'r12.taxable': 1000, 'r12.sgst': 60, 'r28.taxable': 100, 'r28.sgst': 14, 'total.amount': 1248 },
+      rows: [{ key: 'p1', cells: { srNo: 1, billNo: 'SUP-101', party: 'Linae', 'r12.taxable': 1000, 'r12.sgst': 60, 'r28.taxable': 100, 'r28.sgst': 14, 'total.amount': 1248 } }],
+    },
+  ],
+};
+
+describe('Purchase Bills Show columns', () => {
+  const headers = () => within(screen.getByRole('table', { name: 'Purchase Bills' })).getAllByRole('columnheader').map((h) => h.textContent);
+  const totalsCells = () => within(screen.getByTestId('report-totals-row')).getAllByRole('cell').map((c) => c.textContent);
+  const open = async () => {
+    mockQuery = 'report=purchase-bills&from=2026-10-01&to=2026-10-31';
+    api.get.mockResolvedValue(purchaseBills as any);
+    const view = render(<PharmacyReportWorkspace />);
+    await screen.findByRole('table', { name: 'Purchase Bills' });
+    return view;
+  };
+  const toggle = async (name: string) => {
+    await userEvent.click(screen.getByRole('button', { name: /Show columns/ }));
+    await userEvent.click(await screen.findByRole('menuitemcheckbox', { name }));
+  };
+
+  it('hides a GST band with its headings and totals, keeps the menu open, and remembers the choice after a remount', async () => {
+    const view = await open();
+    expect(headers()).toEqual(['12%', '28%', 'Total', 'Sr No.', 'Bill No.', 'Distributor', 'Base, 12%', 'SGST, 12%', 'Base, 28%', 'SGST, 28%', 'Amount, Total']);
+    expect(totalsCells()).toEqual(['', 'Total', '', '1,000.00', '60.00', '100.00', '14.00', '1,248.00']);
+
+    await toggle('28%');
+    expect(screen.getByRole('menuitemcheckbox', { name: '28%' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Distributor' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Bill No.' })).not.toBeInTheDocument();
+    expect(screen.getByText('Print and Download always include every column.')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(headers()).toEqual(['12%', 'Total', 'Sr No.', 'Bill No.', 'Distributor', 'Base, 12%', 'SGST, 12%', 'Amount, Total']);
+    expect(totalsCells()).toEqual(['', 'Total', '', '1,000.00', '60.00', '1,248.00']);
+    expect(screen.getByRole('button', { name: /Show columns/ })).toHaveTextContent('Show columns1 hidden');
+
+    view.unmount();
+    await open();
+    expect(headers()).toEqual(['12%', 'Total', 'Sr No.', 'Bill No.', 'Distributor', 'Base, 12%', 'SGST, 12%', 'Amount, Total']);
+    await userEvent.click(screen.getByRole('button', { name: /Show columns/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Show all columns' }));
+    await userEvent.keyboard('{Escape}');
+    expect(headers()).toContain('28%');
+    expect(totalsCells()).toHaveLength(8);
+    expect(JSON.parse(window.localStorage.getItem('pharmacy-report-hidden-columns:purchase-bills')!)).toEqual([]);
+  });
+
+  it('still shows every column, and lets columns be hidden for the visit, when the browser refuses storage', async () => {
+    const refuse = () => {
+      throw new Error('blocked');
+    };
+    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(refuse);
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation(refuse);
+    try {
+      await open();
+      expect(headers()).toContain('28%');
+      await toggle('28%');
+      await userEvent.keyboard('{Escape}');
+      expect(headers()).not.toContain('28%');
+    } finally {
+      jest.restoreAllMocks();
+    }
   });
 });
 

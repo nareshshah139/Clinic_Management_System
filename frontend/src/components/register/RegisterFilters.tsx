@@ -125,7 +125,7 @@ export function FilterSelect({
   );
 }
 
-export function MoreFilters({ count, children, label = 'More filters' }: { count: number; children: ReactNode; label?: string }) {
+export function MoreFilters({ count, children, label = 'More filters', className }: { count: number; children: ReactNode; label?: string; className?: string }) {
   const { open, setOpen, wrapper, trigger, onKeyDown } = usePopover();
   const panelId = useId();
   return (
@@ -134,7 +134,7 @@ export function MoreFilters({ count, children, label = 'More filters' }: { count
         ref={trigger}
         type="button"
         variant="outline"
-        className="h-10 px-3 text-sm"
+        className={cn('h-10 px-3 text-sm', className)}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}

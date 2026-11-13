@@ -51,6 +51,8 @@ export const nextSort = (current: SortState, column: ReportColumn): SortState =>
       ? { key: column.key, direction: isNumeric(column) ? "asc" : "desc" }
       : null;
 
+const identityColumn = (columns: ReportColumn[]) => columns.find((column) => column.frozen && column.kind === "text");
+
 /** Frozen columns stay on screen while the money columns scroll; each needs a fixed width to stack. */
 export function frozenWidth(column: ReportColumn): number {
   if (column.key === "srNo") return 108;
@@ -68,11 +70,12 @@ export function frozenWidth(column: ReportColumn): number {
  */
 export function frozenOffsets(columns: ReportColumn[], frameWidth = Infinity, share = 0.5): Map<string, number> {
   const offsets = new Map<string, number>();
+  const identity = identityColumn(columns);
   let left = 0;
   for (const column of columns) {
     if (!column.frozen) break;
     const width = frozenWidth(column);
-    const identityShown = [...offsets.keys()].some((key) => columns.find((c) => c.key === key)?.kind === "text");
+    const identityShown = !!identity && offsets.has(identity.key);
     if (identityShown && left + width > frameWidth * share) break;
     offsets.set(column.key, left);
     left += width;
@@ -89,4 +92,23 @@ export function headerBands(columns: ReportColumn[]): { label: string | null; sp
     else bands.push({ label: column.group ?? null, span: 1, first: column });
   }
   return bands;
+}
+
+export type ColumnChoice = { id: string; label: string; keys: string[] };
+
+export function columnChoices(columns: ReportColumn[]): ColumnChoice[] {
+  const identity = identityColumn(columns);
+  return headerBands(columns).flatMap((band) => {
+    if (band.label) {
+      const keys = columns.filter((column) => column.group === band.label).map((column) => column.key);
+      return [{ id: `group:${band.label}`, label: band.label, keys }];
+    }
+    return band.first === identity ? [] : [{ id: `column:${band.first.key}`, label: band.first.label, keys: [band.first.key] }];
+  });
+}
+
+export function visibleColumns(columns: ReportColumn[], hidden: ReadonlySet<string>): ReportColumn[] {
+  if (!hidden.size) return columns;
+  const hiddenKeys = new Set(columnChoices(columns).filter((choice) => hidden.has(choice.id)).flatMap((choice) => choice.keys));
+  return columns.filter((column) => !hiddenKeys.has(column.key));
 }

@@ -56,6 +56,7 @@ export type PharmacyReport = {
   notes: string[];
   scope: { statuses: string[]; draftsExcluded: boolean; dateBasis: string };
   search: string | null;
+  filterChoices?: { doctor: string[] };
 };
 
 export const summable = (column: ReportColumn) =>

@@ -313,10 +313,100 @@ export const salesOfType = (docs: SaleDoc[], type: SalesRegisterType) =>
         : doc.kind !== 'SALES_RETURN',
   );
 
+export type SalesRegisterFilters = {
+  gst: GstFilter;
+  source: 'ALL' | 'BILL' | 'COUNTER_SALE';
+  doctor: string | null;
+  discount: 'ALL' | 'DISCOUNTED';
+};
+
+export const NO_SALES_FILTERS: SalesRegisterFilters = {
+  gst: 'ALL',
+  source: 'ALL',
+  doctor: null,
+  discount: 'ALL',
+};
+
+const doctorKey = (name: string | null) => (name ?? '').trim().toLowerCase();
+
+const SALES_FILTERS: {
+  [K in keyof SalesRegisterFilters]: (
+    doc: SaleDoc,
+    value: SalesRegisterFilters[K],
+  ) => boolean;
+} = {
+  gst: (doc, value) =>
+    value === 'ALL' || (value === 'WITH_GST') === hasGst(doc.lines),
+  source: (doc, value) => value === 'ALL' || doc.kind === value,
+  doctor: (doc, value) => value === null || doctorKey(doc.doctor) === doctorKey(value),
+  discount: (doc, value) => value === 'ALL' || sumLines(doc.lines).discount > 0,
+};
+
+const FILTER_KEYS = Object.keys(
+  NO_SALES_FILTERS,
+) as (keyof SalesRegisterFilters)[];
+
+const accepts = <K extends keyof SalesRegisterFilters>(
+  key: K,
+  doc: SaleDoc,
+  filters: SalesRegisterFilters,
+) => SALES_FILTERS[key](doc, filters[key]);
+
+const matchesFilters = (doc: SaleDoc, filters: SalesRegisterFilters) =>
+  FILTER_KEYS.every((key) => accepts(key, doc, filters));
+
+const FILTER_PHRASES: {
+  [K in keyof SalesRegisterFilters]: (
+    value: SalesRegisterFilters[K],
+  ) => string | null;
+} = {
+  gst: (value) =>
+    value === 'WITH_GST'
+      ? 'bills with GST'
+      : value === 'WITHOUT_GST'
+        ? 'bills without GST'
+        : null,
+  source: (value) =>
+    value === 'BILL'
+      ? 'prescription bills'
+      : value === 'COUNTER_SALE'
+        ? 'counter sales'
+        : null,
+  doctor: (value) => value?.trim() || null,
+  discount: (value) => (value === 'DISCOUNTED' ? 'discounted bills' : null),
+};
+
+export function salesFilterNote(filters: SalesRegisterFilters): string | null {
+  const phrase = <K extends keyof SalesRegisterFilters>(key: K) =>
+    FILTER_PHRASES[key](filters[key]);
+  const phrases = FILTER_KEYS.map((key) => phrase(key)).filter(
+    (text): text is string => !!text,
+  );
+  return phrases.length ? `Showing only: ${phrases.join(', ')}.` : null;
+}
+
+const doctorsOf = (docs: SaleDoc[]) => {
+  const seen = new Map<string, string>();
+  for (const { doctor } of docs) {
+    const key = doctorKey(doctor);
+    if (key && !seen.has(key)) seen.set(key, doctor!.trim());
+  }
+  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, 'en'));
+};
+
 export function salesRegister(
   docs: SaleDoc[],
-  options: { type: SalesRegisterType; search?: string | null },
+  {
+    type,
+    search,
+    ...given
+  }: {
+    type: SalesRegisterType;
+    search?: string | null;
+  } & Partial<SalesRegisterFilters>,
 ) {
+  const filters: SalesRegisterFilters = { ...NO_SALES_FILTERS, ...given };
+  const ofType = salesOfType(docs, type);
   const columns: ReportColumn[] = [
     text('billNo', 'Bill No.', { frozen: true }),
     date('billDate', 'Bill Date'),
@@ -333,8 +423,9 @@ export function salesRegister(
     rupees('igst', 'IGST'),
     rupees('total', 'Total', { help: 'Taxable + CESS + SGST + CGST + IGST.' }),
   ];
-  const rows: ReportRow[] = salesOfType(docs, options.type)
-    .filter((doc) => matchesCustomer(doc, options.search))
+  const rows: ReportRow[] = ofType
+    .filter((doc) => matchesCustomer(doc, search))
+    .filter((doc) => matchesFilters(doc, filters))
     .sort(byDayThenNumber)
     .map((doc) => {
       const sum = sumLines(doc.lines);
@@ -365,7 +456,12 @@ export function salesRegister(
     rows,
     emptyText: 'No bills in this period.',
   });
-  return { section: sec, total: Number(sec.totals!.total) };
+  return {
+    section: sec,
+    total: Number(sec.totals!.total),
+    filterChoices: { doctor: doctorsOf(ofType) },
+    filterNote: salesFilterNote(filters),
+  };
 }
 
 // ---- CR-33a / CR-33c shared slab bands ------------------------------------------------------------

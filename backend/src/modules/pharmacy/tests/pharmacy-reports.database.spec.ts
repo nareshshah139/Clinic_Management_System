@@ -383,6 +383,18 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
     expect(report.headline!.value).toBe(224);
   });
 
+  it('applies the Sales Register filters to the rows, the headline, the note and keeps the doctor choices of the whole period', async () => {
+    const report = await reports.report(
+      'sales-register',
+      q('2026-11-05', '2026-11-05', { source: 'COUNTER_SALE' }),
+      actor,
+    );
+    expect(rowsOf(report).map((r: any) => r.billNo)).toEqual(['CS-1']);
+    expect(report.headline!.value).toBe(112);
+    expect(report.notes[0]).toBe('Showing only: counter sales.');
+    expect(report.filterChoices!.doctor).toEqual(['Dr. Visiting', 'Praneeta Jain']);
+  });
+
   it('builds Purchase Bills and the Purchase Register from stock-committed bills, with supplier returns negative', async () => {
     const bills = await reports.report(
       'purchase-bills',

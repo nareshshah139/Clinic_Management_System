@@ -32,3 +32,8 @@ it('rejects an unknown margin filter value instead of widening the export', asyn
   const errors = await validate(plainToInstance(PharmacyReportQueryDto, { from: '2026-11-01', marginType: 'EVERYTHING', cost: 'CHEAP' }));
   expect(errors.map((e) => e.property).sort()).toEqual(['cost', 'marginType']);
 });
+
+it('rejects an unknown sales register filter value instead of showing every bill', async () => {
+  const errors = await validate(plainToInstance(PharmacyReportQueryDto, { from: '2026-11-01', source: 'ONLINE', discount: 'SOME' }));
+  expect(errors.map((e) => e.property).sort()).toEqual(['discount', 'source']);
+});
