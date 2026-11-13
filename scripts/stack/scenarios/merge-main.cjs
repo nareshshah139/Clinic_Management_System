@@ -157,7 +157,7 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
     {
       const { page, context, seen } = await open("pharmacist", DESKTOP);
       await go(page, "/dashboard/inventory?area=stock&view=list");
-      await page.getByRole("button", { name: "Add batch" }).first().click();
+      await page.getByRole("button", { name: "Add item" }).first().click();
       const dialog = page.getByRole("dialog");
       await dialog.getByLabel("Form *").selectOption("SHAMPOO");
       await dialog.getByLabel("Medicine name *").fill("Ketoconazole");

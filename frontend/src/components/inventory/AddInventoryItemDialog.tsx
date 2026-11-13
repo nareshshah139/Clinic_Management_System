@@ -219,7 +219,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           <DialogHeader>
             <DialogTitle>Sent to doctor for approval</DialogTitle>
             <DialogDescription role="status">
-              Sent to doctor for approval. The item will appear in inventory once approved.
+              Sent to doctor for approval. The item will appear in inventory once approved, with no stock. Add its stock from a purchase bill or opening stock.
             </DialogDescription>
           </DialogHeader>
           <ItemRequestDuplicateWarning duplicates={duplicates} intro={duplicates?.inventory.length ? 'An item with this name is already in inventory; the doctor will see this.' : 'Another request for this item is already waiting; the doctor will see this.'} />
@@ -228,7 +228,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           </DialogFooter>
         </> : <>
         <DialogHeader>
-          <DialogTitle>Add Inventory Item</DialogTitle>
+          <DialogTitle>Add item</DialogTitle>
           <DialogDescription>
             Add a new item to your inventory. Fields marked with * are required.
           </DialogDescription>

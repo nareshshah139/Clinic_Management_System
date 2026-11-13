@@ -4,7 +4,7 @@ import { apiClient } from '@/lib/api';
 
 let role = 'PHARMACIST';
 jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: { role } }) }));
-jest.mock('./AddInventoryItemDialog', () => ({ AddInventoryItemDialog: () => null }));
+jest.mock('./AddInventoryItemDialog', () => ({ AddInventoryItemDialog: ({ open, onSuccess }: { open: boolean; onSuccess: () => void }) => open ? <button onClick={onSuccess}>Finish adding</button> : null }));
 jest.mock('./InventoryItemPage', () => ({ InventoryItemPage: () => null }));
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), post: jest.fn(), submitDrugInventoryChanges: jest.fn() } }));
 
@@ -18,7 +18,7 @@ const rows = [
   batch({}),
   batch({ id: 'i2', name: 'Uprise D3 60000 Cap', productName: 'Cap. Uprise D3 60000', recordedName: 'Uprise D3 60000 Cap', batchNumber: 'CR11-13', currentStock: 5, available: 5, sellingPrice: 76, storageLocation: 'Rack M-1' }),
 ];
-const renderStock = () => render(<WorkspaceStock query={{ missing: 'Strength missing' }} navigate={jest.fn()} capabilities={{}} onTask={jest.fn()} onDocument={jest.fn()} onInvoice={jest.fn()} />);
+const renderStock = (capabilities: Record<string, boolean> = {}) => render(<WorkspaceStock query={{ missing: 'Strength missing' }} navigate={jest.fn()} capabilities={capabilities} onTask={jest.fn()} onDocument={jest.fn()} onInvoice={jest.fn()} />);
 const row = async (product: string) => (await screen.findByRole('button', { name: product })).closest('tr') as HTMLElement;
 
 beforeEach(() => {
@@ -60,4 +60,28 @@ it('offers no row edits to a role that cannot submit them', async () => {
   await row('Cap. Omega 3');
   expect(screen.queryByRole('columnheader', { name: 'Edit' })).toBeNull();
   expect(screen.getByRole('columnheader', { name: 'Location' })).toBeInTheDocument();
+});
+
+it('names the add button for what it does', async () => {
+  renderStock({ itemCreate: true });
+  await row('Cap. Omega 3');
+  expect(screen.getByRole('button', { name: 'Add item' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Add batch' })).toBeNull();
+});
+
+it('says a directly added item has no stock yet', async () => {
+  renderStock({ itemCreate: true });
+  await row('Cap. Omega 3');
+  fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish adding' }));
+  expect(await screen.findByText('Item added with no stock. Add its stock from a purchase bill or opening stock.')).toBeInTheDocument();
+});
+
+it('shows availability in the product cell for phones', async () => {
+  api.get.mockResolvedValue({ rows: [batch({ id: 'i3', name: 'Clobetasol Cream 15g', productName: 'Clobetasol Cream 15g', unit: 'TUBES', available: 20, currentStock: 20, storageLocation: '' })], total: 1, page: 1, totalPages: 1 });
+  renderStock();
+  const line = within(await row('Clobetasol Cream 15g')).getByText(/20 TUBES available/);
+  expect(line).toHaveAttribute('aria-hidden', 'true');
+  expect(line).toHaveClass('md:hidden');
+  expect(line).toHaveTextContent(/^20 TUBES available · .+ · Not assigned$/);
 });
