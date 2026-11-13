@@ -30,7 +30,7 @@ Seed-data caveat that shapes several findings: at the start the Purchase bills r
 | **Steps — scan route** (STORY-084) | 4 to start the read (measured); the story lists **30 steps vs ideal 6** for the rest | suspected beyond the read |
 | **Steps — pay one bill** (`Mark paid`) | **3 vs ideal 3** | measured |
 | **Steps — pay via `Payments & dues`** | 4 interactions + ~1,865 px of scrolling vs ideal 5 | measured |
-| **Decisions** | 10, of which **4 needless** | below |
+| **Decisions** | 13: 5 needed, 4 carried by a default, **4 needless** | below |
 | **Re-entry** | **4** kinds of data the app already holds | below |
 | **Confirmations** | 6, of which **2 guard nothing** (+1 suspected), **1 is a double confirm**, 1 is a phantom | below |
 | **Dead ends** | **4** | below |
@@ -39,10 +39,10 @@ Seed-data caveat that shapes several findings: at the start the Purchase bills r
 **Step breakdown, typed bill (measured).** `Inventory` (1) → `Scan or enter bill` (1) → `Type instead` (1) → Saved supplier (1) → DL No. (1) → Invoice No. (1) → line 1: Product, Pack Size, Stock unit, Batch, Exp. Month, Exp. Year, Paid Qty, Rate, MRP, HSN (10) → `Add Line` (1) → line 2 (10) → `Confirm reviewed values & add stock` (1) = 28. The eight that a better form would not ask for: `Type instead`, DL No., and Pack Size + Stock unit + HSN on each line. Batch, expiry, quantity, rate and MRP are on the paper and nowhere else — those 5 per line are irreducible and earn their place.
 Each product the catalogue does not know adds 4 (cosmetic) to 8 (medicine) interactions; a product typed almost-but-not-exactly adds 3 plus a 2,200 px scroll.
 
-**Decisions (10).** Needed: scan vs type; Bill Type Cash/Credit; product kind for a new product; confirm / choose another / create new on a doubtful match; payment mode. Carried well by a default: Received on (today), Invoice Date (today), payment Date (today), Mode (remembered). **Needless (4):**
+**Decisions (13).** Needed: scan vs type; Bill Type Cash/Credit; product kind for a new product; confirm / choose another / create new on a doubtful match; payment mode. Carried well by a default: Received on (today), Invoice Date (today), payment Date (today), Mode (remembered). **Needless (4):**
 1. "Invoice product kind" *and* "Product kind" — two selects with the same three options in one card ([06](J7-purchase-bill-screens/06-product-not-in-inventory.jpg)).
 2. `Confirm reviewed values & add stock` vs `More options` › `Save & Process` — a second way to post, differing only in an "automatic" label (`PurchaseInvoiceWorkbench.tsx:3712-3717`).
-3. `Retry product check` vs `Refresh Matches` — same function, two names (`:3345` and the matching card).
+3. `Retry product check` vs `Refresh Matches` — both call `refreshMasterMatches()` (`:3345`, `:4755`).
 4. `Resolve line N product` vs `Fix products on this invoice` vs `Choose another product` — three buttons that scroll to the same card ([07](J7-purchase-bill-screens/07-different-products-second-confirm.jpg)).
 
 **Re-entry (4).**
@@ -116,7 +116,7 @@ Above the upload control sit three things no step of STORY-084/085 uses on arriv
 
 ### 7. Doubtful match — [07-different-products-second-confirm.jpg](J7-purchase-bill-screens/07-different-products-second-confirm.jpg)
 - The comparison is good content in the wrong place: it is the same two panels as the matching card, shown a second time, at the top of the page.
-- `Confirm this match` — the action the user came to take — is the only *unstyled* button in a row of outlined ones.
+- `Confirm this match` — the action the user came to take — is the only *unstyled* button in a row of outlined ones (`variant="ghost"`, `:3588`).
 - **Remove**: "Reference: 16dac046-54b1-…" (a UUID with no use to the pharmacist), `Fix products on this invoice`, `Save corrections and check again` (neither resolves this question).
 - Simplest fix: show "Product names differ — confirm anyway?" inline, next to the `Confirm Match` that was pressed.
 
@@ -125,13 +125,13 @@ Three statements on one screen: "Unfinished invoice saved to the server…", red
 
 ### 9. Ready to post — [09-ready-to-post-total-and-bar.jpg](J7-purchase-bill-screens/09-ready-to-post-total-and-bar.jpg)
 - Exactly one primary action, correctly labelled, with its consequence stated above it. No dialog. This part is right.
-- "Check bill total": ten equal tiles and a 50-word paragraph. The number the pharmacist compares with the paper — **Net Payable** — is the same size as "Free stock units". Make Net Payable dominant; fold the stock-unit tiles and the margin explanation into a disclosure.
+- "Check bill total": ten equal tiles and a paragraph of about 50 words. The number the pharmacist compares with the paper — **Net Payable** — is the same size as "Free stock units". Make Net Payable dominant; fold the stock-unit tiles and the margin explanation into a disclosure.
 - **Remove**: `More options` › `Save & Process`.
 - Bar status "Not saved · stock not added" repeats what the button label and guidance line already say.
 
 ### 10. Stock added — [10-stock-added-outcome.jpg](J7-purchase-bill-screens/10-stock-added-outcome.jpg)
 - "Stock added" is stated **eight** times on the page: status pill, "Stock added - saved receipt", stepper "3. Add stock", the notice "Stock added for J7-1001. The saved record confirms the operation completed.", the heading, a badge, the sentence under it, and the bottom bar. One green receipt block is enough.
-- 47 green "Verified" badges, one per field, on a read-only bill — emphasis inflation; a single "Checked and posted by Karthik R., 13 Nov" line carries the same fact.
+- 42 green "Verified" badges, one per field (7 header, 14 per line, 7 reported amounts), on a read-only bill — emphasis inflation; a single "Checked and posted by Karthik R., 13 Nov" line carries the same fact.
 - **Remove here**: `Recover interrupted import`, "Review status guide", the disabled `Add Line`, "Apply GST or discount to selected rows", `Remove line` on a posted bill.
 - **Missing onward action**: nothing leads to the payable. A cash bill has just become "Due"; `Mark paid` and "View in Purchase bills" belong next to `New invoice`.
 - Good: the receipt list links each batch and states units added.
@@ -145,8 +145,8 @@ Three statements on one screen: "Unfinished invoice saved to the server…", red
 - Already minimal: title carries amount and payee, Mode and Date are prefilled, the reference is optional, the submit button repeats the amount, and the row then shows "Paid · Undo". Two clicks. Nothing to remove.
 
 ### 13. Posted bill › Invoice history and documents — [13-posted-bill-history-and-documents.jpg](J7-purchase-bill-screens/13-posted-bill-history-and-documents.jpg)
-- Ten equal outline buttons in three rows; the two that start a correction (`Correct posted purchase`, `Return to supplier`) lead to the same place (suspected, per STORY-088) and are not distinguished from `Logs` or `Print QR`.
-- The section is the last collapsed disclosure of a ~4,000 px page, yet it is the only route to fixing a posted mistake. The sentence under the heading at the top says instead "To fix a saved quantity, price or product detail, open the batch below" — a different, stock-only route (both texts seen live).
+- Ten equal outline buttons in three rows, plus `Add supporting original`; the two that start a correction (`Correct posted purchase`, `Return to supplier`) lead to the same place (suspected, per STORY-088) and are not distinguished from `Logs` or `Print QR`.
+- The section is the last collapsed disclosure of a ~3,900 px page, yet it is the only route to fixing a posted mistake. The sentence under the heading at the top says instead "To fix a saved quantity, price or product detail, open the batch below" — a different, stock-only route (both texts seen live).
 - The sticky `Back to list` strip overlaps the content beneath it (top of the screenshot).
 
 ### 14. Payments & dues — [14-payments-and-dues.jpg](J7-purchase-bill-screens/14-payments-and-dues.jpg)
