@@ -278,6 +278,46 @@ async function tableData(page, name) {
       await shot(page, "purchase-bills-scrolled-1440");
     });
 
+    await check("Purchase Bills Show columns: hiding the 28% band removes it from the screen and survives a reload, while the Excel file keeps every column", async () => {
+      await page.goto(`${reports}?report=purchase-bills`, { waitUntil: "networkidle" });
+      const table = page.getByRole("table", { name: "Purchase Bills" });
+      const full = await tableData(page, "Purchase Bills");
+      const bandsOf = () => table.locator("thead tr").first().locator("th[scope=colgroup]").allInnerTexts();
+      assert.ok((await bandsOf()).includes("28%"));
+      await page.getByRole("button", { name: "Show columns" }).click();
+      await page.getByRole("menuitemcheckbox", { name: "28%" }).click();
+      assert.equal(await page.getByRole("menuitemcheckbox", { name: "28%" }).getAttribute("aria-checked"), "false");
+      await page.getByRole("menuitemcheckbox", { name: "Distributor" }).waitFor();
+      assert.equal(await page.getByRole("menuitemcheckbox", { name: "Bill No." }).count(), 0, "the bill number cannot be hidden");
+      await shot(page, "purchase-bills-show-columns-1440");
+      await page.keyboard.press("Escape");
+      const hidden = await tableData(page, "Purchase Bills");
+      assert.deepEqual(await bandsOf(), ["CESS", "0%", "5%", "12%", "18%", "40%", "Total"]);
+      assert.equal(hidden.labels.length, full.labels.length - 4, "28% has four columns");
+      assert.equal(hidden.totals.length, hidden.labels.length);
+      near(num(hidden.totals.at(-1)), expected.monthPurchase.amount, "amount total still adds up");
+      assert.match(await page.getByRole("button", { name: /Show columns/ }).innerText(), /^Show columns\s+1\s+hidden$/);
+
+      await page.reload({ waitUntil: "networkidle" });
+      await table.waitFor();
+      assert.ok(!(await bandsOf()).includes("28%"), "still hidden after a reload");
+
+      await page.getByRole("button", { name: "Download" }).click();
+      const [file] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: "Excel (.xlsx)" }).click()]);
+      const target = path.join(out, `show-columns-${file.suggestedFilename()}`);
+      await file.saveAs(target);
+      const rows = XLSX.utils.sheet_to_json(XLSX.readFile(target).Sheets["Purchase Bills"], { header: 1, blankrows: false });
+      const header = rows.find((r) => r.includes("Bill No."));
+      assert.equal(header.length, full.labels.length, "the file has every column the full screen had");
+      assert.ok(rows.some((r) => r.includes("28%") || r.some((c) => String(c).includes("28%"))), "the 28% band is in the file");
+
+      await page.getByRole("button", { name: "Show columns" }).click();
+      await page.getByRole("menuitem", { name: "Show all columns" }).click();
+      await page.keyboard.press("Escape");
+      await table.locator("thead th[scope=colgroup]", { hasText: "28%" }).waitFor();
+      assert.equal((await tableData(page, "Purchase Bills")).labels.length, full.labels.length);
+    });
+
     await check("GSTR-3B: output tax and ITC from the seeded month, unregistered supplier not claimed", async () => {
       await page.goto(`${reports}?report=gstr-3b`, { waitUntil: "networkidle" });
       const outward = await tableData(page, "GSTR-3B: 3.1 Outward supplies and 4 Eligible ITC");
@@ -418,6 +458,28 @@ async function tableData(page, name) {
         assert.ok(overflow <= 0, `${name} overflows by ${overflow}px`);
         await shot(phone.page, `${name}-390`);
       }
+      await phone.context.close();
+    });
+
+    await check("Show columns on a 390 px phone opens inside the screen and works by keyboard", async () => {
+      const phone = await open("pharmacist", { width: 390, height: 844 });
+      await phone.page.goto(`${reports}?report=purchase-bills`, { waitUntil: "networkidle" });
+      await phone.page.getByRole("table", { name: "Purchase Bills" }).waitFor();
+      const button = phone.page.getByRole("button", { name: "Show columns" });
+      await button.focus();
+      await phone.page.keyboard.press("Enter");
+      const menu = phone.page.getByRole("menu");
+      await menu.waitFor();
+      const box = await menu.boundingBox();
+      assert.ok(box.x >= 0 && box.x + box.width <= 390, `menu stays on screen (${box.x}, ${box.width})`);
+      await phone.page.waitForTimeout(500);
+      await shot(phone.page, "purchase-bills-show-columns-390");
+      await phone.page.keyboard.press("ArrowDown");
+      await phone.page.keyboard.press("Space");
+      assert.match(await phone.page.locator("button", { hasText: "Show columns" }).innerText(), /1\s+hidden/);
+      assert.equal(await phone.page.getByRole("menu").count(), 1, "the menu stays open while toggling");
+      await phone.page.keyboard.press("Escape");
+      assert.ok(await phone.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth) <= 0, "no sideways scroll");
       await phone.context.close();
     });
 

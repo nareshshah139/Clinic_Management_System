@@ -83,6 +83,7 @@ const counted = (sequence: number, cash: number, by = 'Asha Rao') => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockQuery = '';
+  window.localStorage.clear();
 });
 
 // jsdom applies no CSS, so the phone cards and the desk table are both present; scope to the table.
@@ -223,6 +224,95 @@ describe('Pharmacy Report', () => {
     mockQuery = 'report=nonsense';
     render(<PharmacyReportWorkspace />);
     expect(screen.getByRole('alert')).toHaveTextContent('That report is not available');
+  });
+});
+
+const slab = (rate: number) => [
+  { key: `r${rate}.taxable`, label: 'Base', kind: 'money', group: `${rate}%` },
+  { key: `r${rate}.sgst`, label: 'SGST', kind: 'money', group: `${rate}%` },
+];
+const purchaseBills = {
+  id: 'purchase-bills',
+  title: 'Purchase Bills',
+  period: { startDate: '2026-10-01', endDate: '2026-10-31', timeZone: 'Asia/Kolkata' },
+  headline: { label: 'Total for the period', value: 1180 },
+  tiles: [],
+  notes: [],
+  search: null,
+  sections: [
+    {
+      id: 'purchase-bills',
+      title: 'Purchase Bills',
+      columns: [
+        { key: 'srNo', label: 'Sr No.', kind: 'number', frozen: true },
+        { key: 'billNo', label: 'Bill No.', kind: 'text', frozen: true },
+        { key: 'party', label: 'Distributor', kind: 'text' },
+        ...slab(12),
+        ...slab(28),
+        { key: 'total.amount', label: 'Amount', kind: 'money', group: 'Total' },
+      ],
+      totals: { billNo: 'Total', 'r12.taxable': 1000, 'r12.sgst': 60, 'r28.taxable': 100, 'r28.sgst': 14, 'total.amount': 1248 },
+      rows: [{ key: 'p1', cells: { srNo: 1, billNo: 'SUP-101', party: 'Linae', 'r12.taxable': 1000, 'r12.sgst': 60, 'r28.taxable': 100, 'r28.sgst': 14, 'total.amount': 1248 } }],
+    },
+  ],
+};
+
+describe('Purchase Bills Show columns', () => {
+  const headers = () => within(screen.getByRole('table', { name: 'Purchase Bills' })).getAllByRole('columnheader').map((h) => h.textContent);
+  const totalsCells = () => within(screen.getByTestId('report-totals-row')).getAllByRole('cell').map((c) => c.textContent);
+  const open = async () => {
+    mockQuery = 'report=purchase-bills&from=2026-10-01&to=2026-10-31';
+    api.get.mockResolvedValue(purchaseBills as any);
+    const view = render(<PharmacyReportWorkspace />);
+    await screen.findByRole('table', { name: 'Purchase Bills' });
+    return view;
+  };
+  const toggle = async (name: string) => {
+    await userEvent.click(screen.getByRole('button', { name: /Show columns/ }));
+    await userEvent.click(await screen.findByRole('menuitemcheckbox', { name }));
+  };
+
+  it('hides a GST band with its headings and totals, keeps the menu open, and remembers the choice after a remount', async () => {
+    const view = await open();
+    expect(headers()).toEqual(['12%', '28%', 'Total', 'Sr No.', 'Bill No.', 'Distributor', 'Base, 12%', 'SGST, 12%', 'Base, 28%', 'SGST, 28%', 'Amount, Total']);
+    expect(totalsCells()).toEqual(['', 'Total', '', '1,000.00', '60.00', '100.00', '14.00', '1,248.00']);
+
+    await toggle('28%');
+    expect(screen.getByRole('menuitemcheckbox', { name: '28%' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Distributor' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Bill No.' })).not.toBeInTheDocument();
+    expect(screen.getByText('Print and Download always include every column.')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(headers()).toEqual(['12%', 'Total', 'Sr No.', 'Bill No.', 'Distributor', 'Base, 12%', 'SGST, 12%', 'Amount, Total']);
+    expect(totalsCells()).toEqual(['', 'Total', '', '1,000.00', '60.00', '1,248.00']);
+    expect(screen.getByRole('button', { name: /Show columns/ })).toHaveTextContent('Show columns1 hidden');
+
+    view.unmount();
+    await open();
+    expect(headers()).toEqual(['12%', 'Total', 'Sr No.', 'Bill No.', 'Distributor', 'Base, 12%', 'SGST, 12%', 'Amount, Total']);
+    await userEvent.click(screen.getByRole('button', { name: /Show columns/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Show all columns' }));
+    await userEvent.keyboard('{Escape}');
+    expect(headers()).toContain('28%');
+    expect(totalsCells()).toHaveLength(8);
+    expect(JSON.parse(window.localStorage.getItem('pharmacy-report-hidden-columns:purchase-bills')!)).toEqual([]);
+  });
+
+  it('still shows every column, and lets columns be hidden for the visit, when the browser refuses storage', async () => {
+    const refuse = () => {
+      throw new Error('blocked');
+    };
+    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(refuse);
+    jest.spyOn(Storage.prototype, 'setItem').mockImplementation(refuse);
+    try {
+      await open();
+      expect(headers()).toContain('28%');
+      await toggle('28%');
+      await userEvent.keyboard('{Escape}');
+      expect(headers()).not.toContain('28%');
+    } finally {
+      jest.restoreAllMocks();
+    }
   });
 });
 

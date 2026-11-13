@@ -36,6 +36,8 @@ export type ReportEntry = {
   defaultType?: string;
   gstFilter?: boolean;
   moreFilters?: MoreFilter[];
+  /** Offers "Show columns": the slab tables are wide and a screen rarely needs every band. */
+  columnChooser?: boolean;
   searchLabel?: string;
   windows?: Option[];
   compositionRate?: boolean;
@@ -65,7 +67,7 @@ const SALES_REGISTER_FILTERS: MoreFilter[] = [
 export const REPORTS: ReportEntry[] = [
   { id: "purchase-register", title: "Purchase Register", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", searchLabel: "Distributor, bill no. or GSTIN",
     about: "Every supplier bill posted to stock, one row each, with taxable value, GST and the bill amount.", keywords: ["purchase", "supplier", "distributor", "inward", "gst"] },
-  { id: "purchase-bills", title: "Purchase Bills", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", types: SALES_PURCHASE, defaultType: "PURCHASE", gstFilter: true, searchLabel: "Distributor, bill no. or GSTIN",
+  { id: "purchase-bills", title: "Purchase Bills", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", types: SALES_PURCHASE, defaultType: "PURCHASE", gstFilter: true, columnChooser: true, searchLabel: "Distributor, bill no. or GSTIN",
     about: "Supplier bills split across GST slabs (0, 5, 12, 18, 28, 40%), each with Base, SGST, CGST and IGST.", keywords: ["purchase", "slab", "gst", "itc", "bills"] },
   { id: "sales-register", title: "Sales Register", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", common: true, searchLabel: "Customer, bill no. or mobile", gstFilter: true, moreFilters: SALES_REGISTER_FILTERS,
     types: [
@@ -75,7 +77,7 @@ export const REPORTS: ReportEntry[] = [
     ],
     defaultType: "SALES",
     about: "Every pharmacy bill and counter sale with Gross, Discount, Taxable, GST and Total. Search a patient to read their month.", keywords: ["sales", "bills", "outward", "gst", "customer"] },
-  { id: "sales-bills", title: "Sales Bills", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", types: SALES_PURCHASE, defaultType: "SALES", gstFilter: true, searchLabel: "Customer, bill no. or mobile",
+  { id: "sales-bills", title: "Sales Bills", category: "GST Reports", view: "table", period: "range", defaultPeriod: "last-month", types: SALES_PURCHASE, defaultType: "SALES", gstFilter: true, columnChooser: true, searchLabel: "Customer, bill no. or mobile",
     about: "Pharmacy bills split across GST slabs, the sales side of Purchase Bills.", keywords: ["sales", "slab", "gst", "outward"] },
   { id: "day-wise-summary", title: "Day wise Summary", category: "GST Reports", view: "day-wise", period: "range", common: true,
     about: "One row per day with the bill-number range and the GST slab split; gaps in the numbering stand out.", keywords: ["daily", "day", "summary", "slab", "gst", "bill range"] },

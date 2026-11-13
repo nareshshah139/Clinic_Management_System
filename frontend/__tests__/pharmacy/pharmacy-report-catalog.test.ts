@@ -15,7 +15,7 @@ import {
   reportHref,
   searchReports,
 } from '@/components/pharmacy/reports/report-catalog';
-import { formatCell, frozenOffsets, headerBands, nextSort, sortRows } from '@/components/pharmacy/reports/report-format';
+import { columnChoices, formatCell, frozenOffsets, headerBands, nextSort, sortRows, visibleColumns } from '@/components/pharmacy/reports/report-format';
 import { countPayload, draftChanged, initialDraft, parseAmount, previewCount, statusMessage } from '@/components/pharmacy/reports/collection-model';
 import type { DailyCollection, ReportColumn, ReportRow } from '@/components/pharmacy/reports/report-types';
 
@@ -176,6 +176,32 @@ describe('table formatting and sorting', () => {
     const withSrNo: ReportColumn[] = [{ key: 'srNo', label: 'Sr No.', kind: 'number', frozen: true }, ...columns];
     expect([...frozenOffsets(withSrNo, 390)].map(([key]) => key)).toEqual(['srNo', 'billNo']);
     expect(headerBands(columns).map((b) => [b.label, b.span])).toEqual([[null, 1], [null, 1], ['5%', 2], ['12%', 1]]);
+  });
+});
+
+describe('column choices', () => {
+  const columns: ReportColumn[] = [
+    { key: 'srNo', label: 'Sr No.', kind: 'number', frozen: true },
+    { key: 'billNo', label: 'Bill No.', kind: 'text', frozen: true },
+    { key: 'party', label: 'Distributor', kind: 'text' },
+    { key: 'r5.taxable', label: 'Base', kind: 'money', group: '5%' },
+    { key: 'r5.sgst', label: 'SGST', kind: 'money', group: '5%' },
+    { key: 'r28.taxable', label: 'Base', kind: 'money', group: '28%' },
+    { key: 'total.amount', label: 'Amount', kind: 'money', group: 'Total' },
+  ];
+  const keys = (list: ReportColumn[]) => list.map((c) => c.key);
+
+  it('offers each band and each ungrouped column once, and never the bill number', () => {
+    expect(columnChoices(columns).map((c) => [c.label, c.keys])).toEqual([
+      ['Sr No.', ['srNo']], ['Distributor', ['party']], ['5%', ['r5.taxable', 'r5.sgst']], ['28%', ['r28.taxable']], ['Total', ['total.amount']],
+    ]);
+  });
+
+  it('drops a hidden band whole, ignores ids it does not know, and keeps the bill number even if asked to hide it', () => {
+    const id = (label: string) => columnChoices(columns).find((c) => c.label === label)!.id;
+    expect(keys(visibleColumns(columns, new Set([id('5%'), id('Sr No.')])))).toEqual(['billNo', 'party', 'r28.taxable', 'total.amount']);
+    expect(visibleColumns(columns, new Set(['group:18%', 'column:billNo']))).toEqual(columns);
+    expect(visibleColumns(columns, new Set())).toBe(columns);
   });
 });
 

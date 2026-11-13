@@ -90,3 +90,27 @@ export function headerBands(columns: ReportColumn[]): { label: string | null; sp
   }
   return bands;
 }
+
+export type ColumnChoice = { id: string; label: string; keys: string[] };
+
+/** The column that names the row (Bill No.) and so can never be hidden: the first frozen text column, as in `frozenOffsets`. */
+const identityColumn = (columns: ReportColumn[]) => columns.find((column) => column.frozen && column.kind === "text");
+
+/** What a person can show or hide: one GST band, or one ungrouped column. The identity column is not offered. */
+export function columnChoices(columns: ReportColumn[]): ColumnChoice[] {
+  const identity = identityColumn(columns);
+  return headerBands(columns).flatMap((band) => {
+    if (band.label) {
+      const keys = columns.filter((column) => column.group === band.label).map((column) => column.key);
+      return [{ id: `group:${band.label}`, label: band.label, keys }];
+    }
+    return band.first === identity ? [] : [{ id: `column:${band.first.key}`, label: band.first.label, keys: [band.first.key] }];
+  });
+}
+
+/** Ids that match no choice, such as a band that is gone from this period, hide nothing. */
+export function visibleColumns(columns: ReportColumn[], hidden: ReadonlySet<string>): ReportColumn[] {
+  if (!hidden.size) return columns;
+  const hiddenKeys = new Set(columnChoices(columns).filter((choice) => hidden.has(choice.id)).flatMap((choice) => choice.keys));
+  return columns.filter((column) => !hiddenKeys.has(column.key));
+}
