@@ -47,10 +47,10 @@ async function inViewport(page, locator, label) {
   // Staff: stock list, add form, confirmation, my requests
   await as("reception@clinic.test");
   await page.goto(`${BASE}/dashboard/inventory?area=stock&view=list`);
-  await page.getByRole("button", { name: "Add batch" }).waitFor({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Add item" }).waitFor({ timeout: 60_000 });
   await layout(page, "01-staff-stock-list");
-  await inViewport(page, page.getByRole("button", { name: "Add batch" }), "Add batch");
-  await page.getByRole("button", { name: "Add batch" }).click();
+  await inViewport(page, page.getByRole("button", { name: "Add item" }), "Add item");
+  await page.getByRole("button", { name: "Add item" }).click();
   const dlg = page.getByRole("dialog");
   await dlg.locator("#name").fill(name);
   await dlg.locator("#costPrice").fill("20");
@@ -71,7 +71,7 @@ async function inViewport(page, locator, label) {
   // Doctor: task select label, New items tab, card, reject dialog
   await as("praneeta@clinic.test");
   await page.goto(`${BASE}/dashboard/inventory?area=stock&view=list`);
-  await page.getByRole("button", { name: "Add batch" }).waitFor({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Add item" }).waitFor({ timeout: 60_000 });
   const opt = await page.getByLabel("Inventory task", { exact: true }).locator('option[value="approvals"]').textContent();
   console.log(JSON.stringify({ phoneTaskOption: opt }));
   await layout(page, "05-doctor-stock-list");

@@ -251,7 +251,7 @@ const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis"
     const addDialog = async (page) => {
       await stockList(page, {});
       await page.getByRole("button", { name: "Add item" }).click();
-      await page.getByRole("heading", { name: "Add Inventory Item" }).waitFor();
+      await page.getByRole("heading", { name: "Add item" }).waitFor();
       await page.getByLabel("Cost Price (₹) *").fill("12");
       await page.getByLabel("Selling Price (₹) *").fill("20");
     };
@@ -324,7 +324,7 @@ const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis"
       await page.locator("#medicine-strength").fill("15 MG / 5 ML");
       check("admin-1280 the syrup strength is shown as the clinic writes it", await preview(page), "Syp. Ambrodil 15mg/5ml");
       await submit(page);
-      await page.getByRole("heading", { name: "Add Inventory Item" }).waitFor({ state: "detached" });
+      await page.getByRole("heading", { name: "Add item" }).waitFor({ state: "detached" });
       const syrup = await db.inventoryItem.findFirst({ where: { branchId, brandName: "Ambrodil" } });
       check("admin-1280 the syrup is created directly with its fields", syrup && [syrup.name, syrup.form, syrup.strength], ["Syp. Ambrodil 15mg/5ml", "SYRUP", "15mg/5ml"]);
       check("admin-1280 add item: no console error or refused call", [seen.errors, seen.refused], [[], []]);
@@ -341,7 +341,7 @@ const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis"
       check("admin-390 pressing mcg builds Tab. Eltroxin 25 mcg", await preview(page), "Tab. Eltroxin 25 mcg");
       await shot(page, "admin-390-06b-mcg-chosen");
       await submit(page);
-      await page.getByRole("heading", { name: "Add Inventory Item" }).waitFor({ state: "detached" });
+      await page.getByRole("heading", { name: "Add item" }).waitFor({ state: "detached" });
       const eltroxin = await db.inventoryItem.findFirst({ where: { branchId, brandName: "Eltroxin" } });
       check("admin-390 Eltroxin is saved as 25 mcg", eltroxin && [eltroxin.name, eltroxin.strength], ["Tab. Eltroxin 25 mcg", "25 mcg"]);
       await addDialog(page);
@@ -350,7 +350,7 @@ const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis"
       if ((await overflow(page)) > 0) check("admin-390 add dialog: no sideways page scroll", await overflow(page), 0);
       await shot(page, "admin-390-07-solution-preview");
       await submit(page);
-      await page.getByRole("heading", { name: "Add Inventory Item" }).waitFor({ state: "detached" });
+      await page.getByRole("heading", { name: "Add item" }).waitFor({ state: "detached" });
       check("admin-390 the solution is created", (await db.inventoryItem.findFirst({ where: { branchId, brandName: "Protar-K scalp" } }))?.name, "Protar-K scalp solution");
       check("admin-390 add item: no console error or refused call", [seen.errors, seen.refused], [[], []]);
       await context.close();

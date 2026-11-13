@@ -132,7 +132,7 @@ const stockRow = (ctx, name) => ctx.page.locator("tbody").getByRole("button", { 
 
 async function openStock(ctx) {
   await ctx.page.goto(stockUrl(ctx));
-  await ctx.page.getByRole("button", { name: "Add batch" }).waitFor({ timeout: 60_000 });
+  await ctx.page.getByRole("button", { name: "Add item" }).waitFor({ timeout: 60_000 });
 }
 
 async function openApprovals(ctx) {
@@ -299,8 +299,8 @@ const driver = {
 
   actions: {
     openAdd: async (ctx) => {
-      await ctx.page.getByRole("button", { name: "Add batch" }).click();
-      await ctx.page.getByRole("dialog").getByRole("heading", { name: "Add Inventory Item" }).waitFor();
+      await ctx.page.getByRole("button", { name: "Add item" }).click();
+      await ctx.page.getByRole("dialog").getByRole("heading", { name: "Add item" }).waitFor();
     },
     submitDuplicateSku: async (ctx) => {
       ctx.vars.pendingBefore = pendingCount();
@@ -380,7 +380,7 @@ const driver = {
     pharmacistSubmits: async (ctx) => {
       await as(ctx, "pharmacist");
       await openStock(ctx);
-      await ctx.page.getByRole("button", { name: "Add batch" }).click();
+      await ctx.page.getByRole("button", { name: "Add item" }).click();
       await fillAddForm(ctx.page, { name: ctx.vars.name, costPrice: "8", sellingPrice: "9", sku: ctx.vars.sku });
       await ctx.page.getByRole("button", { name: "Add Item" }).click();
       await ctx.page.getByRole("dialog").getByRole("heading", { name: "Sent to doctor for approval" }).waitFor({ timeout: 15_000 }).catch(() => {});
@@ -389,7 +389,7 @@ const driver = {
       ctx.vars.pendingBefore = pendingCount();
       await as(ctx, "doctor");
       await openStock(ctx);
-      await ctx.page.getByRole("button", { name: "Add batch" }).click();
+      await ctx.page.getByRole("button", { name: "Add item" }).click();
       await fillAddForm(ctx.page, { name: ctx.vars.name, costPrice: "8", sellingPrice: "9", sku: ctx.vars.sku });
       await ctx.page.getByRole("button", { name: "Add Item" }).click();
       await ctx.page.getByRole("dialog").waitFor({ state: "detached", timeout: 15_000 }).catch(() => {});
@@ -465,7 +465,7 @@ const driver = {
 
   checks: {
     StaffStock: async (ctx, check) => {
-      check(await ctx.page.getByRole("button", { name: "Add batch" }).isVisible(), "staff sees Add batch");
+      check(await ctx.page.getByRole("button", { name: "Add item" }).isVisible(), "staff sees Add item");
       check((await stockRow(ctx, ctx.vars.name).count()) === 0, "stock search has no row for the new item");
       check(itemCount(ctx.vars.name) === 0, "DB: 0 inventory items with this name");
       check(requestRows(ctx.vars.name).length === 0, "DB: no request for this name yet");
@@ -473,12 +473,12 @@ const driver = {
     },
     StaffAddForm: async (ctx, check) => {
       const d = ctx.page.getByRole("dialog");
-      check(await d.getByRole("heading", { name: "Add Inventory Item" }).isVisible(), "Add Inventory Item dialog open");
+      check(await d.getByRole("heading", { name: "Add item" }).isVisible(), "Add item dialog open");
       check((await d.locator("#name").inputValue()) === "", "item name empty");
     },
     StaffDuplicateSku: async (ctx, check) => {
       const d = ctx.page.getByRole("dialog");
-      check(await d.getByRole("heading", { name: "Add Inventory Item" }).isVisible(), "form stays open (not sent for approval)");
+      check(await d.getByRole("heading", { name: "Add item" }).isVisible(), "form stays open (not sent for approval)");
       const msg = await until(async () => (await d.getByText(/SKU already exists/i).count()) > 0);
       check(msg, "dialog says the SKU already exists");
       check((await d.locator("#name").inputValue()) === ctx.vars.name, "typed values kept for correction");
