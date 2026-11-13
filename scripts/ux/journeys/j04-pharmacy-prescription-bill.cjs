@@ -22,7 +22,6 @@ module.exports = journey(
     ui.decide("Payment method", true);
     const method = page.locator("label", { hasText: "Payment Method" }).locator("xpath=..").getByRole("combobox");
     await ui.click(method, "Bill: Payment Method");
-    await ui.screen("payment-options");
     await ui.click(page.locator("[role=option]", { hasText: /^UPI$/ }), "Bill: Payment Method, choose UPI");
     await ui.click(page.getByRole("button", { name: /Print Preview/ }), "Bill: Print Preview");
     await page.getByRole("button", { name: "Confirm & Print" }).waitFor();
@@ -30,7 +29,7 @@ module.exports = journey(
     await ui.click(page.getByRole("button", { name: "Confirm & Print" }), "Preview: Confirm & Print");
     await page.getByRole("button", { name: "Invoice Confirmed" }).waitFor();
     await ui.screen("confirmed-preview");
-    await ui.click(page.getByRole("button", { name: "Close" }).last(), "Preview: Close");
+    await ui.click(page.getByRole("button", { name: "Print", exact: true }).locator("xpath=preceding-sibling::button"), "Preview: Close");
     await ui.screen("bill-confirmed");
 
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
