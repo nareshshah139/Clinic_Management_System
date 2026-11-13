@@ -116,10 +116,10 @@ The `Accept / Sub / Edit / NA` buttons sit at x≈1225, underneath the Pick + Pa
 |---|---|---|
 | 1280 | cut off | 0 px |
 | 1366 | cut off | 28 px |
-| 1440 | cut off | ~110 px (one row) |
+| 1440 | cut off | 89 px (one row) |
 | 1536 | cut off | 112 px |
 | 1680 | visible | 150 px |
-| 1800+ | visible | all rows |
+| 1800+ | visible | all rows (189 px for a two-line prescription) |
 
 So on the most common laptop screens the cockpit's one job cannot be done with a mouse. Screenshot 03 shows the
 screen as designed, at 1920.
@@ -288,7 +288,7 @@ Happy path: **4 clicks** (Counter, Confirm, Next — plus one to pick a patient)
 | 6 | One place for line decisions. Either carry `Sub` / `Edit` / `NA` + reason from the dispense task into the bill, or (simpler) delete those buttons and record the review from the bill's own `Substitute` / remove / quantity edits | M–L | `PharmacyCounterCockpit.tsx` :1070–1075; `PharmacyInvoiceBuilderFixed.tsx` (prescription load, :599–640) |
 | 7 | Rename `Print Preview` to `Review & confirm`; in the dialog one primary `Confirm & collect ₹… (Cash)`, with "without printing" as a quiet option; show the payment mode on the draft and on the confirmed bill | S | `PharmacyInvoiceBuilderFixed.tsx` :3034, :3148, :3173, :3267 |
 | 8 | After confirming, replace the form with a finished-bill state ("Paid ₹… · Cash", `Print`, `Next prescription` → queue); retire the amber notice | M | `PharmacyInvoiceBuilderFixed.tsx` :2186–2191; `sales/bill/page.tsx` :164 |
-| 9 | Quantity in packs with the unit shown ("3 strips = 30 capsules"); flag a line whose quantity looks like a dose count | M | `PharmacyInvoiceBuilderFixed.tsx` :622; `backend/src/modules/pharmacy/pharmacy-billing-quantity.ts` |
+| 9 | Quantity in packs with the unit shown ("3 strips = 30 capsules"); flag a line whose quantity looks like a dose count | M | `PharmacyInvoiceBuilderFixed.tsx` :621; `backend/src/modules/pharmacy/pharmacy-billing-quantity.ts` |
 | 10 | Collapse "Prescription directions" and "Billing Information" on prescription bills; keep Total + confirm button in view | S | `PharmacyInvoiceBuilderFixed.tsx` :2819, :2975 |
 | 11 | Demote the cockpit's status rail, checklist tiles and Scan next card; keep one status badge and the shelf/batch facts on the line | S | `PharmacyCounterCockpit.tsx` :878, :1114–1176, :1363 |
 | 12 | Desk: put "N prescriptions waiting" on the `Pharmacy Counter` tile; make `New sale` say "Walk-in sale" | S | `pharmacy-workspace.tsx` :331–345 |
@@ -357,11 +357,11 @@ before stock and money move; the stock warnings on bill lines.
   [measured]. The mechanism is right; only its timing (at the till) is wrong.
 - **Link dialog**: prefilled search, one choice, one confirm.
 - **Commit**: one click creates the bill, issues the number, deducts stock (60 → 57 strips seen in the queue
-  table) and records the payment; the Sales register shows the row at once with a Cash/UPI badge [measured].
+  table) and records the payment; the Sales register shows the row at once with a Cash badge [measured].
 - **Payment method**: one select, four options, sensible default.
 - **Stock warnings on bill lines** ("Insufficient stock: 6 available", "No match") and the refusal to confirm an
   unmatched line — clear, in the right place, and worth their step.
-- **`Substitute`** keeps the prescribed quantity and directions and says so.
+- **`Substitute`** states what will happen before the pharmacist picks: "The prescribed quantity will be kept."
 - **"Changes here do not alter the doctor's prescription."** — one sentence that answers a real worry.
 - **`Start a new invoice`** on a bill page that already lists the queue is a tight next-patient loop
   (`Load` → confirm → `Start a new invoice`).
@@ -371,7 +371,7 @@ before stock and money move; the stock warnings on bill lines.
 
 ## Functional bugs tripped over (not verified further)
 
-- Cockpit review table: Action column clipped and rows squeezed to 0–112 px on 1280–1536 px wide screens;
+- Cockpit review table: Action column clipped and rows squeezed to 0–112 px high on 1280–1536 px wide screens (900 px tall);
   `Accept / Sub / Edit / NA` unreachable by mouse (`PharmacyCounterCockpit.tsx:609`, `:980`, `:1025`).
 - Cockpit patient strip: patient name collapses to 0 px width and the status badge wraps one letter per line at
   1440 (`PharmacyCounterCockpit.tsx:859`).
