@@ -66,7 +66,11 @@ export default function PatientPicker({ selectedPatientId, selectedLabel, onSele
 
   useEffect(() => {
     if (!open) return;
-    if (loadedFor.current === query) return;
+    if (loadedFor.current === query) {
+      // The rows on screen already belong to this text; an abandoned newer search must not leave "Searching…" up.
+      setLoading(false);
+      return;
+    }
     const current = ++generation.current;
     setLoading(true);
     const timer = setTimeout(async () => {

@@ -85,3 +85,15 @@ it('does not choose anything on Enter with several results and no highlight', as
   fireEvent.keyDown(box, { key: 'Enter' });
   expect(onSelect).not.toHaveBeenCalled();
 });
+
+it('shows the rows again when the text returns to a search that already loaded', async () => {
+  render(<Harness />);
+  const box = screen.getByRole('combobox');
+  fireEvent.change(box, { target: { value: 'asha' } });
+  await screen.findAllByRole('option');
+  // Type past the loaded search and come back before the next search starts.
+  fireEvent.change(box, { target: { value: 'ashax' } });
+  fireEvent.change(box, { target: { value: 'asha' } });
+  expect(await screen.findAllByRole('option')).toHaveLength(3);
+  expect(screen.queryByText('Searching…')).not.toBeInTheDocument();
+});
