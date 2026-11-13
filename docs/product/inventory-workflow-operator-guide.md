@@ -123,7 +123,7 @@ Features: INV-14, INV-42
 
 1. Enter supplier, invoice number/date, received date, bill terms, order reference where applicable and due date for a credit bill.
 2. For every row, enter product, pack/unit, batch, expiry, paid quantity, free quantity, MRP, purchase rate, discounts, scheme amount and GST.
-3. Read the computed taxable amount, tax and payable beside the original reported values. Resolve differences; do not erase the source amounts to hide them.
+3. Read the computed taxable amount, tax and payable beside the original reported values. Resolve differences; do not erase the source amounts to hide them. For a typed bill, enter the bill's grand total in Total on the bill; the difference is shown as you type.
 4. Check the footer's row count and paid/free/received stock units. Pack contents do not automatically multiply a quantity already expressed in the declared stock unit.
 
 ## Worked 18% bill arithmetic
