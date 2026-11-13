@@ -21,7 +21,7 @@ it('keeps setup and history accessible after selecting a patient', async () => {
   await screen.findByRole('option', { name: /Synthetic Patient/ });
   fireEvent.keyDown(search, { key: 'ArrowDown' });
   fireEvent.keyDown(search, { key: 'Enter' });
-  await screen.findByRole('tab', { name: 'Patient History' });
+  await screen.findByText('No documented history to show');
   expect(screen.queryByTestId('medical-form')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Start Visit Documentation' }));
   expect(await screen.findByTestId('medical-form')).toBeInTheDocument();
@@ -31,6 +31,6 @@ it('opens a patient deep link and allows returning to setup', async () => {
   render(<VisitsPage />);
   expect(await screen.findByTestId('medical-form')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Back to Setup' }));
-  await screen.findByRole('tab', { name: 'Patient History' });
+  await screen.findByText('No documented history to show');
   await waitFor(() => expect(screen.queryByTestId('medical-form')).not.toBeInTheDocument());
 });
