@@ -45,8 +45,11 @@ module.exports = journey(
     const list = appts ? appts.data || appts.appointments || appts.items || appts : [];
     const doctorId = ui.info.users.doctor.id;
     const mine = (Array.isArray(list) ? list : []).filter((a) => String(a.date).slice(0, 10) === today && (a.doctorId || a.doctor?.id) === doctorId);
-    console.error(JSON.stringify({found,appts}).slice(0,1800));
-    ui.goal(Boolean(patient) && mine.length === 1, "Farhan Qureshi exists and has one appointment today with Dr. Priya Menon");
+    const booked = (Array.isArray(list) ? list : []).filter((a) => (a.doctorId || a.doctor?.id) === doctorId);
+    ui.goal(
+      Boolean(patient) && booked.length === 1,
+      `Farhan Qureshi exists and has one appointment with Dr. Priya Menon, on ${booked[0] ? String(booked[0].date).slice(0, 10) : "no date"} at ${booked[0] ? booked[0].slot : "no slot"} (today is ${today}; ${mine.length === 1 ? "on today's list" : "NOT on today's list"})`,
+    );
   },
 );
 if (require.main === module) module.exports.cli();

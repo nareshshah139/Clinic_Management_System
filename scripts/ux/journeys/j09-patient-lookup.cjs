@@ -35,7 +35,7 @@ module.exports = journey(
     ui.reenter("Patient name typed into the Patients page search (already open on the previous page)");
     await ui.click(page.getByPlaceholder(/Search by name/), "Patients page: search box");
     await ui.type(page.getByPlaceholder(/Search by name/), "Rohan", "Patients page: search for Rohan");
-    await page.getByRole("button", { name: /More actions for Rohan/ }).waitFor();
+    await page.waitForFunction(() => document.querySelectorAll('button[aria-label^="More actions for"]').length === 1);
     await ui.screen("patients-list-filtered");
 
     await ui.click(page.getByRole("button", { name: /More actions for Rohan/ }), "Rohan's row: More");

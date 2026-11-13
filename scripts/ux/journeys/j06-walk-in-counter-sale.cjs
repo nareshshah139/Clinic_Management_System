@@ -55,15 +55,14 @@ module.exports = journey(
     await ui.screen("bill-confirmed");
 
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-    const found = await ui.api("GET", "/pharmacy/sales-register?limit=50");
-    const rows = found.items || found.rows || found.data || [];
-    const ids = rows.filter((r) => /walk-in/i.test(JSON.stringify(r))).map((r) => r.id);
+    const found = await ui.api("GET", `/pharmacy/sales-register?register=sales&from=${today}&to=${today}&limit=50`);
+    const ids = (found.rows || []).filter((r) => String(r.id).startsWith("PHARMACY_BILL:")).map((r) => String(r.id).split(":")[1]);
     let ok = false;
     for (const id of ids) {
       const inv = await ui.api("GET", `/pharmacy/invoices/${id}`);
       const items = inv.items || [];
       const qty = (re) => items.filter((i) => re.test(JSON.stringify(i))).reduce((s, i) => s + Number(i.quantity), 0);
-      if (String(inv.invoiceDate).startsWith(today) && inv.status !== "DRAFT" && inv.paymentStatus === "PAID" && qty(/Cetirizine/i) === 10 && qty(/Sunscreen/i) === 1) ok = true;
+      if (String(inv.invoiceDate).startsWith(today) && inv.status === "CONFIRMED" && inv.paymentStatus === "COMPLETED" && inv.paymentMethod === "CASH" && qty(/Cetirizine/i) === 10 && qty(/Sunscreen/i) === 1) ok = true;
     }
     ui.goal(ok, "a confirmed, paid pharmacy invoice today holds 10 Cetirizine 10mg Tablets and 1 Sunscreen SPF 50 Gel 50g");
   },
