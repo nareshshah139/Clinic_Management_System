@@ -2755,6 +2755,49 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.getByLabelText('Exp. Month')).toHaveValue(null);
   });
 
+  describe('stock unit from the identified product', () => {
+    const stockUnitMock = () => api.suggestPharmacyPurchaseMasterMatches.mockImplementation(async ({ items }: any) => ({ matches: items.map((item: any, lineIndex: number) => ({
+      lineIndex, ocr: item, candidates: [], recommendedAction: 'REVIEW_MATCHES',
+      catalogueResolution: { state: 'ready', product: { id: `ready-${lineIndex}`, name: item.productName, packSizeLabel: item.packSize, manufacturerName: item.manufacturer, price: 0 } },
+      ...(String(item.packUnitType || '').trim() ? {} : { suggestedStockUnit: 'Tube' }),
+    })) }));
+
+    it("fills a blank stock unit from the identified product's stock and says so", async () => {
+      stockUnitMock();
+      render(<PurchaseInvoiceWorkbench />);
+      fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+      expect(screen.getByLabelText('Stock unit')).toHaveValue('');
+      fireEvent.change(screen.getByLabelText('Product'), { target: { value: 'Clobetasol Cream' } });
+      await waitFor(() => expect(screen.getByLabelText('Stock unit')).toHaveValue('Tube'));
+      expect(await screen.findByText('Stock unit for line 1 set to Tube, the unit this product is counted in. Change it if this bill differs.')).toBeInTheDocument();
+      await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalledTimes(2));
+      expect(screen.queryByText('Line 1: Stock unit is missing.')).not.toBeInTheDocument();
+    });
+
+    it('keeps a stock unit the user typed', async () => {
+      stockUnitMock();
+      render(<PurchaseInvoiceWorkbench />);
+      fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+      fireEvent.change(screen.getByLabelText('Stock unit'), { target: { value: 'Box' } });
+      fireEvent.change(screen.getByLabelText('Product'), { target: { value: 'Clobetasol Cream' } });
+      await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalled());
+      await new Promise(resolve => setTimeout(resolve, 400));
+      expect(screen.getByLabelText('Stock unit')).toHaveValue('Box');
+      expect(screen.queryByText(/the unit this product is counted in/)).not.toBeInTheDocument();
+    });
+
+    it('does not loop the product check after filling', async () => {
+      stockUnitMock();
+      render(<PurchaseInvoiceWorkbench />);
+      fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+      fireEvent.change(screen.getByLabelText('Product'), { target: { value: 'Clobetasol Cream' } });
+      await waitFor(() => expect(screen.getByLabelText('Stock unit')).toHaveValue('Tube'));
+      await new Promise(resolve => setTimeout(resolve, 600));
+      expect(api.suggestPharmacyPurchaseMasterMatches.mock.calls.length).toBeLessThanOrEqual(2);
+      expect(screen.getByText(/Stock unit for line 1 set to Tube/)).toBeInTheDocument();
+    });
+  });
+
   it("uses the supplier's last drug license on request", async () => {
     api.get.mockImplementation(async (url: string) => url === '/pharmacy/purchase-invoices/suppliers'
       ? [{ id: 'sup-slv', name: 'Shree Laxmi Vitality Pharma', gstNumber: '27AABCS1234F1Z5', lastBillDrugLicenseNo: 'MH-PUN-SLV' }] : []);

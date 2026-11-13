@@ -314,6 +314,7 @@ type MasterMatch = {
   ocr: Record<string, unknown>;
   candidates: MasterCandidate[];
   recommendedAction: "MATCH_EXISTING" | "REVIEW_MATCHES" | "CREATE_NEW";
+  suggestedStockUnit?: string;
 };
 
 type MasterMatchResponse = {
@@ -449,7 +450,7 @@ function defaultHeader(): HeaderForm {
 
 /**
  * @cc [owner:nareshshah139,label:product] purchase-line-no-silent-defaults
- * A typed line MUST start without a stock unit or expiry; both MUST stay visible missing checks until entered. Extracted, imported, restored and receipt-linked lines MUST keep their source values.
+ * A typed line MUST start without a stock unit or expiry; both MUST stay visible missing checks until entered. A blank stock unit MAY be filled from the exactly identified saved product's own stock with a visible notice; a typed unit MUST NOT be replaced. Extracted, imported, restored and receipt-linked lines MUST keep their source values.
  */
 function emptyLine(serialNumber: number): LineForm {
   return {
@@ -1774,6 +1775,25 @@ function PurchaseInvoiceEditor({
       setCatalogue({ state: 'assessed', request, rows });
       setCatalogueIssue(rows.some(row => row.resolution.state !== 'ready'));
       if (productSaved) setNotice('Product details saved. Invoice products checked again. Complete the final review before adding stock.');
+      // A blank stock unit is filled from the identified product's own stock. The unit is then non-blank, so the
+      // automatic re-check this triggers gets no suggestion and cannot loop. The notice is not cleared by a re-check.
+      const fills = matches.filter(match => match && typeof match.suggestedStockUnit === 'string' && match.suggestedStockUnit.trim() && Number.isInteger(match.lineIndex)
+        && sourceLines[match.lineIndex] && !sourceLines[match.lineIndex].packUnitType.trim() && rows[match.lineIndex] && 'product' in rows[match.lineIndex].resolution);
+      if (fills.length) {
+        const unitByLine = new Map(fills.map(match => [sourceLines[match.lineIndex].localId, { unit: match.suggestedStockUnit!.trim(), number: match.lineIndex + 1 }]));
+        invalidatePending();
+        setManualReviewCandidateId(null);
+        setMasterMatches([]);
+        setMasterStatuses({});
+        setLines(current => current.map(line => unitByLine.has(line.localId) && !line.packUnitType.trim() ? { ...line, packUnitType: unitByLine.get(line.localId)!.unit } : line));
+        if (!productSaved) {
+          const numbers = fills.map(match => match.lineIndex + 1);
+          setNotice(numbers.length === 1
+            ? `Stock unit for line ${numbers[0]} set to ${unitByLine.get(sourceLines[fills[0].lineIndex].localId)!.unit}, the unit this product is counted in. Change it if this bill differs.`
+            : `Stock unit set from saved stock for lines ${numbers.slice(0, -1).join(', ')} and ${numbers[numbers.length - 1]}. Change any that differ on this bill.`);
+        }
+        return false;
+      }
       return rows.every(row => row.resolution.state === 'ready');
     } catch {
       if (!catalogueCurrent(request)) return false;
