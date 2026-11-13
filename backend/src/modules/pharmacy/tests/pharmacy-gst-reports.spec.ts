@@ -367,14 +367,14 @@ describe('CR-33b Sales Register filters', () => {
   });
 
   it('lists the period’s doctors once each, sorted, whatever the other filters say', () => {
-    const all = salesRegister(docs, { type: 'SALES' }).doctors;
+    const all = salesRegister(docs, { type: 'SALES' }).filterChoices.doctor;
     expect(all).toEqual(['Dr. Asha Rao', 'Dr. Vikram Sen']);
     expect(
       salesRegister(docs, {
         type: 'SALES',
         doctor: 'Dr. Vikram Sen',
         gst: 'WITH_GST',
-      }).doctors,
+      }).filterChoices.doctor,
     ).toEqual(all);
   });
 

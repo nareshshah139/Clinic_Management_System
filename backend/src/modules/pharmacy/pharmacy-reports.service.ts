@@ -519,7 +519,7 @@ export class PharmacyReportsService {
           {
             headline: { label: 'Total for the period', value: result.total },
             sections: [result.section],
-            options: { doctors: result.doctors },
+            filterChoices: result.filterChoices,
             notes: [
               ...(result.filterNote ? [result.filterNote] : []),
               'Taxable = Gross - Disc.; Total = Taxable + CESS + SGST + CGST + IGST. Customer returns show as negative rows.',

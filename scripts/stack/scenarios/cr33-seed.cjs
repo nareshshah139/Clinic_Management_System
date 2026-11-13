@@ -182,23 +182,21 @@ async function seedRows(db, { branchId, doctorId, pharmacistId, today }) {
     subtotal: 180, taxAmount: 21.6, totalAmount: 201.6, status: "CANCELLED",
     items: { create: [{ drugId: `${ITEMS[0].id}-drug`, inventoryItemId: ITEMS[0].id, quantity: 1, unitPrice: 180, taxPercent: 12, taxAmount: 21.6, totalAmount: 201.6 }] },
   });
-  // A Wednesday for the Sales Register filters: two bills under the seeded doctor (one discounted), a
-  // nil-rated discounted counter sale under another doctor, and a counter sale with GST and no doctor.
-  const WED = "2024-03-13";
-  await doc("cr33-wed-1", "PHI-2024-003", WED, {
+  const FILTER_DAY = "2024-03-13";
+  await doc("cr33-wed-1", "PHI-2024-003", FILTER_DAY, {
     subtotal: 360, taxAmount: 43.2, totalAmount: 403.2, status: "CONFIRMED",
     items: { create: [{ drugId: `${ITEMS[0].id}-drug`, inventoryItemId: ITEMS[0].id, quantity: 2, unitPrice: 180, taxPercent: 12, taxAmount: 43.2, totalAmount: 403.2 }] },
-    payments: { create: [{ requestKey: "cr33-wed-1", method: "CASH", amount: 403.2, status: "COMPLETED", paymentDate: at(WED, "10:02") }] },
+    payments: { create: [{ requestKey: "cr33-wed-1", method: "CASH", amount: 403.2, status: "COMPLETED", paymentDate: at(FILTER_DAY, "10:02") }] },
   });
-  await doc("cr33-wed-2", "PHI-2024-004", WED, {
+  await doc("cr33-wed-2", "PHI-2024-004", FILTER_DAY, {
     subtotal: 450, discountAmount: 45, taxAmount: 72.9, totalAmount: 477.9, status: "CONFIRMED",
     items: { create: [{ drugId: `${ITEMS[1].id}-drug`, inventoryItemId: ITEMS[1].id, quantity: 1, unitPrice: 450, discountPercent: 10, discountAmount: 45, taxPercent: 18, taxAmount: 72.9, totalAmount: 477.9 }] },
-    payments: { create: [{ requestKey: "cr33-wed-2", method: "CASH", amount: 477.9, status: "COMPLETED", paymentDate: at(WED, "10:03") }] },
+    payments: { create: [{ requestKey: "cr33-wed-2", method: "CASH", amount: 477.9, status: "COMPLETED", paymentDate: at(FILTER_DAY, "10:03") }] },
   });
-  await wf("CS-2024-001", "COUNTER_SALE", { paymentMode: "CASH", customerName: "Walk-in", doctorName: "Dr. Visiting", item: { ...ITEMS[3], rate: 0 }, qty: 2 }, { taxable: 171, tax: 0 }, WED);
-  await wf("CS-2024-002", "COUNTER_SALE", { paymentMode: "CASH", customerName: "Walk-in", item: ITEMS[2], qty: 5 }, { taxable: 180, tax: 9 }, WED);
+  await wf("CS-2024-001", "COUNTER_SALE", { paymentMode: "CASH", customerName: "Walk-in", doctorName: "Dr. Visiting", item: { ...ITEMS[3], rate: 0 }, qty: 2 }, { taxable: r2(2 * ITEMS[3].price * 0.9), tax: 0 }, FILTER_DAY);
+  await wf("CS-2024-002", "COUNTER_SALE", { paymentMode: "CASH", customerName: "Walk-in", item: ITEMS[2], qty: 5 }, { taxable: 180, tax: 9 }, FILTER_DAY);
   expected.refundDay = { monday: MON, tuesday: TUE };
-  expected.filterDay = WED;
+  expected.filterDay = FILTER_DAY;
   return expected;
 }
 

@@ -8,7 +8,7 @@ import { DayField } from "@/components/inventory/DayField";
 import { MoreFilters } from "@/components/register/RegisterFilters";
 import { inputClass } from "@/components/inventory/workspace-model";
 import { cn } from "@/lib/utils";
-import { activeMoreFilters, exportHref, moreFilterValue, periodPresets, presetFor, shiftDay, type ReportEntry, type ReportParams } from "./report-catalog";
+import { activeMoreFilters, exportHref, moreFilterValue, periodPresets, presetFor, shiftDay, type MoreFilter, type ReportEntry, type ReportParams } from "./report-catalog";
 
 const fieldLabel = "text-base font-medium";
 
@@ -178,8 +178,7 @@ export function ReportToolbar({
   canExport: boolean;
   onApply: (params: ReportParams) => void;
   extra?: ReactNode;
-  /** Names for the More filters that list what the loaded report holds, by filter key. */
-  choices?: Record<string, string[] | undefined>;
+  choices?: Partial<Record<MoreFilter["key"], string[]>>;
 }) {
   const [draft, setDraft] = useState(params);
   useEffect(() => setDraft(params), [params]);
@@ -239,15 +238,15 @@ export function ReportToolbar({
         <MoreFilters count={activeMoreFilters(entry, draft)} className="h-11 px-4 text-base">
           {entry.moreFilters.map((filter) => {
             const current = moreFilterValue(filter, draft);
-            const listed = filter.options ?? (choices?.[filter.key] ?? []).map((name) => ({ value: name, label: name }));
-            const options = current !== filter.defaultValue && !listed.some((option) => option.value === current) ? [{ value: current, label: current }, ...listed] : listed;
+            const listed = filter.options === "from-report" ? (choices?.[filter.key] ?? []).map((name) => ({ value: name, label: name })) : filter.options;
+            const options = current !== filter.allValue && !listed.some((option) => option.value === current) ? [{ value: current, label: current }, ...listed] : listed;
             return (
               <Select
                 key={filter.key}
                 label={filter.label}
                 value={current}
-                options={[{ value: filter.defaultValue, label: filter.allLabel }, ...options]}
-                onChange={(value) => setDraft({ ...draft, [filter.key]: value === filter.defaultValue ? undefined : value })}
+                options={[{ value: filter.allValue, label: filter.allLabel }, ...options]}
+                onChange={(value) => setDraft({ ...draft, [filter.key]: value === filter.allValue ? undefined : value })}
               />
             );
           })}

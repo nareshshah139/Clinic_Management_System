@@ -81,7 +81,7 @@ export function TableReport({ entry, params, today, onApply }: { entry: ReportEn
         loading={state.status === "loading"}
         canExport={state.status === "loaded" || state.status === "empty"}
         onApply={onApply}
-        choices={{ doctor: report?.options?.doctors }}
+        choices={report?.filterChoices}
         extra={entry.columnChooser && <ColumnChooser columns={report?.sections[0]?.columns ?? []} hidden={hidden} onChange={setHidden} />}
       />
       {report?.headline && (

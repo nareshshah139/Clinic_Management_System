@@ -148,7 +148,7 @@ describe('Pharmacy Report', () => {
 
   it('counts the More filters, lists the report’s doctors, and applies them with Go', async () => {
     mockQuery = 'report=sales-register&from=2026-10-01&to=2026-10-31';
-    api.get.mockResolvedValue({ ...salesRegister, options: { doctors: ['Dr. Asha Rao', 'Dr. Vikram Sen'] } } as any);
+    api.get.mockResolvedValue({ ...salesRegister, filterChoices: { doctor: ['Dr. Asha Rao', 'Dr. Vikram Sen'] } } as any);
     render(<PharmacyReportWorkspace />);
     await screen.findByRole('table', { name: 'Sales Register' });
     const more = screen.getByRole('button', { name: /More filters/ });
@@ -173,7 +173,7 @@ describe('Pharmacy Report', () => {
 
   it('keeps an applied doctor in the list when the period has none, and Clear empties the filters', async () => {
     mockQuery = 'report=sales-register&from=2026-10-01&to=2026-10-31&source=BILL&doctor=Dr.+Gone&discount=DISCOUNTED';
-    api.get.mockResolvedValue({ ...salesRegister, options: { doctors: [] } } as any);
+    api.get.mockResolvedValue({ ...salesRegister, filterChoices: { doctor: [] } } as any);
     render(<PharmacyReportWorkspace />);
     await screen.findByRole('table', { name: 'Sales Register' });
     expect(api.get).toHaveBeenCalledWith('/pharmacy/reports/sales-register', expect.objectContaining({ source: 'BILL', doctor: 'Dr. Gone', discount: 'DISCOUNTED' }));

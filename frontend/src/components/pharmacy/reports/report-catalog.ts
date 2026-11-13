@@ -11,14 +11,12 @@ export type PeriodKind = "range" | "day" | "none";
 export type ReportView = "table" | "collection" | "day-wise" | "margin" | "gst-summary";
 export type Option = { value: string; label: string };
 
-/** A filter kept in the toolbar's "More filters" panel. Its default is the value that means "no filter"; a param holding it is left out of the URL and the request. */
 export type MoreFilter = {
   key: "source" | "doctor" | "discount";
   label: string;
   allLabel: string;
-  /** Fixed choices; a filter without them lists what the loaded report offers under this key. */
-  options?: Option[];
-  defaultValue: string;
+  allValue: string;
+  options: Option[] | "from-report";
 };
 
 export type ReportEntry = {
@@ -36,7 +34,6 @@ export type ReportEntry = {
   defaultType?: string;
   gstFilter?: boolean;
   moreFilters?: MoreFilter[];
-  /** Offers "Show columns": the slab tables are wide and a screen rarely needs every band. */
   columnChooser?: boolean;
   searchLabel?: string;
   windows?: Option[];
@@ -54,14 +51,14 @@ const SALES_REGISTER_FILTERS: MoreFilter[] = [
     key: "source",
     label: "Source",
     allLabel: "All sources",
-    defaultValue: "ALL",
+    allValue: "ALL",
     options: [
       { value: "BILL", label: "Prescription bills" },
       { value: "COUNTER_SALE", label: "Counter sales" },
     ],
   },
-  { key: "doctor", label: "Doctor", allLabel: "All doctors", defaultValue: "" },
-  { key: "discount", label: "Discount", allLabel: "All bills", defaultValue: "ALL", options: [{ value: "DISCOUNTED", label: "Discounted only" }] },
+  { key: "doctor", label: "Doctor", allLabel: "All doctors", allValue: "", options: "from-report" },
+  { key: "discount", label: "Discount", allLabel: "All bills", allValue: "ALL", options: [{ value: "DISCOUNTED", label: "Discounted only" }] },
 ];
 
 export const REPORTS: ReportEntry[] = [
@@ -214,8 +211,8 @@ export function readParams(entry: ReportEntry, search: Pick<URLSearchParams, "ge
   const more: Partial<ReportParams> = {};
   for (const filter of entry.moreFilters ?? []) {
     const value = clean(search.get(filter.key));
-    const valid = !filter.options || filter.options.some((o) => o.value === value);
-    more[filter.key] = valid && value !== filter.defaultValue ? value : undefined;
+    const valid = filter.options === "from-report" || filter.options.some((o) => o.value === value);
+    more[filter.key] = valid && value !== filter.allValue ? value : undefined;
   }
   return {
     from: validFrom,
@@ -229,10 +226,10 @@ export function readParams(entry: ReportEntry, search: Pick<URLSearchParams, "ge
   };
 }
 
-export const moreFilterValue = (filter: MoreFilter, params: ReportParams) => params[filter.key] ?? filter.defaultValue;
+export const moreFilterValue = (filter: MoreFilter, params: ReportParams) => params[filter.key] ?? filter.allValue;
 
 export const activeMoreFilters = (entry: ReportEntry, params: ReportParams) =>
-  (entry.moreFilters ?? []).filter((filter) => moreFilterValue(filter, params) !== filter.defaultValue).length;
+  (entry.moreFilters ?? []).filter((filter) => moreFilterValue(filter, params) !== filter.allValue).length;
 
 export function reportHref(id: string, params?: Partial<ReportParams>) {
   const search = new URLSearchParams({ report: id });

@@ -316,7 +316,6 @@ export const salesOfType = (docs: SaleDoc[], type: SalesRegisterType) =>
 export type SalesRegisterFilters = {
   gst: GstFilter;
   source: 'ALL' | 'BILL' | 'COUNTER_SALE';
-  /** Exact doctor name, ignoring case and surrounding spaces. */
   doctor: string | null;
   discount: 'ALL' | 'DISCOUNTED';
 };
@@ -328,10 +327,8 @@ export const NO_SALES_FILTERS: SalesRegisterFilters = {
   discount: 'ALL',
 };
 
-const sameDoctor = (a: string | null, b: string) =>
-  (a ?? '').trim().toLowerCase() === b.trim().toLowerCase();
+const doctorKey = (name: string | null) => (name ?? '').trim().toLowerCase();
 
-/** One predicate per filter; a document is shown only when every one of them accepts it. */
 const SALES_FILTERS: {
   [K in keyof SalesRegisterFilters]: (
     doc: SaleDoc,
@@ -341,7 +338,7 @@ const SALES_FILTERS: {
   gst: (doc, value) =>
     value === 'ALL' || (value === 'WITH_GST') === hasGst(doc.lines),
   source: (doc, value) => value === 'ALL' || doc.kind === value,
-  doctor: (doc, value) => value === null || sameDoctor(doc.doctor, value),
+  doctor: (doc, value) => value === null || doctorKey(doc.doctor) === doctorKey(value),
   discount: (doc, value) => value === 'ALL' || sumLines(doc.lines).discount > 0,
 };
 
@@ -379,7 +376,6 @@ const FILTER_PHRASES: {
   discount: (value) => (value === 'DISCOUNTED' ? 'discounted bills' : null),
 };
 
-/** A filtered printout must not read as the whole period, so the active filters are named. */
 export function salesFilterNote(filters: SalesRegisterFilters): string | null {
   const phrase = <K extends keyof SalesRegisterFilters>(key: K) =>
     FILTER_PHRASES[key](filters[key]);
@@ -389,13 +385,11 @@ export function salesFilterNote(filters: SalesRegisterFilters): string | null {
   return phrases.length ? `Showing only: ${phrases.join(', ')}.` : null;
 }
 
-/** Each doctor once, in the spelling first seen, sorted. */
 const doctorsOf = (docs: SaleDoc[]) => {
   const seen = new Map<string, string>();
   for (const { doctor } of docs) {
-    const name = doctor?.trim();
-    if (name && !seen.has(name.toLowerCase()))
-      seen.set(name.toLowerCase(), name);
+    const key = doctorKey(doctor);
+    if (key && !seen.has(key)) seen.set(key, doctor!.trim());
   }
   return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, 'en'));
 };
@@ -465,7 +459,7 @@ export function salesRegister(
   return {
     section: sec,
     total: Number(sec.totals!.total),
-    doctors: doctorsOf(ofType),
+    filterChoices: { doctor: doctorsOf(ofType) },
     filterNote: salesFilterNote(filters),
   };
 }

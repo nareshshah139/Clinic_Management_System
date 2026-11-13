@@ -10,11 +10,6 @@ import type { ReportColumn } from "./report-types";
 
 const storageKey = (reportId: string) => `pharmacy-report-hidden-columns:${reportId}`;
 
-/**
- * The columns a person has hidden on this report in this browser. Hidden ids are stored rather than
- * shown ones, so a GST rate that first appears next month is visible by default. Storage can be
- * missing or refuse writes (private windows, blocked site data); the choice then lasts until reload.
- */
 export function useHiddenColumns(reportId: string) {
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => {
@@ -30,14 +25,15 @@ export function useHiddenColumns(reportId: string) {
       setHidden(next);
       try {
         window.localStorage.setItem(storageKey(reportId), JSON.stringify([...next]));
-      } catch {}
+      } catch {
+        // localStorage throws when site data is blocked or the quota is full; the choice then lasts until reload.
+      }
     },
     [reportId],
   );
   return [hidden, update] as const;
 }
 
-/** Screen-only: Print and Download always carry every column. */
 export function ColumnChooser({ columns, hidden, onChange }: { columns: ReportColumn[]; hidden: ReadonlySet<string>; onChange: (hidden: ReadonlySet<string>) => void }) {
   const choices = useMemo(() => columnChoices(columns), [columns]);
   const hiddenCount = choices.filter((choice) => hidden.has(choice.id)).length;
@@ -58,6 +54,17 @@ export function ColumnChooser({ columns, hidden, onChange }: { columns: ReportCo
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 max-w-[calc(100vw-2rem)]">
+        <DropdownMenuItem
+          className="text-base"
+          disabled={hiddenCount === 0}
+          onSelect={(event: Event) => {
+            event.preventDefault();
+            onChange(new Set());
+          }}
+        >
+          Show all columns
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         {choices.map((choice) => (
           <DropdownMenuCheckboxItem
             key={choice.id}
@@ -75,12 +82,6 @@ export function ColumnChooser({ columns, hidden, onChange }: { columns: ReportCo
           </DropdownMenuCheckboxItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-base" disabled={hiddenCount === 0} onSelect={(event: Event) => {
-            event.preventDefault();
-            onChange(new Set());
-          }}>
-          Show all columns
-        </DropdownMenuItem>
         <DropdownMenuLabel className="text-sm font-normal text-muted-foreground">Print and Download always include every column.</DropdownMenuLabel>
       </DropdownMenuContent>
     </DropdownMenu>

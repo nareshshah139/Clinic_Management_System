@@ -392,7 +392,7 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
     expect(rowsOf(report).map((r: any) => r.billNo)).toEqual(['CS-1']);
     expect(report.headline!.value).toBe(112);
     expect(report.notes[0]).toBe('Showing only: counter sales.');
-    expect(report.options!.doctors).toEqual(['Dr. Visiting', 'Praneeta Jain']);
+    expect(report.filterChoices!.doctor).toEqual(['Dr. Visiting', 'Praneeta Jain']);
   });
 
   it('builds Purchase Bills and the Purchase Register from stock-committed bills, with supplier returns negative', async () => {

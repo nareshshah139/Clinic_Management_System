@@ -51,6 +51,8 @@ export const nextSort = (current: SortState, column: ReportColumn): SortState =>
       ? { key: column.key, direction: isNumeric(column) ? "asc" : "desc" }
       : null;
 
+const identityColumn = (columns: ReportColumn[]) => columns.find((column) => column.frozen && column.kind === "text");
+
 /** Frozen columns stay on screen while the money columns scroll; each needs a fixed width to stack. */
 export function frozenWidth(column: ReportColumn): number {
   if (column.key === "srNo") return 108;
@@ -68,11 +70,12 @@ export function frozenWidth(column: ReportColumn): number {
  */
 export function frozenOffsets(columns: ReportColumn[], frameWidth = Infinity, share = 0.5): Map<string, number> {
   const offsets = new Map<string, number>();
+  const identity = identityColumn(columns);
   let left = 0;
   for (const column of columns) {
     if (!column.frozen) break;
     const width = frozenWidth(column);
-    const identityShown = [...offsets.keys()].some((key) => columns.find((c) => c.key === key)?.kind === "text");
+    const identityShown = !!identity && offsets.has(identity.key);
     if (identityShown && left + width > frameWidth * share) break;
     offsets.set(column.key, left);
     left += width;
@@ -93,10 +96,6 @@ export function headerBands(columns: ReportColumn[]): { label: string | null; sp
 
 export type ColumnChoice = { id: string; label: string; keys: string[] };
 
-/** The column that names the row (Bill No.) and so can never be hidden: the first frozen text column, as in `frozenOffsets`. */
-const identityColumn = (columns: ReportColumn[]) => columns.find((column) => column.frozen && column.kind === "text");
-
-/** What a person can show or hide: one GST band, or one ungrouped column. The identity column is not offered. */
 export function columnChoices(columns: ReportColumn[]): ColumnChoice[] {
   const identity = identityColumn(columns);
   return headerBands(columns).flatMap((band) => {
@@ -108,7 +107,6 @@ export function columnChoices(columns: ReportColumn[]): ColumnChoice[] {
   });
 }
 
-/** Ids that match no choice, such as a band that is gone from this period, hide nothing. */
 export function visibleColumns(columns: ReportColumn[], hidden: ReadonlySet<string>): ReportColumn[] {
   if (!hidden.size) return columns;
   const hiddenKeys = new Set(columnChoices(columns).filter((choice) => hidden.has(choice.id)).flatMap((choice) => choice.keys));
