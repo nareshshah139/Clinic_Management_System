@@ -391,10 +391,9 @@ export default function UsersManagement() {
         loadAllPermissionNames(),
       ]);
       setAllPermissions(perms);
-      // Suggest defaults based on current role from backend roles
       const role = ((rolesRes as any)?.data || (rolesRes as any)?.roles || []).find((r: any) => r.name === u.role);
       const defaults = role?.permissions ? JSON.parse(role.permissions) : [];
-      setRolePerms(defaults);
+      setRolePerms(Array.isArray(u.permissions) ? u.permissions : defaults);
       setPermLoad('ready');
     } catch (e) {
       setAllPermissions([]);

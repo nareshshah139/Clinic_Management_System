@@ -205,6 +205,7 @@ export interface User {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  permissions?: string[] | null;
   metadata?: Record<string, any> | null;
 }
 
