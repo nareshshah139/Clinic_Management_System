@@ -15,7 +15,7 @@ jest.mock('@/components/users/ResetCodeButton', () => ({ ResetCodeButton: () => 
 
 const api = apiClient as unknown as Record<string, jest.Mock>;
 const USERS = [
-  { id: 'u-asha', firstName: 'Asha', lastName: 'Rao', email: 'asha@example.test', phone: '9000000001', role: 'NURSE', status: 'ACTIVE' },
+  { id: 'u-asha', firstName: 'Asha', lastName: 'Rao', email: 'asha@example.test', phone: '9000000001', role: 'NURSE', status: 'ACTIVE', permissions: null },
   { id: 'u-vikram', firstName: 'Vikram', lastName: 'Iyer', email: 'vikram@example.test', phone: '9000000002', role: 'RECEPTION', status: 'ACTIVE' },
 ];
 const ROLES = { roles: [{ name: 'NURSE', permissions: JSON.stringify(['appointments:read']) }], pagination: { totalPages: 1 } };
@@ -50,7 +50,7 @@ describe('UsersManagement', () => {
     expect(within(dialog).getByRole('button', { name: 'Create' })).toBeInTheDocument();
   });
 
-  it('lists every permission, page by page, with the role defaults ticked', async () => {
+  it('lists every permission, page by page, with the role defaults ticked for a user who has none saved', async () => {
     api.getPermissions.mockImplementation(async ({ page }: { page: number }) => ({
       permissions: page === 1 ? [{ name: 'appointments:read' }, { name: 'appointments:create' }] : [{ name: 'billing:read' }],
       pagination: { totalPages: 2 },
@@ -69,6 +69,28 @@ describe('UsersManagement', () => {
 
     press(dialog, 'Save Permissions');
     await waitFor(() => expect(api.updateUserPermissions).toHaveBeenCalledWith('u-asha', ['appointments:read']));
+  });
+
+  it.each([
+    ['a custom set', ['billing:read']],
+    ['an emptied set', []],
+  ])('ticks %s saved on the user instead of the role defaults, and saves it back unchanged', async (_label, saved) => {
+    api.getUsers.mockResolvedValue({ users: [{ ...USERS[0], permissions: saved }] });
+    api.getPermissions.mockResolvedValue({
+      permissions: [{ name: 'appointments:read' }, { name: 'billing:read' }],
+      pagination: { totalPages: 1 },
+    });
+    render(<UsersManagement />);
+    await screen.findByText('Asha Rao');
+
+    press(rowOf('Asha Rao'), /Role & Permissions/);
+    const dialog = screen.getByRole('dialog');
+    await within(dialog).findByRole('checkbox', { name: 'billing:read' });
+    const ticked = within(dialog).getAllByRole('checkbox').filter((box) => (box as HTMLInputElement).checked).map((box) => box.getAttribute('aria-label'));
+    expect(ticked).toEqual(saved);
+
+    press(dialog, 'Save Permissions');
+    await waitFor(() => expect(api.updateUserPermissions).toHaveBeenCalledWith('u-asha', saved));
   });
 
   it('does not let an unloaded permission list be saved', async () => {
