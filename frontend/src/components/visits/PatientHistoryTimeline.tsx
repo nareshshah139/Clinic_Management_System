@@ -284,12 +284,12 @@ export function PatientHistoryTimeline({ patientId }: { patientId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h3 className="text-lg font-medium text-gray-900">Patient History</h3>
-          <Badge variant="secondary">{history.length === 1 ? '1 Record' : `${history.length} Records`}</Badge>
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="whitespace-nowrap text-lg font-medium text-gray-900">Patient History</h3>
+          <Badge variant="secondary" className="shrink-0 whitespace-nowrap">{history.length === 1 ? '1 Record' : `${history.length} Records`}</Badge>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => void refresh()}>Refresh</Button>
+        <Button variant="ghost" size="sm" className="-mr-2 ml-auto shrink-0 px-2" onClick={() => void refresh()}>Refresh</Button>
       </div>
       
       <div className="relative">
