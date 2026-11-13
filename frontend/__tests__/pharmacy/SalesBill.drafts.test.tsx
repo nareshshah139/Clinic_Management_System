@@ -100,6 +100,23 @@ it('saves a new bill as a draft without remounting, then saves changes against t
   }));
 });
 
+it('bills a searched product at its own GST rate, and at 18% only when it has none', async () => {
+  const unrated = { id: 'drug-3', name: 'Synthetic Lotion', price: 100, manufacturerName: 'Synthetic', packSizeLabel: '1 bottle', totalStock: 4 };
+  const get = api.get.getMockImplementation()!;
+  api.get.mockImplementation(async (url: string, query?: any) =>
+    url === '/drugs/autocomplete' ? [cream, unrated].filter((d) => d.name.toLowerCase().includes(query.q.toLowerCase())) : get(url, query));
+  open('');
+  for (const drug of [cream, unrated]) {
+    fireEvent.change(await screen.findByLabelText('Search Drugs'), { target: { value: drug.name } });
+    const result = (await screen.findByRole('heading', { name: drug.name, level: 4 })).closest('[role="button"]') as HTMLElement;
+    fireEvent.click(within(result).getByRole('button', { name: 'Add' }));
+  }
+  expect(within(await lineFor(cream.name)).getByLabelText('Tax %')).toHaveValue(12);
+  expect(within(await lineFor(unrated.name)).getByLabelText('Tax %')).toHaveValue(18);
+  const summary = screen.getByText('Invoice Summary').closest('.space-y-6 > *') as HTMLElement;
+  expect(within(summary).getByText('Total:').nextSibling).toHaveTextContent('₹174.00');
+});
+
 it('reopens a draft with every line restored and finishes that same bill', async () => {
   open('draft=d-1');
   const creamLine = await lineFor(cream.name);

@@ -316,6 +316,8 @@ export function PharmacyInvoiceBuilderFixed({
   }, [toast, billContext]);
   const [session, setSession] = useState<BillSession>(draft?.session ?? { kind: 'new' });
   const [billDiscount, setBillDiscount] = useState<BillDiscount | null>(draft?.billDiscount ?? null);
+  // The discount field keeps its own typed text, so a new invoice remounts it to show the cleared discount.
+  const [billDiscountFieldKey, setBillDiscountFieldKey] = useState(0);
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(() =>
     draft ? JSON.stringify(billPayload(draft.fields, savedLines(draft), draft.billDiscount)) : null,
   );
@@ -1113,7 +1115,7 @@ export function PharmacyInvoiceBuilderFixed({
         quantity: 1,
         unitPrice: getDrugUnitPrice(drug),
         discountPercent: 0,
-        taxPercent: 18, // Default GST
+        taxPercent: getDrugGstRate(drug) ?? 18, // 18% only when the product has no GST rate
         discountAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
@@ -2112,6 +2114,8 @@ export function PharmacyInvoiceBuilderFixed({
     setInvoiceData(EMPTY_FIELDS);
     invoiceItemsRef.current = [];
     setItems([]);
+    setBillDiscount(null);
+    setBillDiscountFieldKey(key => key + 1);
     setPrescriptionData(null);
     setSelectedPatient(null);
     setSelectedDoctor(null);
@@ -2913,7 +2917,7 @@ export function PharmacyInvoiceBuilderFixed({
                       <span>-₹{lineDiscount.toFixed(2)}</span>
                     </div>
                   )}
-                  <BillDiscountInput value={billDiscount} onChange={setBillDiscount} problem={discountProblem} disabled={loading} />
+                  <BillDiscountInput key={billDiscountFieldKey} value={billDiscount} onChange={setBillDiscount} problem={discountProblem} disabled={loading} />
                   {billDiscountAmount > 0 && (
                     <div className="flex justify-between text-success-text">
                       <span>Bill discount{billDiscount?.kind === 'PERCENT' ? ` (${billDiscount.value}%)` : ''}:</span>

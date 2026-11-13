@@ -381,3 +381,30 @@ it('lists and adds a searched product under its stock name', async () => {
   fireEvent.click(row);
   expect(await screen.findByRole('heading', { name: 'Tab. Flutas 150 mg', level: 4 })).toBeInTheDocument();
 });
+
+it('starts a new invoice without the previous bill discount', async () => {
+  render(<SalesBillPage />);
+  await loadPatient();
+  await screen.findByRole('heading', { name: names[0], level: 4 });
+  fireEvent.change(screen.getByLabelText('Bill discount'), { target: { value: '10' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
+  await screen.findByRole('button', { name: 'Invoice Confirmed' });
+  fireEvent.click(screen.getByText('Close', { selector: 'button' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start a new invoice' }));
+  await waitFor(() => expect(screen.getByLabelText('Bill discount')).toHaveValue(null));
+
+  const bill = screen.getByRole('region', { name: 'Prescription bill' });
+  fireEvent.change(screen.getByLabelText('Patient *'), { target: { value: 'Synthetic Patient Two' } });
+  fireEvent.mouseDown(await within(bill).findByText(secondPatient.name));
+  fireEvent.change(screen.getByLabelText('Search Drugs'), { target: { value: 'Nixiper' } });
+  const result = (await screen.findByRole('heading', { name: names[1], level: 4 })).closest('[role="button"]') as HTMLElement;
+  fireEvent.click(within(result).getByRole('button', { name: 'Add' }));
+  const summary = screen.getByText('Invoice Summary').closest('.space-y-6 > *') as HTMLElement;
+  expect(within(summary).queryByText(/^Bill discount \(/)).not.toBeInTheDocument();
+  expect(within(summary).getByText('Total:').nextSibling).toHaveTextContent('₹105.00');
+  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+  expect(api.post.mock.calls.map(([, payload]: any[]) => payload.billDiscount)).toEqual([{ kind: 'PERCENT', value: 10 }, null]);
+});
