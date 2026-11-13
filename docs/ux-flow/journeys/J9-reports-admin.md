@@ -118,7 +118,7 @@ an OK click (both measured: "Phone number is required", "Password must be 8-20 c
 7. With a report open the report menu is gone; the only way to another report is the small "← Pharmacy Report" breadcrumb.
 8. "GST Summary & Monthly P&L" opens under a second, larger-looking heading "Pharmacy Compliance", with no `Print`/`Download` and two `Export all source rows` buttons ([05](J9-reports-admin-screens/05-gst-summary-monthly-pl.jpg)).
 9. Margin and Sales Register: the column the reader came for ("Profit ₹ (%)", "Total") is off the right edge at 1440 px ([06](J9-reports-admin-screens/06-item-margin-report.jpg), [04](J9-reports-admin-screens/04-sales-register-more-filters-clipped.jpg)).
-10. Daily Collection as admin: the page is 3,088 px tall; the pharmacy count starts about one and a half screens down ([09](J9-reports-admin-screens/09-daily-collection-admin-count.jpg) is scrolled).
+10. Daily Collection as admin: the page is about 3,300 px tall in an 836 px pane and `Save count` sits about 2,180 px down, two and a half screens below the title (measured; [09](J9-reports-admin-screens/09-daily-collection-admin-count.jpg) is scrolled).
 11. "Password (8-20 chars)": what should an admin type for someone else, and how is it passed on? No show/hide control ([12](J9-reports-admin-screens/12-create-user-dialog.jpg)).
 12. After `Create`: did it work?
 13. `Apply Role` vs `Save Permissions`, and why is the list empty?
@@ -200,7 +200,7 @@ an OK click (both measured: "Phone number is required", "Password must be 8-20 c
 - "Pharmacy billed today" appears as a tile, as "Today's bills" total and as "Total billed" in the next
   table (₹2,990.40 three times in one screen, [09](J9-reports-admin-screens/09-daily-collection-admin-count.jpg)).
 - **Collapse** "Pharmacy bills raised today" (six derived rows) behind a disclosure; it restates the reconciliation table.
-- For admin, **collapse** the two bill lists by default so the count is reachable without 1,500 px of scroll.
+- For admin, **collapse** the "Clinic bills" list by default; it grows with every bill and sits between the summary and the count.
 - "Pharmacy count difference — Not counted" tile repeats the amber banner directly above it.
 - One primary action (`Save count`): correct. Day stepper with no `Go`: correct.
 
