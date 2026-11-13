@@ -134,11 +134,20 @@ export class PharmacyPurchaseInvoiceService {
   /**
    * @cc [owner:nareshshah139,label:security;product] supplier-directory-revision
    * Invoice supplier choices MUST include only active records in the requested branch and their
-   * saved revision so corrections can detect intervening edits.
+   * saved revision so corrections can detect intervening edits. Each choice MAY also carry its
+   * saved drug license and the drug license from its latest non-cancelled bill in the branch,
+   * for an explicit Use action only.
    */
   async purchaseSuppliers(branchId: string) {
-    return this.prisma.supplier.findMany({ where: { branchId, isActive: true },
-      select: { id: true, name: true, gstNumber: true, updatedAt: true }, orderBy: { name: 'asc' } });
+    const suppliers = await this.prisma.supplier.findMany({ where: { branchId, isActive: true },
+      select: { id: true, name: true, gstNumber: true, drugLicenseNo: true, updatedAt: true }, orderBy: { name: 'asc' } });
+    const gstins = [...new Set(suppliers.map(supplier => supplier.gstNumber).filter((value): value is string => !!value))];
+    const bills = gstins.length ? await this.prisma.pharmacyPurchaseInvoice.findMany({
+      where: { branchId, distributorGstin: { in: gstins }, distributorDlNo: { not: '' }, status: { not: 'CANCELLED' } },
+      distinct: ['distributorGstin'], orderBy: [{ distributorGstin: 'asc' }, { createdAt: 'desc' }],
+      select: { distributorGstin: true, distributorDlNo: true } }) : [];
+    const lastDl = new Map(bills.map(bill => [bill.distributorGstin, bill.distributorDlNo]));
+    return suppliers.map(supplier => ({ ...supplier, lastBillDrugLicenseNo: (supplier.gstNumber && lastDl.get(supplier.gstNumber)) || null }));
   }
 
   /**
@@ -782,6 +791,12 @@ export class PharmacyPurchaseInvoiceService {
    * line, selected product, mismatch reasons and acknowledgement in audit history with catalogue
    * updates; confirming a match MUST NOT change stock.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-match-fills-blank-unit
+   * Confirming a match MAY fill a blank invoice stock unit from the product's most recent batch
+   * in the same branch, only with a unit that maps to that batch's inventory unit. It MUST NOT
+   * replace a declared unit and MUST NOT write stock, catalogue or invoice data.
+   */
   async confirmMasterRecord(
     dto: ConfirmPharmacyPurchaseMasterDto,
     branchId: string,
@@ -837,10 +852,11 @@ export class PharmacyPurchaseInvoiceService {
         return saved;
       });
 
+      const stockUnit = item.packUnitType?.trim() ? undefined : await this.latestBatchStockUnit(existing.id, branchId);
       return {
         action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING,
         drug: this.masterDrugSummary(updated),
-        linePatch: this.linePatchFromDrug(updated, item),
+        linePatch: this.linePatchFromDrug(updated, item, stockUnit),
         message: `Matched ${item.productName} to ${updated.name}`,
       };
     }
@@ -2278,15 +2294,29 @@ export class PharmacyPurchaseInvoiceService {
     };
   }
 
+  private async latestBatchStockUnit(drugId: string, branchId: string): Promise<string | undefined> {
+    const batch = await this.prisma.inventoryItem.findFirst({
+      where: { branchId, drugs: { some: { id: drugId } } },
+      orderBy: { createdAt: 'desc' }, select: { unit: true, packUnit: true },
+    });
+    if (!batch) return undefined;
+    const text = batch.packUnit?.trim();
+    if (text && this.mapUnitType(text, '') === batch.unit) return text.charAt(0).toUpperCase() + text.slice(1);
+    const names: Record<string, string> = { STRIPS: 'Strip', TUBES: 'Tube', BOTTLES: 'Bottle', VIALS: 'Vial',
+      AMPOULES: 'Ampoule', SYRINGES: 'Syringe', KITS: 'Kit', BOXES: 'Box', PACKS: 'Pack', PIECES: 'Piece' };
+    return names[batch.unit];
+  }
+
   private linePatchFromDrug(
     drug: MasterMatchDrug | any,
     item: CreatePharmacyPurchaseInvoiceItemDto,
+    stockUnit?: string,
   ) {
     return {
       productName: drug.name,
       manufacturer: drug.manufacturerName,
       packSize: drug.packSizeLabel,
-      packUnitType: item.packUnitType,
+      packUnitType: item.packUnitType?.trim() ? item.packUnitType : (stockUnit ?? item.packUnitType),
       mrp: this.money(item.mrp || drug.price || 0),
       purchaseRate: this.money(item.purchaseRate),
     };

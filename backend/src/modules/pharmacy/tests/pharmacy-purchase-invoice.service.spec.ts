@@ -84,6 +84,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
       },
       inventoryItem: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -754,6 +755,54 @@ describe('PharmacyPurchaseInvoiceService', () => {
         packSize: 'Strip of 3',
         mrp: 120,
       }),
+    });
+  });
+
+  describe('purchase-match-fills-blank-unit', () => {
+    const match = async (packUnitType: string, batch: any) => {
+      const drug = completeDrug({ name: 'Clobetasol 0.05% Cream', packSizeLabel: '15 g', type: 'allopathy' });
+      prisma.drug.findFirst.mockResolvedValue(drug);
+      prisma.drug.update.mockResolvedValue(drug);
+      prisma.inventoryItem.findFirst.mockResolvedValue(batch);
+      const item = { ...validDto().items[0], productName: drug.name, packSize: '15 g', packUnitType };
+      return service.confirmMasterRecord({ action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING, drugId: drug.id, item, mismatchAcknowledged: true }, branchId);
+    };
+
+    it("fills a blank stock unit from the product's latest batch", async () => {
+      const result = await match('', { unit: 'TUBES', packUnit: 'tube' });
+      expect(result.linePatch.packUnitType).toBe('Tube');
+      expect(prisma.inventoryItem.findFirst).toHaveBeenCalledWith({
+        where: { branchId, drugs: { some: { id: 'drug-1' } } },
+        orderBy: { createdAt: 'desc' }, select: { unit: true, packUnit: true },
+      });
+      expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
+      expect(prisma.inventoryItem.create).not.toHaveBeenCalled();
+    });
+
+    it('keeps a declared stock unit', async () => {
+      const result = await match('Strip', { unit: 'TUBES', packUnit: 'tube' });
+      expect(result.linePatch.packUnitType).toBe('Strip');
+      expect(prisma.inventoryItem.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the inventory unit when the batch pack text maps elsewhere", async () => {
+      const result = await match('', { unit: 'STRIPS', packUnit: '1x10' });
+      expect(result.linePatch.packUnitType).toBe('Strip');
+    });
+
+    it('leaves the unit blank when the product has no batch', async () => {
+      const result = await match('', null);
+      expect(result.linePatch.packUnitType).toBe('');
+    });
+
+    it('leaves CREATE_NEW units blank', async () => {
+      prisma.drug.findFirst.mockResolvedValue(null);
+      prisma.drug.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'drug-new', ...data }));
+      const item = { ...validDto().items[0], productName: 'Newcold Cream', packUnitType: '' };
+      const result = await service.confirmMasterRecord({ action: PharmacyPurchaseMasterActionDto.CREATE_NEW, item,
+        catalog: { productKind: 'MEDICINE', composition1: 'X', category: 'C', dosageForm: 'Cream', strength: '1%', requiresPrescription: false } }, branchId);
+      expect(result.linePatch.packUnitType).toBe('');
+      expect(prisma.inventoryItem.findFirst).not.toHaveBeenCalled();
     });
   });
 

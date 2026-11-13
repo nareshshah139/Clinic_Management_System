@@ -163,3 +163,42 @@ it('does not accept an unconfirmed correction response', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('response could not be confirmed');
   expect(callbacks.onSaved).not.toHaveBeenCalled();
 });
+
+describe('drug license on file', () => {
+  const known = { ...supplier, lastBillDrugLicenseNo: 'MH-PUN-SLV' };
+  const offer = () => screen.queryByRole('button', { name: 'Use this drug license' });
+
+  it('offers the known license for exactly one match and calls the Use action', async () => {
+    api.get.mockResolvedValue([known]);
+    const onUseDrugLicense = jest.fn();
+    render(<PurchaseSupplierReview {...props()} drugLicenseNo="  " onUseDrugLicense={onUseDrugLicense} />);
+    await screen.findByText(/Matching saved supplier found/);
+    expect(screen.getByText('MH-PUN-SLV')).toBeVisible();
+    expect(screen.getByText(/Check it against the bill\./)).toBeVisible();
+    fireEvent.click(offer()!);
+    expect(onUseDrugLicense).toHaveBeenCalledWith('MH-PUN-SLV');
+  });
+
+  it('prefers the saved supplier license over the last bill', async () => {
+    api.get.mockResolvedValue([{ ...known, drugLicenseNo: 'SAVED-DL' }]);
+    const onUseDrugLicense = jest.fn();
+    render(<PurchaseSupplierReview {...props()} drugLicenseNo="" onUseDrugLicense={onUseDrugLicense} />);
+    await screen.findByText('SAVED-DL');
+    fireEvent.click(offer()!);
+    expect(onUseDrugLicense).toHaveBeenCalledWith('SAVED-DL');
+  });
+
+  it.each([
+    ['read only', { readOnly: true }, [known]],
+    ['already typed', { drugLicenseNo: 'TYPED-1' }, [known]],
+    ['no callback', { onUseDrugLicense: undefined }, [known]],
+    ['two suppliers match', {}, [known, { ...known, id: 'supplier-2' }]],
+    ['nothing known', {}, [supplier]],
+  ])('hides the offer when %s', async (_label, extra, rows) => {
+    api.get.mockResolvedValue(rows);
+    render(<PurchaseSupplierReview {...props()} drugLicenseNo="" onUseDrugLicense={jest.fn()} {...(extra as object)} />);
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Loading saved suppliers…')).not.toBeInTheDocument());
+    expect(offer()).not.toBeInTheDocument();
+  });
+});
