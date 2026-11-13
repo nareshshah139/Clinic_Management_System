@@ -334,8 +334,8 @@ separate Daily Collection day view (a drawer count is a per-day act, not a month
 - **Default access for a new Pharmacist**: no permission editing is needed to open Pharmacy Report or
   record the count (measured). The onboarding path can skip `Role & Permissions` entirely.
 - **Reports & Analytics auto-loading** on card or date change is the right behaviour; only the button beside it is redundant.
-- **Create User dialog size**: seven fields in one small dialog, tab order top to bottom. Apart from
-  Status and Password it asks only for what is needed.
+- **Create User dialog size**: seven fields in one small dialog. Apart from Status and Password it asks
+  only for what is needed.
 
 ## Functional bugs tripped over (not verified further)
 
