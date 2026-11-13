@@ -472,6 +472,9 @@ function VisitsPageInner() {
   const selectedPatientIdRef = useRef(selectedPatientId);
   selectedPatientIdRef.current = selectedPatientId;
   const keepEditingRef = useRef<HTMLButtonElement>(null);
+  // The form reports 'unsaved' on an untouched new visit (and keeps it, since autosave needs a
+  // visitId), so the leave dialog also requires an edit by the user during this form session.
+  const formTouchedRef = useRef(false);
 
   // Autocomplete state for patients
   const [patientQuery, setPatientQuery] = useState('');
@@ -753,7 +756,17 @@ function VisitsPageInner() {
   if (formSession.key !== formSessionKey) {
     setFormSession({ key: formSessionKey, visitDate: new Date().toISOString() });
     setFormSaveStatus('idle');
+    formTouchedRef.current = false;
   }
+
+  const handleSaveStatusChange = useCallback((status: FormSaveStatus) => {
+    if (status === 'saved') formTouchedRef.current = false;
+    setFormSaveStatus(status);
+  }, []);
+  const markFormTouched = () => { formTouchedRef.current = true; };
+  const markFormTouchedByClick = (event: { target: EventTarget }) => {
+    if (!(event.target instanceof Element && event.target.closest('[role="tab"]'))) formTouchedRef.current = true;
+  };
 
   const startNewVisit = () => {
     if (selectedPatientId && selectedDoctorId) {
@@ -774,7 +787,7 @@ function VisitsPageInner() {
   };
 
   const requestLeave = (target: 'setup' | 'calendar') => {
-    if (UNSAVED_STATUSES.includes(formSaveStatus)) setPendingLeave(target);
+    if (formTouchedRef.current && UNSAVED_STATUSES.includes(formSaveStatus)) setPendingLeave(target);
     else leaveForm(target);
   };
  
@@ -1227,6 +1240,7 @@ function VisitsPageInner() {
         />
       </div>
 
+      <div className="contents" onInputCapture={markFormTouched} onChangeCapture={markFormTouched} onClickCapture={markFormTouchedByClick}>
       <MedicalVisitForm
         key={formKey}
         patientId={selectedPatientId}
@@ -1237,8 +1251,9 @@ function VisitsPageInner() {
         appointmentId={boundAppointment?.id}
         appointmentData={boundAppointment}
         initialVisitId={boundVisitId}
-        onSaveStatusChange={setFormSaveStatus}
+        onSaveStatusChange={handleSaveStatusChange}
       />
+      </div>
 
       <Dialog open={pendingLeave !== null} onOpenChange={(open: boolean) => { if (!open) setPendingLeave(null); }}>
         <DialogContent

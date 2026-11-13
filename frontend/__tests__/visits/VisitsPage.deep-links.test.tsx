@@ -15,6 +15,7 @@ type FormProps = {
 let mockQuery = '';
 const mockFormRenders: FormProps[] = [];
 let mockFormStatus = 'idle';
+let mockReportStatus: (status: string) => void = () => {};
 
 jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(mockQuery) }));
 jest.mock('@/lib/api', () => ({
@@ -32,8 +33,17 @@ jest.mock('@/components/visits/MedicalVisitForm', () => {
   return function MockForm(props: FormProps) {
     mockFormRenders.push(props);
     const { onSaveStatusChange } = props;
-    React.useEffect(() => { onSaveStatusChange?.(mockFormStatus); }, [onSaveStatusChange]);
-    return <div data-testid="medical-form">Form for {props.patientId}</div>;
+    React.useEffect(() => {
+      mockReportStatus = (status: string) => onSaveStatusChange?.(status);
+      onSaveStatusChange?.(mockFormStatus);
+    }, [onSaveStatusChange]);
+    return (
+      <div data-testid="medical-form">
+        Form for {props.patientId}
+        <input aria-label="mock field" />
+        <button type="button" role="tab">Vitals</button>
+      </div>
+    );
   };
 });
 jest.mock('@/components/patients/PatientProgressTracker', () => function Tracker() { return null; });
@@ -72,6 +82,12 @@ beforeEach(() => {
 });
 
 const backToSetup = () => fireEvent.click(screen.getByRole('button', { name: 'Back to Setup' }));
+
+function editMockField(value = 'x') {
+  const field = screen.getByLabelText('mock field');
+  fireEvent.input(field, { target: { value } });
+  fireEvent.change(field, { target: { value: value + '!' } });
+}
 
 async function pickPatient(name: string) {
   fireEvent.focus(screen.getByPlaceholderText('Search name, phone, or email'));
@@ -156,6 +172,7 @@ it('Back to Setup asks before leaving unsaved changes', async () => {
   mockQuery = 'patientId=pA';
   render(<VisitsPage />);
   await screen.findByTestId('medical-form');
+  editMockField();
   backToSetup();
   expect(await screen.findByText('Leave without saving?')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
@@ -195,4 +212,44 @@ it('the visit date stays the same while the form is open', async () => {
   } finally {
     jest.useRealTimers();
   }
+});
+
+it('Back to Setup on an untouched visit leaves at once', async () => {
+  mockFormStatus = 'unsaved';
+  mockQuery = 'patientId=pA';
+  render(<VisitsPage />);
+  await screen.findByTestId('medical-form');
+  backToSetup();
+  expect(await screen.findByRole('button', { name: 'Start Visit Documentation' })).toBeInTheDocument();
+  expect(screen.queryByText('Leave without saving?')).not.toBeInTheDocument();
+});
+
+it('switching a form tab does not count as an edit', async () => {
+  mockFormStatus = 'unsaved';
+  mockQuery = 'patientId=pA';
+  render(<VisitsPage />);
+  await screen.findByTestId('medical-form');
+  fireEvent.click(screen.getByRole('tab', { name: 'Vitals' }));
+  backToSetup();
+  expect(await screen.findByRole('button', { name: 'Start Visit Documentation' })).toBeInTheDocument();
+  expect(screen.queryByText('Leave without saving?')).not.toBeInTheDocument();
+});
+
+it('a saved form asks again after a new edit', async () => {
+  mockFormStatus = 'unsaved';
+  mockQuery = 'patientId=pA';
+  render(<VisitsPage />);
+  await screen.findByTestId('medical-form');
+  editMockField();
+  act(() => mockReportStatus('saved'));
+  backToSetup();
+  expect(await screen.findByRole('button', { name: 'Start Visit Documentation' })).toBeInTheDocument();
+  expect(screen.queryByText('Leave without saving?')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Start Visit Documentation' }));
+  await screen.findByTestId('medical-form');
+  editMockField('y');
+  act(() => mockReportStatus('unsaved'));
+  backToSetup();
+  expect(await screen.findByText('Leave without saving?')).toBeInTheDocument();
 });
