@@ -15,7 +15,7 @@ it('Start stays available while history is shown', async () => {
   render(<VisitsPage />);
   const search = await screen.findByPlaceholderText('Search name, phone, or email');
   fireEvent.focus(search);
-  fireEvent.keyDown(search, { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('option', { name: /Synthetic Patient/ }));
   expect(await screen.findByText('No documented history to show')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Start Visit Documentation' })).toBeInTheDocument();
   expect(screen.getByText('Ready to start visit')).toBeInTheDocument();

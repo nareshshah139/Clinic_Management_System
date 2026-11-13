@@ -1,43 +1,34 @@
 'use client';
 
-
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 
-import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { isValidId } from '@/lib/id';
-import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
-import { usePatientHistory } from '@/components/visits/usePatientHistory';
-import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { User, Users, Stethoscope, FileText, Calendar, Activity, ArrowLeft } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { User, Users, Stethoscope, Calendar, ArrowLeft } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { formatPatientName } from '@/lib/utils';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
 import { useRecordById } from '@/components/visits/useRecordById';
 import { PatientHistoryTimeline } from '@/components/visits/PatientHistoryTimeline';
-import { useRef } from 'react';
 import PatientPicker from '@/components/visits/PatientPicker';
 import type {
   Appointment,
   GetPatientsResponse,
   GetUsersResponse,
   Patient,
-  PatientVisitHistoryResponse,
   User as UserSummary,
-  VisitTimelineEntry,
 } from '@/lib/types';
 
 type AppointmentWithVisit = Appointment & { visit?: { id: string } | null };
@@ -86,16 +77,9 @@ function VisitsPageInner() {
   // visitId), so the leave dialog also requires an edit by the user during this form session.
   const formTouchedRef = useRef(false);
 
-  const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
-
   const [loadError, setLoadError] = useState(false);
 
   const searchParams = useSearchParams();
-  const urlPatientId = searchParams.get('patientId');
-  const appointmentIdParam = searchParams.get('appointmentId');
-  const urlDoctorId = searchParams.get('doctorId');
-  const urlVisitId = searchParams.get('visitId');
-  const autoStartParam = searchParams.get('autoStart') === 'true';
 
   const extractPatients = useCallback((payload: unknown): PatientMatch[] => {
     if (!payload) return [];

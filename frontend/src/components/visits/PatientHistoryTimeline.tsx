@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { VisitStatus } from '@cms/shared-types';
 import { Activity, FileText, Stethoscope } from 'lucide-react';
 import { displayClinicDateTime, displayUtcDate } from '@/lib/date-display';
 import { Badge } from '@/components/ui/badge';
@@ -324,7 +325,7 @@ export function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                     visit={visit as unknown as Record<string, unknown>}
                     visitLabel={visit.entryType === 'appointment' ? 'Appointment' : index === 0 ? 'Most recent record' : undefined}
                     highlight={index === 0}
-                    resumeLabel={visit.status === 'COMPLETED' ? 'Open visit' : undefined}
+                    resumeLabel={visit.status === VisitStatus.COMPLETED ? 'Open visit' : undefined}
                     onResume={
                       visit.id
                         ? () => {

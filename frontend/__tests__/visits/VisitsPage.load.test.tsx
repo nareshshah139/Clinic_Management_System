@@ -40,7 +40,7 @@ function mockUsers(me: unknown, usersImpl?: (params: any) => unknown) {
 beforeEach(() => {
   mockQuery = '';
   jest.clearAllMocks();
-  jest.mocked(apiClient.getPatients).mockResolvedValue({ patients: [{ id: 'patient-1', name: 'Synthetic Patient' }] });
+  jest.mocked(apiClient.getPatients).mockResolvedValue({ patients: [{ id: 'patient-1', name: 'Synthetic Patient' }] } as never);
 });
 
 describe('VisitsPage load and default doctor', () => {
@@ -67,7 +67,7 @@ describe('VisitsPage load and default doctor', () => {
 
   it('a doctorId link wins over the signed-in doctor', async () => {
     mockQuery = `patientId=${'c' + 'p'.repeat(24)}&doctorId=${D1}`;
-    jest.mocked(apiClient.getPatients).mockResolvedValue({ patients: [{ id: 'c' + 'p'.repeat(24), name: 'Synthetic Patient' }] });
+    jest.mocked(apiClient.getPatients).mockResolvedValue({ patients: [{ id: 'c' + 'p'.repeat(24), name: 'Synthetic Patient' }] } as never);
     mockUsers({ id: D2, role: 'DOCTOR' });
     render(<VisitsPage />);
     expect(await screen.findByTestId('medical-form')).toHaveTextContent(`Doctor: ${D1}`);
@@ -77,7 +77,7 @@ describe('VisitsPage load and default doctor', () => {
     mockUsers({ id: D2, role: 'DOCTOR' });
     jest.mocked(apiClient.getPatients)
       .mockRejectedValueOnce(new Error('network'))
-      .mockResolvedValue({ patients: [{ id: 'patient-1', name: 'Synthetic Patient' }] });
+      .mockResolvedValue({ patients: [{ id: 'patient-1', name: 'Synthetic Patient' }] } as never);
     render(<VisitsPage />);
     expect(await screen.findByText("Couldn't load visit setup")).toBeInTheDocument();
     expect(screen.queryByText('Setup Required')).not.toBeInTheDocument();
