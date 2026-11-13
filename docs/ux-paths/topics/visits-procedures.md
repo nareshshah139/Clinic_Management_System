@@ -5,7 +5,7 @@
 > `VisitIdentityBar.tsx`, `frontend/src/app/dashboard/procedures/page.tsx`,
 > `backend/src/modules/visits/visits.controller.ts` / `visits.service.ts` / `consultation.ts`.
 > Labels in `code font` or "quotes" are the strings in the code. Anything not read directly is marked *(unverified)* or *(inferred)*.
-> Stories are numbered locally from 001.
+> Story ids are catalog-wide.
 
 Facts that several stories rely on (read once):
 
@@ -176,7 +176,7 @@ Facts that several stories rely on (read once):
 **Preconditions**: Signed in as DOCTOR. Confirmed appointment today for Ananya Sharma (F, 27). She has two earlier visits, the last with tagged photos (Front, Left, Right). Drug master and a signature are set up (prescription internals are another topic).
 **Ideal path**: 14 — open from appointment (1), four vitals (4), add three photos in one action (2), complaint + diagnosis + examination chips (3), order tests (1), prescription hand-off (1), complete (2: confirm + done).
 **Alternate paths**:
-- Starting: any route from STORY-041/002/003.
+- Starting: any route from STORY-041/042/043.
 - Vitals: `Vitals` tab **or** Prescription › "Clinical Details & Vitals" (Height, Weight, BMI, BP Sys, BP Dia, Pulse) — the two are kept in sync.
 - Diagnosis: Prescription › "Diagnosis" text box **or** Prescription › "On Examination" › "Dermatology Diagnoses" chips (merged on save).
 - Ordering tests: `Lab Tests` tab **or** Prescription › "Investigations" checklist.

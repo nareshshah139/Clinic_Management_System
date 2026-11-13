@@ -38,7 +38,7 @@ Neither surface sells anything itself: every sale ends on the Sales bill page.
 5. Clicks sidebar **Pharmacy Counter** to begin dispensing (or goes back to the Desk and uses the `Pharmacy Counter` tile — both end on `?section=counter`).
 
 ### Variations
-- **Reception (Riya)**: the Desk shows no figures and no `Refresh` / `Invoices` / `Drugs` / `New sale`; only `Quick Guide`, `Pharmacy Counter` and `Inventory Control` (two tiles). The AI assistant launcher, Partner Daily Sync form and `Create Package` button are still rendered for her (see STORY-071/010 edge cases).
+- **Reception (Riya)**: the Desk shows no figures and no `Refresh` / `Invoices` / `Drugs` / `New sale`; only `Quick Guide`, `Pharmacy Counter` and `Inventory Control` (two tiles). The AI assistant launcher, Partner Daily Sync form and `Create Package` button are still rendered for her (see STORY-071/072 edge cases).
 - **Refresh figures**: `Refresh` in the dark header re-fetches `/pharmacy/dashboard` only; Partner Daily Sync has its own `Refresh`, and the package list reloads only after a package is created.
 - **Quick Guide**: opens "Pharmacy Management Guide"; its "Inventory Controls" section still says "Use Inventory > Pharmacy Control for Excel import / invoice scanning" — an area that does not exist.
 - **Owner**: has no Pharmacy Desk/Counter sidebar entry; can only arrive by typing the URL.

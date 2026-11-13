@@ -200,7 +200,7 @@
 **Ideal path**: 4 — click the quantity, type 8 and a reason, submit; approver approves from a notification.
 **Alternate paths** (lead A.14 in `discovery.md`, confirmed in code):
 - Item page action row `Edit stock` (same dialog).
-- A stock count: stock list `Count selected batches`, item page `Count this batch`, or Stock counts › `Count an item` → sign-off → `Approve and adjust stock` (STORY-099/007).
+- A stock count: stock list `Count selected batches`, item page `Count this batch`, or Stock counts › `Count an item` → sign-off → `Approve and adjust stock` (STORY-099/100).
 - `Loss & breakage` document (`Post stock loss` — posts immediately, **no approval**).
 - Item page › `Ledger` tab › row `Correct` → "Correct signed quantity" + "Reason" → `Post linked correction` (shown to approvers only; creates a `Corrections` document).
 - For price: row `Edit price` / item page `Edit price` (same dialog with "New selling price (₹ per stock unit)").

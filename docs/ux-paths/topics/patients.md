@@ -370,7 +370,7 @@
 
 ### Edge Cases
 - **Meaning of the period**: `Last 1 Month` = registered **or** had a visit in the last month; the control is only labelled by its value, so Suresh may read it as "new registrations".
-- **Columns**: ID, Name, Age, Gender, Phone, Email, ABHA ID, Referral, Consultation Type, Portal Linked, Created At. Per code `Consultation Type` is always blank and `Portal Linked` always "No" (same dropped fields as STORY-013/005); `ID` is the internal ID, the patient code is not exported.
+- **Columns**: ID, Name, Age, Gender, Phone, Email, ABHA ID, Referral, Consultation Type, Portal Linked, Created At. Per code `Consultation Type` is always blank and `Portal Linked` always "No" (same dropped fields as STORY-013/015); `ID` is the internal ID, the patient code is not exported.
 - **Size**: the server caps an export at 10,000 rows with no warning when the cap is hit.
 - **Failure**: destructive toast `Export failed`.
 - **Archived patients** are never included.

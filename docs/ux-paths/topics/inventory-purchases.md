@@ -4,7 +4,7 @@
 > (scan/OCR, manual, CSV, Gmail), reviewing and posting them to stock, the Purchase bills register,
 > paying, credit notes and set-off, supplier returns, suppliers, Terms of Trade and purchase analytics.
 > Labels in quotes or `code font` are the strings in the source. Anything not read directly in code is
-> marked *(inferred)* or *(label unverified)*. Stories are numbered locally from 001.
+> marked *(inferred)* or *(label unverified)*. Story ids are catalog-wide.
 >
 > Shared navigation facts used by every story (`frontend/src/components/inventory/InventoryWorkspace.tsx`):
 > - Sidebar `Inventory` → `/dashboard/inventory` opens area **Today**. Area buttons: `Today`, `Purchases`, `Stock`, `Sales`, `Reorder`.

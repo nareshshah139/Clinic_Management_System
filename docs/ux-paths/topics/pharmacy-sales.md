@@ -2,7 +2,7 @@
 
 > Read-only analysis of the code as it stands. Labels in `code font` or "quotes" are strings found in the
 > source. Paths are relative to `frontend/src/` unless prefixed. Items marked *(unverified)* were inferred,
-> not read. Stories are numbered locally from 001.
+> not read. Story ids are catalog-wide.
 
 Things the code does **not** have, which shape several stories below:
 
