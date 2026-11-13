@@ -2,7 +2,7 @@
 
 import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
-import { assessCatalogue, catalogueFieldLabels, catalogueFingerprint, sameCatalogueRequest, type CatalogueAssessment, type CatalogueProduct, type CatalogueRequest, type CatalogueResolution, type CatalogueRow } from '@/lib/purchase-invoice-catalogue';
+import { assessCatalogue, catalogueFieldLabels, catalogueFingerprint, sameCatalogueRequest, type CatalogueAssessment, type CatalogueField, type CatalogueProduct, type CatalogueRequest, type CatalogueResolution, type CatalogueRow } from '@/lib/purchase-invoice-catalogue';
 import { PurchaseDocumentActions } from "@/components/inventory/PurchaseDocumentActions";
 import {
   useCallback,
@@ -380,9 +380,7 @@ function todayInput() {
   return toDateInput(new Date());
 }
 
-function nextExpiryYear() {
-  return String(new Date().getFullYear() + 1);
-}
+const plainReviewMessage = (raw: string) => /\bis required(?: before review)?$/i.test(raw.trim()) ? purchaseReviewIssue(raw).message : raw;
 
 function money(value: number) {
   return Math.round(value * 100) / 100;
@@ -448,6 +446,10 @@ function defaultHeader(): HeaderForm {
   };
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-line-no-silent-defaults
+ * A typed line MUST start without a stock unit or expiry; both MUST stay visible missing checks until entered. Extracted, imported, restored and receipt-linked lines MUST keep their source values.
+ */
 function emptyLine(serialNumber: number): LineForm {
   return {
     localId: makeLocalId(),
@@ -455,11 +457,11 @@ function emptyLine(serialNumber: number): LineForm {
     productName: "",
     manufacturer: "",
     packSize: "",
-    packUnitType: "Strip",
+    packUnitType: "",
     hsnCode: "",
     batchNumber: "",
-    expiryMonth: "12",
-    expiryYear: nextExpiryYear(),
+    expiryMonth: "",
+    expiryYear: "",
     quantityPurchased: "1",
     freeQuantity: "0",
     mrp: "0",
@@ -614,6 +616,7 @@ function parseDateInput(value: string) {
 }
 
 function isExpiredLine(line: LineForm) {
+  if (!line.expiryMonth.trim() || !line.expiryYear.trim()) return false;
   const month = numeric(line.expiryMonth);
   const year = numeric(line.expiryYear);
   if (!Number.isInteger(month) || !Number.isInteger(year)) return false;
@@ -695,7 +698,9 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
     if (numeric(line.purchaseRate) < 0 || numeric(line.mrp) < 0) {
       errors.push(`${prefix}: purchase rate and MRP cannot be negative`);
     }
-    if (purchaseExpiryInvalid(line.expiryMonth, line.expiryYear)) {
+    if (!line.expiryMonth.trim() && !line.expiryYear.trim()) {
+      errors.push(`${prefix}: expiry is required`);
+    } else if (purchaseExpiryInvalid(line.expiryMonth, line.expiryYear)) {
       errors.push(`${prefix}: expiry month/year is invalid`);
     }
     if (numeric(line.schemeAmount) < 0 || calculateLine(line).taxable < 0)
@@ -1691,7 +1696,11 @@ function PurchaseInvoiceEditor({
   const linePayload = (line: LineForm) => {
     const payload = buildDraftPayload(header, [line]);
     const item = Array.isArray(payload.items) ? payload.items[0] : undefined;
-    return { ...item as Record<string, unknown>, productKind: line.productKind || undefined };
+    // The product check only reads name, pack and kind, but the server rejects a request whose expiry is blank.
+    // A placeholder is sent for the check only; it is never saved or shown.
+    const expiryTyped = !purchaseExpiryInvalid(line.expiryMonth, line.expiryYear);
+    const placeholder = expiryTyped ? {} : { expiryMonth: 12, expiryYear: new Date().getFullYear() + 1 };
+    return { ...item as Record<string, unknown>, ...placeholder, productKind: line.productKind || undefined };
   };
 
   const applyLinePatch = (
@@ -3057,7 +3066,8 @@ function PurchaseInvoiceEditor({
   }));
   const catalogueReady = catalogueRows.length === lines.length && catalogueRows.length > 0 && catalogueRows.every(row => row.resolution.state === 'ready');
   const catalogueBlockers = catalogueRows.filter(row => row.resolution.state !== 'ready');
-  const catalogueChecks = stockAdded || activeInvoice?.status === 'CANCELLED' ? 0 : catalogueReady ? 0 : Math.max(1, catalogueBlockers.length);
+  const anyProductName = lines.some(line => line.productName.trim());
+  const catalogueChecks = stockAdded || activeInvoice?.status === 'CANCELLED' ? 0 : catalogueReady ? 0 : !anyProductName ? 0 : Math.max(1, catalogueBlockers.length);
   const canReview =
     catalogueReady &&
     access.review &&
@@ -3232,8 +3242,8 @@ function PurchaseInvoiceEditor({
         ...(header.billType === "CREDIT" && !header.dueDate
           ? ["dueDate is required before review"]
           : []),
-        ...lines.flatMap((line, index) =>
-          (
+        ...lines.flatMap((line, index) => [
+          ...(
             [
               "productName",
               "packSize",
@@ -3247,7 +3257,8 @@ function PurchaseInvoiceEditor({
               (field) =>
                 `Line ${index + 1}: ${field} is required before review`,
             ),
-        ),
+          ...(!line.expiryMonth.trim() && !line.expiryYear.trim() ? [`Line ${index + 1}: expiry is required before review`] : []),
+        ]),
       ]
     : [];
   const flaggedFields = new Set([
@@ -3270,6 +3281,9 @@ function PurchaseInvoiceEditor({
     (issue) =>
       !manualIssueKeys.has(issue.key) && issue.key !== "header:supplier-match",
   );
+  const isMissingIssue = (issue: (typeof correctionIssues)[number]) => !!issue.field && issue.key.endsWith(":missing") && !issue.category;
+  const missingIssues = correctionIssues.filter(isMissingIssue);
+  const restIssues = correctionIssues.filter(issue => !isMissingIssue(issue));
   const manualConfidenceLines = otherReviewIssues
     .filter(
       (issue) =>
@@ -3384,9 +3398,29 @@ function PurchaseInvoiceEditor({
           {lines.map((line, index) => <PurchaseOcrChecklist key={line.localId} flags={currentLineFlags[index]} checked={checkedOcr[line.localId]} lineIndex={index} lineId={line.localId} values={line} />)}
         </>
       )}
-      {correctionIssues.length > 0 && (
+      {missingIssues.length > 0 && (
         <ul className="space-y-2 text-sm">
-          {correctionIssues.map((issue) => {
+          <li className={`space-y-2 rounded-md border p-3 ${reviewColors.error}`}>
+            <PurchaseStatusCue tone="error">{missingIssues.length} detail{missingIssues.length === 1 ? "" : "s"} to fill in</PurchaseStatusCue>
+            <ul aria-label="Details to fill in" className="space-y-1">
+              {missingIssues.map((issue) => {
+                const lineId = issue.lineIndex === undefined ? undefined : lines[issue.lineIndex]?.localId;
+                const target = issue.target && (lineId && issue.field ? `${lineId}-${issue.target}` : issue.target);
+                return (
+                  <li key={issue.key} className="flex flex-wrap items-baseline gap-x-3">
+                    <span>{issue.message}</span>
+                    {editingChecks && target && <a className="underline underline-offset-4" onClick={() => focusPurchaseField(target)} href={`#${target}`}>Go to {issue.label}</a>}
+                  </li>
+                );
+              })}
+            </ul>
+            <details><summary className="cursor-pointer text-muted-foreground">How to fix</summary><p className="mt-2 max-w-prose text-muted-foreground">Type each missing detail from the bill. Stock unit is how you count this item, such as Strip, Tube or Bottle.</p></details>
+          </li>
+        </ul>
+      )}
+      {restIssues.length > 0 && (
+        <ul className="space-y-2 text-sm">
+          {restIssues.map((issue) => {
             const lineId =
               issue.lineIndex === undefined
                 ? undefined
@@ -3618,10 +3652,10 @@ function PurchaseInvoiceEditor({
         ? "An inventory administrator must check this bill against opening stock before posting."
         : !access.review || !access.create
           ? "Confirming this invoice requires create and review permissions."
-          : !catalogueReady
+          : !catalogueReady && anyProductName
             ? "Resolve the product checks before adding stock."
             : invalidReviewValues.length > 0
-              ? invalidReviewValues[0]
+              ? plainReviewMessage(missingStockFields[0] ?? invalidReviewValues[0])
               : hardOcrFlags.length > 0
                 ? "Resolve the upload or unsupported invoice checks. Correct the source and scan again, or enter the complete invoice manually."
                 : !reviewDate
@@ -3639,12 +3673,24 @@ function PurchaseInvoiceEditor({
     if (batchDisabled || batchState.kind !== 'preview') return;
     try {
       const next = applyPurchaseTerms(lines, batchState.proposal, batchBasis);
-      const errors = validateDraft(header, next);
+      const before = new Set(validateDraft(header, lines));
+      const errors = validateDraft(header, next).filter(error => !before.has(error));
       if (errors.length) { setError(errors.join(' ')); return; }
       invalidatePending();  setManualReviewCandidateId(null);
       setLines(next); setBatchState({ ...batchState, kind: 'applied' });
       setNotice(`Shared terms applied to ${batchState.proposal.selectedIds.length} selected rows. Draft only; stock has not changed.`);
     } catch (error) { setError(getErrorMessage(error)); setBatchState({ kind: 'idle' }); }
+  };
+  const typedTotalOnly = !originalAmounts || Object.keys(originalAmounts).every(key => key === 'netPayable');
+  const typedTotalText = String(originalAmounts?.netPayable ?? "");
+  const typedTotalDifference = typedTotalText === "" || !Number.isFinite(Number(typedTotalText)) ? null : money(totals.netPayable - Number(typedTotalText));
+  /**
+   * @cc [owner:nareshshah139,label:product] typed-bill-printed-total
+   * A typed bill MAY record the printed grand total. It MUST stay optional: clearing it removes it. A difference above INR 1 MUST block final confirmation through the existing printed-total check; smaller differences MUST be shown as information.
+   */
+  const updateTypedTotal = (value: string) => {
+    setManualReviewCandidateId(null);
+    setOriginalAmounts(value === "" ? null : { netPayable: value });
   };
   const undoShared = () => {
     if (batchDisabled || batchState.kind !== 'applied' || batchState.invoiceId !== editingId) return;
@@ -4131,7 +4177,7 @@ function PurchaseInvoiceEditor({
                 </p>
                 <ul className="list-disc pl-4 space-y-1">
                   {validationErrors.map((item) => (
-                    <li key={item}>{item}</li>
+                    <li key={item}>{plainReviewMessage(item)}</li>
                   ))}
                 </ul>
               </AlertDescription>
@@ -4997,7 +5043,7 @@ function PurchaseInvoiceEditor({
                                           className="my-2 text-sm text-destructive"
                                         >
                                           Complete the saved product details:{" "}
-                                          {savedProduct.catalogIssues.join(
+                                          {savedProduct.catalogIssues.map(field => catalogueFieldLabels[field as CatalogueField] ?? field).join(
                                             ", ",
                                           )}
                                           . Choose the correct product kind if
@@ -5113,6 +5159,9 @@ function PurchaseInvoiceEditor({
                       </div>
 
                       {sharedTermsEditor}
+                      <datalist id="purchase-stock-units">
+                        {["Strip", "Tube", "Bottle", "Box", "Vial", "Ampoule", "Pack", "Piece", "Kit", "Syringe"].map(unit => <option key={unit} value={unit} />)}
+                      </datalist>
                       {lines.map((line, index) => {
                         const amounts = calculateLine(line);
                         return (
@@ -5164,7 +5213,7 @@ function PurchaseInvoiceEditor({
                                 <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
 <Field id={`${line.localId}-product`} label="Product" value={line.productName} className="col-span-2" onChange={event => updateLine(line.localId, "productName", event.target.value)} />
 <Field id={`${line.localId}-pack-size`} label="Pack Size" value={line.packSize} onChange={event => updateLine(line.localId, "packSize", event.target.value)} />
-<Field id={`${line.localId}-unit`} label="Stock unit" value={line.packUnitType} onChange={event => updateLine(line.localId, "packUnitType", event.target.value)} />
+<Field id={`${line.localId}-unit`} label="Stock unit" list="purchase-stock-units" placeholder="Strip, Tube, Bottle…" value={line.packUnitType} onChange={event => updateLine(line.localId, "packUnitType", event.target.value)} />
 <Field id={`${line.localId}-batch`} label="Batch" value={line.batchNumber} onChange={event => updateLine(line.localId, "batchNumber", event.target.value)} />
 <Field id={`${line.localId}-expiry-month`} label="Exp. Month" value={line.expiryMonth} type="number" min="1" max="12" onChange={event => updateLine(line.localId, "expiryMonth", event.target.value)} />
 <Field id={`${line.localId}-expiry-year`} label="Exp. Year" value={line.expiryYear} type="number" min="2020" max="2100" onChange={event => updateLine(line.localId, "expiryYear", event.target.value)} />
@@ -5377,7 +5426,31 @@ function PurchaseInvoiceEditor({
                           from sales and purchase cost; TCS and rounding are
                           excluded. Missing MRP makes margin unknown.
                         </p>
-                        <ReportedAmountsEditor
+                        {typedTotalOnly && !savedFormLocked && (
+                          <div className="max-w-xs space-y-1">
+                            <Field
+                              id="invoice-printed-total"
+                              label="Total on the bill (₹)"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={typedTotalText}
+                              disabled={saving || extracting || processing}
+                              onChange={(event) => updateTypedTotal(event.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">Optional. Type the bill's grand total to check your entries.</p>
+                            {typedTotalDifference !== null && (
+                              <p role="status" className={Math.abs(typedTotalDifference) > 1 ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>
+                                {typedTotalDifference === 0
+                                  ? "Matches the calculated total."
+                                  : Math.abs(typedTotalDifference) <= 1
+                                    ? `Differs by ${currency.format(Math.abs(typedTotalDifference))}, within the ₹1 rounding allowance.`
+                                    : `Differs from the calculated total (${currency.format(totals.netPayable)}) by ${currency.format(Math.abs(typedTotalDifference))}. Check quantities, rates and GST against the bill.`}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {(!typedTotalOnly || savedFormLocked) && <ReportedAmountsEditor
                           id="invoice"
                           values={originalAmounts}
                           labels={reportedHeaderAmounts}
@@ -5390,7 +5463,7 @@ function PurchaseInvoiceEditor({
                           onChange={(key, value) =>
                             updateReportedAmount(key, value)
                           }
-                        />
+                        />}
                       </CardContent>
                     </Card>
 

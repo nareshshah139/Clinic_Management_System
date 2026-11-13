@@ -1419,7 +1419,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     saveCurrentInvoice();
 
     expect(await screen.findByText('Fix Required')).toBeInTheDocument();
-    expect(screen.getByText('Distributor name is required')).toBeInTheDocument();
+    expect(within(screen.getByText('Fix Required').closest('[role="alert"]') as HTMLElement).getByText('Supplier is missing.')).toBeInTheDocument();
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
   });
 
@@ -1740,6 +1740,9 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.change(screen.getByLabelText('Batch'), {
       target: { value: 'AZT2401' },
     });
+    fireEvent.change(screen.getByLabelText('Stock unit'), { target: { value: 'Strip' } });
+    fireEvent.change(screen.getByLabelText('Exp. Month'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('Exp. Year'), { target: { value: '2027' } });
 
     fireEvent.change(screen.getByLabelText('Rate'), { target: { value: '100' } });
     fireEvent.change(screen.getByLabelText('MRP'), { target: { value: '120' } });
@@ -2651,5 +2654,114 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(document.getElementById('purchase-review-checklist')).toHaveFocus();
     expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
   });
+
+  async function typeValidBill(options: { hsn?: string } = {}) {
+    fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+    const set = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    set('Distributor', 'Apex Distributors');
+    set('GSTIN', '36ABCDE1234F1Z5');
+    set('DL No.', 'TS/HYD/20B/12345');
+    set('Invoice No.', 'APX-001');
+    set('Product', 'Azithral 500 Tablet');
+    set('Pack Size', 'Strip of 3');
+    set('Stock unit', 'Strip');
+    set('HSN', options.hsn ?? '3004');
+    set('Batch', 'AZT2401');
+    set('Exp. Month', '12');
+    set('Exp. Year', '2027');
+    set('Rate', '100');
+    set('MRP', '120');
+  }
+
+  it('starts a typed line with no stock unit or expiry and lists both as missing', async () => {
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+    expect(screen.getByLabelText('Stock unit')).toHaveValue('');
+    expect(screen.getByLabelText('Exp. Month')).toHaveValue(null);
+    expect(screen.getByLabelText('Exp. Year')).toHaveValue(null);
+    const checklist = screen.getByRole('region', { name: 'Check before adding stock' });
+    expect(within(checklist).getByText('Line 1: Stock unit is missing.')).toBeInTheDocument();
+    expect(within(checklist).getByText('Line 1: Expiry is missing.')).toBeInTheDocument();
+  });
+
+  it('names a missing field in plain words in the footer', async () => {
+    render(<PurchaseInvoiceWorkbench />);
+    await typeValidBill({ hsn: '' });
+    const footer = await waitFor(() => {
+      const element = document.getElementById('purchase-posting-guidance') as HTMLElement;
+      expect(element).toHaveTextContent('Line 1: HSN is missing.');
+      return element;
+    });
+    expect(footer.textContent).not.toMatch(/hsnCode|required before review/);
+  });
+
+  it('shows no product check before any product is typed', async () => {
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+    const checklist = screen.getByRole('region', { name: 'Check before adding stock' });
+    expect(within(checklist).queryByText('Products need attention')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Invoice product checks' })).not.toBeInTheDocument();
+    expect(document.getElementById('purchase-posting-guidance')).not.toHaveTextContent('Resolve the product checks before adding stock.');
+  });
+
+  it('groups missing details into one list', async () => {
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+    const list = screen.getByRole('list', { name: 'Details to fill in' });
+    expect(within(list).getByRole('link', { name: 'Go to HSN' })).toBeInTheDocument();
+    expect(within(list).getByRole('link', { name: 'Go to batch' })).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole('link', { name: 'Go to HSN' }));
+    expect(screen.getByLabelText('HSN')).toHaveFocus();
+  });
+
+  it('checks a typed bill against the total on the bill', async () => {
+    render(<PurchaseInvoiceWorkbench />);
+    await typeValidBill();
+    const total = screen.getByLabelText('Total on the bill (₹)');
+    fireEvent.change(total, { target: { value: '130' } });
+    expect(await screen.findByText(/Differs from the calculated total/)).toBeInTheDocument();
+    fireEvent.click(await reviewConfirmation());
+    expect(await screen.findByText(/Printed Net payable differs from the calculated amount/)).toBeVisible();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    fireEvent.change(total, { target: { value: '112.40' } });
+    expect(await screen.findByText(/within the ₹1 rounding allowance/)).toBeInTheDocument();
+    api.reviewPharmacyPurchaseInvoice.mockResolvedValue({ ...draftInvoice, status: 'REVIEWED' });
+    fireEvent.click(await reviewConfirmation());
+    await waitFor(() => expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith(expect.objectContaining({ netPayable: 112.4 })));
+  });
+
+  it('removes the typed total when the field is cleared', async () => {
+    render(<PurchaseInvoiceWorkbench />);
+    await typeValidBill();
+    const total = screen.getByLabelText('Total on the bill (₹)');
+    fireEvent.change(total, { target: { value: '130' } });
+    fireEvent.change(total, { target: { value: '' } });
+    expect(screen.queryByText(/Reported Net payable/)).not.toBeInTheDocument();
+    api.reviewPharmacyPurchaseInvoice.mockResolvedValue({ ...draftInvoice, status: 'REVIEWED' });
+    fireEvent.click(await reviewConfirmation());
+    await waitFor(() => expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith(expect.objectContaining({ netPayable: 112 })));
+  });
+
+  it('sends the product check a valid placeholder expiry while the typed expiry is blank', async () => {
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+    fireEvent.change(screen.getByLabelText('Product'), { target: { value: 'Clobetasol Cream' } });
+    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalled());
+    const item = (api.suggestPharmacyPurchaseMasterMatches.mock.calls[0][0] as any).items[0];
+    expect(item.expiryMonth).toBeGreaterThanOrEqual(1);
+    expect(item.expiryMonth).toBeLessThanOrEqual(12);
+    expect(item.expiryYear).toBeGreaterThanOrEqual(2020);
+    expect(screen.getByLabelText('Exp. Month')).toHaveValue(null);
+  });
+
+  it('names saved product gaps in plain words', async () => {
+    mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true, editProduct: true } as typeof mockPurchaseAccess;
+    api.suggestPharmacyPurchaseMasterMatches.mockResolvedValue(cosgloMatches());
+    renderSavedInvoice(cosgloInvoice);
+    await editSelectedInvoice();
+    expect(await screen.findByText(/Complete the saved product details: composition, category, dosage form, strength\./)).toBeInTheDocument();
+  });
+
 
 });
