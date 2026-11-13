@@ -68,3 +68,6 @@ output/stack/
 .claude/worktrees/
 
 /output/pdf/
+
+# User guide screenshots and intermediate HTML, rebuilt by scripts/guide
+output/guide/
