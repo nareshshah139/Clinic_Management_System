@@ -3388,7 +3388,7 @@ function PurchaseInvoiceEditor({
           {lines.map((line, index) => <PurchaseOcrChecklist key={line.localId} flags={currentLineFlags[index]} checked={checkedOcr[line.localId]} lineIndex={index} lineId={line.localId} values={line} />)}
         </>
       )}
-      {correctionIssues.length > 0 && (
+      {hasDraftContent && correctionIssues.length > 0 && (
         <ul className="space-y-2 text-sm">
           {correctionIssues.map((issue) => {
             const lineId =

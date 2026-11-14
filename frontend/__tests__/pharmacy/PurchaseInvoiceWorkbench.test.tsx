@@ -2723,6 +2723,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.queryByRole('navigation', { name: 'Invoice checks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Invoice product checks' })).not.toBeInTheDocument();
     expect(document.querySelectorAll('[aria-invalid="true"]')).toHaveLength(0);
+    expect(screen.queryByText(/is missing\./)).not.toBeInTheDocument();
+    expect(screen.queryByText('No saved supplier matches these details.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Supplier name'), { target: { value: 'Apex Medico Agencies' } });
     expect(await screen.findByText(/checks to finish/)).toBeInTheDocument();
