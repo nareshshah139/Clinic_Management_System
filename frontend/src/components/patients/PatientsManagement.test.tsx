@@ -79,7 +79,11 @@ describe('PatientsManagement table', () => {
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'First Name' }), 'Meera');
     await userEvent.type(within(dialog).getByRole('textbox', { name: 'Phone' }), '9848012345');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
-    expect(within(dialog).getByRole('alert')).toHaveTextContent("Enter the patient's gender.");
+    const gender = within(dialog).getByRole('combobox', { name: 'Gender' });
+    expect(gender).toHaveAttribute('aria-invalid', 'true');
+    expect(gender).toHaveAccessibleDescription("Choose the patient's gender.");
+    expect(gender).toHaveFocus();
+    expect(within(dialog).getByRole('textbox', { name: 'Phone' })).not.toHaveAttribute('aria-invalid');
     expect(apiClient.createPatient).not.toHaveBeenCalled();
   });
 });
