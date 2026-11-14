@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-xs font-medium w-fit min-w-0 max-w-full whitespace-nowrap [&>svg]:size-3 [&>svg]:shrink-0 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden",
+  "inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-xs font-medium w-fit max-w-full whitespace-nowrap [&>svg]:size-3 [&>svg]:shrink-0 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive transition-[color,box-shadow]",
   {
     variants: {
       variant: {
@@ -33,25 +33,37 @@ const badgeVariants = cva(
   }
 )
 
+const LONG_LABEL_CHARS = 24
+
 /**
  * @cc [owner:nareshshah139,label:accessibility] wrapping-badge-label
  * Badge labels MUST stay on one line and never break inside a word, while keeping their icons visible.
+ * A short label MUST never be clipped; a text label longer than 24 characters MAY shrink, and then
+ * ends in an ellipsis with its full text as the title.
  */
 function Badge({
   className,
   variant,
   asChild = false,
+  children,
+  title,
   ...props
 }: React.ComponentProps<"span"> &
   VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
   const Comp = asChild ? Slot : "span"
+  const parts = React.Children.toArray(children)
+  const text = parts.every((part) => typeof part === "string" || typeof part === "number") ? parts.join("") : null
+  const long = text !== null && text.length > LONG_LABEL_CHARS
 
   return (
     <Comp
       data-slot="badge"
-      className={cn(badgeVariants({ variant }), className)}
+      className={cn(badgeVariants({ variant }), long ? "min-w-0" : "shrink-0", className)}
+      title={title ?? (long ? text : undefined)}
       {...props}
-    />
+    >
+      {long ? <span className="truncate">{text}</span> : children}
+    </Comp>
   )
 }
 

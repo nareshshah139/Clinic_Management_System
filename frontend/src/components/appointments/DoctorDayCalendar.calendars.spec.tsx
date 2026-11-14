@@ -136,8 +136,8 @@ describe('DoctorDayCalendar Scheduled and Confirmed calendars', () => {
     const missed: Fixture = { id: 'a4', slot: '13:00-13:30', name: 'Meena Rao', status: AppointmentStatus.NO_SHOW, calendar: 'CONFIRMED' };
     await renderDay(ravi, missed);
 
-    expect(column('Scheduled').getAllByTitle('Reschedule Appointment')).toHaveLength(1);
-    expect(column('Confirmed').queryAllByTitle('Reschedule Appointment')).toHaveLength(0);
+    expect(column('Scheduled').getAllByRole('button', { name: /^Reschedule / })).toHaveLength(1);
+    expect(column('Confirmed').queryAllByRole('button', { name: /^Reschedule / })).toHaveLength(0);
     const noShow = await openDetails('Meena Rao');
     expect(noShow.getByRole('button', { name: /Cancel Appointment/ })).toBeInTheDocument();
     expect(noShow.queryByRole('button', { name: 'Reschedule' })).toBeNull();

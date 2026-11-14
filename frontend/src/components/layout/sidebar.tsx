@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Fragment, useMemo } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { enumLabel } from "@/lib/labels";
 import { useDashboardUser } from "./dashboard-user-context";
 import { usePendingItemRequestCount } from "@/components/inventory/use-pending-item-requests";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
@@ -215,6 +216,7 @@ function linkIsActive(
  */
 export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, logout, loading } = useDashboardUser();
   const role = user?.role;
@@ -251,6 +253,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <Link
               key={item.name}
               href={item.href}
+              prefetch={false}
+              onMouseEnter={() => router.prefetch(item.href)}
+              onFocus={() => router.prefetch(item.href)}
               onClick={onNavigate}
               aria-current={isActive ? "page" : undefined}
               className={cn(
@@ -297,7 +302,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                   "Unknown User"}
             </p>
             <p className="text-xs text-[var(--muted-foreground)]">
-              {role ?? "Unknown Role"}
+              {role ? enumLabel("role", role) : "Unknown Role"}
             </p>
           </div>
           <button

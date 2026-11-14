@@ -19,6 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { PageHeader } from '@/components/ui/page-header';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { enumLabel, humanizeEnum } from '@/lib/labels';
 import { getErrorMessage } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import React, { useRef } from 'react';
@@ -34,8 +35,6 @@ import {
 
 type UserForm = { id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string };
 const EMPTY_FORM: UserForm = { firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE' };
-const ROLE_LABELS: Record<string, string> = { OWNER: 'Owner', ADMIN: 'Admin', MANAGER: 'Manager', DOCTOR: 'Doctor', NURSE: 'Nurse', RECEPTION: 'Receptionist', PHARMACIST: 'Pharmacist', ACCOUNTANT: 'Accountant' };
-const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Active', INACTIVE: 'Inactive', SUSPENDED: 'Suspended', PENDING: 'Pending' };
 // The API serves at most 100 permissions per page.
 const PERMISSIONS_PAGE_SIZE = 100;
 
@@ -448,7 +447,7 @@ export default function UsersManagement() {
       toast({ variant: 'destructive', title: 'Could not change the role', description: getErrorMessage(error) });
       return;
     }
-    toast({ title: 'Role changed', description: `${selectedUser.firstName} ${selectedUser.lastName} is now ${ROLE_LABELS[role] ?? role}.` });
+    toast({ title: 'Role changed', description: `${selectedUser.firstName} ${selectedUser.lastName} is now ${enumLabel('role', role)}.` });
     if (request !== permRequest.current) return;
     setSelectedUser({ ...selectedUser, role: role as any });
     setPermLoad('loading');
@@ -599,8 +598,8 @@ export default function UsersManagement() {
                     <TableRow key={u.id}>
                       <TableCell>{u.firstName} {u.lastName}</TableCell>
                       <TableCell>{u.email}</TableCell>
-                      <TableCell>{ROLE_LABELS[String(u.role)] ?? u.role}</TableCell>
-                      <TableCell>{STATUS_LABELS[String(u.status)] ?? u.status}</TableCell>
+                      <TableCell>{enumLabel('role', String(u.role))}</TableCell>
+                      <TableCell>{humanizeEnum(String(u.status))}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Button variant="outline" size="sm" onClick={() => onEdit(u)}><Edit /> Edit</Button>

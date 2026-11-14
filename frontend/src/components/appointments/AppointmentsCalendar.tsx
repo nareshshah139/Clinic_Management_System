@@ -20,6 +20,7 @@ import { useOverbookConfirm } from './useOverbookConfirm';
 import { CALENDARS, type SlotChoice } from './appointment-calendars';
 import { CalendarLegend } from './CalendarLegend';
 import { overbookFlag } from '@/lib/overbooking';
+import { enumLabel } from '@/lib/labels';
 
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -635,7 +636,7 @@ export default function AppointmentsCalendar({
                     {bookingDetails.patient?.name || `${selectedPatient?.firstName ?? ''} ${selectedPatient?.lastName ?? ''}`.trim()} 
                     {' '} scheduled for {bookingDetails.slot} in the {CALENDARS[bookingDetails.calendar].title} calendar
                     {bookingDetails.room && ` in ${bookingDetails.room.name}`}
-                    {bookingDetails.visitType && ` (${bookingDetails.visitType})`}
+                    {bookingDetails.visitType && ` (${enumLabel('visitType', bookingDetails.visitType)})`}
                   </p>
                 </div>
               </div>

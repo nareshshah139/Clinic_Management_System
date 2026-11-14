@@ -1,3 +1,5 @@
+import { humanizeEnum, normalizeEnum } from './labels';
+
 export type StatusVariant = 'success' | 'warning' | 'info' | 'highlight' | 'neutral' | 'danger';
 export type StatusDomain = 'appointment' | 'visit' | 'invoice' | 'dispense' | 'stock' | 'room' | 'workflow' | 'priority' | 'confidence';
 
@@ -45,9 +47,8 @@ const statuses: Record<StatusDomain, Readonly<Record<string, Presentation>>> = {
   confidence: { HIGH: ['success', 'High'], MEDIUM: ['info', 'Medium'], LOW: ['warning', 'Low'], COLD_START: ['neutral', 'Cold start'] },
 };
 
-const normalize = (status: string | null | undefined) => status?.trim().toUpperCase().replace(/[\s-]+/g, '_') ?? '';
 const presentation = (domain: StatusDomain, status: string | null | undefined): Presentation | undefined => {
-  const key = normalize(status);
+  const key = normalizeEnum(status);
   return Object.hasOwn(statuses[domain], key) ? statuses[domain][key] : undefined;
 };
 
@@ -66,8 +67,5 @@ export function statusVariant(domain: StatusDomain, status: string | null | unde
  * sentence-case words, never as a raw enum such as SCHEDULED or LOW_STOCK.
  */
 export function statusLabel(domain: StatusDomain, status: string | null | undefined): string {
-  const known = presentation(domain, status)?.[1];
-  if (known) return known;
-  const words = normalize(status).replace(/_/g, ' ').trim().toLowerCase();
-  return words ? words[0].toUpperCase() + words.slice(1) : 'Unknown';
+  return presentation(domain, status)?.[1] ?? humanizeEnum(status);
 }

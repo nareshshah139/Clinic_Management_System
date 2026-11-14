@@ -63,8 +63,10 @@ it("shows reception today's full list grouped by doctor, and the bookings left t
   const praneetaDay = within(screen.getByRole('list', { name: 'Dr. Praneeta Jain today' }));
   expect(praneetaDay.getAllByRole('link').map((link) => link.textContent)).toEqual(['09:30-09:45Ananya ReddyScheduled', '15:00-15:30Fatima BegumChecked in']);
   expect(row(/Mohammed Irfan Siddiqui/).getAttribute('href')).toBe('/dashboard/patients/p2');
-  expect([row(/Today.s bookings not yet confirmed/).textContent, row(/Today.s bookings not yet confirmed/).getAttribute('href')])
-    .toEqual(["1Today's bookings not yet confirmed", '/dashboard/appointments']);
+  expect(row(/Today.s bookings not yet confirmed/).textContent).toBe("1Today's bookings not yet confirmed");
+  const day = row(/Today.s bookings not yet confirmed/).getAttribute('href')?.match(/^\/dashboard\/appointments\?date=(\d{4}-\d{2}-\d{2})$/)?.[1];
+  expect(day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(screen.getByRole('link', { name: 'Dr. Praneeta Jain' }).getAttribute('href')).toBe(`/dashboard/appointments?date=${day}&doctorId=d2`);
 });
 
 it("puts the doctor's own queue first, in time order, each row starting or reopening the visit", async () => {

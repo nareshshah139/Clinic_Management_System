@@ -17,8 +17,12 @@ jest.mock('@/lib/api', () => ({
 }));
 jest.mock('@/components/appointments/AppointmentsCalendar', () => ({
   __esModule: true,
-  default: ({ controlledDoctorId }: { controlledDoctorId?: string }) => <p>Calendar for {controlledDoctorId || 'nobody'}</p>,
+  default: ({ controlledDoctorId, controlledDate }: { controlledDoctorId?: string; controlledDate?: string }) => (
+    <><p>Calendar for {controlledDoctorId || 'nobody'}</p><p>Day {controlledDate}</p></>
+  ),
 }));
+let mockQuery = '';
+jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(mockQuery) }));
 jest.mock('@/components/appointments/AppointmentScheduler', () => ({ __esModule: true, default: () => null }));
 
 function renderAs(user: Partial<User>) {
@@ -30,7 +34,10 @@ function renderAs(user: Partial<User>) {
 }
 
 describe('Appointments page default doctor', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    mockQuery = '';
+  });
 
   it('opens a signed-in doctor on their own calendar, even over a stored choice', async () => {
     localStorage.setItem('appointments.doctorId', 'd-praneeta');
@@ -47,5 +54,19 @@ describe('Appointments page default doctor', () => {
   it('falls back to the first listed doctor when nothing is stored', async () => {
     renderAs({ id: 'r-1', role: UserRole.RECEPTION });
     expect(await screen.findByText('Calendar for d-praneeta')).toBeInTheDocument();
+  });
+
+  it('opens on the day and doctor a dashboard link names, over the signed-in doctor', async () => {
+    mockQuery = 'date=2026-11-21&doctorId=d-praneeta';
+    renderAs({ id: 'd-shravya', role: UserRole.DOCTOR });
+    expect(await screen.findByText('Calendar for d-praneeta')).toBeInTheDocument();
+    expect(screen.getByText('Day 2026-11-21')).toBeInTheDocument();
+  });
+
+  it('ignores a malformed date in the link', async () => {
+    mockQuery = 'date=21/11/2026';
+    renderAs({ id: 'r-1', role: UserRole.RECEPTION });
+    expect(await screen.findByText('Calendar for d-praneeta')).toBeInTheDocument();
+    expect(screen.queryByText('Day 21/11/2026')).toBeNull();
   });
 });

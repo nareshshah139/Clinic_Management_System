@@ -33,6 +33,8 @@ import { paymentModeLabel } from '@/lib/clinic-payment-modes';
 import { addDays } from '@/lib/date-ranges';
 import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
 import { LOW_STOCK_DEFINITION, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
+import { enumLabel } from '@/lib/labels';
+import type { StatusVariant } from '@/lib/status-variants';
 
 type ReportType = 'revenue' | 'patients' | 'doctors' | 'appointments' | 'inventory' | 'payments';
 type ExportFormat = 'JSON' | 'CSV' | 'PDF' | 'EXCEL';
@@ -199,6 +201,50 @@ interface SystemAlerts {
     pendingPayments: number;
     upcomingAppointments: number;
   };
+}
+
+type AlertCounts = SystemAlerts['counts'];
+const ALERT_ITEMS: Array<{ key: keyof AlertCounts; label: string; tone: StatusVariant; note?: string }> = [
+  { key: 'overdueInvoices', label: 'Overdue Invoices', tone: 'danger' },
+  { key: 'lowStockAlerts', label: 'Low Stock', tone: 'warning', note: LOW_STOCK_DEFINITION },
+  { key: 'expiryAlerts', label: 'Expiry Alerts', tone: 'warning' },
+  { key: 'pendingPayments', label: 'Pending Payments', tone: 'info' },
+  { key: 'upcomingAppointments', label: 'Upcoming Appointments', tone: 'neutral', note: UPCOMING_DEFINITION },
+];
+const TONE_RANK: StatusVariant[] = ['neutral', 'success', 'info', 'highlight', 'warning', 'danger'];
+const BAND_CLASS: Record<StatusVariant, string> = {
+  neutral: '', success: 'border-success-border bg-success-soft', info: 'border-info-border bg-info-soft',
+  highlight: 'border-highlight-border bg-highlight-soft', warning: 'border-warning-border bg-warning-soft', danger: 'border-destructive-border bg-destructive-soft',
+};
+const LABEL_CLASS: Record<StatusVariant, string> = {
+  neutral: 'text-muted-foreground', success: 'text-success-text', info: 'text-info-text',
+  highlight: 'text-highlight-text', warning: 'text-warning-text', danger: 'text-destructive-text',
+};
+
+function SystemAlertsBand({ counts }: { counts: AlertCounts }) {
+  const tones = ALERT_ITEMS.map((item) => (counts[item.key] > 0 ? item.tone : 'neutral'));
+  const band = tones.reduce((worst, tone) => (TONE_RANK.indexOf(tone) > TONE_RANK.indexOf(worst) ? tone : worst), 'neutral' as StatusVariant);
+  return (
+    <Card className={BAND_CLASS[band]}>
+      <CardHeader>
+        <CardTitle className={`flex items-center ${LABEL_CLASS[band] || 'text-foreground'}`}>
+          <AlertCircle className="h-5 w-5 mr-2" aria-hidden="true" />
+          System Alerts
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+          {ALERT_ITEMS.map((item, index) => (
+            <div key={item.key} className="text-center">
+              <p className={LABEL_CLASS[tones[index]]}>{item.label}</p>
+              <p className="text-lg font-bold">{counts[item.key]}</p>
+              {item.note && <p className="text-xs text-muted-foreground">{item.note}</p>}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function ReportsPage() {
@@ -564,7 +610,7 @@ export default function ReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {data.genderBreakdown.map((gender: GenderBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg text-center">
-                    <p className="font-medium capitalize">{gender.gender}</p>
+                    <p className="font-medium">{enumLabel('gender', gender.gender)}</p>
                     <p className="text-2xl font-bold mt-1">{gender.count}</p>
                     <Badge variant="secondary">{formatPercentage(gender.percentage)}</Badge>
                   </div>
@@ -1161,43 +1207,7 @@ export default function ReportsPage() {
           ]}
         /></>} />
 
-      {/* System Alerts */}
-      {systemAlerts && systemAlerts.counts && (
-        <Card className="border-warning-border bg-warning-soft">
-          <CardHeader>
-            <CardTitle className="flex items-center text-warning-text">
-              <AlertCircle className="h-5 w-5 mr-2" />
-              System Alerts
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-              <div className="text-center">
-                <p className="text-warning-text">Overdue Invoices</p>
-                <p className="text-lg font-bold">{systemAlerts.counts.overdueInvoices}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-destructive-text">Low Stock</p>
-                <p className="text-lg font-bold">{systemAlerts.counts.lowStockAlerts}</p>
-                <p className="text-xs text-warning-text">{LOW_STOCK_DEFINITION}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-warning-text">Expiry Alerts</p>
-                <p className="text-lg font-bold">{systemAlerts.counts.expiryAlerts}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-info-text">Pending Payments</p>
-                <p className="text-lg font-bold">{systemAlerts.counts.pendingPayments}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-success-text">Upcoming Appointments</p>
-                <p className="text-lg font-bold">{systemAlerts.counts.upcomingAppointments}</p>
-                <p className="text-xs text-warning-text">{UPCOMING_DEFINITION}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {systemAlerts?.counts && <SystemAlertsBand counts={systemAlerts.counts} />}
 
       {/* Report Type Selection */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

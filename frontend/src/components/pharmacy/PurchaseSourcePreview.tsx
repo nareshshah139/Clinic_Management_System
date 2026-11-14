@@ -435,8 +435,8 @@ export function PurchaseSourcePreview({
                   height={((box[4] - box[2]) * height) / 1000}
                   fill={
                     target.id === selectedId
-                      ? "rgba(250,204,21,.28)"
-                      : "rgba(59,130,246,.08)"
+                      ? "color-mix(in srgb, var(--warning) 28%, transparent)"
+                      : "color-mix(in srgb, var(--info) 8%, transparent)"
                   }
                   stroke={target.id === selectedId ? "var(--warning)" : "var(--info)"}
                   strokeWidth={target.id === selectedId ? 3 : 1}

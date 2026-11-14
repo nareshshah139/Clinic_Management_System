@@ -18,6 +18,23 @@ describe('labels stay whole', () => {
     expectNoMidWordBreak(el);
   });
 
+  it('never clips a short Badge label and gives a long one an ellipsis and its full text as a title', () => {
+    const capacity = 2;
+    render(
+      <>
+        <Badge>Cap: {capacity}</Badge>
+        <Badge>Needs reconciliation before the count closes</Badge>
+      </>,
+    );
+    const short = screen.getByText('Cap: 2');
+    expect(short).not.toHaveAttribute('title');
+    expect(short).toHaveClass('shrink-0');
+    expect(short).not.toHaveClass('overflow-hidden');
+    const long = screen.getByTitle('Needs reconciliation before the count closes');
+    expect(long).toHaveClass('min-w-0');
+    expect(screen.getByText('Needs reconciliation before the count closes')).toHaveClass('truncate');
+  });
+
   it('keeps Button text on one line', () => {
     render(<Button>Submit</Button>);
     const el = screen.getByRole('button', { name: 'Submit' });

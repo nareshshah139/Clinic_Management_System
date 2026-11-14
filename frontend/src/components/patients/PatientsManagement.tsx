@@ -17,6 +17,7 @@ import { Plus, Search, Edit, Eye, Archive, Link as LinkIcon, Unlink, MessageSqua
 import { apiClient } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { formatPatientName, filterRoomsByVisitType, calculateAge } from '@/lib/utils';
+import { enumLabel } from '@/lib/labels';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useOverbookConfirm } from '@/components/appointments/useOverbookConfirm';
@@ -63,6 +64,63 @@ const MISSING_FIELD_MESSAGE: Record<RequiredPatientField, string> = {
   phone: "Enter the patient's phone number.",
 };
 
+const normalizeGender = (g: unknown): 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN' => {
+  const s = String(g || '').trim().toUpperCase();
+  if (s === 'M' || s === 'MALE') return 'MALE';
+  if (s === 'F' || s === 'FEMALE') return 'FEMALE';
+  if (s === 'O' || s === 'OTHER') return 'OTHER';
+  return 'UNKNOWN';
+};
+
+function patientsFrom(payload: unknown): Patient[] {
+  const p = payload as Partial<GetPatientsResponseWithMeta> | BackendPatientRow[] | null;
+  const rows: BackendPatientRow[] = !p ? [] : Array.isArray(p) ? p : Array.isArray(p.data) ? (p.data as BackendPatientRow[]) : Array.isArray(p.patients) ? (p.patients as BackendPatientRow[]) : [];
+  return rows.map((bp) => {
+    const rawName = String(bp.name || '').trim();
+    const firstName = String(bp.firstName || '').trim();
+    const lastName = String(bp.lastName || '').trim();
+    return {
+      id: bp.id,
+      patientCode: bp.patientCode || undefined,
+      abhaId: bp.abhaId || undefined,
+      firstName: firstName || rawName || '',
+      lastName,
+      name: formatPatientName({ id: bp.id, name: rawName, firstName, lastName }),
+      email: bp.email || undefined,
+      phone: bp.phone,
+      gender: normalizeGender(bp.gender),
+      dob: bp.dob || undefined,
+      age: bp.age ?? undefined,
+      address: bp.address || undefined,
+      city: bp.city || undefined,
+      state: bp.state || undefined,
+      referralSource: bp.referralSource || undefined,
+      emergencyContact: bp.emergencyContact || undefined,
+      portalUserId: bp.portalUserId || undefined,
+      lastVisitDate: bp.lastVisitAt || undefined,
+      createdAt: bp.createdAt,
+      updatedAt: bp.updatedAt,
+    };
+  });
+}
+
+const sexLabel = (patient: Patient) => (patient.gender && patient.gender !== 'UNKNOWN' ? enumLabel('gender', patient.gender) : null);
+
+const PATIENT_CSV_COLUMNS = ['Patient code', 'Name', 'Phone', 'Age', 'Sex', 'Last visit', 'Portal linked'];
+
+function patientCsvRow(patient: Patient): string[] {
+  const age = calculateAge(patient);
+  return [
+    patient.patientCode ?? '',
+    formatPatientName(patient),
+    patient.phone ?? '',
+    age !== null ? String(age) : '',
+    sexLabel(patient) ?? '',
+    patient.lastVisitDate ? displayClinicDate(patient.lastVisitDate) : '',
+    patient.portalUserId ? 'Yes' : 'No',
+  ];
+}
+
 export default function PatientsManagement() {
   const router = useRouter();
   const { toast } = useToast();
@@ -89,6 +147,8 @@ export default function PatientsManagement() {
     return 20;
   });
   const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const formErrorRef = useRef<HTMLParagraphElement>(null);
   const [missingFields, setMissingFields] = useState<RequiredPatientField[]>([]);
   const [doctors, setDoctors] = useState<Array<{ id: string; firstName?: string; lastName?: string }>>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -115,14 +175,6 @@ export default function PatientsManagement() {
     walkinVisitType: 'OPD',
     walkinRoomId: '',
   });
-
-  const normalizeGender = (g: any): 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN' => {
-    const s = String(g || '').trim().toUpperCase();
-    if (s === 'M' || s === 'MALE') return 'MALE';
-    if (s === 'F' || s === 'FEMALE') return 'FEMALE';
-    if (s === 'O' || s === 'OTHER') return 'OTHER';
-    return 'UNKNOWN';
-  };
 
   // Client-side fuzzy suggestions for pre-min-2 search
   const suggestions = useMemo(() => {
@@ -208,44 +260,7 @@ export default function PatientsManagement() {
         sortOrder: sortOrder,
       });
 
-      const extractRows = (payload: unknown): BackendPatientRow[] => {
-        if (!payload) return [];
-        const p = payload as Partial<GetPatientsResponseWithMeta> | BackendPatientRow[] | Patient[];
-        if (Array.isArray(p)) return p as BackendPatientRow[];
-        if (Array.isArray(p.data)) return p.data as BackendPatientRow[];
-        if (Array.isArray(p.patients)) return p.patients as BackendPatientRow[];
-        return [];
-      };
-
-      const rows = extractRows(response);
-      const mapped: Patient[] = rows.map((bp: BackendPatientRow) => {
-        const rawName = String(bp.name || '').trim();
-        const firstName = String(bp.firstName || '').trim();
-        const lastName = String(bp.lastName || '').trim();
-        const displayName = formatPatientName({ id: bp.id, name: rawName, firstName, lastName });
-        return {
-          id: bp.id,
-          patientCode: bp.patientCode || undefined,
-          abhaId: bp.abhaId || undefined,
-          firstName: firstName || rawName || '',
-          lastName: lastName,
-          name: displayName,
-          email: bp.email || undefined,
-          phone: bp.phone,
-          gender: normalizeGender(bp.gender),
-          dob: bp.dob || undefined,
-          age: bp.age ?? undefined,
-          address: bp.address || undefined,
-          city: bp.city || undefined,
-          state: bp.state || undefined,
-          referralSource: bp.referralSource || undefined,
-          emergencyContact: bp.emergencyContact || undefined,
-          portalUserId: bp.portalUserId || undefined,
-          lastVisitDate: bp.lastVisitAt || undefined,
-          createdAt: bp.createdAt,
-          updatedAt: bp.updatedAt,
-        };
-      });
+      const mapped = patientsFrom(response);
       if (requestId !== fetchIdRef.current) return; // stale response guard
       setPatients(mapped);
       
@@ -310,6 +325,10 @@ export default function PatientsManagement() {
     setCurrentPage(1);
   };
 
+  useEffect(() => {
+    if (formError) formErrorRef.current?.focus();
+  }, [formError]);
+
   const [exporting, setExporting] = useState(false);
 
   const exportCsv = async () => {
@@ -328,70 +347,14 @@ export default function PatientsManagement() {
         dateRange: normDateRange,
       });
 
-      const extractRows = (payload: unknown): BackendPatientRow[] => {
-        if (!payload) return [];
-        const p = payload as Partial<GetPatientsResponseWithMeta> | BackendPatientRow[];
-        if (Array.isArray(p)) return p as BackendPatientRow[];
-        if (Array.isArray((p as any).data)) return (p as any).data as BackendPatientRow[];
-        if (Array.isArray((p as any).patients)) return (p as any).patients as BackendPatientRow[];
-        return [];
-      };
+      const allPatients = patientsFrom(response);
 
-      const allRows = extractRows(response);
-      const allPatients: Patient[] = allRows.map((bp: BackendPatientRow) => {
-        const rawName = String(bp.name || '').trim();
-        const firstName = String(bp.firstName || '').trim();
-        const lastName = String(bp.lastName || '').trim();
-        const displayName = formatPatientName({ id: bp.id, name: rawName, firstName, lastName });
-        return {
-          id: bp.id,
-          patientCode: bp.patientCode || undefined,
-          abhaId: bp.abhaId || undefined,
-          firstName: firstName || rawName || '',
-          lastName: lastName,
-          name: displayName,
-          email: bp.email || undefined,
-          phone: bp.phone,
-          gender: normalizeGender(bp.gender),
-          dob: bp.dob || undefined,
-          age: bp.age ?? undefined,
-          address: bp.address || undefined,
-          city: bp.city || undefined,
-          state: bp.state || undefined,
-          referralSource: bp.referralSource || undefined,
-          emergencyContact: bp.emergencyContact || undefined,
-          portalUserId: bp.portalUserId || undefined,
-          createdAt: bp.createdAt,
-          updatedAt: bp.updatedAt,
-        };
-      });
-
-      const headers = [
-        'ID','Name','Age','Gender','Phone','Email','ABHA ID','Referral','Consultation Type','Portal Linked','Created At'
-      ];
-      const lines = [headers.join(',')];
       const csvEscape = (v: unknown) => {
         const s = String(v ?? '');
         if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
         return s;
       };
-      for (const p of allPatients) {
-        const age = calculateAge(p);
-        const row = [
-          p.id,
-          p.name,
-          age !== null ? age : 'N/A',
-          p.gender,
-          p.phone,
-          p.email || '',
-          p.abhaId || '',
-          p.referralSource || '',
-          (p as any).consultationType === 'ONLINE' ? 'Online' : (p as any).consultationType === 'OFFLINE' ? 'Offline' : '',
-          p.portalUserId ? 'Yes' : 'No',
-          p.createdAt,
-        ].map(csvEscape);
-        lines.push(row.join(','));
-      }
+      const lines = [PATIENT_CSV_COLUMNS.join(','), ...allPatients.map((p) => patientCsvRow(p).map(csvEscape).join(','))];
       const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -448,7 +411,7 @@ export default function PatientsManagement() {
       walkinVisitType: 'OPD',
       walkinRoomId: '',
     });
-    setError(null);
+    setFormError(null);
     setMissingFields([]);
   };
 
@@ -466,7 +429,7 @@ export default function PatientsManagement() {
   const submitPatient = async () => {
     try {
       setActionLoading(true);
-      setError(null);
+      setFormError(null);
       
       // Basic validation
       const missing = REQUIRED_PATIENT_FIELDS.filter((field) => !String(form[field] ?? '').trim());
@@ -479,7 +442,7 @@ export default function PatientsManagement() {
         const abha = form.abhaId.trim();
         const isDigits = /^\d{14}$/.test(abha);
         if (!isDigits) {
-          setError('ABHA ID must be a 14-digit number');
+          setFormError('ABHA ID must be a 14-digit number');
           return;
         }
       }
@@ -526,7 +489,7 @@ export default function PatientsManagement() {
       resetForm();
     } catch (err: any) {
       console.error('Failed to save patient', err);
-      setError(err?.message || 'Failed to save patient. Please check your input and try again.');
+      setFormError(err?.message || 'Failed to save patient. Please check your input and try again.');
     } finally {
       setActionLoading(false);
     }
@@ -761,8 +724,7 @@ export default function PatientsManagement() {
 
   const ageSex = (patient: Patient) => {
     const age = calculateAge(patient);
-    const sex = { MALE: 'Male', FEMALE: 'Female', OTHER: 'Other' }[patient.gender as Gender];
-    return [age !== null ? String(age) : null, sex].filter(Boolean).join(' · ') || '—';
+    return [age !== null ? String(age) : null, sexLabel(patient)].filter(Boolean).join(' · ') || '—';
   };
 
   const copyPatientCode = (code: string) => {
@@ -786,11 +748,6 @@ export default function PatientsManagement() {
             <DialogHeader>
               <DialogTitle>{form.id ? 'Edit Patient' : 'Create Patient'}</DialogTitle>
             </DialogHeader>
-            {error && (
-              <div role="alert" className="bg-destructive-soft border border-destructive-border text-destructive-text px-4 py-3 rounded-md">
-                {error}
-              </div>
-            )}
             <p className="text-sm text-muted-foreground">Fields marked <span aria-hidden="true">*</span> are required.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -960,7 +917,12 @@ export default function PatientsManagement() {
                 </>
               )}
             </div>
-            <div className="flex justify-end gap-2 pt-4">
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-4">
+              {formError && (
+                <p ref={formErrorRef} role="alert" tabIndex={-1} className="mr-auto min-w-0 flex-1 basis-56 rounded-md border border-destructive-border bg-destructive-soft px-3 py-2 text-sm text-destructive-text">
+                  {formError}
+                </p>
+              )}
               <Button variant="outline" onClick={() => { setOpen(false); resetForm(); }}>Cancel</Button>
               <Button onClick={submitPatient} disabled={actionLoading}>{form.id ? 'Save Changes' : 'Create'}</Button>
             </div>
@@ -970,15 +932,15 @@ export default function PatientsManagement() {
 
       <Card>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4 items-start">
-            <div className="relative w-full sm:flex-1" data-tour="search-patients">
+          <div className="flex flex-col sm:flex-row gap-3 items-start">
+            <div className="relative w-full sm:min-w-64 sm:flex-[2_1_16rem]" data-tour="search-patients">
               <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 id="patients-search"
                 aria-label="Search patients"
                 className="pl-10" 
-                placeholder="Search by name, phone, ABHA, or email (min 2 chars)" 
+                placeholder="Name, phone, ABHA or email" 
                 value={search} 
                 onChange={(e) => setSearch(e.target.value)}
                 aria-describedby="patients-search-hint"
@@ -1016,7 +978,7 @@ export default function PatientsManagement() {
               )}
             </div>
             <Select value={genderFilter} onValueChange={(v: 'ALL' | Gender) => setGenderFilter(v)}>
-              <SelectTrigger aria-label="Filter by gender" className="w-full sm:w-48"><SelectValue placeholder="Gender" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by gender" className="w-full sm:w-auto"><SelectValue placeholder="Gender" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Genders</SelectItem>
                 <SelectItem value="MALE">Male</SelectItem>
@@ -1025,7 +987,7 @@ export default function PatientsManagement() {
               </SelectContent>
             </Select>
             <Select value={consultationTypeFilter} onValueChange={(v: 'ALL' | 'ONLINE' | 'OFFLINE') => setConsultationTypeFilter(v)}>
-              <SelectTrigger aria-label="Filter by consultation type" className="w-full sm:w-48"><SelectValue placeholder="Consultation Type" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by consultation type" className="w-full sm:w-auto"><SelectValue placeholder="Consultation Type" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Consultations</SelectItem>
                 <SelectItem value="ONLINE">Online</SelectItem>
@@ -1033,7 +995,7 @@ export default function PatientsManagement() {
               </SelectContent>
             </Select>
             <Select value={dateRangeFilter} onValueChange={(v: 'ALL' | 'LAST_1_WEEK' | 'LAST_1_MONTH') => { setDateRangeFilter(v); setCurrentPage(1); }}>
-              <SelectTrigger aria-label="Filter by date range" className="w-full sm:w-48"><SelectValue placeholder="Date Range" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by date range" className="w-full sm:w-auto"><SelectValue placeholder="Date Range" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Time</SelectItem>
                 <SelectItem value="LAST_1_WEEK">Last 1 Week</SelectItem>
@@ -1041,7 +1003,7 @@ export default function PatientsManagement() {
               </SelectContent>
             </Select>
             <Select value={pageSize.toString()} onValueChange={(v: string) => setPageSize(parseInt(v, 10))}>
-              <SelectTrigger aria-label="Patients per page" className="w-full sm:w-32"><SelectValue placeholder="Per page" /></SelectTrigger>
+              <SelectTrigger aria-label="Patients per page" className="w-full sm:w-auto"><SelectValue placeholder="Per page" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="10">10 / page</SelectItem>
                 <SelectItem value="20">20 / page</SelectItem>

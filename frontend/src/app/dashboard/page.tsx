@@ -18,6 +18,7 @@ import { fmtMoney } from '@/components/inventory/workspace-model';
 import { getErrorMessage, getISTDateString } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { APPOINTMENT_READ_ROLES } from '@/lib/appointment-access';
+import { appointmentsHref } from '@/lib/appointments-link';
 import { LOW_STOCK_DEFINITION, LOW_STOCK_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
 
 type DashboardView = 'doctor' | 'pharmacist' | 'admin' | 'front-desk' | 'billing';
@@ -121,9 +122,9 @@ function FrontDeskDashboard() {
       countAppointments(getISTDateString(), 'CHECKED_IN'),
     ]);
     const rows: AttentionRow[] = [
-      { count: unconfirmedToday, label: "Today's bookings not yet confirmed", href: '/dashboard/appointments' },
-      { count: unconfirmedTomorrow, label: "Tomorrow's bookings to confirm", href: '/dashboard/appointments' },
-      { count: checkedIn, label: 'Checked in, waiting for the doctor', href: '/dashboard/appointments' },
+      { count: unconfirmedToday, label: "Today's bookings not yet confirmed", href: appointmentsHref(getISTDateString()) },
+      { count: unconfirmedTomorrow, label: "Tomorrow's bookings to confirm", href: appointmentsHref(tomorrow()) },
+      { count: checkedIn, label: 'Checked in, waiting for the doctor', href: appointmentsHref(getISTDateString()) },
     ];
     return { day, rows };
   }, []);
@@ -153,9 +154,9 @@ function AdminDashboard() {
       collectedToday(),
     ]);
     const rows: AttentionRow[] = [
-      { count: day.total, label: 'Appointments today', href: '/dashboard/appointments' },
+      { count: day.total, label: 'Appointments today', href: appointmentsHref(getISTDateString()) },
       { count: alerts.counts.upcomingAppointments, label: 'Upcoming appointments', note: UPCOMING_DEFINITION, href: '/dashboard/appointments' },
-      { count: noShows, label: 'No-shows today', href: '/dashboard/appointments' },
+      { count: noShows, label: 'No-shows today', href: appointmentsHref(getISTDateString()) },
       { count: collected, label: 'Collected today', note: COLLECTED_NOTE, href: COLLECTION_HREF },
     ];
     return { day, rows };

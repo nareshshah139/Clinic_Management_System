@@ -3149,7 +3149,7 @@ export function PharmacyInvoiceBuilderFixed({
 
               <Button
                 type="button"
-                className="w-full bg-success text-white hover:bg-success"
+                className="w-full bg-success text-white hover:bg-success/90"
                 onClick={handleConfirmInvoiceFromPreview}
                 disabled={
                   isPrintPreviewSaved || loading || savingInvoiceFromPreview

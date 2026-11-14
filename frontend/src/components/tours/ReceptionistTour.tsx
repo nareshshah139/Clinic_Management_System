@@ -98,7 +98,7 @@ function injectTourStyles() {
       .introjs-nextbutton:hover {
         background: linear-gradient(135deg, var(--info) 0%, var(--info) 100%) !important;
         transform: translateY(-1px) !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--info) 40%, transparent) !important;
       }
       
       .introjs-prevbutton {
@@ -140,7 +140,7 @@ function injectTourStyles() {
         background: var(--destructive) !important;
         color: var(--destructive-foreground) !important;
         transform: translateY(-1px) scale(1.05) !important;
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5) !important;
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--destructive) 50%, transparent) !important;
         border-color: var(--destructive) !important;
       }
       
@@ -200,7 +200,7 @@ function injectTourStyles() {
       
       /* Highlighted element */
       .introjs-helperLayer {
-        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7), 0 0 20px rgba(59, 130, 246, 0.5) !important;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7), 0 0 20px color-mix(in srgb, var(--info) 50%, transparent) !important;
         border-radius: 8px !important;
       }
       
@@ -540,34 +540,34 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </p>
             
             <div class="space-y-2 mt-3">
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(219, 234, 254, 0.5); border-left: 4px solid var(--info);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--info-soft) 50%, transparent); border-left: 4px solid var(--info);">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-sm"
-                     style="background-color: rgba(219, 234, 254, 0.95); color: var(--info-text);">OPD</div>
+                     style="background-color: color-mix(in srgb, var(--info-soft) 95%, transparent); color: var(--info-text);">OPD</div>
                 <div class="flex-1">
                   <p class="font-bold text-info-text">OPD Consultations (Light Blue)</p>
                   <p class="text-xs text-info-text">Standard outpatient appointments for regular consultations</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(237, 233, 254, 0.5); border-left: 4px solid var(--highlight);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--highlight-soft) 50%, transparent); border-left: 4px solid var(--highlight);">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-xs"
-                     style="background-color: rgba(237, 233, 254, 0.95); color: var(--highlight-text);">PROC</div>
+                     style="background-color: color-mix(in srgb, var(--highlight-soft) 95%, transparent); color: var(--highlight-text);">PROC</div>
                 <div class="flex-1">
                   <p class="font-bold text-highlight-text">Procedures (Light Purple)</p>
                   <p class="text-xs text-highlight-text">Clinical procedures, treatments, laser sessions, and aesthetic services</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(243, 244, 246, 0.8); border-left: 4px solid var(--border);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--muted) 80%, transparent); border-left: 4px solid var(--border);">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-xs"
-                     style="background-color: rgba(243, 244, 246, 0.95); color: var(--foreground);">TELE</div>
+                     style="background-color: color-mix(in srgb, var(--muted) 95%, transparent); color: var(--foreground);">TELE</div>
                 <div class="flex-1">
                   <p class="font-bold text-foreground">Telemedicine (Light Gray)</p>
                   <p class="text-xs text-foreground">Virtual consultations via phone or video call</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(226, 232, 240, 0.5); border-left: 4px solid var(--border);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--muted) 50%, transparent); border-left: 4px solid var(--border);">
                 <div class="flex-1">
                   <p class="font-bold text-foreground">Completed (Lighter Gray)</p>
                   <p class="text-xs text-foreground">Doctor finished consultation - ready for billing</p>
@@ -575,14 +575,14 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(34, 197, 94, 0.15); border-left: 4px solid var(--success);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--success) 15%, transparent); border-left: 4px solid var(--success);">
                 <div class="flex-1">
                   <p class="font-bold text-success-text">Newly Booked (Green Highlight)</p>
                   <p class="text-xs text-success-text">Just booked in the last few seconds - temporary visual feedback</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(251, 191, 36, 0.15); border-left: 4px solid var(--warning);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--warning-border) 15%, transparent); border-left: 4px solid var(--warning);">
                 <div class="flex-1">
                   <p class="font-bold text-warning-text">Booking In Progress (Yellow)</p>
                   <p class="text-xs text-warning-text">Someone is currently booking this slot - wait for it to complete</p>
@@ -590,7 +590,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
             </div>
             
-            <div class="p-3 rounded-lg text-xs mt-3" style="background-color: rgba(219, 234, 254, 0.5); border: 1px solid var(--info-border);">
+            <div class="p-3 rounded-lg text-xs mt-3" style="background-color: color-mix(in srgb, var(--info-soft) 50%, transparent); border: 1px solid var(--info-border);">
               <p class="font-semibold text-info-text mb-1">Viewing Appointment Status:</p>
               <p class="text-info-text">
                 To see if a patient is <strong>SCHEDULED, CHECKED-IN, or IN-PROGRESS</strong>, 
@@ -599,7 +599,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </p>
             </div>
             
-            <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(237, 233, 254, 0.5); border: 1px solid var(--highlight-border);">
+            <div class="p-3 rounded-lg text-xs mt-2" style="background-color: color-mix(in srgb, var(--highlight-soft) 50%, transparent); border: 1px solid var(--highlight-border);">
               <p class="font-semibold text-highlight-text mb-1">Finding the Legend:</p>
               <p class="text-highlight-text">
                 Press the <strong>Legend</strong> button in the calendar toolbar to see what each color means.
@@ -607,7 +607,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </p>
             </div>
             
-            <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(251, 191, 36, 0.15); border: 1px solid var(--warning-border);">
+            <div class="p-3 rounded-lg text-xs mt-2" style="background-color: color-mix(in srgb, var(--warning-border) 15%, transparent); border: 1px solid var(--warning-border);">
               <p class="font-semibold text-warning-text mb-1">Pro Tip:</p>
               <p class="text-warning-text">
                 <strong>Past appointments</strong> show in even lighter shades. 
@@ -648,7 +648,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 
                 <div class="bg-white p-3 rounded-md border-l-4 border-warning">
                   <p class="font-bold text-foreground mb-1">
-                    <span class="bg-warning-border text-white px-2 py-1 rounded-md text-xs mr-2">DOUBLE CLICK</span>
+                    <span class="bg-warning text-warning-foreground px-2 py-1 rounded-md text-xs mr-2">DOUBLE CLICK</span>
                     Open Full Details
                   </p>
                   <p class="text-xs text-foreground mb-2">

@@ -285,7 +285,7 @@ export function DrugManagement() {
       <PageHeader title="Drug Database" description="Manage your pharmacy's drug inventory" actions={
         <Button
           onClick={() => setShowAddDialog(true)}
-          className="bg-info hover:bg-info"
+          className="bg-info hover:bg-info/90"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add New Drug

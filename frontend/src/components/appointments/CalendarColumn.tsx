@@ -16,6 +16,7 @@ import { CircleAlert } from 'lucide-react';
 import type { AppointmentInSlot, AppointmentCalendar, BillType } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 import { layoutDay } from './day-layout';
+import { enumLabel } from '@/lib/labels';
 import { CALENDARS, canMove } from './appointment-calendars';
 import { BILL_TYPE_LABEL, BILL_TYPE_SHORT, billingChip, type BillingTone, type ChipWidth } from './appointment-billing-view';
 
@@ -113,7 +114,8 @@ interface CalendarColumnProps {
 /**
  * @cc [owner:nareshshah139,label:product] appointment-details-access
  * Appointment facts MUST remain inline on calendar cards; hovering MUST NOT open a details preview.
- * Saved appointments MUST expose their full details and actions through the INFO control.
+ * Saved appointments MUST expose their full details and actions through the Details control, named
+ * for the patient, and every tile action MUST read as words, never as INFO, RESCHED or START.
  */
 export default function CalendarColumn({
   calendar,
@@ -221,6 +223,7 @@ export default function CalendarColumn({
           const tone = statusVariant('appointment', apt.status);
           const status = { label: statusLabel('appointment', apt.status), tone, ...STATUS_MARK[tone] };
           const patientName = formatPatientName(apt.patient ?? { name: 'Unknown' });
+          const visitAction = enumLabel('appointmentAction', apt.visit?.id ? 'CONTINUE_VISIT' : 'START_VISIT');
           const isOptimistic = apt.id?.startsWith('optimistic-');
           const accessibleName = [
             apt.tokenNumber != null ? `Token ${apt.tokenNumber}` : null,
@@ -285,7 +288,7 @@ export default function CalendarColumn({
                         {apt.visitType === 'PROCEDURE' && apt.notes && (
                           <span className="truncate font-medium text-highlight-text">({apt.notes})</span>
                         )}
-                        {(!apt.billType || apt.visitType === 'TELEMED') && <span className="font-medium text-highlight-text">{apt.visitType || 'OPD'}</span>}
+                        {(!apt.billType || apt.visitType === 'TELEMED') && <span className="font-medium text-highlight-text">{enumLabel('visitType', apt.visitType || 'OPD')}</span>}
                         {apt.patient?.age !== undefined && <span className="text-muted-foreground">{apt.patient.age}y</span>}
                         {apt.patient?.gender && <span className="rounded bg-muted px-1 text-muted-foreground">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
                         {apt.room?.name && <span className="truncate font-medium text-success-text">{apt.room.name}</span>}
@@ -300,11 +303,11 @@ export default function CalendarColumn({
                         e.stopPropagation();
                         onOpen(apt);
                       }}
-                      className="bg-muted-foreground hover:bg-muted-foreground text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                      title="View Appointment Details"
+                      className="bg-muted-foreground hover:bg-muted-foreground/90 text-white text-xs leading-4 px-2 py-0.5 rounded shadow-sm transition-colors font-medium"
+                      aria-label={`${enumLabel('appointmentAction', 'DETAILS')} for ${patientName}`}
                       disabled={isOptimistic}
                     >
-                      INFO
+                      {enumLabel('appointmentAction', 'DETAILS')}
                     </button>
                     {canMove(apt.status) && (
                       <button
@@ -313,11 +316,11 @@ export default function CalendarColumn({
                           e.stopPropagation();
                           onReschedule(apt);
                         }}
-                        className="bg-warning hover:bg-warning text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                        title="Reschedule Appointment"
+                        className="bg-warning hover:bg-warning/90 text-white text-xs leading-4 px-2 py-0.5 rounded shadow-sm transition-colors font-medium"
+                        aria-label={`${enumLabel('appointmentAction', 'RESCHEDULE')} ${patientName}`}
                         disabled={isOptimistic}
                       >
-                        RESCHED
+                        {enumLabel('appointmentAction', 'RESCHEDULE')}
                       </button>
                     )}
                     <button
@@ -326,11 +329,11 @@ export default function CalendarColumn({
                         e.stopPropagation();
                         onStartVisit(apt);
                       }}
-                      className="bg-info hover:bg-info text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                      title={apt.visit?.id ? 'Continue Visit' : 'Start Visit'}
+                      className="bg-info hover:bg-info/90 text-white text-xs leading-4 px-2 py-0.5 rounded shadow-sm transition-colors font-medium"
+                      aria-label={`${visitAction} for ${patientName}`}
                       disabled={isOptimistic}
                     >
-                      {apt.visit?.id ? 'CONT' : 'START'}
+                      {visitAction}
                     </button>
                   </div>
                 </div>
@@ -413,8 +416,8 @@ export default function CalendarColumn({
                 opacity: past && !hasAny ? 0.6 : 1,
                 boxShadow: (() => {
                   const parts: string[] = [];
-                  if (isNewlyBooked) parts.push('0 0 0 2px rgba(34, 197, 94, 0.3)');
-                  else if (isBookingInProgress) parts.push('0 0 0 2px rgba(251, 191, 36, 0.3)');
+                  if (isNewlyBooked) parts.push('0 0 0 2px color-mix(in srgb, var(--success) 30%, transparent)');
+                  else if (isBookingInProgress) parts.push('0 0 0 2px color-mix(in srgb, var(--warning) 30%, transparent)');
                   if (showNowLine) parts.push('inset 0 2px 0 var(--destructive)');
                   else if (isHourStart && !(hasAny && crossesTop)) parts.push('inset 0 1px 0 var(--border)');
                   return parts.length ? parts.join(', ') : 'none';

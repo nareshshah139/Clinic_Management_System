@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CALENDARS, CALENDAR_ORDER } from './appointment-calendars';
 
 const PANEL_WIDTH_PX = 544;
+const VIEWPORT_GUTTER_PX = 16;
 
 const SWATCHES: Array<[label: string, color: string]> = [
   ['OPD', 'var(--calendar-consultation)'],
@@ -28,10 +29,11 @@ const SWATCHES: Array<[label: string, color: string]> = [
  * @cc [owner:nareshshah139,label:accessibility] appointment-calendar-legend-disclosure
  * The Legend button is a disclosure, not a menu: it reports aria-expanded and controls the
  * legend panel. Escape closes the panel and returns focus to the button; a click outside closes it.
+ * While open, the panel MUST stay inside the viewport when the toolbar wraps, the window resizes or the page scrolls.
  */
 export function CalendarLegend() {
   const [open, setOpen] = useState(false);
-  const [alignEnd, setAlignEnd] = useState(false);
+  const [offsetX, setOffsetX] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
@@ -54,15 +56,28 @@ export function CalendarLegend() {
     };
   }, [open]);
 
-  const toggle = () => {
-    const left = buttonRef.current?.getBoundingClientRect().left ?? 0;
-    setAlignEnd(left + PANEL_WIDTH_PX > window.innerWidth - 16);
-    setOpen((value) => !value);
-  };
+  useLayoutEffect(() => {
+    if (!open) return;
+    let frame = 0;
+    let placedFor = '';
+    const track = () => {
+      const anchor = rootRef.current?.getBoundingClientRect();
+      const key = anchor ? `${anchor.left}:${window.innerWidth}` : '';
+      if (anchor && key !== placedFor) {
+        placedFor = key;
+        const width = Math.min(PANEL_WIDTH_PX, window.innerWidth * 0.9);
+        const left = Math.max(VIEWPORT_GUTTER_PX, Math.min(anchor.left, window.innerWidth - VIEWPORT_GUTTER_PX - width));
+        setOffsetX(left - anchor.left);
+      }
+      frame = requestAnimationFrame(track);
+    };
+    track();
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
 
   return (
     <div ref={rootRef} className="relative">
-      <Button ref={buttonRef} variant="outline" size="sm" className="gap-1.5" aria-expanded={open} aria-controls={panelId} onClick={toggle}>
+      <Button ref={buttonRef} variant="outline" size="sm" className="gap-1.5" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)}>
         <BookOpen className="h-4 w-4" aria-hidden="true" />
         Legend
       </Button>
@@ -71,7 +86,8 @@ export function CalendarLegend() {
           id={panelId}
           role="region"
           aria-labelledby={`${panelId}-title`}
-          className={`absolute top-full z-50 mt-1 w-[34rem] max-w-[90vw] rounded-md border bg-popover p-3 text-popover-foreground shadow-md ${alignEnd ? 'right-0' : 'left-0'}`}
+          style={{ left: offsetX }}
+          className="absolute top-full z-50 mt-1 w-[34rem] max-w-[90vw] rounded-md border bg-popover p-3 text-popover-foreground shadow-md"
         >
           <h2 id={`${panelId}-title`} className="mb-2 font-semibold">Legend</h2>
           <ul className="mb-3 space-y-1 text-sm">

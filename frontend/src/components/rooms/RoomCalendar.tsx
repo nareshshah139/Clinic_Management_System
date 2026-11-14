@@ -12,6 +12,8 @@ import { Calendar, ChevronLeft, ChevronRight, Clock, User, Stethoscope } from 'l
 import { apiClient } from '@/lib/api';
 import { getISTDateString, minutesToHHMM, hhmmToMinutes, isSlotInPast } from '@/lib/utils';
 import { RoomTypeIcon } from './room-type-icon';
+import { enumLabel } from '@/lib/labels';
+import { statusLabel } from '@/lib/status-variants';
 import type { RoomSchedule } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 
@@ -361,173 +363,161 @@ export default function RoomCalendar() {
             Room Occupancy Calendar
           </CardTitle>
         </CardHeader>
-        <CardContent style={{ overflow: 'visible' }}>
-          <div className="overflow-x-auto overflow-y-visible" style={{ overflowY: 'visible' }}>
-            <div className="min-w-[800px]" style={{ overflow: 'visible' }}>
-              {/* Header Row */}
-              <div className="grid grid-cols-[120px_repeat(auto-fit,minmax(200px,1fr))] gap-2 mb-2">
-                <div className="font-semibold text-sm text-muted-foreground p-2">Time</div>
-                {filteredRooms.map((room) => (
-                  <div key={room.id} className="text-center p-2 bg-muted rounded-md">
-                    <div className="font-semibold text-sm">{room.name}</div>
-                    <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                      <RoomTypeIcon type={room.type} className="size-3.5" />
-                      <span>{room.type}</span>
-                      <Badge variant="outline" className="text-xs">
-                        Cap: {room.capacity}
-                      </Badge>
-                    </div>
+        <CardContent>
+          <div className="overflow-x-auto pb-2" role="region" aria-label="Room occupancy by time" tabIndex={0}>
+            <div className="grid gap-2" style={{ gridTemplateColumns: `6rem repeat(${filteredRooms.length}, minmax(9.5rem, 1fr))` }}>
+              <div className="sticky left-0 z-20 bg-card p-2 text-sm font-semibold text-muted-foreground">Time</div>
+              {filteredRooms.map((room) => (
+                <div key={room.id} className="min-w-0 rounded-md bg-muted p-2 text-center">
+                  <div className="text-balance break-words text-sm font-semibold">{room.name}</div>
+                  <div className="flex flex-wrap items-center justify-center gap-1 text-xs text-muted-foreground">
+                    <RoomTypeIcon type={room.type} className="size-3.5" />
+                    <span>{room.type}</span>
+                    <Badge variant="outline" className="text-xs">
+                      Cap: {room.capacity}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+              <div className="sticky left-0 z-20 bg-card" style={{ height: '80vh' }}>
+                {timeSlots.map((slot) => (
+                  <div key={`gutter-${slot.label}`} className="absolute left-0 right-0 flex items-center pl-2 text-xs text-muted-foreground"
+                    style={{ top: `${((slot.startMin - 9*60) * 100) / (9*60)}%`, transform: 'translateY(-50%)' }}
+                    id={`time-${slot.label}`}
+                  >
+                    <Clock className="h-3 w-3 mr-1" />
+                    {slot.label}
                   </div>
                 ))}
               </div>
-
-              {/* Time Slots */}
-              <div className="grid grid-cols-[120px_repeat(auto-fit,minmax(200px,1fr))] gap-2" style={{ overflow: 'visible' }}>
-                {/* Time gutter (left) */}
-                <div className="relative" style={{ height: '80vh' }}>
-                  {timeSlots.map((slot) => (
-                    <div key={`gutter-${slot.label}`} className="absolute left-0 right-0 flex items-center pl-2 text-xs text-muted-foreground"
-                      style={{ top: `${((slot.startMin - 9*60) * 100) / (9*60)}%`, transform: 'translateY(-50%)' }}
-                      id={`time-${slot.label}`}
-                    >
-                      <Clock className="h-3 w-3 mr-1" />
-                      {slot.label}
-                    </div>
-                  ))}
-                </div>
-                {/* Room columns */}
-                {filteredRooms.map((room) => {
-                  const schedule = roomSchedules[room.id];
-                  const appointments = schedule?.appointments || [];
-                  const dayStart = 9 * 60;
-                  const dayEnd = 18 * 60;
-                  const total = Math.max(1, dayEnd - dayStart);
-                  const dateStr = getISTDateString(selectedDate);
-                  const getColor = (vt: string, completed: boolean, slot: string) => {
-                    const isPast = isSlotInPast(slot, dateStr);
-                    
-                    if (completed) return 'var(--calendar-completed)';
-                    
-                    const upper = (vt || '').toUpperCase();
-                    
-                    if (isPast) {
-                      if (upper === 'PROCEDURE') return 'var(--calendar-procedure-past)';
-                      if (upper === 'TELEMED' || upper === 'TELEMEDICINE') return 'var(--calendar-telemedicine-past)';
-                      return 'var(--calendar-consultation-past)';
-                    }
-                    
-                    if (upper === 'PROCEDURE') return 'var(--calendar-procedure)';
-                    if (upper === 'TELEMED' || upper === 'TELEMEDICINE') return 'var(--calendar-telemedicine)';
-                    return 'var(--calendar-consultation)';
-                  };
-                  const overlapsWith = (a: any, b: any) => {
-                    const [as, ae] = (a.slot || '').split('-');
-                    const [bs, be] = (b.slot || '').split('-');
-                    if (!as || !ae || !bs || !be) return false;
-                    const a1 = hhmmToMinutes(as), a2 = hhmmToMinutes(ae);
-                    const b1 = hhmmToMinutes(bs), b2 = hhmmToMinutes(be);
-                    return a1 < b2 && a2 > b1;
-                  };
-                  return (
-                    <div key={`col-${room.id}`} className="relative bg-white rounded-md border group/col" style={{ height: '80vh' }}>
-                      {/* Horizontal grid lines */}
-                      {timeSlots.map((slot) => (
-                        <div key={`line-${room.id}-${slot.label}`} className="absolute left-0 right-0 border-t border-border"
-                          style={{ top: `${((slot.startMin - dayStart) * 100) / total}%` }}
+              {filteredRooms.map((room) => {
+                const schedule = roomSchedules[room.id];
+                const appointments = schedule?.appointments || [];
+                const dayStart = 9 * 60;
+                const dayEnd = 18 * 60;
+                const total = Math.max(1, dayEnd - dayStart);
+                const dateStr = getISTDateString(selectedDate);
+                const getColor = (vt: string, completed: boolean, slot: string) => {
+                  const isPast = isSlotInPast(slot, dateStr);
+                  
+                  if (completed) return 'var(--calendar-completed)';
+                  
+                  const upper = (vt || '').toUpperCase();
+                  
+                  if (isPast) {
+                    if (upper === 'PROCEDURE') return 'var(--calendar-procedure-past)';
+                    if (upper === 'TELEMED' || upper === 'TELEMEDICINE') return 'var(--calendar-telemedicine-past)';
+                    return 'var(--calendar-consultation-past)';
+                  }
+                  
+                  if (upper === 'PROCEDURE') return 'var(--calendar-procedure)';
+                  if (upper === 'TELEMED' || upper === 'TELEMEDICINE') return 'var(--calendar-telemedicine)';
+                  return 'var(--calendar-consultation)';
+                };
+                const overlapsWith = (a: any, b: any) => {
+                  const [as, ae] = (a.slot || '').split('-');
+                  const [bs, be] = (b.slot || '').split('-');
+                  if (!as || !ae || !bs || !be) return false;
+                  const a1 = hhmmToMinutes(as), a2 = hhmmToMinutes(ae);
+                  const b1 = hhmmToMinutes(bs), b2 = hhmmToMinutes(be);
+                  return a1 < b2 && a2 > b1;
+                };
+                return (
+                  <div key={`col-${room.id}`} className="relative bg-card rounded-md border group/col" style={{ height: '80vh' }}>
+                    {timeSlots.map((slot) => (
+                      <div key={`line-${room.id}-${slot.label}`} className="absolute left-0 right-0 border-t border-border"
+                        style={{ top: `${((slot.startMin - dayStart) * 100) / total}%` }}
+                      />
+                    ))}
+                    {appointments.map((apt, idx) => {
+                      const [s, e] = (apt.slot || '').split('-');
+                      if (!s || !e) return null;
+                      const start = Math.max(dayStart, Math.min(hhmmToMinutes(s), dayEnd));
+                      const end = Math.max(dayStart, Math.min(hhmmToMinutes(e), dayEnd));
+                      if (end <= start) return null;
+                      const topPct = ((start - dayStart) * 100) / total;
+                      const heightPct = ((end - start) * 100) / total;
+                      const getStart = (x: any) => hhmmToMinutes(((x.slot || '').split('-')[0]) || '00:00');
+                      const overlapping = appointments
+                        .filter((b) => overlapsWith(apt, b))
+                        .sort((a, b) => getStart(a) - getStart(b));
+                      const index = Math.max(0, overlapping.findIndex((b) => (b.id && apt.id ? b.id === apt.id : b.slot === apt.slot)));
+                      const widthPct = 100 / Math.max(1, overlapping.length);
+                      const leftPct = index * widthPct;
+                      const bg = getColor(apt.visitType || '', apt.status === AppointmentStatus.COMPLETED, apt.slot);
+                      return (
+                        <div key={`apt-${room.id}-${idx}`} className="absolute rounded-md"
+                          style={{
+                            top: `${topPct}%`,
+                            height: `${heightPct}%`,
+                            left: `${leftPct}%`,
+                            width: `${widthPct}%`,
+                            backgroundColor: bg,
+                            boxShadow: 'inset 0 0 0 1px var(--border)',
+                            pointerEvents: 'none',
+                          }}
                         />
-                      ))}
-                      {/* Appointment blocks */}
-                      {appointments.map((apt, idx) => {
-                        const [s, e] = (apt.slot || '').split('-');
-                        if (!s || !e) return null;
-                        const start = Math.max(dayStart, Math.min(hhmmToMinutes(s), dayEnd));
-                        const end = Math.max(dayStart, Math.min(hhmmToMinutes(e), dayEnd));
-                        if (end <= start) return null;
-                        const topPct = ((start - dayStart) * 100) / total;
-                        const heightPct = ((end - start) * 100) / total;
-                        const getStart = (x: any) => hhmmToMinutes(((x.slot || '').split('-')[0]) || '00:00');
-                        const overlapping = appointments
-                          .filter((b) => overlapsWith(apt, b))
-                          .sort((a, b) => getStart(a) - getStart(b));
-                        const index = Math.max(0, overlapping.findIndex((b) => (b.id && apt.id ? b.id === apt.id : b.slot === apt.slot)));
-                        const widthPct = 100 / Math.max(1, overlapping.length);
-                        const leftPct = index * widthPct;
-                        const bg = getColor(apt.visitType || '', apt.status === AppointmentStatus.COMPLETED, apt.slot);
-                        return (
-                          <div key={`apt-${room.id}-${idx}`} className="absolute rounded-md"
-                            style={{
-                              top: `${topPct}%`,
-                              height: `${heightPct}%`,
-                              left: `${leftPct}%`,
-                              width: `${widthPct}%`,
-                              backgroundColor: bg,
-                              boxShadow: 'inset 0 0 0 1px var(--border)',
-                              pointerEvents: 'none',
-                            }}
-                          />
-                        );
-                      })}
-                      {/* Floating labels */}
-                      {appointments.map((apt, idx) => {
-                        const [s, e] = (apt.slot || '').split('-');
-                        if (!s || !e) return null;
-                        const start = Math.max(dayStart, Math.min(hhmmToMinutes(s), dayEnd));
-                        const end = Math.max(dayStart, Math.min(hhmmToMinutes(e), dayEnd));
-                        if (end <= start) return null;
-                        const topPct = ((start - dayStart) * 100) / total;
-                        const heightPct = ((end - start) * 100) / total;
-                        const getStart = (x: any) => hhmmToMinutes(((x.slot || '').split('-')[0]) || '00:00');
-                        const overlapping = appointments
-                          .filter((b) => overlapsWith(apt, b))
-                          .sort((a, b) => getStart(a) - getStart(b));
-                        const index = Math.max(0, overlapping.findIndex((b) => (b.id && apt.id ? b.id === apt.id : b.slot === apt.slot)));
-                        const widthPct = 100 / Math.max(1, overlapping.length);
-                        return (
-                          <div
-                            key={`label-${room.id}-${idx}`}
-                            className="absolute group"
-                            style={{ top: `${topPct}%`, height: `${heightPct}%`, left: `${index * widthPct}%`, width: `${widthPct}%`, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            onMouseEnter={(e) => {
-                              const el = (e.currentTarget as HTMLElement) || null;
-                              if (!el || typeof el.getBoundingClientRect !== 'function') {
-                                // Element may be null if unmounted or event fired during layout changes
-                                setTooltipPos(null);
-                                return;
-                              }
-                              const rect = el.getBoundingClientRect();
-                              if (!rect) {
-                                setTooltipPos(null);
-                                return;
-                              }
-                              setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + 12 });
-                              setHoveredApt(apt);
-                              setHoveredRoomInfo({ name: room.name, type: room.type });
-                            }}
-                            onMouseLeave={() => {
-                              if (!tooltipLocked) {
-                                setHoveredApt(null);
-                                setHoveredRoomInfo(null);
-                                setTooltipPos(null);
-                              }
-                            }}
-                          >
-                            <div className="w-full min-w-0 max-h-full overflow-hidden font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: 'var(--foreground)', fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))', lineHeight: '1.2' }}>
-                              <div className="whitespace-normal [overflow-wrap:anywhere] font-semibold">
-                                {apt.patient.name}
-                                {apt.visitType === 'PROCEDURE' && apt.notes && (
-                                  <span className="text-highlight-text font-medium ml-0.5">({apt.notes})</span>
-                                )}
-                              </div>
+                      );
+                    })}
+                    {appointments.map((apt, idx) => {
+                      const [s, e] = (apt.slot || '').split('-');
+                      if (!s || !e) return null;
+                      const start = Math.max(dayStart, Math.min(hhmmToMinutes(s), dayEnd));
+                      const end = Math.max(dayStart, Math.min(hhmmToMinutes(e), dayEnd));
+                      if (end <= start) return null;
+                      const topPct = ((start - dayStart) * 100) / total;
+                      const heightPct = ((end - start) * 100) / total;
+                      const getStart = (x: any) => hhmmToMinutes(((x.slot || '').split('-')[0]) || '00:00');
+                      const overlapping = appointments
+                        .filter((b) => overlapsWith(apt, b))
+                        .sort((a, b) => getStart(a) - getStart(b));
+                      const index = Math.max(0, overlapping.findIndex((b) => (b.id && apt.id ? b.id === apt.id : b.slot === apt.slot)));
+                      const widthPct = 100 / Math.max(1, overlapping.length);
+                      return (
+                        <div
+                          key={`label-${room.id}-${idx}`}
+                          className="absolute group"
+                          style={{ top: `${topPct}%`, height: `${heightPct}%`, left: `${index * widthPct}%`, width: `${widthPct}%`, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          onMouseEnter={(e) => {
+                            const el = (e.currentTarget as HTMLElement) || null;
+                            if (!el || typeof el.getBoundingClientRect !== 'function') {
+                              // Element may be null if unmounted or event fired during layout changes
+                              setTooltipPos(null);
+                              return;
+                            }
+                            const rect = el.getBoundingClientRect();
+                            if (!rect) {
+                              setTooltipPos(null);
+                              return;
+                            }
+                            setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + 12 });
+                            setHoveredApt(apt);
+                            setHoveredRoomInfo({ name: room.name, type: room.type });
+                          }}
+                          onMouseLeave={() => {
+                            if (!tooltipLocked) {
+                              setHoveredApt(null);
+                              setHoveredRoomInfo(null);
+                              setTooltipPos(null);
+                            }
+                          }}
+                        >
+                          <div className="w-full min-w-0 max-h-full overflow-hidden font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: 'var(--foreground)', fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))', lineHeight: '1.2' }}>
+                            <div className="whitespace-normal [overflow-wrap:anywhere] font-semibold">
+                              {apt.patient.name}
+                              {apt.visitType === 'PROCEDURE' && apt.notes && (
+                                <span className="text-highlight-text font-medium ml-0.5">({apt.notes})</span>
+                              )}
                             </div>
-                            
-                            {/* Per-tile no inline tooltip: global fixed tooltip below */}
                           </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
+                          
+                          {/* Per-tile no inline tooltip: global fixed tooltip below */}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </CardContent>
@@ -577,11 +567,11 @@ export default function RoomCalendar() {
                   hoveredApt.visitType === 'TELEMED' ? 'bg-muted text-foreground' :
                   'bg-info-soft text-info-text'
                 }`}>
-                  {hoveredApt.visitType || 'OPD'}
+                  {enumLabel('visitType', hoveredApt.visitType || 'OPD')}
                 </span>
               </div>
               {hoveredApt.status && (
-                <div className="text-xs"><span className="font-medium text-foreground">Status:</span> {hoveredApt.status}</div>
+                <div className="text-xs"><span className="font-medium text-foreground">Status:</span> {statusLabel('appointment', hoveredApt.status)}</div>
               )}
               {hoveredApt.visitType === 'PROCEDURE' && hoveredApt.notes && (
                 <div className="text-xs [overflow-wrap:anywhere]"><span className="font-medium text-foreground">Notes:</span> {hoveredApt.notes}</div>
