@@ -13,7 +13,7 @@ module.exports = journey(
     await ui.page.getByText(user.firstName, { exact: false }).first().waitFor();
     await ui.screen("landing");
     await ui.click(ui.page.getByRole("link", { name: "Appointments" }), "Menu: Appointments");
-    await ui.page.getByText("Doctor Calendar").waitFor();
+    await ui.page.getByPlaceholder("Name or phone").waitFor();
     await ui.page.getByText("Vikram Patil").first().waitFor();
     await ui.screen("today-schedule");
     ui.goal(/\/dashboard\/appointments/.test(ui.page.url()), "receptionist sees today's schedule with booked patients");

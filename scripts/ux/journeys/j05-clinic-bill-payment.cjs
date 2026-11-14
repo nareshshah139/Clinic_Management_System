@@ -11,7 +11,7 @@ module.exports = journey(
     await ui.start("/dashboard");
     await ui.screen("dashboard");
     await ui.click(page.getByRole("link", { name: "Appointments" }), "Menu: Appointments");
-    await page.getByText("Doctor Calendar").waitFor();
+    await page.getByPlaceholder("Name or phone").waitFor();
     await sneha.waitFor();
     await ui.screen("calendar-before-billing");
 

@@ -11,7 +11,7 @@ module.exports = journey(
     const before = await ui.api("GET", `/appointments/doctor/${ui.info.seeded.doctor.id}/schedule?date=${tomorrow}`);
     const beforeCount = (before.appointments || []).filter((a) => a.patient && a.patient.id === patient.id).length;
     await ui.click(page.getByRole("link", { name: "Appointments" }), "Menu: Appointments");
-    await page.getByText("Doctor Calendar").waitFor();
+    await page.getByPlaceholder("Name or phone").waitFor();
     await ui.screen("calendar-today");
 
     ui.decide("Which doctor", true);
