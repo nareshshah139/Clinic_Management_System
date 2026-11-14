@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// Rewrites raw Tailwind palette classes (and Tailwind palette hex values in inline styles) to the
-// semantic tokens in frontend/src/app/globals.css, and drops dead `dark:` variants.
+// Rewrites raw Tailwind palette classes (and Tailwind palette hex and rgb() values in inline styles) to
+// the semantic tokens in frontend/src/app/globals.css, drops dead `dark:` variants, and gives a hover or
+// active background that collapsed onto its resting token a visible change (`hover:bg-X/90`).
+// Safe to rerun: every rewrite produces text that none of the rewrites match again.
 // Usage: node scripts/design/tokenize-colors.mjs [--dry-run] [paths...]   (default: frontend/src frontend/__tests__)
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, darkVariantPattern, hexPattern, loadAllowlist, rawClassPattern, walk } from './raw-colors.mjs';
+import { ROOT, darkVariantPattern, hexPattern, isNeutralInk, loadAllowlist, rawClassPattern, rgbPattern, sameTokenStatePairs, walk } from './raw-colors.mjs';
 
 const MAP = {
   families: {
@@ -38,6 +40,7 @@ const MAP = {
     '#64748b': ['slate', 500], '#4b5563': ['gray', 600], '#475569': ['slate', 600], '#374151': ['gray', 700], '#1f2937': ['gray', 800], '#111827': ['gray', 900],
     '#ef4444': ['red', 500], '#dc2626': ['red', 600], '#b91c1c': ['red', 700],
     '#f0fdf4': ['green', 50], '#22c55e': ['green', 500], '#16a34a': ['green', 600], '#15803d': ['green', 700], '#10b981': ['emerald', 500], '#059669': ['emerald', 600],
+    '#dbeafe': ['blue', 100], '#ede9fe': ['violet', 100], '#facc15': ['yellow', 400],
     '#fef3c7': ['amber', 100], '#fcd34d': ['amber', 300], '#fbbf24': ['amber', 400], '#f59e0b': ['amber', 500], '#a16207': ['yellow', 700], '#ea580c': ['orange', 600],
     '#93c5fd': ['blue', 300], '#3b82f6': ['blue', 500], '#2563eb': ['blue', 600], '#1d4ed8': ['blue', 700], '#1e40af': ['blue', 800], '#0ea5e9': ['sky', 500],
     '#d8b4fe': ['purple', 300], '#a855f7': ['purple', 500], '#8b5cf6': ['violet', 500], '#9333ea': ['purple', 600], '#6b21a8': ['purple', 800],
@@ -99,23 +102,57 @@ function hexProperty(linePrefix) {
   return best?.band ?? null;
 }
 
+function paletteVar(key, whole, offset) {
+  const palette = MAP.hex[key];
+  const lineStart = whole.lastIndexOf('\n', offset) + 1;
+  let contextStart = lineStart;
+  for (let i = 0; i < 3 && contextStart > 0; i++) contextStart = whole.lastIndexOf('\n', contextStart - 2) + 1;
+  // A value on its own line (a ternary branch, an array push) takes the property from the lines just above.
+  const band = hexProperty(whole.slice(lineStart, offset)) ?? hexProperty(whole.slice(contextStart, lineStart));
+  if (!palette || !band) return null;
+  return `var(--${tokenFor(band === 'paint' ? 'fill' : band, palette[0], palette[1])})`;
+}
+
 function rewriteHex(text, relPath, allowed) {
   let count = 0;
   const unmapped = [];
   const out = text.replace(hexPattern(), (hex, offset, whole) => {
-    const key = hex.toLowerCase();
-    if (allowed(relPath, 'hex', key)) return hex;
-    const palette = MAP.hex[key];
-    const band = hexProperty(whole.slice(whole.lastIndexOf('\n', offset) + 1, offset));
-    if (!palette || !band) {
+    if (allowed(relPath, 'hex', hex)) return hex;
+    const value = paletteVar(hex.toLowerCase(), whole, offset);
+    if (!value) {
       unmapped.push(`${hex}@${whole.slice(0, offset).split('\n').length}`);
       return hex;
     }
     count++;
-    const property = band === 'paint' ? 'fill' : band;
-    return `var(--${tokenFor(property, palette[0], palette[1])})`;
+    return value;
   });
   return { out, count, unmapped };
+}
+
+const toHex = (...channels) => `#${channels.map((c) => Number(c).toString(16).padStart(2, '0')).join('')}`;
+
+function rewriteRgb(text, relPath, allowed) {
+  let count = 0;
+  const unmapped = [];
+  const out = text.replace(rgbPattern(), (literal, r, g, b, alpha, offset, whole) => {
+    if (isNeutralInk(+r, +g, +b) || allowed(relPath, 'rgb', literal)) return literal;
+    const value = paletteVar(toHex(r, g, b), whole, offset);
+    if (!value) {
+      unmapped.push(`${literal.replace(/\s+/g, '')}@${whole.slice(0, offset).split('\n').length}`);
+      return literal;
+    }
+    count++;
+    const percent = alpha === undefined ? 100 : Math.round(alpha.endsWith('%') ? parseFloat(alpha) : Number(alpha) * 100);
+    return percent >= 100 ? value : `color-mix(in srgb, ${value} ${percent}%, transparent)`;
+  });
+  return { out, count, unmapped };
+}
+
+function distinguishStates(text) {
+  const fixes = sameTokenStatePairs(text).filter((pair) => pair.fix);
+  let out = text;
+  for (const { index, token, fix } of fixes.reverse()) out = out.slice(0, index) + fix + out.slice(index + token.length);
+  return { out, count: fixes.length };
 }
 
 const args = process.argv.slice(2);
@@ -125,25 +162,31 @@ const roots = (targets.length ? targets : ['frontend/src', 'frontend/__tests__']
 const allowed = loadAllowlist();
 const hexScope = (rel) => rel.startsWith('frontend/src/components/') || rel.startsWith('frontend/src/app/');
 
-const totals = { classes: 0, dark: 0, hex: 0, files: 0 };
+const totals = { classes: 0, dark: 0, hex: 0, rgb: 0, states: 0, files: 0 };
 const rows = [];
 for (const file of roots.flatMap((r) => walk(r))) {
   const rel = path.relative(ROOT, file).split(path.sep).join('/');
   const before = fs.readFileSync(file, 'utf8');
+  const inlineScope = hexScope(rel) && !rel.endsWith('.css');
+  const none = (text) => ({ out: text, count: 0, unmapped: [] });
   const classes = rewriteClasses(before);
   const dark = dropDarkVariants(classes.out);
-  const hex = hexScope(rel) && !rel.endsWith('.css') ? rewriteHex(dark.out, rel, allowed) : { out: dark.out, count: 0, unmapped: [] };
-  if (hex.out !== before) {
+  const hex = inlineScope ? rewriteHex(dark.out, rel, allowed) : none(dark.out);
+  const rgb = inlineScope ? rewriteRgb(hex.out, rel, allowed) : none(hex.out);
+  const states = distinguishStates(rgb.out);
+  if (states.out !== before) {
     totals.files++;
-    if (!dryRun) fs.writeFileSync(file, hex.out);
+    if (!dryRun) fs.writeFileSync(file, states.out);
   }
-  totals.classes += classes.count; totals.dark += dark.count; totals.hex += hex.count;
-  if (classes.count || dark.count || hex.count || hex.unmapped.length) rows.push({ rel, classes: classes.count, dark: dark.count, hex: hex.count, unmapped: hex.unmapped });
+  const row = { rel, classes: classes.count, dark: dark.count, hex: hex.count, rgb: rgb.count, states: states.count, unmapped: [...hex.unmapped, ...rgb.unmapped] };
+  for (const key of ['classes', 'dark', 'hex', 'rgb', 'states']) totals[key] += row[key];
+  if (row.classes + row.dark + row.hex + row.rgb + row.states || row.unmapped.length) rows.push(row);
 }
 
-rows.sort((a, b) => (b.classes + b.dark + b.hex) - (a.classes + a.dark + a.hex));
+const changes = (r) => r.classes + r.dark + r.hex + r.rgb + r.states;
+rows.sort((a, b) => changes(b) - changes(a));
 for (const r of rows) {
-  const left = r.unmapped.length ? `  unmapped hex: ${r.unmapped.join(' ')}` : '';
-  console.log(`${String(r.classes).padStart(5)} classes ${String(r.dark).padStart(4)} dark ${String(r.hex).padStart(4)} hex  ${r.rel}${left}`);
+  const left = r.unmapped.length ? `  unmapped: ${r.unmapped.join(' ')}` : '';
+  console.log(`${String(r.classes).padStart(5)} classes ${String(r.dark).padStart(4)} dark ${String(r.hex).padStart(4)} hex ${String(r.rgb).padStart(4)} rgb ${String(r.states).padStart(4)} states  ${r.rel}${left}`);
 }
-console.log(`${dryRun ? 'would change' : 'changed'} ${totals.files} files: ${totals.classes} palette classes, ${totals.dark} dark: variants, ${totals.hex} hex values`);
+console.log(`${dryRun ? 'would change' : 'changed'} ${totals.files} files: ${totals.classes} palette classes, ${totals.dark} dark: variants, ${totals.hex} hex values, ${totals.rgb} rgb values, ${totals.states} same-token hover/active backgrounds`);
