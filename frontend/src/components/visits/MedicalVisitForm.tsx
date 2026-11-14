@@ -194,6 +194,8 @@ const ROLE_PERMISSIONS = {
   OWNER: ['all'],
 };
 
+const VISIT_LOAD_WAIT_MS = 10_000;
+
 /**
  * @cc [owner:nareshshah139,label:product] visit-save-version
  * Existing-visit saves MUST send the version loaded or acknowledged by this form.
@@ -212,8 +214,6 @@ const ROLE_PERMISSIONS = {
  * @cc [owner:nareshshah139,label:product] completion-progress-explanation
  * When completion is unavailable because progress is below 80%, the form identifies unfinished tracked sections and states that progress is not a clinical validation.
  */
-const VISIT_LOAD_WAIT_MS = 10_000;
-
 function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
