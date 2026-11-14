@@ -103,7 +103,7 @@ async function main() {
     await reception.locator('[data-tour="help-button"]').click();
     await reception.waitForSelector('.introjs-nextbutton');
     await reception.locator('.introjs-nextbutton').click();
-    await reception.waitForFunction(() => document.querySelector('.introjs-tooltip')?.textContent.includes('Add New Patient'), { timeout: 10000 });
+    await reception.waitForFunction(() => document.querySelector('.introjs-tooltip')?.textContent.includes('New patient'), { timeout: 10000 });
     console.log('PASS receptionist tour advances with pointer');
   } finally { await browser.close(); }
 }

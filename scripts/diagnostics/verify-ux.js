@@ -31,6 +31,7 @@ async function prepare(page) {
       if (endpoint === '/auth/me' || endpoint === '/users/ux-test-user') body = user;
       else if (endpoint === '/auth/login') return new Response(JSON.stringify({ message: 'Check your phone or email and password.' }), { status: 401, headers: { 'content-type': 'application/json' } });
       else if (endpoint === '/auth/statistics') body = { users: { total: 12 }, patients: { total: 128 }, appointments: { total: 24 }, system: { status: 'healthy', version: '1.0.0', uptime: 3600 } };
+      else if (endpoint === '/pharmacy/reports/daily-collection') body = { wholeDay: null, collection: { expectedTotal: 0, modes: [] } };
       else if (endpoint === '/reports/alerts') body = { lowStockAlerts: [], expiryAlerts: [], pendingPayments: [], generatedAt: '2026-11-05T09:00:00Z' };
       else if (endpoint === '/users') body = { users: [user], total: 1 };
       else if (endpoint === '/patients') body = { patients: [], total: 0, page: 1, totalPages: 1 };
@@ -132,16 +133,22 @@ async function inspectTheme(page, name) {
       results.push(await inspectTheme(page, 'light'));
       results.push(await inspectTheme(page, 'dark'));
       await page.evaluate(() => document.documentElement.classList.remove('dark'));
-      const brandSwitch = await page.$('[aria-label="Toggle branded mode"]');
-      assert.ok(brandSwitch, 'The branded theme switch must remain accessible');
-      await brandSwitch.click();
+      const switchBranded = async enabled => {
+        await page.goto(`${baseUrl}/login`, { waitUntil: 'networkidle0' });
+        const brandSwitch = await page.waitForSelector('[aria-label="Toggle branded mode"]:not([disabled])');
+        assert.ok(brandSwitch, 'The branded theme switch must remain accessible on the login page');
+        await brandSwitch.click();
+        await page.waitForFunction(on => document.documentElement.classList.contains('branded') === on, {}, enabled);
+      };
+      await switchBranded(true);
+      await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle0' });
+      await page.waitForSelector('h1');
       await page.waitForFunction(() => document.documentElement.classList.contains('branded'));
       results.push(await inspectTheme(page, 'branded'));
       results.push(await inspectTheme(page, 'branded-dark'));
       results.push(await inspectTheme(page, 'branded-contrast'));
       await page.evaluate(() => document.body.classList.remove('high-contrast'));
-      await brandSwitch.click();
-      await page.waitForFunction(() => !document.documentElement.classList.contains('branded'));
+      await switchBranded(false);
       await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
       await page.goto(`${baseUrl}/dashboard?ux-loading=1`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('[role="status"][aria-label="Loading dashboard…"]');
