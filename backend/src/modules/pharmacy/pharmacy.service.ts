@@ -280,7 +280,7 @@ export class PharmacyService {
         recentInvoices: recentInvoices.map((invoice: any) => ({
           id: invoice.id,
           invoiceNumber: billNumberLabel(invoice.invoiceNumber),
-          patientName: invoice.patient.name,
+          patientName: invoice.billingName || invoice.patient?.name || null,
           amount: invoice.totalAmount,
           status: invoice.status,
           createdAt: invoice.createdAt.toISOString(),
@@ -471,7 +471,7 @@ export class PharmacyService {
       return (invoices as any[]).map((invoice: any) => ({
         id: invoice.id,
         invoiceNumber: billNumberLabel(invoice.invoiceNumber),
-        patientName: invoice.patient.name,
+        patientName: invoice.billingName || invoice.patient?.name || null,
         doctorName: invoice.doctor
           ? `${invoice.doctor.firstName} ${invoice.doctor.lastName}`
           : null,

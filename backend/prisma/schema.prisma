@@ -1388,7 +1388,7 @@ model InventoryItemRequest {
 model PharmacyInvoice {
   id             String  @id @default(cuid())
   invoiceNumber  String
-  patientId      String
+  patientId      String?
   doctorId       String?
   prescriptionId String?
   checkoutRequestKey String?
@@ -1432,7 +1432,7 @@ model PharmacyInvoice {
   revisedAt       DateTime?
 
   // Relations
-  patient      Patient               @relation(fields: [patientId], references: [id])
+  patient      Patient?              @relation(fields: [patientId], references: [id], onDelete: Restrict)
   doctor       User?                 @relation("PharmacyInvoiceDoctor", fields: [doctorId], references: [id])
   createdBy    User?                 @relation("PharmacyInvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
   prescription Prescription?         @relation(fields: [prescriptionId], references: [id])

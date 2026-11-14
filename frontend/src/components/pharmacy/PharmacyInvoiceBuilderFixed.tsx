@@ -1,7 +1,5 @@
 'use client';
 
-import { downloadInvoicePdf } from '@/lib/download-invoice-pdf';
-
 import { displayClinicDate } from '@/lib/date-display';
 import { isIssuedBillNumber } from '@/lib/bill-number';
 import { Spinner } from '@/components/ui/spinner';
@@ -45,7 +43,7 @@ import {
   Package as PackageIcon,
   FileText,
   Printer,
-  Download,
+  Check,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
@@ -86,6 +84,7 @@ interface Drug {
   strength?: string;
   totalStock?: number;
   stockName?: string | null;
+  requiresPrescription?: boolean | null;
 }
 
 interface PharmacyPackage {
@@ -168,6 +167,13 @@ type CheckoutAttempt = {
 const BLANK_BILL = JSON.stringify([undefined, undefined, undefined, undefined]);
 
 const checkoutStorageKey = 'pharmacy-checkout-attempt-v1';
+
+const PAYMENT_METHODS = [
+  ['CASH', 'Cash'],
+  ['UPI', 'UPI'],
+  ['CARD', 'Card'],
+  ['NETBANKING', 'Net banking'],
+] as const;
 
 type PrescriptionStockItem = {
   prescriptionVersion?: string;
@@ -265,6 +271,7 @@ export function PharmacyInvoiceBuilderFixed({
   onDiscarded,
   onReloadDraft,
   onDone,
+  onFinished,
 }: {
   prefill?: BillPrefill;
   draft?: SavedDraft;
@@ -272,6 +279,7 @@ export function PharmacyInvoiceBuilderFixed({
   onDiscarded?: (session: DraftSession) => void;
   onReloadDraft?: () => void;
   onDone?: () => void;
+  onFinished: (bill: { id: string; fromPrescription: boolean }) => void;
 }) {
   const incomingPrefillKey = JSON.stringify([
     suppliedPrefill?.patientId,
@@ -335,6 +343,8 @@ export function PharmacyInvoiceBuilderFixed({
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [packages, setPackages] = useState<PharmacyPackage[]>([]);
   const [searchResults, setSearchResults] = useState<Drug[]>([]);
+  const [resultsQuery, setResultsQuery] = useState('');
+  const [focusQuantityFor, setFocusQuantityFor] = useState<string | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>(() => (draft ? savedLines(draft) : []));
   const [prescriptionData, setPrescriptionData] = useState<any>(null);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(draft?.patient ?? null);
@@ -343,10 +353,17 @@ export function PharmacyInvoiceBuilderFixed({
     draft?.patient ? `${draft.patient.name}${draft.patient.phone ? ` (${draft.patient.phone})` : ''}` : '',
   );
   const [drugSearchQuery, setDrugSearchQuery] = useState('');
+  const drugQueryRef = useRef('');
+  drugQueryRef.current = drugSearchQuery;
   const [showPatientSearchResults, setShowPatientSearchResults] =
     useState(false);
   const [showDrugSearchResults, setShowDrugSearchResults] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'drugs' | 'packages'>('drugs');
+  const [doctorOpen, setDoctorOpen] = useState(false);
+  const [walkIn, setWalkIn] = useState(() => Boolean(draft && !draft.fields.patientId));
+  const [packagesOpen, setPackagesOpen] = useState(false);
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [directionsOpen, setDirectionsOpen] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(false);
   const [loadingPrescription, setLoadingPrescription] = useState(false);
   const [prefillError, setPrefillError] = useState<string | null>(null);
@@ -357,7 +374,6 @@ export function PharmacyInvoiceBuilderFixed({
   const [printPreviewCopyType, setPrintPreviewCopyType] =
     useState<PharmacyInvoiceCopyType>('ORIGINAL');
   const [printPreviewZoom, setPrintPreviewZoom] = useState(0.9);
-  const [savingPdf, setSavingPdf] = useState(false);
   const [savingInvoiceFromPreview, setSavingInvoiceFromPreview] =
     useState(false);
 
@@ -365,7 +381,6 @@ export function PharmacyInvoiceBuilderFixed({
   const patientSearchRef = useRef<HTMLDivElement>(null);
   const drugSearchRef = useRef<HTMLDivElement>(null);
   const invoiceItemsRef = useRef<InvoiceItem[]>(items);
-  const printPreviewFrameRef = useRef<HTMLIFrameElement>(null);
 
   const [invoiceData, setInvoiceData] = useState<BillFields>(() => draft?.fields ?? {
     ...EMPTY_FIELDS,
@@ -947,29 +962,41 @@ export function PharmacyInvoiceBuilderFixed({
     }
   };
 
-  const searchDrugs = async (query: string) => {
+  const searchDrugs = async (query: string): Promise<Drug[]> => {
     if (!query.trim()) {
       setSearchResults([]);
+      setResultsQuery('');
       setShowDrugSearchResults(false);
-      return;
+      return [];
     }
 
     try {
       const response = await apiClient.get<Drug[]>('/drugs/autocomplete', { q: query, limit: 20 });
       if (Array.isArray(response)) {
+        if (query.trim() !== drugQueryRef.current.trim()) return response;
         setSearchResults(response);
+        setResultsQuery(query.trim());
         setShowDrugSearchResults(true);
-      } else {
-        console.warn('Invalid drugs response format:', response);
-        setSearchResults([]);
-        setShowDrugSearchResults(false);
+        return response;
       }
+      console.warn('Invalid drugs response format:', response);
     } catch (error) {
       console.error('Error searching drugs:', error);
-      setSearchResults([]);
-      setShowDrugSearchResults(false);
     }
+    setSearchResults([]);
+    setResultsQuery('');
+    setShowDrugSearchResults(false);
+    return [];
   };
+
+  useEffect(() => {
+    if (!focusQuantityFor) return;
+    const input = document.getElementById(`quantity-${focusQuantityFor}`) as HTMLInputElement | null;
+    if (!input) return;
+    input.focus();
+    input.select();
+    setFocusQuantityFor(null);
+  }, [focusQuantityFor, items]);
 
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
@@ -1053,7 +1080,7 @@ export function PharmacyInvoiceBuilderFixed({
           variant="default"
           className="text-xs ml-2 whitespace-nowrap bg-green-100 text-green-800"
         >
-          Best Match
+          Best match · Enter
         </Badge>
       );
     if (index < 3)
@@ -1062,7 +1089,7 @@ export function PharmacyInvoiceBuilderFixed({
           variant="secondary"
           className="text-xs ml-2 whitespace-nowrap bg-blue-100 text-blue-800"
         >
-          High Match
+          High match
         </Badge>
       );
     return null;
@@ -1102,6 +1129,7 @@ export function PharmacyInvoiceBuilderFixed({
       updatedItems[existingItemIndex].quantity += 1;
       calculateItemTotal(updatedItems[existingItemIndex]);
       setItems(updatedItems);
+      setFocusQuantityFor(updatedItems[existingItemIndex].id);
     } else {
       // Add new item
       const newItem: InvoiceItem = {
@@ -1113,7 +1141,7 @@ export function PharmacyInvoiceBuilderFixed({
         quantity: 1,
         unitPrice: getDrugUnitPrice(drug),
         discountPercent: 0,
-        taxPercent: 18, // Default GST
+        taxPercent: getDrugGstRate(drug),
         discountAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
@@ -1121,10 +1149,18 @@ export function PharmacyInvoiceBuilderFixed({
 
       calculateItemTotal(newItem);
       setItems([...items, newItem]);
+      setFocusQuantityFor(newItem.id);
     }
 
     setDrugSearchQuery('');
     setShowDrugSearchResults(false);
+  };
+
+  const addTopMatch = async () => {
+    const query = drugSearchQuery.trim();
+    if (!query) return;
+    const matches = resultsQuery === query ? searchResults : await searchDrugs(query);
+    if (matches[0]) addDrugToInvoice(matches[0]);
   };
 
   const addPackageToInvoice = (pkg: PharmacyPackage) => {
@@ -1278,28 +1314,39 @@ export function PharmacyInvoiceBuilderFixed({
     };
   };
 
+  const walkInPrescriptionProblem = (item: InvoiceItem) =>
+    walkIn && !invoiceData.patientId && item.itemType === 'DRUG' && item.drug?.requiresPrescription
+      ? `${billLineName(item)} needs a prescription. Choose the patient instead of Walk-in customer.`
+      : null;
+
   const getValidInvoiceItems = () => {
     if (loadingPrescription || (invoiceData.prescriptionId && !prescriptionData)) {
       toast({ title: 'Prescription not ready', description: 'Wait for the prescription to load, or retry the failed load before billing.', variant: 'destructive' });
       return null;
     }
     if (
-      !invoiceData.patientId ||
+      (!invoiceData.patientId && !walkIn) ||
       items.length === 0 ||
-      !invoiceData.billingName ||
-      !invoiceData.billingPhone
+      !invoiceData.billingName.trim() ||
+      !invoiceData.billingPhone.trim()
     ) {
       toast({
         title: 'Validation Error',
-        description: !invoiceData.patientId
-          ? 'Patient is required'
+        description: !invoiceData.patientId && !walkIn
+          ? 'Choose a patient, or Walk-in customer'
           : items.length === 0
             ? 'At least one item is required'
-            : !invoiceData.billingName
-              ? 'Billing name is required'
-              : 'Billing phone is required',
+            : !invoiceData.billingName.trim()
+              ? walkIn ? "Enter the customer's name" : 'Billing name is required'
+              : walkIn ? "Enter the customer's phone" : 'Billing phone is required',
         variant: 'destructive',
       });
+      return null;
+    }
+
+    const prescriptionProblem = items.map(walkInPrescriptionProblem).find(Boolean);
+    if (prescriptionProblem) {
+      toast({ title: 'Choose the patient', description: prescriptionProblem, variant: 'destructive' });
       return null;
     }
 
@@ -1420,14 +1467,9 @@ export function PharmacyInvoiceBuilderFixed({
       }
 
       toast({
-        title: 'Success',
-        description: `Invoice ${printableInvoice?.invoice?.invoiceNumber || printableInvoice?.invoiceNumber || ''} confirmed successfully`,
+        title: 'Bill confirmed',
+        description: `Bill ${printableInvoice?.invoice?.invoiceNumber || printableInvoice?.invoiceNumber || ''} is paid.`,
       });
-
-      // Open print preview using saved invoice data
-      if (printableInvoice) {
-        openPrintPreview(printableInvoice, attempt.previewItems, copyType);
-      }
 
       // Notify dashboard to refresh stats
       if (typeof window !== 'undefined') {
@@ -1437,7 +1479,7 @@ export function PharmacyInvoiceBuilderFixed({
         window.dispatchEvent(ev2);
       }
 
-      return printableInvoice;
+      return { id: createdInvoice.id as string, printable: printableInvoice };
     } catch (error: any) {
       const draftRefused = attempt?.payload.draftId ? draftRefusal(error, 'This draft can no longer be finished.') : null;
       if (attempt && !attempt.confirmed && ([400, 404].includes(error?.status) || draftRefused)) {
@@ -1464,7 +1506,7 @@ export function PharmacyInvoiceBuilderFixed({
         console.error('❌ Error creating invoice:', message);
       }
       toast({
-        title: 'Error Confirming Invoice',
+        title: 'Bill not confirmed',
         description: message,
         variant: 'destructive',
       });
@@ -1482,7 +1524,7 @@ export function PharmacyInvoiceBuilderFixed({
    * a refusal MUST be shown with a way to reload, never retried over the other change.
    */
   const saveDraft = async () => {
-    const problem = draftProblem(invoiceData, items) ?? discountProblem;
+    const problem = draftProblem(invoiceData, items, walkIn) ?? discountProblem;
     if (problem) {
       toast({ title: 'Draft not saved', description: problem, variant: 'destructive' });
       return;
@@ -1565,31 +1607,38 @@ export function PharmacyInvoiceBuilderFixed({
     setPrintPreviewOpen(true);
   };
 
-  const handleConfirmInvoiceFromPreview = async () => {
-    const validItems = getValidInvoiceItems();
-    if (!validItems) return;
-
+  const finishCheckout = async (validItems: InvoiceItem[], copyType: PharmacyInvoiceCopyType, recovery?: CheckoutAttempt) => {
     setSavingInvoiceFromPreview(true);
     try {
-      await createAndConfirmInvoice(validItems, printPreviewCopyType);
+      const finished = await createAndConfirmInvoice(validItems, copyType, recovery);
+      if (!finished) return;
+      if (!recovery) {
+        try {
+          await printHtmlInHiddenFrame(renderPrintHtml(finished.printable, validItems, {
+            copyType,
+            billingFallback: {
+              billingName: invoiceData.billingName,
+              billingPhone: invoiceData.billingPhone,
+              billingAddress: invoiceData.billingAddress,
+              notes: invoiceData.notes,
+            },
+          }));
+        } catch (error) {
+          console.error('Invoice print failed', error);
+          toast({ title: 'Print failed', description: 'The bill is saved. Print it again from the bill.', variant: 'destructive' });
+        }
+      }
+      setPrintPreviewOpen(false);
+      onFinished({ id: finished.id, fromPrescription: Boolean(invoiceData.prescriptionId) });
     } finally {
       setSavingInvoiceFromPreview(false);
     }
   };
 
-  const buildPrintPreviewPayload = (
-    invoice: any,
-    itemsData: InvoiceItem[]
-  ): PharmacyInvoicePrintPreview => ({
-    invoice,
-    items: itemsData,
-    billingFallback: {
-      billingName: invoiceData.billingName,
-      billingPhone: invoiceData.billingPhone,
-      billingAddress: invoiceData.billingAddress,
-      notes: invoiceData.notes,
-    },
-  });
+  const confirmAndPrint = (copyType: PharmacyInvoiceCopyType = 'ORIGINAL') => {
+    const validItems = getValidInvoiceItems();
+    if (validItems) void finishCheckout(validItems, copyType);
+  };
 
   const getInvoiceCoreFromPrintData = (invoice: any) =>
     Array.isArray(invoice?.lines) ? invoice.invoice : invoice;
@@ -1687,7 +1736,7 @@ export function PharmacyInvoiceBuilderFixed({
     };
     const billDiscountLabel =
       invoiceCore?.billDiscountKind === 'PERCENT' ? `Bill discount (${Number(invoiceCore.billDiscountValue)}%)` : 'Bill discount';
-    const invoiceNumberText = hasSavedInvoiceIdentity(invoice) ? invoiceCore?.invoiceNumber : 'Given when the bill is printed';
+    const invoiceNumberText = hasSavedInvoiceIdentity(invoice) ? invoiceCore?.invoiceNumber : '';
     const gstRows =
       isStandardPrintData && Array.isArray(invoice.gstSummary)
         ? invoice.gstSummary
@@ -1803,7 +1852,7 @@ export function PharmacyInvoiceBuilderFixed({
                 ${branch?.phone ? `Phone: ${escapeHtml(branch.phone)}<br/>` : ''}
                 ${branch?.gstNumber ? `GSTIN: ${escapeHtml(branch.gstNumber)}<br/>` : ''}
                 ${branch?.drugLicenseNumber ? `DL No: ${escapeHtml(branch.drugLicenseNumber)}<br/>` : ''}
-                <strong>Invoice #:</strong> ${escapeHtml(invoiceNumberText || '')}<br/>
+                ${invoiceNumberText ? `<strong>Invoice #:</strong> ${escapeHtml(invoiceNumberText)}<br/>` : ''}
                 <strong>Copy:</strong> ${escapeHtml(copyType)}<br/>
                 <strong>Date:</strong> ${escapeHtml(dateStr)}
                 ${invoiceCore?.revisedAt ? `<br/><strong>Revised ${escapeHtml(displayClinicDate(invoiceCore.revisedAt))}</strong>` : ''}
@@ -1887,20 +1936,6 @@ export function PharmacyInvoiceBuilderFixed({
     `;
   };
 
-  const openPrintPreview = (
-    invoice: any,
-    itemsData: InvoiceItem[],
-    copyTypeOverride?: PharmacyInvoiceCopyType
-  ) => {
-    const copyType =
-      copyTypeOverride ||
-      (invoice?.copyType === 'DUPLICATE' ? 'DUPLICATE' : 'ORIGINAL');
-    setPrintPreviewCopyType(copyType);
-    setPrintPreviewZoom(0.9);
-    setPrintPreviewData(buildPrintPreviewPayload(invoice, itemsData));
-    setPrintPreviewOpen(true);
-  };
-
   const printPreviewHtml = printPreviewData
     ? renderPrintHtml(printPreviewData.invoice, printPreviewData.items, {
         includePrintButton: false,
@@ -1908,16 +1943,6 @@ export function PharmacyInvoiceBuilderFixed({
         billingFallback: printPreviewData.billingFallback,
       })
     : '';
-
-  const getPrintPreviewInvoiceCore = () => {
-    const invoice = printPreviewData?.invoice;
-    return getInvoiceCoreFromPrintData(invoice);
-  };
-
-  const getPrintPreviewPatient = () => {
-    const invoice = printPreviewData?.invoice;
-    return Array.isArray(invoice?.lines) ? invoice.patient : undefined;
-  };
 
   const printHtmlInHiddenFrame = async (html: string) => {
     if (!html.trim()) {
@@ -1971,104 +1996,6 @@ export function PharmacyInvoiceBuilderFixed({
     }
   };
 
-  const printPreviewInFrame = async () => {
-    let invoiceForPrint = printPreviewData?.invoice;
-    let itemsForPrint = printPreviewData?.items || [];
-    let billingFallback = printPreviewData?.billingFallback;
-    const copyType = printPreviewCopyType;
-
-    if (!hasSavedInvoiceIdentity(invoiceForPrint)) {
-      const validItems = getValidInvoiceItems();
-      if (!validItems) return;
-
-      setSavingInvoiceFromPreview(true);
-      try {
-        const printableInvoice = await createAndConfirmInvoice(
-          validItems,
-          copyType
-        );
-        if (!printableInvoice) return;
-        invoiceForPrint = printableInvoice;
-        itemsForPrint = validItems;
-        billingFallback = {
-          billingName: invoiceData.billingName,
-          billingPhone: invoiceData.billingPhone,
-          billingAddress: invoiceData.billingAddress,
-          notes: invoiceData.notes,
-        };
-      } finally {
-        setSavingInvoiceFromPreview(false);
-      }
-    }
-
-    if (!invoiceForPrint || !itemsForPrint.length) {
-      toast({
-        title: 'Print failed',
-        description: 'No invoice preview is ready yet.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      const html = renderPrintHtml(invoiceForPrint, itemsForPrint, {
-        includePrintButton: false,
-        copyType,
-        billingFallback,
-      });
-      await printHtmlInHiddenFrame(html);
-    } catch (error) {
-      console.error('Invoice print failed', error);
-      toast({
-        title: 'Print failed',
-        description: 'Could not open the browser print dialog.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const downloadPrintPreviewPdf = async () => {
-    if (!isPrintPreviewSaved) {
-      toast({
-        title: 'Confirm invoice first',
-        description: 'Save the invoice from the preview before downloading PDF.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const frameDocument = printPreviewFrameRef.current?.contentDocument;
-    if (!frameDocument?.body) {
-      toast({
-        title: 'PDF failed',
-        description: 'No invoice preview is ready yet.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setSavingPdf(true);
-    try {
-      const invoiceCore = getPrintPreviewInvoiceCore();
-      const invoiceNumber = invoiceCore?.invoiceNumber || 'draft';
-      await downloadInvoicePdf(frameDocument, invoiceNumber);
-
-      toast({
-        title: 'PDF ready',
-        description: 'Pharmacy invoice PDF downloaded.',
-      });
-    } catch (error) {
-      console.error('Invoice PDF generation failed', error);
-      toast({
-        title: 'PDF failed',
-        description: 'Could not generate PDF. Use Print / Save as PDF instead.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingPdf(false);
-    }
-  };
-
   const { subtotal, lineDiscount, billDiscountAmount, totalDiscount, totalTax, grandTotal, discountProblem } =
     calculateInvoiceTotals();
   const draftChanged = savedSnapshot !== JSON.stringify(billPayload(invoiceData, items, billDiscount));
@@ -2079,13 +2006,16 @@ export function PharmacyInvoiceBuilderFixed({
     onDone?.();
   };
   const hasUnresolvedGst = items.some(item => item.taxPercent === null);
-  const previewInvoiceCore = getPrintPreviewInvoiceCore();
-  const previewPatient = getPrintPreviewPatient();
-  const isPrintPreviewSaved = hasSavedInvoiceIdentity(printPreviewData?.invoice);
+  const fromPrescription = Boolean(invoiceData.prescriptionId || prefill?.visitId);
+  const showDoctor = fromPrescription || Boolean(invoiceData.doctorId) || doctorOpen;
+  const showPackages = fromPrescription || packagesOpen || items.some((item) => item.itemType === 'PACKAGE');
+  const showBillDiscount = discountOpen || Boolean(billDiscount);
+  const showDirections = (item: InvoiceItem) =>
+    isPrescriptionItem(item.id) || directionsOpen.has(item.id) || Boolean(item.dosage || item.frequency || item.duration || item.instructions);
   const previewLineCount = Array.isArray(printPreviewData?.invoice?.lines)
     ? printPreviewData?.invoice.lines.length
     : printPreviewData?.items.length || 0;
-  const previewTotal = Number(previewInvoiceCore?.totalAmount || 0);
+  const previewTotal = Number(getInvoiceCoreFromPrintData(printPreviewData?.invoice)?.totalAmount || 0);
   const previewTotalLabel = previewTotal.toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -2093,6 +2023,14 @@ export function PharmacyInvoiceBuilderFixed({
 
   const prescriptionItems = items.filter(item => item.id.startsWith('prescription_'));
   const isPrescriptionItem = (itemId: string) => itemId.startsWith('prescription_');
+
+  const chooseWalkIn = (next: boolean) => {
+    setWalkIn(next);
+    setSelectedPatient(null);
+    setPatientSearchQuery('');
+    setShowPatientSearchResults(false);
+    setInvoiceData((prev) => ({ ...prev, patientId: '', billingName: '', billingPhone: '', billingAddress: '', billingCity: '', billingState: '', billingPincode: '' }));
+  };
 
   /**
    * @cc [owner:nareshshah139,label:product] fresh-invoice-context
@@ -2121,6 +2059,11 @@ export function PharmacyInvoiceBuilderFixed({
     setShowPatientSearchResults(false);
     setShowDrugSearchResults(false);
     setSelectedTab('drugs');
+    setDoctorOpen(false);
+    setWalkIn(false);
+    setPackagesOpen(false);
+    setDiscountOpen(false);
+    setDirectionsOpen(new Set());
     setSubstitutingItemId(null);
     setLoadingPrescription(false);
     setPrefillError(null);
@@ -2152,20 +2095,11 @@ export function PharmacyInvoiceBuilderFixed({
           <h3 className="font-semibold text-blue-800">Linked Prescription</h3>
         </div>
         <div className="text-sm text-blue-700">
-          <p>
-            <strong>Prescription ID:</strong> {prescriptionData.id}
-          </p>
-          {prescriptionItems.length > 0 && (
-            <p>
-              <strong>Items from prescription:</strong> {prescriptionItems.length}
-            </p>
-          )}
           {prescriptionItems.filter(item => !item.drugId).map(item => <div key={item.id} className="mt-2">
             {item.prescribedDrugName}: link inventory before billing. <PrescriptionInventoryLink prescriptionId={prescriptionData.id} lineIndex={item.prescriptionLineIndex!} prescriptionVersion={item.prescriptionVersion} name={item.prescribedDrugName || ''} onLinked={() => loadPrescriptionData(prescriptionData.id)} />
           </div>)}
           <p className="mt-2 text-xs text-blue-600">
-            Review stock warnings, substitute medicines, adjust quantities or remove items before billing.
-            Changes here do not alter the doctor's prescription.
+            Edits here do not change the doctor&apos;s prescription.
           </p>
         </div>
       </div>
@@ -2183,12 +2117,12 @@ export function PharmacyInvoiceBuilderFixed({
       )}
       {checkoutAttempt && (
         <div role="status" className="m-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm">
-          <p>{checkoutAttempt.confirmed ? 'This checkout is confirmed. Reopen it for another copy.' : `A checkout for ${checkoutAttempt.payload.billingName} needs confirmation. Retry it before starting another sale.`}</p>
+          <p>{checkoutAttempt.confirmed ? 'This bill is confirmed and paid.' : `A checkout for ${checkoutAttempt.payload.billingName} needs confirmation. Retry it before starting another sale.`}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Button variant="outline" disabled={loading} onClick={() => void createAndConfirmInvoice(checkoutAttempt.previewItems, 'ORIGINAL', checkoutAttempt)}>
-              {checkoutAttempt.confirmed ? 'Reopen confirmed invoice' : 'Retry pending checkout'}
+            <Button variant="outline" disabled={loading} onClick={() => void finishCheckout(checkoutAttempt.previewItems, 'ORIGINAL', checkoutAttempt)}>
+              {checkoutAttempt.confirmed ? 'Open the bill' : 'Retry pending checkout'}
             </Button>
-            {checkoutAttempt.confirmed && <Button variant="ghost" disabled={loading} onClick={startNewInvoice}>Start a new invoice</Button>}
+            {checkoutAttempt.confirmed && <Button variant="ghost" disabled={loading} onClick={startNewInvoice}>New sale</Button>}
             {checkoutAttempt.confirmed && onDone && <Button variant="ghost" disabled={loading} onClick={leaveFinishedBill}>Back to Sales</Button>}
           </div>
         </div>
@@ -2212,7 +2146,7 @@ export function PharmacyInvoiceBuilderFixed({
           {session.kind === 'draft' ? (
             <>
               <Badge variant="warning">Draft</Badge>
-              {session.number ? <span>{session.number} not final</span> : <span className="text-base font-normal text-muted-foreground">Gets its bill number when finished</span>}
+              {session.number && <span>{session.number} not final</span>}
             </>
           ) : (
             'New bill'
@@ -2238,21 +2172,40 @@ export function PharmacyInvoiceBuilderFixed({
           <div className="lg:col-span-2 space-y-6">
             {/* Patient & Doctor Selection */}
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-4 w-4" />
-                  Patient & Doctor Details
+                  {walkIn ? 'Walk-in customer' : 'Patient'}
                 </CardTitle>
+                {!fromPrescription && (
+                  <Button type="button" variant="outline" size="sm" aria-pressed={walkIn} onClick={() => chooseWalkIn(!walkIn)}>
+                    {walkIn ? 'Choose a patient' : 'Walk-in customer'}
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {walkIn ? (
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="billingName">Customer name *</Label>
+                        <Input id="billingName" value={invoiceData.billingName} autoFocus
+                          onChange={(e) => setInvoiceData((prev) => ({ ...prev, billingName: e.target.value }))} />
+                      </div>
+                      <div>
+                        <Label htmlFor="billingPhone">Phone *</Label>
+                        <Input id="billingPhone" type="tel" inputMode="tel" value={invoiceData.billingPhone}
+                          onChange={(e) => setInvoiceData((prev) => ({ ...prev, billingPhone: e.target.value }))} />
+                      </div>
+                    </div>
+                  ) : (
                   <div>
                     <Label htmlFor="patient">Patient *</Label>
                     <div className="relative" ref={patientSearchRef}>
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="patient"
-                        placeholder="Search patients by name or phone..."
+                        placeholder="Name or phone"
                         className="pl-8"
                         value={patientSearchQuery}
                         onChange={(e) => {
@@ -2307,6 +2260,8 @@ export function PharmacyInvoiceBuilderFixed({
                       )}
                     </div>
                   </div>
+                  )}
+                  {showDoctor ? (
                   <div>
                     <Label htmlFor="doctor">Doctor</Label>
                     <Select
@@ -2328,14 +2283,26 @@ export function PharmacyInvoiceBuilderFixed({
                       </SelectContent>
                     </Select>
                   </div>
+                  ) : (
+                    <div className="flex items-end">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setDoctorOpen(true)}>
+                        <Plus className="h-4 w-4" /> Doctor
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
             {/* Add Items */}
             <Card>
-              <CardHeader>
-                <CardTitle>Add Items to Invoice</CardTitle>
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+                <CardTitle>Add medicine</CardTitle>
+                {!showPackages && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => { setPackagesOpen(true); setSelectedTab('packages'); }}>
+                    <PackageIcon className="h-4 w-4" /> Treatment packages
+                  </Button>
+                )}
               </CardHeader>
               <CardContent>
                 <Tabs
@@ -2344,6 +2311,8 @@ export function PharmacyInvoiceBuilderFixed({
                     setSelectedTab(value)
                   }
                 >
+                  {showPackages && (
+                  <>
                   <div className="flex justify-end mb-2">
                     <TabsFontSizeControls />
                   </div>
@@ -2353,7 +2322,7 @@ export function PharmacyInvoiceBuilderFixed({
                       className="flex items-center gap-2"
                     >
                       <Pill className="h-4 w-4" />
-                      Individual Drugs
+                      Medicines
                     </TabsTrigger>
                     <TabsTrigger
                       value="packages"
@@ -2363,6 +2332,8 @@ export function PharmacyInvoiceBuilderFixed({
                       Treatment Packages
                     </TabsTrigger>
                   </TabsList>
+                  </>
+                  )}
 
                   <TabsContent value="drugs" className="space-y-4">
                     <div ref={drugSearchRef} className="space-y-2">
@@ -2372,15 +2343,20 @@ export function PharmacyInvoiceBuilderFixed({
                           <Button variant="ghost" size="sm" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
                         </div>
                       )}
-                      <Label htmlFor="drugSearch">Search Drugs</Label>
+                      <Label htmlFor="drugSearch">Medicine</Label>
                       <div className="relative">
                         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
                           id="drugSearch"
                           ref={searchInputRef}
-                          placeholder="Search by drug name, manufacturer, or ingredient..."
+                          placeholder="Medicine name"
                           value={drugSearchQuery}
                           onChange={(e) => setDrugSearchQuery(e.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key !== 'Enter') return;
+                            event.preventDefault();
+                            void addTopMatch();
+                          }}
                           className="pl-8"
                         />
                       </div>
@@ -2480,7 +2456,7 @@ export function PharmacyInvoiceBuilderFixed({
                         drugSearchQuery.trim() &&
                         searchResults.length === 0 && (
                           <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                            No matching drugs found in the drug master.
+                            No matching medicine.
                           </div>
                         )}
                       </div>
@@ -2557,7 +2533,7 @@ export function PharmacyInvoiceBuilderFixed({
             {items.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Invoice Items</CardTitle>
+                  <CardTitle>On this bill</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -2598,7 +2574,7 @@ export function PharmacyInvoiceBuilderFixed({
                                     : 'default'
                                 }
                               >
-                                {item.itemType}
+                                {item.itemType === 'DRUG' ? 'Medicine' : 'Package'}
                               </Badge>
                               {isPrescriptionItem(item.id) && (
                                 <Badge
@@ -2631,6 +2607,9 @@ export function PharmacyInvoiceBuilderFixed({
                                   Confirm
                                 </Button>
                               </div>
+                            )}
+                            {walkInPrescriptionProblem(item) && (
+                              <p role="alert" className="mt-2 text-sm text-destructive-text">{walkInPrescriptionProblem(item)}</p>
                             )}
                             {prescribedNameShown(item) && (
                               <p className="text-sm text-blue-700">Prescribed: {prescribedNameShown(item)}</p>
@@ -2682,6 +2661,11 @@ export function PharmacyInvoiceBuilderFixed({
                                   });
                                 }}>
                                 Substitute
+                              </Button>
+                            )}
+                            {item.itemType === 'DRUG' && !showDirections(item) && (
+                              <Button variant="ghost" size="sm" onClick={() => setDirectionsOpen((open) => new Set(open).add(item.id))}>
+                                Directions
                               </Button>
                             )}
                             <Button
@@ -2811,7 +2795,7 @@ export function PharmacyInvoiceBuilderFixed({
                           </div>
                         )}
 
-                        {item.itemType === 'DRUG' && (
+                        {item.itemType === 'DRUG' && showDirections(item) && (
                           <div className="mt-3 rounded-md border bg-slate-50 p-3">
                             <div className="mb-2 flex items-center gap-2">
                               <FileText className="h-4 w-4 text-slate-600" />
@@ -2831,7 +2815,6 @@ export function PharmacyInvoiceBuilderFixed({
                                       event.target.value
                                     )
                                   }
-                                  placeholder="e.g. 1 tablet / thin layer"
                                   className="h-8"
                                 />
                               </div>
@@ -2846,7 +2829,6 @@ export function PharmacyInvoiceBuilderFixed({
                                       event.target.value
                                     )
                                   }
-                                  placeholder="e.g. twice daily"
                                   className="h-8"
                                 />
                               </div>
@@ -2861,7 +2843,6 @@ export function PharmacyInvoiceBuilderFixed({
                                       event.target.value
                                     )
                                   }
-                                  placeholder="e.g. 7 days"
                                   className="h-8"
                                 />
                               </div>
@@ -2877,7 +2858,6 @@ export function PharmacyInvoiceBuilderFixed({
                                     event.target.value
                                   )
                                 }
-                                placeholder="e.g. apply after cleansing; avoid eyes"
                                 className="min-h-16"
                               />
                             </div>
@@ -2893,12 +2873,68 @@ export function PharmacyInvoiceBuilderFixed({
 
           {/* Right Column - Summary & Billing */}
           <div className="space-y-6">
-            {/* Invoice Summary */}
+            {/* Billing Information */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Billing details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!walkIn && (
+                <>
+                <div>
+                  <Label htmlFor="billingName">Billing Name *</Label>
+                  <Input
+                    id="billingName"
+                    value={invoiceData.billingName}
+                    onChange={(e) =>
+                      setInvoiceData((prev) => ({
+                        ...prev,
+                        billingName: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="billingPhone">Phone *</Label>
+                  <Input
+                    id="billingPhone"
+                    value={invoiceData.billingPhone}
+                    onChange={(e) =>
+                      setInvoiceData((prev) => ({
+                        ...prev,
+                        billingPhone: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                </>
+                )}
+                <div>
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea
+                    id="notes"
+                    value={invoiceData.notes}
+                    onChange={(e) =>
+                      setInvoiceData((prev) => ({
+                        ...prev,
+                        notes: e.target.value,
+                      }))
+                    }
+                    rows={3}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Bill summary */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Calculator className="h-4 w-4" />
-                  Invoice Summary
+                  Bill summary
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -2913,7 +2949,13 @@ export function PharmacyInvoiceBuilderFixed({
                       <span>-₹{lineDiscount.toFixed(2)}</span>
                     </div>
                   )}
-                  <BillDiscountInput value={billDiscount} onChange={setBillDiscount} problem={discountProblem} disabled={loading} />
+                  {showBillDiscount ? (
+                    <BillDiscountInput value={billDiscount} onChange={setBillDiscount} problem={discountProblem} disabled={loading} />
+                  ) : (
+                    <Button type="button" variant="ghost" size="sm" className="-ml-3" aria-expanded={false} onClick={() => setDiscountOpen(true)}>
+                      <Plus className="h-4 w-4" /> Bill discount
+                    </Button>
+                  )}
                   {billDiscountAmount > 0 && (
                     <div className="flex justify-between text-success-text">
                       <span>Bill discount{billDiscount?.kind === 'PERCENT' ? ` (${billDiscount.value}%)` : ''}:</span>
@@ -2934,124 +2976,60 @@ export function PharmacyInvoiceBuilderFixed({
               </CardContent>
             </Card>
 
-            {/* Billing Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4" />
-                  Billing Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="billingName">Billing Name *</Label>
-                  <Input
-                    id="billingName"
-                    value={invoiceData.billingName}
-                    onChange={(e) =>
-                      setInvoiceData((prev) => ({
-                        ...prev,
-                        billingName: e.target.value,
-                      }))
-                    }
-                    placeholder="Full name"
-                  />
+            <div className="space-y-3">
+              <div role="group" aria-labelledby="paymentMethodLabel" className="space-y-1.5">
+                <p id="paymentMethodLabel" className="text-sm font-medium">Payment method</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {PAYMENT_METHODS.map(([value, label]) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant="outline"
+                      className={invoiceData.paymentMethod === value ? 'border-primary bg-primary/10 font-semibold ring-2 ring-primary' : undefined}
+                      aria-pressed={invoiceData.paymentMethod === value}
+                      disabled={loading}
+                      onClick={() => setInvoiceData((prev) => ({ ...prev, paymentMethod: value }))}
+                    >
+                      {invoiceData.paymentMethod === value && <Check aria-hidden="true" className="mr-1.5 h-4 w-4" />}
+                      {label}
+                    </Button>
+                  ))}
                 </div>
-                <div>
-                  <Label htmlFor="billingPhone">Phone *</Label>
-                  <Input
-                    id="billingPhone"
-                    value={invoiceData.billingPhone}
-                    onChange={(e) =>
-                      setInvoiceData((prev) => ({
-                        ...prev,
-                        billingPhone: e.target.value,
-                      }))
-                    }
-                    placeholder="Phone number"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="paymentMethod">Payment Method</Label>
-                  <Select
-                    value={invoiceData.paymentMethod}
-                    onValueChange={(
-                      value: 'CASH' | 'CARD' | 'UPI' | 'NETBANKING'
-                    ) =>
-                      setInvoiceData((prev) => ({
-                        ...prev,
-                        paymentMethod: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CASH">Cash</SelectItem>
-                      <SelectItem value="CARD">Card</SelectItem>
-                      <SelectItem value="UPI">UPI</SelectItem>
-                      <SelectItem value="NETBANKING">Net Banking</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea
-                    id="notes"
-                    value={invoiceData.notes}
-                    onChange={(e) =>
-                      setInvoiceData((prev) => ({
-                        ...prev,
-                        notes: e.target.value,
-                      }))
-                    }
-                    placeholder="Additional notes..."
-                    rows={3}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Actions */}
-            <div className="space-y-2">
+              </div>
               <Button
-                onClick={handleOpenPrintPreview}
-                disabled={
-                  loading || !invoiceData.patientId || items.length === 0
-                }
+                onClick={() => confirmAndPrint()}
+                disabled={loading || savingInvoiceFromPreview || (!invoiceData.patientId && !walkIn) || items.length === 0}
                 className="w-full"
                 size="lg"
               >
-                {loading ? (
-                  <>
-                    <Spinner className="  h-4 w-4   mr-2" />
-                    Confirming Invoice...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Print Preview
-                  </>
-                )}
+                {loading || savingInvoiceFromPreview ? <Spinner className="mr-2 h-4 w-4" /> : <Printer className="mr-2 h-4 w-4" />}
+                {loading || savingInvoiceFromPreview ? 'Confirming…' : 'Confirm and print'}
               </Button>
-              <p className="text-xs text-gray-500 text-center">
-                {items.length} items • {hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)} total`}
-              </p>
-              {!checkoutAttempt && (
-                <div className="space-y-2 border-t pt-3">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleOpenPrintPreview}
+                  disabled={loading || (!invoiceData.patientId && !walkIn) || items.length === 0}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Preview
+                </Button>
+                {!checkoutAttempt && (
                   <Button
                     variant="outline"
-                    className="w-full"
                     onClick={() => void saveDraft()}
                     disabled={savingDraft || loading || discarding}
                   >
                     {savingDraft ? <Spinner className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
                     {savingDraft ? 'Saving draft…' : 'Save draft'}
                   </Button>
+                )}
+              </div>
+              {!checkoutAttempt && (
+                <>
                   <p role="status" className="text-center text-xs text-muted-foreground">
                     {session.kind === 'new'
-                      ? 'Saves the bill to Sales without moving stock or taking payment.'
+                      ? 'No stock or payment change.'
                       : draftChanged
                         ? 'Unsaved changes'
                         : 'All changes saved to the draft'}
@@ -3067,7 +3045,7 @@ export function PharmacyInvoiceBuilderFixed({
                       Discard draft
                     </Button>
                   )}
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -3094,28 +3072,20 @@ export function PharmacyInvoiceBuilderFixed({
     </Dialog>
 
     <Dialog open={printPreviewOpen} onOpenChange={setPrintPreviewOpen}>
-      <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] max-h-none p-0 overflow-hidden rounded-none border-0">
+      <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100dvh] max-h-none p-0 overflow-hidden rounded-none border-0">
         <DialogHeader className="sr-only">
-          <DialogTitle>Pharmacy Invoice Preview</DialogTitle>
+          <DialogTitle>Bill preview</DialogTitle>
         </DialogHeader>
-        <div className="flex h-full min-h-0 bg-slate-100">
-          <div className="flex min-w-0 flex-1 flex-col">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 px-4 py-3 text-sm backdrop-blur">
-              <div>
-                <div className="font-semibold text-slate-900">
-                  Pharmacy Invoice Preview
-                </div>
-                <div className="text-xs text-slate-600">
-                  {previewInvoiceCore?.invoiceNumber || 'Invoice'} •{' '}
-                  {previewPatient?.name ||
-                    printPreviewData?.billingFallback.billingName ||
-                    'Patient'}
-                </div>
+        <div className="flex h-full min-h-0 w-full min-w-0 flex-col bg-slate-100 md:flex-row">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 px-4 py-3 pr-12 text-sm backdrop-blur">
+              <div className="min-w-0">
+                <div className="font-semibold text-slate-900">Bill preview</div>
+                <div className="truncate text-xs text-slate-600">{printPreviewData?.billingFallback.billingName}</div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary">{previewLineCount} items</Badge>
                 <Badge variant="secondary">₹{previewTotalLabel}</Badge>
-                <Badge variant="outline">{printPreviewCopyType}</Badge>
               </div>
             </div>
 
@@ -3129,8 +3099,7 @@ export function PharmacyInvoiceBuilderFixed({
                 }}
               >
                 <iframe
-                  ref={printPreviewFrameRef}
-                  title="Pharmacy invoice print preview"
+                  title="Bill print preview"
                   srcDoc={printPreviewHtml}
                   className="h-[1120px] w-full rounded-md border bg-white shadow-sm"
                 />
@@ -3138,50 +3107,24 @@ export function PharmacyInvoiceBuilderFixed({
             </div>
           </div>
 
-          <aside className="h-full w-80 shrink-0 overflow-auto border-l bg-white p-4 sm:w-96">
-            <div className="space-y-5">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">
-                  Invoice Controls
-                </h3>
-                <p className="mt-1 text-xs text-slate-600">
-                  Draft previews are confirmed before printing or PDF export.
-                </p>
-              </div>
+          <aside className="shrink-0 space-y-4 overflow-auto border-t bg-white p-4 md:h-full md:w-80 md:border-l md:border-t-0">
+            <Button
+              type="button"
+              className="w-full"
+              size="lg"
+              onClick={() => confirmAndPrint(printPreviewCopyType)}
+              disabled={!printPreviewData || loading || savingInvoiceFromPreview}
+            >
+              {savingInvoiceFromPreview || loading ? <Spinner className="mr-2 h-4 w-4" /> : <Printer className="mr-2 h-4 w-4" />}
+              {savingInvoiceFromPreview || loading ? 'Confirming…' : 'Confirm and print'}
+            </Button>
 
-              <Button
-                type="button"
-                className="w-full bg-green-600 text-white hover:bg-green-700"
-                onClick={handleConfirmInvoiceFromPreview}
-                disabled={
-                  isPrintPreviewSaved || loading || savingInvoiceFromPreview
-                }
-              >
-                {savingInvoiceFromPreview || loading ? (
-                  <>
-                    <Spinner className="mr-2 h-4 w-4    " />
-                    Confirming...
-                  </>
-                ) : isPrintPreviewSaved ? (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Invoice Confirmed
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Confirm Invoice
-                  </>
-                )}
-              </Button>
-
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-1">
               <div className="space-y-2">
-                <Label className="text-xs">Copy Type</Label>
+                <Label className="text-xs">Copy</Label>
                 <Select
                   value={printPreviewCopyType}
-                  onValueChange={(value: 'ORIGINAL' | 'DUPLICATE') =>
-                    setPrintPreviewCopyType(value)
-                  }
+                  onValueChange={(value: 'ORIGINAL' | 'DUPLICATE') => setPrintPreviewCopyType(value)}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -3194,92 +3137,26 @@ export function PharmacyInvoiceBuilderFixed({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs">Preview Zoom</Label>
+                <Label className="text-xs">Zoom</Label>
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setPrintPreviewZoom((value) => Math.max(0.55, value - 0.1))
-                    }
-                  >
+                  <Button type="button" variant="outline" size="sm" aria-label="Zoom out"
+                    onClick={() => setPrintPreviewZoom((value) => Math.max(0.55, value - 0.1))}>
                     <ZoomOut className="h-4 w-4" />
                   </Button>
-                  <div className="flex-1 rounded-md border px-3 py-2 text-center text-sm">
+                  <div className="flex-1 rounded-md border px-2 py-1.5 text-center text-sm">
                     {Math.round(printPreviewZoom * 100)}%
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setPrintPreviewZoom((value) => Math.min(1.25, value + 0.1))
-                    }
-                  >
+                  <Button type="button" variant="outline" size="sm" aria-label="Zoom in"
+                    onClick={() => setPrintPreviewZoom((value) => Math.min(1.25, value + 0.1))}>
                     <ZoomIn className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
-
-              <div className="rounded-md border bg-slate-50 p-3 text-xs text-slate-700">
-                <div className="font-medium text-slate-900">Invoice</div>
-                <div className="mt-1">
-                  {previewInvoiceCore?.invoiceNumber || 'Not available'}
-                </div>
-                <div className="mt-2 font-medium text-slate-900">Status</div>
-                <div className="mt-1">
-                  {isPrintPreviewSaved ? 'Confirmed' : 'Draft preview'}
-                </div>
-                <div className="mt-2 font-medium text-slate-900">Patient</div>
-                <div className="mt-1">
-                  {previewPatient?.name ||
-                    printPreviewData?.billingFallback.billingName ||
-                    'Not selected'}
-                </div>
-                <div className="mt-2 font-medium text-slate-900">Total</div>
-                <div className="mt-1">₹{previewTotalLabel}</div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setPrintPreviewOpen(false)}
-                >
-                  Close
-                </Button>
-                <Button
-                  type="button"
-                  onClick={printPreviewInFrame}
-                  disabled={
-                    !printPreviewData || loading || savingInvoiceFromPreview
-                  }
-                >
-                  {savingInvoiceFromPreview || loading ? (
-                    <>
-                      <Spinner className="mr-2 h-4 w-4    " />
-                      Confirming...
-                    </>
-                  ) : (
-                    <>
-                      <Printer className="mr-2 h-4 w-4" />
-                      {isPrintPreviewSaved ? 'Print' : 'Confirm & Print'}
-                    </>
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  className="col-span-2"
-                  variant="secondary"
-                  onClick={downloadPrintPreviewPdf}
-                  disabled={savingPdf || !isPrintPreviewSaved}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  {savingPdf ? 'Saving PDF...' : 'Download PDF'}
-                </Button>
-              </div>
             </div>
+
+            <Button type="button" variant="outline" className="w-full" onClick={() => setPrintPreviewOpen(false)}>
+              Back to the bill
+            </Button>
           </aside>
         </div>
       </DialogContent>

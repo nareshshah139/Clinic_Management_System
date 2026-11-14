@@ -75,7 +75,7 @@ it('saves a new bill as a draft without remounting, then saves changes against t
   open('');
   fireEvent.change(await screen.findByLabelText('Patient *'), { target: { value: 'Meera' } });
   fireEvent.mouseDown(await screen.findByText('Meera Shah', { selector: '.font-medium' }));
-  fireEvent.change(screen.getByLabelText('Search Drugs'), { target: { value: 'Cream' } });
+  fireEvent.change(screen.getByLabelText('Medicine'), { target: { value: 'Cream' } });
   const result = (await screen.findByRole('heading', { name: cream.name, level: 4 })).closest('[role="button"]') as HTMLElement;
   fireEvent.click(within(result).getByRole('button', { name: 'Add' }));
   api.post.mockResolvedValueOnce({ id: 'd-1', invoiceNumber: 'PH-7', mutationVersion: 0 } as any);
@@ -120,8 +120,11 @@ it('reopens a draft with every line restored and finishes that same bill', async
   fireEvent.change(within(creamLine).getByLabelText('Quantity'), { target: { value: '4' } });
   api.post.mockResolvedValueOnce({ id: 'd-1', invoiceNumber: 'PH-7', status: 'CONFIRMED' } as any);
   api.getPharmacyInvoicePrintData.mockResolvedValueOnce({ id: 'd-1', invoiceNumber: 'PH-7' } as any);
-  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  const preview = await screen.findByRole('dialog', { name: 'Bill preview' });
+  expect(within(preview).getAllByRole('button').map((button) => button.textContent).filter((name) => /confirm|download|pdf/i.test(name ?? ''))).toEqual(['Confirm and print']);
+  invoice = { ...invoice, status: 'CONFIRMED', payments: [], revisions: [] };
+  fireEvent.click(within(preview).getByRole('button', { name: 'Confirm and print' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({
     requestKey: expect.any(String), draftId: 'd-1', draftVersion: 3, patientId: 'patient-1', doctorId: 'doctor-1', paymentMethod: 'UPI', notes: 'Collect at 5 pm',
     items: [
@@ -130,6 +133,10 @@ it('reopens a draft with every line restored and finishes that same bill', async
     ],
   })));
   expect(api.post).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(mockGo).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales/bill?bill=d-1&next=sale'));
+  expect(await screen.findByText('Bill PH-7')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'New sale' })).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill');
+  expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
 });
 
 it('refuses a save over a newer change with a plain message, and reloads the latest draft', async () => {
@@ -167,12 +174,11 @@ it('shows the server reason when finishing a draft hits a missing record', async
   open('draft=d-1');
   await lineFor(cream.name);
   api.post.mockRejectedValueOnce(conflict(404, 'Prescription not found in this branch'));
-  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
-  await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Error Confirming Invoice' })));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
+  await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Bill not confirmed' })));
   expect([
     screen.queryByRole('alert'),
-    mockToast.mock.calls.find(([shown]) => shown.title === 'Error Confirming Invoice')?.[0].description,
+    mockToast.mock.calls.find(([shown]) => shown.title === 'Bill not confirmed')?.[0].description,
   ]).toEqual([null, 'Prescription not found in this branch']);
 });
 
@@ -222,7 +228,7 @@ it('keeps a finished checkout with its own bill and still offers a pending one a
   sessionStorage.setItem('pharmacy-checkout-attempt-v1', attempt(true));
   open('');
   expect(await screen.findByRole('button', { name: 'Save draft' })).toBeInTheDocument();
-  expect(screen.queryByText('This checkout is confirmed. Reopen it for another copy.')).not.toBeInTheDocument();
+  expect(screen.queryByText('This bill is confirmed and paid.')).not.toBeInTheDocument();
   expect(sessionStorage.getItem('pharmacy-checkout-attempt-v1')).toBeNull();
 
   sessionStorage.setItem('pharmacy-checkout-attempt-v1', attempt(false));
@@ -234,7 +240,7 @@ it('keeps a bill discount with the draft, shows it before tax and refuses one la
   invoice = { ...invoice, billDiscountKind: 'PERCENT', billDiscountValue: 10 };
   open('draft=d-1');
   await lineFor(cream.name);
-  const summary = screen.getByText('Invoice Summary').closest('.space-y-6 > *') as HTMLElement;
+  const summary = screen.getByText('Bill summary').closest('.space-y-6 > *') as HTMLElement;
   expect(screen.getByLabelText('Bill discount')).toHaveValue(10);
   expect(screen.getByRole('button', { name: 'Percent' })).toHaveAttribute('aria-pressed', 'true');
   expect(within(summary).getByText('Bill discount (10%):').nextSibling).toHaveTextContent('-₹12.00');
@@ -253,6 +259,6 @@ it('keeps a bill discount with the draft, shows it before tax and refuses one la
   api.updatePharmacyInvoice.mockResolvedValueOnce({ id: 'd-1', invoiceNumber: 'DRAFT-1f2e', mutationVersion: 4 } as any);
   fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
   await waitFor(() => expect(api.updatePharmacyInvoice).toHaveBeenCalledWith('d-1', expect.objectContaining({ expectedVersion: 3, billDiscount: { kind: 'AMOUNT', value: 20 } })));
-  expect(await screen.findByText('Gets its bill number when finished')).toBeInTheDocument();
+  expect(await screen.findByText('All changes saved to the draft')).toBeInTheDocument();
   expect(screen.queryByText(/DRAFT-1f2e/)).not.toBeInTheDocument();
 });

@@ -338,21 +338,16 @@ export class PharmacyInvoiceService {
     } = {},
   ) {
     this.validateInvoiceItemsInput(createInvoiceDto.items);
-    // Validate patient exists
-    const patient = await tx.patient.findFirst({
-      where: { id: createInvoiceDto.patientId, branchId },
-    });
-
-    if (!patient) {
-      console.error(
-        '❌ Patient not found:',
-        createInvoiceDto.patientId,
-        'in branch:',
-        branchId,
-      );
-      throw new NotFoundException(
-        `Patient not found: ${createInvoiceDto.patientId}`,
-      );
+    const patientId = createInvoiceDto.patientId?.trim() || null;
+    if (patientId) {
+      const patient = await tx.patient.findFirst({
+        where: { id: patientId, branchId },
+      });
+      if (!patient) {
+        throw new NotFoundException(`Patient not found: ${patientId}`);
+      }
+    } else {
+      this.requireWalkInCustomer(createInvoiceDto);
     }
 
     // Validate doctor if provided
@@ -379,7 +374,7 @@ export class PharmacyInvoiceService {
         tx,
         {
           prescriptionId: createInvoiceDto.prescriptionId,
-          patientId: createInvoiceDto.patientId,
+          patientId,
           doctorId: createInvoiceDto.doctorId,
         },
         branchId,
@@ -454,6 +449,10 @@ export class PharmacyInvoiceService {
       createInvoiceDto.items as unknown as PharmacyInvoiceItemDto[],
       packages,
     );
+    await this.requirePatientForPrescriptionOnly(tx, patientId, [
+      ...drugIds,
+      ...packages.flatMap((pkg) => pkg.items.map((item) => item.drugId)),
+    ]);
 
     const priced = this.priceItems(
       createInvoiceDto.items,
@@ -464,7 +463,7 @@ export class PharmacyInvoiceService {
       data: {
         invoiceNumber: draftBillNumber(),
         ...operation,
-        patientId: createInvoiceDto.patientId,
+        patientId,
         doctorId: createInvoiceDto.doctorId || undefined,
         prescriptionId: createInvoiceDto.prescriptionId || undefined,
         branchId,
@@ -972,15 +971,15 @@ export class PharmacyInvoiceService {
           drugLicenseNumber: invoice.branch.licenseNumber,
         },
         patient: {
-          id: invoice.patient.id,
-          name: invoice.billingName || invoice.patient.name,
-          phone: invoice.billingPhone || invoice.patient.phone,
+          id: invoice.patient?.id ?? null,
+          name: invoice.billingName || invoice.patient?.name,
+          phone: invoice.billingPhone || invoice.patient?.phone,
           address:
             this.compactAddress({
-              address: invoice.billingAddress || invoice.patient.address,
-              city: invoice.billingCity || invoice.patient.city,
-              state: invoice.billingState || invoice.patient.state,
-              pincode: invoice.billingPincode || invoice.patient.pincode,
+              address: invoice.billingAddress || invoice.patient?.address,
+              city: invoice.billingCity || invoice.patient?.city,
+              state: invoice.billingState || invoice.patient?.state,
+              pincode: invoice.billingPincode || invoice.patient?.pincode,
             }) || undefined,
         },
         doctor: invoice.doctor
@@ -1105,7 +1104,19 @@ export class PharmacyInvoiceService {
       );
     }
     const targetPatientId =
-      updateInvoiceDto.patientId || existingInvoice.patientId;
+      updateInvoiceDto.patientId === undefined
+        ? existingInvoice.patientId
+        : updateInvoiceDto.patientId.trim() || null;
+    if (!targetPatientId) {
+      this.requireWalkInCustomer({
+        billingName: updateInvoiceDto.billingName ?? existingInvoice.billingName,
+        billingPhone: updateInvoiceDto.billingPhone ?? existingInvoice.billingPhone,
+        prescriptionId:
+          updateInvoiceDto.prescriptionId === undefined
+            ? existingInvoice.prescriptionId
+            : updateInvoiceDto.prescriptionId,
+      });
+    }
 
     if (updateInvoiceDto.patientId) {
       const patient = await prisma.patient.findFirst({
@@ -1152,6 +1163,9 @@ export class PharmacyInvoiceService {
 
     let updateData: any = {
       ...updateInvoiceDto,
+      ...(updateInvoiceDto.patientId === undefined
+        ? {}
+        : { patientId: targetPatientId }),
       ...(updateInvoiceDto.doctorId === undefined
         ? {}
         : { doctorId: updateInvoiceDto.doctorId || null }),
@@ -1226,6 +1240,12 @@ export class PharmacyInvoiceService {
         updateInvoiceDto.items as unknown as PharmacyInvoiceItemDto[],
         packages,
       );
+      await this.requirePatientForPrescriptionOnly(prisma, targetPatientId, [
+        ...drugIds,
+        ...packages.flatMap((pkg: any) =>
+          pkg.items.map((item: any) => item.drugId),
+        ),
+      ]);
 
       const priced = this.priceItems(
         updateInvoiceDto.items as unknown as PharmacyInvoiceItemDto[],
@@ -1412,6 +1432,16 @@ export class PharmacyInvoiceService {
       );
     }
 
+    if (shouldApplyStock)
+      await this.requirePatientForPrescriptionOnly(
+        tx,
+        existingInvoice.patientId,
+        existingInvoice.items.flatMap((item) => [
+          ...(item.drugId ? [item.drugId] : []),
+          ...(item.package?.items.map((line) => line.drugId) ?? []),
+        ]),
+      );
+
     const stockOps = shouldApplyStock
       ? await this.planConfirmedStockDeductions(
           tx,
@@ -1487,6 +1517,52 @@ export class PharmacyInvoiceService {
   }
 
   /**
+   * A walk-in sale has no patient record, so the bill itself carries who bought it.
+   * Prescription bills always belong to the prescription's patient.
+   */
+  private requireWalkInCustomer(input: {
+    billingName?: string | null;
+    billingPhone?: string | null;
+    prescriptionId?: string | null;
+  }) {
+    if (input.prescriptionId)
+      throw new BadRequestException(
+        'A prescription bill needs the prescription\'s patient',
+      );
+    if (!input.billingName?.trim() || !input.billingPhone?.trim())
+      throw new BadRequestException(
+        'A walk-in sale needs the customer\'s name and phone',
+      );
+  }
+
+  private async requirePatientForPrescriptionOnly(
+    tx: Prisma.TransactionClient,
+    patientId: string | null,
+    drugIds: string[],
+  ) {
+    if (patientId || !drugIds.length) return;
+    const drugs = await tx.drug.findMany({
+      where: { id: { in: [...new Set(drugIds)] } },
+      select: {
+        name: true,
+        requiresPrescription: true,
+        inventoryItems: {
+          where: { status: 'ACTIVE' },
+          select: { requiresPrescription: true },
+        },
+      },
+    });
+    const restricted = drugs.find((drug) =>
+      drug.requiresPrescription ??
+      drug.inventoryItems.some((item) => item.requiresPrescription),
+    );
+    if (restricted)
+      throw new BadRequestException(
+        `${restricted.name} needs a prescription. Choose the patient instead of Walk-in customer.`,
+      );
+  }
+
+  /**
    * @cc [owner:nareshshah139,label:product;security] prescription-billing-eligibility
    * Creating or relinking a prescription bill and every first stock posting MUST require an ACTIVE,
    * unexpired prescription on an undeleted visit belonging to the selected patient, doctor and branch.
@@ -1497,7 +1573,7 @@ export class PharmacyInvoiceService {
     tx: Prisma.TransactionClient,
     input: {
       prescriptionId: string;
-      patientId: string;
+      patientId: string | null;
       doctorId?: string | null;
     },
     branchId: string,

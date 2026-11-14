@@ -39,6 +39,25 @@ describe('Drug Search shared ranking', () => {
     expect(sql.values).toContain('clinic');
     expect(sql.sql).toContain('<->>');
   });
+  it('tells the bill form which suggested medicines need a prescription: the medicine\'s own choice, else its stock', async () => {
+    const rows = ['marked', 'cleared', 'unset-stock', 'unset-plain'].map((id) => ({ id, name: `Cream ${id}`, packSizeLabel: '1', manufacturerName: '', strength: null }));
+    const requirement: Record<string, boolean | null> = { marked: true, cleared: false, 'unset-stock': null, 'unset-plain': null };
+    const db = {
+      $queryRaw: jest.fn().mockResolvedValue(rows.map((row) => ({ id: row.id }))),
+      drug: { findMany: jest.fn().mockResolvedValue(rows.map((row) => ({ ...row, requiresPrescription: requirement[row.id] }))) },
+      inventoryItem: {
+        findMany: jest.fn().mockResolvedValue([
+          { status: 'ACTIVE', currentStock: 1, heldStock: 0, expiryDate: null, requiresPrescription: true, drugs: [{ id: 'cleared' }] },
+          { status: 'ACTIVE', currentStock: 1, heldStock: 0, expiryDate: null, requiresPrescription: true, drugs: [{ id: 'unset-stock' }] },
+          { status: 'ACTIVE', currentStock: 1, heldStock: 0, expiryDate: null, requiresPrescription: false, drugs: [{ id: 'unset-plain' }] },
+        ]),
+      },
+    };
+    const results = await new DrugService(db as any).autocomplete({ q: 'cream', limit: 10 }, 'clinic');
+    expect(Object.fromEntries(results.map((r) => [r.id, r.requiresPrescription]))).toEqual({
+      marked: true, cleared: false, 'unset-stock': true, 'unset-plain': false,
+    });
+  });
   it('uses only reviewed, unambiguous, same-branch aliases', async () => {
     const db = database();
     db.inventoryItem.findMany.mockResolvedValue([

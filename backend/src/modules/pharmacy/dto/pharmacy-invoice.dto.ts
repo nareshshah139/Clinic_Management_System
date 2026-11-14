@@ -162,9 +162,13 @@ export class PharmacyInvoiceItemDto {
 }
 
 export class CreatePharmacyInvoiceDto {
-  @ApiProperty({ description: 'Patient ID', example: 'patient-123' })
+  @ApiPropertyOptional({
+    description: 'Patient ID; leave empty for a walk-in sale, which then needs the billing name and phone',
+    example: 'patient-123',
+  })
+  @IsOptional()
   @IsString()
-  patientId: string;
+  patientId?: string;
 
   @ApiPropertyOptional({ description: 'Doctor ID', example: 'doctor-123' })
   @IsOptional()
@@ -272,7 +276,7 @@ export class UpdatePharmacyInvoiceDto {
   @Min(0)
   expectedVersion: number;
 
-  @ApiPropertyOptional({ description: 'Patient ID', example: 'patient-123' })
+  @ApiPropertyOptional({ description: 'Patient ID; an empty string makes the draft a walk-in sale', example: 'patient-123' })
   @IsOptional()
   @IsString()
   patientId?: string;

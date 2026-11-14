@@ -15,6 +15,7 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
   const makeInvoice = (quantity = 5, status = 'DRAFT') => ({
     id: 'invoice-1',
     invoiceNumber: 'PHI-2026-001',
+    patientId: 'patient-1',
     status,
     items: [
       {

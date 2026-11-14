@@ -53,11 +53,15 @@ it('says what stops a draft from being saved, one problem at a time', () => {
     draftProblem(fields, [{ ...line, drugId: 'temp_rx_0', drug: { name: 'Unmatched cream' } }]),
     draftProblem(fields, [{ ...line, taxPercent: null }]),
     draftProblem(fields, [line]),
+    draftProblem({ ...fields, patientId: '', billingPhone: ' ' }, [line], true),
+    draftProblem({ ...fields, patientId: '' }, [line], true),
   ]).toEqual([
     'Select a patient before saving the draft.',
     'Add at least one medicine before saving the draft.',
     'Choose a stocked product for Unmatched cream or remove it before saving the draft.',
     'Enter Tax % for Synthetic Cream before saving the draft.',
+    null,
+    "Enter the customer's name and phone before saving the draft.",
     null,
   ]);
 });

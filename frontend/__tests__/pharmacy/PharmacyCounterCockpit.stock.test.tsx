@@ -14,7 +14,7 @@ const stock = (quantity: number) => ({ items: [{
   totalNonExpiredStock: quantity, batches: [], lowStock: false, nearExpiry: false,
 }] });
 let quantity: number;
-const props = { onOpenBilling: jest.fn(), onOpenQueue: jest.fn(), onOpenPartnerSync: jest.fn(), onOpenInventoryControl: jest.fn() };
+const props = { onOpenBilling: jest.fn(), onOpenDailyCollection: jest.fn(), onOpenInventoryControl: jest.fn() };
 beforeEach(() => {
   jest.clearAllMocks(); quantity = 10;
   get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(quantity) : { data: [entry()], pagination: { total: 1 } });
@@ -207,4 +207,21 @@ it('shows separate stock for same-name lines using source identity even when res
   render(<PharmacyCounterCockpit {...props} />);
   await screen.findByText(/5 available/);
   expect(screen.getByText(/10 available/)).toBeInTheDocument();
+});
+
+it('offers one Bill button for the selected prescription and sends Daily close to Daily Collection', async () => {
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findByText(/10 available/);
+  expect(screen.getAllByRole('button', { name: /bill|collect payment/i }).map((button) => button.textContent)).toEqual(['Bill']);
+  fireEvent.click(screen.getByRole('button', { name: 'Bill' }));
+  expect(props.onOpenBilling).toHaveBeenCalledWith({ patientId: 'rx-1', doctorId: 'd', prescriptionId: 'rx-1' });
+  fireEvent.click(screen.getByRole('button', { name: 'Daily close' }));
+  expect(props.onOpenDailyCollection).toHaveBeenCalledTimes(1);
+});
+
+it('shows no Daily close button when the user cannot open that report', async () => {
+  render(<PharmacyCounterCockpit {...props} onOpenDailyCollection={undefined} />);
+  await screen.findByText(/10 available/);
+  expect(screen.queryByRole('button', { name: 'Daily close' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Shelf locations' })).toBeInTheDocument();
 });

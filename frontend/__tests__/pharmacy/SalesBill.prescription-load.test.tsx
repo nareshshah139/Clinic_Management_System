@@ -42,6 +42,11 @@ const entries = [patient, secondPatient].map((p, index) => ({
 }));
 let saved = false;
 const scrollIntoView = jest.fn();
+const finishedBill = {
+  id: 'invoice-1', invoiceNumber: 'PH-1', status: 'CONFIRMED', mutationVersion: 1, invoiceDate: '2026-11-14T05:00:00.000Z', revisedAt: null,
+  billingName: patient.name, billingPhone: patient.phone, patient, doctor: null, subtotal: 100, discountAmount: 0, billDiscountKind: null,
+  billDiscountValue: 0, billDiscountAmount: 0, taxAmount: 5, totalAmount: 105, items: [], payments: [], revisions: [],
+};
 
 beforeEach(() => {
   jest.clearAllMocks(); sessionStorage.clear(); saved = false; mockNav.query = new URLSearchParams();
@@ -60,6 +65,7 @@ beforeEach(() => {
     if (url === '/drugs') return { data: drugs };
     if (url === '/drugs/autocomplete') return drugs.filter(d => d.name.toLowerCase().includes(query.q.toLowerCase()));
     if (url.startsWith('/visits/')) return { patient, doctor, prescription: { id: 'rx-0' } };
+    if (url === '/pharmacy/invoices/invoice-1') return finishedBill;
     return {};
   });
   api.post.mockImplementation(async (url) => {
@@ -166,7 +172,7 @@ it('keeps every line when an inventory lookup fails and exposes a retry', async 
   expect(screen.getAllByText('Inventory check failed')).toHaveLength(4);
   expect(within(screen.getByRole('region', { name: 'Prescription bill' })).getByRole('alert')).toHaveTextContent('inventory details could not be checked');
   expect(screen.getByRole('button', { name: 'Retry loading prescription' })).toBeEnabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
   expect(api.post).not.toHaveBeenCalled();
   expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Medicine needs review' }));
 });
@@ -178,19 +184,19 @@ it('substitutes an unmatched line with the chosen product and keeps its edited q
   const item = heading.closest('[data-invoice-item]') as HTMLElement;
   fireEvent.change(within(item).getByLabelText('Quantity'), { target: { value: '2' } });
   fireEvent.click(within(item).getByRole('button', { name: 'Substitute Unmatched cream' }));
-  fireEvent.change(screen.getByLabelText('Search Drugs'), { target: { value: 'Nixiper' } });
+  fireEvent.change(screen.getByLabelText('Medicine'), { target: { value: 'Nixiper' } });
   const result = (await screen.findByRole('heading', { name: names[1], level: 4 })).closest('[role="button"]') as HTMLElement;
   fireEvent.click(within(result).getByRole('button', { name: 'Add' }));
   expect(within(item).getByRole('heading', { name: names[1], level: 4 })).toBeInTheDocument();
   expect(within(item).getByText('Prescribed: Unmatched cream')).toBeInTheDocument();
   expect(within(item).getByLabelText('Quantity')).toHaveValue(2);
   expect(within(item).queryByText('No match')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({ requestKey: expect.any(String),
     prescriptionId: 'rx-1', patientId: secondPatient.id,
     items: [expect.objectContaining({ drugId: 'drug-1', quantity: 2, unitPrice: 100, taxPercent: 5 })],
   })));
+  await waitFor(() => expect(mockGo).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales/bill?bill=invoice-1&next=prescriptions'));
 });
 
 it('ignores a late prescription response after switching patients', async () => {
@@ -213,9 +219,8 @@ it('keeps a pending prescription visible and reports a failed confirmation', asy
   render(<SalesBillPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
-  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
-  await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Error Confirming Invoice', description: 'Insufficient inventory stock' })));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
+  await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Bill not confirmed', description: 'Insufficient inventory stock' })));
   expect(screen.getByText(patient.name, { selector: 'td *' }).closest('tr')).not.toBeNull();
 });
 
@@ -233,10 +238,21 @@ it('refreshes Pending after confirmation while preserving the prescription link 
   render(<SalesBillPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
-  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
+  expect(screen.getByText(patient.name, { selector: 'td *' })).toBeInTheDocument();
+  const queueReads = () => api.get.mock.calls.filter(([url]) => url === '/pharmacy/prescription-queue').length;
+  const readsBefore = queueReads();
+  mockGo.mockImplementationOnce(() => undefined);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({ requestKey: expect.any(String), prescriptionId: 'rx-0', patientId: patient.id, items: drugs.map((d, i) => expect.objectContaining({ drugId: d.id, quantity: quantities[i] })) })));
+  await waitFor(() => expect(mockGo).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales/bill?bill=invoice-1&next=prescriptions'));
+  await waitFor(() => expect(queueReads()).toBeGreaterThan(readsBefore));
   await waitFor(() => expect(screen.queryByText(patient.name, { selector: 'td *' })).not.toBeInTheDocument());
+  expect(screen.getByText(secondPatient.name, { selector: 'td *' })).toBeInTheDocument();
+
+  act(() => mockGo('/dashboard/pharmacy/sales/bill?bill=invoice-1&next=prescriptions'));
+  expect(await screen.findByRole('link', { name: 'Prescriptions waiting' })).toHaveAttribute('href', '/dashboard/pharmacy?section=counter');
+  expect(screen.getByText('Bill PH-1')).toBeInTheDocument();
 });
 
 it('starts a new patient bill after prescription checkout without the previous context', async () => {
@@ -246,18 +262,13 @@ it('starts a new patient bill after prescription checkout without the previous c
   fireEvent.change(screen.getByLabelText('Notes'), {
     target: { value: 'Old notes' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Confirm Invoice' })
-  );
-  await screen.findByRole('button', { name: 'Invoice Confirmed' });
-  fireEvent.click(screen.getByText('Close', { selector: 'button' }));
-  window.history.replaceState(
-    {},
-    '',
-    '/dashboard/pharmacy/sales/bill?patientId=patient-trina&prescriptionId=rx-0&doctorId=doctor-1&visitId=visit-0'
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Start a new invoice' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
+  await screen.findByText('Bill PH-1');
+  const reopened = '/dashboard/pharmacy/sales/bill?patientId=patient-trina&prescriptionId=rx-0&doctorId=doctor-1&visitId=visit-0';
+  window.history.replaceState({}, '', reopened);
+  act(() => mockGo(reopened));
+  expect(await screen.findByText('This bill is confirmed and paid.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'New sale' }));
   await waitFor(() =>
     expect(
       screen.queryByRole('heading', { name: 'Linked Prescription' })
@@ -272,17 +283,14 @@ it('starts a new patient bill after prescription checkout without the previous c
     target: { value: 'Synthetic Patient Two' },
   });
   fireEvent.mouseDown(await within(bill).findByText(secondPatient.name));
-  fireEvent.change(screen.getByLabelText('Search Drugs'), {
+  fireEvent.change(screen.getByLabelText('Medicine'), {
     target: { value: 'Nixiper' },
   });
   const result = (
     await screen.findByRole('heading', { name: names[1], level: 4 })
   ).closest('[role="button"]') as HTMLElement;
   fireEvent.click(within(result).getByRole('button', { name: 'Add' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Confirm Invoice' })
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
   expect(api.post.mock.calls[1]).toEqual([
     '/pharmacy/invoices/checkout',
@@ -296,6 +304,7 @@ it('starts a new patient bill after prescription checkout without the previous c
     }),
   ]);
   expect(api.patch).not.toHaveBeenCalled();
+  await waitFor(() => expect(mockGo).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales/bill?bill=invoice-1&next=sale'));
 });
 
 it('keeps billing edits with unchanged source lines on reorder and resets changed medicines', async () => {
@@ -376,7 +385,7 @@ it('lists and adds a searched product under its stock name', async () => {
   const get = api.get.getMockImplementation()!;
   api.get.mockImplementation(async (url, query) => url === '/drugs/autocomplete' && (query as any)?.q === '13 74 | Flutas' ? [flutas] as any : get(url, query));
   render(<SalesBillPage />);
-  fireEvent.change(await screen.findByPlaceholderText(/Search by drug name/), { target: { value: '13 74 | Flutas' } });
+  fireEvent.change(await screen.findByPlaceholderText('Medicine name'), { target: { value: '13 74 | Flutas' } });
   const row = await screen.findByRole('button', { name: /Tab\. Flutas 150 mg/ });
   fireEvent.click(row);
   expect(await screen.findByRole('heading', { name: 'Tab. Flutas 150 mg', level: 4 })).toBeInTheDocument();
