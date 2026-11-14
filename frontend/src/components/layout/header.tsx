@@ -2,7 +2,7 @@
 
 import { displayUtcDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
-import { Bell, Search, Settings, User, Calendar, Users, Palette} from 'lucide-react';
+import { Bell, Search, Settings, User, Calendar, Users } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +23,6 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useBrandedMode } from './branded-mode-context';
 import { ReceptionistTour } from '@/components/tours/ReceptionistTour';
 import { useToast } from '@/hooks/use-toast';
 import { DoctorSignatureSettings } from '@/components/users/DoctorSignatureSettings';
@@ -38,12 +37,18 @@ import {
   validateWhatsAppTemplateChoice,
   type WhatsAppTemplateOption,
 } from '@/lib/whatsapp-settings';
+import { formatRupee } from '@/components/pharmacy/reports/report-format';
 
-const DUE_SALES = '/dashboard/pharmacy/sales?pay=CREDIT';
+const DAILY_COLLECTION = '/dashboard/pharmacy/reports?report=daily-collection';
+const LOW_STOCK_LIST = '/dashboard/inventory?area=stock&view=list&stock=LOW';
+const EXPIRING_LIST = '/dashboard/inventory?area=stock&view=list&expiryMonths=3';
+const REPORT_ROLES = ['OWNER', 'ADMIN', 'MANAGER'];
+const dayOf = (value: string) => String(value).slice(0, 10);
+const appointmentsOn = (day: string) => `/dashboard/appointments?date=${day}`;
 
 interface SearchResult {
   id: string;
-  type: 'patient' | 'appointment' | 'user';
+  type: 'patient' | 'appointment';
   title: string;
   subtitle?: string;
   description?: string;
@@ -69,7 +74,6 @@ export function Header() {
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { user, loading, refresh } = useDashboardUser();
-  const { brandedEnabled, toggleBranded, loading: brandedLoading } = useBrandedMode();
   const { toast } = useToast();
 
   type NotificationItem = {
@@ -131,8 +135,9 @@ export function Header() {
     setWhatsappTemplateLanguage(settings.templateLanguage);
   }, [user]);
 
+  const isDoctor = String(user?.role || '').toUpperCase() === 'DOCTOR';
+
   useEffect(() => {
-    const isDoctor = String((user as any)?.role || '').toUpperCase() === 'DOCTOR';
     if (!settingsOpen || !isDoctor || loading) return;
 
     let cancelled = false;
@@ -159,19 +164,28 @@ export function Header() {
     return () => {
       cancelled = true;
     };
-  }, [loading, settingsOpen, user]);
+  }, [isDoctor, loading, settingsOpen]);
 
   function buildRoleNotifications(alerts: any, role?: string): NotificationItem[] {
     const items: NotificationItem[] = [];
     const counts = alerts?.counts || {};
     const lowStock = alerts?.lowStockAlerts || [];
     const expiry = alerts?.expiryAlerts || [];
-    const overdue = alerts?.overdueInvoices || [];
+    const billsDue = alerts?.billsDue || [];
     const pending = alerts?.pendingPayments || [];
     const upcoming = alerts?.upcomingAppointments || [];
 
     const pushMany = (arr: NotificationItem[], max: number = 5) =>
       arr.slice(0, max).forEach((it) => items.push(it));
+    const billItems = (href: (bill: any) => string): NotificationItem[] =>
+      billsDue.map((bill: any) => ({
+        id: `bill-${bill.id}`,
+        title: `${bill.patient?.name || 'Patient'} owes ${formatRupee(bill.balance)}`,
+        description: `Bill ${bill.invoiceNo}`,
+        href: href(bill),
+        variant: bill.status === 'OVERDUE' ? 'destructive' : 'warning',
+      }));
+    const onBillDay = (bill: any) => appointmentsOn(bill.billDate);
 
     const roleUpper = (role || '').toUpperCase();
     switch (roleUpper) {
@@ -180,7 +194,7 @@ export function Header() {
           id: `appt-${a.id}`,
           title: `${a.patientName || 'Patient'} on ${displayUtcDate(a.time)}`,
           description: `${a.visitType || 'Visit'} • ${a.status}`,
-          href: `/dashboard/visits?appointmentId=${encodeURIComponent(a.id)}`,
+          href: `/dashboard/visits?${new URLSearchParams({ patientId: a.patientId || '', appointmentId: a.id })}`,
           variant: 'default',
         }));
         pushMany(list, 6);
@@ -189,19 +203,12 @@ export function Header() {
       case 'RECEPTION': {
         const apptItems: NotificationItem[] = (upcoming || []).map((a: any) => ({
           id: `appt-${a.id}`,
-          title: `Upcoming: ${a.patientName || 'Patient'} on ${displayUtcDate(a.time)}`,
+          title: `${a.patientName || 'Patient'} on ${displayUtcDate(a.time)}`,
           description: `${a.visitType || 'Visit'} • Dr. ${a.doctorName || ''}`.trim(),
-          href: `/dashboard/appointments`,
-        }));
-        const invItems: NotificationItem[] = (overdue || []).map((inv: any) => ({
-          id: `inv-${inv.id}`,
-          title: `Overdue Invoice ${inv.invoiceNo}`,
-          description: `${inv.patient?.name || 'Patient'} • Due ${displayUtcDate(inv.dueDate)}`,
-          href: DUE_SALES,
-          variant: 'warning',
+          href: appointmentsOn(dayOf(a.time)),
         }));
         pushMany(apptItems, 4);
-        pushMany(invItems, 3);
+        pushMany(billItems(onBillDay), 3);
         break;
       }
       case 'PHARMACIST':
@@ -209,15 +216,15 @@ export function Header() {
         const stockItems: NotificationItem[] = (lowStock || []).map((i: any) => ({
           id: `stock-${i.itemId}`,
           title: `Low stock: ${i.itemName}`,
-          description: `Stock ${i.currentStock} • Reorder ${i.reorderLevel}`,
-          href: `/dashboard/inventory?tab=low-stock`,
+          description: `Stock ${i.currentStock} • Minimum ${i.reorderLevel}`,
+          href: LOW_STOCK_LIST,
           variant: 'destructive',
         }));
         const expItems: NotificationItem[] = (expiry || []).map((i: any) => ({
           id: `exp-${i.itemId}`,
-          title: `Expiring soon: ${i.itemName}`,
+          title: `Expiring in 3 months: ${i.itemName}`,
           description: `${i.daysUntilExpiry} days left • Qty ${i.currentStock}`,
-          href: `/dashboard/inventory?tab=expiry`,
+          href: EXPIRING_LIST,
           variant: 'warning',
         }));
         pushMany(stockItems, 5);
@@ -228,59 +235,39 @@ export function Header() {
       case 'BILLING': {
         const payItems: NotificationItem[] = (pending || []).map((p: any) => ({
           id: `pay-${p.id}`,
-          title: `Pending ${formatCurrency(p.amount)} (${p.mode})`,
-          description: `Invoice ${p.invoice?.invoiceNo || ''} • ${formatRelative(p.createdAt)}`,
-          href: DUE_SALES,
+          title: `Pending ${formatRupee(p.amount)} (${p.mode})`,
+          description: `Bill ${p.invoice?.invoiceNo || ''} • ${formatRelative(p.createdAt)}`,
+          href: DAILY_COLLECTION,
           variant: 'warning',
         }));
-        const invItems: NotificationItem[] = (overdue || []).map((inv: any) => ({
-          id: `inv-${inv.id}`,
-          title: `Overdue Invoice ${inv.invoiceNo}`,
-          description: `${inv.patient?.name || 'Patient'} • Due ${displayUtcDate(inv.dueDate)}`,
-          href: DUE_SALES,
-          variant: 'destructive',
-        }));
         pushMany(payItems, 5);
-        pushMany(invItems, 3);
+        pushMany(billItems(() => DAILY_COLLECTION), 3);
         break;
       }
       case 'OWNER':
       case 'ADMIN':
       default: {
-        // Summary items for admins/owners (and fallback)
-        const summary: NotificationItem[] = [];
-        if (counts.overdueInvoices > 0) {
-          summary.push({
-            id: 'summary-overdue',
-            title: `${counts.overdueInvoices} overdue invoice${counts.overdueInvoices === 1 ? '' : 's'}`,
-            description: 'Billing attention needed',
-            href: DUE_SALES,
-            variant: 'destructive',
-          });
-        }
+        const summary: NotificationItem[] = [...billItems(onBillDay).slice(0, 3)];
         if (counts.pendingPayments > 0) {
           summary.push({
             id: 'summary-pending',
             title: `${counts.pendingPayments} pending payment${counts.pendingPayments === 1 ? '' : 's'}`,
-            description: 'Reconciliation required',
-            href: DUE_SALES,
+            href: DAILY_COLLECTION,
             variant: 'warning',
           });
         }
         if (counts.lowStockAlerts > 0) {
           summary.push({
             id: 'summary-stock',
-            title: `${counts.lowStockAlerts} low-stock item${counts.lowStockAlerts === 1 ? '' : 's'}`,
-            description: 'Restock inventory',
-            href: '/dashboard/inventory?tab=low-stock',
+            title: `Low stock (${counts.lowStockAlerts})`,
+            href: LOW_STOCK_LIST,
           });
         }
         if (counts.expiryAlerts > 0) {
           summary.push({
             id: 'summary-expiry',
-            title: `${counts.expiryAlerts} near-expiry item${counts.expiryAlerts === 1 ? '' : 's'}`,
-            description: 'Check expirations',
-            href: '/dashboard/inventory?tab=expiry',
+            title: `Expiring in 3 months (${counts.expiryAlerts})`,
+            href: EXPIRING_LIST,
             variant: 'warning',
           });
         }
@@ -288,24 +275,16 @@ export function Header() {
           summary.push({
             id: 'summary-appts',
             title: `${counts.upcomingAppointments} upcoming appointment${counts.upcomingAppointments === 1 ? '' : 's'}`,
-            description: 'Within 48 hours',
             href: '/dashboard/appointments',
           });
         }
-        pushMany(summary, 6);
+        pushMany(summary, 7);
         break;
       }
     }
     return items;
   }
 
-  function formatCurrency(amount: number): string {
-    try {
-      return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'INR' }).format(amount || 0);
-    } catch {
-      return `₹${(amount || 0).toFixed(2)}`;
-    }
-  }
   function formatRelative(value: string | Date): string {
     const d = new Date(value);
     const diffMs = Date.now() - d.getTime();
@@ -421,7 +400,7 @@ export function Header() {
             subtitle: patient.phone || patient.email,
             description: `Patient • ${patient.gender || 'Unknown'} • ${formatAge(patient)}`,
             icon: Users,
-            href: `/dashboard/patients?search=${encodeURIComponent(patient.id)}`,
+            href: `/dashboard/patients/${encodeURIComponent(patient.id)}`,
           });
         });
       } catch (e) {
@@ -447,30 +426,11 @@ export function Header() {
             subtitle: `Dr. ${doctorName}`,
             description: `Appointment • ${displayUtcDate(appointment.date)} • ${appointment.visitType || 'OPD'}`,
             icon: Calendar,
-            href: `/dashboard/appointments`,
+            href: appointmentsOn(dayOf(appointment.date)),
           });
         });
       } catch (e) {
         console.error('Failed to search appointments', e);
-      }
-
-      // Search users/doctors
-      try {
-        const userRes: any = await apiClient.getUsers({ search: query, limit: 3 });
-        const users = userRes.users || userRes.data || [];
-        users.forEach((user: any) => {
-          results.push({
-            id: user.id,
-            type: 'user',
-            title: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || 'Unknown User',
-            subtitle: user.email,
-            description: `${user.role || 'User'} • ${user.specialization || 'General'}`,
-            icon: User,
-            href: `/dashboard/users?search=${encodeURIComponent(user.id)}`,
-          });
-        });
-      } catch (e) {
-        console.error('Failed to search users', e);
       }
 
       setSearchResults(results);
@@ -513,7 +473,7 @@ export function Header() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               type="text"
-              placeholder="Search patients, appointments, doctors..."
+              placeholder="Find a patient"
               className="pl-10 pr-4 py-2 w-full"
               value={searchQuery}
               onChange={(e) => {
@@ -547,8 +507,7 @@ export function Header() {
                     <div className="flex-shrink-0">
                       <div className={`p-2 rounded-lg ${
                         result.type === 'patient' ? 'bg-blue-100 text-blue-600' :
-                        result.type === 'appointment' ? 'bg-green-100 text-green-600' :
-                        'bg-purple-100 text-purple-600'
+                        'bg-green-100 text-green-600'
                       }`}>
                         <IconComponent className="h-4 w-4" />
                       </div>
@@ -570,20 +529,12 @@ export function Header() {
                     </div>
                     <div className="flex-shrink-0">
                       <Badge variant="outline" className="text-xs">
-                        {result.type === 'patient' ? 'Patient' : 
-                         result.type === 'appointment' ? 'Appointment' : 'Staff'}
+                        {result.type === 'patient' ? 'Patient' : 'Appointment'}
                       </Badge>
                     </div>
                   </div>
                 );
               })}
-              {searchQuery.length >= 2 && (
-                <div className="p-3 bg-gray-50 border-t">
-                  <p className="text-xs text-gray-500 text-center">
-                    Press Enter to go to first result • Type more to refine search
-                  </p>
-                </div>
-              )}
             </CardContent>
           </Card>
         )}
@@ -593,7 +544,6 @@ export function Header() {
           <Card className="absolute top-full left-0 right-0 mt-1 z-50 shadow-sm">
             <CardContent className="p-4 text-center">
               <p className="text-sm text-gray-500">No results found for "{searchQuery}"</p>
-              <p className="text-xs text-gray-400 mt-1">Try searching for patient names, phone numbers, or doctor names</p>
             </CardContent>
           </Card>
         )}
@@ -609,17 +559,6 @@ export function Header() {
           </div>
         )}
         
-        {/* Branded mode toggle */}
-        <div className="flex items-center gap-2 pr-2 border-r border-gray-200 mr-2">
-          <Palette className="h-4 w-4 text-gray-500" />
-          <span className="text-xs text-gray-600">Branded</span>
-          <Switch
-            checked={brandedEnabled}
-            onCheckedChange={() => toggleBranded()}
-            aria-label="Toggle branded mode"
-            disabled={brandedLoading}
-          />
-        </div>
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -663,7 +602,7 @@ export function Header() {
                 </div>
               </DropdownMenuItem>
             ))}
-            {notifItems.length > 0 && (
+            {notifItems.length > 0 && REPORT_ROLES.includes(String(user?.role)) && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => router.push('/dashboard/reports')}>
@@ -674,129 +613,109 @@ export function Header() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Settings */}
-        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="sm" aria-label="Open settings"><Settings className="h-5 w-5" /></Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>My Settings</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              {String((user as any)?.role || '').toUpperCase() === 'DOCTOR' && (
-                <>
-                  {settingsOpen && user?.id && <DoctorSignatureSettings doctorId={user.id} />}
-                  {settingsOpen && user?.id && <DoctorLetterheadSettings doctorId={user.id} />}
-                  {settingsOpen && user?.id && <DoctorAvailabilitySettings doctorId={user.id} />}
-                  <div className="border rounded-md p-3 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
+        {isDoctor && (
+          <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="sm" aria-label="Open settings"><Settings className="h-5 w-5" /></Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>My Settings</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                    {settingsOpen && user?.id && <DoctorSignatureSettings doctorId={user.id} />}
+                    {settingsOpen && user?.id && <DoctorLetterheadSettings doctorId={user.id} />}
+                    {settingsOpen && user?.id && <DoctorAvailabilitySettings doctorId={user.id} />}
+                    <div className="border rounded-md p-3 space-y-3">
+                      <div className="flex items-center justify-between">
                         <div className="font-medium">Send WhatsApp on appointment creation</div>
-                        <div className="text-xs text-gray-500">Enable automatic WhatsApp confirmation to patients when you are the doctor.</div>
+                        <Switch checked={whatsappAutoConfirm} onCheckedChange={(v: boolean) => setWhatsappAutoConfirm(v)} />
                       </div>
-                      <Switch checked={whatsappAutoConfirm} onCheckedChange={(v: boolean) => setWhatsappAutoConfirm(v)} />
                     </div>
-                    <div className="text-xs text-gray-500">Requires backend WhatsApp credentials. Uses text messages by default.</div>
-                  </div>
 
-                  <div className="border rounded-md p-3 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium">Use WhatsApp Template</div>
-                        <div className="text-xs text-gray-500">Recommended for sending messages outside the 24h window.</div>
+                    <div className="border rounded-md p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">Use WhatsApp Template</div>
+                          <div className="text-xs text-gray-500">Recommended for sending messages outside the 24h window.</div>
+                        </div>
+                        <Switch checked={whatsappUseTemplate} onCheckedChange={(v: boolean) => setWhatsappUseTemplate(v)} />
                       </div>
-                      <Switch checked={whatsappUseTemplate} onCheckedChange={(v: boolean) => setWhatsappUseTemplate(v)} />
-                    </div>
-                    {whatsappUseTemplate && (
-                      <div className="space-y-3">
-                        {whatsappTemplatesLoading ? (
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <Spinner className="h-3.5 w-3.5 " />
-                            Loading approved templates…
-                          </div>
-                        ) : whatsappTemplates.length > 0 ? (
-                          <div>
-                            <label className="text-sm">Approved Templates</label>
-                            <Select
-                              value={selectedSavedTemplateValue}
-                              onValueChange={(value: string) => {
-                                const next = parseTemplateSelectionValue(value);
-                                setWhatsappTemplateName(next.templateName);
-                                setWhatsappTemplateLanguage(next.templateLanguage);
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a saved appointment template" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {whatsappTemplates.map((template) => (
-                                  <SelectItem key={template.value} value={template.value}>
-                                    {template.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <div className="text-xs text-gray-500 mt-1">
-                              Selecting from saved templates avoids name and language mismatches.
+                      {whatsappUseTemplate && (
+                        <div className="space-y-3">
+                          {whatsappTemplatesLoading ? (
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <Spinner className="h-3.5 w-3.5 " />
+                              Loading approved templates…
+                            </div>
+                          ) : whatsappTemplates.length > 0 ? (
+                            <div>
+                              <label className="text-sm">Approved Templates</label>
+                              <Select
+                                value={selectedSavedTemplateValue}
+                                onValueChange={(value: string) => {
+                                  const next = parseTemplateSelectionValue(value);
+                                  setWhatsappTemplateName(next.templateName);
+                                  setWhatsappTemplateLanguage(next.templateLanguage);
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a saved appointment template" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {whatsappTemplates.map((template) => (
+                                    <SelectItem key={template.value} value={template.value}>
+                                      {template.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-500">
+                              No active appointment templates were found. You can still enter the template name and language manually.
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-sm">Template Name</label>
+                              <Input
+                                value={whatsappTemplateName}
+                                onChange={(e) => setWhatsappTemplateName(e.target.value)}
+                                placeholder="e.g., appointment_confirm"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-sm">Language Code</label>
+                              <Input
+                                value={whatsappTemplateLanguage}
+                                onChange={(e) => setWhatsappTemplateLanguage(e.target.value)}
+                                placeholder="e.g., en, en_US, hi"
+                              />
                             </div>
                           </div>
-                        ) : (
-                          <div className="text-xs text-gray-500">
-                            No active appointment templates were found. You can still enter the template name and language manually.
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-sm">Template Name</label>
-                            <Input
-                              value={whatsappTemplateName}
-                              onChange={(e) => setWhatsappTemplateName(e.target.value)}
-                              placeholder="e.g., appointment_confirm"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-sm">Language Code</label>
-                            <Input
-                              value={whatsappTemplateLanguage}
-                              onChange={(e) => setWhatsappTemplateLanguage(e.target.value)}
-                              placeholder="e.g., en, en_US, hi"
-                            />
-                          </div>
                         </div>
-                      </div>
+                      )}
+                    </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setSettingsOpen(false)} disabled={settingsSaving}>Close</Button>
+                  <Button onClick={() => void saveDoctorSettings()} disabled={settingsSaving}>
+                    {settingsSaving ? (
+                      <>
+                        <Spinner className="h-4 w-4 " />
+                        Saving…
+                      </>
+                    ) : (
+                      'Save'
                     )}
-                  </div>
-
-                  <div className="border rounded-md p-3 bg-gray-50">
-                    <div className="font-medium mb-2">How to enable WhatsApp (Doctor steps)</div>
-                    <ol className="list-decimal ml-5 space-y-1 text-gray-600 text-sm">
-                      <li>Ask the admin to configure WhatsApp Cloud API credentials on the server.</li>
-                      <li>Toggle "Send WhatsApp on appointment creation" to enable automatic messages.</li>
-                      <li>Optional: Toggle "Use WhatsApp Template", then enter your approved template name and language.</li>
-                      <li>Book or receive a new appointment to test delivery.</li>
-                    </ol>
-                  </div>
-                </>
-              )}
-
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setSettingsOpen(false)} disabled={settingsSaving}>Close</Button>
-                <Button onClick={() => void saveDoctorSettings()} disabled={settingsSaving}>
-                  {settingsSaving ? (
-                    <>
-                      <Spinner className="h-4 w-4 " />
-                      Saving…
-                    </>
-                  ) : (
-                    'Save'
-                  )}
-                </Button>
+                  </Button>
+                </div>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
 
         {/* User menu */}
         <div className="flex items-center space-x-2">
