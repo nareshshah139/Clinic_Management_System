@@ -9,7 +9,6 @@ import {
   Barcode,
   CheckCircle2,
   ClipboardCheck,
-  FileText,
   MapPin,
   PackageCheck,
   Pill,
@@ -199,14 +198,12 @@ const DISPENSE_TASK_CANCELLED = `CANCEL${'LED'}` as DispenseTaskStatus;
 export function PharmacyCounterCockpit({
   prefill,
   onOpenBilling,
-  onOpenQueue,
-  onOpenPartnerSync,
+  onOpenDailyCollection,
   onOpenInventoryControl,
 }: {
   prefill?: PharmacyBillingPrefill | null;
   onOpenBilling: (prefill?: PharmacyBillingPrefill) => void;
-  onOpenQueue: () => void;
-  onOpenPartnerSync: () => void;
+  onOpenDailyCollection: () => void;
   onOpenInventoryControl: () => void;
 }) {
   const [queue, setQueue] = useState<QueueEntry[]>([]);
@@ -551,18 +548,9 @@ export function PharmacyCounterCockpit({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-lg font-semibold tracking-tight">
-                Pharmacy Counter
+                Prescriptions waiting
               </h3>
-              <Badge variant="outline" className="border-emerald-300/30 bg-emerald-300/10 px-2 py-0 text-xs text-emerald-100">
-                Pharmacist review
-              </Badge>
-              <Badge variant="outline" className="border-cyan-300/30 bg-cyan-300/10 px-2 py-0 text-xs text-cyan-100">
-                Shelf locations
-              </Badge>
             </div>
-            <p className="mt-0.5 truncate text-xs text-slate-300">
-              Queue to pick to bill in one workstation.
-            </p>
           </div>
 
           <div className="grid gap-1.5 sm:grid-cols-4">
@@ -582,15 +570,6 @@ export function PharmacyCounterCockpit({
             >
               {loadingQueue ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
               Refresh
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
-              onClick={onOpenQueue}
-            >
-              <ClipboardCheck className="h-4 w-4" />
-              Rx queue
             </Button>
             <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={openActiveBilling} disabled={activeEntry?.dispensingEligible === false}>
               <Receipt className="h-4 w-4" />
@@ -641,8 +620,7 @@ export function PharmacyCounterCockpit({
           activeLifecycle={activeLifecycle}
           exceptionCount={exceptionCount}
           allLinesReviewed={allLinesReviewed}
-          onOpenBilling={openActiveBilling}
-          onOpenPartnerSync={onOpenPartnerSync}
+          onOpenDailyCollection={onOpenDailyCollection}
           onOpenInventoryControl={onOpenInventoryControl}
         />
       </div>
@@ -744,7 +722,7 @@ function QueueColumn({
             <p className="font-semibold text-slate-950">No prescriptions waiting</p>
             <div className="mt-3 grid gap-1.5">
               <Button size="sm" onClick={onOpenBilling}>
-                Walk-in bill
+                New sale
               </Button>
               <Button size="sm" variant="outline" onClick={onRefresh}>
                 Pull visits
@@ -910,7 +888,7 @@ function ActiveDispenseColumn({
               <Textarea
                 value={reasonNote}
                 onChange={(event) => setReasonNote(event.target.value)}
-                placeholder="Reason or pharmacist note"
+                placeholder="Note"
                 className="min-h-9 resize-none rounded-md py-2"
               />
             </div>
@@ -918,9 +896,7 @@ function ActiveDispenseColumn({
 
           <div className="mt-2 shrink-0 flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm">
-              <p className="font-semibold text-slate-950">
-                {readyForBilling ? 'Ready for billing review' : 'Review every medicine before billing'}
-              </p>
+              {readyForBilling && <p className="font-semibold text-slate-950">Ready for billing review</p>}
             </div>
             <div className="flex flex-wrap gap-1.5">
               <Button
@@ -947,10 +923,6 @@ function ActiveDispenseColumn({
               >
                 Paid
               </Button>
-              <Button size="sm" onClick={onOpenBilling} disabled={savingTask || activeEntry?.dispensingEligible === false}>
-                <Receipt className="mr-2 h-4 w-4" />
-                Open bill
-              </Button>
             </div>
           </div>
         </div>
@@ -959,7 +931,7 @@ function ActiveDispenseColumn({
           <Pill className="mx-auto h-8 w-8 text-slate-400" />
           <p className="mt-3 font-semibold text-slate-950">No active prescription</p>
           <Button className="mt-3" size="sm" onClick={onOpenBilling}>
-            Start billing
+            New sale
           </Button>
         </div>
       )}
@@ -1083,8 +1055,7 @@ function FulfillmentColumn({
   activeLifecycle,
   exceptionCount,
   allLinesReviewed,
-  onOpenBilling,
-  onOpenPartnerSync,
+  onOpenDailyCollection,
   onOpenInventoryControl,
 }: {
   activeEntry: QueueEntry | null;
@@ -1098,8 +1069,7 @@ function FulfillmentColumn({
   activeLifecycle: DispenseLifecycle;
   exceptionCount: number;
   allLinesReviewed: boolean;
-  onOpenBilling: () => void;
-  onOpenPartnerSync: () => void;
+  onOpenDailyCollection: () => void;
   onOpenInventoryControl: () => void;
 }) {
   const nextPick = pickLines.find((line) => line.recommendedBatch) || pickLines[0] || null;
@@ -1178,9 +1148,6 @@ function FulfillmentColumn({
       <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 shadow-sm">
         <div className="shrink-0 border-b border-slate-100 bg-slate-50 px-2.5 py-2">
           <p className="text-sm font-semibold text-slate-950">Pick Assist</p>
-          <p className="text-xs text-slate-500">
-            Shelf, batch, and split-stock view.
-          </p>
         </div>
         <div className="min-h-0 divide-y divide-slate-100 overflow-y-auto">
           {pickLines.length === 0 ? (
@@ -1225,11 +1192,7 @@ function FulfillmentColumn({
       </div>
 
       <div className="mt-2 grid shrink-0 gap-1.5">
-        <Button size="sm" onClick={onOpenBilling} disabled={!activeEntry}>
-          <FileText className="mr-2 h-4 w-4" />
-          Collect payment
-        </Button>
-        <Button size="sm" variant="outline" onClick={onOpenPartnerSync}>
+        <Button size="sm" variant="outline" onClick={onOpenDailyCollection}>
           <ShoppingCart className="mr-2 h-4 w-4" />
           Daily close
         </Button>

@@ -27,6 +27,8 @@ import {
   type SavedInvoice,
 } from '@/components/pharmacy/sales/sales-bill-model';
 
+const COUNTER_PATH = '/dashboard/pharmacy?section=counter';
+
 type DraftLoad =
   | { status: 'loading' }
   | { status: 'ready'; draft: SavedDraft }
@@ -56,7 +58,9 @@ function useSavedDraft(id: string, reloadKey: number): DraftLoad {
   return load;
 }
 
-function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
+type Finished = (bill: { id: string; fromPrescription: boolean }) => void;
+
+function DraftBill({ id, onLeave, onFinished }: { id: string; onLeave: () => void; onFinished: Finished }) {
   const [reloadKey, setReloadKey] = useState(0);
   const load = useSavedDraft(id, reloadKey);
   const back = <Button asChild variant="outline"><Link href={SALES_PATH}>Back to Sales</Link></Button>;
@@ -100,6 +104,7 @@ function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
       onDiscarded={onLeave}
       onReloadDraft={() => setReloadKey((key) => key + 1)}
       onDone={onLeave}
+      onFinished={onFinished}
     />
   );
 }
@@ -109,7 +114,7 @@ function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
  * Loading a prescription MUST bring its bill into view. Switching prescriptions MUST
  * create a separate draft so medicines and billing details from another patient cannot carry over.
  */
-function NewBill({ prefill, onCreated, onLeave }: { prefill: BillPrefill | undefined; onCreated: (id: string) => void; onLeave: () => void }) {
+function NewBill({ prefill, onCreated, onLeave, onFinished }: { prefill: BillPrefill | undefined; onCreated: (id: string) => void; onLeave: () => void; onFinished: Finished }) {
   const router = useRouter();
   const billRef = useRef<HTMLDivElement>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -128,14 +133,6 @@ function NewBill({ prefill, onCreated, onLeave }: { prefill: BillPrefill | undef
 
   return (
     <section className="min-w-0 space-y-3">
-      <PrescriptionDispensingQueue
-        onOpenBilling={(selected) => {
-          setSaved(null);
-          setLoadAttempt((attempt) => attempt + 1);
-          router.push(billHref({ prefill: selected }), { scroll: false });
-        }}
-        openActionLabel="Load"
-      />
       <div ref={billRef} role="region" aria-label="Prescription bill" tabIndex={-1} className="scroll-mt-4">
         <PharmacyInvoiceBuilderFixed
           key={key}
@@ -148,8 +145,17 @@ function NewBill({ prefill, onCreated, onLeave }: { prefill: BillPrefill | undef
           }}
           onDiscarded={onLeave}
           onDone={onLeave}
+          onFinished={onFinished}
         />
       </div>
+      <PrescriptionDispensingQueue
+        onOpenBilling={(selected) => {
+          setSaved(null);
+          setLoadAttempt((attempt) => attempt + 1);
+          router.push(billHref({ prefill: selected }), { scroll: false });
+        }}
+        openActionLabel="Load"
+      />
     </section>
   );
 }
@@ -162,6 +168,8 @@ function SalesBillContent() {
   const [created, setCreated] = useState<string | null>(null);
   const prefill = prefillFrom(searchParams);
   const leave = () => router.push(SALES_PATH);
+  const finished: Finished = ({ id, fromPrescription }) => router.push(billHref({ bill: id, next: fromPrescription ? 'prescriptions' : 'sale' }));
+  const next = searchParams.get('next');
 
   return (
     <Tabs value="sales" onValueChange={(value: string) => router.push(salesTabHref(value as Register))}>
@@ -174,11 +182,22 @@ function SalesBillContent() {
           }
         />
         {billId ? (
-          <FinishedBillView key={billId} id={billId} startEditing={searchParams.get('edit') === 'discount'} />
+          <FinishedBillView
+            key={billId}
+            id={billId}
+            startEditing={searchParams.get('edit') === 'discount'}
+            nextStep={
+              next === 'prescriptions' ? (
+                <Button asChild><Link href={COUNTER_PATH}>Prescriptions waiting</Link></Button>
+              ) : next === 'sale' ? (
+                <Button asChild><Link href={billHref()}>New sale</Link></Button>
+              ) : undefined
+            }
+          />
         ) : draftId && draftId !== created ? (
-          <DraftBill key={draftId} id={draftId} onLeave={leave} />
+          <DraftBill key={draftId} id={draftId} onLeave={leave} onFinished={finished} />
         ) : (
-          <NewBill prefill={draftId ? undefined : prefill} onCreated={setCreated} onLeave={leave} />
+          <NewBill prefill={draftId ? undefined : prefill} onCreated={setCreated} onLeave={leave} onFinished={finished} />
         )}
       </div>
     </Tabs>

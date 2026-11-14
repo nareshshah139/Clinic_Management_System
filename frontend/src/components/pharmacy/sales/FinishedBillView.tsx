@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { History, Percent, Printer, RotateCcw, Undo2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
@@ -239,7 +239,7 @@ function RecordRefundDialog({ bill, amount, open, onOpenChange, onSaved }: {
  * and new totals, and what the ledger owes either way. Money taken above the total MUST show as a refund
  * due with an explicit Record refund action; Edit discount MUST NOT offer item, quantity or price changes.
  */
-export function FinishedBillView({ id, notice, startEditing }: { id: string; notice?: string; startEditing?: boolean }) {
+export function FinishedBillView({ id, notice, startEditing, nextStep }: { id: string; notice?: string; startEditing?: boolean; nextStep?: ReactNode }) {
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [editing, setEditing] = useState(false);
   const [editKey, setEditKey] = useState(0);
@@ -323,6 +323,7 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
                 <Printer aria-hidden="true" /> Print
               </Button>
             )}
+            {nextStep}
             {editable && (
               <Button type="button" variant="outline" onClick={() => setEditing(true)}>
                 <Percent aria-hidden="true" /> Edit discount

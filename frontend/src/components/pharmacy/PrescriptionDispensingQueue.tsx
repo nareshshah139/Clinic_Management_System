@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { billHref, type BillPrefill } from './sales/sales-bill-model';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -221,24 +221,10 @@ export function PrescriptionDispensingQueue({
     setRefreshingId(null);
   };
 
-  const visibleRange = useMemo(() => {
-    if (pagination.total === 0) return '0';
-    const start = (pagination.page - 1) * pagination.limit + 1;
-    const end = Math.min(pagination.total, start + queue.length - 1);
-    return `${start}-${end}`;
-  }, [pagination, queue.length]);
-
   return (
     <Card className="rounded-lg">
       <CardHeader className="flex flex-col gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <CardTitle className="text-lg">
-            Prescription dispensing queue
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            {visibleRange} of {pagination.total} prescriptions
-          </p>
-        </div>
+        <CardTitle className="text-lg">Prescriptions waiting</CardTitle>
         <div className="flex items-center gap-2">
           <Select
             value={status}
@@ -386,7 +372,7 @@ export function PrescriptionDispensingQueue({
             )}
           </TableBody>
         </Table>
-        <div className="flex items-center justify-between border-t px-4 py-3">
+        {pagination.pages > 1 && <div className="flex items-center justify-between border-t px-4 py-3">
           <Button
             variant="outline"
             size="sm"
@@ -406,7 +392,7 @@ export function PrescriptionDispensingQueue({
           >
             Next
           </Button>
-        </div>
+        </div>}
       </CardContent>
     </Card>
   );

@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { PackageBrowser } from '@/components/pharmacy/PackageBrowser';
 import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCreator';
-import { PrescriptionDispensingQueue } from '@/components/pharmacy/PrescriptionDispensingQueue';
 import { PartnerDailySync } from '@/components/pharmacy/PartnerDailySync';
 import { PharmacyCounterCockpit } from '@/components/pharmacy/PharmacyCounterCockpit';
 import { apiClient } from '@/lib/api';
@@ -18,7 +17,6 @@ import { QuickGuide } from '@/components/common/QuickGuide';
 import {
   ArrowRight,
   Bot,
-  CheckCircle2,
   ClipboardCheck,
   DollarSign,
   MessageSquare,
@@ -45,6 +43,8 @@ const AgenticPharmacyDock = dynamic(
 );
 
 type PharmacySideTab = 'desk' | 'counter';
+
+const SHELF_PATH = '/dashboard/inventory?area=stock&view=list';
 
 /** The roles the server lets sell (GET /pharmacy/dashboard, /drugs, pharmacy invoices); only they see the desk's figures and sale actions. */
 const PHARMACY_SALES_ROLES = ['OWNER', 'ADMIN', 'DOCTOR', 'PHARMACIST'];
@@ -177,17 +177,17 @@ function PharmacyPageContent() {
               onOpenAgent={() => setIsAgentDockOpen(true)}
               onOpenCounter={() => openPharmacyTab('counter')}
               onOpenSale={() => openBill()}
-              onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control')}
+              onOpenInventoryControl={() => router.push(SHELF_PATH)}
               onOpenInvoices={() => router.push('/dashboard/pharmacy/invoices')}
               onOpenDrugs={() => router.push('/dashboard/pharmacy/drugs')}
             />
           ) : null}
 
           {pharmacyTab === 'counter' ? (
-            <PharmacyCounterPanel
+            <PharmacyCounterCockpit
               onOpenBilling={openBill}
-              onOpenPartnerSync={() => openPharmacyTab('desk')}
-              onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control&section=shelf')}
+              onOpenDailyCollection={() => router.push('/dashboard/pharmacy/reports?report=daily-collection')}
+              onOpenInventoryControl={() => router.push(SHELF_PATH)}
             />
           ) : null}
 
@@ -243,13 +243,7 @@ function PharmacyDeskPanel({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <PageHeader title="Pharmacy Desk" />
-              <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-100">
-                Command center
-              </span>
             </div>
-            <p className="mt-0.5 truncate text-xs text-slate-300">
-              Queue, review, pick, bill, pay, dispense.
-            </p>
           </div>
 
           {sells ? (
@@ -329,14 +323,12 @@ function PharmacyDeskPanel({
           <QuickAction
             icon={<ClipboardCheck className="h-4 w-4" />}
             title="Pharmacy Counter"
-            detail="Review and pick"
             onClick={onOpenCounter}
           />
           {sells && (
             <QuickAction
               icon={<Receipt className="h-4 w-4" />}
               title="New sale"
-              detail="Bill a prescription or walk-in"
               onClick={onOpenSale}
             />
           )}
@@ -363,38 +355,6 @@ function PharmacyDeskPanel({
   );
 }
 
-function PharmacyCounterPanel({
-  onOpenBilling,
-  onOpenPartnerSync,
-  onOpenInventoryControl,
-}: {
-  onOpenBilling: (prefill?: BillPrefill) => void;
-  onOpenPartnerSync: () => void;
-  onOpenInventoryControl: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <PharmacyCounterCockpit
-        onOpenBilling={onOpenBilling}
-        onOpenQueue={() => undefined}
-        onOpenPartnerSync={onOpenPartnerSync}
-        onOpenInventoryControl={onOpenInventoryControl}
-      />
-
-      <section className="space-y-3">
-        <WorkbenchHeader
-          title="Prescription Queue"
-          detail="Review visit prescriptions and send approved medicines into a Sales bill."
-        />
-        <PrescriptionDispensingQueue
-          onOpenBilling={onOpenBilling}
-          openActionLabel="Bill"
-        />
-      </section>
-    </div>
-  );
-}
-
 function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -407,9 +367,6 @@ function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
             <h3 className="truncate text-sm font-semibold text-slate-950">
               Pharmacy AI assistant
             </h3>
-            <p className="truncate text-xs text-slate-500">
-              Opens when needed.
-            </p>
           </div>
         </div>
         <Button size="sm" className="h-9 shrink-0 gap-2" onClick={onOpen}>
@@ -514,7 +471,7 @@ function QuickAction({
 }: {
   icon: ReactNode;
   title: string;
-  detail: string;
+  detail?: string;
   onClick: () => void;
 }) {
   return (
@@ -529,32 +486,11 @@ function QuickAction({
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">{title}</p>
-          <p className="truncate text-xs text-slate-300">{detail}</p>
+          {detail && <p className="truncate text-xs text-slate-300">{detail}</p>}
         </div>
       </div>
       <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-1" />
     </button>
-  );
-}
-
-function WorkbenchHeader({
-  title,
-  detail,
-}: {
-  title: string;
-  detail: string;
-}) {
-  return (
-    <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <p className="text-lg font-semibold text-slate-950">{title}</p>
-        <p className="text-sm text-slate-600">{detail}</p>
-      </div>
-      <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        Validate before adding stock
-      </div>
-    </div>
   );
 }
 

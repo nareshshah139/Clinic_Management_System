@@ -105,7 +105,7 @@ it("reconciles the same checkout payload after a lost response and remount", asy
   (apiClient.post as jest.Mock).mockRejectedValueOnce(
     new Error("Response lost"),
   );
-  const first = render(<PharmacyInvoiceBuilderFixed />);
+  const first = render(<PharmacyInvoiceBuilderFixed onFinished={jest.fn()} />);
   fireEvent.click(
     await screen.findByRole("button", { name: "Retry pending checkout" }),
   );
@@ -122,10 +122,12 @@ it("reconciles the same checkout payload after a lost response and remount", asy
   (apiClient.getPharmacyInvoicePrintData as jest.Mock).mockResolvedValue(
     invoice,
   );
-  render(<PharmacyInvoiceBuilderFixed />);
+  const finished = jest.fn();
+  render(<PharmacyInvoiceBuilderFixed onFinished={finished} />);
   fireEvent.click(
     await screen.findByRole("button", { name: "Retry pending checkout" }),
   );
+  await waitFor(() => expect(finished).toHaveBeenCalledWith({ id: "invoice-1", fromPrescription: false }));
   await waitFor(() =>
     expect(
       JSON.parse(sessionStorage.getItem("pharmacy-checkout-attempt-v1")!)
@@ -314,10 +316,10 @@ it.each(["prescription", "visit", "patient", "initial"])(
         context: JSON.stringify([prefill.patientId, prefill.prescriptionId, prefill.doctorId, prefill.visitId]),
       })
     );
-    render(<PharmacyInvoiceBuilderFixed prefill={prefill} />);
+    render(<PharmacyInvoiceBuilderFixed prefill={prefill} onFinished={jest.fn()} />);
     await waitFor(() => expect(started).toBe(true));
     fireEvent.click(
-      await screen.findByRole("button", { name: "Start a new invoice" })
+      await screen.findByRole("button", { name: "New sale" })
     );
     await act(async () => resolveLate(response));
     expect(screen.getByLabelText("Patient *")).toHaveValue("");
