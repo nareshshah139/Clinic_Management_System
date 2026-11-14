@@ -117,8 +117,8 @@ export function TodaysAppointments({ mode, doctorId }: { mode: AppointmentsMode;
   const billFor = rows.find((row) => row.id === billForId) ?? null;
 
   return (
-    <Card data-tour="appointments-list">
-      <CardHeader className="pb-3">
+    <Card data-tour="appointments-list" className="gap-3">
+      <CardHeader>
         <CardTitle className="flex items-center">
           <Clock className="h-5 w-5 text-blue-500 mr-2" />
           {mode === 'doctor' ? "Today's patients" : "Today's appointments"}
@@ -137,11 +137,11 @@ export function TodaysAppointments({ mode, doctorId }: { mode: AppointmentsMode;
                 return (
                   <li key={row.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 ${FINISHED.has(row.status) ? 'text-gray-500' : ''}`}>
                     <span className="w-28 shrink-0 whitespace-nowrap text-sm tabular-nums">{row.slot}</span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
+                    <span className="order-first basis-full text-sm font-medium text-gray-900 sm:order-none sm:min-w-0 sm:flex-1 sm:basis-0 sm:truncate">
                       {row.patient.name}
                       {row.doctorName && <span className="font-normal text-gray-500"> · Dr. {row.doctorName}</span>}
                     </span>
-                    <span className="text-xs text-gray-600" data-appointment-status={row.status}>{STATUS_WORDS[row.status as AppointmentStatus] ?? row.status}</span>
+                    <span className="mr-auto text-xs text-gray-600 sm:mr-0" data-appointment-status={row.status}>{STATUS_WORDS[row.status as AppointmentStatus] ?? row.status}</span>
                     {chip && (
                       <button
                         type="button"

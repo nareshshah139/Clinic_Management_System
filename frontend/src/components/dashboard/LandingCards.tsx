@@ -42,8 +42,8 @@ const fetchCollection = () => apiClient.get<DailyCollectionReport>('/pharmacy/re
 export function CollectionFigure() {
   const [state, retry] = useLoad(fetchCollection);
   return (
-    <Card className="relative">
-      <CardHeader className="pb-2">
+    <Card className="relative gap-3">
+      <CardHeader>
         <CardTitle className="text-base">
           <Link href={DAILY_COLLECTION} className="after:absolute after:inset-0 hover:underline">Today&apos;s collection</Link>
         </CardTitle>
@@ -84,8 +84,8 @@ function Parts({ parts }: { parts: string[] }) {
 /** Every open clinic bill by patient, each opening the calendar on the day it was raised. */
 export function BillsDue({ alerts, onRetry, title = 'Bills due' }: { alerts: Loadable<ClinicAlerts>; onRetry: () => void; title?: string }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="gap-3">
+      <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent>
@@ -133,8 +133,8 @@ export function ApprovalsFigure({ role }: { role: string }) {
   const [state, retry] = useLoad(fetch);
   if (state.status === 'ready' && state.value === null) return null;
   return (
-    <Card className="relative">
-      <CardHeader className="pb-2">
+    <Card className="relative gap-3">
+      <CardHeader>
         <CardTitle className="text-base">
           <Link href={APPROVALS} className="after:absolute after:inset-0 hover:underline">Waiting for approval</Link>
         </CardTitle>
@@ -151,8 +151,8 @@ export function ApprovalsFigure({ role }: { role: string }) {
 /** Low stock and expiring medicines by name, each heading opening the matching Inventory list. */
 export function NeedsAttention({ alerts, onRetry }: { alerts: Loadable<ClinicAlerts>; onRetry: () => void }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="gap-3">
+      <CardHeader>
         <CardTitle className="text-base">Needs attention</CardTitle>
       </CardHeader>
       <CardContent>
@@ -211,12 +211,12 @@ export function PharmacyWork({ alerts, onRetry }: { alerts: Loadable<ClinicAlert
   const firstBillable = waiting.find((w) => w.dispensingEligible !== false)?.prescriptionId;
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 pb-3">
+      <Card className="gap-3">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle className="text-base">
             Prescriptions waiting{state.status === 'ready' ? ` (${state.value.pagination?.total ?? waiting.length})` : ''}
           </CardTitle>
-          <Button asChild variant={firstBillable ? 'outline' : 'default'}>
+          <Button asChild variant={firstBillable ? 'outline' : 'default'} className="shrink-0">
             <Link href={billHref()}>New sale</Link>
           </Button>
         </CardHeader>
@@ -248,8 +248,8 @@ export function PharmacyWork({ alerts, onRetry }: { alerts: Loadable<ClinicAlert
           </Loaded>
         </CardContent>
       </Card>
-      <Card>
-        <CardContent className="pt-6">
+      <Card className="gap-3">
+        <CardContent>
           <Loaded state={alerts} subject="stock alerts" onRetry={onRetry}>
             {(value) => (
               <div className="flex flex-wrap gap-x-8 gap-y-2">
