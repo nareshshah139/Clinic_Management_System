@@ -4,18 +4,16 @@ module.exports = journey(
   { id: "j05", title: "Bill a consultation and collect a balance", story: "CLINIC-BILLING-01/02", persona: "reception" },
   async (ui) => {
     const page = ui.page;
-    const sneha = page.locator('[data-appointment-block="cuxappttoday0000000000005"]');
-    const rohan = page.locator('[data-appointment-block="cuxappttoday0000000000002"]');
+    const today = page.getByRole("list", { name: "Today's appointments" }).getByRole("listitem");
+    const sneha = today.filter({ hasText: "Sneha Deshpande" });
+    const rohan = today.filter({ hasText: "Rohan Kulkarni" });
     const dialog = page.getByRole("dialog");
 
     await ui.start("/dashboard");
+    await sneha.getByRole("button").waitFor();
     await ui.screen("dashboard");
-    await ui.click(page.getByRole("link", { name: "Appointments" }), "Menu: Appointments");
-    await page.getByPlaceholder("Name or phone").waitFor();
-    await sneha.waitFor();
-    await ui.screen("calendar-before-billing");
 
-    await ui.click(sneha.locator("button[data-appointment-billing]"), "Calendar row (Sneha): bill chip 'Not billed'");
+    await ui.click(sneha.getByRole("button"), "Landing page row (Sneha): bill chip 'Not billed'");
     await dialog.getByRole("heading", { name: /Bill for/ }).waitFor();
     await dialog.getByText("Create bill").first().waitFor();
     await ui.screen("sneha-create-bill-dialog");
@@ -25,10 +23,10 @@ module.exports = journey(
     ui.decide("Payment mode", true);
     await ui.click(dialog.getByRole("button", { name: /^Create bill and record/ }), "Bill dialog: Create bill and record payment");
     await dialog.waitFor({ state: "hidden" });
-    await sneha.locator('button[data-appointment-billing="PAID"]').waitFor();
-    await ui.screen("calendar-sneha-paid");
+    await sneha.getByRole("button", { name: /paid/i }).waitFor();
+    await ui.screen("landing-sneha-paid");
 
-    await ui.click(rohan.locator("button[data-appointment-billing]"), "Calendar row (Rohan): bill chip with balance due");
+    await ui.click(rohan.getByRole("button"), "Landing page row (Rohan): bill chip with balance due");
     await dialog.getByText("Record payment").waitFor();
     await ui.screen("rohan-record-payment-dialog");
     ui.decide("Amount received", true);
@@ -36,8 +34,8 @@ module.exports = journey(
     await ui.click(dialog.getByRole("radio", { name: "UPI" }), "Bill dialog: mode UPI");
     await ui.click(dialog.getByRole("button", { name: /^Record .* payment$/ }), "Bill dialog: Record payment");
     await dialog.waitFor({ state: "hidden" });
-    await rohan.locator('button[data-appointment-billing="PAID"]').waitFor();
-    await ui.screen("calendar-both-paid");
+    await rohan.getByRole("button", { name: /paid/i }).waitFor();
+    await ui.screen("landing-both-paid");
 
     const list = (body) => body?.invoices || body?.data || body?.items || (Array.isArray(body) ? body : []);
     const billed = async (name, appointmentId) =>

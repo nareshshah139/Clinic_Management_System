@@ -10,10 +10,7 @@ module.exports = journey(
     const page = ui.page;
     await ui.start("/dashboard");
     await ui.screen("dashboard");
-    await ui.click(page.getByRole("link", { name: "Patients" }), "Menu: Patients");
-    await page.getByRole("button", { name: "New patient" }).waitFor();
-    await ui.screen("patients-list");
-    await ui.click(page.getByRole("button", { name: "New patient" }), "Patients: New patient");
+    await ui.click(page.getByRole("link", { name: "New patient" }), "Landing page: New patient");
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Name *").waitFor();
     await ui.screen("new-patient-dialog");

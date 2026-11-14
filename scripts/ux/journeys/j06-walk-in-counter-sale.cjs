@@ -7,12 +7,9 @@ module.exports = journey(
   async (ui) => {
     const page = ui.page;
     await ui.start("/dashboard");
-    await page.getByRole("link", { name: "Sales", exact: true }).waitFor();
+    await page.getByRole("link", { name: "New sale", exact: true }).waitFor();
     await ui.screen("dashboard");
-    await ui.click(page.getByRole("link", { name: "Sales", exact: true }), "Menu: Sales");
-    await page.getByRole("button", { name: "New sale" }).waitFor();
-    await ui.screen("sales-register");
-    await ui.click(page.getByRole("button", { name: "New sale" }), "Sales: New sale");
+    await ui.click(page.getByRole("link", { name: "New sale", exact: true }), "Landing page: New sale");
     await page.waitForURL(/\/sales\/bill/);
     await page.getByRole("button", { name: "Walk-in customer" }).waitFor();
     await ui.screen("new-bill-empty");

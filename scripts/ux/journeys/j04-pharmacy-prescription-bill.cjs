@@ -6,13 +6,10 @@ module.exports = journey(
     const page = ui.page;
     const rx = ui.info.seeded.waitingPrescription;
     await ui.start("/dashboard");
-    await page.getByRole("link", { name: "Pharmacy Counter", exact: true }).waitFor();
+    const waiting = page.getByRole("list", { name: "Prescriptions waiting" }).getByRole("listitem").filter({ hasText: rx.patient });
+    await waiting.getByRole("link", { name: "Bill", exact: true }).waitFor();
     await ui.screen("dashboard");
-    await ui.click(page.getByRole("link", { name: "Pharmacy Counter", exact: true }), "Menu: Pharmacy Counter");
-    await page.getByRole("button", { name: "Bill", exact: true }).waitFor();
-    await page.getByText(rx.patient).first().waitFor();
-    await ui.screen("counter-cockpit");
-    await ui.click(page.getByRole("button", { name: "Bill", exact: true }), "Counter: Bill");
+    await ui.click(waiting.getByRole("link", { name: "Bill", exact: true }), "Landing page: Bill on the waiting prescription");
     await page.waitForURL(/\/sales\/bill/);
     await page.locator("#billingName").waitFor();
     await page.locator('input[id^="quantity-"]').nth(2).waitFor();
