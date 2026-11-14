@@ -99,8 +99,8 @@ async function run() {
         });
         const result = await page.evaluate(() => ({
           text: document.querySelector('[data-tour="appointments-list"]').innerText,
-          names: [...document.querySelectorAll('[data-tour="appointments-list"] p.text-sm.font-medium')].map(element => element.innerText.trim()),
-          times: [...document.querySelectorAll('[data-tour="appointments-list"] p.text-xs')].map(element => element.innerText),
+          names: [...document.querySelectorAll('[data-tour="appointments-list"] [data-patient-name]')].map(element => element.innerText.trim()),
+          times: [...document.querySelectorAll('[data-tour="appointments-list"] [data-appointment-time]')].map(element => element.innerText),
           requests: window.__appointmentRequests.filter(url => url.startsWith('/appointments')),
         }));
         const expectedNames = fallbackNames
