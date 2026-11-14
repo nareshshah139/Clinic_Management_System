@@ -47,10 +47,29 @@ CODEX_AUTH_JSON_B64="base64-encoded-codex-auth-json"
 CODEX_ACCESS_TOKEN="codex-access-token-from-chatgpt"
 # Optional – choose the transcription model (defaults to gpt-4o-transcribe)
 OPENAI_TRANSCRIBE_MODEL="gpt-4o-transcribe" # or whisper-1, gpt-4o-mini-transcribe
-# Optional – enable outbound WhatsApp via Meta Cloud
+# Optional – server-wide WhatsApp number, used only by clinics that have not linked their own
 WHATSAPP_TOKEN="your-meta-whatsapp-cloud-api-token"
 WHATSAPP_PHONE_NUMBER_ID="your-meta-whatsapp-phone-number-id"
+# Optional – WhatsApp delivery webhooks (Meta app > WhatsApp > Configuration)
+WHATSAPP_WEBHOOK_VERIFY_TOKEN="any-string-you-also-enter-in-meta"
+META_APP_SECRET="meta-app-secret-used-to-sign-webhooks"
+# Optional – base64 of 32 random bytes; without it clinic tokens are encrypted with a key derived from JWT_SECRET
+WHATSAPP_TOKEN_KEY="base64-of-32-bytes"
 ```
+
+### WhatsApp
+
+Each clinic links its own WhatsApp Business number in **Clinic profile** (owners and admins).
+The app verifies the phone number ID and access token with Meta before saving, and stores the
+token encrypted (aes-256-gcm). Prescriptions go out as the document header of the clinic's
+chosen approved template, which reaches any patient; without a template they go out as a plain
+document, which WhatsApp delivers only within 24 hours of the patient's last message.
+
+Point the Meta webhook at `https://<backend>/whatsapp/webhook` with the verify token above and
+subscribe to `messages` so delivery and read statuses reach Clinic profile. Changing
+`JWT_SECRET` (when `WHATSAPP_TOKEN_KEY` is unset) or `WHATSAPP_TOKEN_KEY` makes saved tokens
+unreadable; clinics then link WhatsApp again. `WHATSAPP_GRAPH_BASE_URL` overrides
+`https://graph.facebook.com` for local testing (`scripts/diagnostics/whatsapp-linker-browser.cjs`).
 
 The application performs a startup validation and will refuse to boot if `DATABASE_URL` or `JWT_SECRET` are missing. Missing optional values log helpful warnings.
 
