@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { AppointmentInSlot, ClinicBillAccess } from '@/lib/types';
 import { DESK_PAYMENT_MODES, paymentModeLabel, type DeskPaymentMode } from '@/lib/clinic-payment-modes';
 import { BILL_TYPE_LABEL, FEE_LIST_PATH, defaultBillLine, parseRupees, rupee } from './appointment-billing-view';
+import { plural } from '@/lib/labels';
 
 type InvoiceDetail = {
   id: string;
@@ -239,7 +240,7 @@ export function AppointmentBillDialog({
           <div className="space-y-3">
             {invoices.length > 1 && (
               <p data-testid="bill-summary" className="text-sm font-semibold">
-                {invoices.length} bills · {rupee(total)} · {due > 0 ? `Due ${rupee(due)}` : 'Paid'}
+                {plural(invoices.length, 'bill')} · {rupee(total)} · {due > 0 ? `Due ${rupee(due)}` : 'Paid'}
               </p>
             )}
             {invoices.map((invoice) => (

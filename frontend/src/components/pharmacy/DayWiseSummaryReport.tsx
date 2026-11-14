@@ -25,6 +25,7 @@ import {
   useReport,
 } from "./pharmacy-report-model";
 import { NativeSelect } from '@/components/ui/native-select';
+import { plural } from '@/lib/labels';
 
 const BILL_NO_HELP: Record<DayWiseType, string> = {
   SALES:
@@ -181,7 +182,7 @@ export function DayWiseSummaryReport() {
               rows={rows}
               totals={{
                 key: "totals",
-                frozen: ["Total", `${state.data.totals.billCount} bills`],
+                frozen: ["Total", plural(state.data.totals.billCount, 'bill')],
                 slabs: state.data.totals.slabs,
                 total: state.data.totals.total,
                 amount: state.data.totals.amount,

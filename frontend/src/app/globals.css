@@ -200,6 +200,11 @@
   outline-offset: 2px;
 }
 
+/* Containers focused by script (tabindex=-1 regions, alerts, headings) still announce, but do not ring the whole block. */
+[tabindex="-1"]:not(a, button, input, select, textarea, summary, [role="button"], [role="link"], [role="option"], [role^="menuitem"], [role="tab"], [role="treeitem"], [role="gridcell"], [role="radio"], [role="checkbox"], [role="switch"]):focus-visible {
+  outline: none;
+}
+
 /* High-contrast mode toggle (applied via document.body.classList.toggle('high-contrast')) */
 .high-contrast {
   --background: #ffffff;

@@ -20,6 +20,7 @@ import type {
   VisitType,
   GetRoomsResponse 
 } from '@/lib/types';
+import { CheckCircle2 } from 'lucide-react';
 
 interface AppointmentBookingDialogProps {
   open: boolean;
@@ -406,7 +407,7 @@ export default function AppointmentBookingDialog({
                             </div>
                           )}
                           {isAvailable && (
-                            <p className="text-sm text-success-text">✓ Available for {derivedSlot}</p>
+                            <p className="flex items-center gap-1.5 text-sm text-success-text"><CheckCircle2 aria-hidden="true" className="size-4" />Available for {derivedSlot}</p>
                           )}
                         </CardContent>
                       </Card>

@@ -31,6 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/lib/api';
 import type { InventoryItem } from '@/lib/types';
 import { NativeSelect } from '@/components/ui/native-select';
+import { plural } from '@/lib/labels';
 
 type ShelfInventoryItem = InventoryItem & {
   batchNumber?: string | null;
@@ -487,7 +488,7 @@ function ShelfGroupCard({ group }: { group: ShelfGroup }) {
         <div className="min-w-0">
           <p className="truncate font-semibold text-foreground">{group.location}</p>
           <p className="text-xs text-muted-foreground">
-            {group.items.length} batches · {group.totalStock} units
+            {plural(group.items.length, 'batch', 'batches')} · {group.totalStock} units
           </p>
         </div>
         <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />

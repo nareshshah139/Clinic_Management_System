@@ -11,6 +11,7 @@ import { FREQUENCY_OPTIONS, DOSE_PATTERN_OPTIONS, inferFrequencyFromDosePattern,
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Trash2 } from 'lucide-react';
+import { prescriptionLabel } from '@/lib/prescription-labels';
 
 interface Drug {
   id: string;
@@ -269,7 +270,7 @@ export function PharmacyPackageCreator({ onCreated, onCancel }: PharmacyPackageC
                     <SelectTrigger><SelectValue placeholder="Select frequency" /></SelectTrigger>
                     <SelectContent>
                       {FREQUENCY_OPTIONS.map((f) => (
-                        <SelectItem key={f} value={f}>{f.replaceAll('_',' ')}</SelectItem>
+                        <SelectItem key={f} value={f}>{prescriptionLabel('frequency', f)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

@@ -10,8 +10,8 @@ export default function PatientsPage() {
   return (
     <Suspense fallback={<LoadingSkeleton label="Loading patients…" />}>
       <div className="space-y-4">
-        <PageHeader title={<>Patients Management</>} description={<>Manage patient records and information</>} actions={<><QuickGuide
-            title="Patients Management Guide"
+        <PageHeader title={<>Patients</>} actions={<><QuickGuide
+            title="Patients guide"
             sections={[
               {
                 title: "Adding Patients",

@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { plural } from '@/lib/labels';
 
 type AnalyticsTotals = {
   invoiceCount: number;
@@ -324,7 +325,7 @@ export function DistributorAnalytics() {
         <MetricCard
           title="Purchase Value"
           value={currency.format(analytics.totals.lineTotal || 0)}
-          detail={`${analytics.totals.invoiceCount || 0} invoices`}
+          detail={plural(analytics.totals.invoiceCount || 0, 'invoice')}
           icon={<Truck className="h-5 w-5 text-info-text" />}
         />
         <MetricCard
@@ -402,7 +403,7 @@ export function DistributorAnalytics() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="font-semibold">Product Effective Cost</h4>
-          <Badge variant="outline">{analytics.products.length} products</Badge>
+          <Badge variant="outline">{plural(analytics.products.length, 'product')}</Badge>
         </div>
         <Table>
           <TableHeader>

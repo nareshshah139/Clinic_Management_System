@@ -1,4 +1,4 @@
-export type LabelKind = 'gender' | 'role' | 'visitType' | 'appointmentAction';
+export type LabelKind = 'gender' | 'role' | 'visitType' | 'appointmentAction' | 'itemType';
 
 const labels: Record<LabelKind, Readonly<Record<string, string>>> = {
   gender: { MALE: 'Male', M: 'Male', FEMALE: 'Female', F: 'Female', OTHER: 'Other', O: 'Other' },
@@ -8,7 +8,10 @@ const labels: Record<LabelKind, Readonly<Record<string, string>>> = {
   },
   visitType: { OPD: 'OPD', TELEMED: 'Telemedicine', TELEMEDICINE: 'Telemedicine', PROCEDURE: 'Procedure' },
   appointmentAction: { DETAILS: 'Details', RESCHEDULE: 'Reschedule', START_VISIT: 'Start visit', CONTINUE_VISIT: 'Continue visit' },
+  itemType: { DRUG: 'Medicine', PACKAGE: 'Package' },
 };
+
+export const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 
 export const normalizeEnum = (value: string | null | undefined) => value?.trim().toUpperCase().replace(/[\s-]+/g, '_') ?? '';
 
@@ -20,7 +23,7 @@ export function humanizeEnum(value: string | null | undefined): string {
 
 /**
  * @cc [owner:nareshshah139,label:product] enum-label
- * Gender, role, visit type and appointment action text MUST come from this table. An unknown value
+ * Gender, role, visit type, appointment action and bill item type text MUST come from this table. An unknown value
  * MUST read as sentence-case words, never as a raw enum such as FEMALE or DOCTOR.
  */
 export function enumLabel(kind: LabelKind, value: string | null | undefined): string {

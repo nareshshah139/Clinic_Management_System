@@ -34,6 +34,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { NativeSelect } from '@/components/ui/native-select';
+import { plural } from '@/lib/labels';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -376,7 +377,7 @@ export function StockPredictionDashboard() {
                           {pred.drugName}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {pred.daysUntilStockout && `Stockout in ${pred.daysUntilStockout} days | `}
+                          {pred.daysUntilStockout && `Stockout in ${plural(pred.daysUntilStockout, 'day')} | `}
                           Current: {pred.currentStock} | Order: {pred.predictedQuantity}
                         </div>
                       </div>
@@ -465,7 +466,7 @@ export function StockPredictionDashboard() {
                     <p className="text-lg font-semibold">
                       Total Estimated Cost: ₹{bulkOrder.totalEstimatedCost.toFixed(2)}
                     </p>
-                    <p className="text-sm text-muted-foreground">{bulkOrder.items.length} items to order</p>
+                    <p className="text-sm text-muted-foreground">{plural(bulkOrder.items.length, 'item')} to order</p>
                   </div>
 
                   <div className="space-y-2 max-h-96 overflow-y-auto">

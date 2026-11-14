@@ -39,6 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { plural } from '@/lib/labels';
 
 type PaymentMode = "CASH" | "CHEQUE" | "NEFT" | "UPI" | "CARD";
 type PaymentStatus = "PENDING" | "PARTIALLY_PAID" | "PAID";
@@ -525,7 +526,7 @@ export function PurchaseLedger({
                       {formatMoney(bucket.amount)}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {bucket.count} invoices
+                      {plural(bucket.count, 'invoice')}
                     </div>
                   </div>
                 </div>
