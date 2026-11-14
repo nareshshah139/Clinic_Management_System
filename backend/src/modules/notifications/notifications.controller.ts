@@ -7,7 +7,7 @@ import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { NotificationsService } from './notifications.service';
 
 interface AuthenticatedRequest {
-  user: { sub: string };
+  user: { id: string };
 }
 
 @ApiTags('Notifications')
@@ -29,7 +29,7 @@ export class NotificationsController {
   @Post('test')
   async test(@Request() req: AuthenticatedRequest) {
     const user = await this.prisma.user.findUnique({
-      where: { id: req.user.sub },
+      where: { id: req.user.id },
       select: { email: true },
     });
     if (!user?.email) {

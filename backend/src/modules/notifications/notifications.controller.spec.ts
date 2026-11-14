@@ -17,7 +17,7 @@ describe('NotificationsController', () => {
 
   it('sends the test email only to the requesting user own address', async () => {
     const { controller, notifications, prisma } = make('doc@example.com');
-    const result = await controller.test({ user: { sub: 'user-1' } });
+    const result = await controller.test({ user: { id: 'user-1' } });
     expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'user-1' }, select: { email: true } });
     expect(notifications.sendEmail).toHaveBeenCalledWith({
       to: 'doc@example.com',
@@ -29,7 +29,7 @@ describe('NotificationsController', () => {
 
   it('rejects with 400 when the user has no email', async () => {
     const { controller, notifications } = make(null);
-    await expect(controller.test({ user: { sub: 'user-1' } })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.test({ user: { id: 'user-1' } })).rejects.toBeInstanceOf(BadRequestException);
     expect(notifications.sendEmail).not.toHaveBeenCalled();
   });
 });
