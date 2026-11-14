@@ -83,6 +83,7 @@ interface Drug {
   strength?: string;
   totalStock?: number;
   stockName?: string | null;
+  requiresPrescription?: boolean | null;
 }
 
 interface PharmacyPackage {
@@ -1312,6 +1313,11 @@ export function PharmacyInvoiceBuilderFixed({
     };
   };
 
+  const walkInPrescriptionProblem = (item: InvoiceItem) =>
+    walkIn && !invoiceData.patientId && item.itemType === 'DRUG' && item.drug?.requiresPrescription
+      ? `${billLineName(item)} needs a prescription. Choose the patient instead of Walk-in customer.`
+      : null;
+
   const getValidInvoiceItems = () => {
     if (loadingPrescription || (invoiceData.prescriptionId && !prescriptionData)) {
       toast({ title: 'Prescription not ready', description: 'Wait for the prescription to load, or retry the failed load before billing.', variant: 'destructive' });
@@ -1334,6 +1340,12 @@ export function PharmacyInvoiceBuilderFixed({
               : walkIn ? "Enter the customer's phone" : 'Billing phone is required',
         variant: 'destructive',
       });
+      return null;
+    }
+
+    const prescriptionProblem = items.map(walkInPrescriptionProblem).find(Boolean);
+    if (prescriptionProblem) {
+      toast({ title: 'Choose the patient', description: prescriptionProblem, variant: 'destructive' });
       return null;
     }
 
@@ -2594,6 +2606,9 @@ export function PharmacyInvoiceBuilderFixed({
                                   Confirm
                                 </Button>
                               </div>
+                            )}
+                            {walkInPrescriptionProblem(item) && (
+                              <p role="alert" className="mt-2 text-sm text-destructive-text">{walkInPrescriptionProblem(item)}</p>
                             )}
                             {prescribedNameShown(item) && (
                               <p className="text-sm text-blue-700">Prescribed: {prescribedNameShown(item)}</p>

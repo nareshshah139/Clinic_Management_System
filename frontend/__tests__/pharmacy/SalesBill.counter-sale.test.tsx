@@ -159,3 +159,34 @@ it('sells to a walk-in customer by name and phone with no patient, and never car
   })));
   await waitFor(() => expect(mockGo).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales/bill?bill=inv-9&next=sale'));
 });
+
+it('refuses a prescription-only medicine on a walk-in bill at once, and lets it go on a bill with a patient', async () => {
+  const doxycycline = { id: 'drug-d', name: 'Doxycycline 100mg Capsule', price: 90, gstRate: 12, manufacturerName: 'Cipla', packSizeLabel: '10 capsules', totalStock: 40, requiresPrescription: true };
+  const base = api.get.getMockImplementation()!;
+  api.get.mockImplementation(async (url: string, query?: any) =>
+    url === '/drugs/autocomplete' && /doxy/i.test(query.q) ? [doxycycline] : base(url, query));
+  const message = 'Doxycycline 100mg Capsule needs a prescription. Choose the patient instead of Walk-in customer.';
+
+  render(<SalesBillPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Walk-in customer' }));
+  const search = screen.getByLabelText('Medicine');
+  fireEvent.change(search, { target: { value: 'Doxycycline' } });
+  fireEvent.keyDown(search, { key: 'Enter' });
+  const doxyLine = await line(doxycycline.name);
+  expect(within(doxyLine).getByRole('alert')).toHaveTextContent(message);
+
+  fireEvent.change(screen.getByLabelText('Customer name *'), { target: { value: 'Ramesh Kale' } });
+  fireEvent.change(screen.getByLabelText('Phone *'), { target: { value: '9000011111' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
+  expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ description: message }));
+  expect(api.post).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Choose a patient' }));
+  expect(within(doxyLine).queryByRole('alert')).not.toBeInTheDocument();
+  await pickPatient();
+  expect(within(await line(doxycycline.name)).queryByText(message)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({
+    patientId: patient.id, items: [expect.objectContaining({ drugId: doxycycline.id })],
+  })));
+});
