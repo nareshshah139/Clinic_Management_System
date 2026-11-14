@@ -39,7 +39,7 @@ async function renderDay(...rows: Fixture[]) {
   return renderDayAs({}, ...rows);
 }
 
-async function renderDayAs(props: { canStartVisit?: boolean; selectedPatientId?: string }, ...rows: Fixture[]) {
+async function renderDayAs(props: { role?: string }, ...rows: Fixture[]) {
   api.getDoctorSchedule.mockResolvedValue(toSchedule(rows));
   const onSelectSlot = jest.fn();
   render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" onSelectSlot={onSelectSlot} {...props} />);
@@ -65,9 +65,23 @@ describe('DoctorDayCalendar Scheduled and Confirmed calendars', () => {
     expect(column('Confirmed').getByRole('button', { name: 'Suresh Babu, 12:00-12:30, In progress' })).toBeInTheDocument();
     expect(column('Confirmed').queryByText('Ravi Kumar')).toBeNull();
 
-    expect(column('Scheduled').getByText('1 patient to confirm')).toBeInTheDocument();
-    expect(column('Confirmed').getByText('2 patients confirmed')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Scheduled' })).toHaveTextContent(/^Scheduled · 1 to confirm/);
+    expect(screen.getByRole('region', { name: 'Confirmed' })).toHaveTextContent(/^Confirmed · 2/);
     expect(screen.queryByRole('region', { name: /patient queue/i })).toBeNull();
+  });
+
+  it('counts in each header only the patients still to be dealt with, on one line with the title', async () => {
+    const done: Fixture = { id: 'a4', slot: '13:00-13:30', name: 'Asha Rao', status: AppointmentStatus.COMPLETED, calendar: 'CONFIRMED' };
+    await renderDay(priya, suresh, done);
+    const confirmed = screen.getByRole('region', { name: 'Confirmed' });
+    expect(within(confirmed).getByRole('heading', { name: 'Confirmed' }).closest('header')).toHaveTextContent('Confirmed · 2');
+    expect(within(confirmed).getByRole('button', { name: 'Asha Rao, 13:00-13:30, Completed' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Scheduled' }).querySelector('header')).toHaveTextContent('Scheduled · No one left to confirm');
+  });
+
+  it('says nobody is waiting when every confirmed patient is done', async () => {
+    await renderDay({ id: 'a4', slot: '13:00-13:30', name: 'Asha Rao', status: AppointmentStatus.COMPLETED, calendar: 'CONFIRMED' });
+    expect(screen.getByRole('region', { name: 'Confirmed' }).querySelector('header')).toHaveTextContent('Confirmed · none waiting');
   });
 
   it('counts capacity per calendar, so a confirmed patient does not close the same time in Scheduled', async () => {
@@ -124,11 +138,11 @@ describe('DoctorDayCalendar Scheduled and Confirmed calendars', () => {
   });
 
   it('offers Move to Scheduled for a confirmed patient, at the same time, but not once the visit has started', async () => {
-    await renderDay(priya, suresh);
+    await renderDayAs({ role: 'DOCTOR' }, priya, suresh);
     api.rescheduleAppointment.mockResolvedValueOnce({ id: 'a2' } as never);
 
     const started = await openDetails('Suresh Babu');
-    expect(started.getByRole('button', { name: 'Start Visit' })).toBeInTheDocument();
+    expect(started.getByRole('button', { name: 'Start visit' })).toBeInTheDocument();
     expect(started.queryByRole('button', { name: 'Move to Scheduled' })).toBeNull();
     fireEvent.click(started.getAllByRole('button', { name: 'Close' })[0]);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -233,7 +247,7 @@ describe('DoctorDayCalendar primary action on each row', () => {
         { id: 'a2', slot: '11:00-11:30', status: 'CONFIRMED', calendar: 'CONFIRMED', visitType: 'OPD', patient: { id: 'p2', name: 'Priya Nair' } },
       ],
     } as never);
-    render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" canStartVisit onSelectSlot={jest.fn()} />);
+    render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" role="DOCTOR" onSelectSlot={jest.fn()} />);
     await screen.findByRole('button', { name: 'Start visit' });
 
     expect(column('Scheduled').queryByRole('button', { name: 'Start visit' })).toBeNull();
@@ -242,30 +256,78 @@ describe('DoctorDayCalendar primary action on each row', () => {
   });
 
   it('shows no Start visit to a role that may not start visits', async () => {
-    await renderDayAs({ canStartVisit: false }, priya);
+    await renderDayAs({ role: 'RECEPTION' }, priya);
     expect(screen.queryByRole('button', { name: /visit/i })).toBeNull();
   });
 });
 
-describe('DoctorDayCalendar patient already booked that day', () => {
+describe('DoctorDayCalendar visit action by role, on the row and in the details dialog', () => {
   beforeEach(() => jest.clearAllMocks());
+  const withVisit = { id: 'a2', slot: '11:00-11:30', status: 'IN_PROGRESS', calendar: 'CONFIRMED', visitType: 'OPD', visit: { id: 'v1', status: 'IN_PROGRESS' }, patient: { id: 'p2', name: 'Priya Nair' } };
+  const noVisit = { id: 'a3', slot: '12:00-12:30', status: 'CONFIRMED', calendar: 'CONFIRMED', visitType: 'OPD', patient: { id: 'p3', name: 'Suresh Babu' } };
+  const visitButtons = (scope: { queryAllByRole: ReturnType<typeof within>['queryAllByRole'] }) => scope.queryAllByRole('button', { name: /^(Start|Continue|Open) visit$/i }).map((b) => b.textContent);
+  const show = async (role: string, appointments: object[]) => {
+    api.getDoctorSchedule.mockResolvedValue({ appointments } as never);
+    render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" role={role} onSelectSlot={jest.fn()} />);
+    await screen.findByRole('region', { name: 'Confirmed' });
+    await screen.findAllByRole('button', { name: /^(Priya Nair|Suresh Babu), / });
+  };
 
-  it('says so above the calendar when the selected patient has a time that day, and still offers every free time', async () => {
-    api.getDoctorSchedule.mockResolvedValue({
-      appointments: [{ id: 'a1', slot: '10:00-10:15', status: 'CONFIRMED', calendar: 'CONFIRMED', visitType: 'OPD', patient: { id: 'p9', name: 'Kavita Naik' } }],
-    } as never);
-    render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" selectedPatientId="p9" onSelectSlot={jest.fn()} />);
-
-    expect(await screen.findByRole('status')).toHaveTextContent('Kavita Naik already has 10:00 on 01 Jan 2099');
-    expect(column('Confirmed').getAllByRole('button', { name: /^Book / }).length).toBeGreaterThan(0);
+  it.each([
+    ['DOCTOR', ['Continue visit'], ['Start visit']],
+    ['ADMIN', ['Continue visit'], ['Start visit']],
+    ['OWNER', ['Continue visit'], ['Start visit']],
+    ['NURSE', ['Open visit'], []],
+    ['RECEPTION', [], []],
+  ])('%s sees %j for a visit that exists and %j for one that does not, on the row and in the dialog', async (role, existing, missing) => {
+    await show(role, [withVisit, noVisit]);
+    const rowOf = (name: string) => within(document.querySelector(`[data-appointment-block="${name}"]`) as HTMLElement);
+    expect(visitButtons(rowOf('a2'))).toEqual(existing);
+    expect(visitButtons(rowOf('a3'))).toEqual(missing);
+    expect(visitButtons(await openDetails('Priya Nair'))).toEqual(existing);
+    fireEvent.click(within(screen.getByRole('dialog')).getAllByRole('button', { name: 'Close' })[0]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(visitButtons(await openDetails('Suresh Babu'))).toEqual(missing);
   });
 
-  it('stays silent for a patient with nothing that day', async () => {
+  it('opens the existing visit for a nurse', async () => {
+    await show('NURSE', [withVisit]);
+    fireEvent.click((await openDetails('Priya Nair')).getByRole('button', { name: 'Open visit' }));
+    expect(mockPush).toHaveBeenCalledWith('/dashboard/visits?patientId=p2&appointmentId=a2&visitId=v1');
+  });
+});
+
+describe('DoctorDayCalendar display names', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('names the visit type and the status in words on the row and in the details dialog', async () => {
     api.getDoctorSchedule.mockResolvedValue({
-      appointments: [{ id: 'a1', slot: '10:00-10:15', status: 'CONFIRMED', calendar: 'CONFIRMED', visitType: 'OPD', patient: { id: 'p9', name: 'Kavita Naik' } }],
+      appointments: [
+        { id: 'a1', slot: '10:00-10:30', status: 'IN_PROGRESS', calendar: 'CONFIRMED', visitType: 'TELEMED', patient: { id: 'p1', name: 'Ravi Kumar' } },
+        { id: 'a2', slot: '11:00-11:30', status: 'CONFIRMED', calendar: 'CONFIRMED', visitType: 'OPD', patient: { id: 'p2', name: 'Priya Nair' } },
+      ],
     } as never);
-    render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" selectedPatientId="p2" onSelectSlot={jest.fn()} />);
-    await screen.findByRole('region', { name: 'Confirmed' });
-    expect(screen.queryByRole('status')).toBeNull();
+    render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" role="DOCTOR" onSelectSlot={jest.fn()} />);
+    const row = await screen.findByRole('button', { name: 'Ravi Kumar, 10:00-10:30, In progress' });
+    expect(row).toHaveTextContent('Video call');
+    expect(row).not.toHaveTextContent('TELEMED');
+
+    const dialog = await (async () => { fireEvent.click(row); return within(await screen.findByRole('dialog', { name: 'Appointment Details' })); })();
+    expect(dialog.getByText('Video call')).toBeInTheDocument();
+    expect(dialog.getByText('Status:').parentElement).toHaveTextContent('Status: In progress');
+    expect(dialog.queryByText('TELEMED')).toBeNull();
+    expect(dialog.queryByText('IN_PROGRESS')).toBeNull();
+  });
+
+  it('names the type in the cancel confirmation and the filter badge', async () => {
+    api.getDoctorSchedule.mockResolvedValue({
+      appointments: [{ id: 'a1', slot: '10:00-10:30', status: 'SCHEDULED', calendar: 'SCHEDULED', visitType: 'PROCEDURE', patient: { id: 'p1', name: 'Ravi Kumar' } }],
+    } as never);
+    render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" visitTypeFilter="PROCEDURE" onSelectSlot={jest.fn()} />);
+    expect(await screen.findByText('Procedure', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ravi Kumar, 10:00-10:30, Scheduled' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel Appointment' }));
+    expect(await screen.findByText('Type:', { selector: 'span.font-medium' })).toBeInTheDocument();
+    expect(screen.getByText('Type:', { selector: 'span.font-medium' }).parentElement).toHaveTextContent('Type: Procedure');
   });
 });

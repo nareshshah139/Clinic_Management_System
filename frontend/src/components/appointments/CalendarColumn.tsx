@@ -16,7 +16,8 @@ import { CircleAlert } from 'lucide-react';
 import type { AppointmentInSlot, AppointmentCalendar, BillType } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 import { layoutDay } from './day-layout';
-import { CALENDARS, canMove } from './appointment-calendars';
+import { CALENDARS, STATUS_LABEL, canMove, isWaiting, visitTypeLabel } from './appointment-calendars';
+import { visitActionFor } from '@/lib/appointment-access';
 import { BILL_TYPE_LABEL, billingChip, type BillingTone, type ChipWidth } from './appointment-billing-view';
 
 type StatusStyle = {
@@ -29,13 +30,13 @@ type StatusStyle = {
 };
 
 const APPOINTMENT_STATUS_STYLE: Record<AppointmentStatus, StatusStyle> = {
-  [AppointmentStatus.SCHEDULED]: { label: 'Scheduled', badgeVariant: 'neutral', accentClassName: 'border-l-slate-400', dotClassName: 'bg-slate-400', muted: false, strikeName: false },
-  [AppointmentStatus.CONFIRMED]: { label: 'Confirmed', badgeVariant: 'info', accentClassName: 'border-l-sky-500', dotClassName: 'bg-sky-500', muted: false, strikeName: false },
-  [AppointmentStatus.CHECKED_IN]: { label: 'Checked in', badgeVariant: 'warning', accentClassName: 'border-l-amber-500', dotClassName: 'bg-amber-500', muted: false, strikeName: false },
-  [AppointmentStatus.IN_PROGRESS]: { label: 'In progress', badgeVariant: 'success', accentClassName: 'border-l-emerald-500', dotClassName: 'bg-emerald-500', muted: false, strikeName: false },
-  [AppointmentStatus.COMPLETED]: { label: 'Completed', badgeVariant: 'neutral', accentClassName: 'border-l-slate-300', dotClassName: 'bg-slate-400', muted: true, strikeName: false },
-  [AppointmentStatus.NO_SHOW]: { label: 'No-show', badgeVariant: 'danger', accentClassName: 'border-l-red-500', dotClassName: 'bg-red-500', muted: true, strikeName: true },
-  [AppointmentStatus.CANCELLED]: { label: 'Cancelled', badgeVariant: 'danger', accentClassName: 'border-l-red-300', dotClassName: 'bg-red-400', muted: true, strikeName: true },
+  [AppointmentStatus.SCHEDULED]: { label: STATUS_LABEL[AppointmentStatus.SCHEDULED], badgeVariant: 'neutral', accentClassName: 'border-l-slate-400', dotClassName: 'bg-slate-400', muted: false, strikeName: false },
+  [AppointmentStatus.CONFIRMED]: { label: STATUS_LABEL[AppointmentStatus.CONFIRMED], badgeVariant: 'info', accentClassName: 'border-l-sky-500', dotClassName: 'bg-sky-500', muted: false, strikeName: false },
+  [AppointmentStatus.CHECKED_IN]: { label: STATUS_LABEL[AppointmentStatus.CHECKED_IN], badgeVariant: 'warning', accentClassName: 'border-l-amber-500', dotClassName: 'bg-amber-500', muted: false, strikeName: false },
+  [AppointmentStatus.IN_PROGRESS]: { label: STATUS_LABEL[AppointmentStatus.IN_PROGRESS], badgeVariant: 'success', accentClassName: 'border-l-emerald-500', dotClassName: 'bg-emerald-500', muted: false, strikeName: false },
+  [AppointmentStatus.COMPLETED]: { label: STATUS_LABEL[AppointmentStatus.COMPLETED], badgeVariant: 'neutral', accentClassName: 'border-l-slate-300', dotClassName: 'bg-slate-400', muted: true, strikeName: false },
+  [AppointmentStatus.NO_SHOW]: { label: STATUS_LABEL[AppointmentStatus.NO_SHOW], badgeVariant: 'danger', accentClassName: 'border-l-red-500', dotClassName: 'bg-red-500', muted: true, strikeName: true },
+  [AppointmentStatus.CANCELLED]: { label: STATUS_LABEL[AppointmentStatus.CANCELLED], badgeVariant: 'danger', accentClassName: 'border-l-red-300', dotClassName: 'bg-red-400', muted: true, strikeName: true },
 };
 
 const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> = {
@@ -45,8 +46,6 @@ const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> =
 };
 
 const FLEX_STEP_MIN = 15;
-
-const VISIT_STATUSES = [AppointmentStatus.CONFIRMED, AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_PROGRESS];
 
 const BILL_TYPE_TONE: Record<BillType, string> = {
   FIRST_CONSULTATION: 'text-teal-700',
@@ -111,7 +110,7 @@ interface CalendarColumnProps {
   maxBookingsPerSlot: number;
   slotAction: SlotAction;
   busy: boolean;
-  canStartVisit: boolean;
+  role?: string;
   onOpen: (appointment: AppointmentInSlot) => void;
   onReschedule: (appointment: AppointmentInSlot) => void;
   onStartVisit: (appointment: AppointmentInSlot) => void;
@@ -141,7 +140,7 @@ export default function CalendarColumn({
   maxBookingsPerSlot,
   slotAction,
   busy,
-  canStartVisit,
+  role,
   onOpen,
   onReschedule,
   onStartVisit,
@@ -151,6 +150,7 @@ export default function CalendarColumn({
   onMove,
 }: CalendarColumnProps) {
   const spec = CALENDARS[calendar];
+  const waiting = appointments.filter((a) => isWaiting(a.status)).length;
   const titleId = useId();
   const { toast } = useToast();
   const [selecting, setSelecting] = useState<boolean>(false);
@@ -221,10 +221,11 @@ export default function CalendarColumn({
       className="row-span-2 grid min-w-0 grid-rows-subgrid"
       style={{ gridColumnStart: column }}
     >
-      <header className="min-w-0 border-b-2 pb-1.5" style={{ borderBottomColor: spec.accentColor }}>
+      <header className="flex min-w-0 items-baseline gap-1.5 border-b-2 pb-1" style={{ borderBottomColor: spec.accentColor }}>
         <h3 id={titleId} className="font-semibold leading-tight text-gray-900">{spec.title}</h3>
-        <p className="text-xs font-medium leading-tight text-gray-800">{appointments.length ? spec.count(appointments.length) : spec.empty}</p>
-        <p className="text-xs leading-tight text-gray-600">{spec.hint}</p>
+        <span className="min-w-0 truncate text-xs font-medium leading-tight text-gray-700">
+          <span aria-hidden="true">{' · '}</span>{waiting ? spec.count(waiting) : spec.empty}
+        </span>
       </header>
       <div
         className="grid grid-cols-1 gap-0"
@@ -242,8 +243,7 @@ export default function CalendarColumn({
           ].filter(Boolean).join(', ');
           const chip = apt.billing ? billingChip(apt.billing, apt.billType) : null;
           const confirms = spec.move.primary && apt.status === spec.move.offeredWhile;
-          const startsVisit = !confirms && canStartVisit && VISIT_STATUSES.includes(apt.status);
-          const primaryLabel = confirms ? spec.move.label : startsVisit ? (apt.visit?.id ? 'Continue visit' : 'Start visit') : null;
+          const primaryLabel = confirms ? spec.move.label : visitActionFor(role, apt);
           const statusFit = chip ? STATUS_IN_WORDS.withChip : STATUS_IN_WORDS.withoutChip;
           return (
             <div
@@ -298,7 +298,7 @@ export default function CalendarColumn({
                         {apt.visitType === 'PROCEDURE' && apt.notes && (
                           <span className="truncate font-medium text-purple-700">({apt.notes})</span>
                         )}
-                        {(!apt.billType || apt.visitType === 'TELEMED') && <span className="font-medium text-purple-600">{apt.visitType || 'OPD'}</span>}
+                        {(!apt.billType || apt.visitType === 'TELEMED') && <span className="font-medium text-purple-600">{visitTypeLabel(apt.visitType)}</span>}
                         {apt.patient?.age !== undefined && <span className="text-gray-600">{apt.patient.age}y</span>}
                         {apt.patient?.gender && <span className="rounded bg-gray-100 px-1 text-gray-600">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
                         {apt.room?.name && <span className="truncate font-medium text-green-600">{apt.room.name}</span>}

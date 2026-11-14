@@ -5,7 +5,6 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppointmentsCalendar from '@/components/appointments/AppointmentsCalendar';
-import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
@@ -15,7 +14,13 @@ import { Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
-import { ROOM_READ_ROLES, START_VISIT_ROLES } from '@/lib/appointment-access';
+import { ROOM_READ_ROLES } from '@/lib/appointment-access';
+
+function isRealDay(text: string | null): text is string {
+  if (!text || !/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const day = new Date(`${text}T00:00:00Z`);
+  return !Number.isNaN(day.getTime()) && day.toISOString().slice(0, 10) === text;
+}
 
 function AppointmentsPageInner() {
   const search = useSearchParams();
@@ -27,7 +32,7 @@ function AppointmentsPageInner() {
   const [date, setDate] = useState<string>(() => {
     // Default to today (IST). Only restore the stored date if it equals today.
     const today = getISTDateString();
-    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && !Number.isNaN(Date.parse(dateParam))) return dateParam;
+    if (isRealDay(dateParam)) return dateParam;
     if (typeof window === 'undefined') return today;
     try {
       const persisted = localStorage.getItem('appointments.date');
@@ -70,39 +75,6 @@ function AppointmentsPageInner() {
   return (
     <div className="space-y-4">
       <PageHeader title="Appointments" />
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div data-tour="doctor-select">
-              <label className="text-sm text-gray-700">Doctor</label>
-              <Select value={doctorId} onValueChange={setDoctorId}>
-                <SelectTrigger aria-label="Doctor"><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                <SelectContent>
-                  {doctors.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div data-tour="date-picker">
-              <label className="text-sm text-gray-700">Date</label>
-              <Input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm text-gray-700">&nbsp;</label>
-              <Button
-                variant="outline"
-                className="w-full flex items-center justify-center gap-2"
-                onClick={() => setGuideDialogOpen(true)}
-              >
-                <Info className="h-4 w-4" />
-                Quick Guide
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <Dialog open={guideDialogOpen} onOpenChange={setGuideDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -115,10 +87,10 @@ function AppointmentsPageInner() {
             <ul className="text-sm text-gray-700 space-y-2">
               <li>• <strong>Scheduled</strong> (left) holds patients booked ahead who still need a confirmation call. <strong>Confirmed</strong> (right) is the doctor&apos;s real day, with walk-ins.</li>
               <li>• When a patient confirms on the call, press <strong>Confirm</strong> on their row. They move to Confirmed at the same time.</li>
-              <li>• Type a name or phone in <strong>Patient</strong>. One match is picked for you. Then <strong>click a free time</strong> in either column and press <strong>Book</strong>.</li>
+              <li>• Type at least 3 letters of a name, or the start of a phone number, in <strong>Patient</strong>. When one patient matches, they are picked for you; when several match, click the right one. Then <strong>click a free time</strong> in either column and press <strong>Book</strong>.</li>
               <li>• <strong>Drag across tiles</strong> to pick a longer time. The booking dialog also lets you change the duration.</li>
-              <li>• If the patient already has a time that day, a note above the calendar says so. You can still book.</li>
-              <li>• <strong>Click</strong> an appointment to see its details, reschedule or cancel it. <strong>Start visit</strong> is on the row of a confirmed patient.</li>
+              <li>• If the patient already has a time that day, with this doctor or another, a note above the calendar says so. You can still book.</li>
+              <li>• <strong>Click</strong> an appointment to see its details, reschedule or cancel it. Doctors, admins and owners also get <strong>Start visit</strong> (or <strong>Continue visit</strong>) on the row of a confirmed patient. Nurses get <strong>Open visit</strong> once the visit has started. Reception has no visit button.</li>
               <li>• <strong>Filters</strong> narrow the calendar by type or room and change the time grid. <strong>Legend</strong> explains the colours.</li>
             </ul>
           </div>
@@ -131,7 +103,32 @@ function AppointmentsPageInner() {
         controlledDate={date}
         hideHeaderControls
         readsRooms={ROOM_READ_ROLES.includes(user?.role ?? '')}
-        canStartVisit={START_VISIT_ROLES.includes(user?.role ?? '')}
+        role={user?.role}
+        leadingControls={
+          <>
+            <div data-tour="doctor-select" className="w-48">
+              <label className="text-sm text-gray-700">Doctor</label>
+              <Select value={doctorId} onValueChange={setDoctorId}>
+                <SelectTrigger aria-label="Doctor"><SelectValue placeholder="Select doctor" /></SelectTrigger>
+                <SelectContent>
+                  {doctors.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div data-tour="date-picker" className="w-44">
+              <label className="text-sm text-gray-700">Date</label>
+              <Input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+          </>
+        }
+        trailingControls={
+          <Button variant="outline" className="gap-2" onClick={() => setGuideDialogOpen(true)}>
+            <Info className="h-4 w-4" />
+            Quick Guide
+          </Button>
+        }
       />
     </div>
   );

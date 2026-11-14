@@ -22,6 +22,7 @@ jest.mock('@/lib/api', () => ({
     getRooms: jest.fn().mockResolvedValue({ rooms: [] }),
     getRoomSchedule: jest.fn().mockResolvedValue({ appointments: [] }),
     getPatient: jest.fn().mockResolvedValue({ id: 'p1', name: 'Asha Rao' }),
+    getAppointments: jest.fn().mockResolvedValue({ appointments: [] }),
     createAppointment: (...args: unknown[]) => createAppointment(...args),
   },
 }));
