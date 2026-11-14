@@ -32,3 +32,16 @@ it('sizes the wrapper with className and hands the ref to the select', () => {
   expect(select.parentElement).toHaveClass('w-64');
   expect(select).not.toHaveClass('w-64');
 });
+
+it('gives height classes to the select so it lines up with the inputs beside it', () => {
+  render(
+    <NativeSelect aria-label="Period" className="h-11 w-full">
+      <option>Today</option>
+    </NativeSelect>,
+  );
+  const select = screen.getByRole('combobox', { name: 'Period' });
+  expect(select).toHaveClass('h-11');
+  expect(select).not.toHaveClass('h-9');
+  expect(select.parentElement).toHaveClass('w-full');
+  expect(select.parentElement).not.toHaveClass('h-11');
+});

@@ -120,7 +120,7 @@ export function DayWiseSummaryReport() {
             <Label htmlFor="day-wise-type">Type</Label>
             <NativeSelect
               id="day-wise-type"
-              className="w-full min-w-0"
+              className="h-10 w-full min-w-0"
               value={type}
               onChange={(event) => {
                 const next = event.target.value as DayWiseType;

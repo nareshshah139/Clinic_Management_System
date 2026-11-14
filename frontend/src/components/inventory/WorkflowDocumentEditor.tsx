@@ -807,7 +807,7 @@ export function WorkflowDocumentEditor({
           <label className="text-sm">
             Supplier
             <NativeSelect
-              className="w-full min-w-0"
+              className="h-10 w-full min-w-0"
               value={form.supplierId}
               onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
             >
@@ -826,7 +826,7 @@ export function WorkflowDocumentEditor({
           <label className="text-sm">
             Purchase order
             <NativeSelect
-              className="w-full min-w-0"
+              className="h-10 w-full min-w-0"
               value={form.sourceId}
               onChange={(e) => {
                 const source = sources.find((s) => s.id === e.target.value);
@@ -850,7 +850,7 @@ export function WorkflowDocumentEditor({
           <label className="text-sm">
             Stock source
             <NativeSelect
-              className="w-full min-w-0"
+              className="h-10 w-full min-w-0"
               value={form.payload.sourceHoldId || ""}
               onChange={(e) => payload("sourceHoldId", e.target.value)}
             >
@@ -886,7 +886,7 @@ export function WorkflowDocumentEditor({
             <label className="text-sm">
               {kind === "SALES_RETURN" ? "Refund method" : "Payment method"}
               <NativeSelect
-                className="w-full min-w-0"
+                className="h-10 w-full min-w-0"
                 value={
                   (kind === "SALES_RETURN"
                     ? form.payload.refundMode
@@ -920,7 +920,7 @@ export function WorkflowDocumentEditor({
             <label className="text-sm">
               Order type
               <NativeSelect
-                className="w-full min-w-0"
+                className="h-10 w-full min-w-0"
                 value={form.payload.orderType || "PICKUP"}
                 onChange={(e) => payload("orderType", e.target.value)}
               >
@@ -936,7 +936,7 @@ export function WorkflowDocumentEditor({
             <label className="text-sm">
               Reason for return
               <NativeSelect
-                className="w-full min-w-0"
+                className="h-10 w-full min-w-0"
                 value={returnReasonValue(form.payload.returnReason ?? form.payload.returnType)}
                 onChange={(e) => payload("returnReason", e.target.value)}
               >
@@ -948,7 +948,7 @@ export function WorkflowDocumentEditor({
             <label className="text-sm">
               Return price basis
               <NativeSelect
-                className="w-full min-w-0"
+                className="h-10 w-full min-w-0"
                 value={form.payload.returnBase || "PURCHASE_RATE"}
                 onChange={(e) => payload("returnBase", e.target.value)}
               >
@@ -980,7 +980,7 @@ export function WorkflowDocumentEditor({
           <label className="text-sm">
             Request source
             <NativeSelect
-              className="w-full min-w-0"
+              className="h-10 w-full min-w-0"
               value={form.payload.source || "MANUAL"}
               onChange={(e) => payload("source", e.target.value)}
             >
@@ -1004,7 +1004,7 @@ export function WorkflowDocumentEditor({
             <label className="text-sm">
               Priority
               <NativeSelect
-                className="w-full min-w-0"
+                className="h-10 w-full min-w-0"
                 value={form.payload.priority || "NORMAL"}
                 onChange={(e) => payload("priority", e.target.value)}
               >
@@ -1050,7 +1050,7 @@ export function WorkflowDocumentEditor({
                 <label className="block text-sm">
                   Add from original sale
                   <NativeSelect
-                    className="w-full min-w-0"
+                    className="h-10 w-full min-w-0"
                     value=""
                     onChange={(e) => {
                       const sale = sales.find((s) => s.id === e.target.value);
@@ -1301,7 +1301,7 @@ export function WorkflowDocumentEditor({
                   <td className="p-3">
                     <NativeSelect
                       aria-label={`Disposition for ${l.name}`}
-                      className="min-w-0 w-36"
+                      className="h-10 min-w-0 w-36"
                       disabled={!editable}
                       value={l.disposition}
                       onChange={(e) =>
@@ -1318,7 +1318,7 @@ export function WorkflowDocumentEditor({
                   <td className="p-3 text-right tabular-nums">
                     <NativeSelect
                       aria-label={`Order line for ${l.name}`}
-                      className="min-w-0 w-44"
+                      className="h-10 min-w-0 w-44"
                       disabled={!editable}
                       value={l.sourceLineId || ""}
                       onChange={(e) =>

@@ -326,12 +326,12 @@ export function WorkspaceStock({
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-sm">Stock level
-              <NativeSelect className="w-full min-w-0" value={query.stock || ""} onChange={event => navigate({ stock: event.target.value, batchView: "ALL", expiryMonths: "", page: "1", item: "" })}>
+              <NativeSelect className="h-10 w-full min-w-0" value={query.stock || ""} onChange={event => navigate({ stock: event.target.value, batchView: "ALL", expiryMonths: "", page: "1", item: "" })}>
                 {[["", "Any stock level"], ["LOW", "Low stock"], ["HIGH", "Above maximum"], ["POSITIVE", "Stock on shelf"], ["ZERO", "Out of stock"], ["NEGATIVE", "Negative — count needed"], ["HELD", "Set aside / held"], ["EXPIRED", "Expired"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </NativeSelect>
             </label>
             <label className="text-sm">Expiry
-              <NativeSelect className="w-full min-w-0" value={query.expiryMonths || ""} onChange={event => navigate({ expiryMonths: event.target.value, stock: "", batchView: "ALL", page: "1", item: "" })}>
+              <NativeSelect className="h-10 w-full min-w-0" value={query.expiryMonths || ""} onChange={event => navigate({ expiryMonths: event.target.value, stock: "", batchView: "ALL", page: "1", item: "" })}>
                 <option value="">Any expiry date</option>
                 {[1, 2, 3, 6].map(months => <option key={months} value={months}>Within {months} {months === 1 ? 'month' : 'months'}</option>)}
               </NativeSelect>
@@ -354,7 +354,7 @@ export function WorkspaceStock({
                 <label className="text-sm" key={key}>
                   {label}
                   <NativeSelect
-                    className="w-full min-w-0"
+                    className="h-10 w-full min-w-0"
                     value={query[key] || ""}
                     onChange={(e) => filter(key, e.target.value)}
                   >
@@ -387,7 +387,7 @@ export function WorkspaceStock({
               <label className="text-sm">
                 Count history
                 <NativeSelect
-                  className="w-full min-w-0"
+                  className="h-10 w-full min-w-0"
                   value={query.audit || ""}
                   onChange={(e) => filter("audit", e.target.value)}
                 >
@@ -402,7 +402,7 @@ export function WorkspaceStock({
               <label className="text-sm">
                 Product mapping
                 <NativeSelect
-                  className="w-full min-w-0"
+                  className="h-10 w-full min-w-0"
                   value={query.mapping || ""}
                   onChange={(e) => filter("mapping", e.target.value)}
                 >
@@ -415,7 +415,7 @@ export function WorkspaceStock({
               <label className="text-sm">
                 Missing information
                 <NativeSelect
-                  className="w-full min-w-0"
+                  className="h-10 w-full min-w-0"
                   value={query.missing || ""}
                   onChange={(e) => filter("missing", e.target.value)}
                 >
@@ -455,7 +455,7 @@ export function WorkspaceStock({
           <label className="block max-w-xs text-sm">
             Sort
             <NativeSelect
-              className="w-full min-w-0"
+              className="h-10 w-full min-w-0"
               value={query.sortBy || (query.search?.trim() ? "relevance" : "name")}
               onChange={(e) => filter("sortBy", e.target.value)}
             >

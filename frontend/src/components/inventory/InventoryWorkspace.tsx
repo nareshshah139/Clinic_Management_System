@@ -308,7 +308,7 @@ export function InventoryWorkspace() {
           Task
           <NativeSelect
             aria-label="Inventory task"
-            className="w-full min-w-0"
+            className="h-10 w-full min-w-0"
             value={view}
             onChange={(e) =>
               navigate({
@@ -354,7 +354,7 @@ export function InventoryWorkspace() {
               Supplier returns are now in Purchase bills › Returns
             </button>
           )}
-          {moreTasks.length > 0 && <NativeSelect aria-label="More inventory tasks" className="max-w-64"
+          {moreTasks.length > 0 && <NativeSelect aria-label="More inventory tasks" className="max-w-72"
             value={moreTasks.some(([id]) => id === view) ? view : ""} onChange={event => switchTask(event.target.value)}>
             <option value="" disabled>More tasks…</option>
             {moreTasks.map(([id, label]) => <option key={id} value={id}>{taskLabel(id, label)}</option>)}
@@ -921,7 +921,7 @@ function WorkflowRegister({
       <label className="block max-w-xs text-sm">
         Status
         <NativeSelect
-          className="w-full min-w-0"
+          className="h-10 w-full min-w-0"
           value={query.status || ""}
           onChange={(e) => navigate({ status: e.target.value, page: "1" })}
         >

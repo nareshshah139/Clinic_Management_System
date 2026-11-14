@@ -91,7 +91,7 @@ function Select({ label, value, options, onChange }: { label: string; value: str
       <label htmlFor={id} className={fieldLabel}>
         {label}
       </label>
-      <NativeSelect id={id} className="w-full min-w-36" value={value} onChange={(event) => onChange(event.target.value)}>
+      <NativeSelect id={id} className="w-full h-11 min-w-36" value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

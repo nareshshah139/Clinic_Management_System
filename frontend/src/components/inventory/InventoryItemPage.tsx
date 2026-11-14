@@ -648,7 +648,7 @@ function LedgerFilters({ filter, onChange, shown, total, fileName }: {
         <input type="date" className={inputClass} value={filter.to} onChange={(e) => onChange({ ...filter, to: e.target.value })} />
       </label>
       <label className="text-sm">Type
-        <NativeSelect className="w-full min-w-0" value={filter.kind} onChange={(e) => onChange({ ...filter, kind: e.target.value as LedgerKind | "" })}>
+        <NativeSelect className="h-10 w-full min-w-0" value={filter.kind} onChange={(e) => onChange({ ...filter, kind: e.target.value as LedgerKind | "" })}>
           <option value="">All types</option>
           {Object.entries(LEDGER_KIND_LABEL).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}
         </NativeSelect>

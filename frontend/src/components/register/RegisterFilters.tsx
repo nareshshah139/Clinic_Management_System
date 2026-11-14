@@ -10,8 +10,6 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 
 export const filterLabelClass = 'text-[calc(0.8125rem+var(--app-text-increase))] font-medium leading-5 text-foreground';
-export const filterControlClass =
-  'h-10 rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 export type FilterOption = { value: string; label: string };
 
@@ -116,7 +114,7 @@ export function FilterSelect({
   return (
     <label className={cn('flex flex-col gap-1', filterLabelClass)}>
       {label}
-      <NativeSelect className="max-w-[8.5rem]" value={value} onChange={(event) => onChange(event.target.value)}>
+      <NativeSelect className="h-10 max-w-[8.5rem]" value={value} onChange={(event) => onChange(event.target.value)}>
         {allLabel !== undefined && <option value="">{allLabel}</option>}
         {options.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>
@@ -206,7 +204,7 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
     <div role="group" aria-labelledby={labelId} className="flex flex-col gap-1">
       <span id={labelId} className={filterLabelClass}>Period</span>
       <div ref={wrapper} className="relative flex items-center gap-1" onKeyDown={onKeyDown}>
-        <NativeSelect
+        <NativeSelect className="h-10"
           aria-label="Period"
           value={active}
           onChange={(event) => {

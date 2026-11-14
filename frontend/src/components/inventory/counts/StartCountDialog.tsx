@@ -189,7 +189,7 @@ export function StartCountDialog({ anchor, onClose, onStarted }: { anchor: HTMLE
           <label htmlFor={`${id}-shelf`} className="text-sm font-medium">
             Shelf
           </label>
-          <NativeSelect
+          <NativeSelect className="h-10"
             id={`${id}-shelf`}
             ref={shelfRef}
             value={shelf}

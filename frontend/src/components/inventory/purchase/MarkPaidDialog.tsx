@@ -190,7 +190,7 @@ export function MarkPaidDialog({
           <div className="grid grid-cols-2 gap-3">
             <label className={cn('flex flex-col gap-1', filterLabelClass)}>
               Mode
-              <NativeSelect ref={modeRef} value={mode} onChange={(event) => setMode(event.target.value as SettleMode)} disabled={saving}>
+              <NativeSelect className="h-10" ref={modeRef} value={mode} onChange={(event) => setMode(event.target.value as SettleMode)} disabled={saving}>
                 {SETTLE_MODES.map((value) => (
                   <option key={value} value={value}>{SETTLE_MODE_LABELS[value]}</option>
                 ))}

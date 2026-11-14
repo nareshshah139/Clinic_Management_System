@@ -159,7 +159,7 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
           <input type="search" className={inputClass} placeholder="Product, batch or reference" value={search} onChange={e => setSearch(e.target.value)} />
         </label>
         <label className="col-span-2 grid gap-1 text-sm font-medium md:col-span-1">Method
-          <NativeSelect className="w-full min-w-0" value={channel} onChange={e => navigate({ ledgerChannel: e.target.value, ledgerPage: "" })}>
+          <NativeSelect className="h-10 w-full min-w-0" value={channel} onChange={e => navigate({ ledgerChannel: e.target.value, ledgerPage: "" })}>
             <option value="">All methods</option>
             {(Object.keys(CHANNEL) as Channel[]).map(c => <option key={c} value={c}>{CHANNEL[c].label}</option>)}
           </NativeSelect>

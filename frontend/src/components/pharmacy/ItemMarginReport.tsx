@@ -168,7 +168,7 @@ function FilterSelect({ id, label, value, onChange, children }: { id: string; la
   return (
     <div className="min-w-0 space-y-1">
       <Label htmlFor={id}>{label}</Label>
-      <NativeSelect id={id} className="w-full min-w-0" value={value} onChange={(event) => onChange(event.target.value)}>
+      <NativeSelect id={id} className="h-10 w-full min-w-0" value={value} onChange={(event) => onChange(event.target.value)}>
         {children}
       </NativeSelect>
     </div>

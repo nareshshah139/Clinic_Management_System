@@ -318,7 +318,7 @@ export function ShelfIntelligence() {
                   id="shelf-item"
                   value={selectedItemId}
                   onChange={(event) => setSelectedItemId(event.target.value)}
-                  className="w-full"
+                  className="h-10 w-full"
                 >
                   {items.map((item) => (
                     <option key={item.id} value={item.id}>

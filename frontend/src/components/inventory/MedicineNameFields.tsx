@@ -53,7 +53,7 @@ export function MedicineNameFields({
           <label htmlFor="medicine-form">Form{formRequired ? ' *' : ''}</label>
           <NativeSelect
             id="medicine-form"
-            className="mt-1 w-full min-w-0"
+            className="mt-1 h-10 w-full min-w-0"
             value={value.form || ''}
             aria-invalid={Boolean(errors.form)}
             aria-describedby={errors.form ? 'medicine-form-error' : undefined}

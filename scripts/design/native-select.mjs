@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Rewrites every raw <select> in frontend/src (outside components/ui) to the shared NativeSelect,
 // keeping its props and children and only the layout classes (width, margin, flex placement) of its
-// className; NativeSelect owns the look. Safe to rerun: a tree with no raw <select> is left as is.
+// className, plus its height so it lines up with its neighbours; NativeSelect owns the look. Safe to rerun: a tree with no raw <select> is left as is.
 // Usage: node scripts/design/native-select.mjs [--check] [paths...]
 //   --check  write nothing; list raw <select> and selects without an accessible name, exit 1 if any.
 import fs from 'node:fs';
@@ -14,7 +14,7 @@ const targets = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
 const SRC = path.join(ROOT, 'frontend/src');
 const UI = path.join(SRC, 'components/ui') + path.sep;
 const IMPORT = "import { NativeSelect } from '@/components/ui/native-select';";
-const LAYOUT = /^(?:-?m[trblxyse]?-|w-|min-w-|max-w-|flex-|basis-|grow|shrink|self-|justify-self-|place-self-|col-|row-|order-|block$|hidden$)/;
+const LAYOUT = /^(?:-?m[trblxyse]?-|w-|h-|min-h-|max-h-|min-w-|max-w-|flex-|basis-|grow|shrink|self-|justify-self-|place-self-|col-|row-|order-|block$|hidden$)/;
 
 function tagEnd(text, start) {
   let depth = 0;

@@ -193,7 +193,7 @@ export function StockDetailsEditor({
             <label className="text-sm">
               Availability
               <NativeSelect
-                className="w-full min-w-0"
+                className="h-10 w-full min-w-0"
                 value={value.status}
                 onChange={(event) =>
                   onChange({ ...value, status: event.target.value })
