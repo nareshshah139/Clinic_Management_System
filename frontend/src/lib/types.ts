@@ -262,6 +262,7 @@ export interface BackendPatientRow {
   referralSource?: string | null;
   consultationType?: string | null;
   portalUserId?: string | null;
+  lastVisitAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

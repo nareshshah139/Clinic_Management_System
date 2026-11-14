@@ -4,20 +4,19 @@ import { displayCalendarDate, displayClinicDate } from '@/lib/date-display';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope, Download } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import Link from 'next/link';
+import { Plus, Search, Edit, Eye, Archive, Link as LinkIcon, Unlink, MessageSquare, Stethoscope, Download, MoreHorizontal, CalendarPlus, Copy } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { track } from '@/lib/analytics';
-import { formatPatientName, filterRoomsByVisitType, calculateAge, formatAge } from '@/lib/utils';
+import { formatPatientName, filterRoomsByVisitType, calculateAge } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useOverbookConfirm } from '@/components/appointments/useOverbookConfirm';
@@ -54,7 +53,7 @@ interface PatientFormState {
  */
 /**
  * @cc [owner:nareshshah139,label:accessibility] patient-row-actions
- * Patient actions remain available through labeled controls when the table is horizontally constrained.
+ * Every patient row MUST show Start Visit and a "More actions for <name>" menu inside the table's visible box at 1280px and wider, without horizontal scrolling.
  */
 export default function PatientsManagement() {
   const router = useRouter();
@@ -88,7 +87,7 @@ export default function PatientsManagement() {
   const [linkPortalEmail, setLinkPortalEmail] = useState<string>('');
   const [linkPortalTarget, setLinkPortalTarget] = useState<Patient | null>(null);
   const fetchIdRef = useRef(0);
-  const [sortBy, setSortBy] = useState<'NAME' | 'AGE' | 'GENDER' | 'LAST_VISIT' | 'CREATED_AT' | 'REFERRAL'>('NAME');
+  const [sortBy, setSortBy] = useState<'NAME' | 'AGE' | 'LAST_VISIT'>('NAME');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [form, setForm] = useState<PatientFormState>({
     abhaId: '',
@@ -233,6 +232,7 @@ export default function PatientsManagement() {
           referralSource: bp.referralSource || undefined,
           emergencyContact: bp.emergencyContact || undefined,
           portalUserId: bp.portalUserId || undefined,
+          lastVisitDate: bp.lastVisitAt || undefined,
           createdAt: bp.createdAt,
           updatedAt: bp.updatedAt,
         };
@@ -273,18 +273,10 @@ export default function PatientsManagement() {
         const ageA = calculateAge(a) ?? -Infinity;
         const ageB = calculateAge(b) ?? -Infinity;
         r = cmp(ageA, ageB);
-      } else if (sortBy === 'GENDER') {
-        r = cmp((a.gender || '').toString(), (b.gender || '').toString());
-      } else if (sortBy === 'LAST_VISIT') {
+      } else {
         const da = a.lastVisitDate ? new Date(a.lastVisitDate).getTime() : -Infinity;
         const db = b.lastVisitDate ? new Date(b.lastVisitDate).getTime() : -Infinity;
         r = cmp(da, db);
-      } else if (sortBy === 'REFERRAL') {
-        r = cmp((a.referralSource || ''), (b.referralSource || ''));
-      } else {
-        const ca = a.createdAt ? new Date(a.createdAt).getTime() : -Infinity;
-        const cb = b.createdAt ? new Date(b.createdAt).getTime() : -Infinity;
-        r = cmp(ca, cb);
       }
       return sortOrder === 'asc' ? r : -r;
     });
@@ -744,21 +736,23 @@ export default function PatientsManagement() {
     }
   };
 
-  const initials = (patient: Patient) => {
-    const name = formatPatientName(patient);
-    const parts = name.split(' ').filter(Boolean);
-    const first = parts[0]?.[0] || '';
-    const second = parts.length > 1 ? parts[1]?.[0] || '' : '';
-    return `${first}${second}`.toUpperCase();
+  const ageSex = (patient: Patient) => {
+    const age = calculateAge(patient);
+    const sex = { MALE: 'Male', FEMALE: 'Female', OTHER: 'Other' }[patient.gender as Gender];
+    return [age !== null ? String(age) : null, sex].filter(Boolean).join(' · ') || '—';
+  };
+
+  const copyPatientCode = (code: string) => {
+    navigator.clipboard?.writeText(code).then(() => {
+      toast({ title: 'Copied', description: 'Patient code copied to clipboard' });
+    }).catch(() => {});
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Patients</h2>
-          <p className="text-gray-600">Search, add, and manage patient records</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
+        <Button variant="outline" onClick={exportCsv} disabled={exporting}><Download className="h-4 w-4 mr-2" /> {exporting ? 'Exporting...' : 'Export CSV'}</Button>
         <Dialog open={open} onOpenChange={(v: boolean) => { if (!v) resetForm(); setOpen(v); }}>
           <DialogTrigger asChild>
             <Button data-tour="add-patient-btn">
@@ -945,14 +939,10 @@ export default function PatientsManagement() {
             </div>
           </DialogContent>
         </Dialog>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
-          <Button variant="outline" onClick={exportCsv} disabled={exporting}><Download className="h-4 w-4 mr-2" /> {exporting ? 'Exporting...' : 'Export CSV'}</Button>
-        </div>
       </div>
 
       <Card>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="flex flex-col sm:flex-row gap-4 items-start">
             <div className="relative w-full sm:flex-1" data-tour="search-patients">
               <div className="relative">
@@ -1056,10 +1046,6 @@ export default function PatientsManagement() {
       </Dialog>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Patient Records</CardTitle>
-          <CardDescription>Manage and view all patient information</CardDescription>
-        </CardHeader>
         <CardContent>
           {error ? (
             <div className="text-center py-10">
@@ -1073,135 +1059,73 @@ export default function PatientsManagement() {
           ) : patients.length === 0 ? (
             <EmptyState title="No patients found" description={search.length >= 2 || genderFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? 'Adjust your search or filters to find a patient.' : 'Add a patient to start their clinic record.'} />
           ) : (
-            <div className="min-w-0 max-w-full overflow-x-auto" data-tour="patients-table">
-              <Table>
+            <div data-tour="patients-table">
+              <Table data-own-cell-spacing className="[&_td]:py-1.5">
                 <TableHeader>
                   <TableRow>
                     <TableHead aria-sort={sortBy === 'NAME' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
                       <button type="button" onClick={() => toggleSort('NAME')}>Patient {sortBy === 'NAME' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
-                    <TableHead>Patient Code</TableHead>
+                    <TableHead>Phone</TableHead>
                     <TableHead aria-sort={sortBy === 'AGE' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                      <button type="button" onClick={() => toggleSort('AGE')}>Age {sortBy === 'AGE' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
+                      <button type="button" onClick={() => toggleSort('AGE')}>Age · Sex {sortBy === 'AGE' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
-                    <TableHead aria-sort={sortBy === 'GENDER' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                      <button type="button" onClick={() => toggleSort('GENDER')}>Gender {sortBy === 'GENDER' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
+                    <TableHead aria-sort={sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('LAST_VISIT')}>Last visit {sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead>ABHA ID</TableHead>
-                    {displayPatients.some(p => !!p.lastVisitDate) && (
-                      <TableHead aria-sort={sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                        <button type="button" onClick={() => toggleSort('LAST_VISIT')}>Last Visit {sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
-                      </TableHead>
-                    )}
-                    <TableHead aria-sort={sortBy === 'REFERRAL' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                      <button type="button" onClick={() => toggleSort('REFERRAL')}>Referral {sortBy === 'REFERRAL' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
-                    </TableHead>
-                    <TableHead>Consultation</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="w-0"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayPatients.map((p) => (
-                    <TableRow key={p.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/dashboard/patients/${p.id}`)}>
+                  {displayPatients.map((p) => {
+                    const name = formatPatientName(p);
+                    const href = `/dashboard/patients/${p.id}`;
+                    return (
+                    <TableRow
+                      key={p.id}
+                      className="cursor-pointer"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('a, button, [role="menu"]')) return;
+                        router.push(href);
+                      }}
+                    >
                       <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar><AvatarFallback className="bg-blue-100 text-blue-600">{initials(p)}</AvatarFallback></Avatar>
-                          <div>
-                            <div className="font-medium text-gray-900">{formatPatientName(p)}</div>
-                            <button
-                              type="button"
-                              className="text-xs text-gray-500 hover:underline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard?.writeText(p.id).then(() => {
-                                  toast({ title: 'Copied', description: 'Patient ID copied to clipboard' });
-                                }).catch(() => {});
-                              }}
-                              title="Click to copy full ID"
-                            >
-                              ID: {p.id.slice(-8)}
-                            </button>
-                            {p.portalUserId && <Badge variant="outline" className="text-xs mt-1">Portal Linked</Badge>}
-                          </div>
+                        <Link href={href} className="font-medium leading-tight text-foreground hover:underline">{name}</Link>
+                        <div className="text-xs leading-tight text-muted-foreground">
+                          {p.patientCode ? <span className="font-mono">{p.patientCode}</span> : 'No patient code'}
+                          {p.portalUserId && ' · Portal linked'}
                         </div>
                       </TableCell>
+                      <TableCell className="tabular-nums">{p.phone}</TableCell>
+                      <TableCell>{ageSex(p)}</TableCell>
+                      <TableCell>{p.lastVisitDate ? displayClinicDate(p.lastVisitDate) : <span className="text-muted-foreground">No visits yet</span>}</TableCell>
                       <TableCell>
-                        <div className="flex flex-col text-sm">
-                          <div className="font-mono">
-                            {p.patientCode ? p.patientCode : <span className="text-gray-400">—</span>}
-                          </div>
-                          {p.patientCode && (
-                            <button
-                              type="button"
-                              className="text-xs text-gray-500 hover:underline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard?.writeText(p.patientCode || '').then(() => {
-                                  toast({ title: 'Copied', description: 'Patient code copied to clipboard' });
-                                }).catch(() => {});
-                              }}
-                              title="Click to copy patient code"
-                            >
-                              Copy code
-                            </button>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">{(() => {
-                          const age = calculateAge(p);
-                          return age !== null ? `${age} yrs` : <span className="text-gray-400">—</span>;
-                        })()}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{normalizeGender(p.gender)}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1 text-sm text-gray-700">
-                          <div className="flex items-center"><Phone className="h-3 w-3 mr-1" /> {p.phone}</div>
-                          {p.email && <div className="flex items-center"><Mail className="h-3 w-3 mr-1" /> {p.email}</div>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm text-gray-600">{p.abhaId || <span className="text-gray-400">—</span>}</div>
-                      </TableCell>
-                      {displayPatients.some(pp => !!pp.lastVisitDate) && (
-                        <TableCell>
-                          <div className="text-sm text-gray-600">{p.lastVisitDate ? displayClinicDate(p.lastVisitDate) : <span className="text-gray-400">—</span>}</div>
-                        </TableCell>
-                      )}
-                      <TableCell>
-                        <div className="text-sm text-gray-600">{p.referralSource || <span className="text-gray-400">—</span>}</div>
-                      </TableCell>
-                      <TableCell>
-                        {(p as any).consultationType === 'ONLINE' ? (
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-700">Online</Badge>
-                        ) : (p as any).consultationType === 'OFFLINE' ? (
-                          <Badge variant="secondary" className="bg-green-100 text-green-700">Offline</Badge>
-                        ) : (
-                          <span className="text-gray-400 text-sm">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/patients/${p.id}`); }}><Eye className="h-3 w-3 mr-1" /> View</Button>
-                          <Button size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visits?patientId=${p.id}&autoStart=true`); }}>
-                            <Stethoscope className="h-3 w-3 mr-1" /> Start Visit
+                        <div className="flex items-center justify-end gap-1">
+                          <Button size="sm" className="whitespace-nowrap" onClick={() => router.push(`/dashboard/visits?patientId=${p.id}&autoStart=true`)}>
+                            <Stethoscope /> Start Visit
                           </Button>
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button variant="outline" size="sm" aria-label={`More actions for ${formatPatientName(p)}`} onClick={e => e.stopPropagation()}>More</Button></DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e: import('react').MouseEvent) => e.stopPropagation()}>
-                              <DropdownMenuItem onSelect={() => onEdit(p)}>Edit</DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => handleArchive(p)}>Archive</DropdownMenuItem>
-                              {p.portalUserId ? <DropdownMenuItem onSelect={() => handleUnlinkPortalUser(p)}>Unlink portal</DropdownMenuItem> : <DropdownMenuItem onSelect={() => handleLinkPortalUser(p)}>Link portal</DropdownMenuItem>}
-                              <DropdownMenuItem onSelect={() => handleSendWhatsApp(p)}>WhatsApp</DropdownMenuItem>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="size-8" aria-label={`More actions for ${name}`}><MoreHorizontal /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onSelect={() => router.push(href)}><Eye /> View</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => onEdit(p)}><Edit /> Edit</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => router.push(`/dashboard/appointments?patientId=${encodeURIComponent(p.id)}`)}><CalendarPlus /> Book appointment</DropdownMenuItem>
+                              {p.patientCode && <DropdownMenuItem onSelect={() => copyPatientCode(p.patientCode!)}><Copy /> Copy code</DropdownMenuItem>}
+                              <DropdownMenuItem onSelect={() => handleSendWhatsApp(p)}><MessageSquare /> WhatsApp reminder</DropdownMenuItem>
+                              {p.portalUserId
+                                ? <DropdownMenuItem onSelect={() => handleUnlinkPortalUser(p)}><Unlink /> Unlink portal</DropdownMenuItem>
+                                : <DropdownMenuItem onSelect={() => handleLinkPortalUser(p)}><LinkIcon /> Link portal</DropdownMenuItem>}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem variant="destructive" onSelect={() => handleArchive(p)}><Archive /> Archive</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
