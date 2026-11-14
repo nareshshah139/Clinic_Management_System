@@ -57,6 +57,13 @@ import {
   loadTimeOff,
 } from '../doctor-availability/availability.queries';
 
+type BookedAppointment = Prisma.AppointmentGetPayload<{
+  include: {
+    patient: { select: { id: true; name: true; phone: true; email: true } };
+    doctor: { select: { id: true; firstName: true; lastName: true; email: true } };
+  };
+}>;
+
 type WhatsAppTemplateComponent = {
   type: 'body';
   parameters: { type: 'text'; text: string }[];
@@ -84,18 +91,7 @@ export class AppointmentsService {
     branchId: string,
     callerUserId?: string,
   ) {
-    const {
-      patientId,
-      doctorId,
-      roomId,
-      date,
-      slot,
-      visitType,
-      notes,
-      source,
-      calendar = 'SCHEDULED',
-      allowOverbook = false,
-    } = createAppointmentDto;
+    const { patientId, doctorId, roomId, date, slot } = createAppointmentDto;
 
     // Validate inputs
     this.validateAppointmentInputs(createAppointmentDto);
@@ -129,39 +125,59 @@ export class AppointmentsService {
       }
     }
 
-    const appointment = await this.withTokenRetry(() => this.prisma.$transaction(async (tx) => {
-      await this.lockSchedule(tx, branchId, doctorId, roomId ?? null, date);
-      await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId, { allowOverbook, calendar });
-      const tokenNumber = await this.nextDoctorToken(tx, branchId, doctorId, date);
+    const appointment = await this.withTokenRetry(() =>
+      this.prisma.$transaction((tx) => this.bookInTransaction(tx, createAppointmentDto, branchId)),
+    );
+    await this.notifyBooked(appointment, branchId, callerUserId);
+    return appointment;
+  }
 
-      return tx.appointment.create({
-        data: {
-          patientId,
-          doctorId,
-          roomId,
-          date: new Date(date),
-          slot,
-          visitType: visitType || VisitType.OPD,
-          notes,
-          source,
-          branchId,
-          tokenNumber,
-          status: statusEnteringCalendar(calendar),
-        },
-        include: {
-          patient: {
-            select: { id: true, name: true, phone: true, email: true },
-          },
-          doctor: {
-            select: { id: true, firstName: true, lastName: true, email: true },
-          },
-          room: {
-            select: { id: true, name: true, type: true },
-          },
-        },
-      });
-    }));
+  /**
+   * Callers validate the patient, doctor, room and time off first. A taken slot throws ConflictException and leaves
+   * the transaction usable, so a caller can try the next slot.
+   */
+  async bookInTransaction(
+    tx: Prisma.TransactionClient,
+    dto: CreateAppointmentDto & { reviewOfVisitId?: string },
+    branchId: string,
+  ) {
+    const { patientId, doctorId, roomId, date, slot, visitType, notes, source, reviewOfVisitId, calendar = 'SCHEDULED', allowOverbook = false } = dto;
+    await this.lockSchedule(tx, branchId, doctorId, roomId ?? null, date);
+    await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId, { allowOverbook, calendar });
+    const tokenNumber = await this.nextDoctorToken(tx, branchId, doctorId, date);
 
+    return tx.appointment.create({
+      data: {
+        patientId,
+        doctorId,
+        roomId,
+        date: new Date(date),
+        slot,
+        visitType: visitType || VisitType.OPD,
+        notes,
+        source,
+        reviewOfVisitId,
+        branchId,
+        tokenNumber,
+        status: statusEnteringCalendar(calendar),
+      },
+      include: {
+        patient: {
+          select: { id: true, name: true, phone: true, email: true },
+        },
+        doctor: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        room: {
+          select: { id: true, name: true, type: true },
+        },
+      },
+    });
+  }
+
+  async notifyBooked(appointment: BookedAppointment, branchId: string, callerUserId?: string) {
+    const { doctorId, slot } = appointment;
+    const date = appointment.date.toISOString().slice(0, 10);
     // Fire-and-forget notifications (if configured and doctor has enabled)
     if (this.notifications) {
       // Check if the doctor has enabled auto WhatsApp confirmations
@@ -279,8 +295,12 @@ export class AppointmentsService {
     void this.googleCalendar
       ?.syncAppointmentEvent(appointment.id, callerUserId)
       .catch(() => void 0);
+  }
 
-    return appointment;
+  notifyCancelled(id: string, callerUserId?: string) {
+    void this.googleCalendar
+      ?.deleteAppointmentEvent(id, callerUserId)
+      .catch(() => void 0);
   }
 
   async findAll(query: QueryAppointmentsDto, branchId: string) {
@@ -632,11 +652,7 @@ export class AppointmentsService {
       throw new ConflictException('Appointment changed; refresh and try again');
     }
 
-    // Remove Google Calendar event if one exists
-    void this.googleCalendar
-      ?.deleteAppointmentEvent(id, callerUserId)
-      .catch(() => void 0);
-
+    this.notifyCancelled(id, callerUserId);
     return { message: 'Appointment cancelled successfully' };
   }
 
