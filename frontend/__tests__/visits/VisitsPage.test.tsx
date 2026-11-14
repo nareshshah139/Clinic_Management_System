@@ -79,6 +79,56 @@ describe('VisitsPage', () => {
     });
   });
 
+  describe('opening a colleague\'s appointment', () => {
+    const doctors = [
+      { id: 'doctor-1', firstName: 'Shravya', lastName: 'Rao' },
+      { id: 'doctor-2', firstName: 'Praneeta', lastName: 'Jain' },
+    ];
+    const open = (me: { id: string; role: string }, order: 'me-first' | 'appointment-first') => {
+      jest.mocked(apiClient.getPatients).mockResolvedValue({ data: [{ id: 'patient-123', name: 'Patient' }] } as any);
+      let releaseMe: () => void = () => {};
+      const meGate = new Promise<void>((resolve) => { releaseMe = resolve; });
+      jest.mocked(apiClient.get).mockImplementation(async (path: string) => {
+        if (path === '/auth/me') {
+          if (order === 'appointment-first') await meGate;
+          return me as any;
+        }
+        return { users: doctors, pagination: { totalPages: 1 } } as any;
+      });
+      jest.mocked(apiClient.getAppointment).mockImplementation(async () => {
+        if (order === 'me-first') await new Promise((r) => setTimeout(r, 50));
+        else releaseMe();
+        return { id: 'appt-1', doctorId: 'doctor-2' } as any;
+      });
+      return jest.spyOn(navigation, 'useSearchParams').mockReturnValue(
+        new URLSearchParams('patientId=patient-123&appointmentId=appt-1&autoStart=true') as any,
+      );
+    };
+
+    it.each(['me-first', 'appointment-first'] as const)(
+      'selects the signed-in doctor and shows who it was booked with (%s)',
+      async (order) => {
+        const spy = open({ id: 'doctor-1', role: 'DOCTOR' }, order);
+        render(<VisitsPage />);
+        await waitFor(() => expect(apiClient.getAppointment).toHaveBeenCalled());
+        const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
+        await waitFor(() => expect(picker).toHaveTextContent('Dr. Shravya Rao'));
+        expect(await screen.findByText('Booked with Dr. Praneeta Jain')).toBeInTheDocument();
+        expect(screen.getByTestId('medical-visit-form')).toHaveTextContent('Doctor: doctor-1');
+        spy.mockRestore();
+      },
+    );
+
+    it('selects the appointment doctor for a receptionist without a note', async () => {
+      const spy = open({ id: 'rec-1', role: 'RECEPTIONIST' }, 'me-first');
+      render(<VisitsPage />);
+      const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
+      await waitFor(() => expect(picker).toHaveTextContent('Dr. Praneeta Jain'));
+      expect(screen.queryByText(/Booked with/)).not.toBeInTheDocument();
+      spy.mockRestore();
+    });
+  });
+
   it('does not open a visit for an admin who arrives without a doctor', async () => {
     jest.mocked(apiClient.getPatients).mockResolvedValue({ data: [{ id: 'patient-123', name: 'Patient' }] } as any);
     jest.mocked(apiClient.get).mockImplementation(async (path: string) => {

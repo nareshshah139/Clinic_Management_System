@@ -607,7 +607,7 @@ it.each([
     };
     assertHistory(document.getElementById('prescription-print-root'));
     assertHistory(document.getElementById('pagedjs-container'));
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Print', exact: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Print$/ })); });
     expect(print).toHaveBeenCalled();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download PDF' })); });
     await waitFor(() => expect(mockPdfOutput).toHaveBeenCalled());
@@ -789,7 +789,7 @@ it('toggles and remembers the doctor signature across preview, print, PDF, Whats
     for (const enabled of [true, false, true]) {
       fireEvent.click(toggle);
       // Exports stay disabled until pagination reflects the new selection.
-      expect(screen.getByRole('button', { name: 'Print', exact: true })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^Print$/ })).toBeDisabled();
       await settlePreviewPagination();
       const assertSignature = (root: Element | null) => {
         expect(root).toHaveTextContent('Dr. Praneeta Jain');
@@ -801,7 +801,7 @@ it('toggles and remembers the doctor signature across preview, print, PDF, Whats
         } else expect(image).toBeNull();
       };
       assertSignature(document.getElementById('pagedjs-container'));
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Print', exact: true })); });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Print$/ })); });
       expect(print).toHaveBeenCalled();
       assertSignature(document.getElementById('prescription-print-host'));
       act(() => { window.dispatchEvent(new Event('afterprint')); });
@@ -896,21 +896,23 @@ it('reports an Rx conflict between the successful visit save and PDF output', as
 });
 
 it('disables Print while the prescription has no medicines', async () => {
-  render(<PrescriptionBuilder patientId="empty-patient" doctorId="doctor" standalone />);
+  render(<PrescriptionBuilder patientId="empty-patient" visitId={null} doctorId="doctor" standalone />);
   await openPreview();
   await settlePreviewPagination();
-  expect(screen.getByRole('button', { name: 'Print', exact: true })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /^Print$/ })).toBeDisabled();
 });
 
-it('names the prescribing doctor in the Print Preview header instead of an id fragment', async () => {
-  const get = jest.spyOn(apiClient, 'get').mockImplementation(async (path: string) => (
-    path === '/users/doctor-abcdef123' ? { id: 'doctor-abcdef123', firstName: 'Shravya', lastName: 'Rao' } : {}
-  ) as any);
+it('names the resolved doctor in the toolbar and the signature block of an unsaved visit', async () => {
+  const get = jest.spyOn(apiClient, 'get');
   try {
-    render(<PrescriptionBuilder patientId="named-patient" doctorId="doctor-abcdef123" standalone />);
+    render(<PrescriptionBuilder patientId="named-patient" visitId={null} doctorId="doctor-abcdef123" doctorName="Dr. Shravya Rao" standalone />);
     await openPreview();
     await settlePreviewPagination();
-    expect(await screen.findByText('Dr. Shravya Rao')).toBeInTheDocument();
-    expect(screen.queryByText(/Doctor doctor/)).toBeNull();
+    const toolbar = document.querySelector('[data-prescription-preview-toolbar]') as HTMLElement;
+    expect(toolbar).toHaveTextContent('Dr. Shravya Rao');
+    const signature = document.querySelector('.doctor-signature-block') as HTMLElement;
+    expect(signature).toHaveTextContent('Dr. Shravya Rao');
+    expect(signature).not.toHaveTextContent(/^Dr\.\s*Signature/);
+    expect(get).not.toHaveBeenCalledWith('/users/doctor-abcdef123');
   } finally { get.mockRestore(); }
 });

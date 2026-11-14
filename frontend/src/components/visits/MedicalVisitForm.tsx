@@ -70,6 +70,7 @@ import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 interface Props {
   patientId: string;
   doctorId: string;
+  doctorName?: string;
   userRole?: string;
   visitNumber?: number;
   patientName?: string;
@@ -211,7 +212,7 @@ const ROLE_PERMISSIONS = {
  * @cc [owner:nareshshah139,label:product] completion-progress-explanation
  * When completion is unavailable because progress is below 80%, the form identifies unfinished tracked sections and states that progress is not a clinical validation.
  */
-function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
+function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
   const automaticSaveBlocked = useRef(false);
@@ -2353,6 +2354,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                 <PrescriptionBuilder 
                   patientId={patientId}
                   doctorId={doctorId}
+                  doctorName={doctorName}
                   visitId={visitId}
                   consultationType={consultationType}
                   teleVideoConsent={teleVideoConsent}
