@@ -112,11 +112,13 @@ interface PrescriptionItemForm extends RegimenRow {
   pulseRegimen?: string;
 }
 
+/** What completing the visit must do so the stored prescription equals what the doctor sees. */
+export type PrescriptionPendingChange = 'none' | 'save' | 'cancel';
+
 export interface PrescriptionCompletionState {
   hasComplaintOrDiagnosis: boolean;
-  medicines: number;
-  unsavedMedicines: boolean;
-  saved: boolean;
+  pending: PrescriptionPendingChange;
+  saving: boolean;
 }
 
 interface Props {
@@ -136,7 +138,7 @@ interface Props {
   onBeforeExport?: () => Promise<string>;
   onPreview?: () => void;
   onCompletionStateChange?: (state: PrescriptionCompletionState) => void;
-  savePrescriptionRef?: React.MutableRefObject<(() => Promise<string | undefined>) | null>;
+  settlePrescriptionRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
   reviewDate?: string;
   printBgUrl?: string;
   printTopMarginPx?: number;
@@ -275,7 +277,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
 const inventoryNamesOf = (drug: any): string[] =>
   [drug?.name, ...(Array.isArray(drug?.knownNames) ? drug.knownNames : [])].map((name) => String(name || '').trim().toLowerCase()).filter(Boolean);
 
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, onCompletionStateChange, savePrescriptionRef, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, onCompletionStateChange, settlePrescriptionRef, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
@@ -737,8 +739,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
   const createdPrescriptionIdRef = useRef<string | null>(null);
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
-  const [savedItemsKey, setSavedItemsKey] = useState<string | null>(null);
-  const itemsMatchSavedPrescription = useRef(false);
+  const [savedFieldsKey, setSavedFieldsKey] = useState<string | null>(null);
+  const fieldsMatchSavedPrescription = useRef(false);
+  const [cancelledPrescriptionId, setCancelledPrescriptionId] = useState<string | null>(null);
   const [savingFromPreview, setSavingFromPreview] = useState(false);
   const prescriptionSaveInFlight = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -1192,8 +1195,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return parts.join(' / ');
   }, [patientAgeYears, patientGender]);
   const todayStr = useMemo(() => displayClinicDate(new Date()), []);
-  const savedPrescriptionIdForBill: string | null = savedPrescriptionId || visitData?.prescription?.id || visitData?.prescriptionId || null;
-  const hasSavedPrescription = !!savedPrescriptionIdForBill;
+  const storedPrescriptionId: string | null = savedPrescriptionId || visitData?.prescription?.id || visitData?.prescriptionId || null;
+  const activePrescriptionId = storedPrescriptionId !== cancelledPrescriptionId ? storedPrescriptionId : null;
+  const hasSavedPrescription = !!activePrescriptionId;
 
   const historyLine = useMemo(() => {
     const parts: string[] = [];
@@ -1335,7 +1339,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           setSavedPrescriptionId(res.prescription.id);
           const savedItems = typeof res.prescription.items === 'string' ? JSON.parse(res.prescription.items) : res.prescription.items;
           if (Array.isArray(savedItems) && !items.some(item => item.drugName.trim())) {
-            itemsMatchSavedPrescription.current = true;
+            fieldsMatchSavedPrescription.current = true;
             hydrateItems(savedItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
           }
           if (!followUpInstructions && res.prescription.instructions) hydrateFollowUpInstructions(res.prescription.instructions);
@@ -2641,6 +2645,34 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return true;
   }, [onClinicalConflict]);
 
+  // Everything Create Prescription stores on the prescription itself; a change to any of it is unsaved.
+  const prescriptionFields = useMemo(() => ({
+    items: prescriptionItemsPayload,
+    diagnosis: clinicalField('diagnosis', diagnosis),
+    language,
+    followUpInstructions: clinicalField('followUpInstructions', followUpInstructions),
+    procedureMetrics: Object.keys(procedureMetrics).length ? procedureMetrics : undefined,
+    metadata: {
+      chiefComplaints: clinicalField('chiefComplaints', chiefComplaints),
+      histories: {
+        pastHistory: clinicalField('pastHistory', pastHistory),
+        personalHistory,
+        medicationHistory: clinicalField('medicationHistory', medicationHistory),
+        menstrualHistory: clinicalField('menstrualHistory', menstrualHistory),
+      },
+      familyHistory: {
+        dm: clinicalField('familyHistoryDM', familyHistoryDM),
+        htn: clinicalField('familyHistoryHTN', familyHistoryHTN),
+        thyroid: clinicalField('familyHistoryThyroid', familyHistoryThyroid),
+        others: clinicalField('familyHistoryOthers', familyHistoryOthers),
+      },
+      investigations: clinicalField('investigations', investigations),
+      procedures: clinicalField('procedures', procedures),
+      procedurePlanned: clinicalField('procedurePlanned', procedurePlanned),
+    },
+  }), [prescriptionItemsPayload, diagnosis, language, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned]);
+  const prescriptionFieldsKey = useMemo(() => JSON.stringify(prescriptionFields), [prescriptionFields]);
+
   const create = useCallback(async (exportVisitId?: string) => {
     if (prescriptionSaveInFlight.current) return;
     if (consultationType === 'TELE_VIDEO' && !teleVideoConsent) {
@@ -2697,30 +2729,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         patientId: effectivePatientId,
         visitId: standalone ? undefined : (ensuredVisitId || visitId || undefined),
         doctorId: effectiveDoctorId,
-        items: prescriptionItemsPayload,
-        diagnosis: clinicalField('diagnosis', diagnosis),
-        language,
-
-        followUpInstructions: clinicalField('followUpInstructions', followUpInstructions),
-        procedureMetrics: Object.keys(procedureMetrics).length ? procedureMetrics : undefined,
-        metadata: {
-          chiefComplaints: clinicalField('chiefComplaints', chiefComplaints),
-          histories: {
-            pastHistory: clinicalField('pastHistory', pastHistory),
-            personalHistory,
-            medicationHistory: clinicalField('medicationHistory', medicationHistory),
-            menstrualHistory: clinicalField('menstrualHistory', menstrualHistory),
-          },
-          familyHistory: {
-            dm: clinicalField('familyHistoryDM', familyHistoryDM),
-            htn: clinicalField('familyHistoryHTN', familyHistoryHTN),
-            thyroid: clinicalField('familyHistoryThyroid', familyHistoryThyroid),
-            others: clinicalField('familyHistoryOthers', familyHistoryOthers),
-          },
-          investigations: clinicalField('investigations', investigations),
-          procedures: clinicalField('procedures', procedures),
-          procedurePlanned: clinicalField('procedurePlanned', procedurePlanned),
-        },
+        ...prescriptionFields,
       };
       const existingId = createdPrescriptionIdRef.current || savedPrescriptionId || visitData?.prescription?.id || visitData?.prescriptionId;
       const res: any = existingId
@@ -2732,7 +2741,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       if (!existingId) track('prescription_created', { mode: standalone ? 'quick' : 'visit' });
       createdPrescriptionIdRef.current = res.id;
       setSavedPrescriptionId(res?.id || null);
-      setSavedItemsKey(JSON.stringify(payload.items));
+      setSavedFieldsKey(JSON.stringify(prescriptionFields));
       if (res.visit) {
         visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, res.visit.version);
         onVisitSaved?.(res.visit);
@@ -2759,21 +2768,48 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       prescriptionSaveInFlight.current = false;
       setSavingFromPreview(false);
     }
-  }, [reportClinicalConflict, getClinicalSavePatch, onVisitSaved, consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
+  }, [reportClinicalConflict, getClinicalSavePatch, onVisitSaved, consultationType, teleVideoConsent, savedPrescriptionId, prescriptionFields, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, onCreated]);
 
-  const itemsKey = useMemo(() => JSON.stringify(prescriptionItemsPayload), [prescriptionItemsPayload]);
+  // A saved prescription whose medicines were all removed is cancelled, so the pharmacy never sees a list the doctor dropped.
+  const cancelEmptiedPrescription = async () => {
+    if (!activePrescriptionId || prescriptionSaveInFlight.current) return false;
+    prescriptionSaveInFlight.current = true;
+    setSavingFromPreview(true);
+    try {
+      await apiClient.cancelPrescription(activePrescriptionId, 'All medicines removed before the visit was completed');
+      setCancelledPrescriptionId(activePrescriptionId);
+      toast({ variant: 'success', title: 'Prescription cancelled', description: 'The pharmacy will not see its medicines.' });
+      return true;
+    } catch (e) {
+      reportClinicalConflict(e);
+      const { title, description, variant } = mapCreateErrorToToast(e);
+      toast({ variant: variant || 'destructive', title, description });
+      return false;
+    } finally {
+      prescriptionSaveInFlight.current = false;
+      setSavingFromPreview(false);
+    }
+  };
+
   useEffect(() => {
-    if (!itemsMatchSavedPrescription.current || validItems.length === 0) return;
-    itemsMatchSavedPrescription.current = false;
-    setSavedItemsKey(itemsKey);
-  }, [itemsKey, validItems.length]);
-  const unsavedMedicines = validItems.length > 0 && itemsKey !== savedItemsKey;
+    if (!fieldsMatchSavedPrescription.current || validItems.length === 0) return;
+    fieldsMatchSavedPrescription.current = false;
+    setSavedFieldsKey(prescriptionFieldsKey);
+  }, [prescriptionFieldsKey, validItems.length]);
+  const pendingPrescriptionChange: PrescriptionPendingChange = validItems.length > 0
+    ? (activePrescriptionId && savedFieldsKey === prescriptionFieldsKey ? 'none' : 'save')
+    : (activePrescriptionId ? 'cancel' : 'none');
   const hasComplaintOrDiagnosis = Boolean(chiefComplaints.trim() || diagnosis.trim());
   useEffect(() => {
-    onCompletionStateChange?.({ hasComplaintOrDiagnosis, medicines: validItems.length, unsavedMedicines, saved: hasSavedPrescription });
-  }, [onCompletionStateChange, hasComplaintOrDiagnosis, validItems.length, unsavedMedicines, hasSavedPrescription]);
+    onCompletionStateChange?.({ hasComplaintOrDiagnosis, pending: pendingPrescriptionChange, saving: savingFromPreview });
+  }, [onCompletionStateChange, hasComplaintOrDiagnosis, pendingPrescriptionChange, savingFromPreview]);
   useEffect(() => {
-    if (savePrescriptionRef) savePrescriptionRef.current = () => create();
+    if (!settlePrescriptionRef) return;
+    settlePrescriptionRef.current = async () => {
+      if (pendingPrescriptionChange === 'save') return Boolean(await create());
+      if (pendingPrescriptionChange === 'cancel') return cancelEmptiedPrescription();
+      return true;
+    };
   });
 
   const exportSaveInFlight = useRef(false);
@@ -5120,7 +5156,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                 )}
                 <div className="flex flex-wrap justify-between items-center gap-2">
-                  <div className="text-sm text-gray-600">Total items: {items.length}</div>
+                  <div className="text-sm text-gray-600">Total items: {validItems.length}</div>
                   <div className="flex flex-wrap gap-2 [&>button]:whitespace-nowrap">
                     {canAddDrugToDB && (
                       <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
@@ -5586,9 +5622,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <Button variant={standalone ? 'default' : 'outline'} onClick={() => void create()} disabled={!canCreate || savingFromPreview || savingForExport}>
                   {(visitId || standalone || ensureVisitId) ? 'Create Prescription' : 'Save visit first'}
                 </Button>
-                {!standalone && savedPrescriptionIdForBill && (
+                {!standalone && activePrescriptionId && (
                   <Button variant="link" className="whitespace-nowrap" asChild>
-                    <a href={billHref({ prefill: { patientId, prescriptionId: savedPrescriptionIdForBill, doctorId } })}>Go to pharmacy</a>
+                    <a href={billHref({ prefill: { patientId, prescriptionId: activePrescriptionId, doctorId } })}>Go to pharmacy</a>
                   </Button>
                 )}
               </div>

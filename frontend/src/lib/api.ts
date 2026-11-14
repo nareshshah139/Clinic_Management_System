@@ -989,6 +989,12 @@ export class ApiClient {
     return this.patch(`/prescriptions/${id}`, data, { idempotencyKey: opts?.idempotencyKey || autoKey });
   }
 
+  async cancelPrescription(id: string, reason: string) {
+    // Cancellation is final and the server keeps the first audit, so one key per prescription is safe to retry.
+    const headers = { 'Idempotency-Key': `cms:DELETE:prescriptions:${id}` };
+    return this.request(`/prescriptions/${id}?reason=${encodeURIComponent(reason)}`, { method: 'DELETE', headers }, { retryUnsafe: true });
+  }
+
   async getPrescription<T = unknown>(id: string): Promise<T> {
     return this.get<T>(`/prescriptions/${id}`);
   }

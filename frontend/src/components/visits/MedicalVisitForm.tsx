@@ -212,6 +212,8 @@ const ROLE_PERMISSIONS = {
  * @cc [owner:nareshshah139,label:product] completion-progress-explanation
  * When completion is unavailable because progress is below 80%, the form identifies unfinished tracked sections and states that progress is not a clinical validation.
  */
+const VISIT_LOAD_WAIT_MS = 10_000;
+
 function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
@@ -408,6 +410,14 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
 
   const [saving, setSaving] = useState(false);
   const [loadedVisitId, setLoadedVisitId] = useState<string | null>(null);
+  const loadedVisitIdRef = useRef<string | null>(null);
+  const visitLoadListener = useRef<((loadedId: string) => void) | null>(null);
+  // Listeners hear about a load after the render that applied it, so they read the loaded state.
+  useEffect(() => {
+    if (!loadedVisitId) return;
+    loadedVisitIdRef.current = loadedVisitId;
+    visitLoadListener.current?.(loadedVisitId);
+  }, [loadedVisitId]);
   const completeVisitRef = useRef<() => Promise<void>>(async () => {});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error'>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -794,17 +804,14 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     return permissions.includes('all') || permissions.includes(section);
   }, [userRole]);
 
-  const [rxCompletion, setRxCompletion] = useState<PrescriptionCompletionState>({ hasComplaintOrDiagnosis: false, medicines: 0, unsavedMedicines: false, saved: false });
-  const savePrescriptionRef = useRef<(() => Promise<string | undefined>) | null>(null);
+  const [rxCompletion, setRxCompletion] = useState<PrescriptionCompletionState>({ hasComplaintOrDiagnosis: false, pending: 'none', saving: false });
+  const settlePrescriptionRef = useRef<(() => Promise<boolean>) | null>(null);
   const progressSections = hasPermission('all')
-    ? [
-        { id: 'notes', label: 'Complaint or diagnosis', done: rxCompletion.hasComplaintOrDiagnosis },
-        { id: 'prescription', label: 'Prescription', done: rxCompletion.saved || rxCompletion.medicines > 0 },
-      ]
+    ? [{ id: 'notes', label: 'A complaint or a diagnosis', done: rxCompletion.hasComplaintOrDiagnosis || complaints.some(complaint => complaint.trim()) }]
     : (['vitals', 'photos'] as const).filter(hasPermission).map(id => ({ id, label: id === 'vitals' ? 'Vitals' : 'Photos', done: completedSections.has(id) }));
-  const progress = hasPermission('all')
+  const progress = progressSections.length
     ? Math.round((progressSections.filter(section => section.done).length / progressSections.length) * 100)
-    : Math.round((completedSections.size / 3) * 100);
+    : 0;
   const missingSections = progressSections.filter(section => !section.done).map(section => section.label.toLowerCase());
 
   /**
@@ -1592,50 +1599,67 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const router = useRouter();
   const completingRef = useRef(false);
   const [completing, setCompleting] = useState(false);
-  const [completeOnceLoaded, setCompleteOnceLoaded] = useState(false);
-  const endCompletion = () => {
-    completingRef.current = false;
-    setCompleting(false);
-  };
   const finishCompletion = async () => {
-    try {
-      if (await save(true)) router.push('/dashboard');
-    } finally {
-      endCompletion();
-    }
+    if (await save(true)) router.push('/dashboard');
   };
-  const completeVisit = async () => {
-    if (completingRef.current || manualSaveInFlight.current) return;
-    completingRef.current = true;
-    setCompleting(true);
-    const visitExisted = Boolean(visitIdRef.current);
-    if (rxCompletion.unsavedMedicines) {
-      manualSaveInFlight.current = true;
-      clearAutoSaveTimer();
-      let prescriptionId: string | undefined;
-      try {
-        await autoSavePromiseRef.current;
-        prescriptionId = await savePrescriptionRef.current?.();
-      } catch {
-        prescriptionId = undefined;
-      } finally {
-        manualSaveInFlight.current = false;
-      }
-      if (!prescriptionId) return endCompletion();
-    }
-    // A visit the prescription save just created must be loaded back before completing,
-    // or its server defaults would count as edits made while saving.
-    if (visitExisted) await finishCompletion();
-    else setCompleteOnceLoaded(true);
-  };
-  completeVisitRef.current = completeVisit;
   const finishCompletionRef = useRef(finishCompletion);
   finishCompletionRef.current = finishCompletion;
-  useEffect(() => {
-    if (!completeOnceLoaded || !visitId || loadedVisitId !== visitId) return;
-    setCompleteOnceLoaded(false);
-    void finishCompletionRef.current();
-  }, [completeOnceLoaded, visitId, loadedVisitId]);
+  const visitLoaded = (id: string) => new Promise<boolean>(resolve => {
+    if (loadedVisitIdRef.current === id) return resolve(true);
+    const timer = setTimeout(() => { visitLoadListener.current = null; resolve(false); }, VISIT_LOAD_WAIT_MS);
+    visitLoadListener.current = loadedId => {
+      if (loadedId !== id) return;
+      clearTimeout(timer);
+      visitLoadListener.current = null;
+      resolve(true);
+    };
+  });
+  const completeVisit = async () => {
+    if (completingRef.current || manualSaveInFlight.current) return;
+    if (!hasPermission('all')) {
+      toast({ variant: 'warning', title: 'Doctor access required', description: 'Only doctors can complete a visit. Save a draft instead.' });
+      return;
+    }
+    if (progress < 80) {
+      toast({ variant: 'warning', title: 'More details needed to complete', description: `Still needed: ${missingSections.join(', ')}.` });
+      return;
+    }
+    if (rxCompletion.saving) {
+      toast({ variant: 'warning', title: 'Prescription still saving', description: 'Complete the visit once the prescription is saved.' });
+      return;
+    }
+    completingRef.current = true;
+    setCompleting(true);
+    try {
+      const visitExisted = Boolean(visitIdRef.current);
+      if (rxCompletion.pending !== 'none') {
+        manualSaveInFlight.current = true;
+        clearAutoSaveTimer();
+        let settled = false;
+        try {
+          await autoSavePromiseRef.current;
+          settled = Boolean(await settlePrescriptionRef.current?.());
+        } catch {
+          settled = false;
+        } finally {
+          manualSaveInFlight.current = false;
+        }
+        if (!settled) return;
+      }
+      // A visit the prescription save just created must be loaded back before completing,
+      // or its server defaults would count as edits made while saving.
+      const createdVisitId = visitExisted ? null : visitIdRef.current;
+      if (createdVisitId && !(await visitLoaded(createdVisitId))) {
+        toast({ variant: 'destructive', title: 'Visit not completed', description: 'The visit took too long to load. Press Complete visit again to retry.' });
+        return;
+      }
+      await finishCompletionRef.current();
+    } finally {
+      completingRef.current = false;
+      setCompleting(false);
+    }
+  };
+  completeVisitRef.current = completeVisit;
 
   /**
    * @cc [owner:nareshshah139,label:product] discard-conflicting-draft
@@ -2381,6 +2405,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     }
                     const newVisitId = (newVisit as VisitDetails).id;
                     acknowledgeMutationVersion((newVisit as VisitDetails).version);
+                    visitIdRef.current = newVisitId;
                     setVisitId(newVisitId);
                     return newVisitId;
                   }}
@@ -2412,7 +2437,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   }}
                   onChangeReviewDate={setReviewDate}
                   onCompletionStateChange={setRxCompletion}
-                  savePrescriptionRef={savePrescriptionRef}
+                  settlePrescriptionRef={settlePrescriptionRef}
                   refreshKey={builderRefreshKey}
                   includeSections={rxIncludeSections}
                   onChangeIncludeSections={setRxIncludeSections}
@@ -2701,7 +2726,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                 {saving ? 'Saving...' : 'Save Draft'}
               </Button>
               {hasPermission('all') && (
-                <Button onClick={() => void completeVisit()} disabled={saving || completing || progress < 80} aria-describedby={progress < 80 ? 'visit-completion-help' : undefined}>
+                <Button onClick={() => void completeVisit()} disabled={saving || completing || rxCompletion.saving || progress < 80} aria-describedby={progress < 80 ? 'visit-completion-help' : undefined}>
                   {completing ? 'Completing...' : 'Complete visit'}
                 </Button>
               )}
