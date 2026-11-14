@@ -281,7 +281,7 @@ async function bootStack(opts = {}) {
     const bfd = logFd("backend");
     const backend = fork(path.join(__dirname, "backend.cjs"), [], {
       cwd: temp,
-      env: { ...env, PORT: String(backendPort), STACK_PRIVATE_CLIENT: clientDir, STACK_DEPS_DIR: depsDir, NODE_PATH: path.join(depsDir, "node_modules") },
+      env: { ...env, ...opts.backendEnv, PORT: String(backendPort), STACK_PRIVATE_CLIENT: clientDir, STACK_DEPS_DIR: depsDir, NODE_PATH: path.join(depsDir, "node_modules") },
       stdio: ["ignore", bfd, bfd, "ipc"],
     });
     fs.closeSync(bfd);

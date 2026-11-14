@@ -1,0 +1,548 @@
+[
+  {
+    "method": "GET",
+    "path": "/v21.0/106540352242922",
+    "query": {
+      "fields": "display_phone_number,verified_name,quality_rating"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "display_phone_number": "+91 20 2555 0199",
+      "verified_name": "Lakshmi Family Clinic",
+      "quality_rating": "GREEN",
+      "id": "106540352242922"
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/102290129340398/message_templates",
+    "query": {
+      "fields": "name,language,status,components",
+      "limit": "250"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "data": [
+        {
+          "name": "prescription_ready",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "DOCUMENT"
+            },
+            {
+              "type": "BODY",
+              "text": "Hello {{1}}, {{2}} has shared your prescription. It is attached as a PDF."
+            },
+            {
+              "type": "FOOTER",
+              "text": "Reply to this message for help."
+            }
+          ]
+        },
+        {
+          "name": "appointment_reminder",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "TEXT",
+              "text": "Reminder"
+            },
+            {
+              "type": "BODY",
+              "text": "See you {{1}}"
+            }
+          ]
+        }
+      ],
+      "paging": {
+        "cursors": {
+          "before": "a",
+          "after": "b"
+        }
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/102290129340398/message_templates",
+    "query": {
+      "fields": "name,language,status,components",
+      "limit": "250"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "data": [
+        {
+          "name": "prescription_ready",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "DOCUMENT"
+            },
+            {
+              "type": "BODY",
+              "text": "Hello {{1}}, {{2}} has shared your prescription. It is attached as a PDF."
+            },
+            {
+              "type": "FOOTER",
+              "text": "Reply to this message for help."
+            }
+          ]
+        },
+        {
+          "name": "appointment_reminder",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "TEXT",
+              "text": "Reminder"
+            },
+            {
+              "type": "BODY",
+              "text": "See you {{1}}"
+            }
+          ]
+        }
+      ],
+      "paging": {
+        "cursors": {
+          "before": "a",
+          "after": "b"
+        }
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/102290129340398/message_templates",
+    "query": {
+      "fields": "name,language,status,components",
+      "limit": "250"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "data": [
+        {
+          "name": "prescription_ready",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "DOCUMENT"
+            },
+            {
+              "type": "BODY",
+              "text": "Hello {{1}}, {{2}} has shared your prescription. It is attached as a PDF."
+            },
+            {
+              "type": "FOOTER",
+              "text": "Reply to this message for help."
+            }
+          ]
+        },
+        {
+          "name": "appointment_reminder",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "TEXT",
+              "text": "Reminder"
+            },
+            {
+              "type": "BODY",
+              "text": "See you {{1}}"
+            }
+          ]
+        }
+      ],
+      "paging": {
+        "cursors": {
+          "before": "a",
+          "after": "b"
+        }
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "POST",
+    "path": "/v21.0/106540352242922/media",
+    "query": {},
+    "authorized": true,
+    "form": {
+      "messaging_product": "whatsapp",
+      "type": "application/pdf",
+      "file": {
+        "filename": "sample-prescription.pdf",
+        "size": 2001,
+        "head": "%PDF-1.3"
+      }
+    },
+    "status": 200,
+    "response": {
+      "id": "media-1"
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "POST",
+    "path": "/v21.0/106540352242922/messages",
+    "query": {},
+    "authorized": true,
+    "json": {
+      "messaging_product": "whatsapp",
+      "recipient_type": "individual",
+      "to": "919704802443",
+      "type": "template",
+      "template": {
+        "name": "prescription_ready",
+        "language": {
+          "code": "en"
+        },
+        "components": [
+          {
+            "type": "header",
+            "parameters": [
+              {
+                "type": "document",
+                "document": {
+                  "id": "media-1",
+                  "filename": "sample-prescription.pdf"
+                }
+              }
+            ]
+          },
+          {
+            "type": "body",
+            "parameters": [
+              {
+                "type": "text",
+                "text": "Test Patient"
+              },
+              {
+                "type": "text",
+                "text": "Dr. Meera Kulkarni"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "response": {
+      "messaging_product": "whatsapp",
+      "contacts": [
+        {
+          "input": "919704802443",
+          "wa_id": "919704802443"
+        }
+      ],
+      "messages": [
+        {
+          "id": "wamid.LOCALFAKE0002"
+        }
+      ]
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "POST",
+    "path": "/v21.0/106540352242922/media",
+    "query": {},
+    "authorized": true,
+    "form": {
+      "messaging_product": "whatsapp",
+      "type": "application/pdf",
+      "file": {
+        "filename": "sample-prescription.pdf",
+        "size": 2001,
+        "head": "%PDF-1.3"
+      }
+    },
+    "status": 200,
+    "response": {
+      "id": "media-3"
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "POST",
+    "path": "/v21.0/106540352242922/messages",
+    "query": {},
+    "authorized": true,
+    "json": {
+      "messaging_product": "whatsapp",
+      "recipient_type": "individual",
+      "to": "919000000000",
+      "type": "template",
+      "template": {
+        "name": "prescription_ready",
+        "language": {
+          "code": "en"
+        },
+        "components": [
+          {
+            "type": "header",
+            "parameters": [
+              {
+                "type": "document",
+                "document": {
+                  "id": "media-3",
+                  "filename": "sample-prescription.pdf"
+                }
+              }
+            ]
+          },
+          {
+            "type": "body",
+            "parameters": [
+              {
+                "type": "text",
+                "text": "Test Patient"
+              },
+              {
+                "type": "text",
+                "text": "Dr. Meera Kulkarni"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "status": 400,
+    "response": {
+      "error": {
+        "message": "(#131030) Recipient phone number not in allowed list",
+        "type": "OAuthException",
+        "code": 131030,
+        "error_data": {
+          "messaging_product": "whatsapp",
+          "details": "Recipient phone number not in allowed list: Add recipient phone number to recipient list and try again."
+        }
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "POST",
+    "path": "/v21.0/106540352242922/media",
+    "query": {},
+    "authorized": true,
+    "form": {
+      "messaging_product": "whatsapp",
+      "type": "application/pdf",
+      "file": {
+        "filename": "prescription-cmwgi867t000g7d8g987jxlu7.pdf",
+        "size": 1481,
+        "head": "%PDF-1.3"
+      }
+    },
+    "status": 200,
+    "response": {
+      "id": "media-4"
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "POST",
+    "path": "/v21.0/106540352242922/messages",
+    "query": {},
+    "authorized": true,
+    "json": {
+      "messaging_product": "whatsapp",
+      "recipient_type": "individual",
+      "to": "919704802443",
+      "type": "template",
+      "template": {
+        "name": "prescription_ready",
+        "language": {
+          "code": "en"
+        },
+        "components": [
+          {
+            "type": "header",
+            "parameters": [
+              {
+                "type": "document",
+                "document": {
+                  "id": "media-4",
+                  "filename": "prescription-cmwgi867t000g7d8g987jxlu7.pdf"
+                }
+              }
+            ]
+          },
+          {
+            "type": "body",
+            "parameters": [
+              {
+                "type": "text",
+                "text": "Asha Verma"
+              },
+              {
+                "type": "text",
+                "text": "Dr. Priya Menon"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "response": {
+      "messaging_product": "whatsapp",
+      "contacts": [
+        {
+          "input": "919704802443",
+          "wa_id": "919704802443"
+        }
+      ],
+      "messages": [
+        {
+          "id": "wamid.LOCALFAKE0005"
+        }
+      ]
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/102290129340398/message_templates",
+    "query": {
+      "fields": "name,language,status,components",
+      "limit": "250"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "data": [
+        {
+          "name": "prescription_ready",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "DOCUMENT"
+            },
+            {
+              "type": "BODY",
+              "text": "Hello {{1}}, {{2}} has shared your prescription. It is attached as a PDF."
+            },
+            {
+              "type": "FOOTER",
+              "text": "Reply to this message for help."
+            }
+          ]
+        },
+        {
+          "name": "appointment_reminder",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "TEXT",
+              "text": "Reminder"
+            },
+            {
+              "type": "BODY",
+              "text": "See you {{1}}"
+            }
+          ]
+        }
+      ],
+      "paging": {
+        "cursors": {
+          "before": "a",
+          "after": "b"
+        }
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/102290129340398/message_templates",
+    "query": {
+      "fields": "name,language,status,components",
+      "limit": "250"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "data": [
+        {
+          "name": "prescription_ready",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "DOCUMENT"
+            },
+            {
+              "type": "BODY",
+              "text": "Hello {{1}}, {{2}} has shared your prescription. It is attached as a PDF."
+            },
+            {
+              "type": "FOOTER",
+              "text": "Reply to this message for help."
+            }
+          ]
+        },
+        {
+          "name": "appointment_reminder",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "TEXT",
+              "text": "Reminder"
+            },
+            {
+              "type": "BODY",
+              "text": "See you {{1}}"
+            }
+          ]
+        }
+      ],
+      "paging": {
+        "cursors": {
+          "before": "a",
+          "after": "b"
+        }
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  }
+]

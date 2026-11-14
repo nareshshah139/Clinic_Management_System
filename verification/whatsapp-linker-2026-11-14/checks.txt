@@ -1,0 +1,9 @@
+PASS Admin opens Clinic profile from the navigation; branch details and the unlinked WhatsApp card show
+PASS Linking verifies the number with WhatsApp, stores only ciphertext, and GET /whatsapp/connection omits token and cipher
+PASS Only the approved document-header template is offered; choosing it stores 2 body values from Meta's copy
+PASS Test prescription to +91 9704802443: PDF upload starts %PDF-, template message to 919704802443 carries the document header and [Test Patient, Dr. Meera Kulkarni]; UI shows wamid.LOCALFAKE0002
+PASS A number Meta refuses (131030) shows the mapped reason instead of success
+PASS Sharing a saved prescription by WhatsApp returns ACCEPTED wamid.LOCALFAKE0005 and records one print event
+PASS Webhook answers Meta's challenge, rejects unsigned and wrongly signed deliveries, applies the signed 'delivered', and ignores a late 'sent'
+PASS After reload, recent messages show the test prescription as Delivered and the shared prescription as Accepted
+PASS Clinic profile fits a 390px phone without horizontal scroll
