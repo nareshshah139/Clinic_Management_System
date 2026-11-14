@@ -50,8 +50,7 @@ import {
   Upload,
   History,
   Image,
-  Keyboard,
-  ChevronDown
+  Keyboard
 } from 'lucide-react';
 import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import { apiClient } from '@/lib/api';
@@ -1756,7 +1755,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
 
   return (
     <div className="grid min-w-0 items-start gap-x-6 gap-y-4 xl:grid-cols-[20rem_minmax(0,1fr)]">
-      <div className="sticky -top-4 z-30 -mx-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-background px-4 py-2 md:-top-6 md:-mx-6 md:px-6 xl:col-span-2">
+      <div className="z-30 -mx-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-4 py-2 md:sticky md:-top-6 md:-mx-6 md:px-6 xl:col-span-2">
         {identity}
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium text-gray-900">Visit #{currentVisitNumber}</span>
@@ -1785,7 +1784,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" data-tour="help-button">
                 Help
-                <ChevronDown className="ml-1 h-4 w-4 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

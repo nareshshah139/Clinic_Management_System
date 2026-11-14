@@ -254,7 +254,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { User, Users, Stethoscope, FileText, Activity, ArrowLeft } from 'lucide-react';
+import { User, Users, Stethoscope, FileText, Activity } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { formatPatientName } from '@/lib/utils';
@@ -939,7 +939,6 @@ function VisitsPageInner() {
         }
         headerActions={
           <Button variant="ghost" size="sm" onClick={() => (appointmentData ? window.history.back() : setShowForm(false))}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
         }
