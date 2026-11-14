@@ -50,6 +50,15 @@ const LEGEND_SWATCHES: [string, string][] = [
 
 type SameDayBooking = { id: string; slot: string; status: string; doctor?: { id?: string; firstName?: string; lastName?: string } };
 
+async function findPatients(text: string): Promise<Patient[]> {
+  const res: any = await apiClient.getPatients({ search: text, limit: 10 });
+  return (res.data || res.patients || []).map((p: any) => ({
+    ...p,
+    firstName: p.firstName || p.name?.split(' ')[0] || '',
+    lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
+  }));
+}
+
 /**
  * @cc [owner:nareshshah139,label:product] appointment-calendar-legend
  * Calendar legend colors MUST match the doctor timeline for visit types and past or completed
@@ -65,15 +74,6 @@ type SameDayBooking = { id: string; slot: string; status: string; doctor?: { id?
  * @cc [owner:nareshshah139,label:product] optimistic-appointment-scope
  * An optimistic booking appears only for the doctor and date for which it was submitted.
  */
-async function findPatients(text: string): Promise<Patient[]> {
-  const res: any = await apiClient.getPatients({ search: text, limit: 10 });
-  return (res.data || res.patients || []).map((p: any) => ({
-    ...p,
-    firstName: p.firstName || p.name?.split(' ')[0] || '',
-    lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
-  }));
-}
-
 export default function AppointmentsCalendar({
   timeSlotConfig = {
     startHour: 9,
