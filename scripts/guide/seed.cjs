@@ -174,6 +174,13 @@ const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g
   );
   console.log(`items: ${items.length}, bills and purchases seeded`);
 
+  for (const [name, gstNumber, city, state, phone, drugLicenseNo] of [
+    ["Sri Sai Pharma Distributors", "36AAAAA0000A1Z5", "Hyderabad", "Telangana", "9848012345", "TS/HYD/20B-4410"],
+    ["Mumbai Derma Supplies", "27BBBBB1111B1Z5", "Mumbai", "Maharashtra", "9820045678", "MH/MUM/20B-7731"],
+    ["Hyderabad Medical Agencies", "36CCCCC2222C1Z5", "Hyderabad", "Telangana", "9866054321", "TS/HYD/20B-5127"],
+  ])
+    await db.supplier.create({ data: { branchId, name, gstNumber, city, state, phone, drugLicenseNo, paymentTerms: "30 days credit" } });
+
   // Earlier visits, so patient history, reports and the pharmacy queue have something to show.
   const rx = (drugName, frequency, duration, instructions, quantity) => ({ drugName, dosage: 1, dosageUnit: "TABLET", frequency, duration, durationUnit: "DAYS", instructions, quantity });
   const history = [
