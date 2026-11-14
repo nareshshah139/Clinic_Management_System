@@ -3058,7 +3058,7 @@ export function PharmacyInvoiceBuilderFixed({
         <DialogHeader className="sr-only">
           <DialogTitle>Bill preview</DialogTitle>
         </DialogHeader>
-        <div className="flex h-full min-h-0 flex-col bg-slate-100 md:flex-row">
+        <div className="flex h-full min-h-0 w-full min-w-0 flex-col bg-slate-100 md:flex-row">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 px-4 py-3 pr-12 text-sm backdrop-blur">
               <div className="min-w-0">
