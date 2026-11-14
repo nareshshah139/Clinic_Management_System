@@ -10,6 +10,7 @@ import {
   strengthRequired,
   strengthUnitMissing,
 } from '@/lib/medicine-names';
+import { NativeSelect } from '@/components/ui/native-select';
 
 export type MedicineNameValue = {
   form?: string | null;
@@ -50,9 +51,9 @@ export function MedicineNameFields({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="text-sm">
           <label htmlFor="medicine-form">Form{formRequired ? ' *' : ''}</label>
-          <select
+          <NativeSelect
             id="medicine-form"
-            className={fieldClass}
+            className="mt-1 w-full min-w-0"
             value={value.form || ''}
             aria-invalid={Boolean(errors.form)}
             aria-describedby={errors.form ? 'medicine-form-error' : undefined}
@@ -62,7 +63,7 @@ export function MedicineNameFields({
             {MEDICINE_FORM_KEYS.map((key) => (
               <option key={key} value={key}>{MEDICINE_FORMS[key].label}</option>
             ))}
-          </select>
+          </NativeSelect>
           {error('form')}
         </div>
         <div className="text-sm">

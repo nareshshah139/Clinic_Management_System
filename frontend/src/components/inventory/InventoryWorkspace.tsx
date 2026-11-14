@@ -30,6 +30,7 @@ import {
   downloadCsv,
   returnDestination,
 } from "./workspace-model";
+import { NativeSelect } from '@/components/ui/native-select';
 
 const lazyView = <P,>(load: () => Promise<ComponentType<P>>) =>
   dynamic(load, { loading: () => <LoadingSkeleton label="Loading…" /> }) as ComponentType<P>;
@@ -305,9 +306,9 @@ export function InventoryWorkspace() {
       {menus[area]?.length > 0 && (
         <label className="block text-sm md:hidden">
           Task
-          <select
+          <NativeSelect
             aria-label="Inventory task"
-            className={inputClass}
+            className="w-full min-w-0"
             value={view}
             onChange={(e) =>
               navigate({
@@ -329,7 +330,7 @@ export function InventoryWorkspace() {
                 {taskLabel(id, label)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
       )}
       {area === "stock" && (
@@ -353,11 +354,11 @@ export function InventoryWorkspace() {
               Supplier returns are now in Purchase bills › Returns
             </button>
           )}
-          {moreTasks.length > 0 && <select aria-label="More inventory tasks" className="max-w-64 rounded-md border bg-background px-3 py-2 text-sm"
+          {moreTasks.length > 0 && <NativeSelect aria-label="More inventory tasks" className="max-w-64"
             value={moreTasks.some(([id]) => id === view) ? view : ""} onChange={event => switchTask(event.target.value)}>
             <option value="" disabled>More tasks…</option>
             {moreTasks.map(([id, label]) => <option key={id} value={id}>{taskLabel(id, label)}</option>)}
-          </select>}
+          </NativeSelect>}
         </nav>
       )}
       {caps && (area === "today" || (area === "stock" && ["list", "optimize"].includes(view) && !query.item)) && (
@@ -919,8 +920,8 @@ function WorkflowRegister({
       </header>
       <label className="block max-w-xs text-sm">
         Status
-        <select
-          className={inputClass}
+        <NativeSelect
+          className="w-full min-w-0"
           value={query.status || ""}
           onChange={(e) => navigate({ status: e.target.value, page: "1" })}
         >
@@ -943,7 +944,7 @@ function WorkflowRegister({
               {labelStatus(v)}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </label>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm">

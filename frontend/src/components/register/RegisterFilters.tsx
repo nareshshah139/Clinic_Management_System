@@ -7,6 +7,7 @@ import { formatDisplayDay, parseDisplayDay, rangeError, rangePresets, type DayRa
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 
 export const filterLabelClass = 'text-[calc(0.8125rem+var(--app-text-increase))] font-medium leading-5 text-foreground';
 export const filterControlClass =
@@ -115,12 +116,12 @@ export function FilterSelect({
   return (
     <label className={cn('flex flex-col gap-1', filterLabelClass)}>
       {label}
-      <select className={cn(filterControlClass, 'max-w-[8.5rem]')} value={value} onChange={(event) => onChange(event.target.value)}>
+      <NativeSelect className="max-w-[8.5rem]" value={value} onChange={(event) => onChange(event.target.value)}>
         {allLabel !== undefined && <option value="">{allLabel}</option>}
         {options.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>
         ))}
-      </select>
+      </NativeSelect>
     </label>
   );
 }
@@ -205,9 +206,8 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
     <div role="group" aria-labelledby={labelId} className="flex flex-col gap-1">
       <span id={labelId} className={filterLabelClass}>Period</span>
       <div ref={wrapper} className="relative flex items-center gap-1" onKeyDown={onKeyDown}>
-        <select
+        <NativeSelect
           aria-label="Period"
-          className={filterControlClass}
           value={active}
           onChange={(event) => {
             const preset = presets.find((p) => p.id === event.target.value);
@@ -219,7 +219,7 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
             <option key={preset.id} value={preset.id}>{preset.label}</option>
           ))}
           <option value="custom">Custom</option>
-        </select>
+        </NativeSelect>
         <button
           ref={trigger}
           type="button"

@@ -29,6 +29,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { apiClient } from '@/lib/api';
 import { stockCheckLineName } from '@/lib/bill-line-name';
 import { PrescriptionInventoryLink, type InventorySuggestion } from './PrescriptionInventoryLink';
+import { NativeSelect } from '@/components/ui/native-select';
 
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
 type CancelledDispenseTaskStatus = `CANCEL${'LED'}`;
@@ -870,18 +871,17 @@ function ActiveDispenseColumn({
 
           <div className="mt-2 shrink-0 rounded-lg border border-border bg-muted/80 p-2">
             <div className="grid gap-2 @md:grid-cols-[210px_minmax(0,1fr)]">
-              <select
+              <NativeSelect
                 aria-label="Reason"
                 value={reasonType}
                 onChange={(event) => setReasonType(event.target.value)}
-                className="h-9 rounded-md border border-border bg-white px-2 text-sm"
               >
                 {reasonOptions.map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               <Textarea
                 value={reasonNote}
                 onChange={(event) => setReasonNote(event.target.value)}

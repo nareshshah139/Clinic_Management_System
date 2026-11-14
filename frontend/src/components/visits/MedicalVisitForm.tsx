@@ -67,6 +67,7 @@ import { useToast } from '@/hooks/use-toast';
 import { isUuid } from '@/lib/id';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const VisitPhotos = dynamic<ComponentProps<typeof VisitPhotosPanel>>(() => import('@/components/visits/VisitPhotos'), {
   ssr: false,
@@ -1765,14 +1766,14 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           {doctorControl}
           <div className="flex items-center gap-2">
             <label htmlFor="visit-consultation-type" className="text-sm font-medium">Consultation type</label>
-            <select id="visit-consultation-type" className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            <NativeSelect id="visit-consultation-type"
               value={consultationType || 'IN_PERSON'} onChange={event => {
                 setConsultationType(event.target.value as ConsultationType);
                 setTeleVideoConsent(false);
               }}>
               <option value="IN_PERSON">In-person</option>
               <option value="TELE_VIDEO">Tele-video</option>
-            </select>
+            </NativeSelect>
           </div>
           {patientDetails?.allergies && (
             <span className="inline-flex max-w-xs items-center gap-1 truncate rounded-md border border-destructive-border bg-destructive-soft px-2 py-1 text-xs font-medium text-destructive-text" title={patientDetails.allergies}>
@@ -2182,10 +2183,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-3">
                         <div>
                           <label className="text-sm text-foreground">Paper Preset</label>
-                          <select className="border rounded-md px-2 py-1 w-full" value={paperPreset} onChange={(e) => setPaperPreset(e.target.value === 'LETTER' ? 'LETTER' : 'A4')}>
+                          <NativeSelect aria-label="Paper Preset" className="w-full" value={paperPreset} onChange={(e) => setPaperPreset(e.target.value === 'LETTER' ? 'LETTER' : 'A4')}>
                             <option value="A4">A4 (210x297mm)</option>
                             <option value="LETTER">Letter (8.5x11in)</option>
-                          </select>
+                          </NativeSelect>
                         </div>
                         <label className="flex items-center gap-2 text-sm">
                           <input type="checkbox" checked={grayscaleMode} onChange={(e) => setGrayscaleMode(e.target.checked)} /> Grayscale Mode

@@ -28,6 +28,7 @@ import {
   type LedgerFilter,
   type LedgerKind,
 } from "./item-ledger-view";
+import { NativeSelect } from '@/components/ui/native-select';
 
 export const ITEM_TABS = [
   ["batches", "Batches"],
@@ -295,10 +296,10 @@ export function InventoryItemPage({ itemId, query, navigate, capabilities, onTas
               <p className="font-medium">Resolve this batch’s product identity</p>
               <p>This batch is linked to more than one product. Verify the physical pack before choosing its product. Resolving the link does not change the stock quantity.</p>
               <label className="block">Verified product
-                <select name="productId" required className="ml-2 rounded-md border p-2" defaultValue="">
+                <NativeSelect name="productId" required className="ml-2" defaultValue="">
                   <option value="" disabled>Select the product on the physical pack</option>
                   {item.drugs.map((drug: any) => <option key={drug.id} value={drug.id}>{drug.name}</option>)}
-                </select>
+                </NativeSelect>
               </label>
               <label className="block">Reason <input name="reason" required maxLength={500} className="ml-2 rounded-md border p-2" /></label>
               <label className="block"><input name="confirmed" type="checkbox" required /> I verified the physical product and the existing {item.unit} stock unit and pack size.</label>
@@ -647,10 +648,10 @@ function LedgerFilters({ filter, onChange, shown, total, fileName }: {
         <input type="date" className={inputClass} value={filter.to} onChange={(e) => onChange({ ...filter, to: e.target.value })} />
       </label>
       <label className="text-sm">Type
-        <select className={inputClass} value={filter.kind} onChange={(e) => onChange({ ...filter, kind: e.target.value as LedgerKind | "" })}>
+        <NativeSelect className="w-full min-w-0" value={filter.kind} onChange={(e) => onChange({ ...filter, kind: e.target.value as LedgerKind | "" })}>
           <option value="">All types</option>
           {Object.entries(LEDGER_KIND_LABEL).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}
-        </select>
+        </NativeSelect>
       </label>
       <Button variant="outline" disabled={!shown.length} onClick={() => downloadCsv(fileName, ledgerCsvRows(shown))}>
         <Download className="h-4 w-4" /> Download CSV

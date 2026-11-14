@@ -30,6 +30,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/lib/api';
 import type { InventoryItem } from '@/lib/types';
+import { NativeSelect } from '@/components/ui/native-select';
 
 type ShelfInventoryItem = InventoryItem & {
   batchNumber?: string | null;
@@ -312,18 +313,18 @@ export function ShelfIntelligence() {
             <div className="mt-4 space-y-3">
               <div className="space-y-2">
                 <Label htmlFor="shelf-item">Medicine batch</Label>
-                <select
+                <NativeSelect
                   id="shelf-item"
                   value={selectedItemId}
                   onChange={(event) => setSelectedItemId(event.target.value)}
-                  className="h-10 w-full rounded-md border border-border bg-white px-3 text-sm"
+                  className="w-full"
                 >
                   {items.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name} {item.batchNumber ? `(${item.batchNumber})` : ''}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="shelf-location">Shelf location</Label>

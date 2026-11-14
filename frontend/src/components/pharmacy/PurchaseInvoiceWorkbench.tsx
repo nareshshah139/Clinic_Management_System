@@ -97,6 +97,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useConfirm, usePrompt } from "@/components/ui/confirm-dialog";
+import { NativeSelect } from '@/components/ui/native-select';
 
 type BillType = "CASH" | "CREDIT" | "";
 type SourceType = "MANUAL" | "OCR" | "CSV" | "GMAIL";
@@ -3682,8 +3683,8 @@ function PurchaseInvoiceEditor({
         <span className="text-sm text-muted-foreground" role="status" aria-label="Selected rows">{currentSelectedRows.length} of {lines.length} rows selected</span>
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">Change<select className="mt-1 block rounded-md border p-2" value={sharedTerms.kind} disabled={batchDisabled} onChange={event => { setSharedTerms(event.target.value === 'gst' ? { kind: 'gst', mode: 'split', rate: '' } : { kind: 'discount', rate: '' }); setBatchState({ kind: 'idle' }); }}><option value="gst">GST</option><option value="discount">Discount</option></select></label>
-        {sharedTerms.kind === 'gst' && <label className="text-sm">GST mode<select className="mt-1 block rounded-md border p-2" value={sharedTerms.mode} disabled={batchDisabled} onChange={event => { setSharedTerms({ ...sharedTerms, mode: event.target.value as 'split' | 'integrated' }); setBatchState({ kind: 'idle' }); }}><option value="split">CGST + SGST</option><option value="integrated">IGST</option></select></label>}
+        <label className="text-sm">Change<NativeSelect className="mt-1 block" value={sharedTerms.kind} disabled={batchDisabled} onChange={event => { setSharedTerms(event.target.value === 'gst' ? { kind: 'gst', mode: 'split', rate: '' } : { kind: 'discount', rate: '' }); setBatchState({ kind: 'idle' }); }}><option value="gst">GST</option><option value="discount">Discount</option></NativeSelect></label>
+        {sharedTerms.kind === 'gst' && <label className="text-sm">GST mode<NativeSelect className="mt-1 block" value={sharedTerms.mode} disabled={batchDisabled} onChange={event => { setSharedTerms({ ...sharedTerms, mode: event.target.value as 'split' | 'integrated' }); setBatchState({ kind: 'idle' }); }}><option value="split">CGST + SGST</option><option value="integrated">IGST</option></NativeSelect></label>}
         <label className="text-sm">{sharedTerms.kind === 'gst' ? 'Total GST %' : 'Shared discount %'}<Input type="number" min="0" max="100" value={sharedTerms.rate} disabled={batchDisabled} onChange={event => { setSharedTerms({ ...sharedTerms, rate: event.target.value }); setBatchState({ kind: 'idle' }); }} /></label>
         <Button type="button" variant="outline" disabled={batchDisabled || !currentSelectedRows.length} onClick={() => { try { setBatchState({ kind: 'preview', proposal: previewPurchaseTerms(lines, currentSelectedRows, sharedTerms, batchBasis), invoiceId: editingId }); setError(null); } catch (error) { setError(getErrorMessage(error)); } }}>Preview {currentSelectedRows.length} selected rows</Button>
       </div>
@@ -3881,13 +3882,13 @@ function PurchaseInvoiceEditor({
                 } catch (err) { setError(getErrorMessage(err)); }
               }}>Find posted receipts</Button>
               {!!receiptOptions.length && <label>Posted receipt
-                <select className="ml-2 rounded-md border p-2" value={workflowReceiptId} disabled={busy} onChange={e => {
+                <NativeSelect className="ml-2" value={workflowReceiptId} disabled={busy} onChange={e => {
                   setWorkflowReceiptId(e.target.value);
                 }}>
                   <option value="" disabled>Select the receipt for these goods</option>
                   {!receiptOptions.some(r => r.id === workflowReceiptId) && workflowReceiptId && <option value={workflowReceiptId}>Current receipt</option>}
                   {receiptOptions.map(receipt => <option key={receipt.id} value={receipt.id}>{receipt.reference} · {receipt.supplierGstin}</option>)}
-                </select>
+                </NativeSelect>
               </label>}
               {workflowReceiptId && <Button type="button" variant="outline" disabled={busy} onClick={async () => {
                 if (await confirm({ title: "Remove the receipt link?", description: "Remove it only if these goods have not already been added to inventory. Posting this bill will add stock.", confirmLabel: "Remove link", destructive: true })) {
@@ -4965,11 +4966,11 @@ function PurchaseInvoiceEditor({
 
                                   {!status && <label className="mt-3 block text-sm">
                                     Invoice product kind
-                                    <select className="mt-1 block w-full rounded-md border bg-background p-2" value={line?.productKind || ""} disabled={busy || masterConfirming !== null} onChange={event => {
+                                    <NativeSelect className="mt-1 block w-full" value={line?.productKind || ""} disabled={busy || masterConfirming !== null} onChange={event => {
                                       if (line) updateLine(line.localId, "productKind", event.target.value);
                                     }}>
                                       <option value="">Not recorded</option><option value="MEDICINE">Medicine</option><option value="COSMETIC">Cosmetic / skin care</option><option value="CONSUMABLE">Other consumable</option>
-                                    </select>
+                                    </NativeSelect>
                                   </label>}
                                   <div className="mt-3 flex flex-col gap-2 md:flex-row md:justify-end">
                                     {best && !status && (

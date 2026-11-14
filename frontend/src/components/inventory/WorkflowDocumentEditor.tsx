@@ -27,6 +27,7 @@ import {
   inputClass,
   downloadCsv,
 } from "./workspace-model";
+import { NativeSelect } from '@/components/ui/native-select';
 
 const DAY_TEXT_KINDS = ["SUPPLIER_RETURN", "CREDIT_NOTE"];
 
@@ -805,8 +806,8 @@ export function WorkflowDocumentEditor({
         ].includes(kind) && (
           <label className="text-sm">
             Supplier
-            <select
-              className={inputClass}
+            <NativeSelect
+              className="w-full min-w-0"
               value={form.supplierId}
               onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
             >
@@ -818,14 +819,14 @@ export function WorkflowDocumentEditor({
                     {s.name} · {s.gstNumber || "GSTIN missing"}
                   </option>
                 ))}
-            </select>
+            </NativeSelect>
           </label>
         )}
         {["INWARD_CHALLAN", "GATE_PASS"].includes(kind) && (
           <label className="text-sm">
             Purchase order
-            <select
-              className={inputClass}
+            <NativeSelect
+              className="w-full min-w-0"
               value={form.sourceId}
               onChange={(e) => {
                 const source = sources.find((s) => s.id === e.target.value);
@@ -842,14 +843,14 @@ export function WorkflowDocumentEditor({
                   {s.reference}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
         )}
         {["LOSS", "SUPPLIER_RETURN"].includes(kind) && (
           <label className="text-sm">
             Stock source
-            <select
-              className={inputClass}
+            <NativeSelect
+              className="w-full min-w-0"
               value={form.payload.sourceHoldId || ""}
               onChange={(e) => payload("sourceHoldId", e.target.value)}
             >
@@ -859,7 +860,7 @@ export function WorkflowDocumentEditor({
                   {h.reference} · {workflowKinds[h.kind]?.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
         )}
         {["COUNTER_SALE", "QUOTATION", "SALES_RETURN"].includes(kind) && (
@@ -884,8 +885,8 @@ export function WorkflowDocumentEditor({
             </label>
             <label className="text-sm">
               {kind === "SALES_RETURN" ? "Refund method" : "Payment method"}
-              <select
-                className={inputClass}
+              <NativeSelect
+                className="w-full min-w-0"
                 value={
                   (kind === "SALES_RETURN"
                     ? form.payload.refundMode
@@ -902,7 +903,7 @@ export function WorkflowDocumentEditor({
                 {["CASH", "UPI", "CARD", "CREDIT"].map((v) => (
                   <option key={v}>{v}</option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           </>
         )}
@@ -918,15 +919,15 @@ export function WorkflowDocumentEditor({
             </label>
             <label className="text-sm">
               Order type
-              <select
-                className={inputClass}
+              <NativeSelect
+                className="w-full min-w-0"
                 value={form.payload.orderType || "PICKUP"}
                 onChange={(e) => payload("orderType", e.target.value)}
               >
                 <option value="PICKUP">Pickup</option>
                 <option value="DELIVERY">Delivery</option>
                 <option value="IN_CLINIC">In clinic</option>
-              </select>
+              </NativeSelect>
             </label>
           </>
         )}
@@ -934,20 +935,20 @@ export function WorkflowDocumentEditor({
           <>
             <label className="text-sm">
               Reason for return
-              <select
-                className={inputClass}
+              <NativeSelect
+                className="w-full min-w-0"
                 value={returnReasonValue(form.payload.returnReason ?? form.payload.returnType)}
                 onChange={(e) => payload("returnReason", e.target.value)}
               >
                 {RETURN_REASONS.map((reason) => (
                   <option key={reason} value={reason}>{RETURN_REASON_LABELS[reason]}</option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
             <label className="text-sm">
               Return price basis
-              <select
-                className={inputClass}
+              <NativeSelect
+                className="w-full min-w-0"
                 value={form.payload.returnBase || "PURCHASE_RATE"}
                 onChange={(e) => payload("returnBase", e.target.value)}
               >
@@ -955,7 +956,7 @@ export function WorkflowDocumentEditor({
                   Purchase rate per stock unit
                 </option>
                 <option value="AGREED_RATE">Agreed rate entered below</option>
-              </select>
+              </NativeSelect>
             </label>
           </>
         )}
@@ -978,15 +979,15 @@ export function WorkflowDocumentEditor({
         {kind === "QUOTATION" && (
           <label className="text-sm">
             Request source
-            <select
-              className={inputClass}
+            <NativeSelect
+              className="w-full min-w-0"
               value={form.payload.source || "MANUAL"}
               onChange={(e) => payload("source", e.target.value)}
             >
               <option value="MANUAL">Manual quotation</option>
               <option value="BOUNCE">Unfilled customer demand</option>
               <option value="REFILL">Requested refill</option>
-            </select>
+            </NativeSelect>
           </label>
         )}
         {["SHORTBOOK", "PURCHASE_ORDER", "QUOTATION"].includes(kind) && (
@@ -1002,15 +1003,15 @@ export function WorkflowDocumentEditor({
             </label>
             <label className="text-sm">
               Priority
-              <select
-                className={inputClass}
+              <NativeSelect
+                className="w-full min-w-0"
                 value={form.payload.priority || "NORMAL"}
                 onChange={(e) => payload("priority", e.target.value)}
               >
                 {["NORMAL", "HIGH", "URGENT"].map((v) => (
                   <option key={v}>{v}</option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           </>
         )}
@@ -1048,8 +1049,8 @@ export function WorkflowDocumentEditor({
                 </label>
                 <label className="block text-sm">
                   Add from original sale
-                  <select
-                    className={inputClass}
+                  <NativeSelect
+                    className="w-full min-w-0"
                     value=""
                     onChange={(e) => {
                       const sale = sales.find((s) => s.id === e.target.value);
@@ -1067,7 +1068,7 @@ export function WorkflowDocumentEditor({
                           {s.availableReturn} {s.item.unit}
                         </option>
                       ))}
-                  </select>
+                  </NativeSelect>
                 </label>
                 {salePage < salePages && (
                   <Button
@@ -1298,8 +1299,9 @@ export function WorkflowDocumentEditor({
                 )}
                 {kind === "SALES_RETURN" && (
                   <td className="p-3">
-                    <select
-                      className={`${inputClass} w-36`}
+                    <NativeSelect
+                      aria-label={`Disposition for ${l.name}`}
+                      className="min-w-0 w-36"
                       disabled={!editable}
                       value={l.disposition}
                       onChange={(e) =>
@@ -1309,13 +1311,14 @@ export function WorkflowDocumentEditor({
                       <option value="RESTOCK">Restock</option>
                       <option value="QUARANTINE">Quarantine</option>
                       <option value="LOSS">Record as loss</option>
-                    </select>
+                    </NativeSelect>
                   </td>
                 )}
                 {kind === "INWARD_CHALLAN" && form.sourceId && (
                   <td className="p-3 text-right tabular-nums">
-                    <select
-                      className={`${inputClass} w-44`}
+                    <NativeSelect
+                      aria-label={`Order line for ${l.name}`}
+                      className="min-w-0 w-44"
                       disabled={!editable}
                       value={l.sourceLineId || ""}
                       onChange={(e) =>
@@ -1330,7 +1333,7 @@ export function WorkflowDocumentEditor({
                             {s.name} · {s.quantity} {s.unit}
                           </option>
                         ))}
-                    </select>
+                    </NativeSelect>
                   </td>
                 )}
                 {editable && (

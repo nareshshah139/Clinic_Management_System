@@ -10,6 +10,7 @@ import { LoadingSkeleton } from "@/components/ui/skeleton";
 import { displayClinicDate, displayClinicTime } from "@/lib/date-display";
 import { useInventoryResource } from "./useInventoryResource";
 import { downloadCsv, fmtMoney, inputClass, workflowKinds } from "./workspace-model";
+import { NativeSelect } from '@/components/ui/native-select';
 
 type Channel =
   | "PURCHASE_INVOICE" | "PRESCRIPTION" | "PHARMACY_BILL" | "COUNTER_SALE" | "PARTNER_SALE" | "CUSTOMER_RETURN"
@@ -158,10 +159,10 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
           <input type="search" className={inputClass} placeholder="Product, batch or reference" value={search} onChange={e => setSearch(e.target.value)} />
         </label>
         <label className="col-span-2 grid gap-1 text-sm font-medium md:col-span-1">Method
-          <select className={inputClass} value={channel} onChange={e => navigate({ ledgerChannel: e.target.value, ledgerPage: "" })}>
+          <NativeSelect className="w-full min-w-0" value={channel} onChange={e => navigate({ ledgerChannel: e.target.value, ledgerPage: "" })}>
             <option value="">All methods</option>
             {(Object.keys(CHANNEL) as Channel[]).map(c => <option key={c} value={c}>{CHANNEL[c].label}</option>)}
-          </select>
+          </NativeSelect>
         </label>
         <div role="group" aria-label="Direction" className="col-span-2 flex rounded-md border p-0.5 md:col-span-1">
           {([["", "All"], ["IN", "Stock in"], ["OUT", "Stock out"]] as const).map(([value, label]) => (

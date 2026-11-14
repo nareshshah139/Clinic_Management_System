@@ -33,6 +33,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { NativeSelect } from '@/components/ui/native-select';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -182,15 +183,15 @@ export function StockPredictionDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <select
+          <NativeSelect
+            aria-label="Forecast period"
             value={monthsAhead}
             onChange={(e) => setMonthsAhead(Number(e.target.value))}
-            className="border rounded-md px-3 py-2"
           >
             <option value={1}>1 Month</option>
             <option value={2}>2 Months</option>
             <option value={3}>3 Months</option>
-          </select>
+          </NativeSelect>
           <Button onClick={fetchPredictions} disabled={loading}>
             {loading ? <Spinner className="h-4 w-4 mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Refresh

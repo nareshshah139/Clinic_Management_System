@@ -45,6 +45,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { NativeSelect } from '@/components/ui/native-select';
 
 type PaymentMode = 'CASH' | 'CARD' | 'UPI' | 'BNPL';
 type SaleStatus =
@@ -1050,7 +1051,7 @@ function PartnerLineRecovery({
           <Label htmlFor={`partner-batch-${item.id}`}>
             Choose the actual product and batch
           </Label>
-          <select
+          <NativeSelect
             id={`partner-batch-${item.id}`}
             value={selectedId}
             onChange={(event) => {
@@ -1058,7 +1059,7 @@ function PartnerLineRecovery({
               setSaved(false);
             }}
             disabled={disabled || busy}
-            className="w-full min-w-0 rounded-md border bg-background p-2 text-sm"
+            className="w-full min-w-0"
           >
             <option value="">Choose a batch</option>
             {matches.map((batch) => (
@@ -1070,7 +1071,7 @@ function PartnerLineRecovery({
                   : ''}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <div>
             <Label htmlFor={`partner-reason-${item.id}`}>
               Reason for correcting the match

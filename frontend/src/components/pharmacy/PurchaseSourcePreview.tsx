@@ -10,6 +10,7 @@ import {
   type PurchaseSourceMap,
   type SourceTarget,
 } from "@/lib/purchase-invoice-source";
+import { NativeSelect } from '@/components/ui/native-select';
 
 export const PurchaseSourceContext = createContext<{
   enabled: boolean;
@@ -277,11 +278,10 @@ export function PurchaseSourcePreview({
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm">
           Page{" "}
-          <select
+          <NativeSelect
             aria-label="Invoice source page"
             value={page}
             onChange={(event) => setPage(Number(event.target.value))}
-            className="rounded-md border bg-background p-1"
           >
             {Array.from(
               { length: Math.max(pageCount, map?.pages.length || 1) },
@@ -291,7 +291,7 @@ export function PurchaseSourcePreview({
                 {item.page}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           {` of ${Math.max(pageCount, map?.pages.length || 1)}`}
         </label>
         <Button
@@ -335,9 +335,9 @@ export function PurchaseSourcePreview({
       </div>
       <label className="block text-sm">
         Captured field
-        <select
+        <NativeSelect
           aria-label="Captured field"
-          className="mt-1 block w-full min-w-0 rounded-md border bg-background p-2"
+          className="mt-1 block w-full min-w-0"
           value={selectedId}
           onChange={(event) => onSelect(event.target.value)}
         >
@@ -347,7 +347,7 @@ export function PurchaseSourcePreview({
               {target.label}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </label>
       <div role="status" aria-live="polite" className="min-h-12 text-sm">
         {selected ? (

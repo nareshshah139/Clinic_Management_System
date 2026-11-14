@@ -1,4 +1,5 @@
 'use client';
+import { NativeSelect } from '@/components/ui/native-select';
 
 type Values = {
   defaultDuration?: string | number | null;
@@ -18,9 +19,9 @@ export function InventoryRegimenFields({ value, onChange }: { value: Values; onC
           onChange={event => onChange({ defaultDuration: event.target.value, defaultDurationUnit: value.defaultDurationUnit || 'DAYS' })} />
       </label>
       <label className="text-sm">Default duration unit
-        <select className={inputClass} value={value.defaultDurationUnit || 'DAYS'} onChange={event => onChange({ defaultDurationUnit: event.target.value })}>
+        <NativeSelect className="mt-1 w-full" value={value.defaultDurationUnit || 'DAYS'} onChange={event => onChange({ defaultDurationUnit: event.target.value })}>
           <option value="DAYS">Days</option><option value="WEEKS">Weeks</option><option value="MONTHS">Months</option><option value="YEARS">Years</option>
-        </select>
+        </NativeSelect>
       </label>
       <label className="text-sm">Default frequency
         <input className={inputClass} maxLength={100} placeholder="e.g., 1-0-1" value={value.defaultFrequency ?? ''} onChange={event => onChange({ defaultFrequency: event.target.value })} />

@@ -19,6 +19,7 @@ import {
   downloadCsv,
   requestKey,
 } from "./workspace-model";
+import { NativeSelect } from '@/components/ui/native-select';
 
 type Props = {
   query: Record<string, string>;
@@ -325,15 +326,15 @@ export function WorkspaceStock({
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-sm">Stock level
-              <select className={inputClass} value={query.stock || ""} onChange={event => navigate({ stock: event.target.value, batchView: "ALL", expiryMonths: "", page: "1", item: "" })}>
+              <NativeSelect className="w-full min-w-0" value={query.stock || ""} onChange={event => navigate({ stock: event.target.value, batchView: "ALL", expiryMonths: "", page: "1", item: "" })}>
                 {[["", "Any stock level"], ["LOW", "Low stock"], ["HIGH", "Above maximum"], ["POSITIVE", "Stock on shelf"], ["ZERO", "Out of stock"], ["NEGATIVE", "Negative — count needed"], ["HELD", "Set aside / held"], ["EXPIRED", "Expired"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
+              </NativeSelect>
             </label>
             <label className="text-sm">Expiry
-              <select className={inputClass} value={query.expiryMonths || ""} onChange={event => navigate({ expiryMonths: event.target.value, stock: "", batchView: "ALL", page: "1", item: "" })}>
+              <NativeSelect className="w-full min-w-0" value={query.expiryMonths || ""} onChange={event => navigate({ expiryMonths: event.target.value, stock: "", batchView: "ALL", page: "1", item: "" })}>
                 <option value="">Any expiry date</option>
                 {[1, 2, 3, 6].map(months => <option key={months} value={months}>Within {months} {months === 1 ? 'month' : 'months'}</option>)}
-              </select>
+              </NativeSelect>
             </label>
             <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={moreColumns} onChange={event => setMoreColumns(event.target.checked)} /> Show cost &amp; stock details</label>
           </div>
@@ -352,8 +353,8 @@ export function WorkspaceStock({
               ].map(([key, label]) => (
                 <label className="text-sm" key={key}>
                   {label}
-                  <select
-                    className={inputClass}
+                  <NativeSelect
+                    className="w-full min-w-0"
                     value={query[key] || ""}
                     onChange={(e) => filter(key, e.target.value)}
                   >
@@ -361,7 +362,7 @@ export function WorkspaceStock({
                     {data?.facets?.[key]?.map((v: string) => (
                       <option key={v}>{v}</option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
               ))}
               {[
@@ -385,8 +386,8 @@ export function WorkspaceStock({
               ))}
               <label className="text-sm">
                 Count history
-                <select
-                  className={inputClass}
+                <NativeSelect
+                  className="w-full min-w-0"
                   value={query.audit || ""}
                   onChange={(e) => filter("audit", e.target.value)}
                 >
@@ -396,12 +397,12 @@ export function WorkspaceStock({
                   <option value="PENDING">Pending</option>
                   <option value="COMPLETED">Completed</option>
                   <option value="BLOCKED">Blocked</option>
-                </select>
+                </NativeSelect>
               </label>
               <label className="text-sm">
                 Product mapping
-                <select
-                  className={inputClass}
+                <NativeSelect
+                  className="w-full min-w-0"
                   value={query.mapping || ""}
                   onChange={(e) => filter("mapping", e.target.value)}
                 >
@@ -409,12 +410,12 @@ export function WorkspaceStock({
                   <option value="MAPPED">Mapped</option>
                   <option value="UNMAPPED">Unmapped</option>
                   <option value="PENDING">Waiting for mapping</option>
-                </select>
+                </NativeSelect>
               </label>
               <label className="text-sm">
                 Missing information
-                <select
-                  className={inputClass}
+                <NativeSelect
+                  className="w-full min-w-0"
                   value={query.missing || ""}
                   onChange={(e) => filter("missing", e.target.value)}
                 >
@@ -424,7 +425,7 @@ export function WorkspaceStock({
                       {key} ({String(count)})
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
             </fieldset>
           )}
@@ -453,8 +454,8 @@ export function WorkspaceStock({
           )}
           <label className="block max-w-xs text-sm">
             Sort
-            <select
-              className={inputClass}
+            <NativeSelect
+              className="w-full min-w-0"
               value={query.sortBy || (query.search?.trim() ? "relevance" : "name")}
               onChange={(e) => filter("sortBy", e.target.value)}
             >
@@ -469,7 +470,7 @@ export function WorkspaceStock({
                   {l}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           {data?.valuation && !error && (
             <div className="overflow-x-auto border-y py-4">
