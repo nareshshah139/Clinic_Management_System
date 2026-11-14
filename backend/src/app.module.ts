@@ -33,6 +33,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { WhatsAppTemplatesModule } from './modules/whatsapp-templates/whatsapp-templates.module';
 import { GoogleCalendarModule } from './modules/google-calendar/google-calendar.module';
+import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 
 const minimalBoot = process.env.MINIMAL_BOOT === 'true';
 
@@ -71,6 +72,7 @@ const fullFeatureModules = [
   StockPredictionModule,
   AuditLogsModule,
   WhatsAppTemplatesModule,
+  WhatsAppModule,
   GoogleCalendarModule,
 ];
 

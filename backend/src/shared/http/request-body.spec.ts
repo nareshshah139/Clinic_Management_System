@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -65,6 +66,16 @@ class SaveController {
     return documents.get(id);
   }
 
+  @Post('whatsapp/webhook')
+  webhook(@Req() req: { rawBody?: Buffer; body: unknown }) {
+    return { raw: req.rawBody?.toString() ?? null, parsed: req.body };
+  }
+
+  @Post('echo-raw')
+  echoRaw(@Req() req: { rawBody?: Buffer }) {
+    return { raw: req.rawBody?.toString() ?? null };
+  }
+
   @Post('attachments')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -105,6 +116,14 @@ describe('Configured save request bodies', () => {
 
   afterAll(async () => {
     await app.close();
+  });
+
+  it('keeps the exact bytes only for the WhatsApp webhook', async () => {
+    const bytes = '{"entry":[ {"id":"w1"} ]}';
+    const server = app.getHttpServer();
+    const webhook = await request(server).post('/whatsapp/webhook?x=1').set('Content-Type', 'application/json').send(bytes);
+    const other = await request(server).post('/echo-raw').set('Content-Type', 'application/json').send(bytes);
+    expect([webhook.body, other.body]).toEqual([{ raw: bytes, parsed: { entry: [{ id: 'w1' }] } }, { raw: null }]);
   });
 
   async function sendStream(body: string | Buffer, compressed = false) {
