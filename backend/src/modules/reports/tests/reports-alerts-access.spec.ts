@@ -36,6 +36,7 @@ const prisma = {
     aggregate: async () => ({ _count: 1, _sum: { balance: 500 } }),
   },
   newPayment: { findMany: async () => [{ id: 'pay-1', amount: 100 }] },
+  inventoryItem: { groupBy: async () => [] },
   appointment: { findMany: async () => [{ id: 'appt-1', date: new Date(), status: 'SCHEDULED', visitType: 'OPD', patient: { name: 'Kiran Bhatt' }, doctor: { firstName: 'Priya', lastName: 'Menon' } }] },
 };
 
