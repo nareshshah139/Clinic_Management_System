@@ -3728,6 +3728,12 @@ function PurchaseInvoiceEditor({
     </section>
   );
 
+  const automaticImport = access.automate && <details hidden={savedFormLocked || (!showIntakeHome && !!activeInvoice && !editingSelectedInvoice)}>
+    <summary className="cursor-pointer">Automatic import</summary>
+    <p className="my-2 text-muted-foreground">Adds stock if every automatic check passes. Choose the files first.</p>
+    <Button type="button" variant="outline" onClick={() => extractFromInvoiceFile(true)} disabled={busy || !!unknownStockInvoiceId || !ocrFile || !importReceivedDate}>Import &amp; Add Stock</Button>
+  </details>;
+
   const recentInvoices = (
     <details className="rounded-lg border p-4" open={showIntakeHome}>
       <summary className="cursor-pointer text-sm font-medium">
@@ -4009,9 +4015,6 @@ function PurchaseInvoiceEditor({
             >
               Scan or enter bill
             </h3>
-            <p className="text-sm text-muted-foreground">
-              Upload every page. Check the reading. Add stock when ready.
-            </p>
           </div>
           <div hidden={!hasDraftContent && !manualEntry} className="flex flex-wrap gap-2">
             <Button
@@ -4048,8 +4051,14 @@ function PurchaseInvoiceEditor({
           </div>
         )}
 
-        {!showIntakeHome && !activeInvoice && recentInvoices}
-        {!showIntakeHome && <details><summary className="cursor-pointer text-sm">Review status guide</summary><ReviewLegend /></details>}
+        {(!showIntakeHome || automaticImport) && <details className="text-sm">
+          <summary className="cursor-pointer py-1 font-medium">More</summary>
+          <div className="mt-2 space-y-3">
+            {!showIntakeHome && !activeInvoice && recentInvoices}
+            {!showIntakeHome && <details><summary className="cursor-pointer">Review status guide</summary><ReviewLegend /></details>}
+            {automaticImport}
+          </div>
+        </details>}
         {!showIntakeHome && stockAdded && <PurchaseReviewSummary
           hasContent={hasDraftContent}
           stockReceivedEarlier={linkedReceipt}
@@ -4330,7 +4339,6 @@ function PurchaseInvoiceEditor({
                       : "Scan a bill"}
                   </summary>
                   <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                    <PurchaseStatusCue>Scan only · stock stays unchanged</PurchaseStatusCue>
                     <PurchaseHelp label="Invoice import">Scanning keeps the original and fills in the details for you to check. You can correct any misread value before saving.</PurchaseHelp>
                   </div>
                   <div className="mt-3 space-y-4">
@@ -4352,7 +4360,7 @@ function PurchaseInvoiceEditor({
                           disabled={extracting || saving || processing}
                         />
                         <p className="mt-1 text-xs text-muted-foreground">
-                          PDF or photos · Up to 10 files · One invoice, in page order
+                          Up to 10 pages, in order
                         </p>
                       </div>
                       <div className="flex flex-col gap-3">
@@ -4375,12 +4383,7 @@ function PurchaseInvoiceEditor({
                           {extracting ? <Spinner className="h-4 w-4 " /> : <FileSearch className="h-4 w-4" />}
                           {extracting ? "Reading bill…" : "Scan bill"}
                         </Button>
-                        <a href="#distributor-name" className="text-center text-sm underline underline-offset-4" onClick={() => { setShowIntakeHome(false); setManualEntry(true); requestAnimationFrame(() => focusPurchaseField('distributor-name')); }}>Type instead</a>
-                        {access.automate && <details className="text-sm">
-                          <summary className="cursor-pointer py-2">Automatic import</summary>
-                          <p className="my-2 text-muted-foreground">Adds stock if every automatic check passes.</p>
-                          <Button type="button" variant="outline" onClick={() => extractFromInvoiceFile(true)} disabled={busy || !!unknownStockInvoiceId || !ocrFile || !importReceivedDate}>Import &amp; Add Stock</Button>
-                        </details>}
+                        <Button type="button" variant="outline" className="w-full md:w-auto" onClick={() => { setShowIntakeHome(false); setManualEntry(true); requestAnimationFrame(() => focusPurchaseField('distributor-name')); }}>Enter bill by hand</Button>
                       </div>
                     </div>
 

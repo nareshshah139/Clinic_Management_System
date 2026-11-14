@@ -86,7 +86,7 @@ async function editSelectedInvoice() {
 }
 
 function saveCurrentInvoice() {
-  if (!screen.queryByRole('button', { name: /^Save draft$/ })) fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+  if (!screen.queryByRole('button', { name: /^Save draft$/ })) fireEvent.click(screen.getByRole('button', { name: 'Enter bill by hand' }));
   fireEvent.click(screen.getByRole('button', { name: /^Save draft$/ }));
 }
 
@@ -97,6 +97,7 @@ function processCurrentInvoice() {
 }
 
 function importAutomatically() {
+  fireEvent.click(screen.getByText('More'));
   fireEvent.click(screen.getByText('Automatic import'));
   fireEvent.click(screen.getByRole('button', { name: 'Import & Add Stock' }));
 }
@@ -644,6 +645,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({ draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02' } }) });
     render(<PurchaseInvoiceWorkbench />);
     expect(screen.queryByLabelText('Supplier name')).not.toBeInTheDocument();
+    expect(screen.getByText('Automatic import')).not.toBeVisible();
+    fireEvent.click(screen.getByText('More'));
     expect(screen.getByText('Automatic import')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Import & Add Stock' })).not.toBeVisible();
     fireEvent.change(screen.getByLabelText('Received on'), { target: { value: '2026-10-02' } });
@@ -1710,7 +1713,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.createPharmacyPurchaseInvoiceDraft.mockResolvedValue(draftInvoice);
 
     render(<PurchaseInvoiceWorkbench />);
-    fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enter bill by hand' }));
 
     fireEvent.change(screen.getByLabelText('Supplier name'), {
       target: { value: 'Apex Distributors' },
@@ -1985,7 +1988,7 @@ describe('PurchaseInvoiceWorkbench', () => {
   it('recovers unfinished OCR edits after remount without hiding them behind another recent invoice', async () => {
     api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
     const view = render(<PurchaseInvoiceWorkbench />);
-    fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enter bill by hand' }));
     fireEvent.change(screen.getByLabelText('Supplier name'), { target: { value: 'Unsaved supplier' } });
     view.unmount();
     render(<PurchaseInvoiceWorkbench />);
@@ -2194,7 +2197,7 @@ describe('PurchaseInvoiceWorkbench', () => {
 
   it('saves incomplete intake for later without creating or processing an invoice and reuses its request key', async () => {
     render(<PurchaseInvoiceWorkbench />);
-    fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enter bill by hand' }));
     fireEvent.change(screen.getByLabelText('Supplier name'), { target: { value: 'Unfinished supplier' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await screen.findByText(/Unfinished invoice saved to the server/);
@@ -2660,7 +2663,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     ];
     api.get.mockImplementation(async url => url === '/pharmacy/purchase-invoices/suppliers' ? suppliers : []);
     render(<PurchaseInvoiceWorkbench />);
-    fireEvent.click(await screen.findByRole('link', { name: 'Type instead' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Enter bill by hand' }));
     const saved = await screen.findByLabelText('Saved supplier');
     await waitFor(() => expect(within(saved).getByRole('option', { name: /Apex Medico Agencies/ })).toBeInTheDocument());
     fireEvent.change(saved, { target: { value: 'supplier-1' } });
