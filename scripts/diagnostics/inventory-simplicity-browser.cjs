@@ -82,12 +82,12 @@ fs.writeFileSync(
         .$eval("#distributor-name", (e) => !!e.getClientRects().length)
         .catch(() => false)),
     );
-    await p.click('a[href="#distributor-name"]');
+    await button("Enter bill by hand");
     await p.waitForFunction(
       () =>
         !!document.querySelector("#distributor-name")?.getClientRects().length,
     );
-    checks.push("Type instead exposes supplier entry");
+    checks.push("Enter bill by hand exposes supplier entry");
     await button("Enter another bill");
     await p.waitForFunction(() =>
       new URL(location.href).searchParams.has("new"),
