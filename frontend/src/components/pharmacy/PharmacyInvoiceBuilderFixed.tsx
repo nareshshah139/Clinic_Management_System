@@ -44,6 +44,7 @@ import {
   Pill,
   Package as PackageIcon,
   FileText,
+  ChevronDown,
   Printer,
   Download,
   ZoomIn,
@@ -2145,22 +2146,21 @@ export function PharmacyInvoiceBuilderFixed({
   const renderPrescriptionHeader = () => {
     if (!prescriptionData) return null;
 
+    const unlinkedItems = prescriptionItems.filter(item => !item.drugId);
     return (
-      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <FileText className="h-5 w-5 text-blue-600" />
+      <details className="group mx-6 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-700">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 [&::-webkit-details-marker]:hidden">
+          <FileText className="h-4 w-4 text-blue-600" />
           <h3 className="font-semibold text-blue-800">Linked Prescription</h3>
-        </div>
-        <div className="text-sm text-blue-700">
+          <span>· {prescriptionItems.length} {prescriptionItems.length === 1 ? 'item' : 'items'}</span>
+          {unlinkedItems.length > 0 && <span className="font-medium">· {unlinkedItems.length} to link to inventory</span>}
+          <ChevronDown className="ml-auto h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="px-3 pb-2">
           <p>
             <strong>Prescription ID:</strong> {prescriptionData.id}
           </p>
-          {prescriptionItems.length > 0 && (
-            <p>
-              <strong>Items from prescription:</strong> {prescriptionItems.length}
-            </p>
-          )}
-          {prescriptionItems.filter(item => !item.drugId).map(item => <div key={item.id} className="mt-2">
+          {unlinkedItems.map(item => <div key={item.id} className="mt-2">
             {item.prescribedDrugName}: link inventory before billing. <PrescriptionInventoryLink prescriptionId={prescriptionData.id} lineIndex={item.prescriptionLineIndex!} prescriptionVersion={item.prescriptionVersion} name={item.prescribedDrugName || ''} onLinked={() => loadPrescriptionData(prescriptionData.id)} />
           </div>)}
           <p className="mt-2 text-xs text-blue-600">
@@ -2168,7 +2168,7 @@ export function PharmacyInvoiceBuilderFixed({
             Changes here do not alter the doctor's prescription.
           </p>
         </div>
-      </div>
+      </details>
     );
   };
 

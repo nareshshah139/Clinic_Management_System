@@ -17,8 +17,8 @@ jest.mock('@/components/pharmacy/PackageBrowser', () => ({ PackageBrowser: () =>
 jest.mock('@/components/pharmacy/PharmacyPackageCreator', () => ({ PharmacyPackageCreator: () => null }));
 jest.mock('@/components/pharmacy/PartnerDailySync', () => ({ PartnerDailySync: () => null }));
 jest.mock('@/components/pharmacy/PharmacyCounterCockpit', () => ({
-  PharmacyCounterCockpit: ({ onNewBill }: { onNewBill?: () => void }) => (
-    <section aria-label="Counter cockpit">{onNewBill && <button onClick={onNewBill}>New bill</button>}</section>
+  PharmacyCounterCockpit: ({ onOpenBilling }: { onOpenBilling?: () => void }) => (
+    <section aria-label="Counter cockpit">{onOpenBilling && <button onClick={() => onOpenBilling()}>New bill</button>}</section>
   ),
 }));
 

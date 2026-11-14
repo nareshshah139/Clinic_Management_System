@@ -107,13 +107,19 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
 
   async function listed(branchId: string) {
     const status = new Map<string, PrescriptionQueueStatus>();
-    for (const value of statuses) {
-      const [selection] = await db.$queryRaw<{ ids: string[] }[]>(queueStatusPage(branchId, value, 1, 10000, new Date()));
-      for (const id of selection.ids) {
+    const counts: Record<string, number>[] = [];
+    for (const value of [...statuses, undefined]) {
+      const [selection] = await db.$queryRaw<{ ids: string[]; counts: Record<string, number> }[]>(queueStatusPage(branchId, value, 1, 10000, new Date()));
+      counts.push(selection.counts);
+      for (const id of value ? selection.ids : []) {
         expect(status.get(id)).toBeUndefined();
-        status.set(id, value);
+        status.set(id, value!);
       }
     }
+    const listedCounts = Object.fromEntries(statuses
+      .map(value => [value, [...status.values()].filter(listedStatus => listedStatus === value).length] as const)
+      .filter(([, total]) => total > 0));
+    for (const count of counts) expect(count).toEqual(listedCounts);
     return status;
   }
 
@@ -170,6 +176,7 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     expect(page.data.map(entry => entry.prescriptionId).sort()).toEqual(
       cases.filter(([, , , status]) => status === PrescriptionQueueStatus.DISPENSED).map(([id]) => id).sort(),
     );
+    expect(page.counts).toEqual(Object.fromEntries(statuses.map(status => [status, [...list.values()].filter(listed => listed === status).length])));
   });
 
   it('marks a prescription dispensed after billing exactly what the stock check suggests', async () => {

@@ -181,8 +181,7 @@ function PharmacyPageContent() {
 
           {pharmacyTab === 'counter' ? (
             <PharmacyCounterCockpit
-              onOpenBilling={openBill}
-              onNewBill={sells ? () => openBill() : undefined}
+              onOpenBilling={sells ? openBill : undefined}
               onOpenPartnerSync={() => openPharmacyTab('desk')}
               onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control&section=shelf')}
             />

@@ -5,12 +5,13 @@ import { apiClient } from '@/lib/api';
 
 const mockPush = jest.fn();
 let mockQuery = new URLSearchParams();
+let mockRole = 'PHARMACIST';
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockPush }),
   useSearchParams: () => mockQuery,
 }));
 jest.mock('@/components/layout/dashboard-user-context', () => ({
-  useDashboardUser: () => ({ user: { id: 'u1', role: 'PHARMACIST' }, loading: false }),
+  useDashboardUser: () => ({ user: { id: 'u1', role: mockRole }, loading: false }),
 }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
 jest.mock('@/lib/api', () => ({ apiClient: {
@@ -33,6 +34,7 @@ const queue = [
 beforeEach(() => {
   jest.clearAllMocks();
   mockQuery = new URLSearchParams();
+  mockRole = 'PHARMACIST';
   Element.prototype.scrollIntoView = jest.fn();
   api.get.mockImplementation(async (url: string) => {
     if (url === '/pharmacy/prescription-queue') return { data: queue, pagination: { total: queue.length } };
@@ -74,6 +76,15 @@ describe('Pharmacy Counter', () => {
     expect(mockPush).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales/bill');
   });
 
+  it('offers reception no bill it would be refused, on any row or the active prescription', async () => {
+    mockRole = 'RECEPTION';
+    render(<PharmacyWorkspace />);
+    const list = await screen.findByRole('list', { name: 'Prescription queue' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    await screen.findByText('0/1 lines reviewed');
+    expect(screen.queryByRole('button', { name: /Bill/ })).not.toBeInTheDocument();
+  });
+
   it('links an unmatched medicine to stock and collects payment only for a billed prescription', async () => {
     render(<PharmacyWorkspace />);
     expect(await screen.findByRole('button', { name: 'Link inventory for Adapalene gel' })).toBeInTheDocument();
@@ -96,5 +107,16 @@ describe('Bill page', () => {
       ['Back to Counter', '/dashboard/pharmacy?section=counter'],
     ]);
     expect(screen.queryByRole('tab', { name: 'Returns' })).not.toBeInTheDocument();
+  });
+
+  it('sums up the linked prescription on one line and keeps its details one click away', async () => {
+    mockQuery = new URLSearchParams('patientId=patient-rx-1&prescriptionId=rx-1&doctorId=doctor-1');
+    render(<SalesBillPage />);
+    const summary = (await screen.findByRole('heading', { name: 'Linked Prescription' })).closest('summary')!;
+    await waitFor(() => expect(summary).toHaveTextContent('Linked Prescription· 1 item· 1 to link to inventory'));
+    expect(screen.getByText('Prescription ID:')).not.toBeVisible();
+    fireEvent.click(summary);
+    expect(screen.getByText('Prescription ID:')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Link inventory for Adapalene gel' })).toBeVisible();
   });
 });

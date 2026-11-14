@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { apiClient } from '@/lib/api';
+import { stockCheckLineName } from '@/lib/bill-line-name';
 import { PrescriptionInventoryLink, type InventorySuggestion } from './PrescriptionInventoryLink';
 
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
@@ -115,6 +116,7 @@ type QueueResponse = {
   pagination: {
     total: number;
   };
+  counts?: Record<QueueStatus, number>;
 };
 
 type PharmacyBillingPrefill = {
@@ -139,13 +141,10 @@ type StockCheckItem = {
   sourceLineKey?: string;
   drugName: string;
   inventoryItemId?: string | null;
+  stockName?: string | null;
+  unit?: string | null;
   prescriptionVersion?: string;
   suggestions?: InventorySuggestion[];
-  matchedDrug?: {
-    id: string;
-    name: string;
-    manufacturerName?: string | null;
-  } | null;
   stockStatus: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK';
   totalNonExpiredStock: number;
   batches?: StockBatch[];
@@ -183,24 +182,17 @@ const reasonOptions = [
 const DISPENSE_TASK_CANCELLED = `CANCEL${'LED'}` as DispenseTaskStatus;
 
 const QUEUE_PAGE_SIZE = 25;
-const QUEUE_MAX_LIMIT = 100;
+const QUEUE_ENDPOINT = '/pharmacy/prescription-queue';
 
-const isException = (entry: QueueEntry) =>
-  entry.status === 'partial' ||
-  entry.status === 'expired' ||
-  entry.dispenseStatus === 'PARTIALLY_FILLED' ||
-  entry.dispenseStatus === 'PAUSED' ||
-  entry.dispenseStatus === DISPENSE_TASK_CANCELLED;
+const QUEUE_FILTERS: ReadonlyArray<{ id: string; label: string; status?: QueueStatus }> = [
+  { id: 'all', label: 'All' },
+  { id: 'waiting', label: 'Waiting', status: 'pending' },
+  { id: 'partial', label: 'Partial', status: 'partial' },
+  { id: 'paused', label: 'Paused', status: 'expired' },
+  { id: 'done', label: 'Done', status: 'dispensed' },
+];
 
-const QUEUE_FILTERS = [
-  { id: 'all', label: 'All', matches: () => true },
-  { id: 'queue', label: 'Queue', matches: (entry: QueueEntry) => entry.dispenseStatus === 'QUEUED' || entry.status === 'pending' },
-  { id: 'review', label: 'Review', matches: (entry: QueueEntry) => entry.dispenseStatus === 'IN_REVIEW' || entry.dispenseStatus === 'READY_TO_BILL' },
-  { id: 'exceptions', label: 'Exceptions', matches: isException },
-  { id: 'done', label: 'Done', matches: (entry: QueueEntry) => entry.dispenseStatus === 'PAID' || entry.dispenseStatus === 'DISPENSED' || entry.status === 'dispensed' },
-] as const;
-
-type QueueFilter = (typeof QUEUE_FILTERS)[number]['id'];
+type QueueFilter = (typeof QUEUE_FILTERS)[number];
 
 const isBillable = (entry: QueueEntry) => entry.dispensingEligible !== false && entry.status !== 'dispensed';
 
@@ -234,26 +226,29 @@ const billingPrefill = (entry: QueueEntry): PharmacyBillingPrefill => ({
  */
 /**
  * @cc [owner:nareshshah139,label:product] counter-single-queue
- * The Counter MUST be the only list of waiting prescriptions. Each row MUST offer Bill with its
- * patient, doctor, prescription and visit; ineligible or dispensed rows MUST NOT. A pharmacy invoice
- * refresh MUST reload the queue so billed prescriptions leave waiting without a page reload.
+ * The Counter MUST be the only list of waiting prescriptions. Each filter chip MUST filter and count
+ * on the server by its queue status, and Show more MUST page within that filter. Bill MUST appear only
+ * for roles that can create a bill (onOpenBilling given); there each billable row MUST offer Bill with
+ * its patient, doctor, prescription and visit, and ineligible or dispensed rows MUST NOT. A pharmacy
+ * invoice refresh MUST reload the queue so billed prescriptions leave waiting without a page reload.
  */
 export function PharmacyCounterCockpit({
   prefill,
   onOpenBilling,
-  onNewBill,
   onOpenPartnerSync,
   onOpenInventoryControl,
 }: {
   prefill?: PharmacyBillingPrefill | null;
-  onOpenBilling: (prefill?: PharmacyBillingPrefill) => void;
-  onNewBill?: () => void;
+  onOpenBilling?: (prefill?: PharmacyBillingPrefill) => void;
   onOpenPartnerSync: () => void;
   onOpenInventoryControl: () => void;
 }) {
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [queueTotal, setQueueTotal] = useState(0);
-  const [queueLimit, setQueueLimit] = useState(QUEUE_PAGE_SIZE);
+  const [queuePages, setQueuePages] = useState(1);
+  const [filter, setFilter] = useState<QueueFilter>(QUEUE_FILTERS[0]);
+  const [statusCounts, setStatusCounts] = useState<Record<QueueStatus, number> | null>(null);
+  const queueRequest = useRef(0);
   const [activeId, setActiveId] = useState<string | null>(
     prefill?.prescriptionId || null,
   );
@@ -282,15 +277,27 @@ export function PharmacyCounterCockpit({
   }, []);
 
   const loadQueue = useCallback(async () => {
+    const request = ++queueRequest.current;
     setStockReloadKey(key => key + 1);
     try {
       setLoadingQueue(true);
       setError(null);
-      const response = await apiClient.get<QueueResponse>(
-        '/pharmacy/prescription-queue',
-        { page: 1, limit: queueLimit },
+      const responses = await Promise.all(
+        Array.from({ length: queuePages }, (_, index) =>
+          apiClient.get<QueueResponse>(QUEUE_ENDPOINT, {
+            page: index + 1,
+            limit: QUEUE_PAGE_SIZE,
+            status: filter.status,
+          }),
+        ),
       );
-      let entries = response.data || [];
+      if (request !== queueRequest.current) return;
+      const response = responses[responses.length - 1];
+      let entries = [
+        ...new Map(
+          responses.flatMap((page) => page.data || []).map((entry) => [entry.prescriptionId, entry]),
+        ).values(),
+      ];
 
       if (
         prefill?.prescriptionId &&
@@ -304,10 +311,12 @@ export function PharmacyCounterCockpit({
         } catch {
           // The billing form can still use URL prefill even if the queue item is unavailable.
         }
+        if (request !== queueRequest.current) return;
       }
 
       setQueue(entries);
       setQueueTotal(response.pagination?.total ?? entries.length);
+      setStatusCounts(response.counts ?? null);
       setActiveId((current) => {
         if (
           prefill?.prescriptionId &&
@@ -326,14 +335,15 @@ export function PharmacyCounterCockpit({
         );
       });
     } catch (err) {
+      if (request !== queueRequest.current) return;
       console.error('Failed to load pharmacy counter queue:', err);
       setError('Unable to load prescription queue');
       setQueue([]);
       setQueueTotal(0);
     } finally {
-      setLoadingQueue(false);
+      if (request === queueRequest.current) setLoadingQueue(false);
     }
-  }, [prefill?.prescriptionId, queueLimit]);
+  }, [filter, prefill?.prescriptionId, queuePages]);
 
   useEffect(() => {
     void loadQueue();
@@ -438,7 +448,7 @@ export function PharmacyCounterCockpit({
     ? deriveLifecycle(activeEntry, activeEntry.prescriptionId === activeId, readyForBilling)
     : 'Queued';
   const openActiveBilling = useCallback(() => {
-    if (activeEntry && isBillable(activeEntry)) onOpenBilling(billingPrefill(activeEntry));
+    if (activeEntry && isBillable(activeEntry)) onOpenBilling?.(billingPrefill(activeEntry));
   }, [activeEntry, onOpenBilling]);
 
   const ensureDispenseTask = useCallback(async (entry: QueueEntry) => {
@@ -593,8 +603,8 @@ export function PharmacyCounterCockpit({
               {loadingQueue ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
               Refresh
             </Button>
-            {onNewBill ? (
-              <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={onNewBill}>
+            {onOpenBilling ? (
+              <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={() => onOpenBilling()}>
                 <Plus className="h-4 w-4" />
                 New bill
               </Button>
@@ -613,15 +623,17 @@ export function PharmacyCounterCockpit({
         <QueueColumn
           queue={queue}
           queueTotal={queueTotal}
+          filter={filter}
+          statusCounts={statusCounts}
+          onFilter={(option) => {
+            setFilter(option);
+            setQueuePages(1);
+          }}
           activeId={activeId}
           loading={loadingQueue}
           onSelect={selectQueueEntry}
-          onBill={(entry) => onOpenBilling(billingPrefill(entry))}
-          onShowMore={
-            queueTotal > queue.length && queueLimit < QUEUE_MAX_LIMIT
-              ? () => setQueueLimit((limit) => Math.min(QUEUE_MAX_LIMIT, limit + QUEUE_PAGE_SIZE))
-              : undefined
-          }
+          onBill={onOpenBilling ? (entry) => onOpenBilling(billingPrefill(entry)) : undefined}
+          onShowMore={queuePages * QUEUE_PAGE_SIZE < queueTotal ? () => setQueuePages((pages) => pages + 1) : undefined}
         />
 
         <ActiveDispenseColumn
@@ -637,7 +649,7 @@ export function PharmacyCounterCockpit({
           setReasonType={setReasonType}
           reasonNote={reasonNote}
           setReasonNote={setReasonNote}
-          onOpenBilling={openActiveBilling}
+          onOpenBilling={onOpenBilling ? openActiveBilling : undefined}
           onUpdateStatus={updateTaskStatus}
           savingTask={savingTask}
         />
@@ -659,6 +671,9 @@ export function PharmacyCounterCockpit({
 function QueueColumn({
   queue,
   queueTotal,
+  filter,
+  statusCounts,
+  onFilter,
   activeId,
   loading,
   onSelect,
@@ -667,16 +682,15 @@ function QueueColumn({
 }: {
   queue: QueueEntry[];
   queueTotal: number;
+  filter: QueueFilter;
+  statusCounts: Record<QueueStatus, number> | null;
+  onFilter: (filter: QueueFilter) => void;
   activeId: string | null;
   loading: boolean;
   onSelect: (entry: QueueEntry) => void;
-  onBill: (entry: QueueEntry) => void;
+  onBill?: (entry: QueueEntry) => void;
   onShowMore?: () => void;
 }) {
-  const [filter, setFilter] = useState<QueueFilter>('all');
-  const matches = QUEUE_FILTERS.find((option) => option.id === filter)!.matches;
-  const filteredQueue = queue.filter(matches);
-
   return (
     <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
       <PanelHeader
@@ -689,15 +703,23 @@ function QueueColumn({
           <button
             key={option.id}
             type="button"
-            aria-pressed={filter === option.id}
-            onClick={() => setFilter(option.id)}
+            aria-pressed={filter.id === option.id}
+            onClick={() => onFilter(option)}
             className={`rounded-full border px-2 py-1 text-xs font-semibold transition ${
-              filter === option.id
+              filter.id === option.id
                 ? 'border-slate-950 bg-slate-950 text-white'
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
             }`}
           >
-            {option.label} <span className="tabular-nums">{queue.filter(option.matches).length}</span>
+            {option.label}
+            {statusCounts ? (
+              <>
+                {' '}
+                <span className="tabular-nums">
+                  {option.status ? statusCounts[option.status] : Object.values(statusCounts).reduce((sum, count) => sum + count, 0)}
+                </span>
+              </>
+            ) : null}
           </button>
         ))}
       </div>
@@ -706,22 +728,24 @@ function QueueColumn({
           <LoadingSkeleton label="Loading prescription queue…" />
         ) : queue.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-            <p className="font-semibold text-slate-950">No prescriptions waiting</p>
-            <p className="mt-1">Prescriptions saved in a visit appear here.</p>
-          </div>
-        ) : filteredQueue.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-            No items match this filter.
+            {filter.status ? (
+              'No items match this filter.'
+            ) : (
+              <>
+                <p className="font-semibold text-slate-950">No prescriptions waiting</p>
+                <p className="mt-1">Prescriptions saved in a visit appear here.</p>
+              </>
+            )}
           </div>
         ) : (
           <ul aria-label="Prescription queue" className="space-y-1.5">
-            {filteredQueue.map((entry) => (
+            {queue.map((entry) => (
               <QueueRow
                 key={entry.prescriptionId}
                 entry={entry}
                 active={activeId === entry.prescriptionId}
                 onSelect={() => onSelect(entry)}
-                onBill={isBillable(entry) ? () => onBill(entry) : undefined}
+                onBill={onBill && isBillable(entry) ? () => onBill(entry) : undefined}
               />
             ))}
           </ul>
@@ -811,7 +835,7 @@ function ActiveDispenseColumn({
   setReasonType: (value: string) => void;
   reasonNote: string;
   setReasonNote: (value: string) => void;
-  onOpenBilling: () => void;
+  onOpenBilling?: () => void;
   onUpdateStatus: (status: DispenseTaskStatus) => void;
   savingTask: boolean;
 }) {
@@ -922,10 +946,12 @@ function ActiveDispenseColumn({
               >
                 Paid
               </Button>
-              <Button size="sm" onClick={onOpenBilling} disabled={savingTask || !isBillable(activeEntry)}>
-                <Receipt className="mr-2 h-4 w-4" />
-                Bill
-              </Button>
+              {onOpenBilling ? (
+                <Button size="sm" onClick={onOpenBilling} disabled={savingTask || !isBillable(activeEntry)}>
+                  <Receipt className="mr-2 h-4 w-4" />
+                  Bill
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -991,6 +1017,11 @@ function MedicationReviewTable({
   );
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] stock-column-all-prescribed-items
+ * Every checked prescription line MUST show its stock status and available quantity with unit.
+ * Unlinked quantities MUST be unknown, not zero; no prescribed line may be hidden.
+ */
 function MedicationReviewRow({
   medication,
   stock,
@@ -1009,10 +1040,10 @@ function MedicationReviewRow({
     medication.prescribedQuantity === null
       ? 'Review qty'
       : Math.max(0, medication.prescribedQuantity - medication.dispensedQuantity);
-  const warnings = stock ? stockWarnings(stock) : ['Stock check pending'];
+  const warnings = stock ? stockWarnings(stock) : [];
 
   return (
-    <div className="grid gap-2 bg-white px-2.5 py-2 transition hover:bg-slate-50 @3xl:grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] @3xl:items-center">
+    <div role="group" aria-label={medication.drugName} className="grid gap-2 bg-white px-2.5 py-2 transition hover:bg-slate-50 @3xl:grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] @3xl:items-center">
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-slate-950">{medication.drugName}</p>
         <p className="truncate text-xs text-slate-600">
@@ -1027,11 +1058,9 @@ function MedicationReviewRow({
 
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-slate-950">
-          {stock?.matchedDrug?.name || 'No inventory match'}
+          {stock ? (isLinked(stock) ? stockCheckLineName(stock) : 'Not linked') : 'Checking stock'}
         </p>
-        <p className="truncate text-xs text-slate-600">
-          {stock?.matchedDrug?.manufacturerName || 'Needs pharmacist action'}
-        </p>
+        <p className="truncate text-xs text-slate-600">{availableText(stock)}</p>
         {warnings.length > 0 ? (
           <div className="mt-1 flex flex-wrap gap-1">
             {warnings.slice(0, 2).map((warning) => (
@@ -1121,7 +1150,7 @@ function FulfillmentColumn({
         <div className="grid grid-cols-3 divide-x divide-white/10 text-center">
           <ScanFact label="Batch" value={nextPick?.recommendedBatch?.batchNumber || '--'} />
           <ScanFact label="Expiry" value={nextPick?.recommendedBatch?.expiryDate ? displayUtcDate(nextPick.recommendedBatch.expiryDate) : '--'} />
-          <ScanFact label="Stock" value={nextPick?.stock?.totalNonExpiredStock ?? '--'} />
+          <ScanFact label="Stock" value={nextPick?.stock ? stockQuantity(nextPick.stock) : '--'} />
         </div>
       </div>
 
@@ -1185,7 +1214,7 @@ function FulfillmentColumn({
                       {line.medication.drugName}
                     </p>
                     <p className="text-xs text-slate-500">
-                      Pick {line.requiredQuantity} · {line.stock?.totalNonExpiredStock ?? '—'} available
+                      Pick {line.requiredQuantity} · {availableText(line.stock)}
                     </p>
                   </div>
                   <Badge variant="outline" className="shrink-0 bg-white text-slate-700">
@@ -1349,10 +1378,25 @@ function StockBadge({ stock }: { stock?: StockCheckItem }) {
   }[stock.stockStatus];
   return (
     <Badge variant="outline" className={config}>
-      {stock.stockStatus.replaceAll('_', ' ')}
+      {stockStatusLabels[stock.stockStatus]}
     </Badge>
   );
 }
+
+const stockStatusLabels: Record<StockCheckItem['stockStatus'], string> = {
+  UNMATCHED: 'Not linked',
+  OUT_OF_STOCK: 'Out of stock',
+  LOW_STOCK: 'Low stock',
+  IN_STOCK: 'In stock',
+};
+
+const isLinked = (stock: StockCheckItem) => stock.stockStatus !== 'UNMATCHED';
+
+const stockQuantity = (stock: StockCheckItem) =>
+  isLinked(stock) ? `${stock.totalNonExpiredStock}${stock.unit ? ` ${stock.unit.toLowerCase()}` : ''}` : '—';
+
+const availableText = (stock?: StockCheckItem) =>
+  !stock ? 'Checking stock' : isLinked(stock) ? `${stockQuantity(stock)} available` : stockQuantity(stock);
 
 function MiniFact({ label, value }: { label: string; value: string | number }) {
   return (
@@ -1436,9 +1480,7 @@ function ChecklistItem({
 
 function stockWarnings(stock: StockCheckItem) {
   const warnings: string[] = [];
-  if (stock.stockStatus === 'UNMATCHED') warnings.push('No match');
-  if (stock.stockStatus === 'OUT_OF_STOCK') warnings.push('Out of stock');
-  if (stock.lowStock) warnings.push('Low stock');
+  if (stock.lowStock && stock.stockStatus === 'IN_STOCK') warnings.push('Low stock');
   if (stock.nearExpiry) warnings.push('Near expiry');
   const expiredBatch = stock.batches?.some(
     (batch) =>
