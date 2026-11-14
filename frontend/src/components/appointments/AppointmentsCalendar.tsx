@@ -18,7 +18,6 @@ import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle, Info } from 'lucide-react';
 import { useOverbookConfirm } from './useOverbookConfirm';
 import { CALENDARS, type SlotChoice } from './appointment-calendars';
-import { CalendarLegend } from './CalendarLegend';
 import { overbookFlag } from '@/lib/overbooking';
 import { enumLabel } from '@/lib/labels';
 
@@ -495,7 +494,6 @@ export default function AppointmentsCalendar({
                 <SelectItem value="60">60 min</SelectItem>
               </SelectContent>
             </Select>
-            <CalendarLegend />
             {googleConfigured !== false && (
               <div className="flex items-center gap-2">
                 {googleStatus.connected ? (

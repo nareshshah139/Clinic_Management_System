@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppointmentScheduler from '@/components/appointments/AppointmentScheduler';
+import { CalendarLegend } from '@/components/appointments/CalendarLegend';
 import AppointmentsCalendar from '@/components/appointments/AppointmentsCalendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -80,7 +81,7 @@ function AppointmentsPageInner() {
     <>
       <div data-tour="doctor-select">
         <Select value={doctorId} onValueChange={setDoctorId}>
-          <SelectTrigger size="sm" aria-label="Doctor"><SelectValue placeholder="Select doctor" /></SelectTrigger>
+          <SelectTrigger size="sm" aria-label="Doctor" className="max-w-40"><SelectValue placeholder="Select doctor" /></SelectTrigger>
           <SelectContent>
             {doctors.map((d) => (
               <SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>
@@ -111,6 +112,7 @@ function AppointmentsPageInner() {
               <TabsTrigger value="calendar">Calendar</TabsTrigger>
               <TabsTrigger value="slots">Slots</TabsTrigger>
             </TabsList>
+            <CalendarLegend />
             <Button variant="outline" size="icon" aria-label="Quick Guide" title="Quick Guide" onClick={() => setGuideDialogOpen(true)}>
               <Info className="h-4 w-4" />
             </Button>

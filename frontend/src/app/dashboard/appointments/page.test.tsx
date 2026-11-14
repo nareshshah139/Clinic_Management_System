@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import AppointmentsPage from './page';
 import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
 import type { User } from '@/lib/types';
@@ -68,5 +69,19 @@ describe('Appointments page default doctor', () => {
     renderAs({ id: 'r-1', role: UserRole.RECEPTION });
     expect(await screen.findByText('Calendar for d-praneeta')).toBeInTheDocument();
     expect(screen.queryByText('Day 21/11/2026')).toBeNull();
+  });
+});
+
+describe('Appointments page header', () => {
+  it('keeps the calendar legend beside the view switch, closed until opened', async () => {
+    renderAs({ id: 'r-1', role: UserRole.RECEPTION });
+    const views = await screen.findByRole('tablist');
+    const header = views.parentElement as HTMLElement;
+    const legend = within(header).getByRole('button', { name: 'Legend' });
+    expect(screen.queryByText('Booking In Progress')).toBeNull();
+
+    await userEvent.click(legend);
+    expect(await screen.findByText('Booking In Progress')).toBeInTheDocument();
+    expect(screen.getByText(/press/)).toHaveTextContent('Open a scheduled patient and press Confirm to move them to Confirmed at the same time.');
   });
 });

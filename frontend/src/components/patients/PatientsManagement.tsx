@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -50,7 +50,7 @@ interface PatientFormState {
 
 /**
  * @cc [owner:nareshshah139,label:accessibility] patient-search-hint-layout
- * Search hints MUST reserve their full wrapped height above the next filter.
+ * Search hints MUST take their full wrapped height in flow below the search, never covering the next filter or row.
  */
 /**
  * @cc [owner:nareshshah139,label:accessibility] patient-row-actions
@@ -135,6 +135,7 @@ export default function PatientsManagement() {
   const [dateRangeFilter, setDateRangeFilter] = useState<'ALL' | 'LAST_1_WEEK' | 'LAST_1_MONTH'>('ALL');
   const [abhaFilter, setAbhaFilter] = useState<'ALL' | 'HAS' | 'NONE'>('ALL');
   const [open, setOpen] = useState<boolean>(false);
+  const newPatientButton = useRef<HTMLButtonElement>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalPatients, setTotalPatients] = useState<number>(0);
@@ -735,16 +736,8 @@ export default function PatientsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
-        <Button variant="outline" onClick={exportCsv} disabled={exporting}><Download className="h-4 w-4 mr-2" /> {exporting ? 'Exporting...' : 'Export CSV'}</Button>
         <Dialog open={open} onOpenChange={(v: boolean) => { if (!v) resetForm(); setOpen(v); }}>
-          <DialogTrigger asChild>
-            <Button data-tour="add-patient-btn">
-              <Plus className="h-4 w-4 mr-2" /> New Patient
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[600px]" onCloseAutoFocus={(event: Event) => { event.preventDefault(); newPatientButton.current?.focus(); }}>
             <DialogHeader>
               <DialogTitle>{form.id ? 'Edit Patient' : 'Create Patient'}</DialogTitle>
             </DialogHeader>
@@ -928,11 +921,10 @@ export default function PatientsManagement() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
 
       <Card>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-3 items-start">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
             <div className="relative w-full sm:min-w-64 sm:flex-[2_1_16rem]" data-tour="search-patients">
               <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -946,16 +938,9 @@ export default function PatientsManagement() {
                 aria-describedby="patients-search-hint"
               />
               </div>
-              <div id="patients-search-hint" className="mt-1 min-h-8 text-xs text-muted-foreground">
+              <div id="patients-search-hint" className="text-xs text-muted-foreground">
               {search.length > 0 && search.length < 2 && (
-                <div className="text-xs text-muted-foreground">
-                  Enter at least 2 characters to search
-                </div>
-              )}
-              {search.length === 0 && (
-                <div className="text-xs text-muted-foreground">
-                  Try: 9xxx… (phone), abha…, @email
-                </div>
+                <div className="mt-1">Enter at least 2 characters to search</div>
               )}
               </div>
               {search.length > 0 && search.length < 2 && suggestions.length > 0 && (
@@ -1010,9 +995,14 @@ export default function PatientsManagement() {
                 <SelectItem value="50">50 / page</SelectItem>
               </SelectContent>
             </Select>
+            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+              <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
+              <Button variant="outline" onClick={exportCsv} disabled={exporting}><Download className="h-4 w-4 mr-2" /> {exporting ? 'Exporting...' : 'Export CSV'}</Button>
+              <Button ref={newPatientButton} data-tour="add-patient-btn" onClick={() => setOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" /> New Patient
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
 
       {/* Link Portal User Dialog */}
       <Dialog open={linkPortalOpen} onOpenChange={(v: boolean) => { if (!v) { setLinkPortalTarget(null); setLinkPortalEmail(''); } setLinkPortalOpen(v); }}>
@@ -1034,8 +1024,6 @@ export default function PatientsManagement() {
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardContent>
           {error ? (
             <div className="text-center py-10">
               <div className="text-destructive-text mb-2">{error}</div>
