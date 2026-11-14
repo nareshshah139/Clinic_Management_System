@@ -118,6 +118,7 @@ Each unit was reviewed by a second agent on a stronger tier before it merged. Ev
 | Pharmacy | No money, tax or stock error. A product rule had moved onto the wrong method. |
 | Purchase | Confirming a product match replaced the tax typed from the supplier's bill with the catalogue's rate. A 12% bill was committed at 18%. |
 | Visit form | A completed visit could keep a stale prescription. A visit with no medicines could not be completed. Completing could hang for good. |
+| Visit header | "Back" used browser history, so a visit opened in a fresh tab or from the bell left the app. The "Visit tour" menu item started nothing. At phone width the patient's name scrolled off screen. |
 
 Three of these came from instructions I gave the units: fill GST from the catalogue, book another day when today is full, and require a prescription to complete a visit. All three are withdrawn and fixed.
 
@@ -128,7 +129,7 @@ A new check, `scripts/contracts/compare-attachment.cjs`, compares every product 
 | Check | Result |
 |---|---|
 | Ten journeys, each from a fresh seed | 10 pass, 62 actions |
-| Frontend tests | 158 suites, 1,712 tests pass (149 and 1,581 before) |
+| Frontend tests | 158 suites, 1,712 tests pass (149 and 1,581 before). The visit header fixes came after this run; the 32 visit suites (319 tests) and journeys j03 and j09 were re-run on them and pass. |
 | Frontend lint | 17 errors, in the same files as before the run |
 | Frontend type-check | 91 errors in test files, unchanged; 0 in the build configuration |
 | Backend type-check | Clean |
@@ -197,9 +198,10 @@ Found during the run and not fixed:
 10. **Seven components that nothing imports** (4,411 lines) were not deleted.
 11. **Names.** "Bill", "New sale" and "Medicine" are applied on the journeys' screens only.
 12. **Commit trailers.** 25 unit commits carry trailers naming the helper model. Rewriting pushed history was blocked.
-13. **Eleven older browser diagnostics fail**, as they did before this run. Most wait for text or fixtures the app no longer matches. They need repairing or retiring.
-14. **Status colours fail contrast.** White text on the success, warning and destructive colours is below 4.5 to 1.
-15. **GitHub issues were not filed.** `ux-flow` normally files one per proposal. They post under the owner's name and were not asked for.
+13. **The visit form's "Back" does not warn about unsaved changes.** It did not before this run either. The Templates bar still opens above the complaints card, away from its button.
+14. **Eleven older browser diagnostics fail**, as they did before this run. Most wait for text or fixtures the app no longer matches. They need repairing or retiring.
+15. **Status colours fail contrast.** White text on the success, warning and destructive colours is below 4.5 to 1.
+16. **GitHub issues were not filed.** `ux-flow` normally files one per proposal. They post under the owner's name and were not asked for.
 
 ## Already minimal
 

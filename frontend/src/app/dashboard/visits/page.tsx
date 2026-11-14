@@ -938,9 +938,15 @@ function VisitsPageInner() {
           />
         }
         headerActions={
-          <Button variant="ghost" size="sm" onClick={() => (appointmentData ? window.history.back() : setShowForm(false))}>
-            Back
-          </Button>
+          appointmentData ? (
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/dashboard">Back</Link>
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+              Back
+            </Button>
+          )
         }
         key={`${selectedPatientId}:${urlVisitId || appointmentData?.id || "new"}`}
         patientId={selectedPatientId} 

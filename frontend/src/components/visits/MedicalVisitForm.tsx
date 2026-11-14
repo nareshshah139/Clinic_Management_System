@@ -1755,8 +1755,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
 
   return (
     <div className="grid min-w-0 items-start gap-x-6 gap-y-4 xl:grid-cols-[20rem_minmax(0,1fr)]">
-      <div className="z-30 -mx-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-4 py-2 md:sticky md:-top-6 md:-mx-6 md:px-6 xl:col-span-2">
-        {identity}
+      <div className="contents md:sticky md:-top-6 md:z-30 md:-mx-6 md:flex md:flex-wrap md:items-center md:gap-x-3 md:gap-y-2 md:border-b md:bg-background md:px-6 md:py-2 xl:col-span-2">
+        <div className="sticky -top-4 z-30 -mx-4 border-b bg-background px-4 py-1.5 md:static md:z-auto md:mx-0 md:border-0 md:bg-transparent md:p-0">{identity}</div>
+        <div className="-mx-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-4 py-2 md:contents">
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium text-gray-900">Visit #{currentVisitNumber}</span>
           <Badge variant={visitStatus === 'COMPLETED' ? 'default' : visitStatus === 'IN_PROGRESS' ? 'secondary' : 'outline'}>
@@ -1780,21 +1781,24 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
             <option value="IN_PERSON">In-person</option>
             <option value="TELE_VIDEO">Tele-video</option>
           </select>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" data-tour="help-button">
-                Help
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setGuideOpen(true)}>Quick Guide</DropdownMenuItem>
-              <DoctorTour autoStart={false}>
-                {startTour => <DropdownMenuItem onSelect={startTour}>Visit tour</DropdownMenuItem>}
-              </DoctorTour>
-              <DropdownMenuItem onSelect={() => setShortcutsOpen(true)}>Shortcuts</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <DoctorTour autoStart={false}>
+            {startTour => (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" data-tour="help-button">
+                    Help
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setGuideOpen(true)}>Quick Guide</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setTimeout(startTour, 0)}>Visit tour</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setShortcutsOpen(true)}>Shortcuts</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </DoctorTour>
           {headerActions}
+        </div>
         </div>
       </div>
       <QuickGuide title="Visit guide" sections={VISIT_GUIDE_SECTIONS} open={guideOpen} onOpenChange={setGuideOpen} />

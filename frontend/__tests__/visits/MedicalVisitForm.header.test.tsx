@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { apiClient } from '@/lib/api';
 
@@ -7,7 +7,16 @@ jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }
 jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor() { return null; });
 jest.mock('@/components/visits/VisitPhotos', () => function Photos() { return null; });
 const mockStartTour = jest.fn();
-jest.mock('@/components/tours', () => ({ DoctorTour: ({ children }: { children: (start: () => void) => React.ReactNode }) => <>{children(mockStartTour)}</> }));
+const mockTourUnmounted = jest.fn();
+jest.mock('@/components/tours', () => {
+  const { useEffect } = jest.requireActual('react');
+  return {
+    DoctorTour: function Tour({ children }: { children: (start: () => void) => React.ReactNode }) {
+      useEffect(() => () => mockTourUnmounted(), []);
+      return <>{children(mockStartTour)}</>;
+    },
+  };
+});
 const flush = async () => { await act(async () => { await Promise.resolve(); }); };
 
 beforeEach(() => {
@@ -59,7 +68,8 @@ it('opens the quick guide, the visit tour and the shortcuts from the help menu',
 
   openHelp();
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Visit tour' }));
-  expect(mockStartTour).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(mockStartTour).toHaveBeenCalledTimes(1));
+  expect(mockTourUnmounted).not.toHaveBeenCalled();
 
   openHelp();
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Shortcuts' }));
