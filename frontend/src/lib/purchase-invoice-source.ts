@@ -84,7 +84,6 @@ export const LINE_SOURCE_IDS: Record<string, string> = {
   hsnCode: "hsn",
   batchNumber: "batch",
   expiryMonth: "expiry-month",
-  expiryYear: "expiry-year",
   quantityPurchased: "qty",
   freeQuantity: "free-qty",
   purchaseRate: "rate",

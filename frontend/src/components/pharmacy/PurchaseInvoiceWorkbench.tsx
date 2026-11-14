@@ -1487,7 +1487,7 @@ function PurchaseInvoiceEditor({
     setHeader(next);
   };
 
-  const updateLine = (localId: string, key: keyof LineForm, value: string) => {
+  const updateLine = (localId: string, key: keyof LineForm, value: string, also: Partial<LineForm> = {}) => {
     invalidatePending();
     setManualReviewCandidateId(null);
 
@@ -1498,7 +1498,7 @@ function PurchaseInvoiceEditor({
     const index = lines.findIndex(line => line.localId === localId);
     const line = lines[index];
     if (!line) return;
-    const next = { ...line, [key]: value };
+    const next = { ...line, ...also, [key]: value };
     const review = confirmPurchaseChecks(currentLineFlags[index], next, checkedOcr[localId], index, key);
     setCheckedOcr(current => ({ ...current, [localId]: review.checked }));
     setLines(current => current.map(row => row.localId === localId ? { ...next, ocrFlags: review.flags.join(', ') } : row));
@@ -3293,7 +3293,6 @@ function PurchaseInvoiceEditor({
     const lineId = issue.lineIndex === undefined ? undefined : lines[issue.lineIndex]?.localId;
     const id = lineId && issue.field ? `${lineId}-${issue.target}` : issue.target;
     if (fieldTones[id] !== "error") fieldTones[id] = tone;
-    if (issue.field === "expiryMonth" && lineId) fieldTones[`${lineId}-expiry-year`] = tone;
   };
   if (editingChecks && !stockStatusUnknown && !draftWriteBlocked) {
     Object.entries(checkedOcr).forEach(([scope, entries]) => {
@@ -5166,8 +5165,7 @@ function PurchaseInvoiceEditor({
 <Field id={`${line.localId}-pack-size`} label="Pack Size" value={line.packSize} onChange={event => updateLine(line.localId, "packSize", event.target.value)} />
 <Field id={`${line.localId}-unit`} label="Stock unit" value={line.packUnitType} onChange={event => updateLine(line.localId, "packUnitType", event.target.value)} />
 <Field id={`${line.localId}-batch`} label="Batch" value={line.batchNumber} onChange={event => updateLine(line.localId, "batchNumber", event.target.value)} />
-<Field id={`${line.localId}-expiry-month`} label="Exp. Month" value={line.expiryMonth} type="number" min="1" max="12" onChange={event => updateLine(line.localId, "expiryMonth", event.target.value)} />
-<Field id={`${line.localId}-expiry-year`} label="Exp. Year" value={line.expiryYear} type="number" min="2020" max="2100" onChange={event => updateLine(line.localId, "expiryYear", event.target.value)} />
+<ExpiryField id={`${line.localId}-expiry-month`} month={line.expiryMonth} year={line.expiryYear} onChange={(month, year) => updateLine(line.localId, "expiryMonth", month, { expiryYear: year })} />
 <Field id={`${line.localId}-qty`} label="Paid Qty" value={line.quantityPurchased} type="number" min="0" step="1" onChange={event => updateLine(line.localId, "quantityPurchased", event.target.value)} />
 <Field id={`${line.localId}-free-qty`} label="Free Qty" value={line.freeQuantity} type="number" min="0" step="1" onChange={event => updateLine(line.localId, "freeQuantity", event.target.value)} />
 <Field id={`${line.localId}-rate`} label="Rate" value={line.purchaseRate} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "purchaseRate", event.target.value)} />
@@ -5677,6 +5675,23 @@ function Field({ id, label, className, ...props }: FieldProps) {
       />
     </div>
   );
+}
+
+const expiryText = (month: string, year: string) => month || year ? `${month.padStart(2, "0")}/${year}` : "";
+
+function parseExpiry(text: string): [string, string] {
+  const match = text.trim().match(/^(\d{1,2})\s*[/.\-\s]\s*(\d{4}|\d{2})$/);
+  return match ? [String(Number(match[1])), match[2].length === 2 ? `20${match[2]}` : match[2]] : ["", ""];
+}
+
+function ExpiryField({ id, month, year, onChange }: { id: string; month: string; year: string; onChange: (month: string, year: string) => void }) {
+  const [shown, setShown] = useState({ text: expiryText(month, year), month, year });
+  if (shown.month !== month || shown.year !== year) setShown({ text: expiryText(month, year), month, year });
+  return <Field id={id} label="Expiry" value={shown.text} inputMode="numeric" placeholder="MM/YYYY" onChange={event => {
+    const [nextMonth, nextYear] = parseExpiry(event.target.value);
+    setShown({ text: event.target.value, month: nextMonth, year: nextYear });
+    onChange(nextMonth, nextYear);
+  }} />;
 }
 
 function ReadOnlyAmount({ label, value }: { label: string; value: number }) {

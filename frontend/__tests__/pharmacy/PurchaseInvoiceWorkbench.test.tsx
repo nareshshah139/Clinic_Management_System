@@ -2398,8 +2398,9 @@ describe('PurchaseInvoiceWorkbench', () => {
   it('keeps invalid expiry red and unconfirmable while preserving the save validation', async () => {
     renderSavedInvoice({ ...draftInvoice, distributorDlNo: 'DL-TEST', unresolvedOcrFlags: 1, items: [{ ...draftInvoice.items[0], packUnitType: 'Strip', expiryMonth: 13, ocrFlags: ['uncertain_expiry'] }] });
     await editSelectedInvoice();
-    expect(screen.getByLabelText('Exp. Month')).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByLabelText('Exp. Year')).toHaveClass('border-red-600');
+    expect(screen.getByLabelText('Expiry')).toHaveValue('13/2027');
+    expect(screen.getByLabelText('Expiry')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Expiry')).toHaveClass('border-red-600');
     expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     saveCurrentInvoice();
     const validationFeedback = screen.getByText('Fix Required').closest('[role="alert"]') as HTMLElement;
@@ -2407,11 +2408,11 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
     await screen.findByText('Unfinished invoice saved to the server. Missing fields are allowed; stock has not changed.');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled());
-    fireEvent.change(screen.getByLabelText('Exp. Month'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('Expiry'), { target: { value: '12/2027' } });
     expect(screen.queryByRole('button', { name: 'Confirm line 1 expiry checked' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Exp. Month')).toHaveClass('border-emerald-600');
-    fireEvent.change(screen.getByLabelText('Exp. Year'), { target: { value: '' } });
-    expect(screen.getByLabelText('Exp. Month')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Expiry')).toHaveClass('border-emerald-600');
+    fireEvent.change(screen.getByLabelText('Expiry'), { target: { value: '12/' } });
+    expect(screen.getByLabelText('Expiry')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     expect(await screen.findByText('1 check to finish')).toBeInTheDocument();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
@@ -2612,7 +2613,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice({ ...draftInvoice, items: [{ ...draftInvoice.items[0], expiryMonth: 13 }] });
     await editSelectedInvoice();
     fireEvent.click(screen.getByRole('button', { name: 'Next check' }));
-    expect(screen.getByLabelText('Exp. Month')).toHaveFocus();
+    expect(screen.getByLabelText('Expiry')).toHaveFocus();
     expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
   });
 
@@ -2620,9 +2621,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice({ ...draftInvoice, items: [{ ...draftInvoice.items[0], expiryMonth: 1, expiryYear: 2020 }] });
     await editSelectedInvoice();
     fireEvent.click(screen.getByRole('button', { name: 'Next check' }));
-    expect(screen.getByLabelText('Exp. Month')).toHaveFocus();
-    expect(screen.getByLabelText('Exp. Month')).toHaveValue(1);
-    expect(screen.getByLabelText('Exp. Year')).toHaveValue(2020);
+    expect(screen.getByLabelText('Expiry')).toHaveFocus();
+    expect(screen.getByLabelText('Expiry')).toHaveValue('01/2020');
     expect(screen.getByLabelText('Batch')).toHaveValue('AZT2401');
     expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
@@ -2674,6 +2674,19 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.change(saved, { target: { value: 'supplier-1' } });
     expect(saved).toHaveValue('supplier-1');
     expect(screen.getByLabelText('DL No.')).toHaveValue('TYPED-DL');
+  });
+
+
+  it('reads one expiry field as month and year for the saved draft', async () => {
+    renderSavedInvoice();
+    await editSelectedInvoice();
+    expect(screen.getByLabelText('Expiry')).toHaveValue('12/2027');
+    fireEvent.change(screen.getByLabelText('Expiry'), { target: { value: '10/2028' } });
+    expect(screen.getByLabelText('Expiry')).toHaveValue('10/2028');
+    saveCurrentInvoice();
+    await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({
+      items: [expect.objectContaining({ expiryMonth: 10, expiryYear: 2028 })],
+    })));
   });
 
 });
