@@ -180,6 +180,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   highlight = false,
   open,
   onOpenChange,
+  actions,
 }: {
   title: string;
   section: string;
@@ -188,6 +189,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   highlight?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  actions?: React.ReactNode;
 }) {
   const headingId = `section-${section}-heading`;
   const contentId = `section-${section}-content`;
@@ -220,6 +222,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
             </CardTitle>
             {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
           </div>
+          {actions}
         </div>
       </CardHeader>
       <CardContent id={contentId} className="pt-0 overflow-visible" hidden={!expanded}>
@@ -4552,12 +4555,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     <div className="space-y-6 overflow-visible">
       <div className="space-y-6">
         <div className="space-y-4">
+          {showTemplatesBar && (
           <div className="space-y-2">
-            <Button variant="outline" size="sm" aria-expanded={showTemplatesBar} onClick={() => setShowTemplatesBar(open => !open)}>
-              Templates
-              <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
-            </Button>
-            {showTemplatesBar && (hydrated && templatesReady && allTemplates.length > 0 ? (
+            {hydrated && templatesReady && allTemplates.length > 0 ? (
               <div className="flex flex-wrap gap-2 items-end">
                 <div className="min-w-[240px]">
                   <DropdownMenu>
@@ -4617,48 +4617,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 {loadingTemplates ? 'Loading templates…' : 'Templates will appear once loaded.'}
               </div>
-            ))}
+            )}
           </div>
+          )}
 
             {/* Basic Information */}
             {/* Moved to bottom of builder; removed Doctor's Personal Notes field */}
-
-            {/* Clinical Details */}
-            <CollapsibleSection title="Clinical Details & Vitals" section="clinical">
-              <div className="space-y-3">
-                {/* Vitals */}
-                <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
-                  <div>
-                    <label className="text-xs text-gray-600">Height (cm)</label>
-                    <Input key="vitals-height" aria-label="Height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600">Weight (kg)</label>
-                    <Input key="vitals-weight" aria-label="Weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600">BMI</label>
-                    <Input key="vitals-bmi" value={vitalsBmi ?? ''} readOnly />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600">BP (Sys)</label>
-                    <Input key="vitals-bp-sys" aria-label="Systolic blood pressure" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600">BP (Dia)</label>
-                    <Input key="vitals-bp-dia" aria-label="Diastolic blood pressure" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600">Pulse (bpm)</label>
-                    <Input key="vitals-pulse" aria-label="Pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
-                  </div>
-                  <div></div>
-                  <div></div>
-                </div>
-
-                
-              </div>
-            </CollapsibleSection>
 
             {/* Add Drug to DB Dialog */}
             <Dialog open={addDrugOpen} onOpenChange={setAddDrugOpen}>
@@ -4730,6 +4694,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               title="Chief Complaints" 
               section="chief-complaints" 
               highlight={hasChiefComplaints}
+              actions={
+                <Button variant="outline" size="sm" aria-expanded={showTemplatesBar} onClick={() => setShowTemplatesBar(open => !open)}>
+                  Templates
+                  <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                </Button>
+              }
             >
               <div className="opacity-100">
                 <label className="text-xs text-gray-600 flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
@@ -4785,6 +4755,43 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                   )}
                 </div>
+              </div>
+            </CollapsibleSection>
+
+            {/* Clinical Details */}
+            <CollapsibleSection title="Clinical Details & Vitals" section="clinical">
+              <div className="space-y-3">
+                {/* Vitals */}
+                <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-600">Height (cm)</label>
+                    <Input key="vitals-height" aria-label="Height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Weight (kg)</label>
+                    <Input key="vitals-weight" aria-label="Weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">BMI</label>
+                    <Input key="vitals-bmi" value={vitalsBmi ?? ''} readOnly />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">BP (Sys)</label>
+                    <Input key="vitals-bp-sys" aria-label="Systolic blood pressure" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">BP (Dia)</label>
+                    <Input key="vitals-bp-dia" aria-label="Diastolic blood pressure" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Pulse (bpm)</label>
+                    <Input key="vitals-pulse" aria-label="Pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div></div>
+                  <div></div>
+                </div>
+
+                
               </div>
             </CollapsibleSection>
 

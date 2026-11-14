@@ -4,8 +4,7 @@ import { apiClient } from '@/lib/api';
 let mockQuery = '';
 jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(mockQuery) }));
 jest.mock('@/lib/api', () => ({ apiClient: { getPatients: jest.fn(), getPatient: jest.fn().mockResolvedValue({ id: 'patient-123', name: 'Synthetic Patient' }), getUser: jest.fn().mockResolvedValue({ id: 'doctor-123', firstName: 'Synthetic', lastName: 'Doctor' }), get: jest.fn(), getAllPatientVisitHistory: jest.fn().mockResolvedValue([]) } }));
-jest.mock('@/components/visits/MedicalVisitForm', () => function Form() { return <div data-testid="medical-form" />; });
-jest.mock('@/components/patients/PatientProgressTracker', () => function Tracker() { return null; });
+jest.mock('@/components/visits/MedicalVisitForm', () => function Form({ headerActions }: { headerActions?: React.ReactNode }) { return <div data-testid="medical-form">{headerActions}</div>; });
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
 beforeEach(() => {
   mockQuery = '';
@@ -28,7 +27,7 @@ it('opens a patient deep link and allows returning to setup', async () => {
   mockQuery = 'patientId=patient-123';
   render(<VisitsPage />);
   expect(await screen.findByTestId('medical-form')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Back to Setup' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
   await screen.findByRole('tab', { name: 'Patient History' });
   await waitFor(() => expect(screen.queryByTestId('medical-form')).not.toBeInTheDocument());
 });

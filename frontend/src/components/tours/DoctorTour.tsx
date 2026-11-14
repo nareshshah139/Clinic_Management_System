@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { HelpCircle } from 'lucide-react';
@@ -259,6 +259,8 @@ function injectTourStyles() {
 interface DoctorTourProps {
   /** Whether to auto-start the tour on first visit */
   autoStart?: boolean;
+  /** Renders a custom trigger, such as a menu item, instead of the default button. */
+  children?: (startTour: () => void) => ReactNode;
 }
 
 /**
@@ -355,7 +357,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
  * Displays a help button that starts an interactive tour for the doctor visit workflow.
  * Can be configured to auto-start on first visit.
  */
-export function DoctorTour({ autoStart = false }: DoctorTourProps) {
+export function DoctorTour({ autoStart = false, children }: DoctorTourProps) {
   const pathname = usePathname();
   const [hasSeenTour, setHasSeenTour] = useState(true);
 
@@ -405,6 +407,8 @@ export function DoctorTour({ autoStart = false }: DoctorTourProps) {
       setHasSeenTour(true);
     }
   };
+
+  if (children) return <>{children(handleStartTour)}</>;
 
   return (
     <Button

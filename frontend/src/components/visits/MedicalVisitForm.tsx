@@ -3,7 +3,7 @@
 import { displayCalendarDate, displayClinicTime } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, printBackgroundKey, savedPrintBackground } from '@/lib/prescription-letterhead';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
@@ -14,6 +14,8 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { QuickGuide, type GuideSection } from '@/components/common/QuickGuide';
 import { 
   Mic, 
   MicOff,
@@ -48,7 +50,9 @@ import {
   Upload,
   History,
   Image,
-  Keyboard
+  Keyboard,
+  HelpCircle,
+  ChevronDown
 } from 'lucide-react';
 import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import { apiClient } from '@/lib/api';
@@ -78,6 +82,8 @@ interface Props {
   appointmentId?: string;
   appointmentData?: { patient?: VisitPatientSummary } | null;
   initialVisitId?: string;
+  identity?: ReactNode;
+  headerActions?: ReactNode;
 }
 
 interface PatientHistory {
@@ -185,6 +191,41 @@ const MORPHOLOGY = ['Macule','Papule','Pustule','Nodule','Plaque','Vesicle','Sca
 const DISTRIBUTION = ['Face','Scalp','Neck','Trunk','Arms','Legs','Hands','Feet','Flexures','Extensors','Generalized'];
 const FITZPATRICK = ['I','II','III','IV','V','VI'];
 
+const VISIT_GUIDE_SECTIONS: GuideSection[] = [
+  {
+    title: 'The visit',
+    items: [
+      'The visit opens on the Prescription tab',
+      'Type the chief complaint or the diagnosis',
+      'Add medicines; a new empty row appears after each one',
+      'Press Complete visit; it saves the prescription and returns you to the dashboard',
+    ],
+  },
+  {
+    title: 'Prescriptions',
+    items: [
+      'Pick medicines from the list as you type',
+      'Set frequency and duration with the presets, or type them',
+      'Create Prescription saves without completing the visit',
+      'Go to pharmacy appears once the prescription is saved',
+    ],
+  },
+  {
+    title: 'Vitals, photos and lab tests',
+    items: [
+      'Fill them only when there is something to record',
+      'A single photo uploads straight away',
+      "Change a photo's position on its card",
+    ],
+  },
+];
+
+const VISIT_STATE_LABEL: Record<VisitStatus | 'draft', string> = {
+  draft: 'Draft',
+  IN_PROGRESS: 'In progress',
+  COMPLETED: 'Completed',
+};
+
 const ROLE_PERMISSIONS = {
   THERAPIST: ['vitals', 'photos', 'basic-assessment'],
   NURSE: ['vitals', 'photos', 'basic-assessment', 'complaints'],
@@ -214,7 +255,7 @@ const VISIT_LOAD_WAIT_MS = 10_000;
  * @cc [owner:nareshshah139,label:product] completion-progress-explanation
  * When completion is unavailable because progress is below 80%, the form identifies unfinished tracked sections and states that progress is not a clinical validation.
  */
-function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
+function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, identity, headerActions, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
   const automaticSaveBlocked = useRef(false);
@@ -422,6 +463,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const [saveStatus, setSaveStatus] = useState<'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error'>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Print customization (moved from PrescriptionBuilder)
   // Custom background override; empty means the doctor's own letterhead.
@@ -1687,26 +1729,26 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   // Render tabs based on user role
   const renderTabs = () => {
     const tabs = [
-      { id: 'overview', label: 'Overview', icon: Eye, always: true },
+      { id: 'overview', label: 'Overview', always: true },
     ];
 
     if (hasPermission('vitals') || hasPermission('all')) {
-      tabs.push({ id: 'vitals', label: 'Vitals', icon: Stethoscope, always: false });
+      tabs.push({ id: 'vitals', label: 'Vitals', always: false });
     }
 
     if (hasPermission('photos') || hasPermission('all')) {
-      tabs.push({ id: 'photos', label: 'Photos', icon: Camera, always: false });
+      tabs.push({ id: 'photos', label: 'Photos', always: false });
     }
 
     // Assessment tab removed; moved into Prescription's Chief Complaints
 
     if (hasPermission('all')) {
-      tabs.push({ id: 'prescription', label: 'Prescription', icon: FileText, always: false });
-      tabs.push({ id: 'labs', label: 'Lab Tests', icon: Activity, always: false });
-      tabs.push({ id: 'customization', label: 'Customization', icon: FileText, always: false });
+      tabs.push({ id: 'prescription', label: 'Prescription', always: false });
+      tabs.push({ id: 'labs', label: 'Lab Tests', always: false });
+      tabs.push({ id: 'customization', label: 'Customization', always: false });
     }
 
-    tabs.push({ id: 'history', label: 'History', icon: History, always: true });
+    tabs.push({ id: 'history', label: 'History', always: true });
 
     // On Examination is now part of Prescription tab UI
 
@@ -1714,10 +1756,67 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   };
 
   return (
-    <div className="flex min-w-0 flex-col gap-6 xl:flex-row">
+    <div className="grid min-w-0 items-start gap-x-6 gap-y-4 xl:grid-cols-[20rem_minmax(0,1fr)]">
+      <div className="sticky -top-4 z-30 -mx-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-background px-4 py-2 md:-top-6 md:-mx-6 md:px-6 xl:col-span-2">
+        {identity}
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-medium text-gray-900">Visit #{currentVisitNumber}</span>
+          <Badge variant={visitStatus === 'COMPLETED' ? 'default' : visitStatus === 'IN_PROGRESS' ? 'secondary' : 'outline'}>
+            {VISIT_STATE_LABEL[visitStatus]}
+          </Badge>
+          <span className="text-xs text-gray-500">
+            {saveStatus === 'saving' && 'Saving…'}
+            {saveStatus === 'autosaving' && 'Auto-saving…'}
+            {saveStatus === 'unsaved' && 'Unsaved changes'}
+            {saveStatus === 'saved' && (lastSavedAt ? `Saved ${displayClinicTime(new Date(lastSavedAt))}` : 'Saved')}
+            {saveStatus === 'error' && <span className="text-red-600">Save failed</span>}
+          </span>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <label htmlFor="visit-consultation-type" className="text-sm font-medium">Consultation type</label>
+          <select id="visit-consultation-type" className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            value={consultationType || 'IN_PERSON'} onChange={event => {
+              setConsultationType(event.target.value as ConsultationType);
+              setTeleVideoConsent(false);
+            }}>
+            <option value="IN_PERSON">In-person</option>
+            <option value="TELE_VIDEO">Tele-video</option>
+          </select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" data-tour="help-button">
+                <HelpCircle className="h-4 w-4 mr-2" />
+                Help
+                <ChevronDown className="ml-1 h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setGuideOpen(true)}>Quick Guide</DropdownMenuItem>
+              <DoctorTour autoStart={false}>
+                {startTour => <DropdownMenuItem onSelect={startTour}>Visit tour</DropdownMenuItem>}
+              </DoctorTour>
+              <DropdownMenuItem onSelect={() => setShortcutsOpen(true)}>Shortcuts</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {headerActions}
+        </div>
+      </div>
+      <QuickGuide title="Visit guide" sections={VISIT_GUIDE_SECTIONS} open={guideOpen} onOpenChange={setGuideOpen} />
+      {consultationType === 'TELE_VIDEO' && (
+        <div className="space-y-2 rounded-md border bg-muted/30 p-3 xl:col-span-2">
+          <label className="flex items-start gap-2 text-sm font-medium">
+            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={teleVideoConsent}
+              required aria-describedby="tele-video-consent-help" onChange={event => setTeleVideoConsent(event.target.checked)} />
+            Patient consented to tele-video consultation
+          </label>
+          <p id="tele-video-consent-help" className={`text-sm ${consentMissing ? 'text-destructive' : 'text-muted-foreground'}`}>
+            {consentMissing ? TELE_VIDEO_CONSENT_REQUIRED : 'Consent will be recorded with your account and the save time.'}
+          </p>
+        </div>
+      )}
       {/* Patient Context Sidebar */}
       {showPatientContext && (
-        <div className="w-full shrink-0 space-y-4 xl:w-80">
+        <div className="w-full space-y-4">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -1730,14 +1829,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
             <CardContent className="space-y-4">
               {patientDetails && (
                 <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <User className="h-4 w-4 text-gray-500" />
-                    <span className="font-medium">{patientDetails.name}</span>
-                    <Badge variant="outline" className="max-w-full break-all whitespace-normal text-xs">ID: {patientId}</Badge>
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    Age: {calculateAge(patientDetails) ?? 'N/A'} • {patientDetails.gender || 'N/A'}
-                  </div>
+                  {patientDetails.patientCode && (
+                    <div className="text-sm text-gray-600">Patient code: {patientDetails.patientCode}</div>
+                  )}
                   <div className="text-sm text-gray-600">
                     Phone: {patientDetails.phone || 'N/A'}
                   </div>
@@ -1760,7 +1854,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                   <div className="text-xs font-medium text-yellow-800">⚠️ Patient Loading</div>
                   <div className="text-sm text-yellow-700">
-                    Loading patient data for ID: {patientId}
+                    Loading patient data
                     {patientName && <div className="mt-1">Name: {patientName}</div>}
                   </div>
                   <Button 
@@ -1815,7 +1909,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       )}
       
       {/* Main Content */}
-      <div className={`min-w-0 flex-1 space-y-6 ${showPatientContext ? '' : 'max-w-none'}`}>
+      <div className={`min-w-0 space-y-6 ${showPatientContext ? '' : 'xl:col-span-2'}`}>
         {!showPatientContext && (
           <Button variant="outline" size="sm" onClick={() => setShowPatientContext(true)} className="mb-4">
             <User className="h-4 w-4 mr-2" />
@@ -1834,75 +1928,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
           </Button>
         </div>
       )}
-
-      {/* Visit Header */}
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-              <CardTitle className="flex flex-wrap items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Visit #{currentVisitNumber}
-                <Badge variant={visitStatus === 'COMPLETED' ? 'default' : visitStatus === 'IN_PROGRESS' ? 'secondary' : 'outline'}>
-                  {visitStatus.replace('_', ' ').toUpperCase()}
-                </Badge>
-                {appointmentData && (
-                  <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-                    <Calendar className="h-3 w-3 mr-1" />
-                    Linked to Appointment
-                  </Badge>
-                )}
-              </CardTitle>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{photoCount} Photos</Badge>
-              <div className="w-20 bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            <div className="text-xs text-gray-500 min-w-[120px] text-right">
-              {saveStatus === 'saving' && 'Saving…'}
-              {saveStatus === 'autosaving' && 'Auto-saving…'}
-              {saveStatus === 'unsaved' && 'Unsaved changes'}
-              {saveStatus === 'saved' && (lastSavedAt ? `Saved ${displayClinicTime(new Date(lastSavedAt))}` : 'Saved')}
-              {saveStatus === 'error' && <span className="text-red-600">Save failed</span>}
-            </div>
-              <DoctorTour autoStart={false} />
-              <Button variant="outline" size="sm" onClick={() => setShortcutsOpen(true)}>
-                <Keyboard className="h-4 w-4 mr-2" />
-                Shortcuts
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3 pt-0">
-          <div className="max-w-xs space-y-1.5">
-            <label htmlFor="visit-consultation-type" className="text-sm font-medium">Consultation type</label>
-            <select id="visit-consultation-type" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={consultationType || 'IN_PERSON'} onChange={event => {
-                setConsultationType(event.target.value as ConsultationType);
-                setTeleVideoConsent(false);
-              }}>
-              <option value="IN_PERSON">In-person</option>
-              <option value="TELE_VIDEO">Tele-video</option>
-            </select>
-          </div>
-          {consultationType === 'TELE_VIDEO' && (
-            <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-              <label className="flex items-start gap-2 text-sm font-medium">
-                <input type="checkbox" className="mt-0.5 h-4 w-4" checked={teleVideoConsent}
-                  required aria-describedby="tele-video-consent-help" onChange={event => setTeleVideoConsent(event.target.checked)} />
-                Patient consented to tele-video consultation
-              </label>
-              <p id="tele-video-consent-help" className={`text-sm ${consentMissing ? 'text-destructive' : 'text-muted-foreground'}`}>
-                {consentMissing ? TELE_VIDEO_CONSENT_REQUIRED : 'Consent will be recorded with your account and the save time.'}
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
         <DialogContent className="max-w-md">
@@ -1939,9 +1964,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       <Card>
         <CardContent className="p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6 flex flex-wrap gap-2">
+            <TabsList className="mb-4 flex w-full flex-wrap gap-1">
               {renderTabs().map(tab => {
-                const IconComponent = tab.icon;
                 const showIndicator = progressSections.some(section => section.id === tab.id && section.done);
                 return (
                   <TabsTrigger 
@@ -1949,8 +1973,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     value={tab.id}
                     className="flex items-center gap-2 relative"
                   >
-                    <IconComponent className="h-4 w-4" />
                     {tab.label}
+                    {tab.id === 'photos' && photoCount > 0 && (
+                      <Badge variant="secondary" className="px-1.5 py-0 text-xs">{photoCount}</Badge>
+                    )}
                     {showIndicator && (
                       <div className="w-2 h-2 bg-green-500 rounded-full" title="Section complete" />
                     )}
