@@ -23,7 +23,7 @@ import { validate, ValidationError } from 'class-validator';
 import { extractWithCodexOAuth, purchaseOcrCodexConfig } from '../../shared/codex/codex-oauth';
 import sharp from 'sharp';
 import type { Express } from 'express';
-import { grantsForRole, parsePermissionList, permissionGrants } from '../../shared/access/permission-grants';
+import { permissionGrants, userGrants } from '../../shared/access/permission-grants';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { clinicDayOf, clinicDayRange, clinicDayStart } from './register-utils';
 import {
@@ -114,12 +114,12 @@ export class PharmacyPurchaseInvoiceService {
    * scope and everything nested under it, and a pharmacist holds the pharmacy and inventory scopes.
    */
   async capabilities(user: { id: string; role: string }) {
-    const dbUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { role: true, permissions: true } });
+    const dbUser = await this.prisma.user.findUnique({ where: { id: user.id }, select: { role: true, permissions: true, revokedPermissions: true } });
     const role = dbUser?.role;
     const universal = user.role === 'OWNER' || role === 'ADMIN' || role === 'DOCTOR';
     const eligible = universal || ['RECEPTION', 'PHARMACIST'].includes(user.role);
     const roleRecord = dbUser ? await this.prisma.role.findFirst({ where: { name: role }, select: { permissions: true } }) : null;
-    const permissions = permissionGrants(grantsForRole(role, [...parsePermissionList(dbUser?.permissions), ...parsePermissionList(roleRecord?.permissions)]));
+    const permissions = permissionGrants(dbUser ? userGrants(dbUser, roleRecord?.permissions) : []);
     const has = (...keys: string[]) => eligible && (universal || keys.some(key => permissions.has(key)));
     const read = has('pharmacy:purchase-invoice:read', 'inventory:po:read');
     const create = has('pharmacy:purchase-invoice:create', 'inventory:po:create');

@@ -27,7 +27,7 @@ import { InventoryService } from '../inventory/inventory.service';
 import { InventoryItemRequestService } from '../inventory/inventory-item-request.service';
 import { ITEM_NAMING_INSTRUCTIONS, ITEM_NAMING_SCHEMA, nameProposedItem, ProposedItemNaming } from './proposed-item-naming';
 import { ReportsService } from '../reports/reports.service';
-import { grantsForRole, parsePermissionList, permissionGranted } from '../../shared/access/permission-grants';
+import { permissionGranted, userGrants } from '../../shared/access/permission-grants';
 import {
   CreatePharmacyAgentSessionDto,
   RejectPharmacyAgentProposalDto,
@@ -1541,20 +1541,14 @@ export class PharmacyAgentService implements OnModuleInit {
     const prisma = this.prisma as any;
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { permissions: true, role: true },
+      select: { permissions: true, revokedPermissions: true, role: true },
     });
     if (!dbUser) return false;
     const role = await prisma.role.findFirst({
       where: { name: dbUser.role },
       select: { permissions: true },
     });
-    return permissionGranted(
-      grantsForRole(dbUser.role, [
-        ...parsePermissionList(role?.permissions),
-        ...parsePermissionList(dbUser.permissions),
-      ]),
-      permission,
-    );
+    return permissionGranted(userGrants(dbUser, role?.permissions), permission);
   }
 
   private detectAttachmentKind(file: Express.Multer.File) {

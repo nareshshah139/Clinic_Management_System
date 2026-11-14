@@ -1,8 +1,8 @@
 import { PharmacyPurchaseInvoiceService } from '../pharmacy-purchase-invoice.service';
 import { PharmacyAgentService } from '../../pharmacy-agent/pharmacy-agent.service';
 
-const database = (role: string, grants: string[]) => ({
-  user: { findUnique: jest.fn().mockResolvedValue({ role, permissions: null }) },
+const database = (role: string, grants: string[], revoked: string[] | null = null) => ({
+  user: { findUnique: jest.fn().mockResolvedValue({ role, permissions: null, revokedPermissions: revoked && JSON.stringify(revoked) }) },
   role: { findFirst: jest.fn().mockResolvedValue({ permissions: JSON.stringify(grants) }) },
 });
 
@@ -22,4 +22,15 @@ it('grants an agent permission inside the wildcard scope and nothing outside it'
   expect(await (service as any).hasPermission(user, 'pharmacy:drug:read')).toBe(true);
   expect(await (service as any).hasPermission(user, 'pharmacy:drug:inventory-change:read')).toBe(true);
   expect(await (service as any).hasPermission(user, 'pharmacy:invoice:read')).toBe(false);
+});
+it('refuses purchase capabilities whose role grant the user has had revoked', async () => {
+  const service = new PharmacyPurchaseInvoiceService(database('RECEPTION', ['inventory:po:*', 'pharmacy:drug:*'], ['inventory:po:*']) as any);
+  const result = await service.capabilities({ id: 'reception', role: 'RECEPTION' });
+  expect(result).toMatchObject({ read: false, create: false, review: false, commit: false });
+});
+it('refuses an agent permission whose role grant the user has had revoked', async () => {
+  const service = new PharmacyAgentService(database('RECEPTION', ['pharmacy:drug:*', 'pharmacy:invoice:read'], ['pharmacy:drug:*']) as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+  const user = { id: 'reception', role: 'RECEPTION' };
+  expect(await (service as any).hasPermission(user, 'pharmacy:drug:read')).toBe(false);
+  expect(await (service as any).hasPermission(user, 'pharmacy:invoice:read')).toBe(true);
 });

@@ -1,4 +1,4 @@
-import { fixedGrants, grantsForRole, heldPermissions, parsePermissionList, permissionDeltas, permissionGranted, userGrants } from './permission-grants';
+import { fixedGrants, heldPermissions, permissionDeltas, permissionGranted, userGrants } from './permission-grants';
 
 describe('permissionGranted', () => {
   it.each([
@@ -34,7 +34,7 @@ describe('permissionGranted', () => {
   });
 });
 
-describe('grantsForRole', () => {
+describe('userGrants for the role-fixed rules', () => {
   it.each([
     ['PHARMACIST', [], ['pharmacy:*', 'inventory:*']],
     ['PHARMACIST', ['billing:invoice:read'], ['billing:invoice:read', 'pharmacy:*', 'inventory:*']],
@@ -45,11 +45,11 @@ describe('grantsForRole', () => {
     ['MANAGER', ['pharmacy:*'], ['pharmacy:*']],
     [undefined, ['inventory:item:read'], ['inventory:item:read']],
   ])('gives %s with %j the grants %j', (role, stored, expected) => {
-    expect(grantsForRole(role, stored)).toEqual(expected);
+    expect(userGrants({ role, permissions: stored, revokedPermissions: null }, null)).toEqual(expected);
   });
 });
 
-describe('parsePermissionList', () => {
+describe('stored permission lists', () => {
   it.each([
     ['["pharmacy:invoice:read",1,"inventory:*"]', ['pharmacy:invoice:read', 'inventory:*']],
     [['pharmacy:drug:read', null], ['pharmacy:drug:read']],
@@ -57,7 +57,7 @@ describe('parsePermissionList', () => {
     ['{"pharmacy":true}', []],
     [null, []],
   ])('reads %j as %j', (raw, expected) => {
-    expect(parsePermissionList(raw)).toEqual(expected);
+    expect(heldPermissions(raw, { permissions: null, revokedPermissions: null })).toEqual(expected);
   });
 });
 

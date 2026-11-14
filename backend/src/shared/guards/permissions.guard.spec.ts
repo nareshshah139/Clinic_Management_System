@@ -23,13 +23,13 @@ describe('PermissionsGuard requirement groups', () => {
     getHandler: () => routes[method], getClass: () => PermissionRoutes,
     switchToHttp: () => ({ getRequest: () => ({ user: { id: 'test-user', role } }) }),
   }) as ExecutionContext;
-  const checkAs = (role: string, method: keyof PermissionRoutes, userPermissions: readonly string[], rolePermissions: readonly string[] = []) =>
+  const checkAs = (role: string, method: keyof PermissionRoutes, userPermissions: readonly string[], rolePermissions: readonly string[] = [], revoked: readonly string[] = []) =>
     new PermissionsGuard(new Reflector(), {
-      user: { findUnique: async () => ({ role, permissions: JSON.stringify(userPermissions) }) },
+      user: { findUnique: async () => ({ role, permissions: JSON.stringify(userPermissions), revokedPermissions: JSON.stringify(revoked) }) },
       role: { findFirst: async () => ({ permissions: JSON.stringify(rolePermissions) }) },
     } as any).canActivate(context(method, role));
-  const check = (method: keyof PermissionRoutes, userPermissions: string[], rolePermissions: string[] = []) =>
-    checkAs('RECEPTION', method, userPermissions, rolePermissions);
+  const check = (method: keyof PermissionRoutes, userPermissions: string[], rolePermissions: string[] = [], revoked: string[] = []) =>
+    checkAs('RECEPTION', method, userPermissions, rolePermissions, revoked);
 
   it('keeps every existing string permission required', async () => {
     expect(await check('all', ['first'])).toBe(false);
@@ -44,6 +44,14 @@ describe('PermissionsGuard requirement groups', () => {
   });
   it('combines role and user grants while requiring every group', async () => {
     expect(await check('alternatives', ['alternative'], ['second'])).toBe(true);
+  });
+  it('refuses a role grant the user has had revoked and keeps the unrevoked ones', async () => {
+    expect(await check('inventoryRead', [], ['inventory:item:read', 'first'], ['inventory:item:read'])).toBe(false);
+    expect(await check('inventoryRead', [], ['inventory:item:read', 'first'], ['first'])).toBe(true);
+    expect(await check('inventoryRead', ['inventory:item:read'], [], ['inventory:item:read'])).toBe(false);
+  });
+  it('keeps the pharmacist role-fixed grants when they are revoked', async () => {
+    expect(await checkAs('PHARMACIST', 'invoiceRead', [], ['pharmacy:*'], ['pharmacy:*'])).toBe(true);
   });
   it('fails closed on an empty alternative group or ungranted wildcard', async () => {
     expect(await check('emptyAlternatives', ['*'])).toBe(false);

@@ -6,7 +6,7 @@ const IMPLIED_GRANTS: Readonly<Record<string, readonly string[]>> = {
 
 export type PermissionGrants = { readonly has: (required: string) => boolean };
 
-export function parsePermissionList(raw: unknown): string[] {
+function parsePermissionList(raw: unknown): string[] {
   try {
     const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
     return Array.isArray(value) ? value.filter((p): p is string => typeof p === 'string') : [];
@@ -22,7 +22,7 @@ export function fixedGrants(role: string | null | undefined): string[] {
   return [...(IMPLIED_GRANTS[role] ?? [])];
 }
 
-export function grantsForRole(role: string | null | undefined, stored: readonly string[]): string[] {
+function grantsForRole(role: string | null | undefined, stored: readonly string[]): string[] {
   if (role && UNIVERSAL_ROLES.has(role)) return ['*'];
   return [...stored.filter((grant) => grant !== '*'), ...fixedGrants(role)];
 }

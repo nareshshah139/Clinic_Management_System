@@ -2,7 +2,7 @@ import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY, PermissionRequirement } from '../decorators/permissions.decorator';
 import { PrismaService } from '../database/prisma.service';
-import { grantsForRole, parsePermissionList, permissionGrants } from '../access/permission-grants';
+import { permissionGrants, userGrants } from '../access/permission-grants';
 
 /**
  * @cc [owner:nareshshah139,label:security] permission-gate
@@ -54,7 +54,7 @@ export class PermissionsGuard implements CanActivate {
 
     const dbUser = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { permissions: true, role: true },
+      select: { permissions: true, revokedPermissions: true, role: true },
     });
 
     if (!dbUser) {
@@ -69,12 +69,7 @@ export class PermissionsGuard implements CanActivate {
     const roleRecord = await this.prisma.role
       .findFirst({ where: { name: dbUser.role }, select: { permissions: true } })
       .catch(() => null);
-    const grants = permissionGrants(
-      grantsForRole(dbUser.role, [
-        ...parsePermissionList(roleRecord?.permissions),
-        ...parsePermissionList(dbUser.permissions),
-      ]),
-    );
+    const grants = permissionGrants(userGrants(dbUser, roleRecord?.permissions));
 
     return requiredPermissions.every((requirement) =>
       typeof requirement === 'string'
