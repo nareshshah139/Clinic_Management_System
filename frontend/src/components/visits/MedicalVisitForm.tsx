@@ -604,7 +604,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     [doctorId, patientId, visitId, appointmentId, visitDate]
   );
 
-  const isInitialLoadRef = useRef(true);
   const hasUnsavedChangesRef = useRef(false);
   const autoSaveTimerRef = useRef<number | null>(null);
   const autoSavePromiseRef = useRef<Promise<void> | null>(null);
@@ -615,15 +614,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const justSavedRef = useRef(false);
   const lastIdempotencyKeyRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
-  const lastChangeHashRef = useRef<string | null>(null);
-  const stableHash = useCallback((input: string): string => {
-    let hash = 5381;
-    for (let i = 0; i < input.length; i++) {
-      hash = ((hash << 5) + hash) + input.charCodeAt(i);
-      hash |= 0;
-    }
-    return Math.abs(hash).toString(36);
-  }, []);
+  const lastEditSignatureRef = useRef<string | null>(null);
+  const editBaselineRef = useRef<string | null>(null);
+  const hydratedValues = useRef(new Map<string, string>());
 
   const visitSaveAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
   /**
@@ -641,7 +634,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       visitSaveAttempt.current = { fingerprint, key: `cms:${method}:${scope}:${nonce}` };
     }
     return visitSaveAttempt.current.key;
-  }, [appointmentId, doctorId, patientId, stableHash]);
+  }, [appointmentId, doctorId, patientId]);
 
   const clearAutoSaveTimer = useCallback(() => {
     if (autoSaveTimerRef.current) {
@@ -714,6 +707,29 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     dirtyClinicalFields.current,
   ]);
 
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-unsaved-means-edited
+   * Unsaved changes MUST mean the doctor edited a field since the visit loaded or
+   * last saved. Server loads, restored saved drafts, save receipts and the
+   * prescription editor's echoed consultation type and personal history MUST NOT.
+   */
+  const editSignature = useCallback((draft: MedicalVisitDraftState) => {
+    const sinceHydration = (key: string, value: unknown) => {
+      if (value === undefined) return undefined;
+      const json = JSON.stringify(value);
+      if (!hydratedValues.current.has(key)) hydratedValues.current.set(key, json);
+      return hydratedValues.current.get(key) === json ? undefined : value;
+    };
+    const { consultationType: _type, teleVideoConsent: _consent, history, ...rx } = draft.prescriptionClinical ?? {};
+    const { personalHistory, ...rxHistory } = (history ?? {}) as Record<string, unknown>;
+    const valueAt = (path: string) => path.split('.').reduce<unknown>((value, key) => (value as Record<string, unknown> | undefined)?.[key], draft);
+    return JSON.stringify({
+      edited: [...(draft.dirtyClinicalFields ?? [])].sort().map((path) => [path, valueAt(path)]),
+      consultation: sinceHydration('consultation', draft.consultationType && [draft.consultationType, draft.teleVideoConsent]),
+      rx: { ...rx, history: rxHistory, personalHistory: sinceHydration('personalHistory', personalHistory) },
+    });
+  }, []);
+
   const latestDraftStateRef = useRef(serializeDraft());
   latestDraftStateRef.current = serializeDraft();
 
@@ -765,6 +781,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     const payload = draftOverride ?? serializeDraft();
     const record = {
       version: DRAFT_STORAGE_VERSION,
+      saved: force || !hasUnsavedChangesRef.current,
       visitId,
       doctorId,
       patientId,
@@ -927,6 +944,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     }
 
     const payload = buildPayload();
+    const savedSignature = editSignature(latestDraftStateRef.current);
     if (payload.consultationType === 'TELE_VIDEO' && payload.teleVideoConsent !== true) {
       setSaveStatus('unsaved');
       return;
@@ -945,6 +963,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         const saved = await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey }) as VisitDetails;
         const newerChanges = JSON.stringify(payload) !== JSON.stringify(latestPayload.current());
         acknowledgeMutationVersion(saved.version);
+        editBaselineRef.current = savedSignature;
         visitSaveAttempt.current = null;
         latestDraftWriter.current(!newerChanges);
         if (newerChanges) {
@@ -1001,7 +1020,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         }
       }
     })();
-  }, [blockAutomaticSave, buildPayload, clearAutoSaveTimer, persistDraftToStorage, toast, visitId]);
+  }, [blockAutomaticSave, buildPayload, clearAutoSaveTimer, editSignature, persistDraftToStorage, toast, visitId]);
 
   autoSaveRunner.current = runAutoSave;
 
@@ -1074,6 +1093,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         lastDraftJsonRef.current = stored;
         const parsed = JSON.parse(stored) as {
           version?: number;
+          saved?: boolean;
           data?: MedicalVisitDraftState;
           visitId?: string | null;
           appointmentId?: string | null;
@@ -1082,6 +1102,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         };
         if (parsed?.version === DRAFT_STORAGE_VERSION && parsed.data) {
           applyDraft(parsed.data);
+          if (parsed.saved) editBaselineRef.current = editSignature(parsed.data);
           if (parsed.visitId && typeof parsed.visitId === 'string') {
             setVisitId(parsed.visitId);
           }
@@ -1093,7 +1114,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     }
 
     lastStorageKeyRef.current = draftStorageKey;
-  }, [draftStorageKey, applyDraft]);
+  }, [draftStorageKey, applyDraft, editSignature]);
 
   // Unmount cleanup/guards
   useEffect(() => {
@@ -1214,23 +1235,20 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   }, [visitId]);
 
   useEffect(() => {
-    if (isInitialLoadRef.current) {
-      isInitialLoadRef.current = false;
-      return;
-    }
-
+    const signature = editSignature(serializeDraft());
+    editBaselineRef.current ??= signature;
     if (justSavedRef.current) justSavedRef.current = false;
+    if (signature === lastEditSignatureRef.current) return;
+    lastEditSignatureRef.current = signature;
 
-    // Skip if the draft state is logically unchanged to avoid re-render loops
-    try {
-      const draftSnapshot = serializeDraft();
-      const draftHash = stableHash(JSON.stringify(draftSnapshot));
-      if (draftHash === lastChangeHashRef.current) {
-        return;
+    if (signature === editBaselineRef.current) {
+      if (hasUnsavedChangesRef.current && !manualSaveInFlight.current && !autoSavePromiseRef.current && !automaticSaveBlocked.current) {
+        hasUnsavedChangesRef.current = false;
+        clearAutoSaveTimer();
+        setSaveStatus((status) => (status === 'unsaved' ? 'idle' : status));
+        persistDraftToStorage();
       }
-      lastChangeHashRef.current = draftHash;
-    } catch {
-      // If hashing fails, proceed with save path to avoid losing changes
+      return;
     }
 
     hasUnsavedChangesRef.current = true;
@@ -1241,6 +1259,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       scheduleAutoSave();
     }
   }, [
+    editSignature,
+    clearAutoSaveTimer,
     serializeDraft,
     persistDraftToStorage,
     scheduleAutoSave,
@@ -1465,7 +1485,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       latestDraftWriter.current();
       setSaveStatus('saving');
       const payload = getClinicalSavePatch();
-      
+      const savedSignature = editSignature(latestDraftStateRef.current);
+
       let visit;
       if (visitId) {
         const idemKey = buildIdempotencyKey('PATCH', visitId, payload as any);
@@ -1492,6 +1513,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       visitSaveAttempt.current = null;
       const newerChanges = JSON.stringify(payload) !== JSON.stringify(latestPayload.current());
       acknowledgeMutationVersion((visit as VisitDetails).version);
+      editBaselineRef.current = savedSignature;
       if ((complete || requireLatest) && newerChanges) throw new Error('New changes were entered while saving. Please save again before completing or exporting.');
       if (complete) {
         const completePayload: Record<string, unknown> = { version: visitVersionRef.current };
@@ -1737,7 +1759,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
               {saveStatus === 'saving' && 'Saving…'}
               {saveStatus === 'autosaving' && 'Auto-saving…'}
               {saveStatus === 'unsaved' && 'Unsaved changes'}
-              {saveStatus === 'saved' && (lastSavedAt ? `Saved ${displayClinicTime(new Date(lastSavedAt))}` : 'Saved')}
+              {(saveStatus === 'saved' || (saveStatus === 'idle' && visitId)) && (lastSavedAt ? `Saved ${displayClinicTime(new Date(lastSavedAt))}` : 'Saved')}
               {saveStatus === 'error' && <span className="text-destructive-text">Save failed</span>}
             </span>
             <DropdownMenu>
