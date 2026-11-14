@@ -20,10 +20,9 @@ module.exports = journey(
     await page.locator('[data-calendar="CONFIRMED"]').getByText("Kavita Naik").first().waitFor();
     await ui.screen("calendar-tomorrow");
 
-    await ui.type(page.getByPlaceholder("Search patient by name/phone"), "Kavita", "Patient search: Kavita");
-    ui.decide("Which match is the patient", false);
-    await ui.click(page.getByText(`Kavita Naik — ${patient.phone}`), "Patient search: pick Kavita Naik");
-    await page.getByText("Selected: Kavita Naik").waitFor();
+    await ui.type(page.getByPlaceholder("Name or phone"), "Kavita", "Patient search: Kavita");
+    await page.waitForFunction((shown) => [...document.querySelectorAll("input")].some((i) => i.value === shown), `Kavita Naik — ${patient.phone}`);
+    await page.getByRole("status").filter({ hasText: "Kavita Naik already has 10:00" }).waitFor();
     await ui.screen("patient-selected");
 
     ui.decide("Scheduled or Confirmed column", false);
@@ -33,15 +32,15 @@ module.exports = journey(
     const labels = await tiles.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")));
     const wanted = labels.findIndex((l) => l.slice(5, 10) > "10:00");
     await ui.click(tiles.nth(wanted), `Calendar: free time ${labels[wanted].slice(5, 16)} in Confirmed`);
-    await page.getByRole("heading", { name: "Book Appointment" }).waitFor();
+    await page.getByRole("heading", { name: "Book appointment" }).waitFor();
     await ui.screen("booking-dialog");
 
     ui.decide("Duration", true);
-    ui.decide("Appointment type", true);
+    ui.decide("Type", true);
     ui.decide("Room", true);
     ui.reenter("Booking dialog: patient, phone, date and time shown again");
-    await ui.click(page.getByRole("button", { name: "Confirm Booking" }), "Booking dialog: Confirm Booking");
-    await page.getByText("Appointment Successfully Booked!").waitFor();
+    await ui.click(page.getByRole("dialog").getByRole("button", { name: "Book", exact: true }), "Booking dialog: Book");
+    await page.getByText(`Booked: Kavita Naik,`).waitFor();
     await ui.screen("booked");
 
     const after = await ui.api("GET", `/appointments/doctor/${ui.info.seeded.doctor.id}/schedule?date=${tomorrow}`);

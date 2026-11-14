@@ -21,9 +21,7 @@ module.exports = journey(
 
     const row = page.locator('.group:has-text("Vikram Patil")').last();
     await row.scrollIntoViewIfNeeded();
-    const box = await row.boundingBox();
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await ui.click(row.locator('button[title="Start Visit"]'), "Calendar row Vikram Patil: START");
+    await ui.click(row.locator('button[title="Start visit"]'), "Calendar row Vikram Patil: Start visit");
     await page.getByText("Visit Documentation").first().waitFor();
     await ui.screen("visit-overview");
 
