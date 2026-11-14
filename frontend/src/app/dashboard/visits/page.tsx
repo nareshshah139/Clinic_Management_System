@@ -234,7 +234,7 @@ import { useCallback, useEffect, useState, Suspense } from 'react';
 import { isValidId } from '@/lib/id';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { getGlobalPrintStyleTag } from '@/lib/printStyles';
+import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { usePatientHistory } from '@/components/visits/usePatientHistory';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
@@ -1011,10 +1011,9 @@ function VisitsPageInner() {
 }
 
 export default function VisitsPage() {
+  useEffect(() => { ensureGlobalPrintStyles(); }, []);
   return (
     <Suspense fallback={<LoadingSkeleton label="Loading visits…" />}>
-      {/* Inject global print CSS used by prescription/invoice previews (fixed headers, page-break helpers) */}
-      <div dangerouslySetInnerHTML={{ __html: getGlobalPrintStyleTag() }} />
       <VisitsPageInner />
     </Suspense>
   );

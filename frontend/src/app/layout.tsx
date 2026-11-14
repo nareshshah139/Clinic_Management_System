@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { DEFAULT_PALETTE, PALETTE_BOOT_SCRIPT } from "@/lib/palette";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,7 +25,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-palette={DEFAULT_PALETTE} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: PALETTE_BOOT_SCRIPT }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
