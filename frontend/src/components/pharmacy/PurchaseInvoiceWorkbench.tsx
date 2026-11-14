@@ -2562,7 +2562,7 @@ function PurchaseInvoiceEditor({
         setNotice(
           invoice.workflowReceiptId
             ? `Bill ${invoice.invoiceNumber} posted. Stock received earlier · 0 added again.`
-            : `Stock added for ${invoice.invoiceNumber}. The saved record confirms the operation completed.`,
+            : `Stock added for ${invoice.invoiceNumber}. ${(invoice.items || []).map(item => `${item.productName}: ${Number(item.quantityPurchased) + Number(item.freeQuantity || 0)} added.`).join(" ")}`,
         );
         window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
       }
@@ -4112,6 +4112,9 @@ function PurchaseInvoiceEditor({
               )}
               {notice}
             </p>
+          )}
+          {notice && stockAdded && !stockReceivedEarlier && !notice.startsWith("Restored") && (
+            <Button onClick={() => { resetDraft(); onNew?.(); }} disabled={busy}>Enter another bill</Button>
           )}
           {error && (error.startsWith("Could not copy.") || !recovery || !error.includes(recovery.message)) && (
             <Alert variant="destructive">

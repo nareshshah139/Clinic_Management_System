@@ -2171,8 +2171,9 @@ describe('PurchaseInvoiceWorkbench', () => {
     );
     expect(api.reviewPharmacyPurchaseInvoice.mock.invocationCallOrder[0]).toBeLessThan(api.commitPharmacyPurchaseInvoiceStock.mock.invocationCallOrder[0]);
     expect(window.confirm).not.toHaveBeenCalled();
-    expect(await screen.findByText(/Stock added for APX-001/i)).toBeInTheDocument();
+    expect(await screen.findByText('Stock added for APX-001. Azithral 500 Tablet: 1 added.')).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Stock status' })).toHaveTextContent('PINV-APX-001-inv1');
+    expect(screen.getByRole('button', { name: 'Enter another bill' })).toBeEnabled();
   });
 
   it('shows backend reconciliation problems and keeps review disabled', async () => {

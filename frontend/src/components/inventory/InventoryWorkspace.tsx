@@ -270,7 +270,7 @@ export function InventoryWorkspace() {
   };
   return (
     <main className="inventory-surface min-w-0 space-y-5 pb-12 dark:bg-background dark:text-foreground">
-      <PageHeader title={<>Inventory</>} description={<>Receive, review and manage pharmacy stock.</>} actions={<><InventoryAction
+      <PageHeader title={<>Inventory</>} actions={<><InventoryAction
           label="Refresh inventory"
           onClick={() => {
             void loadPermissions();
