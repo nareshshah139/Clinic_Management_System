@@ -3,8 +3,15 @@
 You are building one unit of a UX simplification of the clinic management app (Next.js frontend in
 `frontend/src`, NestJS backend in `backend/src`, Prisma + PostgreSQL). The owner's goal: the app
 should feel brainless to use for clinic staff who are not computer people, and it should carry less
-subtext (helper lines, descriptions, hints). Your assignment names the changes that were accepted
-for your unit and the ones that were rejected. Build the accepted ones. Do not build the rejected ones.
+subtext (helper lines, descriptions, hints). Your assignment is the file `docs/ux-flow/units/<unit>.md`. It
+names the changes accepted for your unit and the ones rejected. Build the accepted ones. Do not
+build the rejected ones.
+
+A container restart can stop you at any moment and files on disk are all that survives. Commit
+after every change that leaves the tests you touched green, and keep a running note of what is
+done and what is next in `NOTES.md` at the root of your worktree (not committed to the final
+result; the lead removes it). If your worktree already has commits or a `NOTES.md` when you start,
+a previous worker was interrupted: read the note and `git log`, verify what is there, and continue.
 
 ## Where you work
 
@@ -33,6 +40,8 @@ for your unit and the ones that were rejected. Build the accepted ones. Do not b
 - Clinical data, money and stock rules do not change unless your assignment says so explicitly.
 - Text you write: plain words, sentence case, no exclamation marks, no internal codes (OPD,
   WALKIN, ids). One concept, one name (naming table in `redundancy.md`).
+- The owner decided that Quick Guides and tours stay. Where a Subtext table says to cut a Quick
+  Guide button, dialog or tour, keep it and rewrite its lines to match the changed screen.
 - Subtext: apply your critiques' Subtext tables. "cut" means delete the element and any import it
   leaves unused. "shorten" means use the given wording. "keep" stays. Warnings about safety, money
   or an irreversible action stay even if a table says cut.
@@ -55,7 +64,7 @@ for your unit and the ones that were rejected. Build the accepted ones. Do not b
    off screen, one obvious primary action. Also capture each changed screen at a phone viewport
    (390x844) with a throwaway script in your scratch folder and check it the same way.
 3. **Tests.** `cd frontend && npx jest --ci <tests of the files you touched>` while working, then
-   the whole suite once at the end (`npx jest --ci --silent`). Where a test asserted text or a
+   the whole suite once at the end (`npx jest --ci --silent --maxWorkers=2`). Where a test asserted text or a
    control you removed on purpose, update the expectation. Never skip, delete or loosen a test to
    get green. If a test encodes a product rule your change breaks, stop and report. Add a test for
    each behaviour you add or fix (call the component the way a user does, assert a literal result).
