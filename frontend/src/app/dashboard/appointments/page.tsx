@@ -4,9 +4,7 @@ import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import AppointmentScheduler from '@/components/appointments/AppointmentScheduler';
 import AppointmentsCalendar from '@/components/appointments/AppointmentsCalendar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -22,12 +20,14 @@ import { ROOM_READ_ROLES } from '@/lib/appointment-access';
 function AppointmentsPageInner() {
   const search = useSearchParams();
   const prefillPatientId = search.get('patientId') || undefined;
+  const dateParam = search.get('date');
   const { user } = useDashboardUser();
   const [doctors, setDoctors] = useState<User[]>([]);
   const [doctorId, setDoctorId] = useState<string>('');
   const [date, setDate] = useState<string>(() => {
     // Default to today (IST). Only restore the stored date if it equals today.
     const today = getISTDateString();
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && !Number.isNaN(Date.parse(dateParam))) return dateParam;
     if (typeof window === 'undefined') return today;
     try {
       const persisted = localStorage.getItem('appointments.date');
@@ -68,7 +68,7 @@ function AppointmentsPageInner() {
     try { if (date) localStorage.setItem('appointments.date', date); } catch {}
   }, [date]);
   return (
-    <Tabs defaultValue="calendar" className="space-y-4">
+    <div className="space-y-4">
       <PageHeader title="Appointments" />
       <Card>
         <CardContent className="pt-6">
@@ -125,28 +125,14 @@ function AppointmentsPageInner() {
         </DialogContent>
       </Dialog>
 
-      <TabsList data-tour="view-tabs">
-        <TabsTrigger value="calendar">Calendar</TabsTrigger>
-        <TabsTrigger value="slots">Slots</TabsTrigger>
-      </TabsList>
-      <TabsContent value="calendar">
-        <AppointmentsCalendar 
-          prefillPatientId={prefillPatientId}
-          controlledDoctorId={doctorId}
-          controlledDate={date}
-          hideHeaderControls
-          readsRooms={ROOM_READ_ROLES.includes(user?.role ?? '')}
-        />
-      </TabsContent>
-      <TabsContent value="slots">
-        <AppointmentScheduler 
-          prefillPatientId={prefillPatientId}
-          controlledDoctorId={doctorId}
-          controlledDate={date}
-          hideHeaderControls
-        />
-      </TabsContent>
-    </Tabs>
+      <AppointmentsCalendar
+        prefillPatientId={prefillPatientId}
+        controlledDoctorId={doctorId}
+        controlledDate={date}
+        hideHeaderControls
+        readsRooms={ROOM_READ_ROLES.includes(user?.role ?? '')}
+      />
+    </div>
   );
 }
 

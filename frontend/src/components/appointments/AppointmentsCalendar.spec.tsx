@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AppointmentsCalendar from './AppointmentsCalendar';
 
@@ -54,6 +54,22 @@ describe('AppointmentsCalendar booking flow', () => {
     await waitFor(() => expect(createAppointment).toHaveBeenCalledTimes(1));
     expect(createAppointment.mock.calls[0][0]).toMatchObject({ slot: '14:00-14:15', calendar: 'CONFIRMED' });
     expect((await screen.findByText('Appointment Successfully Booked!')).parentElement).toHaveTextContent('Synthetic Patient scheduled for 14:00-14:15 in the Confirmed calendar');
+  });
+});
+
+describe('AppointmentsCalendar late booking response', () => {
+  it('does not place a booking answered after the date changed in the newly selected day', async () => {
+    const user = userEvent.setup();
+    let answer!: (value: unknown) => void;
+    createAppointment.mockReturnValueOnce(new Promise((resolve) => { answer = resolve; }));
+    const { rerender } = render(<AppointmentsCalendar prefillPatientId="p1" controlledDoctorId="d1" controlledDate="2099-01-01" hideHeaderControls />);
+    await screen.findByText(/Selected: Synthetic Patient/);
+    await user.click(await within(await screen.findByRole('region', { name: 'Confirmed' })).findByRole('button', { name: 'Book 10:00-10:30' }));
+    await user.click(await screen.findByText('Confirm Booking'));
+    await waitFor(() => expect(createAppointment).toHaveBeenCalled());
+    rerender(<AppointmentsCalendar prefillPatientId="p1" controlledDoctorId="d1" controlledDate="2099-01-02" hideHeaderControls />);
+    await act(async () => answer({ id: 'late', slot: '10:00-10:15', patient: { name: 'Synthetic Patient' } }));
+    expect(screen.queryByRole('button', { name: /Synthetic Patient, 10:00-10:15/ })).toBeNull();
   });
 });
 

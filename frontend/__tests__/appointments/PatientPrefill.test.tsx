@@ -1,7 +1,6 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import AppointmentsCalendar from '@/components/appointments/AppointmentsCalendar';
-import AppointmentScheduler from '@/components/appointments/AppointmentScheduler';
 import { apiClient } from '@/lib/api';
 import { usePrefilledPatient } from '@/components/appointments/usePrefilledPatient';
 
@@ -24,8 +23,8 @@ jest.mock('@/components/appointments/AppointmentBookingDialog', () => ({
   default: ({ open, patient }: any) => open ? <div>Booking for {patient?.name || 'missing patient'}</div> : null,
 }));
 
-it.each([AppointmentsCalendar, AppointmentScheduler])('loads the chart patient before opening booking', async (Component) => {
-  render(<Component prefillPatientId="patient-1" controlledDoctorId="doctor-1" controlledDate="2099-01-01" hideHeaderControls />);
+it('loads the chart patient before opening booking', async () => {
+  render(<AppointmentsCalendar prefillPatientId="patient-1" controlledDoctorId="doctor-1" controlledDate="2099-01-01" hideHeaderControls />);
   await waitFor(() => expect(apiClient.getPatient).toHaveBeenCalledWith('patient-1'));
   await screen.findByRole('button', { name: 'Clear' });
   fireEvent.click(screen.getByRole('button', { name: 'Choose slot' }));
