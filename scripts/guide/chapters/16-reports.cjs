@@ -37,7 +37,7 @@ const generate = (name) => async (page, h) => {
   await h.settle(1500);
   await page.locator("main").getByText("Report for", { exact: false }).last().scrollIntoViewIfNeeded();
 };
-const resultCard = (page) => page.locator('main [data-slot="card"]').last();
+const resultCard = (page) => page.locator("main").getByText(/^Report for /).locator('xpath=ancestor::div[@data-slot="card"][1]');
 const tall = { width: 1440, height: 1400 };
 
 module.exports = {
@@ -131,7 +131,7 @@ module.exports = {
       ],
       fieldsHeading: ["Report", "What it is for"],
       fields: [
-        ["Revenue Report", "Money billed for consultations and procedures: totals, payment modes and the doctors who brought in the most."],
+        ["Revenue Report", "Money received for consultations and procedures: totals, payment modes and the doctors who brought in the most."],
         ["Patient Analytics", "How many patients, new or returning, their ages and gender, and who visits most."],
         ["Doctor Performance", "Each doctor's appointments, how many were completed, and the revenue."],
         ["Appointment Analytics", "How many appointments, how many were completed, cancelled or missed, the busiest hours and how much each room is used."],
@@ -147,12 +147,12 @@ module.exports = {
       ],
       shots: [{ file: "revenue", caption: "A Revenue Report for the last 30 days.", viewport: tall, run: generate("Revenue Report"), target: resultCard }],
       fields: [
-        ["Total Revenue", "The total of the clinic bills made in the dates, GST included."],
+        ["Total Revenue", "Money received on clinic bills in the dates, GST included. Unpaid balances are not counted."],
         ["GST Amount", "The GST on those bills. Consultations and procedures are billed without GST, so this is usually ₹0."],
         ["Net Revenue", "Total Revenue less GST."],
-        ["Total Invoices", "How many bills were made."],
+        ["Total Invoices", "How many payments make up that total."],
         ["Payment Mode Breakdown", "How much was paid by each mode (cash, UPI, card and so on), with the share of the total."],
-        ["Top Performing Doctors", "The doctors whose patients were billed the most."],
+        ["Top Performing Doctors", "The doctors whose patients paid the most, with their number of visits and the average per visit."],
       ],
     },
     {
@@ -165,7 +165,7 @@ module.exports = {
         ["New Patients", "Patients registered in the dates."],
         ["Returning Patients", "Patients who had visited before."],
         ["Avg Age", "The average age of the patients."],
-        ["Gender Distribution", "How many patients are female, male or other."],
+        ["Gender Distribution", "How many patients are of each gender, with the share of the total."],
         ["Most Frequent Patients", "The patients with the most visits, with their last visit date and what they have spent."],
       ],
     },
@@ -189,7 +189,7 @@ module.exports = {
       fields: [
         ["Total Appointments, Completed, Cancelled, No Show", "Counts for the dates. No Show means the patient did not come."],
         ["Peak Hours", "The hours of the day with the most appointments."],
-        ["Room Utilization", "For each room: the average appointments per day, the total, and its share of all appointments."],
+        ["Room Utilization", "For each room: the average appointments per day, the total, and its share of all appointments. Rooms are listed by the app's internal room code, not by name."],
       ],
     },
     {
@@ -199,7 +199,7 @@ module.exports = {
       shots: [{ file: "inventory", caption: "The Inventory Report.", viewport: tall, run: generate("Inventory Report"), target: resultCard }],
       fields: [
         ["Total Items, Total Value, Low Stock, Out of Stock", "How many items are in stock, what they are worth, and how many are low or finished."],
-        ["Top Selling Items", "The items sold most in the dates, with the average selling price."],
+        ["Top Selling Items", "Shown when there were sales in the dates: the items sold most, with the average selling price."],
         ["Low Stock Alerts", "Each item at or below its reorder level, with the reorder level and how many are left."],
       ],
     },

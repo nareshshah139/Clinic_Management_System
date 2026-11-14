@@ -182,7 +182,7 @@ module.exports = {
       title: "Quick Guides and tours",
       who: "Everyone",
       body: [
-        "Most pages have a <b>Quick Guide</b> button at the top right. It opens a short explanation of that page, written for the people who use it. Doctors and reception staff are also offered a guided tour the first time they sign in. The tour points at each part of the screen in turn. You can skip it and start it again later from the Dashboard.",
+        "Most pages have a <b>Quick Guide</b> button at the top right. It opens a short explanation of that page, written for the people who use it. Doctors and reception staff also have guided tours. A tour points at each part of the screen in turn and explains it. It starts only when you click its button, and you can skip it at any step and start it again later. The Dashboard chapter shows both tours.",
       ],
       shots: [
         {

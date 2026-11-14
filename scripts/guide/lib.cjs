@@ -24,10 +24,18 @@ const tokens = {};
 async function api(who, method, route, body, headers = {}) {
   if (!tokens[who]) {
     const user = stack.users[who];
-    const res = await fetch(`${stack.api}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier: user.email, password: user.password }) });
-    const cookie = res.headers.get("set-cookie") || "";
-    const data = await res.json().catch(() => ({}));
-    tokens[who] = { bearer: data.access_token || data.accessToken || data.token, cookie: cookie.split(",").map((c) => c.split(";")[0].trim()).join("; ") };
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch(`${stack.api}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier: user.email, password: user.password }) });
+      if (res.status === 429 && attempt < 15) {
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+        continue;
+      }
+      if (!res.ok) throw Error(`sign-in for ${who} returned ${res.status}`);
+      const cookie = res.headers.get("set-cookie") || "";
+      const data = await res.json().catch(() => ({}));
+      tokens[who] = { bearer: data.access_token || data.accessToken || data.token, cookie: cookie.split(",").map((c) => c.split(";")[0].trim()).join("; ") };
+      break;
+    }
   }
   const t = tokens[who];
   const res = await fetch(`${stack.api}${route}`, {

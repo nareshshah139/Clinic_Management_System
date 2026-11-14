@@ -213,7 +213,9 @@ module.exports = {
           caption: "The Patient History tab on the start screen, with the most recent visit opened.",
           viewport: { width: 1440, height: 1400 },
           run: async (page, h) => {
-            await h.goto(`/dashboard/visits?patientId=${pid(h, PATIENT)}`);
+            await h.goto("/dashboard/visits");
+            await page.getByPlaceholder("Search name, phone, or email").pressSequentially("Sunita", { delay: 50 });
+            await page.getByRole("button", { name: /Sunita Sharma/ }).first().click();
             await page.getByRole("tab", { name: "Patient History" }).click();
             await page.getByRole("button", { name: "Show details" }).first().waitFor({ timeout: 60000 });
             const seeded = page.locator('[data-slot="card"]:has-text("Telogen effluvium")').last();
@@ -237,7 +239,7 @@ module.exports = {
       ],
       shotLayout: "row",
       fields: [
-        ["IN PROGRESS / COMPLETED", "The visit's status. In progress means the doctor has not completed it yet."],
+        ["DRAFT / IN PROGRESS / COMPLETED", "The visit's status. Draft means it has not been saved yet. In progress means it is saved but the doctor has not completed it."],
         ["Appointment", "A card labelled Appointment is a booking with no visit documentation yet."],
         ["Photos / Rx Items", "How many photos and prescription items the visit has."],
       ],
@@ -388,6 +390,7 @@ module.exports = {
               { name: "parting-week8.png", mimeType: "image/png", buffer: scalpPng(960, 640, 1.2, 11) },
             ]);
             await page.getByRole("dialog", { name: "Tag photo positions" }).waitFor();
+            await page.getByRole("dialog").getByRole("button", { name: "Grid" }).click();
             const pickers = page.getByRole("dialog").getByRole("combobox");
             await pickers.nth(0).click(); await page.getByRole("option", { name: "Front", exact: true }).click();
             await pickers.nth(1).click(); await page.getByRole("option", { name: "Close-up", exact: true }).click();
@@ -468,7 +471,7 @@ module.exports = {
         {
           file: "labs",
           as: "doctor",
-          caption: "Ferritin and vitamin D results compared with the visit 8 weeks ago.",
+          caption: "Ferritin and vitamin D results entered, with Compare with previous visit ticked.",
           viewport: { width: 1440, height: 1200 },
           run: async (page, h) => {
             await openVisit(page, h, "review", "Lab Tests");
@@ -577,6 +580,14 @@ module.exports = {
             const complete = page.getByRole("button", { name: "Complete Visit" });
             if (!(await page.getByText("COMPLETED").first().isVisible().catch(() => false))) {
               if (await complete.isDisabled()) {
+                await page.getByRole("tab", { name: "Vitals" }).click();
+                await page.getByRole("button", { name: "Mark Vitals Complete" }).click();
+                await h.settle(2500);
+                await page.getByRole("tab", { name: "Photos" }).click();
+                await page.getByAltText("thumb").first().waitFor({ timeout: 60000 });
+                await page.getByRole("tab", { name: "Lab Tests" }).click();
+                await page.getByRole("button", { name: "Save Labs" }).click();
+                await h.settle(2500);
                 await page.getByRole("tab", { name: "Prescription" }).click();
                 await page.getByRole("button", { name: "Print Preview" }).click();
                 await page.locator("[data-prescription-preview-sidebar]").waitFor();

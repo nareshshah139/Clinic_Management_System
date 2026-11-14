@@ -124,7 +124,6 @@ module.exports = {
           run: async (page, h) => {
             await waitDashboard(page, h);
             await page.getByRole("button", { name: "View All Appointments" }).waitFor();
-            await h.mark(page.getByRole("button", { name: "View All Appointments" }), 1);
           },
           target: card("Today's Appointments"),
           narrow: true,

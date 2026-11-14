@@ -12,7 +12,11 @@ const call = (page, method, route, body) =>
 /** Archives earlier copies of a patient this chapter registers, so a second run starts clean. */
 async function archiveByPhone(page, phone) {
   const res = await call(page, "GET", `/patients?search=${phone}&limit=50`);
-  for (const p of (res && res.data) || []) if (p.phone === phone) await call(page, "POST", `/patients/${p.id}/archive`, {});
+  for (const p of (res && res.data) || [])
+    if (p.phone === phone) {
+      if (p.abhaId) await call(page, "PATCH", `/patients/${p.id}`, { abhaId: null });
+      await call(page, "POST", `/patients/${p.id}/archive`, {});
+    }
 }
 
 async function findId(page, phone) {
@@ -390,6 +394,7 @@ module.exports = {
         "Change what you need.",
         "Click <b>Save Changes</b>.",
       ],
+      tips: ["The Edit Patient window shows the patient's whole name in <b>First Name</b> and leaves <b>Last Name</b> empty. Leave it that way: the name is saved as it reads."],
       shots: [
         {
           file: "more-menu",

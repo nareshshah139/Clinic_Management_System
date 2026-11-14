@@ -350,6 +350,8 @@ module.exports = {
           caption: "The finished medicine table for the acne patient. Each row has + (add below) and the bin (remove).",
           run: async (page, h) => {
             await openShowcase(page, h);
+            for (const cell of await card(page, "treatment").locator("table td:first-child").all()) { await cell.hover(); await page.waitForTimeout(400); }
+            await h.settle(800);
             await h.mark(card(page, "treatment").getByRole("button", { name: "Reuse last meds" }), 1);
             await h.mark(card(page, "treatment").getByRole("button", { name: "Add Row" }), 2);
             await h.mark(card(page, "treatment").getByRole("button", { name: /^Add a medicine below/ }).first(), 3);
@@ -426,7 +428,7 @@ module.exports = {
           file: "investigations",
           as: "doctor",
           caption: "Investigations: CBC, LFT and fasting lipid profile before starting isotretinoin.",
-          run: async (page, h) => { await openShowcase(page, h); await page.getByRole("button", { name: "Manage saved investigations" }).click(); await h.settle(500); },
+          run: async (page, h) => { await openShowcase(page, h); await page.getByRole("button", { name: "Manage saved investigations" }).click(); await card(page, "investigations").evaluate((el) => el.scrollIntoView({ block: "center" })); await h.settle(500); },
           target: (page) => card(page, "investigations"),
         },
       ],
@@ -490,7 +492,7 @@ module.exports = {
             await h.mark(page.getByRole("button", { name: /^(Create|Update) Prescription$/ }), 2);
             await h.mark(page.getByRole("button", { name: "Go to Pharmacy" }), 3);
           },
-          target: (page) => page.locator("div.grid:has(> div > label:text-is('Review Date'))").locator("xpath=..").first(),
+
         },
       ],
     },
@@ -571,13 +573,15 @@ module.exports = {
             await page.getByRole("menu").waitFor();
             await h.settle(400);
           },
+          narrow: true,
+          target: '[role="menu"]',
           after: async (page) => { await page.keyboard.press("Escape"); },
         },
         {
           file: "new-template",
           as: "doctor",
           caption: "New template: build a template from scratch.",
-          viewport: { width: 1440, height: 1300 },
+          viewport: { width: 1440, height: 1800 },
           run: async (page, h) => {
             await openScratch(page, h);
             await page.getByRole("button", { name: "New template" }).click();

@@ -42,7 +42,7 @@ module.exports = {
             await h.mark(page.getByRole("button", { name: "New User" }), 1);
             await h.mark(page.getByRole("button", { name: "Clinic Holidays" }), 2);
             await h.mark(page.getByRole("button", { name: "Quick Guide" }), 3);
-            await h.mark(userRow(page, "Priya Menon").getByRole("button", { name: "Edit" }), 4);
+            await h.mark(page.getByRole("button", { name: "Edit" }).first(), 4);
           },
         },
       ],
@@ -194,8 +194,7 @@ module.exports = {
           file: "reset-page",
           as: "anon",
           caption: "Step 3: the person sets a new password with the code.",
-          narrow: true,
-          target: (page) => page.getByText("Set a new password", { exact: true }).locator("xpath=ancestor::div[contains(@class,'border')][1]"),
+
           run: async (page, h) => {
             await h.goto("/reset-password");
             await page.getByLabel("Reset code").fill(resetCode || "");

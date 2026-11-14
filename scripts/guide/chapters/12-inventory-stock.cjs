@@ -170,7 +170,7 @@ module.exports = {
         {
           file: "stock-list",
           as: "pharmacist",
-          caption: "The stock list: (1) search, (2) Filters, (3) batch view, (4) stock level and expiry, (5) export, (6) the batches.",
+          caption: "The stock list: (1) search, (2) Filters, (3) batch view, (4) stock level and expiry, (5) export. The batches are listed below.",
           viewport: { width: 1440, height: 1250 },
           run: async (page, h) => {
             await stockList(page, h);
@@ -179,7 +179,6 @@ module.exports = {
             await h.mark(page.getByRole("navigation", { name: "Batch view" }), 3);
             await h.mark(page.getByLabel("Stock level"), 4);
             await h.mark(page.getByRole("button", { name: "Export all matching stock" }), 5);
-            await h.mark(page.locator("table").nth(1), 6);
           },
         },
       ],
@@ -258,6 +257,7 @@ module.exports = {
             await page.getByLabel("Show cost & stock details").check();
             await page.getByRole("checkbox", { name: /^Select Adapalene/ }).check();
             await page.getByRole("checkbox", { name: /^Select Azelaic/ }).check();
+            await page.evaluate(() => window.scrollTo(0, 0));
             await h.settle(500);
             await h.mark(page.getByRole("button", { name: /^Set location for/ }), 1);
             await h.mark(page.getByRole("button", { name: /^Count selected batches/ }), 2);
@@ -354,7 +354,7 @@ module.exports = {
           file: "item-edit",
           as: "pharmacist",
           caption: "Correcting Clindamycin Gel: the category is added and the before-and-after list shows the change.",
-          viewport: { width: 1440, height: 1500 },
+          viewport: { width: 1440, height: 1000 },
           run: async (page, h) => {
             await itemPage(page, h, CLINDA);
             await page.getByRole("button", { name: "Edit item" }).click();
@@ -364,9 +364,9 @@ module.exports = {
             await form.getByLabel("Category", { exact: true }).fill("Topical antibiotic");
             await form.getByLabel("Why are you changing it?").fill("Category was missing; checked the carton");
             await h.settle(400);
-            await form.scrollIntoViewIfNeeded();
+            await form.getByText("Check your changes").scrollIntoViewIfNeeded();
+            await page.mouse.wheel(0, 250);
           },
-          target: (page) => page.getByRole("form", { name: "Edit product details" }),
           after: async (page, h) => {
             await page.getByRole("button", { name: "Save corrected details" }).click();
             await page.getByText("Corrected details saved").waitFor({ timeout: 15000 });
@@ -403,9 +403,9 @@ module.exports = {
             await form.getByLabel("Minimum stock").fill("12");
             await form.getByLabel("Why are you changing it?").fill("Higher demand from hair clinic patients");
             await h.settle(400);
-            await form.getByLabel("Minimum stock").scrollIntoViewIfNeeded();
+            await form.getByText("Check your changes").scrollIntoViewIfNeeded();
+            await page.mouse.wheel(0, 250);
           },
-          target: (page) => page.getByRole("form", { name: "Edit product details" }),
           after: async (page) => {
             await page.getByRole("button", { name: "Cancel" }).click();
           },
@@ -499,20 +499,20 @@ module.exports = {
             await h.goto(`${INV}?area=stock&view=approvals`);
             await page.getByRole("tab", { name: "Price / stock" }).click();
             await page.getByText(/pending request/).waitFor({ timeout: 30000 });
-            const row = page.locator("li, article, tr, div").filter({ hasText: /Clindamycin/ }).filter({ has: page.getByRole("button", { name: "Approve" }) }).last();
-            await row.getByRole("button", { name: "Approve" }).click();
+            const row = page.locator("li, article, tr, div").filter({ hasText: /Clindamycin/ }).filter({ has: page.getByRole("button", { name: "Approve", exact: true }) }).last();
+            await row.getByRole("button", { name: "Approve", exact: true }).click();
             await page.getByRole("dialog").getByPlaceholder("Optional note").fill("Matches the new Cipla price list");
             await h.settle(300);
           },
           target: '[role="dialog"]',
           narrow: true,
           after: async (page, h) => {
-            await page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
+            await page.getByRole("dialog").getByRole("button", { name: "Approve", exact: true }).click();
             await h.settle(1500);
-            const left = page.getByRole("button", { name: "Approve" });
+            const left = page.getByRole("button", { name: "Approve", exact: true });
             if (await visible(left, 3000)) {
               await left.first().click();
-              await page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
+              await page.getByRole("dialog").getByRole("button", { name: "Approve", exact: true }).click();
               await h.settle(1500);
             }
           },
@@ -628,25 +628,6 @@ module.exports = {
         },
       ],
       tips: ["If the run finds nothing, no batch passed both rules. Lower Non-moving days to look further."],
-    },
-    {
-      title: "See every stock movement in the stock ledger",
-      who: "Pharmacists, admins",
-      body: [
-        "<b>Stock › Stock ledger</b> lists every change to stock across all medicines: purchases, sales, returns, losses, holds, counts and approved edits. Use it to answer questions such as <i>what left the shelf yesterday?</i>",
-        "Set <b>From</b> and <b>To</b>, or click <b>Today</b>, <b>7 days</b>, <b>30 days</b> or <b>90 days</b>. Type in <b>Search</b> to find a medicine or document. <b>Method</b> narrows to one kind of movement, such as Purchase invoice, Pharmacy bill, Supplier return, Loss or breakage, Stock count or Approved stock edit. <b>All</b>, <b>Stock in</b> and <b>Stock out</b> choose the direction. <b>Export CSV</b> saves the rows. Click a medicine or document in a row to open it.",
-      ],
-      shots: [
-        {
-          file: "stock-ledger",
-          caption: "The stock ledger for the last 7 days.",
-          run: async (page, h) => {
-            await h.goto(`${INV}?area=stock&view=ledger`);
-            await page.getByRole("button", { name: "7 days" }).click();
-            await h.settle(1500);
-          },
-        },
-      ],
     },
     {
       title: "Set up the stock count cycle",
@@ -974,6 +955,25 @@ module.exports = {
         },
       ],
       shotLayout: "row",
+    },
+    {
+      title: "See every stock movement in the stock ledger",
+      who: "Pharmacists, admins",
+      body: [
+        "<b>Stock › Stock ledger</b> lists every change to stock across all medicines: purchases, sales, returns, losses, holds, counts and approved edits. Use it to answer questions such as <i>what left the shelf yesterday?</i>",
+        "Set <b>From</b> and <b>To</b>, or click <b>Today</b>, <b>7 days</b>, <b>30 days</b> or <b>90 days</b>. Type in <b>Search</b> to find a medicine or document. <b>Method</b> narrows to one kind of movement, such as Purchase invoice, Pharmacy bill, Supplier return, Loss or breakage, Stock count or Approved stock edit. <b>All</b>, <b>Stock in</b> and <b>Stock out</b> choose the direction. <b>Export CSV</b> saves the rows. Click a medicine or document in a row to open it.",
+      ],
+      shots: [
+        {
+          file: "stock-ledger",
+          caption: "The stock ledger for the last 30 days.",
+          run: async (page, h) => {
+            await h.goto(`${INV}?area=stock&view=ledger`);
+            await page.getByRole("button", { name: "30 days" }).click();
+            await h.settle(1500);
+          },
+        },
+      ],
     },
   ],
 };
