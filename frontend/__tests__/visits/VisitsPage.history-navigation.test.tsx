@@ -21,7 +21,7 @@ it('keeps setup and history accessible after selecting a patient', async () => {
   fireEvent.keyDown(search, { key: 'Enter' });
   await screen.findByRole('tab', { name: 'Patient History' });
   expect(screen.queryByTestId('medical-form')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Start Visit Documentation' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start visit' }));
   expect(await screen.findByTestId('medical-form')).toBeInTheDocument();
 });
 it('opens a patient deep link and allows returning to setup', async () => {

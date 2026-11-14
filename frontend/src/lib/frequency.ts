@@ -71,8 +71,28 @@ export function getAllFrequencyOptions(): string[] {
   return [...DEFAULT_FREQUENCY_OPTIONS, ...getCustomFrequencies()];
 }
 
-export function formatFrequency(f: string): string {
-  return f.replaceAll('_', ' ');
+const FREQUENCY_LABELS: Record<string, string> = {
+  ONCE_DAILY: 'Once a day',
+  TWICE_DAILY: 'Twice a day',
+  THREE_TIMES_DAILY: 'Three times a day',
+  FOUR_TIMES_DAILY: 'Four times a day',
+  EVERY_4_HOURS: 'Every 4 hours',
+  EVERY_6_HOURS: 'Every 6 hours',
+  EVERY_8_HOURS: 'Every 8 hours',
+  EVERY_12_HOURS: 'Every 12 hours',
+  AS_NEEDED: 'When needed',
+  WEEKLY: 'Once a week',
+  MONTHLY: 'Once a month',
+};
+
+/** Words a doctor reads for a stored frequency code or dose pattern. Display only: stored and printed values keep their codes. */
+export function frequencyLabel(value: string): string {
+  if (FREQUENCY_LABELS[value]) return FREQUENCY_LABELS[value];
+  if (/^[A-Z0-9]+(_[A-Z0-9]+)+$/.test(value)) {
+    const words = value.replaceAll('_', ' ').toLowerCase();
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  }
+  return value.toUpperCase();
 }
 
 // ---------------------------------------------------------------------------

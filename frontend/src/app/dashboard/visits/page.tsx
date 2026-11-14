@@ -238,7 +238,7 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 
-import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
+import { useCallback, useEffect, useState, Suspense } from 'react';
 import { isValidId } from '@/lib/id';
 import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -671,32 +671,6 @@ function VisitsPageInner() {
     return () => clearTimeout(timeoutRef);
   }, [extractPatients, patientQuery]);
 
-  const roleInfo = useMemo(() => {
-    const permissions = {
-      THERAPIST: { 
-        label: 'Therapist',
-        description: 'Can record vitals, capture photos, and basic assessments (20-25% of visit)',
-        color: 'bg-blue-100 text-blue-700'
-      },
-      NURSE: { 
-        label: 'Nurse',
-        description: 'Can record vitals, capture photos, complaints, and basic assessments',
-        color: 'bg-green-100 text-green-700'
-      },
-      DOCTOR: { 
-        label: 'Doctor',
-        description: 'Full access to all visit documentation features',
-        color: 'bg-purple-100 text-purple-700'
-      },
-      RECEPTION: { 
-        label: 'Reception',
-        description: 'Can capture photos and basic patient information',
-        color: 'bg-orange-100 text-orange-700'
-      },
-    };
-    return permissions[currentUserRole as keyof typeof permissions] || permissions.DOCTOR;
-  }, [currentUserRole]);
-
   const selectedPatient = useRecordById<PatientMatch>(selectedPatientId, fetchPatientById);
   const selectedDoctor = useRecordById<DoctorSummary>(selectedDoctorId, fetchDoctorById);
 
@@ -767,7 +741,7 @@ function VisitsPageInner() {
     return (
       <div className="space-y-6">
         {/* Header with Guide */}
-        <PageHeader title={<>Visit Documentation</>} description={<>Create and manage patient visits with role-based documentation</>} actions={<><QuickGuide
+        <PageHeader title={<>Visits</>} actions={<><QuickGuide
             title="Visit Documentation Guide"
             sections={[
               {
@@ -776,16 +750,7 @@ function VisitsPageInner() {
                   "Select a patient from the search bar or dropdown",
                   "Choose the consulting doctor",
                   "View patient history in the 'Patient History' tab",
-                  "Click 'Start Visit Documentation' to begin"
-                ]
-              },
-              {
-                title: "Role-Based Access",
-                items: [
-                  "Therapist: Record vitals, photos, and basic assessments (20-25%)",
-                  "Nurse: Record vitals, photos, complaints, and assessments",
-                  "Doctor: Complete SOAP documentation and prescriptions",
-                  "Each role sees features appropriate to their scope"
+                  "Click 'Start visit' to begin"
                 ]
               },
               {
@@ -812,39 +777,10 @@ function VisitsPageInner() {
             ]}
           /></>} />
         
-        {/* Role Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Your Role & Permissions
-            </CardTitle>
-            <CardDescription>
-              Features available based on your role: {roleInfo.label}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900">Current Role</h3>
-                  <p className="text-xs text-gray-500 mt-1">{roleInfo.description}</p>
-                </div>
-                <Badge className={roleInfo.color}>
-                  {roleInfo.label}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Visit Setup */}
         <Card>
           <CardHeader>
-            <CardTitle>Start New Visit</CardTitle>
-            <CardDescription>
-              Select patient and doctor to begin visit documentation
-            </CardDescription>
+            <CardTitle>Start visit</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -965,7 +901,7 @@ function VisitsPageInner() {
                             />
                           </div>
                           <Button onClick={startNewVisit}>
-                            Start Visit Documentation
+                            Start visit
                           </Button>
                         </div>
                       </div>
@@ -986,96 +922,6 @@ function VisitsPageInner() {
           </CardContent>
         </Card>
 
-        {/* Role-based Features Preview */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Available Features</CardTitle>
-            <CardDescription>
-              Features available for your role: {roleInfo.label}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {currentUserRole === 'THERAPIST' && (
-                <>
-                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">Vitals Recording</p>
-                      <p className="text-xs text-blue-600">BP, HR, Temperature, etc.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                    <User className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">Photo Capture</p>
-                      <p className="text-xs text-blue-600">Document patient conditions</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                    <Users className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">Basic Assessment</p>
-                      <p className="text-xs text-blue-600">Initial observations</p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {currentUserRole === 'NURSE' && (
-                <>
-                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium text-green-700">Full Vitals</p>
-                      <p className="text-xs text-green-600">Complete vital signs</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                    <User className="h-5 w-5 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium text-green-700">Photo & Complaints</p>
-                      <p className="text-xs text-green-600">Document and record issues</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                    <Users className="h-5 w-5 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium text-green-700">Assessment Notes</p>
-                      <p className="text-xs text-green-600">Preliminary findings</p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {currentUserRole === 'DOCTOR' && (
-                <>
-                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-purple-500" />
-                    <div>
-                      <p className="text-sm font-medium text-purple-700">Complete Documentation</p>
-                      <p className="text-xs text-purple-600">Full SOAP notes</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
-                    <User className="h-5 w-5 text-purple-500" />
-                    <div>
-                      <p className="text-sm font-medium text-purple-700">Dermatology Specific</p>
-                      <p className="text-xs text-purple-600">Specialized assessments</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
-                    <Users className="h-5 w-5 text-purple-500" />
-                    <div>
-                      <p className="text-sm font-medium text-purple-700">Treatment Planning</p>
-                      <p className="text-xs text-purple-600">Complete care plans</p>
-                    </div>
-                  </div>
-                </>
-              )}
-        </div>
-          </CardContent>
-        </Card>
       </div>
     );
   }
@@ -1085,7 +931,7 @@ function VisitsPageInner() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 max-w-full">
           <div className="flex flex-wrap items-center gap-2">
-            <PageHeader title={<>Visit Documentation</>} />
+            <PageHeader title={<>Visit</>} />
             {appointmentData && (
               <Badge variant="secondary" className="bg-blue-100 text-blue-700">
                 <Calendar className="h-3 w-3 mr-1" />
@@ -1102,34 +948,33 @@ function VisitsPageInner() {
         </div>
         <div className="flex gap-2">
           <QuickGuide
-            title="Visit Documentation Guide"
+            title="Visit guide"
             triggerVariant="ghost"
             sections={[
               {
-                title: "Documenting the Visit",
+                title: "The visit",
                 items: [
-                  "Fill out sections in order: Vitals → History → Examination → Assessment → Plan",
-                  "Use expandable sections to keep the form organized",
-                  "Save progress automatically as you work",
-                  "Mark visit as complete when finished"
+                  "The visit opens on the Prescription tab",
+                  "Type the chief complaint or the diagnosis",
+                  "Add medicines; a new empty row appears after each one",
+                  "Press Complete visit; it saves the prescription and returns you to the dashboard"
                 ]
               },
               {
                 title: "Prescriptions",
                 items: [
-                  "Add medications from the drug database",
-                  "Configure dosage, frequency, and duration",
-                  "Add special dermatology instructions (application site, timing, etc.)",
-                  "Preview and print prescription for the patient"
+                  "Pick medicines from the list as you type",
+                  "Set frequency and duration with the presets, or type them",
+                  "Create Prescription saves without completing the visit",
+                  "Go to pharmacy appears once the prescription is saved"
                 ]
               },
               {
-                title: "Photos & Documentation",
+                title: "Vitals, photos and lab tests",
                 items: [
-                  "Upload photos to document patient condition",
-                  "Photos are automatically attached to the visit",
-                  "Use photos to track treatment progress",
-                  "All photos are stored securely in patient records"
+                  "Fill them only when there is something to record",
+                  "A single photo uploads straight away",
+                  "Change a photo's position on its card"
                 ]
               }
             ]}

@@ -4,6 +4,7 @@ import { displayCalendarDate, displayClinicTime } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, printBackgroundKey, savedPrintBackground } from '@/lib/prescription-letterhead';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,7 +58,7 @@ import { compactClinicalPatch, mergeClinicalPatch, useClinicalState, acknowledge
 import { usePatientHistory } from './usePatientHistory';
 import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
-import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
+import PrescriptionBuilder, { type PrescriptionCompletionState } from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { DoctorTour } from '@/components/tours';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
@@ -211,6 +212,8 @@ const ROLE_PERMISSIONS = {
  * @cc [owner:nareshshah139,label:product] completion-progress-explanation
  * When completion is unavailable because progress is below 80%, the form identifies unfinished tracked sections and states that progress is not a clinical validation.
  */
+const VISIT_LOAD_WAIT_MS = 10_000;
+
 function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
@@ -244,11 +247,15 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
 
   // Core visit data
   const [visitId, setVisitId] = useState<string | null>(initialVisitSnapshot?.id || initialVisitId || null);
+  // Completing a visit saves its prescription first; the visit that save creates must be seen before the next render.
+  const visitIdRef = useRef(visitId);
+  visitIdRef.current = visitId;
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
   const [visitStatus, setVisitStatus] = useState<VisitStatus | 'draft'>('draft');
   
   // Form sections state
-  const [activeTab, setActiveTab] = useState('overview');
+  const firstTab = (ROLE_PERMISSIONS[userRole as keyof typeof ROLE_PERMISSIONS] || []).includes('all') ? 'prescription' : 'overview';
+  const [activeTab, setActiveTab] = useState(firstTab);
   const [completedSections, setCompletedSections] = useState<Set<string>>(new Set());
   
   // Basic info (Therapist/Nurse level - 20-25%)
@@ -402,6 +409,16 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [saving, setSaving] = useState(false);
+  const [loadedVisitId, setLoadedVisitId] = useState<string | null>(null);
+  const loadedVisitIdRef = useRef<string | null>(null);
+  const visitLoadListener = useRef<((loadedId: string) => void) | null>(null);
+  // Listeners hear about a load after the render that applied it, so they read the loaded state.
+  useEffect(() => {
+    if (!loadedVisitId) return;
+    loadedVisitIdRef.current = loadedVisitId;
+    visitLoadListener.current?.(loadedVisitId);
+  }, [loadedVisitId]);
+  const completeVisitRef = useRef<() => Promise<void>>(async () => {});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error'>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -735,10 +752,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     hydrateSystemics(draft.systemics || '', draft.dirtyClinicalFields ?? 'populated');
     hydrateCounseling(draft.counseling || '', draft.dirtyClinicalFields ?? 'populated');
     hydrateReviewDate(draft.reviewDate || '', draft.dirtyClinicalFields ?? 'populated');
-    setActiveTab(draft.activeTab || 'overview');
+    setActiveTab(draft.activeTab || firstTab);
     setCompletedSections(new Set(draft.completedSections || []));
 
-  }, [receiveClinicalData]);
+  }, [receiveClinicalData, firstTab]);
 
   const persistDraftToStorage = useCallback(
     (force = false, draftOverride?: MedicalVisitDraftState) => {
@@ -787,11 +804,15 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     return permissions.includes('all') || permissions.includes(section);
   }, [userRole]);
 
-  // Calculate overall progress (moved up to avoid TDZ issues)
-  const getProgress = useCallback(() => {
-    const totalSections = hasPermission('all') ? 5 : 3; // Doctor vs Therapist/Nurse (Treatment tab removed)
-    return Math.round((completedSections.size / totalSections) * 100);
-  }, [completedSections.size, hasPermission]);
+  const [rxCompletion, setRxCompletion] = useState<PrescriptionCompletionState>({ hasComplaintOrDiagnosis: false, pending: 'none', saving: false });
+  const settlePrescriptionRef = useRef<(() => Promise<boolean>) | null>(null);
+  const progressSections = hasPermission('all')
+    ? [{ id: 'notes', label: 'A complaint or a diagnosis', done: rxCompletion.hasComplaintOrDiagnosis || complaints.some(complaint => complaint.trim()) }]
+    : (['vitals', 'photos'] as const).filter(hasPermission).map(id => ({ id, label: id === 'vitals' ? 'Vitals' : 'Photos', done: completedSections.has(id) }));
+  const progress = progressSections.length
+    ? Math.round((progressSections.filter(section => section.done).length / progressSections.length) * 100)
+    : 0;
+  const missingSections = progressSections.filter(section => !section.done).map(section => section.label.toLowerCase());
 
   /**
    * @cc [owner:nareshshah139,label:product] dirty-clinical-save
@@ -810,7 +831,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     const payload = compactClinicalPatch({
       patientId, doctorId, appointmentId, visitNumber: currentVisitNumber, version: visitVersionRef.current,
       complaints: field('complaints', complaints.map(complaint => ({ complaint })))
-        ?? (!visitId ? [] : undefined),
+        ?? (!visitIdRef.current ? [] : undefined),
       history: { subjective: field('subjective', subjective) },
       scribeJson: { assessment: field('assessment', assessment) },
       examination: {
@@ -840,7 +861,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         oxygenSaturation: field('vitals.spo2', number(vitals.spo2)),
         temperature: field('vitals.temp', vitals.temp === '' ? null : (Number(vitals.temp) - 32) * 5 / 9),
       },
-      metadata: { capturedBy: userRole, sections: Array.from(completedSections), progress: getProgress() },
+      metadata: { capturedBy: userRole, sections: Array.from(completedSections), progress },
     });
     const merged = mergeClinicalPatch(payload, prescriptionClinicalRef.current);
     if (payload.vitals) merged.vitals = { ...merged.vitals, ...payload.vitals };
@@ -849,7 +870,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       merged.teleVideoConsent = teleVideoConsent;
     }
     return merged;
-  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
+  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, progress, completedSections, userRole, vitals, objective, visitId]);
 
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
@@ -1182,6 +1203,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         } catch {}
       } catch {
         // ignore
+      } finally {
+        setLoadedVisitId(visitId);
       }
     };
     void load();
@@ -1276,9 +1299,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       const isComplete = (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's';
       if (isSave || isComplete) {
         e.preventDefault();
-        if (!saving) {
-          void save(isComplete);
-        }
+        if (isComplete) void completeVisitRef.current();
+        else if (!saving) void save(false);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -1436,77 +1458,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     setCompletedSections(prev => new Set([...prev, section]));
   }, []);
 
-  const isSectionComplete = (section: string) => {
-    return completedSections.has(section);
-  };
-
-  // Check if at least 4 key sections are filled for draft readiness indicator
-  // PrescriptionBuilder has its own state, so we check its localStorage draft
-  const [draftCheckTrigger, setDraftCheckTrigger] = useState(0);
-  
-  const isReadyForDraft = useMemo(() => {
-    let filledSectionsCount = 0;
-    
-    // Check PrescriptionBuilder's draft data from localStorage
-    try {
-      const rxDraftKey = `rxDraft:${patientId}:${visitId || 'standalone'}`;
-      const rxDraftData = localStorage.getItem(rxDraftKey);
-      if (rxDraftData) {
-        const draft = JSON.parse(rxDraftData);
-        
-        // 1. Chief complaints
-        if (draft.chiefComplaints && draft.chiefComplaints.trim()) {
-          filledSectionsCount++;
-          console.log('✓ Chief complaints filled');
-        }
-        
-        // 2. Diagnosis
-        if (draft.diagnosis && draft.diagnosis.trim()) {
-          filledSectionsCount++;
-          console.log('✓ Diagnosis filled');
-        }
-        
-        // 3. Clinical details (histories, examination, etc.)
-        const hasClinicalDetails = draft.pastHistory || draft.personalHistory || draft.medicationHistory ||
-                                   draft.menstrualHistory || draft.exObjective || 
-                                   draft.procedurePlanned;
-        if (hasClinicalDetails) {
-          filledSectionsCount++;
-          console.log('✓ Clinical details filled');
-        }
-        
-        // 4. Vitals (any vital filled)
-        const hasVitals = draft.vitalsHeightCm || draft.vitalsWeightKg || 
-                         draft.vitalsBpSys || draft.vitalsBpDia || 
-                         draft.vitalsPulse;
-        if (hasVitals) {
-          filledSectionsCount++;
-          console.log('✓ Vitals filled');
-        }
-        
-        // 5. Treatment (medications prescribed)
-        if (draft.items && Array.isArray(draft.items) && draft.items.length > 0) {
-          filledSectionsCount++;
-          console.log('✓ Treatment/medications filled');
-        }
-      }
-    } catch (e) {
-      console.error('Failed to check prescription draft:', e);
-    }
-    
-    const isReady = filledSectionsCount >= 4;
-    console.log(`📊 Draft readiness: ${filledSectionsCount}/5 sections filled - ${isReady ? '✅ READY' : '❌ NOT READY'}`);
-    return isReady;
-  }, [patientId, visitId, draftCheckTrigger]);
-
-  // Poll localStorage for prescription draft changes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDraftCheckTrigger(prev => prev + 1);
-    }, 2000); // Check every 2 seconds
-    
-    return () => clearInterval(interval);
-  }, []);
 
   // Automatically mark Photos section as complete when photos are uploaded
   useEffect(() => {
@@ -1545,12 +1496,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         });
         return;
       }
-      const progress = getProgress();
       if (progress < 80) {
         toast({
           variant: 'warning',
           title: 'More details needed to complete',
-          description: 'Fill vitals, complaints, diagnosis, and prescription to reach at least 80% before completing.',
+          description: `Still needed: ${missingSections.join(', ')}.`,
         });
         return;
       }
@@ -1565,9 +1515,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       const payload = getClinicalSavePatch();
       
       let visit;
-      if (visitId) {
-        const idemKey = buildIdempotencyKey('PATCH', visitId, payload as any);
-        visit = await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey });
+      const currentVisitId = visitIdRef.current;
+      if (currentVisitId) {
+        const idemKey = buildIdempotencyKey('PATCH', currentVisitId, payload as any);
+        visit = await apiClient.updateVisit(currentVisitId, payload, { idempotencyKey: idemKey });
       } else {
         const idemKey = buildIdempotencyKey('POST', null, payload as any);
         try {
@@ -1618,10 +1569,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       
       toast({
         variant: 'success',
-        title: complete ? 'Visit completed' : newerChanges ? 'Earlier changes saved' : 'Visit saved',
-        description: complete
-          ? 'All documentation has been marked complete.'
-          : newerChanges ? 'New edits are still waiting to save.' : 'Your draft was saved safely.',
+        title: complete ? 'Visit completed' : newerChanges ? 'Earlier changes saved' : 'Saved',
+        description: newerChanges && !complete ? 'New edits are still waiting to save.' : undefined,
       });
       setSaveStatus(newerChanges ? 'unsaved' : 'saved');
       setLastSavedAt(Date.now());
@@ -1646,6 +1595,71 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       if (hasUnsavedChangesRef.current && !automaticSaveBlocked.current) scheduleAutoSave();
     }
   };
+
+  const router = useRouter();
+  const completingRef = useRef(false);
+  const [completing, setCompleting] = useState(false);
+  const finishCompletion = async () => {
+    if (await save(true)) router.push('/dashboard');
+  };
+  const finishCompletionRef = useRef(finishCompletion);
+  finishCompletionRef.current = finishCompletion;
+  const visitLoaded = (id: string) => new Promise<boolean>(resolve => {
+    if (loadedVisitIdRef.current === id) return resolve(true);
+    const timer = setTimeout(() => { visitLoadListener.current = null; resolve(false); }, VISIT_LOAD_WAIT_MS);
+    visitLoadListener.current = loadedId => {
+      if (loadedId !== id) return;
+      clearTimeout(timer);
+      visitLoadListener.current = null;
+      resolve(true);
+    };
+  });
+  const completeVisit = async () => {
+    if (completingRef.current || manualSaveInFlight.current) return;
+    if (!hasPermission('all')) {
+      toast({ variant: 'warning', title: 'Doctor access required', description: 'Only doctors can complete a visit. Save a draft instead.' });
+      return;
+    }
+    if (progress < 80) {
+      toast({ variant: 'warning', title: 'More details needed to complete', description: `Still needed: ${missingSections.join(', ')}.` });
+      return;
+    }
+    if (rxCompletion.saving) {
+      toast({ variant: 'warning', title: 'Prescription still saving', description: 'Complete the visit once the prescription is saved.' });
+      return;
+    }
+    completingRef.current = true;
+    setCompleting(true);
+    try {
+      const visitExisted = Boolean(visitIdRef.current);
+      if (rxCompletion.pending !== 'none') {
+        manualSaveInFlight.current = true;
+        clearAutoSaveTimer();
+        let settled = false;
+        try {
+          await autoSavePromiseRef.current;
+          settled = Boolean(await settlePrescriptionRef.current?.());
+        } catch {
+          settled = false;
+        } finally {
+          manualSaveInFlight.current = false;
+        }
+        if (!settled) return;
+      }
+      // A visit the prescription save just created must be loaded back before completing,
+      // or its server defaults would count as edits made while saving.
+      const createdVisitId = visitExisted ? null : visitIdRef.current;
+      if (createdVisitId && !(await visitLoaded(createdVisitId))) {
+        toast({ variant: 'destructive', title: 'Visit not completed', description: 'The visit took too long to load. Press Complete visit again to retry.' });
+        return;
+      }
+      await finishCompletionRef.current();
+    } finally {
+      completingRef.current = false;
+      setCompleting(false);
+    }
+  };
+  completeVisitRef.current = completeVisit;
 
   /**
    * @cc [owner:nareshshah139,label:product] discard-conflicting-draft
@@ -1839,16 +1853,13 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription>
-                Medical Visit Documentation • Role: {userRole} • Progress: {getProgress()}%
-              </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{photoCount} Photos</Badge>
               <div className="w-20 bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${getProgress()}%` }}
+                  style={{ width: `${progress}%` }}
                 />
               </div>
             <div className="text-xs text-gray-500 min-w-[120px] text-right">
@@ -1931,9 +1942,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
             <TabsList className="mb-6 flex flex-wrap gap-2">
               {renderTabs().map(tab => {
                 const IconComponent = tab.icon;
-                const showIndicator = tab.id === 'prescription' 
-                  ? isReadyForDraft 
-                  : isSectionComplete(tab.id);
+                const showIndicator = progressSections.some(section => section.id === tab.id && section.done);
                 return (
                   <TabsTrigger 
                     key={tab.id} 
@@ -1943,10 +1952,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     <IconComponent className="h-4 w-4" />
                     {tab.label}
                     {showIndicator && (
-                      <div 
-                        className={`w-2 h-2 bg-green-500 rounded-full ${tab.id === 'prescription' ? 'animate-pulse' : ''}`}
-                        title={tab.id === 'prescription' ? 'At least 4 key sections filled' : 'Section complete'}
-                      />
+                      <div className="w-2 h-2 bg-green-500 rounded-full" title="Section complete" />
                     )}
                   </TabsTrigger>
                 );
@@ -1988,11 +1994,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   </CardHeader>
                   <CardContent className="space-y-3">
                   <div className="space-y-2">
-                    {renderTabs().filter(tab => tab.id !== 'overview' && tab.id !== 'history').map(tab => (
-                        <div key={tab.id} className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">{tab.label}:</span>
+                    {progressSections.map(section => (
+                        <div key={section.id} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">{section.label}:</span>
                           <div className="flex items-center gap-2">
-                            {isSectionComplete(tab.id) ? (
+                            {section.done ? (
                               <Badge variant="default" className="text-xs">Complete</Badge>
                             ) : (
                               <Badge variant="outline" className="text-xs">Pending</Badge>
@@ -2004,12 +2010,12 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     <div className="pt-2 border-t">
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium">Overall Progress:</span>
-                        <span className="text-sm font-bold text-blue-600">{getProgress()}%</span>
+                        <span className="text-sm font-bold text-blue-600">{progress}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                         <div 
                           className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${getProgress()}%` }}
+                          style={{ width: `${progress}%` }}
                         />
                       </div>
                     </div>
@@ -2134,7 +2140,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
 
                 <div className="flex justify-end">
                   <Button onClick={async () => { const saved = await save(false); if (saved) markSectionComplete('vitals'); setBuilderRefreshKey((k) => k + 1); }}>
-                    Mark Vitals Complete
+                    Save vitals
                   </Button>
                 </div>
               </TabsContent>
@@ -2146,7 +2152,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg">Lab Tests (Investigations)</CardTitle>
-                    <CardDescription>Select tests and enter results with units. You can also autofill from a photo.</CardDescription>
                     <div className="mt-2">
                       <label className="flex items-center gap-2 text-sm text-gray-600">
                         <input type="checkbox" checked={compareLabs} onChange={(e) => setCompareLabs(e.target.checked)} />
@@ -2305,7 +2310,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                           <span className="text-xs text-gray-400">Accepts JPG, PNG, or PDF</span>
                         </div>
                         <Button type="button" variant="outline" disabled={labsAutofillLoading} onClick={async () => { if (await save(false)) markSectionComplete('labs'); }}>
-                          {labsAutofillLoading ? 'Processing…' : 'Save Labs'}
+                          {labsAutofillLoading ? 'Processing…' : 'Save labs'}
                         </Button>
                       </div>
                     </div>
@@ -2400,6 +2405,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     }
                     const newVisitId = (newVisit as VisitDetails).id;
                     acknowledgeMutationVersion((newVisit as VisitDetails).version);
+                    visitIdRef.current = newVisitId;
                     setVisitId(newVisitId);
                     return newVisitId;
                   }}
@@ -2430,8 +2436,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     if (typeof next.footerHeightMm === 'number') setFooterHeightMm(next.footerHeightMm);
                   }}
                   onChangeReviewDate={setReviewDate}
-                  onPreview={() => markSectionComplete('prescription')}
-                  onCreated={() => markSectionComplete('prescription')}
+                  onCompletionStateChange={setRxCompletion}
+                  settlePrescriptionRef={settlePrescriptionRef}
                   refreshKey={builderRefreshKey}
                   includeSections={rxIncludeSections}
                   onChangeIncludeSections={setRxIncludeSections}
@@ -2708,21 +2714,20 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
 
           {/* Action Buttons */}
           <div className="flex flex-wrap justify-between items-center gap-4 pt-6 border-t">
-            <div className="text-sm text-gray-500">
-              Progress: {getProgress()}% • {completedSections.size} of {hasPermission('all') ? 5 : 3} sections complete
-              {hasPermission('all') && getProgress() < 80 && (
-                <p id="visit-completion-help" className="mt-1 text-gray-700">
-                  Completion requires 80% progress. Remaining: {['vitals', 'photos', 'labs', 'prescription'].filter(section => !completedSections.has(section)).join(', ')}. Section progress does not verify clinical completeness.
+            <div className="text-sm text-gray-700">
+              {hasPermission('all') && progress < 80 && (
+                <p id="visit-completion-help">
+                  Still needed: {missingSections.join(', ')}. Progress does not verify clinical completeness.
                 </p>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="ml-auto flex gap-2">
               <Button variant="outline" onClick={() => void save(false)} disabled={saving}>
                 {saving ? 'Saving...' : 'Save Draft'}
               </Button>
               {hasPermission('all') && (
-                <Button onClick={() => void save(true)} disabled={saving || getProgress() < 80} aria-describedby={getProgress() < 80 ? 'visit-completion-help' : undefined}>
-                  {saving ? 'Completing...' : 'Complete Visit'}
+                <Button onClick={() => void completeVisit()} disabled={saving || completing || rxCompletion.saving || progress < 80} aria-describedby={progress < 80 ? 'visit-completion-help' : undefined}>
+                  {completing ? 'Completing...' : 'Complete visit'}
                 </Button>
               )}
             </div>

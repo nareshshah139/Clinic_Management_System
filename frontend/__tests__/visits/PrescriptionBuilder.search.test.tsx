@@ -26,6 +26,7 @@ async function mount(template = false) {
   render(<PrescriptionBuilder patientId="search-test" visitId={null} doctorId="doctor" />);
   await tick(1000);
   if (template) {
+    fireEvent.click(screen.getByRole('button', { name: 'Templates' }));
     fireEvent.click(screen.getByRole('button', { name: 'New template' }));
     return screen.getByPlaceholderText('Search drug name or brand (min 2 chars)');
   }

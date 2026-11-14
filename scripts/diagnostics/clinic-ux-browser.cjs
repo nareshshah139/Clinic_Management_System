@@ -82,9 +82,9 @@ async function main() {
     await page.waitForFunction(() => document.querySelector('section[data-calendar="SCHEDULED"]')?.textContent.includes('No one left to confirm'));
     console.log('PASS empty Scheduled calendar says no one is left to confirm');
     await page.goto(`${base}/dashboard/visits?visitId=${visit.id}`, { waitUntil: 'networkidle2', timeout: 90000 });
-    await page.waitForFunction(() => document.body.innerText.includes('Complete Visit'), { timeout: 30000 });
+    await page.waitForFunction(() => document.body.innerText.includes('Complete visit'), { timeout: 30000 });
     const help = await page.$eval('#visit-completion-help', e => e.innerText);
-    for (const section of ['vitals', 'photos', 'labs', 'prescription']) assert(help.includes(section));
+    assert(help.includes('Still needed: a complaint or a diagnosis.'));
     assert(help.includes('does not verify clinical completeness'));
     console.log('PASS visit explains incomplete section markers and clinical-validation limit');
     const visitOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);

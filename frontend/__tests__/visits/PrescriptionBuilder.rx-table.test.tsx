@@ -11,6 +11,9 @@ jest.mock('@/lib/api', () => ({ apiClient: {
   getPrescriptionPrintEvents: jest.fn().mockResolvedValue({ totals: {} }),
   autocompletePrescriptionField: jest.fn().mockResolvedValue([]),
   createQuickPrescription: jest.fn().mockResolvedValue({ id: 'rx-1' }),
+  createPrescription: jest.fn().mockResolvedValue({ id: 'rx-9' }),
+  updatePrescription: jest.fn().mockResolvedValue({ id: 'rx-9' }),
+  cancelPrescription: jest.fn().mockResolvedValue({ id: 'rx-9', status: 'CANCELLED' }),
   post: jest.fn().mockResolvedValue({ id: 'tpl-1' }),
 } }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
@@ -119,10 +122,142 @@ it('moves the duration controls and instructions together when a row is inserted
   expect(within(rows[2]).getByDisplayValue('Second')).toBeInTheDocument();
 });
 
+it('opens an empty prescription on one focused blank medicine row and never sends it', async () => {
+  const onClinicalDataChange = jest.fn();
+  render(<PrescriptionBuilder patientId="patient" visitId={null} doctorId="doctor" standalone onClinicalDataChange={onClinicalDataChange} />);
+  await waitFor(() => expect(names()).toEqual(['']));
+  await waitFor(() => expect(screen.getByPlaceholderText('Search medicine name...')).toHaveFocus());
+  expect(onClinicalDataChange.mock.calls.at(-1)![0].treatmentPlan).toBeUndefined();
+});
+
+it('applies the 10 day and night presets to the medicine being edited', async () => {
+  const onClinicalDataChange = await mount([medicine('Cetirizine', { frequency: 'TWICE_DAILY', dosePattern: '1-0-1', duration: 5 })]);
+  fireEvent.focus(named('Cetirizine'));
+  fireEvent.click(screen.getByRole('button', { name: '10d' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Night' }));
+  expect(screen.getByLabelText('Duration for Cetirizine')).toHaveValue(10);
+  await waitFor(() => expect(onClinicalDataChange.mock.calls.at(-1)![0].treatmentPlan.dermatology.medicationPlan[0]).toMatchObject({
+    drugName: 'Cetirizine', frequency: 'ONCE_DAILY', dosePattern: '0-0-1', duration: 10, durationUnit: 'DAYS',
+  }));
+  expect(screen.getByRole('combobox', { name: 'Frequency for Cetirizine' })).toHaveTextContent('0-0-1');
+});
+
+type Completion = { hasComplaintOrDiagnosis: boolean; pending: 'none' | 'save' | 'cancel'; saving: boolean };
+async function mountVisit(items: object[], extra: Record<string, unknown> = {}) {
+  if (items.length) localStorage.setItem('rxDraft:patient:visit-1', JSON.stringify({ items }));
+  const states: Completion[] = [];
+  const settle: { current: (() => Promise<boolean>) | null } = { current: null };
+  render(<PrescriptionBuilder patientId="patient" visitId="visit-1" doctorId="doctor" onCompletionStateChange={state => states.push(state)} settlePrescriptionRef={settle} {...extra} />);
+  if (items.length) await screen.findByDisplayValue((items[0] as { drugName: string }).drugName);
+  const pending = () => states.at(-1)?.pending;
+  const settleNow = async () => { let ok = false; await act(async () => { ok = await settle.current!(); }); return ok; };
+  return { pending, settleNow };
+}
+const savedItems = (call: number) => (jest.mocked(apiClient.updatePrescription).mock.calls[call][1] as { items: { drugName: string; duration: number }[] }).items;
+
+describe('saving the prescription when the visit is completed', () => {
+  beforeEach(() => {
+    jest.mocked(apiClient.createPrescription).mockClear();
+    jest.mocked(apiClient.updatePrescription).mockClear();
+    jest.mocked(apiClient.cancelPrescription).mockClear();
+  });
+
+  it('creates once, then has nothing left to save, and offers the pharmacy as a link instead of a dialog', async () => {
+    const { pending, settleNow } = await mountVisit([medicine('Cetirizine')]);
+    await waitFor(() => expect(pending()).toBe('save'));
+    expect(screen.queryByRole('link', { name: 'Go to pharmacy' })).not.toBeInTheDocument();
+    expect(await settleNow()).toBe(true);
+    expect(apiClient.createPrescription).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(pending()).toBe('none'));
+    expect(await settleNow()).toBe(true);
+    expect(apiClient.createPrescription).toHaveBeenCalledTimes(1);
+    expect(apiClient.updatePrescription).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: 'Go to pharmacy' })).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill?patientId=patient&prescriptionId=rx-9&doctorId=doctor');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('cancels a saved prescription whose medicines were all removed, so no medicine list is left for the pharmacy', async () => {
+    const { pending, settleNow } = await mountVisit([medicine('Mometasone'), medicine('Cetirizine')]);
+    expect(await settleNow()).toBe(true);
+    await waitFor(() => expect(pending()).toBe('none'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Cetirizine' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Mometasone' }));
+    await waitFor(() => expect(pending()).toBe('cancel'));
+    expect(await settleNow()).toBe(true);
+    expect(apiClient.cancelPrescription).toHaveBeenCalledWith('rx-9', 'All medicines removed before the visit was completed');
+    expect(apiClient.updatePrescription).not.toHaveBeenCalled();
+    await waitFor(() => expect(pending()).toBe('none'));
+    expect(screen.queryByRole('link', { name: 'Go to pharmacy' })).not.toBeInTheDocument();
+  });
+
+  it('refuses to complete when the cancellation fails', async () => {
+    const { pending, settleNow } = await mountVisit([medicine('Mometasone')]);
+    await settleNow();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Mometasone' }));
+    await waitFor(() => expect(pending()).toBe('cancel'));
+    jest.mocked(apiClient.cancelPrescription).mockRejectedValueOnce(Object.assign(new Error('down'), { status: 500 }));
+    expect(await settleNow()).toBe(false);
+    expect(pending()).toBe('cancel');
+  });
+
+  it('does not cancel after a known visit conflict', async () => {
+    let conflicted = false;
+    const onClinicalConflict = jest.fn();
+    const getClinicalSavePatch = () => { if (conflicted) throw Object.assign(new Error('Visit changed'), { status: 409 }); return {}; };
+    const { pending, settleNow } = await mountVisit([medicine('Mometasone')], { getClinicalSavePatch, onClinicalConflict });
+    await settleNow();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Mometasone' }));
+    await waitFor(() => expect(pending()).toBe('cancel'));
+    conflicted = true;
+    expect(await settleNow()).toBe(false);
+    expect(apiClient.cancelPrescription).not.toHaveBeenCalled();
+    expect(onClinicalConflict).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves follow-up instructions written after the prescription was created onto the prescription', async () => {
+    const { pending, settleNow } = await mountVisit([medicine('Mometasone')]);
+    await settleNow();
+    await waitFor(() => expect(pending()).toBe('none'));
+    fireEvent.change(screen.getByLabelText('Follow-up instructions'), { target: { value: 'Review in 2 weeks' } });
+    await waitFor(() => expect(pending()).toBe('save'));
+    expect(await settleNow()).toBe(true);
+    expect(apiClient.updatePrescription).toHaveBeenCalledWith('rx-9', expect.objectContaining({ followUpInstructions: 'Review in 2 weeks' }));
+    expect(savedItems(0).map(item => item.drugName)).toEqual(['Mometasone']);
+    await waitFor(() => expect(pending()).toBe('none'));
+  });
+
+  it('saves a medicine edited after the prescription was created', async () => {
+    const { pending, settleNow } = await mountVisit([medicine('Mometasone', { duration: 14 })]);
+    await settleNow();
+    await waitFor(() => expect(pending()).toBe('none'));
+    fireEvent.change(screen.getByLabelText('Duration for Mometasone'), { target: { value: '7' } });
+    await waitFor(() => expect(pending()).toBe('save'));
+    expect(await settleNow()).toBe(true);
+    expect(savedItems(0)).toEqual([expect.objectContaining({ drugName: 'Mometasone', duration: 7 })]);
+  });
+
+  it('creates nothing for a visit with no medicines', async () => {
+    const { pending, settleNow } = await mountVisit([]);
+    await waitFor(() => expect(names()).toEqual(['']));
+    fireEvent.change(screen.getByLabelText('Follow-up instructions'), { target: { value: 'Diet advice' } });
+    expect(pending()).toBe('none');
+    expect(await settleNow()).toBe(true);
+    expect(apiClient.createPrescription).not.toHaveBeenCalled();
+    expect(apiClient.cancelPrescription).not.toHaveBeenCalled();
+  });
+});
+
+it('counts only named medicines and shows a stored frequency code in words', async () => {
+  await mount([medicine('Cetirizine', { frequency: 'TWICE_DAILY', dosePattern: '' })]);
+  expect(screen.getByText('Total items: 1')).toBeInTheDocument();
+  expect(screen.getByRole('combobox', { name: 'Frequency for Cetirizine' })).toHaveTextContent('Twice a day');
+});
+
 describe('template editor', () => {
   async function openEditor() {
     jest.mocked(apiClient.getPrescriptionTemplates).mockResolvedValue({ templates: [] } as any);
     render(<PrescriptionBuilder patientId="patient" visitId={null} doctorId="doctor" standalone />);
+    fireEvent.click(screen.getByRole('button', { name: 'Templates' }));
     fireEvent.click(await screen.findByRole('button', { name: 'New template' }));
     return within(await screen.findByRole('dialog'));
   }
