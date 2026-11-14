@@ -2299,7 +2299,7 @@ export class PharmacyPurchaseInvoiceService {
       packSize: drug.packSizeLabel,
       packUnitType: item.packUnitType?.trim() || (stocked ? STOCK_UNIT_LABELS[stocked.unit] : undefined) || item.packUnitType,
       hsnCode: item.hsnCode?.trim() || stocked?.hsnCode || item.hsnCode,
-      ...(stocked?.gstRate != null ? { gstRate: stocked.gstRate } : {}),
+      ...(stocked?.gstRate != null ? { catalogueGstRate: stocked.gstRate } : {}),
       mrp: this.money(item.mrp || drug.price || 0),
       purchaseRate: this.money(item.purchaseRate),
     };

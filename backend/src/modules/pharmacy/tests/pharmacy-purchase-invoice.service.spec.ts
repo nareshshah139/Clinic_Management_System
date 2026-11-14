@@ -587,13 +587,14 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
   });
 
-  it('fills a blank stock unit and HSN and the GST rate from the matched stocked item, keeping typed values', async () => {
+  it('fills a blank stock unit and HSN from the matched stocked item, keeping typed values, and never writes a tax rate onto the line', async () => {
     prisma.drug.findFirst.mockResolvedValue(completeDrug({ packSizeLabel: '1 unit' }));
     prisma.drug.update.mockImplementation(async ({ data }: any) => completeDrug({ packSizeLabel: '1 unit', ...data }));
-    prisma.inventoryItem.findFirst.mockResolvedValue({ unit: 'TUBES', hsnCode: '30049099', gstRate: 12 });
-    const blank = { ...validDto().items[0], packSize: '', packUnitType: '', hsnCode: '' };
+    prisma.inventoryItem.findFirst.mockResolvedValue({ unit: 'TUBES', hsnCode: '30049099', gstRate: 18 });
+    const blank = { ...validDto().items[0], packSize: '', packUnitType: '', hsnCode: '', cgstPercent: 6, sgstPercent: 6, igstPercent: 0 };
     const filled = await service.confirmMasterRecord({ action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING, drugId: 'drug-1', item: blank }, branchId);
-    expect(filled.linePatch).toMatchObject({ packSize: '1 unit', packUnitType: 'Tube', hsnCode: '30049099', gstRate: 12 });
+    expect(filled.linePatch).toMatchObject({ packSize: '1 unit', packUnitType: 'Tube', hsnCode: '30049099', catalogueGstRate: 18 });
+    for (const key of ['gstRate', 'cgstPercent', 'sgstPercent', 'igstPercent']) expect(filled.linePatch).not.toHaveProperty(key);
     expect(prisma.inventoryItem.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { branchId, status: 'ACTIVE', drugs: { some: { id: 'drug-1' } } } }));
     const typed = await service.confirmMasterRecord({ action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING, drugId: 'drug-1', item: { ...blank, packUnitType: 'Box', hsnCode: '3004' } }, branchId);
     expect(typed.linePatch).toMatchObject({ packUnitType: 'Box', hsnCode: '3004' });

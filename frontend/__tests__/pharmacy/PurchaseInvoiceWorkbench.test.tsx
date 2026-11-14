@@ -2691,29 +2691,34 @@ describe('PurchaseInvoiceWorkbench', () => {
   });
 
 
-  it('fills pack, unit, HSN, GST and MRP from the saved product picked for a typed exact name', async () => {
+  it('fills pack, unit, HSN and MRP from the saved product and leaves the bill tax untouched', async () => {
     const drug = { id: 'drug-tr', name: 'Tretinoin Cream 0.025% 20g', price: 165, manufacturerName: 'Glenmark', packSizeLabel: '1 unit', catalogIssues: [] };
     api.suggestPharmacyPurchaseMasterMatches.mockImplementation(async (data: Record<string, unknown>) => ({ matches: (data.items as unknown[]).map((item, lineIndex) => ({
       lineIndex, ocr: item, matchLabel: 'Same product', recommendedAction: 'MATCH_EXISTING', catalogueResolution: { state: 'missing' },
       candidates: [{ drug, score: 68, confidence: 'MEDIUM', reasons: ['name exact match'] }] })) }));
     api.confirmPharmacyPurchaseMaster.mockResolvedValue({ action: 'MATCH_EXISTING', drug, message: 'Matched',
-      linePatch: { productName: drug.name, manufacturer: 'Glenmark', packSize: '1 unit', packUnitType: 'Tube', hsnCode: '30049099', gstRate: 18, mrp: 165, purchaseRate: 92 } });
+      linePatch: { productName: drug.name, manufacturer: 'Glenmark', packSize: '1 unit', packUnitType: 'Tube', hsnCode: '30049099', catalogueGstRate: 18, mrp: 165, purchaseRate: 92 } });
     render(<PurchaseInvoiceWorkbench />);
     fireEvent.click(await screen.findByRole('button', { name: 'Enter bill by hand' }));
     expect(screen.getByLabelText('Stock unit')).toHaveValue('');
     fireEvent.change(screen.getByLabelText('Product'), { target: { value: drug.name } });
     fireEvent.change(screen.getByLabelText('Rate'), { target: { value: '92' } });
+    expect(screen.getByLabelText('CGST %')).toHaveValue(6);
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm Match' }));
     await waitFor(() => expect(screen.getByLabelText('Stock unit')).toHaveValue('Tube'));
     expect(api.confirmPharmacyPurchaseMaster).toHaveBeenCalledWith(expect.objectContaining({ action: 'MATCH_EXISTING', drugId: 'drug-tr', item: expect.objectContaining({ packSize: '', packUnitType: '' }) }));
     expect(screen.getByLabelText('Pack Size')).toHaveValue('1 unit');
     expect(screen.getByLabelText('HSN')).toHaveValue('30049099');
     expect(screen.getByLabelText('MRP')).toHaveValue(165);
-    expect(screen.getByLabelText('CGST %')).toHaveValue(9);
-    expect(screen.getByLabelText('SGST %')).toHaveValue(9);
+    expect(screen.getByLabelText('CGST %')).toHaveValue(6);
+    expect(screen.getByLabelText('SGST %')).toHaveValue(6);
+    expect(screen.getByLabelText('IGST %')).toHaveValue(0);
+    expect(screen.getByText('Bill says 12%. This item is usually 18%. The bill\'s rate is kept.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('CGST %'), { target: { value: '9' } });
+    fireEvent.change(screen.getByLabelText('SGST %'), { target: { value: '9' } });
+    expect(screen.queryByText(/This item is usually/)).not.toBeInTheDocument();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
-
 
   it('opens a blank hand-typed bill without errors and shows the checks once something is typed', async () => {
     render(<PurchaseInvoiceWorkbench />);

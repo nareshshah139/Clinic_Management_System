@@ -323,7 +323,7 @@ type MasterConfirmationResponse = {
   action: "MATCH_EXISTING" | "CREATE_NEW";
   drug: MasterDrug;
   linePatch?: Partial<
-    Record<keyof LineForm | "gstRate", string | number | null | undefined>
+    Record<keyof LineForm | "catalogueGstRate", string | number | null | undefined>
   >;
   message?: string;
 };
@@ -1216,6 +1216,7 @@ function PurchaseInvoiceEditor({
     section?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   });
 
+  const [catalogueRates, setCatalogueRates] = useState<Record<string, number>>({});
   const [masterStatuses, setMasterStatuses] = useState<
     Record<number, MasterStatus>
   >({});
@@ -1494,6 +1495,7 @@ function PurchaseInvoiceEditor({
     if (["productName", "packSize", "packUnitType"].includes(key)) {
       setMasterMatches([]);
       setMasterStatuses({});
+    setCatalogueRates({});
     }
     const index = lines.findIndex(line => line.localId === localId);
     const line = lines[index];
@@ -1519,6 +1521,7 @@ function PurchaseInvoiceEditor({
     const removedIndex = lines.findIndex((line) => line.localId === localId);
     setMasterMatches([]);
     setMasterStatuses({});
+    setCatalogueRates({});
     setOriginalAmounts((current) =>
       current && Array.isArray(current.items)
         ? {
@@ -1590,6 +1593,7 @@ function PurchaseInvoiceEditor({
     setMasterConfirming(null);
     setMasterRefreshing(false);
     setMasterStatuses({});
+    setCatalogueRates({});
     setValidationErrors([]);
     setNotice(null);
     setError(null);
@@ -1685,6 +1689,7 @@ function PurchaseInvoiceEditor({
     setOcrSummary(extraction || null);
     setMasterMatches(matches?.matches || []);
     setMasterStatuses({});
+    setCatalogueRates({});
     setValidationErrors([]);
   };
 
@@ -1701,6 +1706,9 @@ function PurchaseInvoiceEditor({
     if (!patch) return;
     invalidatePending();
     setManualReviewCandidateId(null);
+    const matchedLine = lines[lineIndex];
+    const catalogueRate = Number(patch.catalogueGstRate);
+    if (matchedLine && patch.catalogueGstRate != null && Number.isFinite(catalogueRate)) setCatalogueRates(current => ({ ...current, [matchedLine.localId]: catalogueRate }));
 
     setLines((current) =>
       current.map((line, index) => {
@@ -1724,10 +1732,6 @@ function PurchaseInvoiceEditor({
               ? formString(patch.packUnitType)
               : line.packUnitType,
           hsnCode: patch.hsnCode !== undefined ? formString(patch.hsnCode) : line.hsnCode,
-          // Only the untouched default rates are replaced; a typed rate stays.
-          ...(patch.gstRate != null && line.cgstPercent === "6" && line.sgstPercent === "6" && numeric(line.igstPercent) === 0
-            ? { cgstPercent: String(Number(patch.gstRate) / 2), sgstPercent: String(Number(patch.gstRate) / 2) }
-            : {}),
           mrp: patch.mrp !== undefined ? formString(patch.mrp) : line.mrp,
           purchaseRate:
             patch.purchaseRate !== undefined
@@ -5161,6 +5165,7 @@ function PurchaseInvoiceEditor({
 <Field id={`${line.localId}-cgst`} label="CGST %" value={line.cgstPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "cgstPercent", event.target.value)} />
 <Field id={`${line.localId}-sgst`} label="SGST %" value={line.sgstPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "sgstPercent", event.target.value)} />
 <Field id={`${line.localId}-igst`} label="IGST %" value={line.igstPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "igstPercent", event.target.value)} />
+{catalogueRates[line.localId] !== undefined && Math.abs(numeric(line.cgstPercent) + numeric(line.sgstPercent) + numeric(line.igstPercent) - catalogueRates[line.localId]) > 0.005 && <p role="status" className="col-span-full text-sm text-amber-700">Bill says {Number((numeric(line.cgstPercent) + numeric(line.sgstPercent) + numeric(line.igstPercent)).toFixed(2))}%. This item is usually {catalogueRates[line.localId]}%. The bill's rate is kept.</p>}
                                 </div>
                                 <details className="border-t pt-2" open={currentLineFlags[index].some(flag => ['manufacturer','hsnCode','oldMrp','specialDiscountPercent','schemeAmount'].includes(purchaseReviewIssue(flag, index).field || '')) || !line.hsnCode.trim() || validationErrors.some(message => message.startsWith(`Line ${index + 1}`)) || undefined}>
                                   <summary className="cursor-pointer py-1 text-sm font-medium">Other commercial details</summary>
