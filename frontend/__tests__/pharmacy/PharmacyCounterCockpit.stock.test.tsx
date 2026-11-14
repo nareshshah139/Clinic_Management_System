@@ -234,3 +234,31 @@ it('shows every checked line with its stock status and available quantity in its
   expect(screen.getByText('Pick 1 · 60 tubes available')).toBeInTheDocument();
   expect(screen.getByText('Pick 1 · —')).toBeInTheDocument();
 });
+
+describe('inventory linking follows Bill', () => {
+  const link = (inventoryItemId: string | null) => ({ items: [{
+    drugName: 'Medicine A', inventoryItemId, stockName: inventoryItemId ? 'Medicine A' : undefined, stockStatus: inventoryItemId ? 'IN_STOCK' : 'UNMATCHED',
+    totalNonExpiredStock: inventoryItemId ? 4 : 0, batches: [], lowStock: false, nearExpiry: false, suggestions: [],
+  }] });
+  const open = (inventoryItemId: string | null) => get.mockImplementation(async url => url.endsWith('/stock-check') ? link(inventoryItemId) : { data: [entry()], pagination: { total: 1 } });
+
+  it('offers Link item and Change link to roles that can bill', async () => {
+    open(null);
+    const unlinked = render(<PharmacyCounterCockpit {...props} />);
+    expect(await screen.findByText('Link item')).toBeInTheDocument();
+    unlinked.unmount();
+    open('inv-a');
+    render(<PharmacyCounterCockpit {...props} />);
+    expect(await screen.findByText('Change link')).toBeInTheDocument();
+  });
+
+  it.each([[null], ['inv-a']])('shows reception no Link item or Change link (inventory %s)', async inventoryItemId => {
+    open(inventoryItemId);
+    render(<PharmacyCounterCockpit {...props} onOpenBilling={undefined} />);
+    await screen.findAllByText('Medicine A');
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/pharmacy/prescription-queue/rx-1/stock-check'));
+    await waitFor(() => expect(screen.queryByText(/Checking stock/)).not.toBeInTheDocument());
+    expect(screen.queryByText('Link item')).not.toBeInTheDocument();
+    expect(screen.queryByText('Change link')).not.toBeInTheDocument();
+  });
+});

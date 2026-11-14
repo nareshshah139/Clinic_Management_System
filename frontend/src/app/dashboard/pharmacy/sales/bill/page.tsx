@@ -7,6 +7,8 @@ import { ArrowLeft } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { isIssuedBillNumber } from '@/lib/bill-number';
 import { getErrorMessage } from '@/lib/utils';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
+import { canSellPharmacy } from '@/lib/pharmacy-access';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -57,6 +59,7 @@ function useSavedDraft(id: string, reloadKey: number): DraftLoad {
 const COUNTER_PATH = '/dashboard/pharmacy?section=counter';
 
 function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
+  const { user } = useDashboardUser();
   const [reloadKey, setReloadKey] = useState(0);
   const load = useSavedDraft(id, reloadKey);
 
@@ -98,6 +101,7 @@ function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
       onDiscarded={onLeave}
       onReloadDraft={() => setReloadKey((key) => key + 1)}
       onDone={onLeave}
+      canLinkInventory={canSellPharmacy(user?.role)}
     />
   );
 }
@@ -110,6 +114,7 @@ function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
  */
 function NewBill({ prefill, onCreated, onLeave }: { prefill: BillPrefill | undefined; onCreated: (id: string) => void; onLeave: () => void }) {
   const router = useRouter();
+  const { user } = useDashboardUser();
   const billRef = useRef<HTMLDivElement>(null);
   const [saved, setSaved] = useState<{ id: string; key: string } | null>(null);
   const prefillKey = PREFILL_KEYS.map((key) => prefill?.[key] ?? '').join('|');
@@ -134,6 +139,7 @@ function NewBill({ prefill, onCreated, onLeave }: { prefill: BillPrefill | undef
         }}
         onDiscarded={onLeave}
         onDone={onLeave}
+        canLinkInventory={canSellPharmacy(user?.role)}
       />
     </div>
   );

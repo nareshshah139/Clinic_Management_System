@@ -231,6 +231,8 @@ const billingPrefill = (entry: QueueEntry): PharmacyBillingPrefill => ({
  * for roles that can create a bill (onOpenBilling given); there each billable row MUST offer Bill with
  * its patient, doctor, prescription and visit, and ineligible or dispensed rows MUST NOT. A pharmacy
  * invoice refresh MUST reload the queue so billed prescriptions leave waiting without a page reload.
+ * Link item and Change link MUST follow Bill: roles without onOpenBilling see neither, because the
+ * server refuses inventory linking for them.
  */
 export function PharmacyCounterCockpit({
   prefill,
@@ -641,7 +643,7 @@ export function PharmacyCounterCockpit({
           stockByLine={stockByLine}
           loadingStock={loadingStock}
           setLineAction={updateLineAction}
-          onInventoryLinked={async () => setStockReloadKey((key) => key + 1)}
+          onInventoryLinked={onOpenBilling ? async () => setStockReloadKey((key) => key + 1) : undefined}
           activeLifecycle={activeLifecycle}
           reviewedLineCount={reviewedLineCount}
           readyForBilling={readyForBilling}
@@ -827,7 +829,7 @@ function ActiveDispenseColumn({
   stockByLine: Record<string, StockCheckItem>;
   loadingStock: boolean;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
-  onInventoryLinked: () => Promise<void>;
+  onInventoryLinked?: () => Promise<void>;
   activeLifecycle: DispenseLifecycle;
   reviewedLineCount: number;
   readyForBilling: boolean;
@@ -975,7 +977,7 @@ function MedicationReviewTable({
   activeEntry: QueueEntry;
   stockByLine: Record<string, StockCheckItem>;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
-  onInventoryLinked: () => Promise<void>;
+  onInventoryLinked?: () => Promise<void>;
 }) {
   return (
     <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200">
@@ -997,7 +999,7 @@ function MedicationReviewTable({
               action={medication.action || 'pending'}
               setAction={(action) => setLineAction(medication, action)}
               inventoryLink={
-                activeEntry.dispensingEligible !== false && stock ? (
+                onInventoryLinked && activeEntry.dispensingEligible !== false && stock ? (
                   <PrescriptionInventoryLink
                     prescriptionId={activeEntry.prescriptionId}
                     lineIndex={index}

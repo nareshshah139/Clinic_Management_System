@@ -119,4 +119,16 @@ describe('Bill page', () => {
     expect(screen.getByText('Prescription ID:')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Link inventory for Adapalene gel' })).toBeVisible();
   });
+
+  it('shows reception the linked prescription without a Link item control', async () => {
+    mockRole = 'RECEPTION';
+    mockQuery = new URLSearchParams('patientId=patient-rx-1&prescriptionId=rx-1&doctorId=doctor-1');
+    render(<SalesBillPage />);
+    const summary = (await screen.findByRole('heading', { name: 'Linked Prescription' })).closest('summary')!;
+    await waitFor(() => expect(summary).toHaveTextContent('1 to link to inventory'));
+    fireEvent.click(summary);
+    expect(screen.getByText('Prescription ID:')).toBeVisible();
+    expect(screen.queryByText('Link item')).not.toBeInTheDocument();
+    expect(screen.queryByText('Change link')).not.toBeInTheDocument();
+  });
 });

@@ -266,6 +266,7 @@ export function PharmacyInvoiceBuilderFixed({
   onDiscarded,
   onReloadDraft,
   onDone,
+  canLinkInventory = true,
 }: {
   prefill?: BillPrefill;
   draft?: SavedDraft;
@@ -273,6 +274,7 @@ export function PharmacyInvoiceBuilderFixed({
   onDiscarded?: (session: DraftSession) => void;
   onReloadDraft?: () => void;
   onDone?: () => void;
+  canLinkInventory?: boolean;
 }) {
   const incomingPrefillKey = JSON.stringify([
     suppliedPrefill?.patientId,
@@ -2161,7 +2163,7 @@ export function PharmacyInvoiceBuilderFixed({
             <strong>Prescription ID:</strong> {prescriptionData.id}
           </p>
           {unlinkedItems.map(item => <div key={item.id} className="mt-2">
-            {item.prescribedDrugName}: link inventory before billing. <PrescriptionInventoryLink prescriptionId={prescriptionData.id} lineIndex={item.prescriptionLineIndex!} prescriptionVersion={item.prescriptionVersion} name={item.prescribedDrugName || ''} onLinked={() => loadPrescriptionData(prescriptionData.id)} />
+            {item.prescribedDrugName}: link inventory before billing. {canLinkInventory && <PrescriptionInventoryLink prescriptionId={prescriptionData.id} lineIndex={item.prescriptionLineIndex!} prescriptionVersion={item.prescriptionVersion} name={item.prescribedDrugName || ''} onLinked={() => loadPrescriptionData(prescriptionData.id)} />}
           </div>)}
           <p className="mt-2 text-xs text-blue-600">
             Review stock warnings, substitute medicines, adjust quantities or remove items before billing.

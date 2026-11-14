@@ -30,6 +30,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { billHref, type BillPrefill } from '@/components/pharmacy/sales/sales-bill-model';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
+import { canSellPharmacy } from '@/lib/pharmacy-access';
 
 const AgenticPharmacyDock = dynamic(
   () =>
@@ -43,9 +44,6 @@ const AgenticPharmacyDock = dynamic(
 );
 
 type PharmacySideTab = 'desk' | 'counter';
-
-/** The roles the server lets sell (GET /pharmacy/dashboard, /drugs, pharmacy invoices); only they see the desk's figures and sale actions. */
-const PHARMACY_SALES_ROLES = ['OWNER', 'ADMIN', 'DOCTOR', 'PHARMACIST'];
 
 interface PharmacyDashboardData {
   todaySales?: number;
@@ -79,7 +77,7 @@ function PharmacyPageContent() {
   const requestedTab = searchParams.get('section') || searchParams.get('tab');
   const pharmacyTab: PharmacySideTab = requestedTab === 'counter' ? 'counter' : 'desk';
   const { user } = useDashboardUser();
-  const sells = PHARMACY_SALES_ROLES.includes(user?.role ?? '');
+  const sells = canSellPharmacy(user?.role);
 
   useEffect(() => {
     const checkAuth = async () => {
