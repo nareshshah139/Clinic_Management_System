@@ -11,31 +11,25 @@ module.exports = journey(
     await ui.start("/dashboard");
     await ui.screen("dashboard");
     await ui.click(page.getByRole("link", { name: "Patients" }), "Menu: Patients");
-    await page.getByRole("button", { name: "New Patient" }).waitFor();
+    await page.getByRole("button", { name: "New patient" }).waitFor();
     await ui.screen("patients-list");
-    await ui.click(page.getByRole("button", { name: "New Patient" }), "Patients: New Patient");
-    await page.getByRole("dialog").getByText("Create Patient").waitFor();
-    await ui.screen("create-patient-dialog");
+    await ui.click(page.getByRole("button", { name: "New patient" }), "Patients: New patient");
     const dialog = page.getByRole("dialog");
-    await ui.fill(dialog.getByLabel("First Name"), FIRST, "Create Patient: First Name");
-    await ui.fill(dialog.getByLabel("Last Name"), LAST, "Create Patient: Last Name");
-    await ui.fill(dialog.getByLabel("Age (years)"), "34", "Create Patient: Age (years)");
-    ui.decide("Gender (defaults to Other, not a sensible value)", false);
-    await ui.click(dialog.locator("#gender"), "Create Patient: Gender dropdown");
-    await ui.click(page.getByRole("option", { name: "Male", exact: true }), "Create Patient: Gender = Male");
-    await ui.fill(dialog.getByLabel("Phone", { exact: true }), PHONE, "Create Patient: Phone");
-    ui.decide("Patient Type (Non walk-in default hides the booking path)", false);
-    await ui.click(dialog.locator("#patientType"), "Create Patient: Patient Type dropdown");
-    await ui.click(page.getByRole("option", { name: "Walk-in", exact: true }), "Create Patient: Patient Type = Walk-in");
-    await dialog.getByText("Appointment Type (walk-in)").waitFor();
-    await ui.screen("walk-in-fields-revealed");
-    ui.decide("Doctor (for walk-in) (no default, nothing books if left empty)", false);
-    await ui.click(dialog.locator("#walkinDoctorId"), "Create Patient: Doctor (for walk-in) dropdown");
-    await ui.click(page.getByRole("option", { name: /Priya Menon/ }), "Create Patient: Doctor = Dr. Priya Menon");
+    await dialog.getByLabel("Name *").waitFor();
+    await ui.screen("new-patient-dialog");
+    ui.decide("Gender (required, none preselected)", false);
+    ui.decide("Doctor (preselected: the only doctor)", true);
+    await ui.fill(dialog.getByLabel("Name *"), `${FIRST} ${LAST}`, "New patient: Name");
+    await ui.fill(dialog.getByLabel("Age (years)"), "34", "New patient: Age");
+    await ui.click(dialog.getByRole("radio", { name: "Male", exact: true }), "New patient: Gender = Male");
+    await ui.fill(dialog.getByLabel("Phone *"), PHONE, "New patient: Phone");
+    await dialog.getByRole("combobox", { name: /Doctor/ }).filter({ hasText: "Priya Menon" }).waitFor();
     await ui.screen("form-filled");
-    await ui.click(dialog.getByRole("button", { name: "Create", exact: true }), "Create Patient: Create");
-    await page.getByText("Walk-in appointment booked").first().waitFor();
-    await ui.screen("booked-toast-on-patients-list");
+    await ui.click(dialog.getByRole("button", { name: "Register and book" }), "New patient: Register and book");
+    const result = dialog.getByRole("status");
+    await result.getByText(/is booked with Dr\. Priya Menon today at/).waitFor();
+    await ui.screen("booked");
+    const shown = await result.innerText();
 
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const found = await ui.api("GET", `/patients?search=${PHONE}&limit=5`);
@@ -47,7 +41,7 @@ module.exports = journey(
     const mine = (Array.isArray(list) ? list : []).filter((a) => String(a.date).slice(0, 10) === today && (a.doctorId || a.doctor?.id) === doctorId);
     const booked = (Array.isArray(list) ? list : []).filter((a) => (a.doctorId || a.doctor?.id) === doctorId);
     ui.goal(
-      Boolean(patient) && booked.length === 1 && mine.length === 1,
+      Boolean(patient) && booked.length === 1 && mine.length === 1 && shown.includes(`at ${mine[0].slot}`) && shown.includes(`token ${mine[0].tokenNumber}`),
       `Farhan Qureshi is registered and on today's list for Dr. Priya Menon at ${mine[0] ? mine[0].slot : "no slot"} (booked for ${booked[0] ? String(booked[0].date).slice(0, 10) : "no date"}, today is ${today})`,
     );
   },

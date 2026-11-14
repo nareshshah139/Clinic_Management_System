@@ -75,7 +75,7 @@ it('renders every clinical field when expanded and uses the appointment day', as
 
 it('labels an appointment without a visit and never offers to resume it as a visit', () => {
   render(<PatientHistoryVisitCard visit={{ id: 'appointment:a', entryType: 'appointment', appointment: { date: '2026-09-02' }, status: 'CANCELLED' }} onResume={() => {}} />);
-  expect(screen.getByText(/no visit documentation recorded/i)).toBeInTheDocument();
+  expect(screen.getByText("No visit notes")).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /resume/i })).not.toBeInTheDocument();
 });
 

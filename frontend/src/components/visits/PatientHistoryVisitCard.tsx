@@ -156,6 +156,26 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
   };
 };
 
+export function summarizeVisit(visit: PatientHistoryVisit) {
+  const data = deriveVisitData(visit);
+  const plan = parseJsonObject<Record<string, unknown>>(visit.plan);
+  const followUp = visit.followUp || plan?.followUpDate;
+  const instructions = (visit as Record<string, any>).prescription?.instructions;
+  const review = [
+    followUp ? `Review on ${formatMaybeDate(String(followUp))}` : '',
+    typeof plan?.notes === 'string' ? plan.notes.trim() : '',
+    typeof instructions === 'string' ? instructions.trim() : '',
+  ].filter((line, index, lines) => line && lines.indexOf(line) === index);
+  return {
+    dateLabel: data.dateLabel,
+    doctorName: data.doctorName,
+    chiefComplaint: data.chiefComplaint,
+    primaryDiagnosis: data.primaryDiagnosis,
+    medicines: data.medicines,
+    review,
+  };
+}
+
 type VisitView = 'summary' | 'compact' | 'full';
 type MedicineItem = Record<string, unknown>;
 
@@ -295,7 +315,7 @@ export default function PatientHistoryVisitCard({
             {data.statusLabel && <Badge variant={data.statusVariant} className="max-w-full whitespace-normal break-words">{data.statusLabel}</Badge>}
           </div>
 
-          {appointmentOnly && <p className="text-xs leading-relaxed text-muted-foreground">Appointment only — no visit documentation recorded.</p>}
+          {appointmentOnly && <p className="text-xs leading-relaxed text-muted-foreground">No visit notes</p>}
           <dl className="space-y-1 text-sm leading-snug">
             <div className="flex min-w-0 gap-2">
               <dt className="w-28 shrink-0 text-xs leading-5 text-muted-foreground">Chief Complaint</dt>

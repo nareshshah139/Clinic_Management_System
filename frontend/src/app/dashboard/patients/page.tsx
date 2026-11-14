@@ -10,35 +10,35 @@ export default function PatientsPage() {
   return (
     <Suspense fallback={<LoadingSkeleton label="Loading patients…" />}>
       <div className="space-y-4">
-        <PageHeader title={<>Patients Management</>} description={<>Manage patient records and information</>} actions={<><QuickGuide
-            title="Patients Management Guide"
+        <PageHeader title="Patients" actions={<QuickGuide
+            title="Patients guide"
             sections={[
               {
-                title: "Adding Patients",
+                title: "New patient",
                 items: [
-                  "Click 'Add Patient' to create a new patient record",
-                  "Fill in required fields: name, contact, date of birth",
-                  "Add optional information like address, medical history, and insurance details"
+                  "Click 'New patient' and enter the name, phone, age and gender",
+                  "'Book for today' puts the patient on today's list for the doctor you choose. 'Register only' just saves the patient",
+                  "Address, email, ABHA ID and other details are under 'More details'"
                 ]
               },
               {
-                title: "Search & Filter",
+                title: "Search",
                 items: [
-                  "Use the search bar to find patients by name, phone, or email",
-                  "Filter patients by status, gender, or date range",
-                  "Click on a patient row to view their detailed profile"
+                  "Type a name or phone number in the search box",
+                  "Narrow the list by gender, consultation type or date",
+                  "Click a patient to open their page"
                 ]
               },
               {
-                title: "Patient Records",
+                title: "Patient page",
                 items: [
-                  "View complete visit history and medical records",
-                  "Track patient progress and treatment plans",
-                  "Access photos, prescriptions, and invoices from patient profile"
+                  "The last visit, with medicines and review advice, is at the top",
+                  "Click 'Edit' to change the patient's details",
+                  "Book an appointment or start a visit from the buttons at the top, and find earlier visits and photos below"
                 ]
               }
             ]}
-          /></>} />
+          />} />
         <PatientsManagement />
       </div>
     </Suspense>
