@@ -33,3 +33,16 @@ it('settings submit changed bounce inputs without the stock count settings, whic
   fireEvent.click(screen.getByLabelText('Include unfulfilled bounce quotations')); fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
   await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/inventory/workspace/settings', { version: 2, ownerId: 'owner', autoMinMaxEnabled: false, autoPoEnabled: false, lookbackDays: 60, minimumOrders: 1, minCoverDays: 10, maxCoverDays: 60, refreshDays: 7, includeBounce: true, includeRefill: true }));
 });
+it('switching from automation settings to the monitor shows the monitor, not the settings response', async () => {
+  const status = { owner: null, transport: { message: 'Setup required' }, runs: [], schedule: 'Daily', approvalPolicy: 'Manual approval', settings: { version: 1, ownerId: '', autoMinMaxEnabled: false, autoPoEnabled: false, lookbackDays: 60, minimumOrders: 1, minCoverDays: 10, maxCoverDays: 60, refreshDays: 7, includeBounce: false, includeRefill: false } };
+  const monitor = { basis: 'Saved purchase-order events', from: '2026-11-01', to: '2026-11-14', branchId: 'branch', series: [{ name: 'AUTO_DRAFTED', count: 2, records: [] }], documents: [], coverage: [], supplierChoices: [], runs: [] };
+  let releaseMonitor: (value: unknown) => void = () => undefined;
+  (apiClient.get as jest.Mock).mockImplementation((url: string) => url.includes('/monitor') ? new Promise((resolve) => { releaseMonitor = resolve; }) : Promise.resolve(url.endsWith('/owners') ? [] : status));
+  const { rerender } = render(<ReplenishmentCenter {...props} view="settings"/>);
+  await screen.findByText('Automation setup & summary');
+  rerender(<ReplenishmentCenter {...props} view="monitor"/>);
+  expect(screen.queryByText('Automation setup & summary')).not.toBeInTheDocument();
+  releaseMonitor(monitor);
+  expect(await screen.findByRole('heading', { name: 'Replenishment monitor' })).toBeInTheDocument();
+  expect(screen.getByText('AUTO DRAFTED')).toBeInTheDocument();
+});
