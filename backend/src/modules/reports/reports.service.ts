@@ -1184,6 +1184,17 @@ export class ReportsService {
       }),
     ]);
 
+    const availableOf = (item: { currentStock: number; heldStock?: number | null }) => item.currentStock - (item.heldStock ?? 0);
+    const lowNames = [...new Set(low.rows.map((i: any) => i.name as string))];
+    const byName = lowNames.length
+      ? await this.prisma.inventoryItem.groupBy({
+          by: ['name'],
+          where: { branchId, status: 'ACTIVE', name: { in: lowNames }, OR: [{ expiryDate: null }, { expiryDate: { gte: now } }] },
+          _sum: { currentStock: true, heldStock: true },
+        })
+      : [];
+    const availableInAll = new Map(byName.map((g) => [g.name, (g._sum.currentStock ?? 0) - (g._sum.heldStock ?? 0)]));
+
     return {
       counts: {
         billsDue: billsDueSum?._count ?? 0,
@@ -1208,6 +1219,8 @@ export class ReportsService {
         itemId: i.id,
         itemName: i.name,
         currentStock: i.currentStock,
+        available: availableOf(i),
+        availableInAll: Math.max(availableOf(i), availableInAll.get(i.name) ?? 0),
         reorderLevel: i.minStockLevel ?? i.reorderLevel ?? 0,
       })),
       expiryAlerts: expiring.rows.map((i: any) => ({

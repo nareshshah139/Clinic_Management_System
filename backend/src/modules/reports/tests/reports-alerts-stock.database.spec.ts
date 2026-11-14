@@ -20,6 +20,8 @@ databaseTests('Alerts use the Inventory stock rules', () => {
     await db.inventoryItem.createMany({ data: [
       batch('Empty cream', { currentStock: 0, minStockLevel: 5 }),
       batch('Short gel', { currentStock: 3, minStockLevel: 8 }),
+      batch('Short gel second batch', { name: 'Short gel', currentStock: 20, heldStock: 2, minStockLevel: 8 }),
+      batch('Short gel expired batch', { name: 'Short gel', currentStock: 50, minStockLevel: 8, expiryDate: inDays(-10) }),
       batch('Held tablet', { currentStock: 6, heldStock: 4, minStockLevel: 2 }),
       batch('Reorder-only lotion', { currentStock: 2, reorderLevel: 3 }),
       batch('Full shampoo', { currentStock: 30, minStockLevel: 8 }),
@@ -46,6 +48,12 @@ databaseTests('Alerts use the Inventory stock rules', () => {
       expiring: ['Soon serum'],
       counts: [4, 1],
     });
+    expect(alerts.lowStockAlerts.map((a: any) => [a.itemName, a.available, a.availableInAll])).toEqual([
+      ['Empty cream', 0, 0],
+      ['Held tablet', 2, 2],
+      ['Reorder-only lotion', 2, 2],
+      ['Short gel', 3, 21],
+    ]);
     expect([(await workspace.stock(actor, { stock: 'LOW' })).total, (await workspace.stock(actor, { expiryMonths: '3' })).total]).toEqual([4, 1]);
   });
 });
