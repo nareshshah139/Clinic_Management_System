@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CalendarLegend } from './CalendarLegend';
 
@@ -54,7 +54,7 @@ describe('CalendarLegend disclosure', () => {
     expect(legend).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('keeps the open panel inside the viewport when the toolbar wraps and the button moves', async () => {
+  it('keeps the open panel inside the viewport when the button moves with no resize or scroll event', async () => {
     const { user, legend } = renderLegend();
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1366 });
     let anchorLeft = 1250;
@@ -65,11 +65,9 @@ describe('CalendarLegend disclosure', () => {
     expect(panel.style.left).toBe('-444px');
 
     anchorLeft = 5;
-    act(() => { window.dispatchEvent(new Event('resize')); });
-    expect(panel.style.left).toBe('11px');
+    await waitFor(() => expect(panel.style.left).toBe('11px'));
 
     anchorLeft = 300;
-    act(() => { window.dispatchEvent(new Event('scroll')); });
-    expect(panel.style.left).toBe('0px');
+    await waitFor(() => expect(panel.style.left).toBe('0px'));
   });
 });

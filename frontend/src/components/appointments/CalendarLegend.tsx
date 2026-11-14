@@ -58,24 +58,21 @@ export function CalendarLegend() {
 
   useLayoutEffect(() => {
     if (!open) return;
-    const place = () => {
+    let frame = 0;
+    let placedFor = '';
+    const track = () => {
       const anchor = rootRef.current?.getBoundingClientRect();
-      if (!anchor) return;
-      const width = Math.min(PANEL_WIDTH_PX, window.innerWidth * 0.9);
-      const left = Math.max(VIEWPORT_GUTTER_PX, Math.min(anchor.left, window.innerWidth - VIEWPORT_GUTTER_PX - width));
-      setOffsetX(left - anchor.left);
+      const key = anchor ? `${anchor.left}:${window.innerWidth}` : '';
+      if (anchor && key !== placedFor) {
+        placedFor = key;
+        const width = Math.min(PANEL_WIDTH_PX, window.innerWidth * 0.9);
+        const left = Math.max(VIEWPORT_GUTTER_PX, Math.min(anchor.left, window.innerWidth - VIEWPORT_GUTTER_PX - width));
+        setOffsetX(left - anchor.left);
+      }
+      frame = requestAnimationFrame(track);
     };
-    place();
-    const toolbar = rootRef.current?.parentElement;
-    const observer = typeof ResizeObserver === 'undefined' || !toolbar ? null : new ResizeObserver(place);
-    if (toolbar) observer?.observe(toolbar);
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
+    track();
+    return () => cancelAnimationFrame(frame);
   }, [open]);
 
   return (
