@@ -34,7 +34,7 @@ One action is one click, one typed field, one selection or one key press. "Ideal
 | j10 Type in a supplier bill and add the stock | Pharmacist | 21 | 12 | 11 |
 | **Total** | | **113** | **62** | **57** |
 
-Both columns come from `scripts/ux/journeys/run-all.cjs`, which replays every journey from a fresh seed and records each interaction through one counter. The files are `docs/ux-flow/scorecards/baseline.json` and `after.json`.
+Both columns come from `scripts/ux/journeys/run-all.cjs`, which replays every journey from a fresh seed and records each interaction through one counter. The files are `docs/ux-flow/scorecards/baseline.json` and `final.json`.
 
 Read the numbers with four things in mind.
 
@@ -128,7 +128,7 @@ A new check, `scripts/contracts/compare-attachment.cjs`, compares every product 
 | Check | Result |
 |---|---|
 | Ten journeys, each from a fresh seed | 10 pass, 62 actions |
-| Frontend tests | 156 suites, 1,706 tests pass (149 and 1,581 before) |
+| Frontend tests | 158 suites, 1,712 tests pass (149 and 1,581 before) |
 | Frontend lint | 17 errors, in the same files as before the run |
 | Frontend type-check | 91 errors in test files, unchanged; 0 in the build configuration |
 | Backend type-check | Clean |
