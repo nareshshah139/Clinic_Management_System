@@ -41,6 +41,7 @@ export default function UsersManagement() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [allPermissions, setAllPermissions] = useState<string[]>([]);
   const [rolePerms, setRolePerms] = useState<string[]>([]);
+  const [alwaysPerms, setAlwaysPerms] = useState<string[]>([]);
   // Permissions can be saved only once the lists have loaded; saving an unloaded list would erase them.
   const [permLoad, setPermLoad] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [roleSelect, setRoleSelect] = useState<string>('ADMIN');
@@ -385,15 +386,12 @@ export default function UsersManagement() {
     setPermLoad('loading');
     setAllPermissions([]);
     setRolePerms([]);
+    setAlwaysPerms([]);
     try {
-      const [rolesRes, perms] = await Promise.all([
-        apiClient.getRoles({ limit: 100 }),
-        loadAllPermissionNames(),
-      ]);
+      const [perms, held] = await Promise.all([loadAllPermissionNames(), apiClient.getUserPermissions(u.id)]);
       setAllPermissions(perms);
-      const role = ((rolesRes as any)?.data || (rolesRes as any)?.roles || []).find((r: any) => r.name === u.role);
-      const defaults = role?.permissions ? JSON.parse(role.permissions) : [];
-      setRolePerms(Array.isArray(u.permissions) ? u.permissions : defaults);
+      setRolePerms(held.permissions);
+      setAlwaysPerms(held.always);
       setPermLoad('ready');
     } catch (e) {
       setAllPermissions([]);
@@ -407,21 +405,24 @@ export default function UsersManagement() {
     try {
       await apiClient.assignRole(selectedUser.id, { role });
       await fetchUsers();
-      
-      // Update the selected user's role in the dialog
-      setSelectedUser({ ...selectedUser, role: role as any });
-      
-      // Fetch updated role permissions and apply them
-      const rolesRes = await apiClient.getRoles({ limit: 100 });
-      const roleRecord = ((rolesRes as any)?.data || (rolesRes as any)?.roles || []).find((r: any) => r.name === role);
-      const defaults = roleRecord?.permissions ? JSON.parse(roleRecord.permissions) : [];
-      setRolePerms(defaults);
-      
-      alert(`Role updated to ${role} successfully!`);
     } catch (error) {
       console.error('Error applying role:', error);
       alert('Failed to update role. Please try again.');
+      return;
     }
+    setSelectedUser({ ...selectedUser, role: role as any });
+    setPermLoad('loading');
+    try {
+      const held = await apiClient.getUserPermissions(selectedUser.id);
+      setRolePerms(held.permissions);
+      setAlwaysPerms(held.always);
+      setPermLoad('ready');
+    } catch {
+      setRolePerms([]);
+      setAlwaysPerms([]);
+      setPermLoad('failed');
+    }
+    alert(`Role updated to ${role} successfully!`);
   };
 
   const applyPermissions = async (perms: string[]) => {
@@ -593,6 +594,11 @@ export default function UsersManagement() {
                                   <div>
                                     <Label>Permissions</Label>
                                     <div className="text-xs text-gray-500">Selected: {rolePerms.length}</div>
+                                    {alwaysPerms.length > 0 && (
+                                      <p className="text-xs text-gray-500">
+                                        This role always has {alwaysPerms.includes('*') ? 'every permission' : alwaysPerms.join(', ')}; unticking cannot remove them.
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="md:col-span-8">

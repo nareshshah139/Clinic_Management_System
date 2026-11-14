@@ -209,6 +209,12 @@ export interface User {
   metadata?: Record<string, any> | null;
 }
 
+/** What a user holds now, and what their role grants whatever is unticked. */
+export interface UserPermissions {
+  permissions: string[];
+  always: string[];
+}
+
 // API Response wrappers
 export interface ApiResponse<T> {
   data: T;
