@@ -45,3 +45,13 @@ it('does not replace a newer selection when the chart lookup finishes late', asy
   await act(async () => finish({ id: 'patient-1', name: 'Old choice' }));
   expect(result.current.box).toEqual({ kind: 'selected', patient: { id: 'patient-2', name: 'New choice' } });
 });
+
+it('clears the selection and says so when the chart lookup fails', async () => {
+  jest.mocked(apiClient.getPatient).mockRejectedValueOnce(new Error('gone'));
+  render(<AppointmentsCalendar prefillPatientId="patient-1" controlledDoctorId="doctor-1" controlledDate="2099-01-01" hideHeaderControls />);
+  await waitFor(() => expect(apiClient.getPatient).toHaveBeenCalled());
+  expect(screen.getByPlaceholderText('Name or phone')).toHaveValue('');
+  expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Choose slot' }));
+  expect(screen.queryByText(/Booking for/)).toBeNull();
+});

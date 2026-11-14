@@ -222,9 +222,9 @@ export default function CalendarColumn({
       className="row-span-2 grid min-w-0 grid-rows-subgrid"
       style={{ gridColumnStart: column }}
     >
-      <header className="flex min-w-0 items-baseline gap-1.5 border-b-2 pb-1" style={{ borderBottomColor: spec.accentColor }}>
+      <header className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 border-b-2 pb-1" style={{ borderBottomColor: spec.accentColor }}>
         <h3 id={titleId} className="font-semibold leading-tight text-gray-900">{spec.title}</h3>
-        <span className="min-w-0 truncate text-xs font-medium leading-tight text-gray-700">
+        <span className="min-w-0 text-xs font-medium leading-tight text-gray-700">
           <span aria-hidden="true">{' · '}</span>{waiting ? spec.count(waiting) : spec.empty}
         </span>
       </header>
