@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { PrescriptionsService } from '../prescriptions.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { TELE_VIDEO_DISCLAIMER } from '../../visits/consultation';
 
 it.each(['download', 'WHATSAPP', 'EMAIL'])('includes the tele-video disclaimer in %s PDFs and removes it for in-person', async channel => {
@@ -48,4 +49,24 @@ it('rejects cross-branch prescriptions and invalid uploads before sharing', asyn
   expect(notifications.sendEmail).not.toHaveBeenCalled();
   expect(notifications.sendWhatsAppDocument).not.toHaveBeenCalled();
   expect(db.prescriptionPrintEvent.create).not.toHaveBeenCalled();
+});
+
+it('fails an email share and records no print event when SMTP is not configured', async () => {
+  const saved = { host: process.env.SMTP_HOST, user: process.env.SMTP_USER, pass: process.env.SMTP_PASS };
+  delete process.env.SMTP_HOST;
+  delete process.env.SMTP_USER;
+  delete process.env.SMTP_PASS;
+  try {
+    const db = { prescription: { findFirst: jest.fn().mockResolvedValue({ id: 'rx' }) }, prescriptionPrintEvent: { create: jest.fn() } };
+    const service = new PrescriptionsService(db as any, new NotificationsService());
+    const body = { channel: 'EMAIL' as const, to: 'synthetic@example.test' };
+    const file = { buffer: Buffer.from('%PDF-synthetic'), mimetype: 'application/pdf' } as any;
+    await expect(service.sharePrescriptionPreview('rx', 'branch', body, file)).rejects.toThrow('Email is not configured on the server');
+    await expect(service.sharePrescription('rx', 'branch', 'staff', body)).rejects.toThrow('Email is not configured on the server');
+    expect(db.prescriptionPrintEvent.create).not.toHaveBeenCalled();
+  } finally {
+    for (const [key, value] of Object.entries({ SMTP_HOST: saved.host, SMTP_USER: saved.user, SMTP_PASS: saved.pass })) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
 });

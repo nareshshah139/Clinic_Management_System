@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import nodemailer from 'nodemailer';
 
 interface EmailOptions {
@@ -116,14 +116,24 @@ export class NotificationsService {
     }
   }
 
+  private emailFrom(): string {
+    return process.env.SMTP_FROM || (process.env.SMTP_USER as string);
+  }
+
+  emailStatus(): { configured: boolean; from: string | null } {
+    return this.smtpTransporter
+      ? { configured: true, from: this.emailFrom() }
+      : { configured: false, from: null };
+  }
+
   async sendEmail(opts: EmailOptions): Promise<void> {
     if (!this.smtpTransporter) {
-      this.logger.warn('SMTP is not configured; skipping email');
-      return;
+      throw new ServiceUnavailableException(
+        'Email is not configured on the server. Ask an admin to set SMTP_HOST, SMTP_USER and SMTP_PASS.',
+      );
     }
-    const from = process.env.SMTP_FROM || process.env.SMTP_USER as string;
     await this.smtpTransporter.sendMail({
-      from,
+      from: this.emailFrom(),
       to: opts.to,
       subject: opts.subject,
       html: opts.html,

@@ -56,6 +56,12 @@ export function validateEnv(config: Record<string, unknown>) {
     );
   }
 
+  if (!config['SMTP_HOST'] || !config['SMTP_USER'] || !config['SMTP_PASS']) {
+    logger.warn(
+      'Email is not configured. Set SMTP_HOST, SMTP_USER and SMTP_PASS to enable outbound email.',
+    );
+  }
+
   return config;
 }
 
