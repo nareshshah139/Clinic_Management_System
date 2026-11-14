@@ -737,7 +737,7 @@ export default function UsersManagement() {
                 </div>
                 <Switch aria-label="Send WhatsApp on appointment creation" checked={waAutoConfirm} onCheckedChange={(v: boolean) => setWaAutoConfirm(v)} />
               </div>
-              <div className="text-xs text-muted-foreground">Requires backend WhatsApp credentials. Uses text messages by default.</div>
+              <div className="text-xs text-muted-foreground">Sends from the clinic WhatsApp linked in Clinic profile. Uses text messages by default.</div>
             </div>
 
             <div className="border rounded-md p-3 space-y-3">

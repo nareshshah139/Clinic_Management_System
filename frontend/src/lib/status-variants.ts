@@ -1,7 +1,7 @@
 import { humanizeEnum, normalizeEnum } from './labels';
 
 export type StatusVariant = 'success' | 'warning' | 'info' | 'highlight' | 'neutral' | 'danger';
-export type StatusDomain = 'appointment' | 'visit' | 'invoice' | 'dispense' | 'stock' | 'room' | 'workflow' | 'priority' | 'confidence';
+export type StatusDomain = 'appointment' | 'visit' | 'invoice' | 'dispense' | 'stock' | 'room' | 'workflow' | 'priority' | 'confidence' | 'message';
 
 type Presentation = readonly [StatusVariant, string];
 
@@ -45,6 +45,7 @@ const statuses: Record<StatusDomain, Readonly<Record<string, Presentation>>> = {
   },
   priority: { CRITICAL: ['danger', 'Critical'], HIGH: ['warning', 'High'], MEDIUM: ['warning', 'Medium'], LOW: ['neutral', 'Low'] },
   confidence: { HIGH: ['success', 'High'], MEDIUM: ['info', 'Medium'], LOW: ['warning', 'Low'], COLD_START: ['neutral', 'Cold start'] },
+  message: { ACCEPTED: ['neutral', 'Accepted'], SENT: ['info', 'Sent'], DELIVERED: ['success', 'Delivered'], READ: ['success', 'Read'], FAILED: ['danger', 'Failed'] },
 };
 
 const presentation = (domain: StatusDomain, status: string | null | undefined): Presentation | undefined => {

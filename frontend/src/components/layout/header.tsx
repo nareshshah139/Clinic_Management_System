@@ -449,7 +449,7 @@ export function Header() {
                       </div>
                       <Switch aria-label="Send WhatsApp on appointment creation" checked={whatsappAutoConfirm} onCheckedChange={(v: boolean) => setWhatsappAutoConfirm(v)} />
                     </div>
-                    <div className="text-xs text-muted-foreground">Requires backend WhatsApp credentials. Uses text messages by default.</div>
+                    <div className="text-xs text-muted-foreground">Sends from the clinic WhatsApp linked in Clinic profile. Uses text messages by default.</div>
                   </div>
 
                   <div className="border rounded-md p-3 space-y-3">
@@ -524,7 +524,7 @@ export function Header() {
                   <div className="border rounded-md p-3 bg-muted">
                     <div className="font-medium mb-2">How to enable WhatsApp (Doctor steps)</div>
                     <ol className="list-decimal ml-5 space-y-1 text-muted-foreground text-sm">
-                      <li>Ask the admin to configure WhatsApp Cloud API credentials on the server.</li>
+                      <li>Ask your clinic admin to link the clinic WhatsApp in Clinic profile.</li>
                       <li>Toggle "Send WhatsApp on appointment creation" to enable automatic messages.</li>
                       <li>Optional: Toggle "Use WhatsApp Template", then enter your approved template name and language.</li>
                       <li>Book or receive a new appointment to test delivery.</li>

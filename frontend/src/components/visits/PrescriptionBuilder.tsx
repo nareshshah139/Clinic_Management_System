@@ -42,6 +42,7 @@ import { AddRowBelowButton, RemoveRowButton, WrappingTextField, insertBlankBelow
 import { loadPatientHistory, visitEntries } from './usePatientHistory';
 import { prescriptionLabel } from '@/lib/prescription-labels';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { WHATSAPP_LINK_HINT, canSendWhatsAppDirectly, sendPrescriptionPdfDirectly, useWhatsAppDirect } from './prescription-whatsapp';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 const rx = rxLayout.prescription;
@@ -809,6 +810,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [renderedSignatureUrl, setRenderedSignatureUrl] = useState<string | null>(null);
   const pagedJsProcessRef = useRef<(() => Promise<void>) | null>(null);
   const [sharingEmail, setSharingEmail] = useState(false);
+  const whatsappDirect = useWhatsAppDirect(previewOpen);
   // Default uses the prescribing doctor's own letterhead; explicit custom backgrounds remain available.
   const [letterheadOption, setLetterheadOption] = useState<'default' | 'none'>('default');
   const { letterhead: doctorLetterhead } = useDoctorLetterhead(visitData?.doctor?.id || doctorId);
@@ -6501,10 +6503,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               toast({ title: 'Generating PDF…', description: 'Preparing prescription for WhatsApp.' });
                               const fileName = `prescription-${saved.documentId}.pdf`;
                               const pdfBlob = await renderPreviewPdf();
+                              const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+                              if (prescId && await canSendWhatsAppDirectly()) {
+                                const outcome = await sendPrescriptionPdfDirectly(prescId, pdfFile, phone);
+                                toast({ variant: outcome.ok ? 'success' : 'destructive', title: outcome.title, description: outcome.description });
+                                return;
+                              }
 
                               try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
 
-                              const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
                               const canShareFile = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [pdfFile] });
 
                               if (canShareFile) {
@@ -6521,7 +6529,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                                 const digits = phone.replace(/[^\d]/g, '');
                                 window.open(`https://wa.me/${digits}?text=${encodeURIComponent('Hi, please find your prescription attached.')}`, '_blank');
-                                toast({ title: 'PDF downloaded', description: 'Attach the downloaded PDF in the WhatsApp chat that just opened.' });
+                                toast({ title: 'PDF downloaded', description: `Attach the downloaded PDF in the WhatsApp chat that just opened. ${WHATSAPP_LINK_HINT}` });
                               }
                             } catch (e: any) {
                               if (e?.name === 'AbortError') return;
@@ -6534,9 +6542,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           </Button>
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent><p>Saves the latest visit details before exporting</p></TooltipContent>
+                      <TooltipContent><p>{whatsappDirect ? 'Saves the latest visit details, then sends the PDF from the clinic WhatsApp' : 'Saves the latest visit details before exporting'}</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                  {whatsappDirect === false && <p className="col-span-2 text-xs text-muted-foreground" data-testid="whatsapp-link-hint">WhatsApp opens on this device. {WHATSAPP_LINK_HINT}</p>}
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
             </div>
             </div>

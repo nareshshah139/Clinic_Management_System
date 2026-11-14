@@ -121,6 +121,58 @@ export interface ClinicFee {
   updatedBy: string | null;
 }
 
+/** The branch details the clinic profile shows; edited elsewhere, read-only here. */
+export interface ClinicBranch {
+  id: string;
+  name: string;
+  address: string;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}
+
+export interface WhatsAppDocumentTemplate {
+  name: string;
+  language: string;
+  bodyParams: number;
+}
+
+export type WhatsAppConnection =
+  | { linked: false; fallback: 'SERVER_ENV' | null }
+  | {
+      linked: true;
+      phoneNumberId: string;
+      businessAccountId: string | null;
+      displayPhoneNumber: string;
+      verifiedName: string;
+      qualityRating: string | null;
+      prescriptionTemplate: WhatsAppDocumentTemplate | null;
+      verifiedAt: string;
+      linkedBy: { id: string; name: string } | null;
+    };
+
+export type WhatsAppSendResult =
+  | { status: 'ACCEPTED'; wamid: string; source: 'DOCTOR' | 'CLINIC' | 'SERVER_ENV' }
+  | { status: 'NOT_CONFIGURED' }
+  | { status: 'FAILED'; code?: number; reason: string };
+
+export type WhatsAppMessageStatus = 'ACCEPTED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+
+export interface WhatsAppMessage {
+  id: string;
+  wamid: string;
+  toPhone: string;
+  kind: 'PRESCRIPTION' | 'TEST_PRESCRIPTION' | 'APPOINTMENT' | 'TEXT';
+  prescriptionId: string | null;
+  status: WhatsAppMessageStatus;
+  errorCode: number | null;
+  errorTitle: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Available Slots
 export interface AvailableSlot {
   time: string;

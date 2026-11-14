@@ -29,8 +29,10 @@ import {
   FileBarChart,
   Wallet,
   ReceiptIndianRupee,
+  Building2,
 } from "lucide-react";
 import { FEE_EDITOR_ROLES, FEE_LIST_PATH } from "@/components/appointments/appointment-billing-view";
+import { CLINIC_PROFILE_PATH, CLINIC_PROFILE_ROLES } from "@/lib/clinic-profile";
 
 type PharmacySidebarSection = "desk" | "counter";
 
@@ -152,6 +154,12 @@ const navigation: NavigationItem[] = [
     href: FEE_LIST_PATH,
     icon: ReceiptIndianRupee,
     allowedRoles: FEE_EDITOR_ROLES,
+  },
+  {
+    name: "Clinic profile", section: "Admin",
+    href: CLINIC_PROFILE_PATH,
+    icon: Building2,
+    allowedRoles: CLINIC_PROFILE_ROLES,
   },
 ];
 

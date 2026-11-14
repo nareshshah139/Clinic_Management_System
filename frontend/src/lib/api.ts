@@ -459,6 +459,39 @@ export class ApiClient {
     return this.put<import('./types').ClinicFee>(`/billing/fees/${billType}`, { amount, version });
   }
 
+  // Clinic profile
+  async getBranch(id: string) {
+    return this.get<import('./types').ClinicBranch>(`/users/branches/${encodeURIComponent(id)}`);
+  }
+
+  async getWhatsAppConnection() {
+    return this.get<import('./types').WhatsAppConnection>('/whatsapp/connection');
+  }
+
+  async linkWhatsApp(data: { accessToken: string; phoneNumberId: string; businessAccountId?: string }) {
+    return this.put<import('./types').WhatsAppConnection>('/whatsapp/connection', data);
+  }
+
+  async getWhatsAppDocumentTemplates() {
+    return this.get<import('./types').WhatsAppDocumentTemplate[]>('/whatsapp/connection/templates');
+  }
+
+  async setWhatsAppPrescriptionTemplate(template: { name: string; language: string } | null) {
+    return this.patch<import('./types').WhatsAppConnection>('/whatsapp/connection/prescription-template', template ?? { name: null });
+  }
+
+  async sendWhatsAppTestPrescription(to: string) {
+    return this.post<import('./types').WhatsAppSendResult>('/whatsapp/connection/test', { to }, { timeoutMs: 60000 });
+  }
+
+  async unlinkWhatsApp() {
+    return this.delete<import('./types').WhatsAppConnection>('/whatsapp/connection');
+  }
+
+  async getWhatsAppMessages(limit = 20) {
+    return this.get<import('./types').WhatsAppMessage[]>('/whatsapp/messages', { limit });
+  }
+
   // Clinic investigations
   async getClinicInvestigations() {
     return this.get<Array<{ id: string; name: string }>>('/clinic-investigations');
@@ -1105,7 +1138,7 @@ export class ApiClient {
     formData.append('channel', data.channel);
     formData.append('to', data.to);
     if (data.message) formData.append('message', data.message);
-    return this.request(`/prescriptions/${encodeURIComponent(id)}/share-preview`, { method: 'POST', body: formData }, { timeoutMs: 120000 });
+    return this.request<{ status: 'ACCEPTED' | 'QUEUED'; wamid?: string; channel: string; to: string }>(`/prescriptions/${encodeURIComponent(id)}/share-preview`, { method: 'POST', body: formData }, { timeoutMs: 120000 });
   }
 
   async recordPrescriptionPrintEvent(id: string, data: { eventType: string; channel?: string; count?: number; metadata?: unknown }) {
