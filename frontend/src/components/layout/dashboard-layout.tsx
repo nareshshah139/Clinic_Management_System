@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
@@ -154,7 +155,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Suspense>
               </SheetContent>
             </Sheet>
-            <span className="font-semibold">ClinicMS</span>
+            <Image src="/linae-name.png" alt="Linaé" width={304} height={112} className="h-6 w-auto" />
           </div>
 
           {/* Page content */}

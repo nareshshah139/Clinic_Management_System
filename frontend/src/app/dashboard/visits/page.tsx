@@ -238,7 +238,7 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 
-import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { isValidId } from '@/lib/id';
 import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -678,32 +678,6 @@ function VisitsPageInner() {
     return () => clearTimeout(timeoutRef);
   }, [extractPatients, patientQuery]);
 
-  const roleInfo = useMemo(() => {
-    const permissions = {
-      THERAPIST: { 
-        label: 'Therapist',
-        description: 'Can record vitals, capture photos, and basic assessments (20-25% of visit)',
-        color: 'bg-blue-100 text-blue-700'
-      },
-      NURSE: { 
-        label: 'Nurse',
-        description: 'Can record vitals, capture photos, complaints, and basic assessments',
-        color: 'bg-green-100 text-green-700'
-      },
-      DOCTOR: { 
-        label: 'Doctor',
-        description: 'Full access to all visit documentation features',
-        color: 'bg-purple-100 text-purple-700'
-      },
-      RECEPTION: { 
-        label: 'Reception',
-        description: 'Can capture photos and basic patient information',
-        color: 'bg-orange-100 text-orange-700'
-      },
-    };
-    return permissions[currentUserRole as keyof typeof permissions] || permissions.DOCTOR;
-  }, [currentUserRole]);
-
   const selectedPatient = useRecordById<PatientMatch>(selectedPatientId, fetchPatientById);
   const selectedDoctor = useRecordById<DoctorSummary>(selectedDoctorId, fetchDoctorById);
 
@@ -822,7 +796,6 @@ function VisitsPageInner() {
               {
                 title: "Role-Based Access",
                 items: [
-                  "Therapist: Record vitals, photos, and basic assessments (20-25%)",
                   "Nurse: Record vitals, photos, complaints, and assessments",
                   "Doctor: Complete SOAP documentation and prescriptions",
                   "Each role sees features appropriate to their scope"
@@ -852,32 +825,6 @@ function VisitsPageInner() {
             ]}
           /></>} />
         
-        {/* Role Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Your Role & Permissions
-            </CardTitle>
-            <CardDescription>
-              Features available based on your role: {roleInfo.label}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900">Current Role</h3>
-                  <p className="text-xs text-gray-500 mt-1">{roleInfo.description}</p>
-                </div>
-                <Badge className={roleInfo.color}>
-                  {roleInfo.label}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Visit Setup */}
         <Card>
           <CardHeader>
@@ -941,9 +888,8 @@ function VisitsPageInner() {
                             <div className="flex flex-col">
                               <span className="font-medium">{p.name || `Patient ${p.id?.slice(-4) || ''}`}</span>
                               <div className="flex items-center gap-3 text-xs text-gray-500">
-                                <span>ID: {p.id}</span>
-                                {p.phone && <span>📞 {p.phone}</span>}
-                                {p.email && <span>✉️ {p.email}</span>}
+                                {p.phone && <span>{p.phone}</span>}
+                                {p.email && <span>{p.email}</span>}
                               </div>
                             </div>
                           </div>
@@ -1023,97 +969,6 @@ function VisitsPageInner() {
                 </Tabs>
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Role-based Features Preview */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Available Features</CardTitle>
-            <CardDescription>
-              Features available for your role: {roleInfo.label}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {currentUserRole === 'THERAPIST' && (
-                <>
-                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">Vitals Recording</p>
-                      <p className="text-xs text-blue-600">BP, HR, Temperature, etc.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                    <User className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">Photo Capture</p>
-                      <p className="text-xs text-blue-600">Document patient conditions</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                    <Users className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">Basic Assessment</p>
-                      <p className="text-xs text-blue-600">Initial observations</p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {currentUserRole === 'NURSE' && (
-                <>
-                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium text-green-700">Full Vitals</p>
-                      <p className="text-xs text-green-600">Complete vital signs</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                    <User className="h-5 w-5 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium text-green-700">Photo & Complaints</p>
-                      <p className="text-xs text-green-600">Document and record issues</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                    <Users className="h-5 w-5 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium text-green-700">Assessment Notes</p>
-                      <p className="text-xs text-green-600">Preliminary findings</p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {currentUserRole === 'DOCTOR' && (
-                <>
-                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-purple-500" />
-                    <div>
-                      <p className="text-sm font-medium text-purple-700">Complete Documentation</p>
-                      <p className="text-xs text-purple-600">Full SOAP notes</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
-                    <User className="h-5 w-5 text-purple-500" />
-                    <div>
-                      <p className="text-sm font-medium text-purple-700">Dermatology Specific</p>
-                      <p className="text-xs text-purple-600">Specialized assessments</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
-                    <Users className="h-5 w-5 text-purple-500" />
-                    <div>
-                      <p className="text-sm font-medium text-purple-700">Treatment Planning</p>
-                      <p className="text-xs text-purple-600">Complete care plans</p>
-                    </div>
-                  </div>
-                </>
-              )}
-        </div>
           </CardContent>
         </Card>
       </div>

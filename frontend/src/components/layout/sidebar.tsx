@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Fragment, useMemo } from "react";
@@ -23,7 +24,6 @@ import {
   MapPin,
   Activity,
   Pill,
-  Mic,
   ShoppingBag,
   FileBarChart,
   Wallet,
@@ -152,12 +152,6 @@ const navigation: NavigationItem[] = [
     icon: ReceiptIndianRupee,
     allowedRoles: FEE_EDITOR_ROLES,
   },
-  {
-    name: "Test Transcribe", section: "Admin",
-    href: "/test-transcribe",
-    icon: Mic,
-    allowedRoles: ["OWNER", "ADMIN", "DOCTOR"],
-  },
 ];
 
 const defaultAllowedRoles = new Set<string>([
@@ -240,14 +234,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       className="flex h-full min-h-0 w-64 flex-col bg-sidebar border-r border-[var(--border)]"
       data-tour="sidebar"
     >
-      {/* Logo */}
       <div className="flex h-16 items-center px-6 border-b border-[var(--border)]">
-        <div className="flex items-center">
-          <Stethoscope className="h-8 w-8 text-[var(--primary)]" />
-          <span className="ml-2 text-xl font-semibold text-[var(--foreground)]">
-            ClinicMS
-          </span>
-        </div>
+        <Image src="/linae-name.png" alt="Linaé" width={304} height={112} priority className="h-8 w-auto" />
       </div>
 
       {/* Navigation */}

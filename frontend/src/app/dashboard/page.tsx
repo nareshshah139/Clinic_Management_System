@@ -15,7 +15,8 @@ import {
   type AttentionRow, type DayAppointment,
 } from '@/components/dashboard/ClinicDay';
 import { fmtMoney } from '@/components/inventory/workspace-model';
-import { getISTDateString } from '@/lib/utils';
+import { getErrorMessage, getISTDateString } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 import { APPOINTMENT_READ_ROLES } from '@/lib/appointment-access';
 import { LOW_STOCK_DEFINITION, LOW_STOCK_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
 
@@ -230,14 +231,15 @@ function BillingDashboard() {
 }
 
 function DatabaseBackup() {
+  const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const backup = async () => {
     try {
       setBusy(true);
-      const { backup: info } = (await apiClient.createDatabaseBackup()) as unknown as { backup: { timestamp: string; directory: string; size: number } };
-      alert(`Database backup created.\n\nTimestamp: ${info.timestamp}\nLocation: ${info.directory}\nSize: ${(info.size / 1024).toFixed(1)} KB`);
+      await apiClient.createDatabaseBackup();
+      toast({ variant: 'success', title: 'Backup started', description: 'The server is writing the backup now and keeps it with the earlier ones.' });
     } catch (error: unknown) {
-      alert(`Backup failed.\n\n${(error as { message?: string })?.message || 'Backup creation failed'}`);
+      toast({ variant: 'destructive', title: 'Backup failed', description: getErrorMessage(error) });
     } finally {
       setBusy(false);
     }

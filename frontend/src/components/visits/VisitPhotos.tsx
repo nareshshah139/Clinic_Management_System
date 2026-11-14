@@ -9,6 +9,7 @@ import { Camera, Upload, Image as ImageIcon, Trash2, ChevronLeft, ChevronRight, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import PatientPhotoArchive from './PatientPhotoArchive';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
@@ -40,6 +41,7 @@ interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoP
  */
 export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount, onVisitVersion, onClinicalConflict }: Props) {
   const { toast } = useToast();
+  const [confirm, confirmDialog] = useConfirm();
   const [items, setItems] = useState<PhotoItem[]>([]);
   const [photoLoading, setPhotoLoading] = useState(true);
   const [photoLoadError, setPhotoLoadError] = useState<string | null>(null);
@@ -564,9 +566,9 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
    * Deleting a photo MUST target the selected item using a single API prefix.
    */
   const deletePhoto = async (photo: PhotoItem) => {
-    const confirmed = window.confirm('Delete this photo? This cannot be undone.');
-    if (!confirmed) return;
     if (deleting) return;
+    const confirmed = await confirm({ title: 'Delete this photo?', description: 'This cannot be undone.', confirmLabel: 'Delete photo', destructive: true });
+    if (!confirmed) return;
     try {
       setDeleting(true);
       const isDraft = visitId === 'temp' || /\/visits\/photos\/draft\//i.test(photo.url);
@@ -936,6 +938,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         <DialogFooter />
       </DialogContent>
     </Dialog>
+    {confirmDialog}
     </>
   );
 } 

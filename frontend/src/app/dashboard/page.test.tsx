@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import DashboardPage from './page';
+import { Toaster } from '@/components/ui/toaster';
 import { apiClient } from '@/lib/api';
 
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
@@ -101,6 +102,24 @@ it("shows an admin today's appointments, upcoming, no-shows and collections, and
   expect([/Appointments today/, /Upcoming appointments/, /No-shows today/, /Collected today/].map((name) => row(name).textContent))
     .toEqual(['3Appointments today', '3Upcoming appointmentsrest of today and later days', '2No-shows today', '₹1,240.00Collected todayClinic and pharmacy, every payment mode']);
   expect(screen.getByRole('heading', { name: 'Database backup' })).toBeInTheDocument();
+});
+
+it('reports a database backup in the app, not in a browser alert', async () => {
+  mockRole = 'ADMIN';
+  const alert = jest.spyOn(window, 'alert').mockImplementation(() => {});
+  api.createDatabaseBackup
+    .mockResolvedValueOnce({ success: true, jobId: 'backup-2026-11-14T07-00-00-user-1' })
+    .mockRejectedValueOnce(new Error('Disk full'));
+  render(<><DashboardPage /><Toaster /></>);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Create backup' }));
+  expect(await screen.findByText('Backup started')).toBeInTheDocument();
+  expect(screen.getByText('The server is writing the backup now and keeps it with the earlier ones.')).toBeInTheDocument();
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Create backup' }));
+  expect(await screen.findByText('Backup failed')).toBeInTheDocument();
+  expect(screen.getByText('Disk full')).toBeInTheDocument();
+  expect(alert).not.toHaveBeenCalled();
 });
 
 it('says the appointments failed to load instead of claiming an empty day, and recovers on retry', async () => {

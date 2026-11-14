@@ -1,18 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { KeyRound } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { displayClinicDateTime } from '@/lib/date-display';
 
 type Step = { kind: 'confirm' } | { kind: 'issuing' } | { kind: 'issued'; code: string; expiresAt: string } | { kind: 'error'; message: string };
 
 /** Lets a manager give a locked-out staff member a one-time reset code in person. */
-export function ResetCodeButton({ user }: { user: { id: string; firstName: string; lastName: string } }) {
-  const [open, setOpen] = useState(false);
+export function ResetCodeDialog({ user, open, onOpenChange }: {
+  user: { id: string; firstName: string; lastName: string };
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [step, setStep] = useState<Step>({ kind: 'confirm' });
   const name = `${user.firstName} ${user.lastName}`.trim();
 
@@ -27,10 +29,7 @@ export function ResetCodeButton({ user }: { user: { id: string; firstName: strin
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next: boolean) => { setOpen(next); if (!next) setStep({ kind: 'confirm' }); }}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm"><KeyRound className="h-3 w-3 mr-1" /> Reset password</Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={(next: boolean) => { onOpenChange(next); if (!next) setStep({ kind: 'confirm' }); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>Reset password for {name}</DialogTitle></DialogHeader>
         {step.kind === 'issued' ? (

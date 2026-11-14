@@ -1,4 +1,4 @@
-import { ApiClient } from "@/lib/api";
+import { ApiClient, type ApiError } from "@/lib/api";
 import {
   API_DIAGNOSTICS_KEY,
   diagnosticResource,
@@ -230,4 +230,24 @@ describe("inventory diagnostic categories", () => {
   it("does not treat unknown endpoints as resource names", () => {
     expect(diagnosticResource("/PRIVATE-id/inventory")).toBe("other");
   });
+});
+
+it.each([
+  ["the framework's bare refusal", { message: "Forbidden resource" }, "You don't have access to this. Ask an admin to grant it."],
+  ["an empty refusal", {}, "You don't have access to this. Ask an admin to grant it."],
+  ["a refusal that explains itself", { message: "Review permission required" }, "Review permission required"],
+])("words %s for staff and keeps the reference apart from the sentence", async (_label, body, sentence) => {
+  (fetch as jest.Mock).mockResolvedValue(response(403, body, requestId));
+  let error!: ApiError;
+  await new ApiClient().get("/appointments").catch((e: ApiError) => { error = e; });
+  expect([error.status, error.body?.message, error.message, error.requestId]).toEqual([
+    403, sentence, `${sentence} (Reference: ${requestId})`, requestId,
+  ]);
+});
+
+it("words the framework's rate limit for staff", async () => {
+  (fetch as jest.Mock).mockResolvedValue(response(429, { message: "ThrottlerException: Too Many Requests" }, requestId));
+  let error!: ApiError;
+  await new ApiClient().post("/auth/login", {}).catch((e: ApiError) => { error = e; });
+  expect([error.status, error.message]).toEqual([429, `Too many attempts. Wait a minute, then try again. (Reference: ${requestId})`]);
 });

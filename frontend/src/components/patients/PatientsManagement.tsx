@@ -32,7 +32,7 @@ interface PatientFormState {
   firstName: string;
   lastName: string;
   age: string;
-  gender: Gender;
+  gender: Gender | '';
   phone: string;
   email?: string;
   address?: string;
@@ -94,7 +94,7 @@ export default function PatientsManagement() {
     firstName: '',
     lastName: '',
     age: '',
-    gender: 'OTHER',
+    gender: '',
     phone: '',
     email: '',
     address: '',
@@ -427,7 +427,7 @@ export default function PatientsManagement() {
       firstName: '',
       lastName: '',
       age: '',
-      gender: 'OTHER',
+      gender: '',
       phone: '',
       email: '',
       address: '',
@@ -448,8 +448,9 @@ export default function PatientsManagement() {
       setError(null);
       
       // Basic validation
-      if (!form.firstName.trim() || !form.phone.trim()) {
-        setError('Please fill in all required fields (Name, Phone)');
+      const missing = [!form.firstName.trim() && 'first name', !form.gender && 'gender', !form.phone.trim() && 'phone'].filter(Boolean);
+      if (missing.length) {
+        setError(`Enter the patient's ${missing.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`);
         return;
       }
       if (form.abhaId && form.abhaId.trim().length > 0) {
@@ -587,7 +588,7 @@ export default function PatientsManagement() {
       firstName: p.firstName,
       lastName: p.lastName,
       age: resolvedAge != null ? String(resolvedAge) : '',
-      gender: (p.gender as Gender) || 'OTHER',
+      gender: (['MALE', 'FEMALE', 'OTHER'] as const).find((g) => g === p.gender) ?? '',
       phone: p.phone,
       email: p.email || '',
       address: p.address || '',
@@ -764,14 +765,15 @@ export default function PatientsManagement() {
               <DialogTitle>{form.id ? 'Edit Patient' : 'Create Patient'}</DialogTitle>
             </DialogHeader>
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+              <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
                 {error}
               </div>
             )}
+            <p className="text-sm text-muted-foreground">Fields marked <span aria-hidden="true">*</span> are required.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+                <Label htmlFor="firstName">First Name<span aria-hidden="true" className="text-destructive"> *</span></Label>
+                <Input id="firstName" required aria-required="true" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
               </div>
               <div>
                 <Label htmlFor="lastName">Last Name</Label>
@@ -782,9 +784,9 @@ export default function PatientsManagement() {
                 <Input id="age" type="number" min="0" max="150" placeholder="e.g. 35" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
               </div>
               <div>
-                <Label id="gender-label" htmlFor="gender">Gender</Label>
+                <Label id="gender-label" htmlFor="gender">Gender<span aria-hidden="true" className="text-destructive"> *</span></Label>
                 <Select value={form.gender} onValueChange={(v: Gender) => setForm({ ...form, gender: v })}>
-                  <SelectTrigger id="gender" aria-labelledby="gender-label">
+                  <SelectTrigger id="gender" aria-labelledby="gender-label" aria-required="true">
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
                   <SelectContent>
@@ -795,8 +797,8 @@ export default function PatientsManagement() {
                 </Select>
               </div>
               <div className="md:col-span-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <Label htmlFor="phone">Phone<span aria-hidden="true" className="text-destructive"> *</span></Label>
+                <Input id="phone" type="tel" required aria-required="true" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </div>
               <div className="md:col-span-2">
                 <Label htmlFor="abhaId">ABHA ID (Ayushman Bharat Health Account)</Label>

@@ -19,6 +19,13 @@ describe('ProceduresPage defaults', () => {
     jest.mocked(apiClient.get).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as any);
   });
 
+  it('has one plain "Procedures" heading and no unfinished Analytics tab', async () => {
+    render(<ProceduresPage />);
+    await waitFor(() => expect(apiClient.getPatients).toHaveBeenCalled());
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Procedures']);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['New Procedure', 'Procedure History']);
+  });
+
   it('opens with no patient selected', async () => {
     render(<ProceduresPage />);
     await waitFor(() => expect(apiClient.getPatients).toHaveBeenCalled());
