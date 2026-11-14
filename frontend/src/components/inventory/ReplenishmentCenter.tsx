@@ -41,7 +41,8 @@ const withoutCounts = ({ reconciliation: _counts, ...rest }: Record<string, any>
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
 export function ReplenishmentCenter({ view, documentId, caps, onOpen, onCreate, onReceive, onBack, query, navigate }: Props) {
-  const [state, setState] = useState<any>(null), [rows, setRows] = useState<any[]>([]), [doc, setDoc] = useState<any>(null);
+  const stateKey = `${view}:${documentId ?? ''}`;
+  const [loaded, setLoaded] = useState<{ key: string; state: any } | null>(null), [rows, setRows] = useState<any[]>([]), [doc, setDoc] = useState<any>(null);
   const [owners, setOwners] = useState<any[]>([]), [settings, setSettings] = useState<any>(null), [suggestions, setSuggestions] = useState<any[]>([]);
   const [selected, setSelected] = useState<string[]>([]), [sync, setSync] = useState(true), [supplierId, setSupplierId] = useState(''), [reason, setReason] = useState('');
   const urlFilters = useMemo(() => ({ search: query?.search || '', from: query?.from || '', to: query?.to || '', status: query?.status || '', gstin: query?.gstin || '' }), [query?.search, query?.from, query?.to, query?.status, query?.gstin]);
@@ -52,6 +53,7 @@ export function ReplenishmentCenter({ view, documentId, caps, onOpen, onCreate, 
   const [loading, setLoading] = useState(true), [loadFailed, setLoadFailed] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const feedback = useRef<HTMLDivElement>(null), lock = useRef(false), loadGeneration = useRef(0);
   const canWrite = !!caps?.kinds?.[view]?.write, canApprove = !!caps?.approve;
+  const state = loaded?.key === stateKey ? loaded.state : null;
   const load = useCallback(async () => {
     const generation = ++loadGeneration.current;
     setLoading(true); setLoadFailed(false); setError('');
@@ -77,14 +79,14 @@ export function ReplenishmentCenter({ view, documentId, caps, onOpen, onCreate, 
       }
       if (generation !== loadGeneration.current) return;
       if (nextDoc) { setDoc(nextDoc); setSelected([]); setSupplierId(nextDoc.supplierId || ''); }
-      if (nextState) { setState(nextState); if (view === 'settings') setSettings(nextState.settings); }
+      if (nextState) { setLoaded({ key: stateKey, state: nextState }); if (view === 'settings') setSettings(nextState.settings); }
       if (nextRows) setRows(nextRows);
       if (nextOwners) setOwners(nextOwners);
       if (nextSuggestions) setSuggestions(nextSuggestions);
     } catch (e: any) { if (generation === loadGeneration.current) { setLoadFailed(true); setError(e.message || 'Could not load replenishment. Retry.'); } }
     finally { if (generation === loadGeneration.current) setLoading(false); }
-  }, [view, documentId, applied, caps?.settings]);
-  useEffect(() => { setDoc(null); setState(null); setSuggestions([]); setNotice(''); void load(); }, [load]);
+  }, [view, documentId, stateKey, applied, caps?.settings]);
+  useEffect(() => { setDoc(null); setLoaded(null); setSuggestions([]); setNotice(''); void load(); }, [load]);
   useEffect(() => { const refresh = () => { void load(); }; window.addEventListener('inventory-workspace-refresh', refresh); return () => window.removeEventListener('inventory-workspace-refresh', refresh); }, [load]);
   const action = async (work: () => Promise<any>, success: string) => {
     if (lock.current) return; lock.current = true; setBusy(true); setError(''); setNotice('');

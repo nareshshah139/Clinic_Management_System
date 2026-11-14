@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface Drug {
   id: string;
@@ -112,6 +113,7 @@ export function PharmacyPackageManager() {
   const [selectedPackage, setSelectedPackage] = useState<PharmacyPackage | null>(null);
   const [editingPackage, setEditingPackage] = useState<PharmacyPackage | null>(null);
   const { toast } = useToast();
+  const [confirm, confirmDialog] = useConfirm();
 
   // Form state for creating/editing packages
   const [formData, setFormData] = useState({
@@ -253,13 +255,18 @@ export function PharmacyPackageManager() {
     }
   };
 
-  const handleDeletePackage = async (packageId: string) => {
+  const handleDeletePackage = async (pkg: PharmacyPackage) => {
     try {
-      if (!confirm('Are you sure you want to delete this package?')) {
+      if (!(await confirm({
+        title: `Delete ${pkg.name}?`,
+        description: 'The package will no longer be offered on new bills.',
+        confirmLabel: 'Delete package',
+        destructive: true,
+      }))) {
         return;
       }
 
-      await apiClient.delete(`/pharmacy/packages/${packageId}`);
+      await apiClient.delete(`/pharmacy/packages/${pkg.id}`);
       
       toast({
         title: "Success",
@@ -372,6 +379,7 @@ export function PharmacyPackageManager() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -475,6 +483,7 @@ export function PharmacyPackageManager() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      aria-label={`View ${pkg.name}`}
                       onClick={() => {
                         setSelectedPackage(pkg);
                         setShowViewDialog(true);
@@ -485,6 +494,7 @@ export function PharmacyPackageManager() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      aria-label={`Edit ${pkg.name}`}
                       onClick={() => openEditDialog(pkg)}
                     >
                       <Edit className="h-4 w-4" />
@@ -492,7 +502,8 @@ export function PharmacyPackageManager() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeletePackage(pkg.id)}
+                      aria-label={`Delete ${pkg.name}`}
+                      onClick={() => handleDeletePackage(pkg)}
                       className="text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />

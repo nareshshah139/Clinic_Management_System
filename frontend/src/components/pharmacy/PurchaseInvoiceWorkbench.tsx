@@ -96,6 +96,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useConfirm, usePrompt } from "@/components/ui/confirm-dialog";
 
 type BillType = "CASH" | "CREDIT" | "";
 type SourceType = "MANUAL" | "OCR" | "CSV" | "GMAIL";
@@ -1095,6 +1096,8 @@ function PurchaseInvoiceEditor({
   onNew?: () => void;
 }) {
   const { user } = useDashboardUser();
+  const [confirm, confirmDialog] = useConfirm();
+  const [askReason, reasonDialog] = usePrompt();
   const {
     permissions: access,
     loading: permissionsLoading,
@@ -2162,8 +2165,13 @@ function PurchaseInvoiceEditor({
    */
   const recoverUnlinkedImport = async () => {
     if (!unknownStockInvoiceId || resolvingImport || !access.create || !access.read || !access.review) return;
-    const reason = window.prompt('Explain the interrupted import. If no exact saved invoice can be recovered, further intake will be rejected and physical stock must be reconciled.');
-    if (!reason?.trim()) return;
+    const reason = await askReason({
+      title: 'Recover the interrupted import?',
+      description: 'If no exact saved invoice can be recovered, further intake will be rejected and physical stock must be reconciled.',
+      inputLabel: 'What interrupted the import?',
+      confirmLabel: 'Recover import',
+    });
+    if (!reason) return;
     const attempt = captureAttempt();
     setResolvingImport(true);
     try {
@@ -3487,8 +3495,14 @@ function PurchaseInvoiceEditor({
   };
   const rejectSavedInvoice = async () => {
     if (!activeInvoice?.updatedAt || !access.create || !access.review || busy || draftWriteBlocked) return;
-    const reason = window.prompt('Why is this invoice being rejected? Its original and history will be retained.');
-    if (!reason?.trim()) return;
+    const reason = await askReason({
+      title: activeInvoice.invoiceNumber ? `Reject purchase invoice ${activeInvoice.invoiceNumber}?` : 'Reject this purchase invoice?',
+      description: 'No stock will be added. Its original and history will be retained.',
+      inputLabel: 'Why is this invoice being rejected?',
+      confirmLabel: 'Reject invoice',
+      destructive: true,
+    });
+    if (!reason) return;
     const attempt = captureAttempt();
     setSaving(true);
     try {
@@ -3505,9 +3519,14 @@ function PurchaseInvoiceEditor({
    * Switching an incomplete reading to manual entry MUST clear extracted values and prior checks,
    * retain originals and any saved invoice identity/revision, and require a new final review.
    */
-  const enterCompleteInvoiceManually = () => {
+  const enterCompleteInvoiceManually = async () => {
     if (!access.create || busy || draftWriteBlocked || savedFormLocked) return;
-    if (!window.confirm('Discard the OCR reading and type every invoice row from the complete original? The original file and any saved invoice identity will be retained.')) return;
+    if (!(await confirm({
+      title: 'Discard the OCR reading?',
+      description: 'You will type every invoice row from the complete original. The original file and any saved invoice identity will be retained.',
+      confirmLabel: 'Enter manually',
+      destructive: true,
+    }))) return;
     const original = sourceDocument, originals = additionalSourceIds;
     const saved = activeInvoice, id = editingId, revision = draftServerRevision, receipt = workflowReceiptId;
     resetDraft();
@@ -3599,7 +3618,7 @@ function PurchaseInvoiceEditor({
       {activeInvoice && !['STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status) && !activeInvoice.stockCommittedAt && access.create && access.review && !draftWriteBlocked && <Button variant="outline" disabled={busy} onClick={rejectSavedInvoice}>Reject invoice</Button>}
       {!unknownStockInvoiceId && sourceDocument && !stockAdded && !savedFormLocked && access.create && <div className="flex flex-wrap gap-2">
         <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={enterCompleteInvoiceManually}>Enter complete invoice manually</Button>
-        {!activeInvoice && <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={() => { if (window.confirm('Reject this upload without adding stock? Its archived original will be retained.')) { resetDraft(); setShowIntakeHome(true); setNotice('Upload rejected. No stock was added; the original remains in Saved uploads.'); } }}>Reject this upload</Button>}
+        {!activeInvoice && <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={async () => { if (await confirm({ title: `Reject the upload ${sourceDocument.fileName}?`, description: 'No stock will be added. Its archived original will be retained.', confirmLabel: 'Reject upload', destructive: true })) { resetDraft(); setShowIntakeHome(true); setNotice('Upload rejected. No stock was added; the original remains in Saved uploads.'); } }}>Reject this upload</Button>}
       </div>}
       {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Confirm the invoice against the original, then choose {postingLabel}. Use Save draft to keep corrections without posting.</p>}
     </section>
@@ -3810,6 +3829,8 @@ function PurchaseInvoiceEditor({
         select: (id) => selectSource(id),
       }}
     >
+      {confirmDialog}
+      {reasonDialog}
       <div
         onChangeCapture={event => {
           const target = event.target as HTMLElement;
@@ -3868,8 +3889,8 @@ function PurchaseInvoiceEditor({
                   {receiptOptions.map(receipt => <option key={receipt.id} value={receipt.id}>{receipt.reference} · {receipt.supplierGstin}</option>)}
                 </select>
               </label>}
-              {workflowReceiptId && <Button type="button" variant="outline" disabled={busy} onClick={() => {
-                if (window.confirm("Remove the receipt link only if these goods have not already been added to inventory. Posting this bill will add stock. Continue?")) {
+              {workflowReceiptId && <Button type="button" variant="outline" disabled={busy} onClick={async () => {
+                if (await confirm({ title: "Remove the receipt link?", description: "Remove it only if these goods have not already been added to inventory. Posting this bill will add stock.", confirmLabel: "Remove link", destructive: true })) {
                   setWorkflowReceiptId("");
                 }
               }}>Remove incorrect receipt link</Button>}

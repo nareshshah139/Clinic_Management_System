@@ -28,7 +28,7 @@ const figuresAsked = () => asked().filter((url) => url === '/pharmacy/dashboard'
 
 beforeEach(() => {
   get.mockReset();
-  get.mockImplementation(async (url: string) => (url === '/pharmacy/dashboard' ? { todaySales: 1240, todayInvoices: 6, totalDrugs: 82 } : { id: 'u1' }));
+  get.mockImplementation(async (url: string) => (url === '/pharmacy/dashboard' ? { todaySales: 1240, todayInvoices: 6, totalDrugs: 0, lowStockDrugs: 4 } : { id: 'u1' }));
 });
 
 it("shows a pharmacist today's sales on the desk", async () => {
@@ -37,6 +37,15 @@ it("shows a pharmacist today's sales on the desk", async () => {
   render(<PharmacyWorkspace />);
   expect(await screen.findByText('₹1240.00')).toBeInTheDocument();
   expect(figuresAsked()).toBe(1);
+});
+
+it('counts low stock on the desk with its definition, not the drug master total', async () => {
+  section = 'desk';
+  role = 'PHARMACIST';
+  render(<PharmacyWorkspace />);
+  const lowStock = (await screen.findByText('Low stock')).parentElement as HTMLElement;
+  expect(lowStock).toHaveTextContent(/^Low stock4at or below minimum stock$/);
+  expect(screen.queryByText('Stock')).toBeNull();
 });
 
 const offered = () => ['New sale', 'New bill', 'Invoices', 'Drugs', 'Refresh', 'Pharmacy Counter', 'Inventory Control']

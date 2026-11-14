@@ -431,7 +431,9 @@ export function PartnerDailySync() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((item) => (
+                  {items.map((item, index) => {
+                    const line = item.medicineName.trim() || `row ${index + 1}`;
+                    return (
                     <TableRow key={item.localId}>
                       <TableCell>
                         <Input
@@ -444,6 +446,7 @@ export function PartnerDailySync() {
                             )
                           }
                           placeholder="Medicine name"
+                          aria-label={`Medicine name, row ${index + 1}`}
                         />
                       </TableCell>
                       <TableCell>
@@ -457,12 +460,14 @@ export function PartnerDailySync() {
                             )
                           }
                           placeholder="Batch"
+                          aria-label={`Batch for ${line}`}
                         />
                       </TableCell>
                       <TableCell>
                         <Input
                           type="number"
                           min="1"
+                          aria-label={`Quantity sold for ${line}`}
                           value={item.quantitySold}
                           onChange={(event) =>
                             updateItem(
@@ -477,6 +482,7 @@ export function PartnerDailySync() {
                         <Input
                           type="number"
                           min="0"
+                          aria-label={`MRP for ${line}`}
                           value={item.mrp}
                           onChange={(event) =>
                             updateItem(item.localId, 'mrp', event.target.value)
@@ -487,6 +493,7 @@ export function PartnerDailySync() {
                         <Input
                           type="number"
                           min="0"
+                          aria-label={`Discount for ${line}`}
                           value={item.discountGiven}
                           onChange={(event) =>
                             updateItem(
@@ -508,7 +515,7 @@ export function PartnerDailySync() {
                             )
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger aria-label={`Payment for ${line}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -524,6 +531,7 @@ export function PartnerDailySync() {
                           type="button"
                           variant="ghost"
                           size="icon"
+                          aria-label={`Remove ${line}`}
                           onClick={() => removeItem(item.localId)}
                           disabled={items.length === 1}
                         >
@@ -531,7 +539,8 @@ export function PartnerDailySync() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

@@ -5,6 +5,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 
 import { useState, useEffect } from 'react';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/hooks/use-toast';
 import {
   Card,
   CardContent,
@@ -65,6 +67,8 @@ interface Drug {
 }
 
 export function DrugManagement() {
+  const [confirm, confirmDialog] = useConfirm();
+  const { toast } = useToast();
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -174,7 +178,7 @@ export function DrugManagement() {
       loadDrugs();
     } catch (error) {
       console.error('Failed to add drug:', error);
-      alert(getErrorMessage(error));
+      toast({ variant: 'destructive', title: 'Could not add the drug', description: getErrorMessage(error) });
     }
   };
 
@@ -194,7 +198,7 @@ export function DrugManagement() {
       loadDrugs();
     } catch (error) {
       console.error('Failed to update drug:', error);
-      alert(getErrorMessage(error));
+      toast({ variant: 'destructive', title: `Could not update ${editingDrug.name}`, description: getErrorMessage(error) });
     }
   };
 
@@ -216,24 +220,27 @@ export function DrugManagement() {
       .map(([, label]) => label);
 
     if (missing.length > 0) {
-      alert(
-        `Please fill required product master fields: ${missing.join(', ')}`
-      );
+      toast({ variant: 'warning', title: 'Fill the required fields', description: missing.join(', ') });
       return false;
     }
 
     return true;
   };
 
-  const handleDeleteDrug = async (drugId: string) => {
-    if (!confirm('Are you sure you want to delete this drug?')) return;
+  const handleDeleteDrug = async (drug: Drug) => {
+    if (!(await confirm({
+      title: `Delete ${drug.name}?`,
+      description: 'It will be removed from the drug database.',
+      confirmLabel: 'Delete drug',
+      destructive: true,
+    }))) return;
 
     try {
-      await apiClient.delete(`/drugs/${drugId}`);
+      await apiClient.delete(`/drugs/${drug.id}`);
       loadDrugs();
     } catch (error) {
       console.error('Failed to delete drug:', error);
-      alert('Failed to delete drug. Please try again.');
+      toast({ variant: 'destructive', title: `Could not delete ${drug.name}`, description: 'Try again.' });
     }
   };
 
@@ -281,6 +288,7 @@ export function DrugManagement() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       {/* Header */}
       <PageHeader title="Drug Database" description="Manage your pharmacy's drug inventory" actions={
         <Button
@@ -498,6 +506,7 @@ export function DrugManagement() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        aria-label={`Edit ${drug.name}`}
                         onClick={() => openEditDialog(drug)}
                       >
                         <Edit className="h-4 w-4" />
@@ -505,7 +514,8 @@ export function DrugManagement() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDeleteDrug(drug.id)}
+                        aria-label={`Delete ${drug.name}`}
+                        onClick={() => handleDeleteDrug(drug)}
                         className="text-destructive hover:text-destructive-text"
                       >
                         <Trash2 className="h-4 w-4" />

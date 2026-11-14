@@ -29,6 +29,16 @@ async function fillLabel(page, text, value) {
   await field.type(String(value));
   await handle.dispose();
 }
+async function answerPrompt(page, label, value, confirmLabel) {
+  await page.waitForFunction(t => [...document.querySelectorAll('[role="alertdialog"] label')].some(l => l.textContent.trim() === t), {}, label);
+  const handle = await page.evaluateHandle(t => document.getElementById([...document.querySelectorAll('[role="alertdialog"] label')].find(l => l.textContent.trim() === t).htmlFor), label);
+  await handle.asElement().type(String(value));
+  await handle.dispose();
+  const confirm = await page.waitForFunction(t => [...document.querySelectorAll('[role="alertdialog"] button')].find(b => b.textContent.trim() === t && !b.disabled), {}, confirmLabel);
+  await confirm.asElement().click();
+  await confirm.dispose();
+  await page.waitForFunction(() => !document.querySelector('[role="alertdialog"]'));
+}
 async function until(read, predicate) {
   for (let i=0;i<100;i++) {
     const value=await read();
@@ -86,8 +96,8 @@ exports.stock = async (f,s) => {
   const actions=await f.page.$$eval('button',buttons=>buttons.map(b=>b.textContent.trim()));
   f.check(s,'fresh missing-invoice URL exposes unlinked recovery action',actions.includes('Recover legacy or missing invoice'),true);
   await f.capture(s,'missing-invoice');
-  f.page.once('dialog', dialog => dialog.accept('Recover missing invoice from its direct UI link'));
   await click(f.page,'Recover legacy or missing invoice');
+  await answerPrompt(f.page,'What interrupted the import?','Recover missing invoice from its direct UI link','Recover import');
   await f.page.waitForSelector('[aria-label="Rejected uncertain import"]');
   const rejectedMissing=await f.db.pharmacyPurchaseImportAttempt.findMany({where:{branchId:f.branch.id,status:'RETRY_REJECTED'}});
   const missingOutcome=rejectedMissing.filter(row=>row.result?.historicalInvoiceIds?.includes(missing));
