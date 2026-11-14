@@ -315,8 +315,8 @@ export function PartnerDailySync() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="@container space-y-6">
+      <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:justify-between">
         <div>
           <h2 className="text-2xl font-semibold tracking-normal">
             Partner Daily Sync
@@ -340,7 +340,7 @@ export function PartnerDailySync() {
         </Alert>
       )}
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 @2xl:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Partners</CardDescription>
@@ -367,14 +367,14 @@ export function PartnerDailySync() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
+      <div className="grid grid-cols-1 gap-6 @7xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Manual Daily Entry</CardTitle>
             <CardDescription>{displayCalendarDate(date)}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-4">
+          <CardContent className="@container space-y-4">
+            <div className="grid gap-4 @xl:grid-cols-2 @4xl:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="partner-date">Date</Label>
                 <Input
