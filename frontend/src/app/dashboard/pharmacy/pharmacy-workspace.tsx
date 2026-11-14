@@ -239,7 +239,7 @@ function PharmacyDeskPanel({
   return (
     <div className="space-y-3">
       <section className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-white shadow-sm">
-        <div className="grid gap-2 xl:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)_auto] xl:items-center">
+        <div className="grid gap-2 2xl:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)_auto] 2xl:items-center">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <PageHeader title="Pharmacy Desk" />
@@ -287,7 +287,7 @@ function PharmacyDeskPanel({
             <div />
           )}
 
-          <div className="flex flex-wrap justify-start gap-1.5 xl:justify-end">
+          <div className="flex flex-wrap justify-start gap-1.5 2xl:justify-end">
             <PharmacyGuide />
             {sells && (
               <Button
