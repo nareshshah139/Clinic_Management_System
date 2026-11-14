@@ -147,6 +147,15 @@ describe('editing a patient', () => {
     expect(screen.queryByRole('button', { name: 'More details' })).not.toBeInTheDocument();
   });
 
+  it('shows the age worked out from the date of birth, not a stale stored age', async () => {
+    const dob = new Date();
+    dob.setFullYear(dob.getFullYear() - 34);
+    dob.setMonth(dob.getMonth() - 1);
+    api.getPatient.mockResolvedValue({ ...stored, dob: dob.toISOString(), age: 33 } as never);
+    render(<PatientFormDialog open onOpenChange={jest.fn()} patientId="p1" onSaved={jest.fn()} />);
+    expect(await screen.findByLabelText('Age (years)')).toHaveValue(34);
+  });
+
   it('sends only the phone when only the phone changed', async () => {
     const user = userEvent.setup();
     api.getPatient.mockResolvedValue(stored as never);

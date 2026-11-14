@@ -362,10 +362,13 @@ export class PatientsService {
       updateData.primaryDoctorId = await this.resolvePrimaryDoctor(primaryDoctorId, branchId);
     }
 
-    const currentAge = existing.dob ? this.ageFromDob(existing.dob) : existing.age;
-    if (age != null && (dob || age !== currentAge)) {
-      updateData.age = age;
-      if (!dob) {
+    if (age != null) {
+      if (dob) {
+        updateData.age = age;
+      } else if (existing.dob && age === this.ageFromDob(existing.dob)) {
+        if (age !== existing.age) updateData.age = age;
+      } else {
+        updateData.age = age;
         updateData.dob = this.ageToApproximateDob(age);
       }
     }

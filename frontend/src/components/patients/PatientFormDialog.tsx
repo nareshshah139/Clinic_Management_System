@@ -62,7 +62,7 @@ const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padS
 
 function fieldsFromPatient(p: Record<string, any>): Fields {
   const gender = normalizeGender(p.gender);
-  const age = calculateAge(p);
+  const age = (p.dob ? calculateAge({ dob: p.dob }) : null) ?? calculateAge(p);
   return {
     name: String(p.name || `${p.firstName || ''} ${p.lastName || ''}`).trim(),
     age: age != null ? String(age) : '',

@@ -30,11 +30,41 @@ describe('PatientsService.update date of birth', () => {
     expect(update.mock.calls[0][0].data).toEqual({ age: 40, dob: new Date(2026 - 40, 0, 1) });
   });
 
-  it('uses the stored age when the patient has no date of birth', async () => {
+  it('brings a stale stored age in line and keeps the date of birth when the age sent matches the date of birth', async () => {
+    stored.age = 37;
+    try {
+      await service.update('p1', { age: 38 } as any, 'branch');
+      expect(update.mock.calls[0][0].data).toEqual({ age: 38 });
+    } finally {
+      stored.age = 38;
+    }
+  });
+
+  it('keeps both when the age sent matches the date of birth and the stored age', async () => {
+    await service.update('p1', { age: 38 } as any, 'branch');
+    expect(update.mock.calls[0][0].data).toEqual({});
+  });
+
+  it('rebuilds the date of birth when the age sent differs from the date of birth, even if it equals a stale stored age', async () => {
+    stored.age = 37;
+    try {
+      await service.update('p1', { age: 37 } as any, 'branch');
+      expect(update.mock.calls[0][0].data).toEqual({ age: 37, dob: new Date(2026 - 37, 0, 1) });
+    } finally {
+      stored.age = 38;
+    }
+  });
+
+  it('changes neither when no age is sent', async () => {
+    await service.update('p1', { email: 'a@b.in' } as any, 'branch');
+    expect(update.mock.calls[0][0].data).toEqual({ email: 'a@b.in' });
+  });
+
+  it('builds the date of birth from the age when the patient has no date of birth', async () => {
     stored.dob = null as any;
     try {
       await service.update('p1', { age: 38 } as any, 'branch');
-      expect(update.mock.calls[0][0].data).toEqual({});
+      expect(update.mock.calls[0][0].data).toEqual({ age: 38, dob: new Date(2026 - 38, 0, 1) });
       await service.update('p1', { age: 41 } as any, 'branch');
       expect(update.mock.calls[1][0].data).toEqual({ age: 41, dob: new Date(2026 - 41, 0, 1) });
     } finally {
