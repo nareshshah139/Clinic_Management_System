@@ -15,7 +15,7 @@ import { Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
-import { ROOM_READ_ROLES } from '@/lib/appointment-access';
+import { ROOM_READ_ROLES, START_VISIT_ROLES } from '@/lib/appointment-access';
 
 function AppointmentsPageInner() {
   const search = useSearchParams();
@@ -114,12 +114,12 @@ function AppointmentsPageInner() {
           <div className="space-y-3">
             <ul className="text-sm text-gray-700 space-y-2">
               <li>• <strong>Scheduled</strong> (left) holds patients booked ahead who still need a confirmation call. <strong>Confirmed</strong> (right) is the doctor&apos;s real day, with walk-ins.</li>
-              <li>• When a patient confirms on the call, click them and press <strong>Confirm</strong>. They move to Confirmed at the same time.</li>
-              <li>• <strong>Search patient</strong> by name or phone, then <strong>click a free time</strong> in either column to book into that calendar</li>
-              <li>• Calendar auto-finds 15-min slots even in larger grid views</li>
-              <li>• <strong>Click</strong> an appointment to view, confirm, reschedule or cancel it</li>
-              <li>• <strong>Drag across tiles</strong> to select custom time ranges</li>
-              <li>• Adjust appointment duration in the booking dialog (15/30/45/60/90 min)</li>
+              <li>• When a patient confirms on the call, press <strong>Confirm</strong> on their row. They move to Confirmed at the same time.</li>
+              <li>• Type a name or phone in <strong>Patient</strong>. One match is picked for you. Then <strong>click a free time</strong> in either column and press <strong>Book</strong>.</li>
+              <li>• <strong>Drag across tiles</strong> to pick a longer time. The booking dialog also lets you change the duration.</li>
+              <li>• If the patient already has a time that day, a note above the calendar says so. You can still book.</li>
+              <li>• <strong>Click</strong> an appointment to see its details, reschedule or cancel it. <strong>Start visit</strong> is on the row of a confirmed patient.</li>
+              <li>• <strong>Filters</strong> narrow the calendar by type or room and change the time grid. <strong>Legend</strong> explains the colours.</li>
             </ul>
           </div>
         </DialogContent>
@@ -131,6 +131,7 @@ function AppointmentsPageInner() {
         controlledDate={date}
         hideHeaderControls
         readsRooms={ROOM_READ_ROLES.includes(user?.role ?? '')}
+        canStartVisit={START_VISIT_ROLES.includes(user?.role ?? '')}
       />
     </div>
   );

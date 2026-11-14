@@ -6,6 +6,8 @@ export interface CalendarSpec {
   title: string;
   accentColor: string;
   description: string;
+  /** The one line a column header carries; the legend spells out `description`. */
+  hint: string;
   count: (patients: number) => string;
   empty: string;
   entryStatus: AppointmentStatus;
@@ -21,6 +23,7 @@ export const CALENDARS: Record<AppointmentCalendar, CalendarSpec> = {
     title: 'Scheduled',
     accentColor: '#94a3b8',
     description: 'Booked ahead. Call to confirm.',
+    hint: 'Call to confirm',
     count: (n) => `${patients(n)} to confirm`,
     empty: 'No one left to confirm',
     entryStatus: AppointmentStatus.SCHEDULED,
@@ -31,6 +34,7 @@ export const CALENDARS: Record<AppointmentCalendar, CalendarSpec> = {
     title: 'Confirmed',
     accentColor: '#0ea5e9',
     description: 'Confirmed, walk-ins and visits.',
+    hint: 'Confirmed',
     count: (n) => `${patients(n)} confirmed`,
     empty: 'No confirmed patients yet',
     entryStatus: AppointmentStatus.CONFIRMED,

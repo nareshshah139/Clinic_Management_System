@@ -17,7 +17,7 @@ import type { AppointmentInSlot, AppointmentCalendar, BillType } from '@/lib/typ
 import { AppointmentStatus } from '@cms/shared-types';
 import { layoutDay } from './day-layout';
 import { CALENDARS, canMove } from './appointment-calendars';
-import { BILL_TYPE_LABEL, BILL_TYPE_SHORT, billingChip, type BillingTone, type ChipWidth } from './appointment-billing-view';
+import { BILL_TYPE_LABEL, billingChip, type BillingTone, type ChipWidth } from './appointment-billing-view';
 
 type StatusStyle = {
   label: string;
@@ -45,6 +45,8 @@ const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> =
 };
 
 const FLEX_STEP_MIN = 15;
+
+const VISIT_STATUSES = [AppointmentStatus.CONFIRMED, AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_PROGRESS];
 
 const BILL_TYPE_TONE: Record<BillType, string> = {
   FIRST_CONSULTATION: 'text-teal-700',
@@ -109,10 +111,12 @@ interface CalendarColumnProps {
   maxBookingsPerSlot: number;
   slotAction: SlotAction;
   busy: boolean;
+  canStartVisit: boolean;
   onOpen: (appointment: AppointmentInSlot) => void;
   onReschedule: (appointment: AppointmentInSlot) => void;
   onStartVisit: (appointment: AppointmentInSlot) => void;
   onOpenBill?: (appointment: AppointmentInSlot) => void;
+  onMoveCalendar: (appointment: AppointmentInSlot, calendar: AppointmentCalendar) => void;
   onBook: (slot: string) => void;
   onMove: (slot: string) => void;
 }
@@ -137,10 +141,12 @@ export default function CalendarColumn({
   maxBookingsPerSlot,
   slotAction,
   busy,
+  canStartVisit,
   onOpen,
   onReschedule,
   onStartVisit,
   onOpenBill,
+  onMoveCalendar,
   onBook,
   onMove,
 }: CalendarColumnProps) {
@@ -218,7 +224,7 @@ export default function CalendarColumn({
       <header className="min-w-0 border-b-2 pb-1.5" style={{ borderBottomColor: spec.accentColor }}>
         <h3 id={titleId} className="font-semibold leading-tight text-gray-900">{spec.title}</h3>
         <p className="text-xs font-medium leading-tight text-gray-800">{appointments.length ? spec.count(appointments.length) : spec.empty}</p>
-        <p className="text-xs leading-tight text-gray-600">{spec.description}</p>
+        <p className="text-xs leading-tight text-gray-600">{spec.hint}</p>
       </header>
       <div
         className="grid grid-cols-1 gap-0"
@@ -235,6 +241,9 @@ export default function CalendarColumn({
             status.label,
           ].filter(Boolean).join(', ');
           const chip = apt.billing ? billingChip(apt.billing, apt.billType) : null;
+          const confirms = spec.move.primary && apt.status === spec.move.offeredWhile;
+          const startsVisit = !confirms && canStartVisit && VISIT_STATUSES.includes(apt.status);
+          const primaryLabel = confirms ? spec.move.label : startsVisit ? (apt.visit?.id ? 'Continue visit' : 'Start visit') : null;
           const statusFit = chip ? STATUS_IN_WORDS.withChip : STATUS_IN_WORDS.withoutChip;
           return (
             <div
@@ -276,8 +285,7 @@ export default function CalendarColumn({
                       </span>
                       {apt.billType && (
                         <span data-bill-type title={BILL_TYPE_LABEL[apt.billType]} className={`hidden shrink-0 font-semibold @min-[18em]:inline ${BILL_TYPE_TONE[apt.billType]}`}>
-                          <span className="@min-[38rem]/row:hidden">{BILL_TYPE_SHORT[apt.billType]}</span>
-                          <span className="hidden @min-[38rem]/row:inline">{BILL_TYPE_LABEL[apt.billType]}</span>
+                          {BILL_TYPE_LABEL[apt.billType]}
                         </span>
                       )}
                       <span data-appointment-status title={status.label} className="hidden shrink-0 items-center @min-[10em]:inline-flex">
@@ -325,20 +333,20 @@ export default function CalendarColumn({
                         RESCHED
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onStartVisit(apt);
-                      }}
-                      className="bg-blue-700 hover:bg-blue-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
-                      title={apt.visit?.id ? 'Continue Visit' : 'Start Visit'}
-                      disabled={isOptimistic}
-                    >
-                      {apt.visit?.id ? 'CONT' : 'START'}
-                    </button>
                   </div>
                 </div>
+                {primaryLabel && (
+                  <button
+                    type="button"
+                    data-appointment-primary
+                    title={primaryLabel}
+                    onClick={() => (confirms ? onMoveCalendar(apt, spec.move.to) : onStartVisit(apt))}
+                    disabled={isOptimistic}
+                    className="my-px mr-0.5 shrink-0 self-start whitespace-nowrap rounded bg-blue-700 px-2 text-[11px] font-semibold leading-4 text-white hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    {primaryLabel}
+                  </button>
+                )}
                 {chip && (
                   <button
                     type="button"

@@ -52,7 +52,7 @@ describe('DoctorDayCalendar billing on each row', () => {
       }),
     ]);
 
-    const paid = await screen.findByRole('button', { name: 'First consultation bill: ₹500, paid' });
+    const paid = await screen.findByRole('button', { name: 'First visit bill: ₹500, paid' });
     expect(within(paid).getByText('₹500 · Paid')).toBeInTheDocument();
     expect(paid).not.toHaveAttribute('data-attention');
 
@@ -66,13 +66,13 @@ describe('DoctorDayCalendar billing on each row', () => {
     const two = screen.getByRole('button', { name: 'Review bill: ₹1,700 in 2 bills, ₹200 due' });
     expect(Array.from(two.querySelectorAll('span')).map((n) => n.textContent)).toEqual(['₹!', '₹200 due', '₹1,700 · ₹200 due · 2 bills']);
 
-    const types = Array.from(document.querySelectorAll('[data-bill-type]')).map((n) => [n.getAttribute('title'), ...Array.from(n.children).map((c) => c.textContent)]);
+    const types = Array.from(document.querySelectorAll('[data-bill-type]')).map((n) => [n.getAttribute('title'), n.textContent]);
     expect(types).toEqual([
-      ['First consultation', 'First', 'First consultation'],
-      ['Review', 'Review', 'Review'],
-      ['Procedure', 'Procedure', 'Procedure'],
-      ['Review', 'Review', 'Review'],
-      ['Review', 'Review', 'Review'],
+      ['First visit', 'First visit'],
+      ['Review', 'Review'],
+      ['Procedure', 'Procedure'],
+      ['Review', 'Review'],
+      ['Review', 'Review'],
     ]);
     expect(confirmed().getByRole('button', { name: 'Meera Shah, 09:00-09:15, Confirmed' })).toHaveTextContent('34y');
   });
@@ -86,7 +86,7 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(first).toHaveAttribute('title', 'Token 5, Venkata Subramanian, 09:00-09:15, Confirmed');
     expect(first.querySelector('[data-appointment-time]')).toHaveTextContent('09:00-09:15');
     expect(first.querySelector('[data-patient-name]')).toHaveTextContent('Venkata Subramanian');
-    expect(first.querySelector('[data-bill-type]')).toHaveAttribute('title', 'First consultation');
+    expect(first.querySelector('[data-bill-type]')).toHaveAttribute('title', 'First visit');
     expect(first.querySelector('[data-appointment-status]')).toHaveAttribute('title', 'Confirmed');
     expect(first.querySelector('[data-appointment-status]')).toHaveTextContent('Confirmed');
     const second = screen.getByRole('button', { name: 'Priya Nair, 09:15-09:30, In progress' });
@@ -120,9 +120,7 @@ describe('DoctorDayCalendar billing on each row', () => {
 
     await waitFor(() => expect(api.processPayment).toHaveBeenCalledWith({ invoiceId: 'cinv1', amount: 200, method: 'UPI' }));
     expect(stableToast).toHaveBeenCalledWith({ variant: 'success', title: '₹200 UPI recorded on INV-1' });
-    await waitFor(() => expect(within(dialog).getByRole('region', { name: 'Bill INV-1' })).toHaveTextContent('Paid'));
-    expect(within(dialog).queryByRole('button', { name: /Record/ })).toBeNull();
-    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(await screen.findByRole('button', { name: 'Review bill: ₹500, paid' })).toBeInTheDocument();
   });
 
@@ -147,6 +145,7 @@ describe('DoctorDayCalendar billing on each row', () => {
       items: [{ name: 'Procedure: Chemical peel', description: 'Procedure: Chemical peel', quantity: 1, unitPrice: 2500, gstRate: 0, discount: 0 }],
     });
     expect(stableToast).toHaveBeenCalledWith({ variant: 'success', title: 'Bill INV-9 created and ₹1,000 Cash recorded' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('takes a cheque at the desk with its number, and lists a bank transfer by name with its reference', async () => {
@@ -189,7 +188,7 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(stableToast).toHaveBeenCalledWith({ variant: 'success', title: 'Bill INV-9 created and ₹2,500 Net banking / NEFT recorded' });
   });
 
-  it('starts the fee from the fee list, names where it came from, and bills the amount the desk changed it to', async () => {
+  it('starts the fee from the fee list, says when it was changed, and bills the amount the desk changed it to', async () => {
     renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', fee: 390, billing: bill('NOT_BILLED', 0, 0, false) })]);
     api.createInvoice.mockResolvedValue({ id: 'cinv7', invoiceNo: 'INV-7' });
 
@@ -197,14 +196,14 @@ describe('DoctorDayCalendar billing on each row', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Bill for Ravi Kumar' });
     const fee = within(dialog).getByRole('textbox', { name: 'Fee' });
     expect([(fee as HTMLInputElement).value, within(dialog).getByRole('textbox', { name: 'Paid now' }).getAttribute('value')]).toEqual(['390', '390']);
-    expect(within(dialog).getByTestId('fee-source')).toHaveTextContent('From fee list: Review ₹390');
-    expect(fee).toHaveAccessibleDescription('From fee list: Review ₹390');
+    expect(within(dialog).queryByTestId('fee-source')).toBeNull();
+    expect(dialog).not.toHaveTextContent('From fee list');
 
     fireEvent.change(fee, { target: { value: '450' } });
     expect(within(dialog).getByTestId('fee-source')).toHaveTextContent('Fee list: Review ₹390, changed for this bill. Use ₹390');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Use ₹390' }));
     expect(fee).toHaveValue('390');
-    expect(within(dialog).getByTestId('fee-source')).toHaveTextContent('From fee list: Review ₹390');
+    expect(within(dialog).queryByTestId('fee-source')).toBeNull();
 
     fireEvent.change(fee, { target: { value: '450' } });
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Paid now' }), { target: { value: '0' } });
@@ -273,7 +272,7 @@ describe('DoctorDayCalendar billing on each row', () => {
   it('shows the bill type but no money to a viewer who cannot read bills', async () => {
     renderDay([row('a1', '09:00-09:15', 'Meera Shah', { billType: 'FIRST_CONSULTATION' })], { read: false, createBill: false, takePayment: false, editFees: false });
     await screen.findByRole('button', { name: 'Meera Shah, 09:00-09:15, Confirmed' });
-    expect(document.querySelector('[data-bill-type]')).toHaveAttribute('title', 'First consultation');
+    expect(document.querySelector('[data-bill-type]')).toHaveAttribute('title', 'First visit');
     expect(document.querySelector('[data-appointment-billing]')).toBeNull();
   });
 });

@@ -34,7 +34,7 @@ describe('AppointmentBookingDialog', () => {
   it('shows validation error when required fields missing', async () => {
     render(<AppointmentBookingDialog {...baseProps} doctorId="" />);
 
-    fireEvent.click(screen.getByText('Confirm Booking'));
+    fireEvent.click(screen.getByRole('button', { name: 'Book' }));
     // Inline validation panel should render with specific error
     expect(await screen.findByText('Please fix the following errors:')).toBeInTheDocument();
     expect(screen.getByText('Doctor information is missing')).toBeInTheDocument();
@@ -44,7 +44,7 @@ describe('AppointmentBookingDialog', () => {
     render(<AppointmentBookingDialog {...baseProps} />);
 
     // Confirm directly (OPD, no room required)
-    fireEvent.click(screen.getByText('Confirm Booking'));
+    fireEvent.click(screen.getByRole('button', { name: 'Book' }));
 
     await waitFor(() => expect(baseProps.onConfirm).toHaveBeenCalled());
     expect(baseProps.onConfirm).toHaveBeenCalledWith(expect.objectContaining({

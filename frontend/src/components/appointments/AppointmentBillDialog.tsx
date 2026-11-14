@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import { cn, formatPatientName, getErrorMessage } from '@/lib/utils';
-import { displayCalendarDate, displayClinicDateTime } from '@/lib/date-display';
+import { displayClinicDateTime } from '@/lib/date-display';
 import { useToast } from '@/hooks/use-toast';
 import type { AppointmentInSlot, ClinicBillAccess } from '@/lib/types';
 import { DESK_PAYMENT_MODES, paymentModeLabel, type DeskPaymentMode } from '@/lib/clinic-payment-modes';
@@ -80,13 +80,11 @@ function ModePicker({ value, onChange, label, reference, onReference }: {
  */
 export function AppointmentBillDialog({
   appointment,
-  date,
   access,
   onClose,
   onChanged,
 }: {
   appointment: AppointmentInSlot | null;
-  date: string;
   access: ClinicBillAccess;
   onClose: () => void;
   onChanged: () => Promise<void> | void;
@@ -168,6 +166,7 @@ export function AppointmentBillDialog({
     toast({ variant: 'success', title: message });
     resetForm();
     await onChanged();
+    onClose();
   };
 
   const createBill = async () => {
@@ -222,9 +221,7 @@ export function AppointmentBillDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Bill for {patient}</DialogTitle>
-          <DialogDescription>
-            {kind} · {displayCalendarDate(date)} · {appointment.slot}
-          </DialogDescription>
+          <DialogDescription>{kind}</DialogDescription>
         </DialogHeader>
 
         {invoices === null && !loadError && <p className="text-sm text-gray-600">Loading the bill…</p>}
@@ -319,35 +316,30 @@ export function AppointmentBillDialog({
             <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1 text-sm font-medium">
                 Fee
-                <Input inputMode="decimal" placeholder="Type the fee" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={feeInvalid || undefined} aria-describedby={`${ids}-fee-source`} className="h-10 text-base" />
+                <Input inputMode="decimal" placeholder="Type the fee" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={feeInvalid || undefined} aria-describedby={listFee === null || feeValue !== listFee ? `${ids}-fee-source` : undefined} className="h-10 text-base" />
               </label>
               <label className="flex flex-col gap-1 text-sm font-medium">
                 Paid now
                 <Input inputMode="decimal" placeholder="0" value={paidText} onChange={(e) => setPaidNow(e.target.value)} aria-invalid={paidInvalid || undefined} className="h-10 text-base" />
               </label>
             </div>
-            <p id={`${ids}-fee-source`} data-testid="fee-source" className="flex flex-wrap items-center gap-x-2 text-sm text-gray-700">
-              {listFee === null ? (
-                <>
-                  <span>No fee set for {kind}.</span>
-                  {access.editFees && ' '}
-                  {access.editFees && <Link href={FEE_LIST_PATH} className="font-medium text-blue-700 underline underline-offset-2">Set fees</Link>}
-                </>
-              ) : feeValue === listFee ? (
-                <span>From fee list: {kind} {rupee(listFee)}</span>
-              ) : (
-                <>
-                  <span>Fee list: {kind} {rupee(listFee)}, changed for this bill.</span>{' '}
-                  <button type="button" className="font-medium text-blue-700 underline underline-offset-2" onClick={() => setFee(String(listFee))}>
-                    Use {rupee(listFee)}
-                  </button>
-                </>
-              )}
-            </p>
+            {listFee === null ? (
+              <p id={`${ids}-fee-source`} data-testid="fee-source" className="flex flex-wrap items-center gap-x-2 text-sm text-gray-700">
+                <span>No fee set for {kind}.</span>
+                {access.editFees && ' '}
+                {access.editFees && <Link href={FEE_LIST_PATH} className="font-medium text-blue-700 underline underline-offset-2">Set fees</Link>}
+              </p>
+            ) : feeValue !== listFee && (
+              <p id={`${ids}-fee-source`} data-testid="fee-source" className="flex flex-wrap items-center gap-x-2 text-sm text-gray-700">
+                <span>Fee list: {kind} {rupee(listFee)}, changed for this bill.</span>{' '}
+                <button type="button" className="font-medium text-blue-700 underline underline-offset-2" onClick={() => setFee(String(listFee))}>
+                  Use {rupee(listFee)}
+                </button>
+              </p>
+            )}
             {feeInvalid && <p className="text-sm text-red-700">Enter the fee as an amount above 0, for example 500.</p>}
             {paidInvalid && <p className="text-sm text-red-700">Paid now can be from 0 up to the fee.</p>}
             {(paidValue ?? 0) > 0 && <ModePicker value={mode} onChange={setMode} label="Payment mode" reference={reference} onReference={setReference} />}
-            <p className="text-xs text-gray-600">Consultation and procedure fees are billed without GST.</p>
             <div className="flex gap-2">
               {adding && <Button variant="outline" className="h-10" onClick={() => setAdding(false)} disabled={saving}>Cancel</Button>}
               <Button className="h-10 flex-1" disabled={saving || feeValue === null || feeInvalid || paidInvalid || !line.trim()} onClick={() => void createBill()}>
@@ -361,7 +353,7 @@ export function AppointmentBillDialog({
           <Button variant="ghost" size="sm" className="self-start" onClick={() => setAdding(true)}>Add another bill</Button>
         )}
         {invoices && invoices.length === 0 && !access.createBill && (
-          <p className="text-sm text-gray-700">Not billed yet. The front desk creates the bill.</p>
+          <p className="text-sm text-gray-700">Not billed yet.</p>
         )}
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       </DialogContent>

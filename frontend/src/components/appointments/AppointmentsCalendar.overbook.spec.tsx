@@ -61,7 +61,7 @@ describe('AppointmentsCalendar booking into a slot that allows overbooking', () 
     await user.click(within(dialog).getByRole('button', { name: 'Book anyway' }));
     await waitFor(() => expect(createAppointment).toHaveBeenCalledTimes(2));
     expect(createAppointment.mock.calls[1][0]).toEqual({ ...createAppointment.mock.calls[0][0], allowOverbook: true });
-    expect(await screen.findByText('Appointment Successfully Booked!')).toBeInTheDocument();
+    expect(await screen.findByText('Booked: Asha Rao, 01 Jan 2099, 11:00-11:15')).toBeInTheDocument();
   });
 
   it('sends nothing more when the user cancels', async () => {

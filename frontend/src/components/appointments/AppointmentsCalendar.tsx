@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Calendar as CalendarIcon } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -17,10 +17,13 @@ import DoctorDayCalendar, { type ScopedAppointment } from '@/components/appointm
 import { Badge } from '@/components/ui/badge';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
-import { AlertCircle, Info } from 'lucide-react';
+import { AlertCircle, ChevronDown } from 'lucide-react';
 import { useOverbookConfirm } from './useOverbookConfirm';
 import { CALENDARS, CALENDAR_ORDER, type SlotChoice } from './appointment-calendars';
 import { overbookFlag } from '@/lib/overbooking';
+import { displayCalendarDate } from '@/lib/date-display';
+
+const SEARCH_PAUSE_MS = 250;
 
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -30,6 +33,7 @@ interface AppointmentsCalendarProps {
   hideHeaderControls?: boolean;
   /** False for a viewer the server refuses rooms; the room filter then stays empty and rooms are never asked for. */
   readsRooms?: boolean;
+  canStartVisit?: boolean;
 }
 
 /**
@@ -59,6 +63,7 @@ export default function AppointmentsCalendar({
   controlledDate,
   hideHeaderControls,
   readsRooms = true,
+  canStartVisit = false,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
   const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
@@ -66,6 +71,9 @@ export default function AppointmentsCalendar({
   const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
   const [patientSearch, setPatientSearch] = useState<string>('');
+  const latestSearch = useRef('');
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [panel, setPanel] = useState<'filters' | 'legend' | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -102,6 +110,10 @@ export default function AppointmentsCalendar({
   const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
 
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
+
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+  }, []);
 
   useEffect(() => {
     void fetchDoctors();
@@ -269,8 +281,46 @@ export default function AppointmentsCalendar({
     }
   };
 
-  const searchPatients = async (q: string) => {
+  const choosePatient = (p: Patient) => {
+    setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
+    setSelectedPatientId(p.id);
+    setSelectedPatient(p);
+    setPatients([]);
+    setQuickCreateOpen(false);
+    setAutoPromptedForSearch(false);
+  };
+
+  const runPatientSearch = async (q: string) => {
+    try {
+      setSearchingPatients(true);
+      const res: any = await apiClient.getPatients({ search: q, limit: 10 });
+      if (latestSearch.current !== q) return;
+      const matches = (res.data || res.patients || []).map((p: any) => ({
+        ...p,
+        firstName: p.firstName || p.name?.split(' ')[0] || '',
+        lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
+      }));
+      setPatients(matches);
+      if (matches.length === 1) {
+        choosePatient(matches[0]);
+      } else if (matches.length === 0 && !autoPromptedForSearch) {
+        setQuickCreateOpen(true);
+        setAutoPromptedForSearch(true);
+      } else if (matches.length > 1) {
+        setQuickCreateOpen(false);
+        setAutoPromptedForSearch(false);
+      }
+      setSearchingPatients(false);
+    } catch (error) {
+      console.error('Failed to search patients', error);
+      setSearchingPatients(false);
+    }
+  };
+
+  const searchPatients = (q: string) => {
     setPatientSearch(q);
+    latestSearch.current = q;
+    if (searchTimer.current) clearTimeout(searchTimer.current);
 
     if (!q.trim()) {
       setPatients([]);
@@ -280,28 +330,7 @@ export default function AppointmentsCalendar({
       return;
     }
 
-    try {
-      setSearchingPatients(true);
-      const res: any = await apiClient.getPatients({ search: q, limit: 10 });
-      const matches = (res.data || res.patients || []).map((p: any) => ({
-        ...p,
-        firstName: p.firstName || p.name?.split(' ')[0] || '',
-        lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
-      }));
-      setPatients(matches);
-      if (matches.length === 0 && !autoPromptedForSearch) {
-        setQuickCreateOpen(true);
-        setAutoPromptedForSearch(true);
-      }
-      if (matches.length > 0) {
-        setQuickCreateOpen(false);
-        setAutoPromptedForSearch(false);
-      }
-      setSearchingPatients(false);
-    } catch (error) {
-      console.error('Failed to search patients', error);
-      setSearchingPatients(false);
-    }
+    searchTimer.current = setTimeout(() => void runPatientSearch(q), SEARCH_PAUSE_MS);
   };
 
   const handleBookingRequest = (slot: string, calendar: AppointmentCalendar) => {
@@ -450,13 +479,10 @@ export default function AppointmentsCalendar({
       <Card>
         <CardHeader className="space-y-2">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5" /> 
-                Doctor Calendar
-              </CardTitle>
-              <CardDescription>Click a free time in the Scheduled or Confirmed column to book into that calendar.</CardDescription>
-            </div>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              Doctor Calendar
+            </CardTitle>
             {googleConfigured !== false && (
               <div className="flex items-center gap-2">
                 {googleStatus.connected ? (
@@ -521,10 +547,10 @@ export default function AppointmentsCalendar({
           )}
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="flex flex-wrap items-end gap-3">
             {!hideHeaderControls && (
               <>
-                <div>
+                <div className="w-48">
                   <label className="text-sm text-gray-700">Doctor</label>
                   <Select value={doctorId} onValueChange={setDoctorId}>
                     <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
@@ -533,88 +559,86 @@ export default function AppointmentsCalendar({
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+                <div className="w-44">
                   <label className="text-sm text-gray-700">Date</label>
                   <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
               </>
             )}
-            <div>
-              <label className="text-sm text-gray-700">Visit Type</label>
-              <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>
-                <SelectTrigger><SelectValue placeholder="All Types" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Types</SelectItem>
-                  <SelectItem value="OPD">OPD Consultation</SelectItem>
-                  <SelectItem value="PROCEDURE">Procedure</SelectItem>
-                  <SelectItem value="TELEMED">Telemedicine</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="min-w-56 flex-[3_1_20rem]">
+              <label className="text-sm text-gray-700">Patient</label>
+              <div className="relative">
+                <Input
+                  placeholder="Name or phone"
+                  value={selectedPatient ? `${formatPatientName(selectedPatient)} — ${selectedPatient.phone ?? ''}` : patientSearch}
+                  className={selectedPatient ? 'pr-16' : undefined}
+                  onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); searchPatients(e.target.value); }}
+                />
+                {selectedPatient && (
+                  <Button variant="ghost" size="sm" className="absolute right-1 top-1/2 h-7 -translate-y-1/2 px-2" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); setQuickCreateOpen(false); }}>Clear</Button>
+                )}
+              </div>
             </div>
-            {readsRooms && (
+            {(['filters', 'legend'] as const).map((name) => (
+              <Button key={name} type="button" variant="outline" aria-expanded={panel === name} onClick={() => setPanel(panel === name ? null : name)}>
+                {name === 'filters' ? 'Filters' : 'Legend'}
+                <ChevronDown className={`h-4 w-4 transition-transform ${panel === name ? 'rotate-180' : ''}`} aria-hidden="true" />
+              </Button>
+            ))}
+          </div>
+
+          {panel === 'filters' && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
-                <label className="text-sm text-gray-700">Room</label>
-                <Select value={roomFilter} onValueChange={setRoomFilter}>
-                  <SelectTrigger><SelectValue placeholder="All Rooms" /></SelectTrigger>
+                <label className="text-sm text-gray-700">Type</label>
+                <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>
+                  <SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ALL">All Rooms</SelectItem>
-                    {rooms.map((room) => (
-                      <SelectItem key={room.id} value={room.id}>{room.name} ({room.type})</SelectItem>
-                    ))}
+                    <SelectItem value="ALL">All types</SelectItem>
+                    <SelectItem value="OPD">Consultation</SelectItem>
+                    <SelectItem value="PROCEDURE">Procedure</SelectItem>
+                    <SelectItem value="TELEMED">Video call</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            )}
-            <div>
-              <label className="text-sm text-gray-700">Patient</label>
-              <Input placeholder="Search patient by name/phone" value={patientSearch} onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }} />
-            </div>
-            <div>
-              <label className="text-sm text-gray-700">Grid</label>
-              <Select value={String(gridMinutes)} onValueChange={(v: string) => setGridMinutes(parseInt(v, 10))}>
-                <SelectTrigger><SelectValue placeholder="Grid granularity" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10 minutes</SelectItem>
-                  <SelectItem value="15">15 minutes</SelectItem>
-                  <SelectItem value="20">20 minutes</SelectItem>
-                  <SelectItem value="30">30 minutes</SelectItem>
-                  <SelectItem value="45">45 minutes</SelectItem>
-                  <SelectItem value="60">60 minutes</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {selectedPatient && (
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">
-                Selected: {selectedPatient.firstName} {selectedPatient.lastName} — {selectedPatient.phone}
-              </Badge>
-              <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); setQuickCreateOpen(false); }}>Clear</Button>
-            </div>
-          )}
-
-          {!selectedPatientId && patientSearch && (
-            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              <AlertCircle className="h-4 w-4" />
-              <span>Select a patient from the list or add them as new before booking.</span>
+              {readsRooms && (
+                <div>
+                  <label className="text-sm text-gray-700">Room</label>
+                  <Select value={roomFilter} onValueChange={setRoomFilter}>
+                    <SelectTrigger><SelectValue placeholder="All rooms" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All rooms</SelectItem>
+                      {rooms.map((room) => (
+                        <SelectItem key={room.id} value={room.id}>{room.name} ({room.type})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div>
+                <label className="text-sm text-gray-700">Grid</label>
+                <Select value={String(gridMinutes)} onValueChange={(v: string) => setGridMinutes(parseInt(v, 10))}>
+                  <SelectTrigger><SelectValue placeholder="Grid granularity" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10 minutes</SelectItem>
+                    <SelectItem value="15">15 minutes</SelectItem>
+                    <SelectItem value="20">20 minutes</SelectItem>
+                    <SelectItem value="30">30 minutes</SelectItem>
+                    <SelectItem value="45">45 minutes</SelectItem>
+                    <SelectItem value="60">60 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 
-          {patientSearch && patients.length > 0 && (
+          {patientSearch && patients.length > 1 && (
             <div className="max-h-40 overflow-auto border rounded">
               {patients.map((p) => (
                 <div
                   key={p.id}
                   className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                  onClick={() => {
-                    setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
-                    setSelectedPatientId(p.id);
-                    setSelectedPatient(p);
-                    setPatients([]);
-                    setQuickCreateOpen(false);
-                    setAutoPromptedForSearch(false);
-                  }}
+                  onClick={() => choosePatient(p)}
                 >
                   {p.firstName} {p.lastName} — {p.phone}
                 </div>
@@ -627,20 +651,14 @@ export default function AppointmentsCalendar({
               <div className="flex items-center justify-between">
                 <span>No matching patients found.</span>
                 <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
-                  + Add "{patientSearch}" as a new patient
+                  New patient
                 </Button>
               </div>
             </div>
           )}
-          {patientSearch && !patients.length && !quickCreateOpen && !selectedPatientId && !searchingPatients && (
-            <div className="text-xs text-gray-500">
-              Tip: enter patient name and phone, then use "Add" to create a new record instantly.
-            </div>
-          )}
 
-          {/* Legend */}
+          {panel === 'legend' && (
           <div className="border rounded p-3 bg-gray-50">
-            <h3 className="font-semibold mb-2">Legend</h3>
             <ul className="mb-3 space-y-1 text-sm">
               {CALENDAR_ORDER.map((calendar) => (
                 <li key={calendar} className="flex items-start gap-2">
@@ -685,6 +703,7 @@ export default function AppointmentsCalendar({
               </div>
             </div>
           </div>
+          )}
 
           {!!bookingDetails && (
             <div 
@@ -703,12 +722,8 @@ export default function AppointmentsCalendar({
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <p className="font-medium">Appointment Successfully Booked!</p>
-                  <p style={{ color: '#16a34a' }}>
-                    {bookingDetails.patient?.name || `${selectedPatient?.firstName ?? ''} ${selectedPatient?.lastName ?? ''}`.trim()} 
-                    {' '} scheduled for {bookingDetails.slot} in the {CALENDARS[bookingDetails.calendar].title} calendar
-                    {bookingDetails.room && ` in ${bookingDetails.room.name}`}
-                    {bookingDetails.visitType && ` (${bookingDetails.visitType})`}
+                  <p className="font-medium">
+                    Booked: {bookingDetails.patient?.name || formatPatientName(selectedPatient)}, {displayCalendarDate(date)}, {bookingDetails.slot}
                   </p>
                 </div>
               </div>
@@ -733,6 +748,8 @@ export default function AppointmentsCalendar({
             optimisticAppointment={optimisticAppointment?.doctorId === doctorId && optimisticAppointment.date === date ? optimisticAppointment : undefined}
             onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
             disableSlotBooking={!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId}
+            selectedPatientId={selectedPatientId || undefined}
+            canStartVisit={canStartVisit}
             selectedRoomName={selectedRoom?.name}
             timeSlotConfig={{ ...slotConfig, stepMinutes: Math.max(10, gridMinutes) }}
             maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}

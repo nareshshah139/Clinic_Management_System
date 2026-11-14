@@ -55,6 +55,10 @@ export interface DoctorDayCalendarProps {
   onAppointmentUpdate?: () => void;
   timeSlotConfig?: TimeSlotConfig;
   disableSlotBooking?: boolean;
+  /** The patient being booked; when the doctor already sees them this day, a line above the calendar says so. */
+  selectedPatientId?: string;
+  /** True for a role the server lets start visits; a confirmed row then shows Start visit. */
+  canStartVisit?: boolean;
   selectedRoomName?: string;
   /** Patients the doctor may see in one slot of one calendar. 1 (the default) keeps every occupied tile closed. */
   maxBookingsPerSlot?: number;
@@ -128,6 +132,8 @@ function DoctorDayCalendarForSelection({
     timezone: 'Asia/Kolkata'
   },
   disableSlotBooking = false,
+  selectedPatientId,
+  canStartVisit = false,
   selectedRoomName,
   maxBookingsPerSlot = 1,
   move,
@@ -426,6 +432,7 @@ function DoctorDayCalendarForSelection({
     );
   }
 
+  const alreadyBooked = selectedPatientId ? schedule.filter((a) => a.patient?.id === selectedPatientId) : [];
   const selectedMove = selectedAppointment ? CALENDARS[selectedAppointment.calendar].move : null;
   const offersMove = !!selectedAppointment && selectedAppointment.status === selectedMove?.offeredWhile;
 
@@ -465,6 +472,11 @@ function DoctorDayCalendarForSelection({
                 </Button>
               </div>
             )}
+            {alreadyBooked.length > 0 && (
+              <div role="status" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                {formatPatientName(alreadyBooked[0].patient)} already has {alreadyBooked.map((a) => a.slot.split('-')[0]).join(', ')} on {displayCalendarDate(date)}
+              </div>
+            )}
             {showLoadingOverlay && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm transition-opacity duration-200">
                 <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
@@ -501,9 +513,11 @@ function DoctorDayCalendarForSelection({
                   maxBookingsPerSlot={maxBookingsPerSlot}
                   slotAction={slotActionFor(calendar)}
                   busy={showLoadingOverlay}
+                  canStartVisit={canStartVisit}
                   onOpen={setSelectedAppointment}
                   onReschedule={(appointment) => setMove({ appointment, from: date })}
                   onStartVisit={handleStartVisit}
+                  onMoveCalendar={(appointment, target) => void moveAtSameTime(appointment, target)}
                   onOpenBill={billAccess.read ? (appointment) => setBillForId(appointment.id) : undefined}
                   onBook={(slot) => onSelectSlot?.(slot, calendar)}
                   onMove={(slot) => void moveInto({ slot, calendar })}
@@ -524,7 +538,6 @@ function DoctorDayCalendarForSelection({
 
       <AppointmentBillDialog
         appointment={billFor}
-        date={date}
         access={billAccess}
         onClose={() => setBillForId(null)}
         onChanged={async () => {
