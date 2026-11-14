@@ -68,7 +68,7 @@ function helpers(page, seed) {
   const pages = {};
   const pageFor = async (who) => {
     if (pages[who]) return pages[who];
-    const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1.5, timezoneId: "Asia/Kolkata", locale: "en-IN" });
+    const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1.25, timezoneId: "Asia/Kolkata", locale: "en-IN" });
     await context.addInitScript((css) => {
       const add = () => document.head && document.head.appendChild(Object.assign(document.createElement("style"), { textContent: css }));
       if (document.head) add();
@@ -105,8 +105,8 @@ function helpers(page, seed) {
           await shot.run(page, h);
           await h.settle(shot.settle ?? 400);
           const element = shot.target ? (typeof shot.target === "string" ? page.locator(shot.target).first() : shot.target(page)) : null;
-          if (element) await element.screenshot({ path: target, type: "jpeg", quality: 88 });
-          else await page.screenshot({ path: target, type: "jpeg", quality: 88, fullPage: !!shot.fullPage });
+          if (element) await element.screenshot({ path: target, type: "jpeg", quality: 80 });
+          else await page.screenshot({ path: target, type: "jpeg", quality: 80, fullPage: !!shot.fullPage });
           taken += 1;
           console.log(`  ok   ${shot.file}`);
         } catch (error) {

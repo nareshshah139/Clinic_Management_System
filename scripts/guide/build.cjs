@@ -29,18 +29,20 @@ function figure(chapter, shot, number) {
 
 function renderSection(chapter, chapterNo, section, sectionNo, counter) {
   const id = `s-${chapterNo}-${sectionNo}`;
-  const parts = [`<section class="section"><h2 id="${id}"><span class="num">${chapterNo}.${sectionNo}</span> ${esc(section.title)}</h2>`];
+  const body = list(section.body);
+  const parts = [`<section class="section"><div class="keep"><h2 id="${id}"><span class="num">${chapterNo}.${sectionNo}</span> ${esc(section.title)}</h2>`];
   if (section.who) parts.push(`<p class="who"><span>Who uses this</span> ${esc(section.who)}</p>`);
-  for (const p of list(section.body)) parts.push(`<p>${esc(p)}</p>`);
+  if (body.length) parts.push(`<p>${esc(body[0])}</p>`);
+  parts.push("</div>");
+  for (const p of body.slice(1)) parts.push(`<p>${esc(p)}</p>`);
   if (list(section.steps).length) parts.push(`<ol class="steps">${list(section.steps).map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`);
   const shots = list(section.shots).filter((shot) => !shot.hidden);
   const figures = shots.map((shot) => figure(chapter, shot, `${chapterNo}.${++counter.n}`)).filter(Boolean);
   if (figures.length) parts.push(section.shotLayout === "row" ? `<div class="figure-row cols-${figures.length}">${figures.join("")}</div>` : figures.join(""));
-  if (list(section.fields).length)
+  const rows = list(section.fields).map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`);
+  if (rows.length)
     parts.push(
-      `<table class="fields"><thead><tr><th>${esc(section.fieldsHeading?.[0] || "On the screen")}</th><th>${esc(section.fieldsHeading?.[1] || "What it means")}</th></tr></thead><tbody>${list(section.fields)
-        .map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`)
-        .join("")}</tbody></table>`,
+      `<table class="fields"><tbody class="keep"><tr><th>${esc(section.fieldsHeading?.[0] || "On the screen")}</th><th>${esc(section.fieldsHeading?.[1] || "What it means")}</th></tr>${rows.slice(0, 2).join("")}</tbody><tbody>${rows.slice(2).join("")}</tbody></table>`,
     );
   for (const p of list(section.after)) parts.push(`<p>${esc(p)}</p>`);
   if (list(section.tips).length) parts.push(`<div class="callout tip"><div class="label">Tip</div>${list(section.tips).map((t) => `<p>${esc(t)}</p>`).join("")}</div>`);
@@ -70,9 +72,10 @@ a { color: inherit; text-decoration: none; }
 .cover .meta { margin-top: auto; font: 400 9.5pt Inter; color: #94a3b8; display: flex; justify-content: space-between; }
 .front { page: front; break-after: page; }
 .front h1 { font: 750 22pt "Inter Display", Inter; margin: 0 0 8mm; }
-.toc { list-style: none; margin: 0; padding: 0; }
-.toc li.ch { margin-top: 9pt; font-weight: 650; font-size: 10.5pt; }
-.toc li.sec { margin-left: 9mm; font-size: 9.5pt; color: #334155; }
+.toc { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 9mm; }
+.toc li { break-inside: avoid; }
+.toc li.ch { margin-top: 8pt; font-weight: 650; font-size: 9.5pt; }
+.toc li.sec { margin-left: 4mm; font-size: 8.5pt; color: #334155; }
 .toc a { display: flex; align-items: baseline; gap: 4pt; }
 .toc a .t { flex: 0 1 auto; }
 .toc a .dots { flex: 1; border-bottom: 1px dotted #94a3b8; transform: translateY(-3pt); }
@@ -103,7 +106,7 @@ table.fields th { text-align: left; font: 650 8pt Inter; text-transform: upperca
 table.fields td { border-bottom: 1px solid #e2e8f0; padding: 4.5pt 8pt 4.5pt 0; vertical-align: top; }
 table.fields td:first-child { width: 31%; font-weight: 600; }
 table.fields tr { break-inside: avoid; }
-table.fields thead { display: table-header-group; }
+.keep { break-inside: avoid; }
 .callout { border-left: 3px solid #0ea5e9; background: #f0f9ff; padding: 6pt 9pt; margin: 3mm 0 5mm; border-radius: 0 4px 4px 0; break-inside: avoid; font-size: 9.5pt; }
 .callout.warn { border-color: #f59e0b; background: #fffbeb; }
 .callout .label { font: 700 7.5pt Inter; text-transform: uppercase; letter-spacing: .08em; color: #0369a1; margin-bottom: 2pt; }
