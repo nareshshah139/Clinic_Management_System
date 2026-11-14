@@ -64,7 +64,7 @@ export default function PatientProgressTracker({ patientId, compact = false, var
         if (cancelled) return;
 
         if (appt.status === 'fulfilled') {
-          setNextAppointment((appt.value as unknown) as NextAppointmentResponse);
+          setNextAppointment(appt.value.appointment);
         } else {
           setNextAppointment(null);
         }

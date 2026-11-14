@@ -29,6 +29,7 @@ import { useToast } from '@/hooks/use-toast';
 import { DoctorSignatureSettings } from '@/components/users/DoctorSignatureSettings';
 import { DoctorLetterheadSettings } from '@/components/users/DoctorLetterheadSettings';
 import { DoctorAvailabilitySettings } from '@/components/users/DoctorAvailabilitySettings';
+import { LOW_STOCK_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
 import {
   buildTemplateSelectionValue,
   getSelectableWhatsAppTemplates,
@@ -210,7 +211,7 @@ export function Header() {
           id: `stock-${i.itemId}`,
           title: `Low stock: ${i.itemName}`,
           description: `Stock ${i.currentStock} • Reorder ${i.reorderLevel}`,
-          href: `/dashboard/inventory?tab=low-stock`,
+          href: LOW_STOCK_HREF,
           variant: 'destructive',
         }));
         const expItems: NotificationItem[] = (expiry || []).map((i: any) => ({
@@ -272,7 +273,7 @@ export function Header() {
             id: 'summary-stock',
             title: `${counts.lowStockAlerts} low-stock item${counts.lowStockAlerts === 1 ? '' : 's'}`,
             description: 'Restock inventory',
-            href: '/dashboard/inventory?tab=low-stock',
+            href: LOW_STOCK_HREF,
           });
         }
         if (counts.expiryAlerts > 0) {
@@ -288,7 +289,7 @@ export function Header() {
           summary.push({
             id: 'summary-appts',
             title: `${counts.upcomingAppointments} upcoming appointment${counts.upcomingAppointments === 1 ? '' : 's'}`,
-            description: 'Within 48 hours',
+            description: UPCOMING_DEFINITION,
             href: '/dashboard/appointments',
           });
         }

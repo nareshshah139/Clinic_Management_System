@@ -76,8 +76,16 @@ export class PatientsController {
   }
 
   @Get(':id/next-appointment')
-  getNextAppointment(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.patientsService.getNextAppointment(id, req.user.branchId);
+  async getNextAppointment(
+    @Param('id') id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return {
+      appointment: await this.patientsService.getNextAppointment(
+        id,
+        req.user.branchId,
+      ),
+    };
   }
 
   @Patch(':id')

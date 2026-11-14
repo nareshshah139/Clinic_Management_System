@@ -1,27 +1,56 @@
 'use client';
 
 import { LoadingSkeleton } from '@/components/ui/skeleton';
-import { EmptyState } from '@/components/ui/empty-state';
 import { Spinner } from '@/components/ui/spinner';
 import { PageHeader } from '@/components/ui/page-header';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Users, Package, TrendingUp, AlertTriangle, Clock, Database, Download } from 'lucide-react';
-import { apiClient, type ApiError } from '@/lib/api';
-import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
+import { Download } from 'lucide-react';
+import { apiClient } from '@/lib/api';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
-import { useRouter } from 'next/navigation';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { DoctorPatientPanels } from '@/components/dashboard/DoctorPatientPanels';
-import { formatPatientName, getISTDateString } from '@/lib/utils';
+import {
+  AttentionList, DashboardSection, DoctorQueue, Loaded, TodayByDoctor, useLoad,
+  type AttentionRow, type DayAppointment,
+} from '@/components/dashboard/ClinicDay';
+import { fmtMoney } from '@/components/inventory/workspace-model';
+import { getISTDateString } from '@/lib/utils';
 import { APPOINTMENT_READ_ROLES } from '@/lib/appointment-access';
+import { LOW_STOCK_DEFINITION, LOW_STOCK_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
 
-type LoadFailure = 'forbidden' | 'unavailable';
+type DashboardView = 'doctor' | 'pharmacist' | 'admin' | 'front-desk' | 'billing';
 
-const loadFailure = (error: unknown): LoadFailure =>
-  (error as ApiError)?.status === 403 ? 'forbidden' : 'unavailable';
+const viewFor = (role: string): DashboardView =>
+  role === 'DOCTOR' ? 'doctor'
+    : role === 'PHARMACIST' ? 'pharmacist'
+      : role === 'ADMIN' || role === 'OWNER' ? 'admin'
+        : APPOINTMENT_READ_ROLES.includes(role) ? 'front-desk'
+          : 'billing';
+
+const GUIDE: Record<DashboardView, string[]> = {
+  doctor: ['Your appointments today are listed in time order.', 'Click a row to start that visit, or to reopen it once started.'],
+  pharmacist: ['Each row counts one job and opens the matching list.', `Low stock means ${LOW_STOCK_DEFINITION}, the same count Inventory shows.`],
+  admin: ['Each row counts one job and opens the matching page.', `Upcoming appointments covers the ${UPCOMING_DEFINITION}.`, "Click a patient in today's list to open their record."],
+  'front-desk': ['Each row counts one job and opens the appointments page.', "Today's appointments are grouped by doctor. Click a patient to open their record."],
+  billing: ['Each row counts one job and opens the matching page.'],
+};
+
+const COLLECTION_HREF = '/dashboard/pharmacy/reports?report=daily-collection';
+const DUE_SALES = '/dashboard/pharmacy/sales?pay=CREDIT';
+const tomorrow = () => getISTDateString(new Date(Date.now() + 86_400_000));
+
+type AppointmentPage = { appointments?: DayAppointment[]; pagination?: { total?: number } };
+const todaysAppointments = async () => {
+  const res = await apiClient.getAppointments({ date: getISTDateString(), limit: 100, sortBy: 'slot', sortOrder: 'asc' }) as AppointmentPage;
+  return { appointments: res.appointments ?? [], total: res.pagination?.total ?? res.appointments?.length ?? 0 };
+};
+const countAppointments = async (date: string, status: string) =>
+  ((await apiClient.getAppointments({ date, status, limit: 1 })) as AppointmentPage).pagination?.total ?? 0;
+type Alerts = { counts: { overdueInvoices: number; pendingPayments: number; upcomingAppointments: number } };
+const collectedToday = async () =>
+  fmtMoney((await apiClient.get<{ headline: { value: number } }>('/pharmacy/reports/daily-collection', { from: getISTDateString(), to: getISTDateString() })).headline.value);
+const COLLECTED_NOTE = 'Clinic and pharmacy, every payment mode';
 
 /**
  * @cc [owner:nareshshah139,label:product] dashboard-clinic-day
@@ -39,436 +68,186 @@ const loadFailure = (error: unknown): LoadFailure =>
  * derived from the appointment's calendar date.
  */
 export default function DashboardPage() {
-  const [statistics, setStatistics] = useState<SystemStatistics | null>(null);
-  const [alerts, setAlerts] = useState<SystemAlert[]>([]);
-  const [todaysAppointments, setTodaysAppointments] = useState<Appointment[]>([]);
-  const [alertsFailure, setAlertsFailure] = useState<LoadFailure | null>(null);
-  const [appointmentsFailure, setAppointmentsFailure] = useState<LoadFailure | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [backupLoading, setBackupLoading] = useState(false);
-  const { user: currentUser, loading: userLoading } = useDashboardUser();
-  const readsAppointments = APPOINTMENT_READ_ROLES.includes(currentUser?.role ?? '');
-  const router = useRouter();
+  const { user, loading } = useDashboardUser();
 
-  const showAdminControls = useMemo(() => {
-    const role = currentUser?.role;
-    return role === 'ADMIN' || role === 'OWNER';
-  }, [currentUser?.role]);
-
-  const loadAlerts = useCallback(async () => {
-    try {
-      const alertsData = await apiClient.getSystemAlerts<any>();
-      const transformedAlerts: SystemAlert[] = [];
-
-      // Transform overdue invoices to alerts
-      if (alertsData.overdueInvoices && alertsData.overdueInvoices.length > 0) {
-        const count = alertsData.overdueInvoices.length;
-        transformedAlerts.push({
-          id: 'overdue-invoices-summary',
-          title: 'Overdue Invoices',
-          message: `${count} invoice${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} overdue. Total amount: ₹${alertsData.overdueInvoices.reduce((sum: number, inv: any) => sum + (inv.total || 0), 0).toFixed(2)}`,
-          severity: 'HIGH',
-          type: 'billing',
-          createdAt: alertsData.generatedAt || new Date().toISOString(),
-        });
-      }
-
-      // Transform low stock alerts
-      if (alertsData.lowStockAlerts && alertsData.lowStockAlerts.length > 0) {
-        const count = alertsData.lowStockAlerts.length;
-        transformedAlerts.push({
-          id: 'low-stock-summary',
-          title: 'Low Stock Alert',
-          message: `${count} item${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} below reorder level`,
-          severity: 'MEDIUM',
-          type: 'inventory',
-          createdAt: alertsData.generatedAt || new Date().toISOString(),
-        });
-      }
-
-      // Transform expiry alerts
-      if (alertsData.expiryAlerts && alertsData.expiryAlerts.length > 0) {
-        const count = alertsData.expiryAlerts.length;
-        const expiringSoon = alertsData.expiryAlerts.filter((a: any) => a.daysUntilExpiry <= 7).length;
-        transformedAlerts.push({
-          id: 'expiry-alerts-summary',
-          title: 'Expiring Items',
-          message: `${count} item${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} expiring within 30 days${expiringSoon > 0 ? ` (${expiringSoon} within 7 days)` : ''}`,
-          severity: expiringSoon > 0 ? 'HIGH' : 'MEDIUM',
-          type: 'inventory',
-          createdAt: alertsData.generatedAt || new Date().toISOString(),
-        });
-      }
-
-      // Transform pending payments
-      if (alertsData.pendingPayments && alertsData.pendingPayments.length > 0) {
-        const count = alertsData.pendingPayments.length;
-        transformedAlerts.push({
-          id: 'pending-payments-summary',
-          title: 'Pending Payments',
-          message: `${count} payment${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} pending reconciliation`,
-          severity: 'LOW',
-          type: 'billing',
-          createdAt: alertsData.generatedAt || new Date().toISOString(),
-        });
-      }
-
-      // Add system status alert (always present)
-      transformedAlerts.push({
-        id: 'system-status',
-        title: 'System Status',
-        message: 'All systems operational',
-        severity: 'LOW',
-        type: 'system',
-        createdAt: new Date().toISOString(),
-      });
-
-      setAlerts(transformedAlerts);
-      setAlertsFailure(null);
-    } catch (error: unknown) {
-      console.warn('Unable to load system alerts', error);
-      setAlerts([]);
-      setAlertsFailure(loadFailure(error));
-    }
-  }, []);
-
-  const loadTodaysAppointments = useCallback(async () => {
-    const todayDate = getISTDateString();
-    try {
-      let appointments: Appointment[];
-      if (currentUser?.role === 'DOCTOR' && currentUser?.id) {
-        const schedule = await apiClient.getDoctorSchedule(currentUser.id, todayDate);
-        appointments = schedule?.appointments ?? [];
-      } else {
-        const res: any = await apiClient.getAppointments({ date: todayDate, limit: 5, sortBy: 'slot', sortOrder: 'asc' });
-        appointments = res?.appointments || res?.data || [];
-      }
-      setTodaysAppointments(appointments);
-      setAppointmentsFailure(null);
-    } catch (error) {
-      console.error("Failed to load today's appointments", error);
-      setTodaysAppointments([]);
-      setAppointmentsFailure(loadFailure(error));
-    }
-  }, [currentUser?.id, currentUser?.role]);
-
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      if (userLoading) return;
-      try {
-        setLoading(true);
-        
-        // Fetch system statistics (ignore if unauthorized for role)
-        try {
-          const stats = await apiClient.getSystemStatistics();
-          setStatistics(stats as SystemStatistics);
-        } catch (error: unknown) {
-          setStatistics(null);
-          console.warn('Unable to load system statistics', error);
-        }
-
-        await Promise.all([loadAlerts(), readsAppointments ? loadTodaysAppointments() : undefined]);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        // Set fallback data on error
-        setStatistics({
-          users: { total: 0, active: 0 },
-          branches: { total: 0, active: 0 },
-          system: { status: 'error', version: '1.0.0', uptime: 0 },
-          generatedAt: new Date().toISOString(),
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void fetchDashboardData();
-  }, [loadAlerts, loadTodaysAppointments, readsAppointments, userLoading]);
-
-  const handleBackup = async () => {
-    try {
-      setBackupLoading(true);
-      const result = await apiClient.createDatabaseBackup();
-      
-      // Show success message
-      const backupInfo = (result as unknown as { backup: { timestamp: string; directory: string; size: number } }).backup;
-      alert(`✅ Database backup created successfully!\n\nTimestamp: ${backupInfo.timestamp}\nLocation: ${backupInfo.directory}\nSize: ${(backupInfo.size / 1024).toFixed(1)} KB\n\nBackup saved to local server directory.`);
-      
-    } catch (error: unknown) {
-      console.error('Backup failed:', error);
-      const message = (error as { message?: string })?.message || 'Backup creation failed';
-      alert(`❌ Backup Failed\n\n${message}`);
-    } finally {
-      setBackupLoading(false);
-    }
-  };
-
-  if (userLoading || loading) {
+  if (loading || !user) {
     return (
       <div className="space-y-6">
-        <div>
-          <PageHeader title="Dashboard" description="Welcome back! Here’s what’s happening at your clinic today." />
-        </div>
+        <PageHeader title="Dashboard" />
         <LoadingSkeleton variant="cards" label="Loading dashboard…" />
       </div>
     );
   }
 
-  const statCards = [
-    {
-      title: 'Total Users',
-      value: statistics?.users?.total || 0,
-      icon: Users,
-    },
-    {
-      title: 'Active Users',
-      value: statistics?.users?.active || 0,
-      icon: Users,
-    },
-    {
-      title: 'Total Branches',
-      value: statistics?.branches?.total || 0,
-      icon: Package,
-    },
-    {
-      title: 'System Status',
-      value: statistics?.system?.status || 'unknown',
-      icon: TrendingUp,
-    },
-  ];
-
+  const view = viewFor(user.role);
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <PageHeader title="Dashboard" description="Welcome back! Here’s what’s happening at your clinic today." actions={<><QuickGuide
-          title="Dashboard Guide"
-          sections={[
-            {
-              title: "Overview",
-              items: [
-                "View key metrics including total users, active users, and branches",
-                "Monitor system status and health at a glance",
-                "Check today's appointments and upcoming schedule"
-              ]
-            },
-            {
-              title: "System Alerts",
-              items: [
-                "Important notifications appear in the alerts section",
-                "Alerts are color-coded by severity (red=high, yellow=medium, blue=low)",
-                "Click on any alert to view more details"
-              ]
-            },
-            ...(showAdminControls ? [{
-              title: "Admin Controls",
-              items: [
-                "Create database backups from the admin controls section",
-                "Backups are stored locally on the server",
-                "Regular backups are recommended for data safety"
-              ]
-            }] : [])
-          ]}
-        /></>} />
-
-      {currentUser?.role === 'DOCTOR' && currentUser.id ? <DoctorPatientPanels doctorId={currentUser.id} /> : null}
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-tour="dashboard-stats">
-        {statCards.map((stat, index) => (
-          <Card key={index}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                  <p className="text-2xl font-semibold tabular-nums text-gray-900">{stat.value}</p>
-                </div>
-                <div className="rounded-md bg-primary-soft p-3">
-                  <stat.icon className="h-6 w-6 text-foreground" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Admin Controls */}
-      {showAdminControls ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Database className="h-5 w-5 text-purple-500 mr-2" />
-              Admin Controls
-            </CardTitle>
-            <CardDescription>
-              Administrative tools and system management
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <h4 className="font-medium text-gray-900">Database Backup</h4>
-                  <p className="text-sm text-gray-600">Create a complete backup of the database</p>
-                </div>
-                <Button 
-                  onClick={handleBackup} 
-                  disabled={backupLoading}
-                  className="flex items-center"
-                >
-                  {backupLoading ? (
-                    <>
-                      <Spinner className="  h-4 w-4   mr-2" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-4 w-4 mr-2" />
-                      Create Backup
-                    </>
-                  )}
-                </Button>
-              </div>
-              <div className="text-xs text-gray-500">
-                ⚠️ Backups are stored locally on the server and contain sensitive data.
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* System Alerts */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-orange-500 mr-2" />
-              System Alerts
-            </CardTitle>
-            <CardDescription>
-              Important notifications requiring your attention
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {alertsFailure ? (
-              <LoadFailureState failure={alertsFailure} subject="clinic alerts" onRetry={() => void loadAlerts()} />
-            ) : alerts.length === 0 ? (
-              <EmptyState icon={AlertTriangle} title="No alerts at this time" description="New clinic notifications will appear here." action={<Button variant="outline" onClick={() => window.location.reload()}>Refresh dashboard</Button>} />
-            ) : (
-              <div className="space-y-3">
-                {alerts.map((alert, index) => (
-                  <div
-                    key={index}
-                    className="flex items-start space-x-3 p-3 rounded-lg bg-gray-50"
-                  >
-                    <div className={`p-1 rounded-full ${
-                      alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                        ? 'bg-red-100'
-                        : alert.severity === 'MEDIUM' 
-                        ? 'bg-yellow-100'
-                        : 'bg-blue-100'
-                    }`}>
-                      <AlertTriangle className={`h-4 w-4 ${
-                        alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                          ? 'text-red-600'
-                          : alert.severity === 'MEDIUM' 
-                          ? 'text-yellow-600'
-                          : 'text-blue-600'
-                      }`} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{alert.title}</p>
-                      <p className="text-xs text-gray-600">{alert.message}</p>
-                    </div>
-                    <Badge variant={
-                      alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                        ? 'danger'
-                        : alert.severity === 'MEDIUM' 
-                        ? 'warning'
-                        : 'info'
-                    }>
-                      {alert.severity}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {readsAppointments && (
-          <Card data-tour="appointments-list">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Clock className="h-5 w-5 text-blue-500 mr-2" />
-                Today&apos;s Appointments
-              </CardTitle>
-              <CardDescription>
-                Upcoming appointments for today
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {appointmentsFailure ? (
-                <LoadFailureState failure={appointmentsFailure} subject="today's appointments" onRetry={() => void loadTodaysAppointments()} />
-              ) : todaysAppointments.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">No appointments scheduled for today</p>
-              ) : (
-                <div className="space-y-3">
-                  {todaysAppointments.map((appointment, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {formatPatientName(appointment.patient)}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {appointment.slot}
-                        </p>
-                      </div>
-                      <Badge variant={
-                        appointment.status === 'CONFIRMED' 
-                          ? 'default' 
-                          : appointment.status === 'IN_PROGRESS'
-                          ? 'warning'
-                          : appointment.status === 'COMPLETED'
-                          ? 'default'
-                          : 'outline'
-                      }>
-                        {appointment.status}
-                      </Badge>
-                    </div>
-                  ))}
-                  <Button
-                    variant="outline"
-                    className="w-full mt-4"
-                    onClick={() => router.push('/dashboard/appointments')}
-                  >
-                    View All Appointments
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        title="Dashboard"
+        description="What needs doing at the clinic today."
+        actions={<QuickGuide title="Dashboard Guide" sections={[{ title: 'Today', items: GUIDE[view] }]} />}
+      />
+      {view === 'doctor' && <DoctorDashboard doctorId={user.id} />}
+      {view === 'pharmacist' && <PharmacistDashboard />}
+      {view === 'admin' && <AdminDashboard />}
+      {view === 'front-desk' && <FrontDeskDashboard />}
+      {view === 'billing' && <BillingDashboard />}
     </div>
   );
 }
 
-function LoadFailureState({ failure, subject, onRetry }: { failure: LoadFailure; subject: string; onRetry: () => void }) {
+function DoctorDashboard({ doctorId }: { doctorId: string }) {
+  const load = useCallback(async () => (await apiClient.getDoctorSchedule(doctorId, getISTDateString()))?.appointments ?? [], [doctorId]);
+  const [queue, retry] = useLoad<DayAppointment[]>(load);
   return (
-    <div role="alert">
-      <EmptyState
-        icon={AlertTriangle}
-        title={`Couldn't load ${subject}`}
-        description={
-          failure === 'forbidden'
-            ? 'Your account does not have access to this yet. Ask an admin to check your role permissions.'
-            : 'This is not an empty list. Check your connection and try again.'
-        }
-        action={<Button variant="outline" onClick={onRetry}>Try again</Button>}
-      />
-    </div>
+    <>
+      <DashboardSection title="Your queue today" description="Click a patient to start the visit, or to reopen it.">
+        <Loaded state={queue} subject="today's appointments" retry={retry}>
+          {(appointments) => <DoctorQueue appointments={appointments} />}
+        </Loaded>
+      </DashboardSection>
+      <DoctorPatientPanels doctorId={doctorId} />
+    </>
+  );
+}
+
+function FrontDeskDashboard() {
+  const load = useCallback(async () => {
+    const [day, unconfirmedToday, unconfirmedTomorrow, checkedIn] = await Promise.all([
+      todaysAppointments(),
+      countAppointments(getISTDateString(), 'SCHEDULED'),
+      countAppointments(tomorrow(), 'SCHEDULED'),
+      countAppointments(getISTDateString(), 'CHECKED_IN'),
+    ]);
+    const rows: AttentionRow[] = [
+      { count: unconfirmedToday, label: "Today's bookings not yet confirmed", href: '/dashboard/appointments' },
+      { count: unconfirmedTomorrow, label: "Tomorrow's bookings to confirm", href: '/dashboard/appointments' },
+      { count: checkedIn, label: 'Checked in, waiting for the doctor', href: '/dashboard/appointments' },
+    ];
+    return { day, rows };
+  }, []);
+  const [state, retry] = useLoad(load);
+  return (
+    <Loaded state={state} subject="today's appointments" retry={retry}>
+      {({ day, rows }) => (
+        <>
+          <DashboardSection title="What needs attention" tour="dashboard-stats">
+            <AttentionList rows={rows} />
+          </DashboardSection>
+          <DashboardSection title="Today's appointments" description={`${day.total} booked, grouped by doctor.`} tour="appointments-list">
+            <TodayByDoctor appointments={day.appointments} total={day.total} />
+          </DashboardSection>
+        </>
+      )}
+    </Loaded>
+  );
+}
+
+function AdminDashboard() {
+  const load = useCallback(async () => {
+    const [day, noShows, alerts, collected] = await Promise.all([
+      todaysAppointments(),
+      countAppointments(getISTDateString(), 'NO_SHOW'),
+      apiClient.getSystemAlerts<Alerts>(),
+      collectedToday(),
+    ]);
+    const rows: AttentionRow[] = [
+      { count: day.total, label: 'Appointments today', href: '/dashboard/appointments' },
+      { count: alerts.counts.upcomingAppointments, label: 'Upcoming appointments', note: UPCOMING_DEFINITION, href: '/dashboard/appointments' },
+      { count: noShows, label: 'No-shows today', href: '/dashboard/appointments' },
+      { count: collected, label: 'Collected today', note: COLLECTED_NOTE, href: COLLECTION_HREF },
+    ];
+    return { day, rows };
+  }, []);
+  const [state, retry] = useLoad(load);
+  return (
+    <>
+      <Loaded state={state} subject="today's clinic figures" retry={retry}>
+        {({ day, rows }) => (
+          <>
+            <DashboardSection title="Clinic today">
+              <AttentionList rows={rows} />
+            </DashboardSection>
+            <DashboardSection title="Today's appointments" description={`${day.total} booked, grouped by doctor.`}>
+              <TodayByDoctor appointments={day.appointments} total={day.total} />
+            </DashboardSection>
+          </>
+        )}
+      </Loaded>
+      <DatabaseBackup />
+    </>
+  );
+}
+
+function PharmacistDashboard() {
+  const load = useCallback(async () => {
+    type Queue = { pagination: { total: number } };
+    type Overview = { lowStock: number; expiring: number; pendingEdits: number | null };
+    const [waiting, partial, overview] = await Promise.all([
+      apiClient.get<Queue>('/pharmacy/prescription-queue', { status: 'pending', limit: 1 }),
+      apiClient.get<Queue>('/pharmacy/prescription-queue', { status: 'partial', limit: 1 }),
+      apiClient.get<Overview>('/inventory/workspace/overview'),
+    ]);
+    const rows: AttentionRow[] = [
+      { count: waiting.pagination.total, label: 'Prescriptions waiting to dispense', href: '/dashboard/pharmacy?section=counter' },
+      { count: partial.pagination.total, label: 'Prescriptions partly dispensed', href: '/dashboard/pharmacy?section=counter' },
+      { count: overview.lowStock, label: 'Low stock', note: LOW_STOCK_DEFINITION, href: LOW_STOCK_HREF },
+      { count: overview.expiring, label: 'Expiring in the next 3 months', href: '/dashboard/inventory?area=stock&view=list&expiryMonths=3' },
+      ...(overview.pendingEdits != null
+        ? [{ count: overview.pendingEdits, label: 'Price/stock edits awaiting approval', href: '/dashboard/inventory?area=stock&view=approvals' }]
+        : []),
+    ];
+    return rows;
+  }, []);
+  const [state, retry] = useLoad(load);
+  return (
+    <DashboardSection title="Pharmacy queue" description="Each row opens the matching records.">
+      <Loaded state={state} subject="pharmacy counts" retry={retry}>
+        {(rows) => <AttentionList rows={rows} />}
+      </Loaded>
+    </DashboardSection>
+  );
+}
+
+function BillingDashboard() {
+  const load = useCallback(async () => {
+    const [alerts, collected] = await Promise.all([apiClient.getSystemAlerts<Alerts>(), collectedToday()]);
+    const rows: AttentionRow[] = [
+      { count: collected, label: 'Collected today', note: COLLECTED_NOTE, href: COLLECTION_HREF },
+      { count: alerts.counts.overdueInvoices, label: 'Overdue invoices', href: DUE_SALES },
+      { count: alerts.counts.pendingPayments, label: 'Payments awaiting reconciliation', href: DUE_SALES },
+    ];
+    return rows;
+  }, []);
+  const [state, retry] = useLoad(load);
+  return (
+    <DashboardSection title="Billing to follow up">
+      <Loaded state={state} subject="billing counts" retry={retry}>
+        {(rows) => <AttentionList rows={rows} />}
+      </Loaded>
+    </DashboardSection>
+  );
+}
+
+function DatabaseBackup() {
+  const [busy, setBusy] = useState(false);
+  const backup = async () => {
+    try {
+      setBusy(true);
+      const { backup: info } = (await apiClient.createDatabaseBackup()) as unknown as { backup: { timestamp: string; directory: string; size: number } };
+      alert(`Database backup created.\n\nTimestamp: ${info.timestamp}\nLocation: ${info.directory}\nSize: ${(info.size / 1024).toFixed(1)} KB`);
+    } catch (error: unknown) {
+      alert(`Backup failed.\n\n${(error as { message?: string })?.message || 'Backup creation failed'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <DashboardSection title="Database backup" description="The server keeps each backup, and it contains patient data.">
+      <Button variant="outline" onClick={backup} disabled={busy}>
+        {busy ? <Spinner className="mr-2 h-4 w-4" /> : <Download className="mr-2 h-4 w-4" />}
+        {busy ? 'Creating…' : 'Create backup'}
+      </Button>
+    </DashboardSection>
   );
 }

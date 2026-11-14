@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { billNumberLabel } from './bill-number';
+import { readLowStock } from '../inventory/inventory-stock-query';
 
 @Injectable()
 export class PharmacyService {
@@ -62,12 +63,11 @@ export class PharmacyService {
         monthInvoices,
         lastMonthInvoices,
         totalDrugs,
-        lowStockInventoryCount,
+        lowStock,
         expiredInventoryCount,
         packagesCount,
         topSellingDrugs,
         recentInvoices,
-        lowStockAlerts,
       ] = await Promise.all([
         // Today's invoices
         prisma.pharmacyInvoice.aggregate({
@@ -129,14 +129,7 @@ export class PharmacyService {
           where: { branchId, isActive: true, isDiscontinued: false },
         }),
 
-        // Low stock inventory items (LOW_STOCK or OUT_OF_STOCK)
-        prisma.inventoryItem.count({
-          where: {
-            branchId,
-            status: 'ACTIVE',
-            OR: [{ stockStatus: 'LOW_STOCK' }, { stockStatus: 'OUT_OF_STOCK' }],
-          },
-        }),
+        readLowStock(this.prisma, branchId, 4),
 
         // Expired inventory items
         prisma.inventoryItem.count({
@@ -200,28 +193,6 @@ export class PharmacyService {
           take: 5,
         }),
 
-        // Low stock alerts from real inventory records
-        prisma.inventoryItem.findMany({
-          where: {
-            branchId,
-            status: 'ACTIVE',
-            stockStatus: {
-              in: ['LOW_STOCK', 'OUT_OF_STOCK'],
-            },
-          },
-          include: {
-            drugs: {
-              select: {
-                id: true,
-                name: true,
-                manufacturerName: true,
-              },
-              take: 1,
-            },
-          },
-          orderBy: [{ currentStock: 'asc' }, { updatedAt: 'desc' }],
-          take: 4,
-        }),
       ]);
 
       // Get drug details for top selling
@@ -273,7 +244,7 @@ export class PharmacyService {
         completedInvoices: monthInvoices._count,
         pendingInvoices: 0,
         totalDrugs,
-        lowStockDrugs: lowStockInventoryCount,
+        lowStockDrugs: lowStock.total,
         expiredDrugs: expiredInventoryCount,
         packagesCount,
         topSellingDrugs: topSellingWithDetails,
@@ -285,7 +256,7 @@ export class PharmacyService {
           status: invoice.status,
           createdAt: invoice.createdAt.toISOString(),
         })),
-        lowStockAlerts: (lowStockAlerts as any[]).map((item: any) =>
+        lowStockAlerts: lowStock.items.map((item) =>
           this.mapInventoryAlert(item),
         ),
       };
@@ -514,49 +485,36 @@ export class PharmacyService {
         },
       };
 
-      const [lowStockAlerts, expiredDrugs, nearExpiryDrugs] = await Promise.all(
-        [
-          prisma.inventoryItem.findMany({
-            where: {
-              branchId,
-              status: 'ACTIVE',
-              stockStatus: {
-                in: ['LOW_STOCK', 'OUT_OF_STOCK'],
-              },
+      const [lowStock, expiredDrugs, nearExpiryDrugs] = await Promise.all([
+        readLowStock(this.prisma, branchId, 10),
+        prisma.inventoryItem.findMany({
+          where: {
+            branchId,
+            status: 'ACTIVE',
+            OR: [{ stockStatus: 'EXPIRED' }, { expiryDate: { lt: now } }],
+          },
+          include: inventoryInclude,
+          orderBy: [{ expiryDate: 'asc' }, { updatedAt: 'desc' }],
+          take: 10,
+        }),
+        prisma.inventoryItem.findMany({
+          where: {
+            branchId,
+            status: 'ACTIVE',
+            currentStock: { gt: 0 },
+            expiryDate: {
+              gte: now,
+              lte: ninetyDaysFromNow,
             },
-            include: inventoryInclude,
-            orderBy: [{ currentStock: 'asc' }, { updatedAt: 'desc' }],
-            take: 10,
-          }),
-          prisma.inventoryItem.findMany({
-            where: {
-              branchId,
-              status: 'ACTIVE',
-              OR: [{ stockStatus: 'EXPIRED' }, { expiryDate: { lt: now } }],
-            },
-            include: inventoryInclude,
-            orderBy: [{ expiryDate: 'asc' }, { updatedAt: 'desc' }],
-            take: 10,
-          }),
-          prisma.inventoryItem.findMany({
-            where: {
-              branchId,
-              status: 'ACTIVE',
-              currentStock: { gt: 0 },
-              expiryDate: {
-                gte: now,
-                lte: ninetyDaysFromNow,
-              },
-            },
-            include: inventoryInclude,
-            orderBy: [{ expiryDate: 'asc' }, { updatedAt: 'desc' }],
-            take: 10,
-          }),
-        ],
-      );
+          },
+          include: inventoryInclude,
+          orderBy: [{ expiryDate: 'asc' }, { updatedAt: 'desc' }],
+          take: 10,
+        }),
+      ]);
 
       return {
-        lowStock: (lowStockAlerts as any[]).map((item: any) =>
+        lowStock: lowStock.items.map((item) =>
           this.mapInventoryAlert(item),
         ),
         expired: (expiredDrugs as any[]).map((item: any) =>

@@ -5,6 +5,8 @@ import { addDays, clinicDay, clinicDayOf, clinicInstants } from '../pharmacy/reg
 import { reportRange, type ReportRange } from './report-range';
 import { Prisma } from '@prisma/client';
 import { viewerGrants } from '../../shared/access/viewer-grants';
+import { isLowStock, readLowStock } from '../inventory/inventory-stock-query';
+import { readUpcomingAppointments } from '../appointments/upcoming-appointments';
 import {
   RevenueReportResponseDto,
   PaymentBreakdownDto,
@@ -633,7 +635,7 @@ export class ReportsService {
     const items = await this.prisma.inventoryItem.findMany({ where: whereItem });
     const totalItems = items.length;
     const totalValue = items.reduce((s, it) => s + (it.currentStock || 0) * (it.sellingPrice || 0), 0);
-    const lowStockItems = items.filter((i) => i.minStockLevel != null && i.currentStock <= (i.minStockLevel || 0)).length;
+    const lowStockItems = items.filter(isLowStock).length;
     const expiredItems = items.filter((i) => i.expiryDate && i.expiryDate < new Date()).length;
     const outOfStockItems = items.filter((i) => (i.currentStock || 0) <= 0).length;
 
@@ -682,8 +684,8 @@ export class ReportsService {
 
     const lowStockAlerts: LowStockAlertDto[] = includeLowStock
       ? items
-          .filter((i) => i.minStockLevel != null && i.currentStock <= (i.minStockLevel || 0))
-          .map((i) => ({ itemId: i.id, itemName: i.name, currentStock: i.currentStock, reorderLevel: i.minStockLevel || 0, daysUntilStockout: -1 }))
+          .filter(isLowStock)
+          .map((i) => ({ itemId: i.id, itemName: i.name, currentStock: i.currentStock, reorderLevel: i.minStockLevel ?? i.reorderLevel ?? 0, daysUntilStockout: -1 }))
       : [];
 
     const expiryAlerts: ExpiryAlertDto[] = includeExpired
@@ -853,7 +855,7 @@ export class ReportsService {
       this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: today }, _sum: { amount: true } }),
       this.prisma.patient.count({ where: { branchId, createdAt: today } }),
       this.prisma.appointment.groupBy({ by: ['doctorId'], where: { branchId, date: today }, _count: { doctorId: true } }),
-      this.prisma.inventoryItem.count({ where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] } }),
+      readLowStock(this.prisma, branchId, 1).then((low) => low.total),
       this.prisma.newPayment.count({ where: { invoice: { branchId }, reconStatus: 'PENDING' } }),
       this.prisma.appointment.findMany({ where: { branchId }, orderBy: { date: 'desc' }, take: 10, select: { id: true, date: true, status: true, visitType: true, patient: { select: { name: true } }, doctor: { select: { firstName: true, lastName: true } } } }),
       this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: lastSevenDays }, _sum: { amount: true }, _count: { _all: true } }),
@@ -1139,7 +1141,6 @@ export class ReportsService {
     };
     const now = new Date();
     const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    const in48Hours = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
     const [overdueInvoices, lowStockAlerts, expiryAlerts, pendingPaymentsList, upcomingAppointments] = await Promise.all([
       !sees.invoices ? [] : this.prisma.newInvoice.findMany({
@@ -1148,12 +1149,7 @@ export class ReportsService {
         orderBy: { dueDate: 'asc' },
         take: 10,
       }),
-      !sees.lowStock ? [] : this.prisma.inventoryItem.findMany({
-        where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] },
-        select: { id: true, name: true, currentStock: true, minStockLevel: true },
-        orderBy: { currentStock: 'asc' },
-        take: 10,
-      }),
+      !sees.lowStock ? { total: 0, items: [] } : readLowStock(this.prisma, branchId, 10),
       !sees.expiry ? [] : this.prisma.inventoryItem.findMany({
         where: { branchId, expiryDate: { gt: now, lt: in30Days } },
         select: { id: true, name: true, expiryDate: true, currentStock: true },
@@ -1169,35 +1165,26 @@ export class ReportsService {
         orderBy: { createdAt: 'desc' },
         take: 10,
       }),
-      !sees.appointments ? [] : this.prisma.appointment.findMany({
-        where: { branchId, date: { gt: now, lt: in48Hours }, status: { notIn: ['CANCELLED'] } },
-        select: { 
-          id: true, 
-          date: true, 
-          status: true, 
-          visitType: true, 
-          patient: { select: { id: true, name: true } }, 
-          doctor: { select: { id: true, firstName: true, lastName: true } } 
-        },
-        orderBy: { date: 'asc' },
-        take: 10,
+      !sees.appointments ? { total: 0, rows: [] } : readUpcomingAppointments(this.prisma, { branchId }, 10, {
+        patient: { select: { id: true, name: true } },
+        doctor: { select: { id: true, firstName: true, lastName: true } },
       }),
     ]);
 
     return {
       counts: {
         overdueInvoices: overdueInvoices.length,
-        lowStockAlerts: lowStockAlerts.length,
+        lowStockAlerts: lowStockAlerts.total,
         expiryAlerts: expiryAlerts.length,
         pendingPayments: pendingPaymentsList.length,
-        upcomingAppointments: upcomingAppointments.length,
+        upcomingAppointments: upcomingAppointments.total,
       },
       overdueInvoices,
-      lowStockAlerts: lowStockAlerts.map((i) => ({
+      lowStockAlerts: lowStockAlerts.items.map((i) => ({
         itemId: i.id,
         itemName: i.name,
         currentStock: i.currentStock,
-        reorderLevel: (i as any).minStockLevel || 0,
+        reorderLevel: i.minStockLevel ?? i.reorderLevel ?? 0,
       })),
       expiryAlerts: expiryAlerts.map((i) => ({
         itemId: i.id,
@@ -1207,9 +1194,10 @@ export class ReportsService {
         currentStock: i.currentStock,
       })),
       pendingPayments: pendingPaymentsList,
-      upcomingAppointments: upcomingAppointments.map((a) => ({
+      upcomingAppointments: upcomingAppointments.rows.map((a) => ({
         id: a.id,
         time: a.date,
+        slot: a.slot,
         status: a.status,
         visitType: a.visitType,
         patientName: (a as any).patient?.name || 'Patient',

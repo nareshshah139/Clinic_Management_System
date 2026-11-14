@@ -32,6 +32,7 @@ import { apiClient } from '@/lib/api';
 import { paymentModeLabel } from '@/lib/clinic-payment-modes';
 import { addDays } from '@/lib/date-ranges';
 import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
+import { LOW_STOCK_DEFINITION, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
 
 type ReportType = 'revenue' | 'patients' | 'doctors' | 'appointments' | 'inventory' | 'payments';
 type ExportFormat = 'JSON' | 'CSV' | 'PDF' | 'EXCEL';
@@ -870,6 +871,7 @@ export default function ReportsPage() {
                 <p className="text-2xl font-bold text-red-600">
                   {data.lowStockItems || 0}
                 </p>
+                <p className="text-xs text-muted-foreground">{LOW_STOCK_DEFINITION}</p>
               </div>
             </CardContent>
           </Card>
@@ -1177,6 +1179,7 @@ export default function ReportsPage() {
               <div className="text-center">
                 <p className="text-red-600">Low Stock</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.lowStockAlerts}</p>
+                <p className="text-xs text-muted-foreground">{LOW_STOCK_DEFINITION}</p>
               </div>
               <div className="text-center">
                 <p className="text-yellow-600">Expiry Alerts</p>
@@ -1189,6 +1192,7 @@ export default function ReportsPage() {
               <div className="text-center">
                 <p className="text-green-600">Upcoming Appointments</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.upcomingAppointments}</p>
+                <p className="text-xs text-muted-foreground">{UPCOMING_DEFINITION}</p>
               </div>
             </div>
           </CardContent>

@@ -19,6 +19,8 @@ import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { Calendar, Users, ArrowLeft } from 'lucide-react';
 
+type NextAppointment = { date: string; slot: string; doctor?: { firstName?: string; lastName?: string } | null };
+
 type VisitEntry = Record<string, unknown> & {
   id?: string;
   createdAt?: string | Date;
@@ -35,6 +37,7 @@ export default function PatientDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [patient, setPatient] = useState<Record<string, any> | null>(null);
+  const [nextAppointment, setNextAppointment] = useState<NextAppointment | null | undefined>(undefined);
   const { entries: visits, loading: historyLoading, error: historyError, refresh } = usePatientHistory(id);
   const [doctorFilter, setDoctorFilter] = useState<string>('ALL');
   const [fromDate, setFromDate] = useState<string>('');
@@ -46,8 +49,12 @@ export default function PatientDetailsPage() {
       try {
         setLoading(true);
         setError(null);
-        const p = await apiClient.getPatient(id);
+        const [p, next] = await Promise.all([
+          apiClient.getPatient(id),
+          apiClient.getPatientNextAppointment(id).catch(() => undefined),
+        ]);
         setPatient(p as any);
+        setNextAppointment(next?.appointment);
       } catch (e: any) {
         setError(e?.message || 'Failed to load patient');
       } finally {
@@ -116,13 +123,11 @@ export default function PatientDetailsPage() {
   const lastVisit = sortedVisits.find(v => v.entryType !== 'appointment');
   const lastVisitDate = lastVisit ? new Date(`${encounterDay(lastVisit)}T12:00:00`) : null;
 
-  const nextAppointmentLabel = (() => {
-    const upcoming = patient?.nextAppointment as any;
-    if (upcoming?.date && upcoming?.slot) {
-      return `${displayUtcDate(String(upcoming.date))} @ ${upcoming.slot}`;
-    }
-    return 'Not scheduled';
-  })();
+  const nextAppointmentLabel = nextAppointment === undefined
+    ? 'Could not load'
+    : nextAppointment
+      ? `${displayUtcDate(nextAppointment.date)} @ ${nextAppointment.slot}${nextAppointment.doctor ? ` with Dr. ${`${nextAppointment.doctor.firstName ?? ''} ${nextAppointment.doctor.lastName ?? ''}`.trim()}` : ''}`
+      : 'Not scheduled';
 
   const getPrimaryDiagnosis = (entry: VisitEntry): string | undefined => {
     const d = entry.diagnosis;
