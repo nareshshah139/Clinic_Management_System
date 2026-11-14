@@ -1362,8 +1362,7 @@ export function DoctorTour({ autoStart = false }: DoctorTourProps) {
       data-tour="help-button"
     >
       <HelpCircle className="h-4 w-4" />
-      <span className="hidden sm:inline">Visit Workflow Tour</span>
-      <span className="sm:hidden">Tour</span>
+      Tour
     </Button>
   );
 }

@@ -48,7 +48,7 @@ it('preserves a duration the doctor entered before selecting a medicine', async 
   fireEvent.change(within(row).getByPlaceholderText('#'), { target: { value: '3' } });
   await select(row);
   expect(within(row).getByPlaceholderText('#')).toHaveValue(3);
-  expect(within(row).getByText('WEEKS')).toBeInTheDocument();
+  expect(within(row).getByText('weeks')).toBeInTheDocument();
 });
 
 const usual = { duration: 10, durationUnit: 'DAYS', frequency: 'TWICE_DAILY', dosePattern: '1-0-1', timing: 'AM/PM', instructions: 'on the rash' };
@@ -137,7 +137,7 @@ it('preserves all four pre-existing values, including custom units, when choosin
   const row = await mount({ duration: 3, durationUnit: 'WEEKS', frequency: 'ONCE_DAILY', dosePattern: '0-0-1', timing: 'PM', instructions: 'doctor instructions' });
   await select(row);
   expect(within(row).getByPlaceholderText('#')).toHaveValue(3);
-  expect(within(row).getByText('WEEKS')).toBeInTheDocument();
+  expect(within(row).getByText('weeks')).toBeInTheDocument();
   expect(within(row).getByText('0-0-1')).toBeInTheDocument();
   expect(within(row).getByText('PM')).toBeInTheDocument();
   expect(within(row).getByPlaceholderText('e.g., Avoid alcohol')).toHaveValue('doctor instructions');

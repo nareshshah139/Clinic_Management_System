@@ -148,3 +148,18 @@ describe('template editor', () => {
     expect(saved.items[1].instructions).toBe(LONG);
   });
 });
+
+it('asks before clearing the prescription, and keeps every medicine when the doctor cancels', async () => {
+  await mount([medicine('Amoxicillin'), medicine('Cetirizine')]);
+  const openMenu = async () => {
+    fireEvent.keyDown(await screen.findByRole('button', { name: 'More prescription actions' }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Clear prescription…' }));
+    return screen.findByRole('alertdialog', { name: 'Clear this prescription?' });
+  };
+  expect(screen.queryByRole('button', { name: 'Reset to default' })).not.toBeInTheDocument();
+  fireEvent.click(within(await openMenu()).getByRole('button', { name: 'Cancel' }));
+  expect(names().filter(Boolean)).toEqual(['Amoxicillin', 'Cetirizine']);
+  fireEvent.click(within(await openMenu()).getByRole('button', { name: 'Clear prescription' }));
+  await waitFor(() => expect(screen.queryByDisplayValue('Amoxicillin')).not.toBeInTheDocument());
+  expect(screen.queryByDisplayValue('Cetirizine')).not.toBeInTheDocument();
+});

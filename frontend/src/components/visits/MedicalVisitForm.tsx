@@ -1,50 +1,42 @@
 'use client';
 
-import { displayCalendarDate, displayClinicTime } from '@/lib/date-display';
+import { displayClinicTime } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, printBackgroundKey, savedPrintBackground } from '@/lib/prescription-letterhead';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Mic, 
   MicOff,
   Save, 
-  FileText, 
-  User, 
-  Clock, 
-  Stethoscope, 
-  Activity, 
   Heart, 
   Thermometer, 
   Scale, 
   Gauge,
   Plus,
-  X,
   Check,
   AlertCircle,
-  Calendar,
   MapPin,
   Phone,
   Mail,
   FileImage,
   Trash2,
-  Eye,
   Download,
   Edit,
   Copy,
   CheckCircle,
   XCircle,
   Printer,
-  Camera,
   Upload,
   History,
   Image,
@@ -53,25 +45,47 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  Circle,
+  CheckCircle2,
+  MoreHorizontal
 } from 'lucide-react';
 import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import { apiClient } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { compactClinicalPatch, mergeClinicalPatch, useClinicalState, acknowledgedVisitVersion } from '@/lib/clinical-patch';
-import { usePatientHistory } from './usePatientHistory';
-import { encounterTime, encounterDay } from '@/lib/patient-history';
+import { usePatientHistory, loadPatientHistory as fetchPatientHistory, visitEntries } from './usePatientHistory';
+import { encounterTime } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
-import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
-import VisitPhotos from '@/components/visits/VisitPhotos';
-import { DoctorTour } from '@/components/tours/DoctorTour';
+import PrescriptionBuilder, { type ConsultationSummary } from '@/components/visits/PrescriptionBuilder';
+import { COMPLETION_RULE, canCompleteVisit, completionSteps } from '@/lib/visit-completion';
+import type VisitPhotosPanel from '@/components/visits/VisitPhotos';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
-import { calculateAge, getErrorMessage } from '@/lib/utils';
+import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { isUuid } from '@/lib/id';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
+
+const VisitPhotos = dynamic<ComponentProps<typeof VisitPhotosPanel>>(() => import('@/components/visits/VisitPhotos'), {
+  ssr: false,
+  loading: () => <p className="py-6 text-sm text-muted-foreground" role="status">Loading photos…</p>,
+});
+const DoctorTour = dynamic(() => import('@/components/tours/DoctorTour').then((module) => module.DoctorTour), { ssr: false });
+
+const CONSULTATION_SECTIONS = [
+  { id: 'clinical', label: 'Vitals' },
+  { id: 'chief-complaints', label: 'Complaints' },
+  { id: 'diagnosis', label: 'Diagnosis' },
+  { id: 'treatment', label: 'Treatment' },
+  { id: 'investigations', label: 'Investigations' },
+  { id: 'basic', label: 'Follow-up' },
+] as const;
+
+const EMPTY_CONSULTATION: ConsultationSummary = { complaint: false, diagnosis: false, plan: false, medicines: 0, vitals: false };
+
+type VisitContextPatient = { id: string; allergies?: string | null; medicalHistory?: string | null };
 
 interface Props {
   patientId: string;
@@ -79,12 +93,16 @@ interface Props {
   doctorName?: string;
   userRole?: string;
   visitNumber?: number;
-  patientName?: string;
   visitDate?: string; // ISO string; falls back to today if not provided
   appointmentId?: string;
   appointmentData?: { patient?: VisitPatientSummary } | null;
   initialVisitId?: string;
   onVisitIdChange?: (visitId: string | null) => void;
+  identity?: ReactNode;
+  doctorControl?: ReactNode;
+  visitActions?: ReactNode;
+  patient?: VisitContextPatient | null;
+  doctorRecord?: { id?: string; metadata?: unknown } | null;
 }
 
 interface PatientHistory {
@@ -112,6 +130,11 @@ type VitalsState = {
 type SimpleLabValue = { value?: string; unit?: string };
 type CompositeLabValue = Record<string, SimpleLabValue>;
 type LabResultsMap = Record<string, SimpleLabValue | CompositeLabValue>;
+const hasLabValue = (entry: unknown): boolean => {
+  if (!entry || typeof entry !== 'object') return false;
+  if ('value' in entry) return String((entry as SimpleLabValue).value ?? '').trim() !== '';
+  return Object.values(entry).some(hasLabValue);
+};
 
 type MedicalVisitDraftState = {
   dirtyClinicalFields?: string[];
@@ -144,8 +167,6 @@ type MedicalVisitDraftState = {
   systemics: string;
   counseling: string;
   reviewDate: string;
-  activeTab: string;
-  completedSections: string[];
   visitStatus: VisitStatus | 'draft';
 };
 
@@ -215,11 +236,7 @@ const ROLE_PERMISSIONS = {
  * New visits default to In-person. Tele-video saves and exports MUST be blocked
  * until consent is checked; visit recovery MUST restore the consultation choice.
  */
-/**
- * @cc [owner:nareshshah139,label:product] completion-progress-explanation
- * When completion is unavailable because progress is below 80%, the form identifies unfinished tracked sections and states that progress is not a clinical validation.
- */
-function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, onVisitIdChange, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
+function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, visitDate, appointmentId, appointmentData, initialVisitId, onVisitIdChange, identity, doctorControl, visitActions, patient, doctorRecord, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
   const automaticSaveBlocked = useRef(false);
@@ -258,9 +275,16 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
   const [visitStatus, setVisitStatus] = useState<VisitStatus | 'draft'>('draft');
   
-  // Form sections state
-  const [activeTab, setActiveTab] = useState('overview');
-  const [completedSections, setCompletedSections] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState(() => {
+    const permissions: string[] = ROLE_PERMISSIONS[userRole as keyof typeof ROLE_PERMISSIONS] || [];
+    if (permissions.includes('all')) return 'consultation';
+    return ['vitals', 'photos'].find((tab) => permissions.includes(tab)) ?? 'history';
+  });
+  const [consultation, setConsultation] = useState<ConsultationSummary>(EMPTY_CONSULTATION);
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(null);
+  const receiveConsultationSummary = useCallback((next: ConsultationSummary) => {
+    setConsultation((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
+  }, []);
   
   // Basic info (Therapist/Nurse level - 20-25%)
   const [vitals, setVitals, hydrateVitals] = useClinicalState<VitalsState>({ ...INITIAL_VITALS }, 'vitals', dirtyClinicalFields);
@@ -292,10 +316,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const [counseling, setCounseling, hydrateCounseling] = useClinicalState<string>('', 'counseling', dirtyClinicalFields);
   const [reviewDate, setReviewDate, hydrateReviewDate] = useClinicalState<string>('', 'reviewDate', dirtyClinicalFields);
   
-  // Lab Tests (Investigations)
-  const investigationOptions: string[] = useMemo(() => (
-    ['CBC','ESR','CRP','LFT','Fasting lipid profile','RFT','Creatinine','FBS','Fasting Insulin','HbA1c','RBS','CUE','Stool examination','Total Testosterone','S. Prolactin','Vitamin B12','Vitamin D','Ferritin','TSH','Thyroid profile','HIV-I,II','HbS Ag','Anti HCV','VDRL','RPR','TPHA','TB Gold Quantiferon Test','Montoux Test','Chest Xray PA view','2D Echo','Skin Biopsy']
-  ), []);
   const [labSelections, setLabSelections, hydrateLabSelections] = useClinicalState<string[]>([], 'labSelections', dirtyClinicalFields);
   const [labResults, setLabResults, hydrateLabResults] = useClinicalState<LabResultsMap>({}, 'labResults', dirtyClinicalFields);
   const [labsAutofillLoading, setLabsAutofillLoading] = useState(false);
@@ -356,14 +376,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     const loadPrev = async () => {
       try {
         if (!patientId) return;
-        const resp = await apiClient.getAllPatientVisitHistory<any>(patientId);
-        const list = Array.isArray(resp)
-          ? resp
-          : Array.isArray((resp as any)?.visits)
-            ? (resp as any).visits
-            : Array.isArray((resp as any)?.data)
-              ? (resp as any).data
-              : [];
+        const list: any[] = visitEntries(await fetchPatientHistory(patientId));
         // When resuming an older visit, compare with its predecessor, not a future visit.
         const currentIndex = list.findIndex((entry: any) => entry.id === visitId);
         const prev = list[currentIndex < 0 ? 0 : currentIndex + 1];
@@ -519,13 +532,13 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     let cancelled = false;
     (async () => {
       try {
-        const u = await apiClient.get(`/users/${encodeURIComponent(doctorId)}`) as any;
+        const u = (doctorRecord?.id === doctorId ? doctorRecord : await apiClient.get(`/users/${encodeURIComponent(doctorId)}`)) as any;
         const p = (u && (u.metadata || u?.user?.metadata)?.rxPrintProfile) || u?.rxPrintProfile;
         if (!cancelled && p) applyDoctorPrintLayout(p);
       } catch {}
     })();
     return () => { cancelled = true; };
-  }, [doctorId, applyDoctorPrintLayout]);
+  }, [doctorId, doctorRecord, applyDoctorPrintLayout]);
 
   // The background override is kept per doctor so one doctor's choice never prints on another's prescriptions.
   const { letterhead: doctorLetterhead, loading: doctorLetterheadLoading } = useDoctorLetterhead(doctorId);
@@ -560,7 +573,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   useEffect(() => { try { localStorage.setItem('rx_frames_enabled', framesEnabled ? '1' : '0'); } catch {} }, [framesEnabled]);
   useEffect(() => { try { localStorage.setItem('rx_header_mm', String(headerHeightMm)); } catch {} }, [headerHeightMm]);
   useEffect(() => { try { localStorage.setItem('rx_footer_mm', String(footerHeightMm)); } catch {} }, [footerHeightMm]);
-  const [builderRefreshKey, setBuilderRefreshKey] = useState(0);
   const [rxIncludeSections, setRxIncludeSections] = useState<Record<string, boolean>>({
     patientInfo: true,
     diagnosis: true,
@@ -668,17 +680,13 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     systemics,
     counseling,
     reviewDate,
-    activeTab,
-    completedSections: Array.from(completedSections),
     visitStatus,
   }), [
     prescriptionClinical,
     labSelections,
     labResults,
-    activeTab,
     assessment,
     complaints,
-    completedSections,
     counseling,
     dermDx,
     distribution,
@@ -746,8 +754,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     hydrateSystemics(draft.systemics || '', draft.dirtyClinicalFields ?? 'populated');
     hydrateCounseling(draft.counseling || '', draft.dirtyClinicalFields ?? 'populated');
     hydrateReviewDate(draft.reviewDate || '', draft.dirtyClinicalFields ?? 'populated');
-    setActiveTab(draft.activeTab || 'overview');
-    setCompletedSections(new Set(draft.completedSections || []));
 
   }, [receiveClinicalData]);
 
@@ -798,11 +804,19 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     return permissions.includes('all') || permissions.includes(section);
   }, [userRole]);
 
-  // Calculate overall progress (moved up to avoid TDZ issues)
-  const getProgress = useCallback(() => {
-    const totalSections = hasPermission('all') ? 5 : 3; // Doctor vs Therapist/Nurse (Treatment tab removed)
-    return Math.round((completedSections.size / totalSections) * 100);
-  }, [completedSections.size, hasPermission]);
+  const labsRecorded = Object.values(labResults).some(hasLabValue);
+  const formVitalsRecorded = Object.values(vitals).some((value) => value !== '');
+  const steps = useMemo(() => completionSteps({
+    complaint: consultation.complaint || complaints.some((complaint) => complaint.trim()),
+    diagnosis: consultation.diagnosis || dermDx.size > 0,
+    plan: consultation.plan || Boolean(plan.trim() || topicals.trim() || systemics.trim()),
+    prescription: consultation.medicines > 0,
+    vitals: consultation.vitals || formVitalsRecorded,
+    photos: photoCount > 0,
+    labs: labsRecorded,
+  }), [consultation, complaints, dermDx, plan, topicals, systemics, formVitalsRecorded, photoCount, labsRecorded]);
+  const canComplete = canCompleteVisit(steps);
+  const recordedSections = useMemo(() => steps.filter((step) => step.done).map((step) => step.key), [steps]);
 
   /**
    * @cc [owner:nareshshah139,label:product] dirty-clinical-save
@@ -851,7 +865,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         oxygenSaturation: field('vitals.spo2', number(vitals.spo2)),
         temperature: field('vitals.temp', vitals.temp === '' ? null : (Number(vitals.temp) - 32) * 5 / 9),
       },
-      metadata: { capturedBy: userRole, sections: Array.from(completedSections), progress: getProgress() },
+      metadata: { capturedBy: userRole, sections: recordedSections },
     });
     const merged = mergeClinicalPatch(payload, prescriptionClinicalRef.current);
     if (payload.vitals) merged.vitals = { ...merged.vitals, ...payload.vitals };
@@ -860,7 +874,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       merged.teleVideoConsent = teleVideoConsent;
     }
     return merged;
-  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
+  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, recordedSections, userRole, vitals, objective, visitId]);
 
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
@@ -1251,8 +1265,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     systemics,
     counseling,
     reviewDate,
-    activeTab,
-    completedSections,
     visitStatus,
   ]);
 
@@ -1298,10 +1310,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [persistDraftToStorage]);
-  // Patient context sidebar
-  const [showPatientContext, setShowPatientContext] = useState(true);
-  const [patientDetails, setPatientDetails] = useState<VisitPatientSummary | null>(null);
-  const [recentVisits, setRecentVisits] = useState<VisitSummary[]>([]);
+  const patientDetails: VisitContextPatient | null = patient ?? appointmentData?.patient ?? null;
 
   
   
@@ -1370,42 +1379,16 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
   
 
-  // Load visit number and patient history
-  const loadPatientContext = useCallback(async () => {
-    if (!patientId) {
-      return;
-    }
 
-    try {
-      const [patient, visits] = await Promise.all([
-        apiClient.getPatient(patientId),
-        apiClient.getPatientVisitHistory<VisitSummary[] | { visits?: VisitSummary[]; data?: VisitSummary[] }>(patientId, { limit: 3 })
-      ]);
-
-      const visitList = Array.isArray(visits)
-        ? visits
-        : visits?.visits || visits?.data || [];
-
-      setPatientDetails(patient as VisitPatientSummary);
-      setRecentVisits(visitList as VisitSummary[]);
-    } catch (error) {
-      console.error('Failed to load patient context:', error);
-      if (appointmentData && 'patient' in appointmentData && appointmentData.patient) {
-        setPatientDetails(appointmentData.patient as VisitPatientSummary);
-      }
-    }
-  }, [appointmentData, patientId]);
-
-  const loadPatientHistory = useCallback(async () => {
+  const loadPatientHistory = useCallback(async (fresh = false) => {
     if (!patientId) {
       return;
     }
 
     try {
       setLoadingHistory(true);
-      const response = await apiClient.getAllPatientVisitHistory<VisitSummary>(patientId);
-      const responseDataArray = response;
-      const historyEntries = (responseDataArray as VisitSummary[]).slice().sort((a, b) => {
+      const response = visitEntries(await fetchPatientHistory(patientId, fresh ? performance.now() : undefined)) as VisitSummary[];
+      const historyEntries = response.slice().sort((a, b) => {
         const at = encounterTime(a);
         const bt = encounterTime(b);
         return bt - at;
@@ -1418,6 +1401,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         setCurrentVisitNumber(historyEntries.length + 1);
       } else {
         const current = historyEntries.find((v: any) => v && v.id === visitId);
+        if (current && typeof (current as any).photos === 'number') {
+          setPhotoCount((count) => count || (current as any).photos);
+        }
         if (current) {
           const scribe = parseJsonValue<Record<string, unknown>>(current.scribeJson);
           const fromScribe = scribe && typeof (scribe as any).visitNumber !== 'undefined' ? Number((scribe as any).visitNumber) : undefined;
@@ -1439,99 +1425,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
   useEffect(() => {
     void loadPatientHistory();
-    void loadPatientContext();
-  }, [loadPatientContext, loadPatientHistory]);
+  }, [loadPatientHistory]);
 
-  // Section completion tracking
-  const markSectionComplete = useCallback((section: string) => {
-    setCompletedSections(prev => new Set([...prev, section]));
-  }, []);
-
-  const isSectionComplete = (section: string) => {
-    return completedSections.has(section);
-  };
-
-  // Check if at least 4 key sections are filled for draft readiness indicator
-  // PrescriptionBuilder has its own state, so we check its localStorage draft
-  const [draftCheckTrigger, setDraftCheckTrigger] = useState(0);
-  
-  const isReadyForDraft = useMemo(() => {
-    let filledSectionsCount = 0;
-    
-    // Check PrescriptionBuilder's draft data from localStorage
-    try {
-      const rxDraftKey = `rxDraft:${patientId}:${visitId || 'standalone'}`;
-      const rxDraftData = localStorage.getItem(rxDraftKey);
-      if (rxDraftData) {
-        const draft = JSON.parse(rxDraftData);
-        
-        // 1. Chief complaints
-        if (draft.chiefComplaints && draft.chiefComplaints.trim()) {
-          filledSectionsCount++;
-          console.log('✓ Chief complaints filled');
-        }
-        
-        // 2. Diagnosis
-        if (draft.diagnosis && draft.diagnosis.trim()) {
-          filledSectionsCount++;
-          console.log('✓ Diagnosis filled');
-        }
-        
-        // 3. Clinical details (histories, examination, etc.)
-        const hasClinicalDetails = draft.pastHistory || draft.personalHistory || draft.medicationHistory ||
-                                   draft.menstrualHistory || draft.exObjective || 
-                                   draft.procedurePlanned;
-        if (hasClinicalDetails) {
-          filledSectionsCount++;
-          console.log('✓ Clinical details filled');
-        }
-        
-        // 4. Vitals (any vital filled)
-        const hasVitals = draft.vitalsHeightCm || draft.vitalsWeightKg || 
-                         draft.vitalsBpSys || draft.vitalsBpDia || 
-                         draft.vitalsPulse;
-        if (hasVitals) {
-          filledSectionsCount++;
-          console.log('✓ Vitals filled');
-        }
-        
-        // 5. Treatment (medications prescribed)
-        if (draft.items && Array.isArray(draft.items) && draft.items.length > 0) {
-          filledSectionsCount++;
-          console.log('✓ Treatment/medications filled');
-        }
-      }
-    } catch (e) {
-      console.error('Failed to check prescription draft:', e);
-    }
-    
-    const isReady = filledSectionsCount >= 4;
-    console.log(`📊 Draft readiness: ${filledSectionsCount}/5 sections filled - ${isReady ? '✅ READY' : '❌ NOT READY'}`);
-    return isReady;
-  }, [patientId, visitId, draftCheckTrigger]);
-
-  // Poll localStorage for prescription draft changes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDraftCheckTrigger(prev => prev + 1);
-    }, 2000); // Check every 2 seconds
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  // Automatically mark Photos section as complete when photos are uploaded
-  useEffect(() => {
-    if (photoCount > 0) {
-      markSectionComplete('photos');
-    } else {
-      // Remove photos from completed sections if all photos are deleted
-      setCompletedSections(prev => {
-        const next = new Set(prev);
-        next.delete('photos');
-        return next;
-      });
-    }
-  }, [photoCount]);
 
   const save = async (complete = false, requireLatest = false) => {
     if (manualSaveInFlight.current) return;
@@ -1556,13 +1451,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         });
         return;
       }
-      const progress = getProgress();
-      if (progress < 80) {
-        toast({
-          variant: 'warning',
-          title: 'More details needed to complete',
-          description: 'Fill vitals, complaints, diagnosis, and prescription to reach at least 80% before completing.',
-        });
+      if (!canComplete) {
+        toast({ variant: 'warning', title: 'Not ready to complete', description: COMPLETION_RULE });
         return;
       }
     }
@@ -1637,7 +1527,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       setSaveStatus(newerChanges ? 'unsaved' : 'saved');
       setLastSavedAt(Date.now());
 
-      void loadPatientHistory();
+      void loadPatientHistory(true);
       return (visit as VisitDetails).id;
     } catch (e) {
       console.error('Save failed:', e);
@@ -1681,146 +1571,251 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     }
   };
 
-  // Render tabs based on user role
-  const renderTabs = () => {
-    const tabs = [
-      { id: 'overview', label: 'Overview', icon: Eye, always: true },
-    ];
+  const tabs = hasPermission('all')
+    ? [
+        { id: 'consultation', label: 'Consultation' },
+        { id: 'photos', label: 'Photos' },
+        { id: 'history', label: 'History' },
+        { id: 'customization', label: 'Print setup' },
+      ]
+    : [
+        ...(hasPermission('vitals') ? [{ id: 'vitals', label: 'Vitals' }] : []),
+        ...(hasPermission('photos') ? [{ id: 'photos', label: 'Photos' }] : []),
+        { id: 'history', label: 'History' },
+      ];
 
-    if (hasPermission('vitals') || hasPermission('all')) {
-      tabs.push({ id: 'vitals', label: 'Vitals', icon: Stethoscope, always: false });
+
+  const labTemplate = (test: string): SimpleLabValue | CompositeLabValue => {
+    const subs = COMPOSITE_TESTS[test];
+    if (!subs) return { value: '', unit: SIMPLE_TEST_UNITS[test] || '' };
+    return Object.fromEntries(Object.entries(subs).map(([sub, unit]) => [sub, { value: '', unit }]));
+  };
+  const editLabResult = (test: string, update: (entry: any) => SimpleLabValue | CompositeLabValue) => {
+    if (!labSelections.includes(test)) setLabSelections((prev) => [...prev, test]);
+    setLabResults((prev) => ({ ...prev, [test]: update(prev[test] ?? labTemplate(test)) }));
+  };
+  const labDelta = (current: unknown, previous: unknown) => {
+    const currentNumber = Number(String(current ?? ''));
+    const previousNumber = Number(String(previous ?? ''));
+    if (String(current ?? '') === '' || String(previous ?? '') === '' || Number.isNaN(currentNumber) || Number.isNaN(previousNumber)) return '—';
+    const delta = currentNumber - previousNumber;
+    return `Δ ${delta >= 0 ? '+' : ''}${delta}`;
+  };
+  const autofillLabs = async (file: File) => {
+    try {
+      setLabsAutofillLoading(true);
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/visits/labs/autofill', { method: 'POST', body: fd, credentials: 'include' });
+      if (res.status === 401) handleUnauthorizedRedirect(res);
+      if (!res.ok) {
+        let t = '';
+        try { t = await res.text(); } catch {}
+        throw new Error(`AI autofill failed: ${res.status} ${t}`);
+      }
+      const data = await res.json();
+      const labs = (data?.labs as any) || {};
+      setLabSelections((prev) => Array.from(new Set([...prev, ...Object.keys(labs)])));
+      setLabResults((prev) => ({ ...prev, ...labs }));
+      toast({ variant: 'success', title: 'Autofill complete', description: 'Extracted results inserted.' });
+    } catch (err) {
+      console.error(err);
+      toast({ variant: 'warning', title: 'Autofill failed', description: getErrorMessage(err) || 'Try another file.' });
+    } finally {
+      setLabsAutofillLoading(false);
     }
-
-    if (hasPermission('photos') || hasPermission('all')) {
-      tabs.push({ id: 'photos', label: 'Photos', icon: Camera, always: false });
-    }
-
-    // Assessment tab removed; moved into Prescription's Chief Complaints
-
-    if (hasPermission('all')) {
-      tabs.push({ id: 'prescription', label: 'Prescription', icon: FileText, always: false });
-      tabs.push({ id: 'labs', label: 'Lab Tests', icon: Activity, always: false });
-      tabs.push({ id: 'customization', label: 'Customization', icon: FileText, always: false });
-    }
-
-    tabs.push({ id: 'history', label: 'History', icon: History, always: true });
-
-    // On Examination is now part of Prescription tab UI
-
-    return tabs;
+  };
+  const renderLabResults = (ordered: string[]) => {
+    const tests = Array.from(new Set([...ordered, ...labSelections]));
+    return (
+      <div className="space-y-3 border-t pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-foreground">Lab results</h3>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input type="checkbox" checked={compareLabs} onChange={(e) => setCompareLabs(e.target.checked)} />
+            Compare with previous visit
+          </label>
+        </div>
+        {tests.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Tick a test above to record its result here, or read results from a report.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {tests.map((test) => {
+              const entry: any = labResults[test] ?? labTemplate(test);
+              const composite = !('value' in entry) && !('unit' in entry);
+              const rows: Array<[string | null, any, any]> = composite
+                ? Object.keys(entry).map((sub) => [sub, entry[sub], (prevLabResults[test] as any)?.[sub]])
+                : [[null, entry, prevLabResults[test]]];
+              return (
+                <div key={test} className="rounded-md border p-3">
+                  <div className="mb-2 text-sm font-semibold">{test}</div>
+                  <div className="space-y-2">
+                    {rows.map(([sub, row, previous]) => {
+                      const name = sub ? `${test} ${sub}` : test;
+                      const write = (field: 'value' | 'unit', value: string) => editLabResult(test, (current) => {
+                        if (!sub) return { value: current?.value ?? '', unit: current?.unit ?? '', [field]: value };
+                        return { ...current, [sub]: { value: current?.[sub]?.value ?? '', unit: current?.[sub]?.unit ?? '', [field]: value } };
+                      });
+                      return (
+                        <div key={name} className="flex items-center gap-2">
+                          {sub && <span className="w-28 text-xs">{sub}</span>}
+                          <Input aria-label={`${name} result`} placeholder="Value" value={row?.value ?? ''} onChange={(e) => write('value', e.target.value)} />
+                          <Input aria-label={`${name} unit`} placeholder="Unit" value={row?.unit ?? ''} onChange={(e) => write('unit', e.target.value)} />
+                          {compareLabs && <span className="text-xs text-muted-foreground">{labDelta(row?.value, previous?.value)}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <label htmlFor="visit-lab-report" className="text-muted-foreground">Read results from a report (JPG, PNG or PDF)</label>
+          <input
+            id="visit-lab-report"
+            type="file"
+            className="max-w-full"
+            accept="image/*,application/pdf"
+            disabled={labsAutofillLoading}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void autofillLabs(file);
+            }}
+          />
+          {labsAutofillLoading && <span role="status" className="text-xs text-muted-foreground">Reading report…</span>}
+        </div>
+      </div>
+    );
   };
 
+  const vitalsExtra = (
+    <>
+      <div>
+        <label htmlFor="visit-vitals-temp" className="text-xs text-muted-foreground">Temp (°F)</label>
+        <Input id="visit-vitals-temp" type="number" inputMode="decimal" value={vitals.temp} onChange={(e) => setVitals({ ...vitals, temp: e.target.value })} />
+      </div>
+      <div>
+        <label htmlFor="visit-vitals-rr" className="text-xs text-muted-foreground">Resp. (/min)</label>
+        <Input id="visit-vitals-rr" type="number" value={vitals.rr} onChange={(e) => setVitals({ ...vitals, rr: e.target.value })} />
+      </div>
+      <div>
+        <label htmlFor="visit-pain-score" className="text-xs text-muted-foreground">Pain (0–10)</label>
+        <Input id="visit-pain-score" type="number" min={0} max={10} value={painScore} onChange={(e) => setPainScore(e.target.value)} />
+      </div>
+    </>
+  );
+
+  const jumpToSection = (id: string) => {
+    const target = document.getElementById(`consult-${id}`);
+    if (!target) return;
+    target.scrollIntoView({ block: 'start' });
+    target.querySelector<HTMLElement>('input, textarea, button, [tabindex]')?.focus({ preventScroll: true });
+  };
+  const requiredSteps = steps.filter((step) => step.required);
+  const optionalSteps = steps.filter((step) => !step.required);
+  const stepItem = (step: (typeof steps)[number]) => (
+    <li key={step.key} className={`inline-flex items-center gap-1 ${step.done ? 'text-success-text' : step.required ? 'text-foreground' : 'text-muted-foreground'}`}>
+      {step.done ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> : <Circle className="h-3.5 w-3.5" aria-hidden="true" />}
+      {step.label}
+      <span className="sr-only">{step.done ? ' recorded' : ' not recorded'}</span>
+    </li>
+  );
+
   return (
-    <div className="flex min-w-0 flex-col gap-6 xl:flex-row">
-      {/* Patient Context Sidebar */}
-      {showPatientContext && (
-        <div className="w-full shrink-0 space-y-4 xl:w-80">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Patient Context</CardTitle>
-                <Button variant="ghost" size="sm" aria-label="Hide patient context" onClick={() => setShowPatientContext(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {patientDetails && (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{patientDetails.name}</span>
-                    <Badge variant="outline" className="max-w-full break-all whitespace-normal text-xs">ID: {patientId}</Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Age: {calculateAge(patientDetails) ?? 'N/A'} • {patientDetails.gender || 'N/A'}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Phone: {patientDetails.phone || 'N/A'}
-                  </div>
-                  {patientDetails.allergies && (
-                    <div className="p-2 bg-destructive-soft border border-destructive-border rounded-md">
-                      <div className="flex items-center gap-1 text-xs font-medium text-destructive-text"><AlertTriangle className="size-3.5" aria-hidden="true" /> Allergies</div>
-                      <div className="text-sm text-destructive-text">{patientDetails.allergies}</div>
-                    </div>
-                  )}
-                  {patientDetails.medicalHistory && (
-                    <div className="p-2 bg-info-soft border border-info-border rounded-md">
-                      <div className="text-xs font-medium text-info-text">Medical History</div>
-                      <div className="text-sm text-info-text">{patientDetails.medicalHistory}</div>
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {!patientDetails && patientId && (
-                <div className="p-3 bg-warning-soft border border-warning-border rounded-md">
-                  <div className="text-xs font-medium text-warning-text">Loading patient</div>
-                  <div className="text-sm text-warning-text">
-                    Loading patient data for ID: {patientId}
-                    {patientName && <div className="mt-1">Name: {patientName}</div>}
-                  </div>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    className="mt-2"
-                    onClick={loadPatientContext}
-                  >
-                    Retry Loading
-                  </Button>
-                </div>
-              )}
-              
-              {!patientDetails && !patientId && (
-                <div className="p-3 bg-muted border border-border rounded-md">
-                  <div className="text-xs font-medium text-muted-foreground">No Patient Selected</div>
-                  <div className="text-sm text-muted-foreground">
-                    Patient context will appear when a patient is selected
-                  </div>
-                </div>
-              )}
-              
-              {recentVisits.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Recent Visits</div>
-                  {recentVisits.slice(0, 2).map((visit, index) => {
-                    const displayDate = displayCalendarDate(encounterDay(visit), 'Unknown date');
-                    const diagnoses = Array.isArray(visit.diagnosis)
-                      ? visit.diagnosis
-                      : [];
-                    const diagnosesList = diagnoses
-                      .map((dx: any) => (typeof dx === 'string' ? dx : dx?.diagnosis))
-                      .filter(Boolean)
-                      .slice(0, 2)
-                      .join(', ');
-                    return (
-                    <div key={visit.id || index} className="p-2 bg-muted rounded-md text-xs">
-                        <div className="font-medium">
-                          {displayDate}
-                        </div>
-                        <div className="text-muted-foreground">
-                          {diagnosesList || 'No diagnosis'}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+    <div className="min-w-0 space-y-4">
+      <div data-visit-bar className="sticky -top-4 z-30 -mx-4 space-y-1.5 border-b bg-background px-4 py-1.5 md:-top-6 md:-mx-6 md:px-6">
+        <div className="flex items-center justify-between gap-x-4">
+          <div className="flex min-w-0 flex-1 items-center gap-x-3">
+            {identity}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-xs text-muted-foreground" role="status" aria-live="polite">
+              {saveStatus === 'saving' && 'Saving…'}
+              {saveStatus === 'autosaving' && 'Auto-saving…'}
+              {saveStatus === 'unsaved' && 'Unsaved changes'}
+              {saveStatus === 'saved' && (lastSavedAt ? `Saved ${displayClinicTime(new Date(lastSavedAt))}` : 'Saved')}
+              {saveStatus === 'error' && <span className="text-destructive-text">Save failed</span>}
+            </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" aria-label="More visit actions"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setShortcutsOpen(true)}>
+                  <Keyboard className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Keyboard shortcuts
+                </DropdownMenuItem>
+                {visitActions}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="outline" size="sm" onClick={() => void save(false)} disabled={saving}>
+              {saving ? 'Saving...' : 'Save Draft'}
+            </Button>
+            {hasPermission('all') && (
+              <Button size="sm" onClick={() => void save(true)} disabled={saving || !canComplete} aria-describedby={!canComplete ? 'visit-completion-help' : undefined}>
+                {saving ? 'Completing...' : 'Complete Visit'}
+              </Button>
+            )}
+          </div>
         </div>
-      )}
-      
-      {/* Main Content */}
-      <div className={`min-w-0 flex-1 space-y-6 ${showPatientContext ? '' : 'max-w-none'}`}>
-        {!showPatientContext && (
-          <Button variant="outline" size="sm" onClick={() => setShowPatientContext(true)} className="mb-4">
-            <User className="h-4 w-4 mr-2" />
-            Show Patient Context
-          </Button>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {doctorControl}
+          <div className="flex items-center gap-2">
+            <label htmlFor="visit-consultation-type" className="text-sm font-medium">Consultation type</label>
+            <select id="visit-consultation-type" className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              value={consultationType || 'IN_PERSON'} onChange={event => {
+                setConsultationType(event.target.value as ConsultationType);
+                setTeleVideoConsent(false);
+              }}>
+              <option value="IN_PERSON">In-person</option>
+              <option value="TELE_VIDEO">Tele-video</option>
+            </select>
+          </div>
+          {patientDetails?.allergies && (
+            <span className="inline-flex max-w-xs items-center gap-1 truncate rounded-md border border-destructive-border bg-destructive-soft px-2 py-1 text-xs font-medium text-destructive-text" title={patientDetails.allergies}>
+              <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">Allergies: {patientDetails.allergies}</span>
+            </span>
+          )}
+          {patientDetails?.medicalHistory && (
+            <span className="max-w-xs truncate text-xs text-muted-foreground" title={patientDetails.medicalHistory}>History: {patientDetails.medicalHistory}</span>
+          )}
+          <div className="ml-auto flex items-center gap-3">
+            <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              Visit #{currentVisitNumber}
+              <StatusBadge domain="visit" status={visitStatus} />
+            </span>
+            <DoctorTour autoStart={false} />
+          </div>
+        </div>
+        {hasPermission('all') && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <ol aria-label="Needed to complete" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {requiredSteps.map(stepItem)}
+            </ol>
+            <span className="text-muted-foreground">Optional:</span>
+            <ul aria-label="Optional" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {optionalSteps.map(stepItem)}
+            </ul>
+            {!canComplete && <p id="visit-completion-help" className="text-muted-foreground">{COMPLETION_RULE}</p>}
+          </div>
         )}
-        
-        
+        {consultationType === 'TELE_VIDEO' && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <label className="flex items-center gap-2 font-medium">
+              <input type="checkbox" className="h-4 w-4" checked={teleVideoConsent}
+                required aria-describedby="tele-video-consent-help" onChange={event => setTeleVideoConsent(event.target.checked)} />
+              Patient consented to tele-video consultation
+            </label>
+            <span id="tele-video-consent-help" className={consentMissing ? 'text-destructive' : 'text-muted-foreground'}>
+              {consentMissing ? TELE_VIDEO_CONSENT_REQUIRED : 'Consent will be recorded with your account and the save time.'}
+            </span>
+          </div>
+        )}
+      </div>
 
       {saveConflict && (
         <div role="alert" className="space-y-3 rounded-md border border-warning-border bg-warning-soft p-4 text-warning-text">
@@ -1831,76 +1826,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           </Button>
         </div>
       )}
-
-      {/* Visit Header */}
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-              <CardTitle className="flex flex-wrap items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Visit #{currentVisitNumber}
-                <StatusBadge domain="visit" status={visitStatus} />
-                {appointmentData && (
-                  <Badge variant="secondary" className="bg-info-soft text-info-text">
-                    <Calendar className="h-3 w-3 mr-1" />
-                    Linked to Appointment
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription>
-                Medical Visit Documentation • Role: {userRole} • Progress: {getProgress()}%
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{photoCount} Photos</Badge>
-              <div className="w-20 bg-muted rounded-full h-2">
-                <div 
-                  className="bg-info h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${getProgress()}%` }}
-                />
-              </div>
-            <div className="text-xs text-muted-foreground min-w-[120px] text-right">
-              {saveStatus === 'saving' && 'Saving…'}
-              {saveStatus === 'autosaving' && 'Auto-saving…'}
-              {saveStatus === 'unsaved' && 'Unsaved changes'}
-              {saveStatus === 'saved' && (lastSavedAt ? `Saved ${displayClinicTime(new Date(lastSavedAt))}` : 'Saved')}
-              {saveStatus === 'error' && <span className="text-destructive-text">Save failed</span>}
-            </div>
-              <DoctorTour autoStart={false} />
-              <Button variant="outline" size="sm" onClick={() => setShortcutsOpen(true)}>
-                <Keyboard className="h-4 w-4 mr-2" />
-                Shortcuts
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3 pt-0">
-          <div className="max-w-xs space-y-1.5">
-            <label htmlFor="visit-consultation-type" className="text-sm font-medium">Consultation type</label>
-            <select id="visit-consultation-type" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={consultationType || 'IN_PERSON'} onChange={event => {
-                setConsultationType(event.target.value as ConsultationType);
-                setTeleVideoConsent(false);
-              }}>
-              <option value="IN_PERSON">In-person</option>
-              <option value="TELE_VIDEO">Tele-video</option>
-            </select>
-          </div>
-          {consultationType === 'TELE_VIDEO' && (
-            <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-              <label className="flex items-start gap-2 text-sm font-medium">
-                <input type="checkbox" className="mt-0.5 h-4 w-4" checked={teleVideoConsent}
-                  required aria-describedby="tele-video-consent-help" onChange={event => setTeleVideoConsent(event.target.checked)} />
-                Patient consented to tele-video consultation
-              </label>
-              <p id="tele-video-consent-help" className={`text-sm ${consentMissing ? 'text-destructive' : 'text-muted-foreground'}`}>
-                {consentMissing ? TELE_VIDEO_CONSENT_REQUIRED : 'Consent will be recorded with your account and the save time.'}
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
         <DialogContent className="max-w-md">
@@ -1933,124 +1858,18 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         </DialogContent>
       </Dialog>
 
-      {/* Main Form */}
-      <Card>
-        <CardContent className="p-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6 flex flex-wrap gap-2">
-              {renderTabs().map(tab => {
-                const IconComponent = tab.icon;
-                const showIndicator = tab.id === 'prescription' 
-                  ? isReadyForDraft 
-                  : isSectionComplete(tab.id);
-                return (
-                  <TabsTrigger 
-                    key={tab.id} 
-                    value={tab.id}
-                    className="flex items-center gap-2 relative"
-                  >
-                    <IconComponent className="h-4 w-4" />
-                    {tab.label}
-                    {showIndicator && (
-                      <div 
-                        className={`w-2 h-2 bg-success rounded-full ${tab.id === 'prescription' ? 'animate-pulse' : ''}`}
-                        title={tab.id === 'prescription' ? 'At least 4 key sections filled' : 'Section complete'}
-                      />
-                    )}
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-4" forceMount>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Visit Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Visit Number:</span>
-                      <Badge variant="outline">#{currentVisitNumber}</Badge>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Status:</span>
-                      <StatusBadge domain="visit" status={visitStatus} />
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Photos Captured:</span>
-                      <span className="text-sm font-medium">0</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Captured By:</span>
-                      <span className="text-sm font-medium">{userRole}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Progress Summary</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                  <div className="space-y-2">
-                    {renderTabs().filter(tab => tab.id !== 'overview' && tab.id !== 'history').map(tab => (
-                        <div key={tab.id} className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">{tab.label}:</span>
-                          <div className="flex items-center gap-2">
-                            {isSectionComplete(tab.id) ? (
-                              <Badge variant="default" className="text-xs">Complete</Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-xs">Pending</Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="pt-2 border-t">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">Overall Progress:</span>
-                        <span className="text-sm font-bold text-info-text">{getProgress()}%</span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2 mt-1">
-                        <div 
-                          className="bg-info h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${getProgress()}%` }}
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Quick Actions */}
-    <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Quick Actions</CardTitle>
-      </CardHeader>
-      <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {hasPermission('vitals') && (
-                      <Button variant="outline" onClick={() => setActiveTab('vitals')}>
-                        <Stethoscope className="h-4 w-4 mr-2" />
-                        Record Vitals
-                      </Button>
-                    )}
-                    {hasPermission('photos') && (
-                      <Button variant="outline" onClick={() => setActiveTab('photos')}>
-                        <Camera className="h-4 w-4 mr-2" />
-                        Capture Photos
-                      </Button>
-                    )}
-                    {/* On Examination is now inside Prescription tab */}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <TabsList className="flex flex-wrap gap-1">
+            {tabs.map(tab => (
+              <TabsTrigger key={tab.id} value={tab.id}>{tab.label}</TabsTrigger>
+            ))}
+          </TabsList>
+          <div ref={setToolbarTarget} className={activeTab === 'consultation' ? 'flex flex-wrap items-center gap-2' : 'hidden'} />
+        </div>
 
             {/* Vitals Tab */}
-            {(hasPermission('vitals') || hasPermission('all')) && (
+            {!hasPermission('all') && hasPermission('vitals') && (
               <TabsContent value="vitals" className="space-y-4" forceMount>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
@@ -2140,186 +1959,126 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                 </div>
 
                 <div className="flex justify-end">
-                  <Button onClick={async () => { const saved = await save(false); if (saved) markSectionComplete('vitals'); setBuilderRefreshKey((k) => k + 1); }}>
-                    Mark Vitals Complete
+                  <Button onClick={() => void save(false)} disabled={saving}>
+                    Save vitals
                   </Button>
                 </div>
               </TabsContent>
             )}
 
-            {/* Lab Tests Tab - Reception + Doctor */}
-            {(hasPermission('all') || hasPermission('basic-info')) && (
-              <TabsContent value="labs" className="space-y-4" forceMount>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Lab Tests (Investigations)</CardTitle>
-                    <CardDescription>Select tests and enter results with units. You can also autofill from a photo.</CardDescription>
-                    <div className="mt-2">
-                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <input type="checkbox" checked={compareLabs} onChange={(e) => setCompareLabs(e.target.checked)} />
-                        Compare with previous visit
-                      </label>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {investigationOptions.map((opt) => (
-                          <label key={opt} className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={labSelections.includes(opt)}
-                              onChange={(e) => setLabSelections((prev) => e.target.checked ? [...prev, opt] : prev.filter((x) => x !== opt))}
-                            />
-                            <span>{opt}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    {labSelections.length > 0 && (
-                      <div className="space-y-3">
-                        <div className="text-sm font-medium">Enter Results</div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {labSelections.map((test) => {
-                            const entry = labResults[test] as any;
-                            const isComposite = entry && typeof entry === 'object' && !('value' in entry) && !('unit' in entry);
-                            return (
-                              <div key={test} className="border rounded-md p-3">
-                                <div className="text-sm font-semibold mb-2">{test}</div>
-                                {!isComposite ? (
-                                  <div className="flex gap-2 items-center">
-                                    <Input
-                                      placeholder="Value"
-                                      value={(entry?.value ?? '') as string}
-                                      onChange={(e) => setLabResults((prev) => ({ ...prev, [test]: { value: e.target.value, unit: (prev[test] as any)?.unit || '' } }))}
-                                    />
-                                    <Input
-                                      placeholder="Unit"
-                                      value={(entry?.unit ?? '') as string}
-                                      onChange={(e) => setLabResults((prev) => ({ ...prev, [test]: { value: (prev[test] as any)?.value || '', unit: e.target.value } }))}
-                                    />
-                                    {compareLabs && (() => {
-                                      const prev = prevLabResults[test] as any;
-                                      const prevVal = typeof prev === 'object' && prev && 'value' in prev ? (prev.value ?? '') : '';
-                                      const currNum = Number((entry?.value ?? '').toString());
-                                      const prevNum = Number((prevVal ?? '').toString());
-                                      const hasNums = !Number.isNaN(currNum) && !Number.isNaN(prevNum);
-                                      const delta = hasNums ? (currNum - prevNum) : null;
-                                      return (
-                                        <div className="text-xs text-muted-foreground">
-                                          {hasNums ? (
-                                            <span>Δ {delta! >= 0 ? '+' : ''}{delta}</span>
-                                          ) : (
-                                            <span className="text-muted-foreground">—</span>
-                                          )}
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-                                ) : (
-                                  <div className="space-y-2">
-                                    {Object.keys(entry || {}).map((sub) => (
-                                      <div key={sub} className="flex items-center gap-2">
-                                        <span className="text-xs w-28">{sub}</span>
-                                        <Input
-                                          placeholder="Value"
-                                          value={(entry?.[sub]?.value ?? '') as string}
-                                          onChange={(e) => setLabResults((prev) => ({
-                                            ...prev,
-                                            [test]: { ...(prev[test] as any), [sub]: { value: e.target.value, unit: (prev[test] as any)?.[sub]?.unit || '' } },
-                                          }))}
-                                        />
-                                        <Input
-                                          placeholder="Unit"
-                                          value={(entry?.[sub]?.unit ?? '') as string}
-                                          onChange={(e) => setLabResults((prev) => ({
-                                            ...prev,
-                                            [test]: { ...(prev[test] as any), [sub]: { value: (prev[test] as any)?.[sub]?.value || '', unit: e.target.value } },
-                                          }))}
-                                        />
-                                        {compareLabs && (() => {
-                                          const prev = (prevLabResults[test] as any)?.[sub];
-                                          const prevVal = typeof prev === 'object' ? (prev?.value ?? '') : '';
-                                          const currNum = Number((((entry as any)?.[sub]?.value ?? '') as string).toString());
-                                          const prevNum = Number((prevVal ?? '').toString());
-                                          const hasNums = !Number.isNaN(currNum) && !Number.isNaN(prevNum);
-                                          const delta = hasNums ? (currNum - prevNum) : null;
-                                          return (
-                                            <div className="text-xs text-muted-foreground">
-                                              {hasNums ? (
-                                                <span>Δ {delta! >= 0 ? '+' : ''}{delta}</span>
-                                              ) : (
-                                                <span className="text-muted-foreground">—</span>
-                                              )}
-                                            </div>
-                                          );
-                                        })()}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
-                      <div className="text-xs text-muted-foreground">Selections and results are saved under Treatment Plan → Dermatology.</div>
-                      <div className="flex min-w-0 max-w-full flex-wrap gap-2">
-                        <div className="flex min-w-0 max-w-full flex-col gap-0.5">
-                          <label className="text-sm">
-                            <input
-                              type="file" className="w-full max-w-full"
-                              accept="image/*,application/pdf"
-                              onChange={async (e) => {
-                                const f = e.target.files?.[0];
-                                if (!f) return;
-                                try {
-                                  setLabsAutofillLoading(true);
-                                  const fd = new FormData();
-                                  fd.append('file', f);
-                                  const res = await fetch('/api/visits/labs/autofill', { method: 'POST', body: fd, credentials: 'include' });
-                                  if (res.status === 401) handleUnauthorizedRedirect(res);
-                                  if (!res.ok) {
-                                    let t = '';
-                                    try { t = await res.text(); } catch {}
-                                    throw new Error(`AI autofill failed: ${res.status} ${t}`);
-                                  }
-                                  const data = await res.json();
-                                  const labs = (data?.labs as any) || {};
-                                  const newSelections = new Set(labSelections);
-                                  const newResults: typeof labResults = { ...labResults };
-                                  Object.keys(labs).forEach((name) => {
-                                    newSelections.add(name);
-                                    newResults[name] = labs[name];
-                                  });
-                                  setLabSelections(Array.from(newSelections));
-                                  setLabResults(newResults);
-                                  toast({ variant: 'success', title: 'Autofill complete', description: 'Extracted results inserted.' });
-                                } catch (err) {
-                                  console.error(err);
-                                  toast({ variant: 'warning', title: 'Autofill failed', description: getErrorMessage(err) || 'Try another file.' });
-                                } finally {
-                                  setLabsAutofillLoading(false);
-                                  try { (e.target as any).value = ''; } catch {}
-                                }
-                              }}
-                            />
-                          </label>
-                          <span className="text-xs text-muted-foreground">Accepts JPG, PNG, or PDF</span>
-                        </div>
-                        <Button type="button" variant="outline" disabled={labsAutofillLoading} onClick={async () => { if (await save(false)) markSectionComplete('labs'); }}>
-                          {labsAutofillLoading ? 'Processing…' : 'Save Labs'}
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+            {hasPermission('all') && (
+              <TabsContent value="consultation" forceMount className="mt-4">
+                <div className="min-[1360px]:grid min-[1360px]:grid-cols-[8.5rem_minmax(0,1fr)] min-[1360px]:gap-6">
+                  <nav aria-label="Consultation sections" className="hidden min-[1360px]:block">
+                    <ul className="sticky top-32 space-y-1 text-sm">
+                      {CONSULTATION_SECTIONS.map((section) => (
+                        <li key={section.id}>
+                          <a
+                            href={`#consult-${section.id}`}
+                            className="block rounded-md px-2 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                            onClick={(event) => { event.preventDefault(); jumpToSection(section.id); }}
+                          >
+                            {section.label}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </nav>
+                  <div className="min-w-0">
+                    <PrescriptionBuilder 
+                      patientId={patientId}
+                      patient={patientDetails}
+                      onSummaryChange={receiveConsultationSummary}
+                      vitalsExtra={vitalsExtra}
+                      investigationResults={renderLabResults}
+                      toolbarTarget={toolbarTarget}
+                      doctorId={doctorId}
+                      doctorName={doctorName}
+                      visitId={visitId}
+                      consultationType={consultationType}
+                      teleVideoConsent={teleVideoConsent}
+                      onClinicalDataChange={receiveClinicalData}
+                      getClinicalSavePatch={getClinicalSavePatch}
+                      shouldPersistDraft={() => !discardDraftRef.current}
+                      initialVisitSnapshot={initialVisitSnapshot}
+                      onClinicalConflict={blockAutomaticSave}
+                      onVisitSaved={(saved) => {
+                        acknowledgeMutationVersion(saved.version);
+                        if (saved.status) setVisitStatus(saved.status);
+                        latestDraftWriter.current();
+                      }}
+                      onBeforeExport={async () => {
+                        const savedId = await save(false, true);
+                        if (!savedId) {
+                          throw new Error('The latest visit details could not be saved. Please retry before exporting.');
+                        }
+                        return savedId;
+                      }}
+                      onChangeChiefComplaints={(value) => setComplaints(value?.trim() ? [value.trim()] : [])}
+                      ensureVisitId={async () => {
+                        if (consentMissing) throw new Error(TELE_VIDEO_CONSENT_REQUIRED);
+                        if (visitId) return visitId;
+                        if (typeof patientId !== 'string' || typeof doctorId !== 'string') {
+                          console.warn('[MedicalVisitForm] Missing IDs when ensuring visit', { patientId, doctorId });
+                          toast({
+                            variant: 'destructive',
+                            title: 'Invalid IDs',
+                            description: 'Patient or Doctor ID is missing. Please select valid records and try again.',
+                          });
+                          throw new Error('Missing IDs');
+                        }
+                        const minimalPayload = getClinicalSavePatch();
+                        let newVisit: any;
+                        try {
+                          newVisit = await apiClient.createVisit(minimalPayload);
+                        } catch (error: any) {
+                          if (error?.status !== 409 || !appointmentId) throw error;
+                          blockAutomaticSave();
+                          const response: any = await apiClient.getVisits({ appointmentId });
+                          const existing = (response.visits || response.data || []).find((v: any) => v.patientId === patientId && (v.appointmentId === appointmentId || v.appointment?.id === appointmentId));
+                          if (existing?.id) setVisitId(existing.id);
+                          throw error;
+                        }
+                        const newVisitId = (newVisit as VisitDetails).id;
+                        acknowledgeMutationVersion((newVisit as VisitDetails).version);
+                        setVisitId(newVisitId);
+                        return newVisitId;
+                      }}
+                      reviewDate={reviewDate}
+                      printBgUrl={printBgUrl}
+                      printTopMarginPx={printTopMarginPx}
+                      printLeftMarginPx={printLeftMarginPx}
+                      printRightMarginPx={printRightMarginPx}
+                      printBottomMarginPx={printBottomMarginPx}
+                      contentOffsetXPx={contentOffsetXPx}
+                      contentOffsetYPx={contentOffsetYPx}
+                      onChangeContentOffset={(x: number, y: number) => { setContentOffsetXPx(x); setContentOffsetYPx(y); }}
+                      designAids={{
+                        enabled: designAidsEnabled,
+                        showGrid: designShowGrid,
+                        showRulers: designShowRulers,
+                        snapToGrid: designSnapToGrid,
+                        gridSizePx: designGridSizePx,
+                        nudgeStepPx: designNudgeStepPx,
+                      }}
+                      paperPreset={paperPreset}
+                      grayscale={grayscaleMode}
+                      bleedSafe={{ enabled: showBleedSafe, safeMarginMm }}
+                      frames={{ enabled: framesEnabled, headerHeightMm, footerHeightMm }}
+                      onChangeFrames={(next: { enabled?: boolean; headerHeightMm?: number; footerHeightMm?: number }) => {
+                        if (typeof next.enabled === 'boolean') setFramesEnabled(next.enabled);
+                        if (typeof next.headerHeightMm === 'number') setHeaderHeightMm(next.headerHeightMm);
+                        if (typeof next.footerHeightMm === 'number') setFooterHeightMm(next.footerHeightMm);
+                      }}
+                      onChangeReviewDate={setReviewDate}
+                      includeSections={rxIncludeSections}
+                      onChangeIncludeSections={setRxIncludeSections}
+                    />
+                  </div>
+                </div>
               </TabsContent>
             )}
+
             {/* Photos Tab */}
             {(hasPermission('photos') || hasPermission('all')) && (
               <TabsContent value="photos" className="space-y-4">
@@ -2327,9 +2086,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                   visitId={visitId || 'temp'} 
                   patientId={patientId}
                   allowDelete={hasPermission('photos') || hasPermission('all')}
-                  onChangeCount={(c) => { setPhotoCount(c); }}
+                  onChangeCount={setPhotoCount}
                   onClinicalConflict={blockAutomaticSave}
-                  onVisitVersion={(version) => {
+                  onVisitVersion={(version?: number) => {
                     acknowledgeMutationVersion(version);
                     latestDraftWriter.current();
                   }}
@@ -2351,101 +2110,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
             
 
-
-            {/* Treatment Tab removed; handled within Prescription where relevant */}
-
-            {/* Prescription Tab - Doctor Only */}
-            {hasPermission('all') && (
-              <TabsContent value="prescription" className="space-y-4" forceMount>
-                <PrescriptionBuilder 
-                  patientId={patientId}
-                  doctorId={doctorId}
-                  doctorName={doctorName}
-                  visitId={visitId}
-                  consultationType={consultationType}
-                  teleVideoConsent={teleVideoConsent}
-                  onClinicalDataChange={receiveClinicalData}
-                  getClinicalSavePatch={getClinicalSavePatch}
-                  shouldPersistDraft={() => !discardDraftRef.current}
-                  initialVisitSnapshot={initialVisitSnapshot}
-                  onClinicalConflict={blockAutomaticSave}
-                  onVisitSaved={(saved) => {
-                    acknowledgeMutationVersion(saved.version);
-                    if (saved.status) setVisitStatus(saved.status);
-                    latestDraftWriter.current();
-                  }}
-                  onBeforeExport={async () => {
-                    const savedId = await save(false, true);
-                    if (!savedId) {
-                      throw new Error('The latest visit details could not be saved. Please retry before exporting.');
-                    }
-                    return savedId;
-                  }}
-                  onChangeChiefComplaints={(value) => setComplaints(value?.trim() ? [value.trim()] : [])}
-                  ensureVisitId={async () => {
-                    if (consentMissing) throw new Error(TELE_VIDEO_CONSENT_REQUIRED);
-                    if (visitId) return visitId;
-                    if (typeof patientId !== 'string' || typeof doctorId !== 'string') {
-                      console.warn('[MedicalVisitForm] Missing IDs when ensuring visit', { patientId, doctorId });
-                      toast({
-                        variant: 'destructive',
-                        title: 'Invalid IDs',
-                        description: 'Patient or Doctor ID is missing. Please select valid records and try again.',
-                      });
-                      throw new Error('Missing IDs');
-                    }
-                    const minimalPayload = getClinicalSavePatch();
-                    let newVisit: any;
-                    try {
-                      newVisit = await apiClient.createVisit(minimalPayload);
-                    } catch (error: any) {
-                      if (error?.status !== 409 || !appointmentId) throw error;
-                      blockAutomaticSave();
-                      const response: any = await apiClient.getVisits({ appointmentId });
-                      const existing = (response.visits || response.data || []).find((v: any) => v.patientId === patientId && (v.appointmentId === appointmentId || v.appointment?.id === appointmentId));
-                      if (existing?.id) setVisitId(existing.id);
-                      throw error;
-                    }
-                    const newVisitId = (newVisit as VisitDetails).id;
-                    acknowledgeMutationVersion((newVisit as VisitDetails).version);
-                    setVisitId(newVisitId);
-                    return newVisitId;
-                  }}
-                  reviewDate={reviewDate}
-                  printBgUrl={printBgUrl}
-                  printTopMarginPx={printTopMarginPx}
-                  printLeftMarginPx={printLeftMarginPx}
-                  printRightMarginPx={printRightMarginPx}
-                  printBottomMarginPx={printBottomMarginPx}
-                  contentOffsetXPx={contentOffsetXPx}
-                  contentOffsetYPx={contentOffsetYPx}
-                  onChangeContentOffset={(x: number, y: number) => { setContentOffsetXPx(x); setContentOffsetYPx(y); }}
-                  designAids={{
-                    enabled: designAidsEnabled,
-                    showGrid: designShowGrid,
-                    showRulers: designShowRulers,
-                    snapToGrid: designSnapToGrid,
-                    gridSizePx: designGridSizePx,
-                    nudgeStepPx: designNudgeStepPx,
-                  }}
-                  paperPreset={paperPreset}
-                  grayscale={grayscaleMode}
-                  bleedSafe={{ enabled: showBleedSafe, safeMarginMm }}
-                  frames={{ enabled: framesEnabled, headerHeightMm, footerHeightMm }}
-                  onChangeFrames={(next: { enabled?: boolean; headerHeightMm?: number; footerHeightMm?: number }) => {
-                    if (typeof next.enabled === 'boolean') setFramesEnabled(next.enabled);
-                    if (typeof next.headerHeightMm === 'number') setHeaderHeightMm(next.headerHeightMm);
-                    if (typeof next.footerHeightMm === 'number') setFooterHeightMm(next.footerHeightMm);
-                  }}
-                  onChangeReviewDate={setReviewDate}
-                  onPreview={() => markSectionComplete('prescription')}
-                  onCreated={() => markSectionComplete('prescription')}
-                  refreshKey={builderRefreshKey}
-                  includeSections={rxIncludeSections}
-                  onChangeIncludeSections={setRxIncludeSections}
-                />
-              </TabsContent>
-            )}
 
             {/* Customization Tab - Doctor Only */}
             {hasPermission('all') && (
@@ -2712,33 +2376,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                 </div>
               )}
           </TabsContent>
-          </Tabs>
-
-          {/* Action Buttons */}
-          <div className="flex flex-wrap justify-between items-center gap-4 pt-6 border-t">
-            <div className="text-sm text-muted-foreground">
-              Progress: {getProgress()}% • {completedSections.size} of {hasPermission('all') ? 5 : 3} sections complete
-              {hasPermission('all') && getProgress() < 80 && (
-                <p id="visit-completion-help" className="mt-1 text-foreground">
-                  Completion requires 80% progress. Remaining: {['vitals', 'photos', 'labs', 'prescription'].filter(section => !completedSections.has(section)).join(', ')}. Section progress does not verify clinical completeness.
-                </p>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => void save(false)} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Draft'}
-              </Button>
-              {hasPermission('all') && (
-                <Button onClick={() => void save(true)} disabled={saving || getProgress() < 80} aria-describedby={getProgress() < 80 ? 'visit-completion-help' : undefined}>
-                  {saving ? 'Completing...' : 'Complete Visit'}
-                </Button>
-              )}
-            </div>
-        </div>
-      </CardContent>
-    </Card>
+      </Tabs>
     </div>
-  </div>
   );
 } 
 

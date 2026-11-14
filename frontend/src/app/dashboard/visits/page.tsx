@@ -33,7 +33,6 @@ function normalizePrescription(prescription: unknown) {
   }
 
   return {
-    id: typeof prescription.id === 'string' ? prescription.id : undefined,
     prescriptionNumber: typeof prescription.prescriptionNumber === 'string' ? prescription.prescriptionNumber : undefined,
     createdAt: displayClinicDateTime(prescription.createdAt as string | Date | undefined, '') || null,
     status: typeof prescription.status === 'string' ? prescription.status : undefined,
@@ -62,7 +61,6 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
   }
 
   const {
-    id,
     prescriptionNumber,
     createdAt,
     status,
@@ -84,12 +82,6 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
             <div>
               <span className="text-muted-foreground">Prescription #:</span>
               <span className="ml-2 text-foreground">{prescriptionNumber}</span>
-            </div>
-          )}
-          {id && (
-            <div>
-              <span className="text-muted-foreground">ID:</span>
-              <span className="ml-2 text-foreground">{id}</span>
             </div>
           )}
           {status && (
@@ -181,8 +173,8 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
                       <p className="font-medium text-foreground">{name}</p>
                       <p className="text-sm text-muted-foreground">
                         {dosage && <span className="mr-2">Dosage: {dosage}</span>}
-                        {frequency && <span className="mr-2">Frequency: {frequency.replaceAll('_', ' ')}</span>}
-                        {duration && <span className="mr-2">Duration: {duration} {durationUnit ?? ''}</span>}
+                        {frequency && <span className="mr-2">Frequency: {prescriptionLabel('frequency', frequency)}</span>}
+                        {duration && <span className="mr-2">Duration: {duration} {prescriptionLabel('durationUnit', durationUnit)}</span>}
                       </p>
                       {instructionsText && (
                         <p className="text-sm text-foreground mt-1">Instructions: {instructionsText}</p>
@@ -238,15 +230,12 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 
-import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
+import { useCallback, useEffect, useState, Suspense } from 'react';
 import { isValidId } from '@/lib/id';
-import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
-import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import { usePatientHistory } from '@/components/visits/usePatientHistory';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import { apiClient } from '@/lib/api';
@@ -256,13 +245,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { User, Users, Stethoscope, FileText, Calendar, Activity, ArrowLeft } from 'lucide-react';
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
+import { prescriptionLabel } from '@/lib/prescription-labels';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
-import { formatPatientName } from '@/lib/utils';
 import { UserRole } from '@cms/shared-types';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
-import { useRecordById } from '@/components/visits/useRecordById';
+import { useRecordById, type RecordState } from '@/components/visits/useRecordById';
 import type {
   Appointment,
   GetPatientsResponse,
@@ -291,18 +282,6 @@ const normalizePatientVisits = (payload: PatientVisitHistoryResponse): VisitTime
   }
   return [];
 };
-
-const PhotosPanel = dynamic<ComponentType<{ visitId: string }>>(
-  () => import('@/components/visits/VisitPhotos'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
-        Loading photos…
-      </div>
-    ),
-  }
-);
 
 // Patient History Timeline Component
 function PatientHistoryTimeline({ patientId }: { patientId: string }) {
@@ -468,9 +447,9 @@ function VisitsPageInner() {
   const [doctors, setDoctors] = useState<DoctorSummary[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [chosenDoctorId, setChosenDoctorId] = useState<string>('');
-  const [currentUser, setCurrentUser] = useState<{ id?: string; role?: string } | null>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<string>('DOCTOR');
-  const [recentVisitId, setRecentVisitId] = useState<string | null>(null);
+  const { user: signedInUser, loading: userLoading } = useDashboardUser();
+  const currentUser: { id?: string; role?: string } | null = userLoading ? null : { id: signedInUser?.id, role: signedInUser?.role };
+  const currentUserRole = signedInUser?.role ?? UserRole.DOCTOR;
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
@@ -483,8 +462,6 @@ function VisitsPageInner() {
   const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
   const [appointmentFailed, setAppointmentFailed] = useState(false);
   const [startedVisitId, setStartedVisitId] = useState<string | null>(null);
-  const [appointmentDismissed, setAppointmentDismissed] = useState(false);
-  const appointmentDismissedRef = useRef(false);
 
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get('patientId');
@@ -492,9 +469,18 @@ function VisitsPageInner() {
   const urlDoctorId = searchParams.get('doctorId');
   const urlVisitId = searchParams.get('visitId');
 
-  const appointmentDoctorId = appointmentData?.doctorId;
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-appointment-follows-patient
+   * The appointment from the URL or the resumed visit applies exactly while its patient is selected.
+   * Picking another patient detaches it; picking its patient again restores it, so the visit saves
+   * with its appointment link.
+   */
+  const appointmentPatientId = appointmentData?.patientId ?? urlPatientId;
+  const appointmentActive = Boolean(selectedPatientId) && selectedPatientId === appointmentPatientId;
+  const activeAppointment = appointmentActive ? appointmentData : null;
+  const appointmentDoctorId = activeAppointment?.doctorId;
   const appointmentPending = Boolean(
-    urlPatientId && appointmentIdParam && !appointmentData && !appointmentFailed && !appointmentDismissed,
+    appointmentActive && appointmentIdParam && !appointmentData && !appointmentFailed,
   );
   const selectedDoctorId = resolveDefaultDoctorId({
     role: currentUser?.role,
@@ -549,18 +535,19 @@ function VisitsPageInner() {
   const fetchAppointmentData = useCallback(async (appointmentId: string) => {
     try {
       const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
-      if (!appointmentDismissedRef.current) setAppointmentData(appointment);
+      setAppointmentData(appointment);
     } catch (error) {
       console.error('Failed to fetch appointment data:', error);
       setAppointmentFailed(true);
     }
   }, []);
 
+  const deepLinked = Boolean(urlPatientId || urlVisitId);
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [patientsRes, usersRes] = await Promise.allSettled([
-        apiClient.getPatients({ page: 1, limit: 1 }),
+        deepLinked ? Promise.resolve([]) : apiClient.getPatients({ page: 1, limit: 1 }),
         loadDoctors()
       ]);
 
@@ -581,22 +568,12 @@ function VisitsPageInner() {
         const doctorsData = usersRes.value;
         setDoctors(doctorsData);
       }
-
-      try {
-        const me = await apiClient.get<{ id?: string; role?: string }>('/auth/me');
-        setCurrentUserRole(me?.role ?? 'DOCTOR');
-        setCurrentUser(me ?? {});
-      } catch (error) {
-        console.error('Failed to get current user:', error);
-        setCurrentUserRole('DOCTOR');
-        setCurrentUser({});
-      }
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
       setLoading(false);
     }
-  }, [loadDoctors, extractPatients, urlPatientId]);
+  }, [loadDoctors, extractPatients, urlPatientId, deepLinked]);
 
   useEffect(() => {
     void loadData();
@@ -641,7 +618,6 @@ function VisitsPageInner() {
           } catch {}
         }
         setShowForm(true);
-        setRecentVisitId(urlVisitId);
       } catch (e) {
         // If visit fetch fails, ignore and proceed with normal flow
         console.warn('[VisitsPage] Failed to load visit by id', e);
@@ -650,15 +626,10 @@ function VisitsPageInner() {
     void run();
   }, [urlVisitId]);
 
-  useEffect(() => {
-    const visitId = (appointmentData?.visit && 'id' in appointmentData.visit) ? appointmentData.visit.id : undefined;
-    if (typeof visitId === 'string') {
-      setRecentVisitId(visitId);
-    }
-  }, [appointmentData]);
-
   // Debounced search for patients
+  const landingVisible = !loading && !userLoading && !showForm;
   useEffect(() => {
+    if (!landingVisible) return;
     let timeoutRef: ReturnType<typeof setTimeout>;
     const run = async () => {
       try {
@@ -676,10 +647,12 @@ function VisitsPageInner() {
       void run();
     }, 250);
     return () => clearTimeout(timeoutRef);
-  }, [extractPatients, patientQuery]);
+  }, [extractPatients, patientQuery, landingVisible]);
 
   const selectedPatient = useRecordById<PatientMatch>(selectedPatientId, fetchPatientById);
-  const selectedDoctor = useRecordById<DoctorSummary>(selectedDoctorId, fetchDoctorById);
+  const listedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId);
+  const fetchedDoctor = useRecordById<DoctorSummary>(listedDoctor ? '' : selectedDoctorId, fetchDoctorById);
+  const selectedDoctor: RecordState<DoctorSummary> = listedDoctor ? { status: 'ready', record: listedDoctor } : fetchedDoctor;
 
   const doctorNameById = (id: string | undefined) => {
     const doctor = doctors.find((d) => d.id === id);
@@ -699,19 +672,13 @@ function VisitsPageInner() {
       : undefined;
 
   const visitAlreadyStarted = Boolean(
-    urlVisitId || startedVisitId || (appointmentData?.visit && 'id' in appointmentData.visit),
+    urlVisitId || startedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit),
   );
   const doctorLocked = Boolean(appointmentDoctorId) || visitAlreadyStarted;
 
   const pickPatient = (id: string) => {
     if (id !== selectedPatientId) setStartedVisitId(null);
     setSelectedPatientId(id);
-    const appointmentPatientId = appointmentData?.patientId ?? urlPatientId;
-    if (appointmentIdParam && id !== appointmentPatientId) {
-      appointmentDismissedRef.current = true;
-      setAppointmentDismissed(true);
-      setAppointmentData(null);
-    }
   };
 
   const startNewVisit = () => {
@@ -720,13 +687,13 @@ function VisitsPageInner() {
     }
   };
  
-  if (loading) {
+  if (loading || userLoading) {
     return (
       <LoadingSkeleton variant="cards" label="Loading visit form…" />
     );
   }
  
-  if (!patients.some(patient => patient.id) || !doctors.some(doctor => doctor.id)) {
+  if ((!deepLinked && !patients.some(patient => patient.id)) || !doctors.some(doctor => doctor.id)) {
     return (
       <Card>
         <CardHeader>
@@ -737,7 +704,7 @@ function VisitsPageInner() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {patients.length === 0 && (
+            {!deepLinked && patients.length === 0 && (
               <div className="flex items-center gap-3 p-3 bg-destructive-soft rounded-lg">
                 <Users className="h-5 w-5 text-destructive" />
                 <div>
@@ -987,84 +954,35 @@ function VisitsPageInner() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0 max-w-full">
-          <div className="flex flex-wrap items-center gap-2">
-            <PageHeader title={<>Visit Documentation</>} />
-            {appointmentData && (
-              <Badge variant="secondary" className="bg-info-soft text-info-text">
-                <Calendar className="h-3 w-3 mr-1" />
-                From Appointment
-              </Badge>
-            )}
-          </div>
-          {/* Minimal inline tracker for current patient */}
-          {selectedPatientId && (
-            <div className="mt-2">
-              <PatientProgressTracker patientId={selectedPatientId} compact />
-            </div>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <QuickGuide
-            title="Visit Documentation Guide"
-            triggerVariant="ghost"
-            sections={[
-              {
-                title: "Documenting the Visit",
-                items: [
-                  "Fill out sections in order: Vitals → History → Examination → Assessment → Plan",
-                  "Use expandable sections to keep the form organized",
-                  "Save progress automatically as you work",
-                  "Mark visit as complete when finished"
-                ]
-              },
-              {
-                title: "Prescriptions",
-                items: [
-                  "Add medications from the drug database",
-                  "Configure dosage, frequency, and duration",
-                  "Add special dermatology instructions (application site, timing, etc.)",
-                  "Preview and print prescription for the patient"
-                ]
-              },
-              {
-                title: "Photos & Documentation",
-                items: [
-                  "Upload photos to document patient condition",
-                  "Photos are automatically attached to the visit",
-                  "Use photos to track treatment progress",
-                  "All photos are stored securely in patient records"
-                ]
-              }
-            ]}
-          />
-          {appointmentData && (
-            <Button variant="outline" onClick={() => window.history.back()}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Calendar
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => setShowForm(false)}>
-            Back to Setup
+    <MedicalVisitForm
+      key={`${selectedPatientId}:${urlVisitId || activeAppointment?.id || "new"}`}
+      patientId={selectedPatientId}
+      doctorId={selectedDoctorId}
+      doctorName={selectedDoctorName}
+      userRole={currentUserRole}
+      patient={selectedPatient.status === 'ready' ? selectedPatient.record : null}
+      doctorRecord={listedDoctor ?? null}
+      visitDate={new Date().toISOString()}
+      appointmentId={activeAppointment?.id}
+      appointmentData={activeAppointment}
+      onVisitIdChange={setStartedVisitId}
+      initialVisitId={urlVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit ? activeAppointment.visit.id : undefined)}
+      identity={
+        <>
+          <h1 className="sr-only">Visit Documentation</h1>
+          <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8" aria-label="Back to Setup" title="Back to setup" onClick={() => setShowForm(false)}>
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
-        </div>
-      </div>
-
-      <div className="sticky -top-4 z-30 -mx-4 md:-top-6 flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-2 md:-mx-6 md:px-6">
-        <VisitIdentityBar
-          patient={selectedPatient}
-          doctor={selectedDoctor}
-          appointment={appointmentData}
-          hideDoctor
-        />
-        <div className="flex items-center gap-2">
+          <VisitIdentityBar className="min-w-0 truncate" patient={selectedPatient} doctor={selectedDoctor} appointment={activeAppointment} hideDoctor />
+        </>
+      }
+      doctorControl={
+        <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="visit-doctor" className="text-sm font-medium text-foreground">
             Attending doctor
           </label>
           <Select value={selectedDoctorId} onValueChange={setChosenDoctorId} disabled={doctorLocked}>
-            <SelectTrigger id="visit-doctor" className="h-9 w-64" aria-label="Attending doctor">
+            <SelectTrigger id="visit-doctor" className="h-9 w-60" aria-label="Attending doctor">
               <SelectValue placeholder="Choose a doctor..." />
             </SelectTrigger>
             <SelectContent>
@@ -1081,25 +999,14 @@ function VisitsPageInner() {
             </span>
           )}
         </div>
-      </div>
-
-      <MedicalVisitForm
-        key={`${selectedPatientId}:${urlVisitId || appointmentData?.id || "new"}`}
-        patientId={selectedPatientId} 
-        doctorId={selectedDoctorId}
-        doctorName={selectedDoctorName}
-        userRole={currentUserRole}
-        patientName={selectedPatient.status === 'ready' ? formatPatientName(selectedPatient.record) : ''}
-        visitDate={new Date().toISOString()}
-        appointmentId={appointmentData?.id}
-        appointmentData={appointmentData}
-        onVisitIdChange={setStartedVisitId}
-        initialVisitId={urlVisitId || (appointmentData?.visit && 'id' in (appointmentData as any).visit ? (appointmentData as any).visit.id : undefined)}
-      />
-      
-      {/* Show standalone photos panel only when the form is not open to avoid duplicate rendering */}
-      {!showForm && recentVisitId && <PhotosPanel visitId={recentVisitId} />}
-    </div>
+      }
+      visitActions={activeAppointment ? (
+        <DropdownMenuItem onSelect={() => window.history.back()}>
+          <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />
+          Back to calendar
+        </DropdownMenuItem>
+      ) : null}
+    />
   );
 }
 

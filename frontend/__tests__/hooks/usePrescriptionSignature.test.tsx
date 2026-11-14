@@ -57,3 +57,12 @@ it.each([[548, 350], [1000, 100], [100, 500]])('preserves the original %s × %s 
   expect(result.current.signatureHeight).toBeLessThanOrEqual(72);
   expect(result.current.signatureWidth / result.current.signatureHeight).toBeCloseTo(width / height);
 });
+
+it('loads the signature when the preview opens, not with the consultation', async () => {
+  readSignature.mockResolvedValue({ signature: { id: 'sig', url: 'sig-url' } });
+  const { result, rerender } = renderHook(({ open }) => usePrescriptionSignature('doctor', open), { initialProps: { open: false } });
+  expect(readSignature).not.toHaveBeenCalled();
+  rerender({ open: true });
+  await waitFor(() => expect(result.current.signatureUrl).toBe('sig-url'));
+  expect(readSignature).toHaveBeenCalledTimes(1);
+});

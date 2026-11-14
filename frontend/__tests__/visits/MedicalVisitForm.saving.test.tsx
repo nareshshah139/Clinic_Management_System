@@ -6,7 +6,7 @@ jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }
 let mockPhotoVersion: ((version: number) => void) | undefined;
 let mockRxSaved: ((visit: { version: number }) => void) | undefined;
 let mockExportResult: Promise<string> | undefined;
-jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange, onBeforeExport, onVisitSaved }: any) { mockRxSaved = onVisitSaved; return <><button onClick={() => { mockExportResult = onBeforeExport(); }}>Export saved visit</button><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
+jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange, onBeforeExport, onVisitSaved, vitalsExtra, onSummaryChange }: any) { mockRxSaved = onVisitSaved; return <>{vitalsExtra}<button onClick={() => onSummaryChange({ complaint: true, diagnosis: false, plan: false, medicines: 1, vitals: false })}>Record complaint and one medicine</button><button onClick={() => { mockExportResult = onBeforeExport(); }}>Export saved visit</button><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
 jest.mock('@/components/visits/VisitPhotos', () => function Photos({ onVisitVersion }: any) { mockPhotoVersion = onVisitVersion; return null; });
 jest.mock('@/components/tours/DoctorTour', () => ({ DoctorTour: () => null }));
 const flush = async () => { await act(async () => { await Promise.resolve(); }); };
@@ -87,12 +87,39 @@ it('saves all parent-form sections together, including independent subjective an
   });
 });
 
-it('keeps the latest vitals-tab edit when the prescription editor holds an older value', async () => {
+it('gives a doctor one consultation with each vital entered once, saving the editor and consultation vitals together', async () => {
   await openForm();
+  expect(screen.queryByRole('tab', { name: 'Vitals' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: 'Lab Tests' })).not.toBeInTheDocument();
+  expect(screen.getAllByLabelText('Temp (°F)')).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: 'Set editor blood pressure' }));
-  fireEvent.change(screen.getAllByPlaceholderText('mmHg')[0], { target: { value: '130' } });
+  fireEvent.change(screen.getByLabelText('Temp (°F)'), { target: { value: '212' } });
+  fireEvent.change(screen.getByLabelText('Resp. (/min)'), { target: { value: '16' } });
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })); });
-  expect(apiClient.updateVisit).toHaveBeenLastCalledWith('v', expect.objectContaining({ vitals: expect.objectContaining({ systolicBP: 130 }) }), expect.anything());
+  expect(apiClient.updateVisit).toHaveBeenLastCalledWith('v', expect.objectContaining({ vitals: expect.objectContaining({ systolicBP: 110, temperature: 100, respiratoryRate: 16 }) }), expect.anything());
+});
+
+it('completes a visit with a complaint and a prescription, without photos, labs or vitals', async () => {
+  (apiClient.completeVisit as jest.Mock).mockResolvedValue({ id: 'v', status: 'COMPLETED', version: 2 });
+  await openForm();
+  const complete = screen.getByRole('button', { name: 'Complete Visit' });
+  expect(complete).toBeDisabled();
+  expect(complete).toHaveAccessibleDescription('To complete, record a complaint or diagnosis, and a plan or prescription.');
+  expect(screen.getByRole('list', { name: 'Needed to complete' })).toHaveTextContent('Complaint or diagnosis not recorded');
+  expect(screen.getByRole('list', { name: 'Optional' })).toHaveTextContent('Photos not recorded');
+  fireEvent.click(screen.getByRole('button', { name: 'Record complaint and one medicine' }));
+  expect(complete).toBeEnabled();
+  expect(screen.getByRole('list', { name: 'Needed to complete' })).toHaveTextContent('Complaint or diagnosis recordedPlan or prescription recorded');
+  await act(async () => { fireEvent.click(complete); });
+  expect(apiClient.completeVisit).toHaveBeenCalledWith('v', expect.anything(), expect.anything());
+});
+
+it('keeps a vitals tab for a nurse, who has no consultation editor', async () => {
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="NURSE" />);
+  await flush();
+  expect(screen.getByRole('tab', { name: 'Vitals' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.queryByRole('tab', { name: 'Consultation' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Complete Visit' })).not.toBeInTheDocument();
 });
 
 it('saves the full current form and returns the confirmed visit ID before export', async () => {
