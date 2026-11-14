@@ -60,7 +60,7 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(Array.from(due.querySelectorAll('span')).map((n) => n.textContent)).toEqual(['₹!', '₹200 due', '₹500 · ₹200 due']);
     expect(due).toHaveAttribute('data-attention', 'true');
 
-    expect(screen.getByRole('button', { name: 'Procedure bill: not billed yet' })).not.toHaveAttribute('data-attention');
+    expect(screen.queryByRole('button', { name: 'Procedure bill: not billed yet' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Review bill: not billed yet, visit finished' })).toHaveAttribute('data-attention', 'true');
 
     const two = screen.getByRole('button', { name: 'Review bill: ₹1,700 in 2 bills, ₹200 due' });
@@ -190,7 +190,7 @@ describe('DoctorDayCalendar billing on each row', () => {
   });
 
   it('starts the fee from the fee list, names where it came from, and bills the amount the desk changed it to', async () => {
-    renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', fee: 390, billing: bill('NOT_BILLED', 0, 0, false) })]);
+    renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { status: 'COMPLETED', billType: 'REVIEW', fee: 390, billing: bill('NOT_BILLED', 0, 0, false) })]);
     api.createInvoice.mockResolvedValue({ id: 'cinv7', invoiceNo: 'INV-7' });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Review bill: not billed yet' }));
@@ -219,7 +219,7 @@ describe('DoctorDayCalendar billing on each row', () => {
   });
 
   it('leaves the fee empty and says so when the bill type has no fee, and only offers the fee list to a user who may edit it', async () => {
-    const lakshmi = row('a3', '09:30-09:45', 'Lakshmi Devi', { billType: 'PROCEDURE', visitType: 'PROCEDURE', fee: null, billing: bill('NOT_BILLED', 0, 0, false) });
+    const lakshmi = row('a3', '09:30-09:45', 'Lakshmi Devi', { status: 'COMPLETED', billType: 'PROCEDURE', visitType: 'PROCEDURE', fee: null, billing: bill('NOT_BILLED', 0, 0, false) });
     renderDay([lakshmi]);
     fireEvent.click(await screen.findByRole('button', { name: 'Procedure bill: not billed yet' }));
     let dialog = await screen.findByRole('dialog', { name: 'Bill for Lakshmi Devi' });

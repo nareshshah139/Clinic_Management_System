@@ -7,13 +7,12 @@ import { useSearchParams } from 'next/navigation';
 import AppointmentScheduler from '@/components/appointments/AppointmentScheduler';
 import AppointmentsCalendar from '@/components/appointments/AppointmentsCalendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import type { User } from '@/lib/types';
 import { getISTDateString } from '@/lib/utils';
-import { Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
@@ -67,41 +66,53 @@ function AppointmentsPageInner() {
     if (typeof window === 'undefined') return;
     try { if (date) localStorage.setItem('appointments.date', date); } catch {}
   }, [date]);
+  const shiftDate = (days: number) => {
+    const d = new Date(`${date}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    setDate(d.toISOString().slice(0, 10));
+  };
+
+  const doctorAndDate = (
+    <>
+      <div data-tour="doctor-select">
+        <Select value={doctorId} onValueChange={setDoctorId}>
+          <SelectTrigger size="sm" aria-label="Doctor"><SelectValue placeholder="Select doctor" /></SelectTrigger>
+          <SelectContent>
+            {doctors.map((d) => (
+              <SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div data-tour="date-picker" className="flex items-center gap-1">
+        <Button variant="outline" size="icon" className="size-8" aria-label="Previous day" onClick={() => shiftDate(-1)}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <Input aria-label="Date" className="h-8 w-40" type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+        <Button variant="outline" size="sm" disabled={date === getISTDateString()} onClick={() => setDate(getISTDateString())}>Today</Button>
+        <Button variant="outline" size="icon" className="size-8" aria-label="Next day" onClick={() => shiftDate(1)}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </>
+  );
+
   return (
-    <Tabs defaultValue="calendar" className="space-y-4">
-      <PageHeader title="Appointments" />
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div data-tour="doctor-select">
-              <label className="text-sm text-gray-700">Doctor</label>
-              <Select value={doctorId} onValueChange={setDoctorId}>
-                <SelectTrigger aria-label="Doctor"><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                <SelectContent>
-                  {doctors.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div data-tour="date-picker">
-              <label className="text-sm text-gray-700">Date</label>
-              <Input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm text-gray-700">&nbsp;</label>
-              <Button
-                variant="outline"
-                className="w-full flex items-center justify-center gap-2"
-                onClick={() => setGuideDialogOpen(true)}
-              >
-                <Info className="h-4 w-4" />
-                Quick Guide
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    <Tabs defaultValue="calendar" className="space-y-3">
+      <PageHeader
+        title="Appointments"
+        actions={
+          <>
+            <TabsList data-tour="view-tabs">
+              <TabsTrigger value="calendar">Calendar</TabsTrigger>
+              <TabsTrigger value="slots">Slots</TabsTrigger>
+            </TabsList>
+            <Button variant="outline" size="icon" aria-label="Quick Guide" title="Quick Guide" onClick={() => setGuideDialogOpen(true)}>
+              <Info className="h-4 w-4" />
+            </Button>
+          </>
+        }
+      />
 
       <Dialog open={guideDialogOpen} onOpenChange={setGuideDialogOpen}>
         <DialogContent className="max-w-2xl">
@@ -125,20 +136,18 @@ function AppointmentsPageInner() {
         </DialogContent>
       </Dialog>
 
-      <TabsList data-tour="view-tabs">
-        <TabsTrigger value="calendar">Calendar</TabsTrigger>
-        <TabsTrigger value="slots">Slots</TabsTrigger>
-      </TabsList>
       <TabsContent value="calendar">
         <AppointmentsCalendar 
           prefillPatientId={prefillPatientId}
           controlledDoctorId={doctorId}
           controlledDate={date}
           hideHeaderControls
+          toolbarLead={doctorAndDate}
           readsRooms={ROOM_READ_ROLES.includes(user?.role ?? '')}
         />
       </TabsContent>
-      <TabsContent value="slots">
+      <TabsContent value="slots" className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">{doctorAndDate}</div>
         <AppointmentScheduler 
           prefillPatientId={prefillPatientId}
           controlledDoctorId={doctorId}
