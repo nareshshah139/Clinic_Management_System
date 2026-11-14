@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useDashboardUser } from './dashboard-user-context';
 import { GlobalSearch } from './global-search';
+import { ColourThemeSetting } from './colour-theme-setting';
 import { apiClient } from '@/lib/api';
 import {
   DropdownMenu,
@@ -359,6 +360,8 @@ export function Header() {
     }
   };
 
+  const isDoctor = String((user as any)?.role || '').toUpperCase() === 'DOCTOR';
+
   return (
     <header className="h-16 bg-white border-b border-border flex items-center justify-between px-6">
       <GlobalSearch />
@@ -437,7 +440,8 @@ export function Header() {
               <DialogTitle>My Settings</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              {String((user as any)?.role || '').toUpperCase() === 'DOCTOR' && (
+              <ColourThemeSetting />
+              {isDoctor && (
                 <>
                   {settingsOpen && user?.id && <DoctorSignatureSettings doctorId={user.id} />}
                   {settingsOpen && user?.id && <DoctorLetterheadSettings doctorId={user.id} />}
@@ -536,16 +540,18 @@ export function Header() {
 
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setSettingsOpen(false)} disabled={settingsSaving}>Close</Button>
-                <Button onClick={() => void saveDoctorSettings()} disabled={settingsSaving}>
-                  {settingsSaving ? (
-                    <>
-                      <Spinner className="h-4 w-4 " />
-                      Saving…
-                    </>
-                  ) : (
-                    'Save'
-                  )}
-                </Button>
+                {isDoctor && (
+                  <Button onClick={() => void saveDoctorSettings()} disabled={settingsSaving}>
+                    {settingsSaving ? (
+                      <>
+                        <Spinner className="h-4 w-4 " />
+                        Saving…
+                      </>
+                    ) : (
+                      'Save'
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
           </DialogContent>

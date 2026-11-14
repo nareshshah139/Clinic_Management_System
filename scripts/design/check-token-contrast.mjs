@@ -72,8 +72,12 @@ function pairs() {
 
 const markdown = process.argv.includes('--markdown');
 let failures = 0;
-for (const theme of [':root', '.high-contrast']) {
-  const tokens = block(theme);
+const themes = {
+  'original palette (:root)': block(':root'),
+  'branded palette (:root[data-palette="branded"])': { ...block(':root'), ...block(':root[data-palette="branded"]') },
+  '.high-contrast': block('.high-contrast'),
+};
+for (const [theme, tokens] of Object.entries(themes)) {
   console.log(markdown ? `\n**${theme}**\n\n| foreground | background | ratio | min | |\n|---|---|---|---|---|` : `\n${theme}`);
   for (const [fg, bg, min] of pairs()) {
     const ratio = contrast(resolve(tokens, fg), resolve(tokens, bg));

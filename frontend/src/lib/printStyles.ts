@@ -1,16 +1,28 @@
 // Centralized print CSS for all printable documents (prescriptions, invoices, reports)
 // Consumers should inject the returned string inside a <style> tag in the print HTML.
 
-export const GLOBAL_PRINT_CSS = `
+import { activePalette, type Palette } from './palette';
+
+const PRINT_INKS: Record<Palette, { ink: string; muted: string; rule: string; surface: string; accent: string }> = {
+  original: { ink: '#1A1A1A', muted: '#555555', rule: '#DDDDDD', surface: '#F4F4F4', accent: '#2563EB' },
+  branded: { ink: '#262A27', muted: '#596057', rule: '#C6CEC3', surface: '#F1F3EF', accent: '#616B60' },
+};
+
+function printInks(palette: Palette): string {
+  const inks = PRINT_INKS[palette];
+  return `
 :root {
-  --print-ink: #262A27;
-  --print-muted: #596057;
-  --print-rule: #C6CEC3;
-  --print-surface: #F1F3EF;
-  --print-accent: #616B60;
+  --print-ink: ${inks.ink};
+  --print-muted: ${inks.muted};
+  --print-rule: ${inks.rule};
+  --print-surface: ${inks.surface};
+  --print-accent: ${inks.accent};
   --print-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+`;
+}
 
+const PRINT_LAYOUT_CSS = `
 @page {
   size: A4 portrait;
   margin: 0; /* content manages its own margins/padding */
@@ -87,12 +99,16 @@ export const GLOBAL_PRINT_CSS = `
 }
 `;
 
+function globalPrintCss(extraCss?: string): string {
+  const css = printInks(activePalette()) + PRINT_LAYOUT_CSS;
+  return extraCss ? `${css}\n${extraCss}` : css;
+}
+
 /**
  * Returns a full <style> tag string with global print CSS, plus any extra rules appended.
  */
 export function getGlobalPrintStyleTag(extraCss?: string): string {
-  const css = extraCss ? `${GLOBAL_PRINT_CSS}\n${extraCss}` : GLOBAL_PRINT_CSS;
-  return `<style>${css}</style>`;
+  return `<style>${globalPrintCss(extraCss)}</style>`;
 }
 
 /**
@@ -108,7 +124,7 @@ export function ensureGlobalPrintStyles(extraCss?: string): void {
     styleEl.id = STYLE_ID;
     document.head.appendChild(styleEl);
   }
-  const css = extraCss ? `${GLOBAL_PRINT_CSS}\n${extraCss}` : GLOBAL_PRINT_CSS;
+  const css = globalPrintCss(extraCss);
   if (styleEl.textContent !== css) {
     styleEl.textContent = css;
   }
