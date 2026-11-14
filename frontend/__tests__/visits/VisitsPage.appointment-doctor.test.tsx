@@ -13,7 +13,7 @@ jest.mock('@/lib/api', () => ({
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }), toast: jest.fn() }));
 jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor() { return null; });
 jest.mock('@/components/visits/VisitPhotos', () => function Photos() { return null; });
-jest.mock('@/components/tours', () => ({ DoctorTour: () => null }));
+jest.mock('@/components/tours/DoctorTour', () => ({ DoctorTour: () => null }));
 
 const doctors = [
   { id: 'doctor-1', firstName: 'Shravya', lastName: 'Rao' },

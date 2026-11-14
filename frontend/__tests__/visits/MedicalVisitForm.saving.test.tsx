@@ -8,7 +8,7 @@ let mockRxSaved: ((visit: { version: number }) => void) | undefined;
 let mockExportResult: Promise<string> | undefined;
 jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange, onBeforeExport, onVisitSaved }: any) { mockRxSaved = onVisitSaved; return <><button onClick={() => { mockExportResult = onBeforeExport(); }}>Export saved visit</button><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
 jest.mock('@/components/visits/VisitPhotos', () => function Photos({ onVisitVersion }: any) { mockPhotoVersion = onVisitVersion; return null; });
-jest.mock('@/components/tours', () => ({ DoctorTour: () => null }));
+jest.mock('@/components/tours/DoctorTour', () => ({ DoctorTour: () => null }));
 const flush = async () => { await act(async () => { await Promise.resolve(); }); };
 beforeEach(() => {
   jest.useFakeTimers(); jest.clearAllMocks(); localStorage.clear();

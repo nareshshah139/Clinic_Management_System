@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
 import { getErrorMessage } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useDashboardUser } from './dashboard-user-context';
 import { GlobalSearch } from './global-search';
 import { apiClient } from '@/lib/api';
@@ -23,11 +24,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ReceptionistTour } from '@/components/tours/ReceptionistTour';
 import { useToast } from '@/hooks/use-toast';
-import { DoctorSignatureSettings } from '@/components/users/DoctorSignatureSettings';
-import { DoctorLetterheadSettings } from '@/components/users/DoctorLetterheadSettings';
-import { DoctorAvailabilitySettings } from '@/components/users/DoctorAvailabilitySettings';
 import { LOW_STOCK_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
 import {
   buildTemplateSelectionValue,
@@ -38,6 +35,11 @@ import {
   validateWhatsAppTemplateChoice,
   type WhatsAppTemplateOption,
 } from '@/lib/whatsapp-settings';
+
+const ReceptionistTour = dynamic(() => import('@/components/tours/ReceptionistTour').then((m) => m.ReceptionistTour), { ssr: false });
+const DoctorSignatureSettings = dynamic(() => import('@/components/users/DoctorSignatureSettings').then((m) => m.DoctorSignatureSettings), { ssr: false });
+const DoctorLetterheadSettings = dynamic(() => import('@/components/users/DoctorLetterheadSettings').then((m) => m.DoctorLetterheadSettings), { ssr: false });
+const DoctorAvailabilitySettings = dynamic(() => import('@/components/users/DoctorAvailabilitySettings').then((m) => m.DoctorAvailabilitySettings), { ssr: false });
 
 const DUE_SALES = '/dashboard/pharmacy/sales?pay=CREDIT';
 

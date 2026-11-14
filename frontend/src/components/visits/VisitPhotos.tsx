@@ -772,7 +772,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                       title={it.uploadedAt ? displayClinicDateTime(it.uploadedAt) : it.url}
                       className="absolute inset-0"
                     >
-                      <img src={toAbsolute(it.url)} alt="thumb" className="h-full w-full object-cover" />
+                      <img src={toAbsolute(it.url)} alt="thumb" loading="lazy" width={112} height={80} className="h-full w-full object-cover" />
                     </button>
                     <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 truncate">
                       {it.position ? POSITION_LABEL[it.position] : ''}
@@ -877,7 +877,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                   {pendingFiles?.map((f, i) => (
                     <button key={`${f.name}-${i}`} type="button" onClick={() => setTaggingIndex(i)} className={`relative h-20 w-20 flex-shrink-0 rounded-md border overflow-hidden ${i === taggingIndex ? 'ring-2 ring-info' : ''}`} title={f.name}>
                       {previewUrls[i] ? (
-                        <img src={previewUrls[i]} alt="thumb" className="h-full w-full object-cover" />
+                        <img src={previewUrls[i]} alt="thumb" width={80} height={80} className="h-full w-full object-cover" />
                       ) : null}
                       <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 truncate">
                         {pendingPositions[i] ? POSITION_LABEL[pendingPositions[i]] : ''}

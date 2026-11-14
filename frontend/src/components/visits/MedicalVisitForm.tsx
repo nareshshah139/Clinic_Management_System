@@ -65,7 +65,7 @@ import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
-import { DoctorTour } from '@/components/tours';
+import { DoctorTour } from '@/components/tours/DoctorTour';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
 import { calculateAge, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
