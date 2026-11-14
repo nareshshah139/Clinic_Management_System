@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Mic, 
@@ -1839,9 +1840,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
               <CardTitle className="flex flex-wrap items-center gap-2">
                 <Clock className="h-5 w-5" />
                 Visit #{currentVisitNumber}
-                <Badge variant={visitStatus === 'COMPLETED' ? 'default' : visitStatus === 'IN_PROGRESS' ? 'secondary' : 'outline'}>
-                  {visitStatus.replace('_', ' ').toUpperCase()}
-                </Badge>
+                <StatusBadge domain="visit" status={visitStatus} />
                 {appointmentData && (
                   <Badge variant="secondary" className="bg-blue-100 text-blue-700">
                     <Calendar className="h-3 w-3 mr-1" />
@@ -1977,9 +1976,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Status:</span>
-                      <Badge variant={visitStatus === 'COMPLETED' ? 'default' : 'secondary'}>
-                        {visitStatus.replace('_', ' ').toUpperCase()}
-                      </Badge>
+                      <StatusBadge domain="visit" status={visitStatus} />
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Photos Captured:</span>

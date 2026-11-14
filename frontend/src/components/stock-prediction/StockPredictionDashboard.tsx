@@ -342,7 +342,7 @@ export function StockPredictionDashboard() {
                         <Tooltip />
                         {/* @ts-expect-error - recharts v3 Legend type compatibility with React 19 */}
                         <Legend />
-                        <Line type="monotone" dataKey="quantity" stroke="#8884d8" name="Quantity Sold" />
+                        <Line type="monotone" dataKey="quantity" stroke="var(--chart-1)" name="Quantity Sold" />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>

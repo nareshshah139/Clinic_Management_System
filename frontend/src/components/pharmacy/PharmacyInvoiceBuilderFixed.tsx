@@ -1648,16 +1648,16 @@ export function PharmacyInvoiceBuilderFixed({
               : '';
             return `
         <tr>
-          <td style="padding:6px;border:1px solid #ddd;">
+          <td style="padding:6px;border:1px solid var(--print-rule);">
             ${escapeHtml(line.name)}
             ${line.hsnCode ? `<div class="muted">HSN: ${escapeHtml(line.hsnCode)}</div>` : ''}
             ${batches ? `<div class="muted">Batch: ${escapeHtml(batches)}</div>` : ''}
           </td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:center;">${line.quantity}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(line.unitPrice)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(line.discountPercent)}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(line.taxPercent)}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(line.totalAmount)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:center;">${line.quantity}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(line.unitPrice)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(line.discountPercent)}%</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(line.taxPercent)}%</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(line.totalAmount)}</td>
         </tr>
       `;
           })
@@ -1668,14 +1668,14 @@ export function PharmacyInvoiceBuilderFixed({
 
             return `
         <tr>
-          <td style="padding:6px;border:1px solid #ddd;">
+          <td style="padding:6px;border:1px solid var(--print-rule);">
             ${escapeHtml(itemName)}
           </td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(item.unitPrice)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(item.discountPercent || 0)}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(item.taxPercent || 0)}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(item.totalAmount)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:center;">${item.quantity}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(item.unitPrice)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(item.discountPercent || 0)}%</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(item.taxPercent || 0)}%</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(item.totalAmount)}</td>
         </tr>
       `;
           })
@@ -1697,12 +1697,12 @@ export function PharmacyInvoiceBuilderFixed({
             .map(
               (slab: any) => `
         <tr>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(slab.taxPercent)}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(slab.taxableAmount)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(slab.cgst)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(slab.sgst)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(slab.igst)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(slab.totalTax)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(slab.taxPercent)}%</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.taxableAmount)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.cgst)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.sgst)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.igst)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.totalTax)}</td>
         </tr>
       `
             )
@@ -1725,7 +1725,7 @@ export function PharmacyInvoiceBuilderFixed({
               .no-print { display: none; }
             }
             body { 
-              font-family: Arial, sans-serif; 
+              font-family: var(--print-font); 
               padding: 20px;
               max-width: 800px;
               margin: 0 auto;
@@ -1733,21 +1733,21 @@ export function PharmacyInvoiceBuilderFixed({
             }
             h1 { 
               margin-bottom: 8px;
-              color: #1a1a1a;
+              color: var(--print-ink);
             }
             .invoice-header {
-              border-bottom: 2px solid #333;
+              border-bottom: 2px solid var(--print-ink);
               padding-bottom: 12px;
               margin-bottom: 20px;
             }
             .muted { 
-              color: #666;
+              color: var(--print-muted);
               font-size: 14px;
             }
             .billing-section {
               margin: 20px 0;
               padding: 15px;
-              background: #f9f9f9;
+              background: var(--print-surface);
               border-radius: 4px;
             }
             table { 
@@ -1756,18 +1756,18 @@ export function PharmacyInvoiceBuilderFixed({
               margin-top: 20px;
             }
             th { 
-              background: #f5f5f5;
+              background: var(--print-surface);
               font-weight: bold;
               padding: 10px 6px !important;
             }
             th, td {
-              border: 1px solid #ddd;
+              border: 1px solid var(--print-rule);
             }
             .totals-section {
               margin-top: 20px;
               text-align: right;
               padding: 15px;
-              background: #f9f9f9;
+              background: var(--print-surface);
               border-radius: 4px;
             }
             .totals-section div {
@@ -1776,15 +1776,15 @@ export function PharmacyInvoiceBuilderFixed({
             .grand-total {
               font-size: 20px;
               font-weight: bold;
-              color: #1a1a1a;
-              border-top: 2px solid #333;
+              color: var(--print-ink);
+              border-top: 2px solid var(--print-ink);
               padding-top: 12px;
               margin-top: 12px;
             }
             .print-button {
               margin: 20px 0;
               padding: 12px 24px;
-              background: #2563eb;
+              background: var(--print-accent);
               color: white;
               border: none;
               border-radius: 6px;
@@ -1792,7 +1792,7 @@ export function PharmacyInvoiceBuilderFixed({
               font-size: 16px;
             }
             .print-button:hover {
-              background: #1d4ed8;
+              background: var(--print-ink);
             }
           </style>
         </head>
@@ -1877,7 +1877,7 @@ export function PharmacyInvoiceBuilderFixed({
           ${
             invoiceCore?.notes || fallback?.notes || invoiceData.notes
               ? `
-            <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
+            <div style="margin-top: 20px; padding: 15px; background: var(--print-surface); border-radius: 4px;">
               <strong>Notes:</strong><br/>
               ${escapeHtml(invoiceCore?.notes || fallback?.notes || invoiceData.notes)}
             </div>

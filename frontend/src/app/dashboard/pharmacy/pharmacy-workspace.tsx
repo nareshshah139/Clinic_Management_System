@@ -25,7 +25,6 @@ import {
   Plus,
   Receipt,
   RefreshCcw,
-  TrendingUp,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { billHref, type BillPrefill } from '@/components/pharmacy/sales/sales-bill-model';
@@ -155,7 +154,7 @@ function PharmacyPageContent() {
   const openBill = (prefill?: BillPrefill) => router.push(billHref({ prefill }));
 
   return (
-    <main className="flex-1 bg-[#eef4f8] p-2 md:p-3">
+    <div className="flex-1">
       <div ref={pharmacyWorkspaceRef} className="mx-auto max-w-[1560px] scroll-mt-3">
         <div className="space-y-3">
           {pharmacyTab === 'desk' ? (
@@ -187,7 +186,7 @@ function PharmacyPageContent() {
 
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -230,108 +229,55 @@ function PharmacyDeskPanel({
 }) {
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-white shadow-sm">
-        <div className="grid gap-2 2xl:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)_auto] 2xl:items-center">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <PageHeader title="Pharmacy Desk" />
-              <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-100">
-                Command center
-              </span>
-            </div>
-            <p className="mt-0.5 truncate text-xs text-slate-300">
-              Queue, review, pick, bill, pay, dispense.
-            </p>
-          </div>
-
-          {sells ? (
-            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricStrip
-                label="Sales"
-                value={`₹${todaySales.toFixed(2)}`}
-                detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`}
-                icon={<DollarSign className="h-4 w-4" />}
-                intent="green"
-              />
-              <MetricStrip
-                label="Invoices"
-                value={invoicesToday}
-                detail={`${pendingInvoices} pending`}
-                icon={<Receipt className="h-4 w-4" />}
-                intent="blue"
-              />
-              <MetricStrip
-                label="Stock"
-                value={totalDrugs}
-                detail={`${lowStockDrugs} low`}
-                icon={<Pill className="h-4 w-4" />}
-                intent="purple"
-              />
-              <MetricStrip
-                label="Packages"
-                value={packagesCount}
-                detail="bundles"
-                icon={<Package className="h-4 w-4" />}
-                intent="amber"
-              />
-            </div>
-          ) : (
-            <div />
-          )}
-
-          <div className="flex flex-wrap justify-start gap-1.5 2xl:justify-end">
+      <PageHeader
+        title="Pharmacy Desk"
+        description="Queue, review, pick, bill, pay, dispense."
+        actions={
+          <>
             <PharmacyGuide />
             {sells && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
-                onClick={() => window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'))}
-              >
-                <RefreshCcw className="h-4 w-4" />
-                Refresh
-              </Button>
-            )}
-            {sells && (
               <>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
-                onClick={onOpenInvoices}
-              >
-                <Receipt className="h-4 w-4" />
-                Invoices
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
-                onClick={onOpenDrugs}
-              >
-                <Pill className="h-4 w-4" />
-                Drugs
-              </Button>
+                <Button size="sm" variant="outline" onClick={() => window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'))}>
+                  <RefreshCcw className="h-4 w-4" />
+                  Refresh
+                </Button>
+                <Button size="sm" variant="outline" onClick={onOpenInvoices}>
+                  <Receipt className="h-4 w-4" />
+                  Invoices
+                </Button>
+                <Button size="sm" variant="outline" onClick={onOpenDrugs}>
+                  <Pill className="h-4 w-4" />
+                  Drugs
+                </Button>
               </>
             )}
-          </div>
-        </div>
+          </>
+        }
+      />
 
-        <div className="mt-2 grid gap-1.5 lg:grid-cols-2">
-          <QuickAction
-            icon={<ClipboardCheck className="h-4 w-4" />}
-            title="Pharmacy Counter"
-            detail="Prescription queue and new bills"
-            onClick={onOpenCounter}
-          />
-          <QuickAction
-            icon={<Package className="h-4 w-4" />}
-            title="Inventory Control"
-            detail="Shelves, invoice scanning, expiry"
-            onClick={onOpenInventoryControl}
-          />
+      {sells && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricStrip label="Sales" value={`₹${todaySales.toFixed(2)}`} detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`} icon={<DollarSign className="h-4 w-4" />} />
+          <MetricStrip label="Invoices" value={invoicesToday} detail={`${pendingInvoices} pending`} icon={<Receipt className="h-4 w-4" />} />
+          <MetricStrip label="Stock" value={totalDrugs} detail={`${lowStockDrugs} low`} icon={<Pill className="h-4 w-4" />} />
+          <MetricStrip label="Packages" value={packagesCount} detail="bundles" icon={<Package className="h-4 w-4" />} />
         </div>
-      </section>
+      )}
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <QuickAction
+          icon={<ClipboardCheck className="h-4 w-4" />}
+          title="Pharmacy Counter"
+          detail="Prescription queue and new bills"
+          onClick={onOpenCounter}
+        />
+        <QuickAction
+          icon={<Package className="h-4 w-4" />}
+          title="Inventory Control"
+          detail="Shelves, invoice scanning, expiry"
+          onClick={onOpenInventoryControl}
+        />
+      </div>
 
       {isAgentDockOpen ? (
         <AgenticPharmacyDock />
@@ -347,17 +293,17 @@ function PharmacyDeskPanel({
 
 function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <section className="rounded-lg border bg-card px-4 py-3 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-950 text-white">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
             <Bot className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-slate-950">
+            <h3 className="truncate text-sm font-semibold text-foreground">
               Pharmacy AI assistant
             </h3>
-            <p className="truncate text-xs text-slate-500">
+            <p className="truncate text-xs text-muted-foreground">
               Opens when needed.
             </p>
           </div>
@@ -373,8 +319,8 @@ function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
 
 function AgenticPharmacyDockLoading() {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
-      <div className="flex items-center gap-3 text-sm text-slate-600">
+    <section className="rounded-lg border bg-card px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
         <Spinner className="h-4 w-4     " />
         Loading pharmacy assistant…
       </div>
@@ -386,8 +332,6 @@ function PharmacyGuide() {
   return (
     <QuickGuide
       title="Pharmacy Management Guide"
-      triggerVariant="ghost"
-      triggerClassName="text-white hover:bg-white/10 hover:text-white"
       sections={[
         {
           title: 'Prescription & Auto-Fill',
@@ -419,70 +363,38 @@ function PharmacyGuide() {
   );
 }
 
-function MetricStrip({
-  label,
-  value,
-  detail,
-  icon,
-  intent,
-}: {
-  label: string;
-  value: string | number;
-  detail: string;
-  icon: ReactNode;
-  intent: 'green' | 'blue' | 'purple' | 'amber';
-}) {
-  const colors = {
-    green: 'bg-emerald-50 text-emerald-700',
-    blue: 'bg-blue-50 text-blue-700',
-    purple: 'bg-violet-50 text-violet-700',
-    amber: 'bg-amber-50 text-amber-700',
-  };
-
+function MetricStrip({ label, value, detail, icon }: { label: string; value: string | number; detail: string; icon: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-white/10 px-2.5 py-1.5">
+    <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 shadow-sm">
       <div className="min-w-0">
-        <p className="text-xs text-slate-300">{label}</p>
-        <p className="truncate text-base font-semibold leading-5 text-white">{value}</p>
-        <p className="flex items-center text-xs leading-4 text-slate-400">
-          {label === "Today's sales" && <TrendingUp className="mr-1 h-3 w-3 text-emerald-700" />}
-          {detail}
-        </p>
+        <p className="text-sm text-muted-foreground">{label}</p>
+        <p className="truncate text-xl font-semibold tabular-nums text-foreground">{value}</p>
+        <p className="text-xs text-muted-foreground">{detail}</p>
       </div>
-      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${colors[intent]}`}>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
         {icon}
       </div>
     </div>
   );
 }
 
-function QuickAction({
-  icon,
-  title,
-  detail,
-  onClick,
-}: {
-  icon: ReactNode;
-  title: string;
-  detail: string;
-  onClick: () => void;
-}) {
+function QuickAction({ icon, title, detail, onClick }: { icon: ReactNode; title: string; detail: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-center justify-between gap-2 rounded-md border border-white/10 bg-white/10 px-2.5 py-1.5 text-left transition hover:-translate-y-0.5 hover:bg-white/15"
+      className="group flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-left shadow-sm transition-colors hover:bg-accent"
     >
-      <div className="flex min-w-0 items-center gap-2">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-slate-950">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
           {icon}
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-white">{title}</p>
-          <p className="truncate text-xs text-slate-300">{detail}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+          <p className="truncate text-xs text-muted-foreground">{detail}</p>
         </div>
       </div>
-      <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-1" />
+      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" />
     </button>
   );
 }

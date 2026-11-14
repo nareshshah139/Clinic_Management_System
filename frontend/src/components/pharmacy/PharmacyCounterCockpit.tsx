@@ -22,10 +22,13 @@ import {
   ShoppingCart,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { apiClient } from '@/lib/api';
 import { stockCheckLineName } from '@/lib/bill-line-name';
+import { statusLabel } from '@/lib/status-variants';
 import { PrescriptionInventoryLink, type InventorySuggestion } from './PrescriptionInventoryLink';
 
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
@@ -193,6 +196,13 @@ const QUEUE_FILTERS: ReadonlyArray<{ id: string; label: string; status?: QueueSt
 ];
 
 type QueueFilter = (typeof QUEUE_FILTERS)[number];
+
+const QUEUE_STATUS_AS_DISPENSE: Record<QueueStatus, DispenseTaskStatus> = {
+  pending: 'QUEUED',
+  partial: 'PARTIALLY_FILLED',
+  dispensed: 'DISPENSED',
+  expired: 'PAUSED',
+};
 
 const isBillable = (entry: QueueEntry) => entry.dispensingEligible !== false && entry.status !== 'dispensed';
 
@@ -574,99 +584,79 @@ export function PharmacyCounterCockpit({
   );
 
   return (
-    <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border border-slate-200/80 bg-white shadow-sm xl:h-[calc(100vh-130px)]">
-      <div className="shrink-0 border-b border-slate-800 bg-slate-950 px-3 py-2 text-white md:px-4">
-        <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-semibold tracking-tight">
-                Pharmacy Counter
-              </h1>
-              <Badge variant="outline" className="border-emerald-300/30 bg-emerald-300/10 px-2 py-0 text-xs text-emerald-100">
-                Pharmacist review
-              </Badge>
-              <Badge variant="outline" className="border-cyan-300/30 bg-cyan-300/10 px-2 py-0 text-xs text-cyan-100">
-                Shelf locations
-              </Badge>
-            </div>
-            <p className="mt-0.5 truncate text-xs text-slate-300">
-              Queue to pick to bill in one workstation.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap justify-start gap-1.5 xl:justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
-              onClick={loadQueue}
-              disabled={loadingQueue || savingTask}
-            >
+    <div className="space-y-3">
+      <PageHeader
+        title="Pharmacy Counter"
+        description="Queue to pick to bill in one workstation."
+        actions={
+          <>
+            <Button size="sm" variant="outline" onClick={loadQueue} disabled={loadingQueue || savingTask}>
               {loadingQueue ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
               Refresh
             </Button>
             {onOpenBilling ? (
-              <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={() => onOpenBilling()}>
+              <Button size="sm" onClick={() => onOpenBilling()}>
                 <Plus className="h-4 w-4" />
                 New bill
               </Button>
             ) : null}
+          </>
+        }
+      />
+      <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border bg-card shadow-sm xl:h-[calc(100vh-196px)]">
+        {error || stockError ? (
+          <div role="alert" className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm font-medium text-red-700">
+            {error || stockError}
           </div>
+        ) : null}
+
+        <div className="grid min-h-0 flex-1 gap-2 bg-slate-100/70 p-2 xl:grid-cols-[280px_minmax(0,1fr)_290px] 2xl:grid-cols-[300px_minmax(0,1fr)_330px]">
+          <QueueColumn
+            queue={queue}
+            queueTotal={queueTotal}
+            filter={filter}
+            statusCounts={statusCounts}
+            onFilter={(option) => {
+              setFilter(option);
+              setQueuePages(1);
+            }}
+            activeId={activeId}
+            loading={loadingQueue}
+            onSelect={selectQueueEntry}
+            onBill={onOpenBilling ? (entry) => onOpenBilling(billingPrefill(entry)) : undefined}
+            onShowMore={queuePages * QUEUE_PAGE_SIZE < queueTotal ? () => setQueuePages((pages) => pages + 1) : undefined}
+          />
+
+          <ActiveDispenseColumn
+            activeEntry={activeEntry}
+            stockByLine={stockByLine}
+            loadingStock={loadingStock}
+            setLineAction={updateLineAction}
+            onInventoryLinked={onOpenBilling ? async () => setStockReloadKey((key) => key + 1) : undefined}
+            activeLifecycle={activeLifecycle}
+            reviewedLineCount={reviewedLineCount}
+            readyForBilling={readyForBilling}
+            reasonType={reasonType}
+            setReasonType={setReasonType}
+            reasonNote={reasonNote}
+            setReasonNote={setReasonNote}
+            onOpenBilling={onOpenBilling ? openActiveBilling : undefined}
+            onUpdateStatus={updateTaskStatus}
+            savingTask={savingTask}
+          />
+
+          <FulfillmentColumn
+            activeEntry={activeEntry}
+            pickLines={pickLines}
+            activeLifecycle={activeLifecycle}
+            exceptionCount={exceptionCount}
+            allLinesReviewed={allLinesReviewed}
+            onOpenPartnerSync={onOpenPartnerSync}
+            onOpenInventoryControl={onOpenInventoryControl}
+          />
         </div>
-      </div>
-
-      {error || stockError ? (
-        <div role="alert" className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm font-medium text-red-700">
-          {error || stockError}
-        </div>
-      ) : null}
-
-      <div className="grid min-h-0 flex-1 gap-2 bg-slate-100/70 p-2 xl:grid-cols-[280px_minmax(0,1fr)_290px] 2xl:grid-cols-[300px_minmax(0,1fr)_330px]">
-        <QueueColumn
-          queue={queue}
-          queueTotal={queueTotal}
-          filter={filter}
-          statusCounts={statusCounts}
-          onFilter={(option) => {
-            setFilter(option);
-            setQueuePages(1);
-          }}
-          activeId={activeId}
-          loading={loadingQueue}
-          onSelect={selectQueueEntry}
-          onBill={onOpenBilling ? (entry) => onOpenBilling(billingPrefill(entry)) : undefined}
-          onShowMore={queuePages * QUEUE_PAGE_SIZE < queueTotal ? () => setQueuePages((pages) => pages + 1) : undefined}
-        />
-
-        <ActiveDispenseColumn
-          activeEntry={activeEntry}
-          stockByLine={stockByLine}
-          loadingStock={loadingStock}
-          setLineAction={updateLineAction}
-          onInventoryLinked={onOpenBilling ? async () => setStockReloadKey((key) => key + 1) : undefined}
-          activeLifecycle={activeLifecycle}
-          reviewedLineCount={reviewedLineCount}
-          readyForBilling={readyForBilling}
-          reasonType={reasonType}
-          setReasonType={setReasonType}
-          reasonNote={reasonNote}
-          setReasonNote={setReasonNote}
-          onOpenBilling={onOpenBilling ? openActiveBilling : undefined}
-          onUpdateStatus={updateTaskStatus}
-          savingTask={savingTask}
-        />
-
-        <FulfillmentColumn
-          activeEntry={activeEntry}
-          pickLines={pickLines}
-          activeLifecycle={activeLifecycle}
-          exceptionCount={exceptionCount}
-          allLinesReviewed={allLinesReviewed}
-          onOpenPartnerSync={onOpenPartnerSync}
-          onOpenInventoryControl={onOpenInventoryControl}
-        />
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }
 
@@ -709,8 +699,8 @@ function QueueColumn({
             onClick={() => onFilter(option)}
             className={`rounded-full border px-2 py-1 text-xs font-semibold transition ${
               filter.id === option.id
-                ? 'border-slate-950 bg-slate-950 text-white'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
           >
             {option.label}
@@ -777,29 +767,29 @@ function QueueRow({
   return (
     <li
       className={`relative rounded-lg border transition ${
-        active ? 'border-slate-950 bg-slate-950 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-950 hover:border-slate-300 hover:bg-slate-50'
+        active ? 'border-primary bg-accent shadow-sm' : 'border-border bg-card hover:bg-accent'
       }`}
     >
       <button type="button" onClick={onSelect} className="w-full px-2.5 py-2 text-left">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p id={nameId} className="truncate text-sm font-semibold">{entry.patient.name}</p>
-            <p className={`mt-0.5 truncate text-xs ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {entry.patient.patientCode || entry.patient.id}
             </p>
           </div>
-          <StatusChip status={entry.status} dispenseStatus={entry.dispenseStatus} active={active} />
+          <StatusBadge domain="dispense" status={entry.dispenseStatus ?? QUEUE_STATUS_AS_DISPENSE[entry.status]} />
         </div>
-        <div className={`mt-2 flex flex-wrap items-center gap-2 text-xs ${onBill ? 'pr-20' : ''} ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+        <div className={`mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground ${onBill ? 'pr-20' : ''}`}>
           <span>{entry.medications.length} medicines</span>
           <span>{formatAge(entry.pendingHours)}</span>
           {entry.isOverTwoHours && entry.status !== 'dispensed' ? (
-            <span className={active ? 'text-amber-200' : 'text-amber-700'}>over 2h</span>
+            <span className="font-medium text-warning-text">over 2h</span>
           ) : null}
         </div>
       </button>
       {onBill ? (
-        <Button size="sm" variant="outline" className="absolute bottom-1.5 right-2 text-foreground" aria-describedby={nameId} onClick={onBill}>
+        <Button size="sm" variant="outline" className="absolute bottom-1.5 right-2" aria-describedby={nameId} onClick={onBill}>
           <Receipt className="h-4 w-4" />
           Bill
         </Button>
@@ -856,22 +846,16 @@ function ActiveDispenseColumn({
       {activeEntry ? (
         <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <div className="grid gap-2 bg-slate-950 px-3 py-2 text-white @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-center">
+            <div className="grid gap-2 bg-muted px-3 py-2 @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-center">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="truncate text-base font-semibold">
                     {activeEntry.patient.name}
                   </p>
-                  <Badge variant="outline" className="border-white/20 bg-white/10 px-2 py-0 text-xs text-white">
-                    {activeLifecycle}
-                  </Badge>
-                  {activeEntry.linkedInvoiceIds.length > 0 ? (
-                    <Badge variant="outline" className="border-emerald-300/30 bg-emerald-300/10 px-2 py-0 text-xs text-emerald-100">
-                      Invoice
-                    </Badge>
-                  ) : null}
+                  <StatusBadge domain="dispense" status={activeLifecycle} />
+                  {activeEntry.linkedInvoiceIds.length > 0 ? <Badge variant="info">Invoice</Badge> : null}
                 </div>
-                <p className="mt-0.5 truncate text-xs text-slate-300">
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   Dr. {activeEntry.doctor.name} · {displayClinicDateTime(activeEntry.createdAt)} · {activeEntry.prescriptionId}
                 </p>
               </div>
@@ -1066,7 +1050,7 @@ function MedicationReviewRow({
         {warnings.length > 0 ? (
           <div className="mt-1 flex flex-wrap gap-1">
             {warnings.slice(0, 2).map((warning) => (
-              <Badge key={warning} variant="outline" className="h-5 bg-amber-50 px-1.5 text-xs text-amber-800">
+              <Badge key={warning} variant="warning" className="h-5 px-1.5">
                 <AlertTriangle className="h-3 w-3" />
                 {warning}
               </Badge>
@@ -1078,7 +1062,7 @@ function MedicationReviewRow({
 
       <div className="flex flex-wrap gap-1 @3xl:block">
         <StockBadge stock={stock} />
-        <Badge variant="outline" className="mt-0 bg-slate-50 text-xs text-slate-700 @3xl:mt-1">
+        <Badge variant="neutral" className="mt-0 @3xl:mt-1">
           Qty {requiredQuantity}
         </Badge>
       </div>
@@ -1131,9 +1115,9 @@ function FulfillmentColumn({
         detail={activeEntry ? `${exceptionCount} exceptions` : 'No active pick'}
       />
 
-      <div className="mt-2 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-950 text-white">
-        <div className="border-b border-white/10 px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-normal text-slate-400">
+      <div className="mt-2 shrink-0 overflow-hidden rounded-lg border bg-muted">
+        <div className="border-b px-3 py-2">
+          <p className="text-xs font-semibold text-muted-foreground">
             Scan next
           </p>
           {nextPick ? (
@@ -1141,7 +1125,7 @@ function FulfillmentColumn({
               <p className="mt-1 truncate text-sm font-semibold">
                 {nextPick.medication.drugName}
               </p>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-muted-foreground">
                 Pick {nextPick.requiredQuantity} · {nextPick.recommendedBatch?.storageLocation || 'Unmapped shelf'}
               </p>
             </>
@@ -1149,7 +1133,7 @@ function FulfillmentColumn({
             <p className="mt-1 text-sm font-semibold">No active item</p>
           )}
         </div>
-        <div className="grid grid-cols-3 divide-x divide-white/10 text-center">
+        <div className="grid grid-cols-3 divide-x text-center">
           <ScanFact label="Batch" value={nextPick?.recommendedBatch?.batchNumber || '--'} />
           <ScanFact label="Expiry" value={nextPick?.recommendedBatch?.expiryDate ? displayUtcDate(nextPick.recommendedBatch.expiryDate) : '--'} />
           <ScanFact label="Stock" value={nextPick?.stock ? stockQuantity(nextPick.stock) : '--'} />
@@ -1219,7 +1203,7 @@ function FulfillmentColumn({
                       Pick {line.requiredQuantity} · {availableText(line.stock)}
                     </p>
                   </div>
-                  <Badge variant="outline" className="shrink-0 bg-white text-slate-700">
+                  <Badge variant="neutral" className="shrink-0">
                     {line.recommendedBatch?.batchNumber || 'No batch'}
                   </Badge>
                 </div>
@@ -1290,55 +1274,6 @@ function PanelHeader({
   );
 }
 
-function StatusChip({
-  status,
-  dispenseStatus,
-  active,
-}: {
-  status: QueueStatus;
-  dispenseStatus?: DispenseTaskStatus;
-  active?: boolean;
-}) {
-  const label =
-    dispenseStatusLabels[dispenseStatus || ''] ||
-    {
-      pending: 'Queued',
-      partial: 'Partial',
-      dispensed: 'Done',
-      expired: 'Paused',
-    }[status];
-  return (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
-        active
-          ? 'border-white/20 bg-white/10 text-white'
-          : dispenseStatus === 'DISPENSED' || status === 'dispensed'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-            : dispenseStatus === 'PAUSED' ||
-                dispenseStatus === DISPENSE_TASK_CANCELLED ||
-                status === 'expired'
-              ? 'border-red-200 bg-red-50 text-red-800'
-              : dispenseStatus === 'PARTIALLY_FILLED' || status === 'partial'
-                ? 'border-amber-200 bg-amber-50 text-amber-800'
-                : 'border-slate-200 bg-slate-50 text-slate-700'
-      }`}
-    >
-      {label}
-    </span>
-  );
-}
-
-const dispenseStatusLabels: Record<string, string> = {
-  QUEUED: 'Queued',
-  IN_REVIEW: 'Review',
-  PARTIALLY_FILLED: 'Partial',
-  PAUSED: 'Paused',
-  READY_TO_BILL: 'Bill',
-  PAID: 'Paid',
-  DISPENSED: 'Done',
-  CANCELLED: 'Cancelled',
-};
-
 function LifecycleRail({ active }: { active: DispenseLifecycle }) {
   return (
     <div className="flex max-w-full flex-wrap gap-1 @2xl:justify-end">
@@ -1351,12 +1286,12 @@ function LifecycleRail({ active }: { active: DispenseLifecycle }) {
             className={`rounded-full border px-2 py-0.5 text-center text-xs font-semibold ${
               isActive
                 ? isExceptional
-                  ? 'border-amber-300 bg-amber-100 text-amber-900'
-                  : 'border-slate-950 bg-slate-950 text-white'
-                : 'border-slate-200 bg-white text-slate-500'
+                  ? 'border-warning-border bg-warning-soft text-warning-text'
+                  : 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-card text-muted-foreground'
             }`}
           >
-            {step}
+            {statusLabel('dispense', step)}
           </div>
         );
       })}
@@ -1365,32 +1300,9 @@ function LifecycleRail({ active }: { active: DispenseLifecycle }) {
 }
 
 function StockBadge({ stock }: { stock?: StockCheckItem }) {
-  if (!stock) {
-    return (
-      <Badge variant="outline" className="bg-slate-50 text-slate-700">
-        Checking
-      </Badge>
-    );
-  }
-  const config = {
-    UNMATCHED: 'bg-red-50 text-red-800',
-    OUT_OF_STOCK: 'bg-red-50 text-red-800',
-    LOW_STOCK: 'bg-amber-50 text-amber-800',
-    IN_STOCK: 'bg-emerald-50 text-emerald-800',
-  }[stock.stockStatus];
-  return (
-    <Badge variant="outline" className={config}>
-      {stockStatusLabels[stock.stockStatus]}
-    </Badge>
-  );
+  if (!stock) return <Badge variant="neutral">Checking</Badge>;
+  return <StatusBadge domain="stock" status={stock.stockStatus} />;
 }
-
-const stockStatusLabels: Record<StockCheckItem['stockStatus'], string> = {
-  UNMATCHED: 'Not linked',
-  OUT_OF_STOCK: 'Out of stock',
-  LOW_STOCK: 'Low stock',
-  IN_STOCK: 'In stock',
-};
 
 const isLinked = (stock: StockCheckItem) => stock.stockStatus !== 'UNMATCHED';
 
@@ -1420,10 +1332,10 @@ function CompactFact({ value }: { value: string | number }) {
 function ScanFact({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="px-2 py-2">
-      <p className="text-xs font-semibold uppercase tracking-normal text-slate-400">
+      <p className="text-xs font-semibold text-muted-foreground">
         {label}
       </p>
-      <p className="whitespace-normal text-xs font-semibold text-white">{value}</p>
+      <p className="whitespace-normal text-xs font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -1443,8 +1355,8 @@ function ReviewButton({
       onClick={onClick}
       className={`rounded-full border px-2 py-1 text-xs font-semibold transition ${
         active
-          ? 'border-slate-950 bg-slate-950 text-white'
-          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-border bg-card text-foreground hover:bg-accent'
       }`}
     >
       {children}
@@ -1467,7 +1379,7 @@ function ChecklistItem({
     <div className="flex gap-2 rounded-md border border-slate-200 bg-white p-1.5 shadow-sm">
       <div
         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
-          done ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+          done ? 'bg-success-soft text-success-text' : 'bg-muted text-muted-foreground'
         }`}
       >
         {done ? <CheckCircle2 className="h-4 w-4" /> : icon}

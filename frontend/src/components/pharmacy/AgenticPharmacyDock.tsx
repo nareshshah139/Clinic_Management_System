@@ -128,7 +128,7 @@ type ThreadActionState = {
   type: "archive" | "restore";
 } | null;
 
-const chartColors = ["#2563eb", "#059669", "#dc2626", "#9333ea", "#ea580c"];
+const chartColors = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 
 const hasThreadContent = (thread: AgentSession) =>
   Boolean(thread.hasContent) ||
@@ -572,7 +572,7 @@ export function AgenticPharmacyDock() {
                   : "Assistant unavailable"}
             </Badge>
             {pendingProposalCount > 0 && (
-              <Badge className="bg-amber-400 text-slate-950">
+              <Badge variant="warning">
                 {pendingProposalCount} pending
               </Badge>
             )}
@@ -682,7 +682,7 @@ export function AgenticPharmacyDock() {
                 key={message.id}
                 className={
                   message.role === "user"
-                    ? "ml-auto max-w-[86%] rounded-md bg-slate-950 px-3 py-2 text-sm text-white"
+                    ? "ml-auto max-w-[86%] rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground"
                     : "mr-auto max-w-[92%] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
                 }
               >
@@ -1019,7 +1019,7 @@ function ThreadListItem({
             {pharmacyChatTitle(session.title)}
           </div>
           {session.pendingProposalCount ? (
-            <Badge className="h-5 bg-amber-400 px-1.5 text-xs text-slate-950">
+            <Badge variant="warning" className="h-5 px-1.5">
               {session.pendingProposalCount}
             </Badge>
           ) : null}

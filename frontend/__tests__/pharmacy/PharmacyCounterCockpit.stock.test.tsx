@@ -114,7 +114,7 @@ it('starts review through explicit pull when staff select a prescription without
   await screen.findByText('10 available');
   fireEvent.click(screen.getByRole('button', { name: /Patient rx-1/ }));
   await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/pharmacy/dispense-tasks/task-1/status', { status: 'IN_REVIEW' }));
-  expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('Review');
+  expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('In review');
 });
 
 it('refreshes invoice coverage after checkout without creating a task during refresh', async () => {
@@ -123,7 +123,7 @@ it('refreshes invoice coverage after checkout without creating a task during ref
   get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(8) : { data: [{ ...entry(), status: 'dispensed', dispenseStatus: 'DISPENSED', linkedInvoiceIds: ['paid-invoice'] }], pagination: { total: 1 } });
   act(() => window.dispatchEvent(new CustomEvent('pharmacy-invoices-refresh')));
   await screen.findByText('8 available');
-  expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('Done');
+  expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('Dispensed');
   expect(apiClient.post).not.toHaveBeenCalled();
 });
 

@@ -59,7 +59,7 @@ describe('DoctorDayCalendar appointment blocks', () => {
     [AppointmentStatus.SCHEDULED, 'Scheduled'],
     [AppointmentStatus.CONFIRMED, 'Confirmed'],
     [AppointmentStatus.CHECKED_IN, 'Checked in'],
-    [AppointmentStatus.IN_PROGRESS, 'In progress'],
+    [AppointmentStatus.IN_PROGRESS, 'In consultation'],
     [AppointmentStatus.COMPLETED, 'Completed'],
     [AppointmentStatus.NO_SHOW, 'No-show'],
   ])('shows a %s chip on the block', async (status, label) => {

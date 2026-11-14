@@ -114,7 +114,7 @@ function injectTourStyles() {
       
       .introjs-skipbutton {
         background: #ef4444 !important;
-        color: #ffffff !important;
+        color: var(--destructive-foreground) !important;
         font-weight: 700 !important;
         border: 2px solid #ef4444 !important;
         border-radius: 50% !important;
@@ -138,7 +138,7 @@ function injectTourStyles() {
       
       .introjs-skipbutton:hover {
         background: #dc2626 !important;
-        color: #ffffff !important;
+        color: var(--destructive-foreground) !important;
         transform: translateY(-1px) scale(1.05) !important;
         box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5) !important;
         border-color: #dc2626 !important;

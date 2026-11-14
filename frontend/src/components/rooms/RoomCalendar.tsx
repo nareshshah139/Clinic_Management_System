@@ -511,7 +511,7 @@ export default function RoomCalendar() {
                               }
                             }}
                           >
-                            <div className="w-full min-w-0 max-h-full overflow-hidden font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: '#000000', fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))', lineHeight: '1.2' }}>
+                            <div className="w-full min-w-0 max-h-full overflow-hidden font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: 'var(--foreground)', fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))', lineHeight: '1.2' }}>
                               <div className="whitespace-normal [overflow-wrap:anywhere] font-semibold">
                                 {apt.patient.name}
                                 {apt.visitType === 'PROCEDURE' && apt.notes && (

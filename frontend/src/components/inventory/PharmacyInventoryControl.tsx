@@ -258,38 +258,30 @@ function ScenarioCard({
       onClick={onClick}
       className={`group flex min-h-36 flex-col justify-between rounded-md border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-sm ${
         active
-          ? 'border-slate-950 bg-slate-950 text-white'
-          : 'border-slate-200 bg-white text-slate-950 hover:border-slate-300'
+          ? 'border-primary bg-accent text-foreground'
+          : 'border-border bg-card text-foreground hover:bg-accent'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div
           className={`flex h-9 w-9 items-center justify-center rounded-md ${
-            active ? 'bg-white text-slate-950' : 'bg-slate-100 text-slate-700'
+            active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
           }`}
         >
           {icon}
         </div>
         <ArrowRight
           className={`h-4 w-4 transition-transform group-hover:translate-x-1 ${
-            active ? 'text-white' : 'text-slate-400'
+            active ? 'text-foreground' : 'text-muted-foreground'
           }`}
         />
       </div>
       <div>
         <p className="mt-4 text-base font-semibold">{title}</p>
-        <p
-          className={`mt-2 text-sm leading-5 ${
-            active ? 'text-slate-300' : 'text-slate-600'
-          }`}
-        >
+        <p className="mt-2 text-sm leading-5 text-muted-foreground">
           {detail}
         </p>
-        <p
-          className={`mt-3 text-xs font-semibold uppercase tracking-normal ${
-            active ? 'text-emerald-300' : 'text-emerald-700'
-          }`}
-        >
+        <p className="mt-3 text-xs font-semibold text-success-text">
           {action}
         </p>
       </div>

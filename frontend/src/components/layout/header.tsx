@@ -2,7 +2,7 @@
 
 import { displayUtcDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
-import { Bell, Settings, User, Palette } from 'lucide-react';
+import { Bell, Settings, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +23,6 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useBrandedMode } from './branded-mode-context';
 import { ReceptionistTour } from '@/components/tours/ReceptionistTour';
 import { useToast } from '@/hooks/use-toast';
 import { DoctorSignatureSettings } from '@/components/users/DoctorSignatureSettings';
@@ -49,7 +48,6 @@ const DUE_SALES = '/dashboard/pharmacy/sales?pay=CREDIT';
 export function Header() {
   const router = useRouter();
   const { user, loading, refresh } = useDashboardUser();
-  const { brandedEnabled, toggleBranded, loading: brandedLoading } = useBrandedMode();
   const { toast } = useToast();
 
   type NotificationItem = {
@@ -369,17 +367,6 @@ export function Header() {
           </div>
         )}
         
-        {/* Branded mode toggle */}
-        <div className="flex items-center gap-2 pr-2 border-r border-gray-200 mr-2">
-          <Palette className="h-4 w-4 text-gray-500" />
-          <span className="text-xs text-gray-600">Branded</span>
-          <Switch
-            checked={brandedEnabled}
-            onCheckedChange={() => toggleBranded()}
-            aria-label="Toggle branded mode"
-            disabled={brandedLoading}
-          />
-        </div>
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

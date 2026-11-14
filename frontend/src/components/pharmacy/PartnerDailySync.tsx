@@ -641,9 +641,7 @@ export function PartnerDailySync() {
                       </TableCell>
                       <TableCell>{displayUtcDate(sale.date)}</TableCell>
                       <TableCell>
-                        <StatusBadge domain="workflow" status={sale.status}>
-                          {sale.status.replace(/_/g, ' ')}
-                        </StatusBadge>
+                        <StatusBadge domain="workflow" status={sale.status} />
                       </TableCell>
                       <TableCell>{sale.totalQuantity}</TableCell>
                       <TableCell className="text-right tabular-nums">{money(sale.netAmount)}</TableCell>

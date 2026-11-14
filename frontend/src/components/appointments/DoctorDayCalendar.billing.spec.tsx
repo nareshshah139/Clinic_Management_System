@@ -89,8 +89,8 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(first.querySelector('[data-bill-type]')).toHaveAttribute('title', 'First consultation');
     expect(first.querySelector('[data-appointment-status]')).toHaveAttribute('title', 'Confirmed');
     expect(first.querySelector('[data-appointment-status]')).toHaveTextContent('Confirmed');
-    const second = screen.getByRole('button', { name: 'Priya Nair, 09:15-09:30, In progress' });
-    expect(second.querySelector('[data-appointment-status]')).toHaveAttribute('title', 'In progress');
+    const second = screen.getByRole('button', { name: 'Priya Nair, 09:15-09:30, In consultation' });
+    expect(second.querySelector('[data-appointment-status]')).toHaveAttribute('title', 'In consultation');
     expect(second.querySelector('[data-appointment-time]')).toHaveTextContent('09:15-09:30');
   });
 

@@ -328,7 +328,7 @@ export function PharmacyDashboard() {
                 <div key={alert.id} className="border rounded-lg p-3 bg-orange-50 border-orange-200">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-medium text-sm">{alert.name}</h4>
-                    <StatusBadge domain="stock" status="LOW_STOCK">Low Stock</StatusBadge>
+                    <StatusBadge domain="stock" status="LOW_STOCK" />
                   </div>
                   <p className="text-xs text-gray-600 mb-1">{alert.manufacturerName}</p>
                   <div className="flex justify-between text-xs">

@@ -67,20 +67,20 @@ function renderPrintDocument(doc: PrintDocument): string {
     ${getGlobalPrintStyleTag()}
     <style>
       @media print { body { margin: 12mm; } .no-print { display: none; } }
-      body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; color: #1a1a1a; }
+      body { font-family: var(--print-font); padding: 20px; max-width: 800px; margin: 0 auto; color: var(--print-ink); }
       .clinic { text-align: center; margin-bottom: 12px; font-size: 14px; line-height: 1.5; }
       .clinic-name { font-size: 22px; font-weight: bold; }
       h1 { margin: 0 0 8px; font-size: 20px; }
-      .header { border-bottom: 2px solid #333; padding-bottom: 12px; margin-bottom: 16px; }
+      .header { border-bottom: 2px solid var(--print-ink); padding-bottom: 12px; margin-bottom: 16px; }
       .meta { font-size: 14px; line-height: 1.6; }
-      .party { margin: 16px 0; padding: 12px; background: #f6f6f6; border-radius: 4px; line-height: 1.6; }
+      .party { margin: 16px 0; padding: 12px; background: var(--print-surface); border-radius: 4px; line-height: 1.6; }
       table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-      th, td { border: 1px solid #ddd; padding: 6px; font-variant-numeric: tabular-nums; }
-      th { background: #f2f2f2; }
+      th, td { border: 1px solid var(--print-rule); padding: 6px; font-variant-numeric: tabular-nums; }
+      th { background: var(--print-surface); }
       .totals { margin-top: 16px; text-align: right; line-height: 1.8; font-variant-numeric: tabular-nums; }
-      .grand { font-size: 20px; font-weight: bold; border-top: 2px solid #333; padding-top: 8px; margin-top: 8px; }
-      .notes { margin-top: 16px; padding: 12px; background: #f6f6f6; border-radius: 4px; }
-      .print-button { margin: 16px 0; padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
+      .grand { font-size: 20px; font-weight: bold; border-top: 2px solid var(--print-ink); padding-top: 8px; margin-top: 8px; }
+      .notes { margin-top: 16px; padding: 12px; background: var(--print-surface); border-radius: 4px; }
+      .print-button { margin: 16px 0; padding: 10px 20px; background: var(--print-accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
     </style>
   </head>
   <body>

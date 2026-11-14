@@ -1,16 +1,54 @@
-export type StatusVariant = 'success' | 'warning' | 'info' | 'neutral' | 'danger';
-export type StatusDomain = 'appointment' | 'visit' | 'invoice' | 'stock' | 'prescription' | 'room' | 'workflow' | 'priority' | 'confidence';
+export type StatusVariant = 'success' | 'warning' | 'info' | 'highlight' | 'neutral' | 'danger';
+export type StatusDomain = 'appointment' | 'visit' | 'invoice' | 'dispense' | 'stock' | 'room' | 'workflow' | 'priority' | 'confidence';
 
-const statuses: Record<StatusDomain, Readonly<Record<string, StatusVariant>>> = {
-  appointment: { SCHEDULED: 'info', CONFIRMED: 'info', CHECKED_IN: 'warning', IN_PROGRESS: 'warning', COMPLETED: 'success', CANCELLED: 'neutral', NO_SHOW: 'danger', RESCHEDULED: 'info' },
-  visit: { DRAFT: 'neutral', SCHEDULED: 'info', WAITING: 'warning', IN_PROGRESS: 'warning', COMPLETED: 'success', SIGNED: 'success', CANCELLED: 'neutral' },
-  invoice: { CONFIRMED: 'info', FAILED: 'danger', DRAFT: 'neutral', PENDING: 'warning', UNPAID: 'warning', PARTIALLY_PAID: 'warning', PARTIAL: 'warning', PAID: 'success', COMPLETED: 'success', DISPENSED: 'info', OVERDUE: 'danger', CANCELLED: 'neutral', REFUNDED: 'info', VOID: 'neutral' },
-  stock: { UNMATCHED: 'neutral', IN_STOCK: 'success', AVAILABLE: 'success', NORMAL: 'success', LOW_STOCK: 'warning', LOW: 'warning', EXPIRING: 'warning', OUT_OF_STOCK: 'danger', OUT: 'danger', EXPIRED: 'danger', CRITICAL: 'danger' },
-  prescription: { PARTIAL: 'warning', EXPIRED: 'danger', DRAFT: 'neutral', PENDING: 'warning', PARTIALLY_DISPENSED: 'warning', READY: 'info', DISPENSED: 'success', COMPLETED: 'success', CANCELLED: 'neutral' },
-  room: { AVAILABLE: 'success', FREE: 'success', OCCUPIED: 'warning', BOOKED: 'info', RESERVED: 'info', MAINTENANCE: 'danger', CLEANING: 'warning', INACTIVE: 'neutral' },
-  workflow: { SUBMITTED: 'info', STOCK_COMMITTED: 'success', PARTIAL_STOCK_COMMITTED: 'warning', RECONCILIATION_REQUIRED: 'danger', DRAFT: 'neutral', PENDING: 'warning', IN_PROGRESS: 'info', APPROVED: 'success', POSTED: 'success', COMPLETED: 'success', CANCELLED: 'neutral', REJECTED: 'danger', FAILED: 'danger', ERROR: 'danger' },
-  priority: { CRITICAL: 'danger', HIGH: 'warning', MEDIUM: 'warning', LOW: 'neutral' },
-  confidence: { HIGH: 'success', MEDIUM: 'info', LOW: 'warning', COLD_START: 'neutral' },
+type Presentation = readonly [StatusVariant, string];
+
+const statuses: Record<StatusDomain, Readonly<Record<string, Presentation>>> = {
+  appointment: {
+    SCHEDULED: ['neutral', 'Scheduled'], CONFIRMED: ['info', 'Confirmed'], CHECKED_IN: ['warning', 'Checked in'],
+    IN_PROGRESS: ['highlight', 'In consultation'], COMPLETED: ['success', 'Completed'], NO_SHOW: ['danger', 'No-show'],
+    CANCELLED: ['neutral', 'Cancelled'], RESCHEDULED: ['info', 'Rescheduled'],
+  },
+  visit: {
+    DRAFT: ['neutral', 'Draft'], SCHEDULED: ['info', 'Scheduled'], WAITING: ['warning', 'Waiting'], IN_PROGRESS: ['highlight', 'In progress'],
+    COMPLETED: ['success', 'Completed'], SIGNED: ['success', 'Signed'], CANCELLED: ['neutral', 'Cancelled'],
+  },
+  invoice: {
+    CONFIRMED: ['info', 'Confirmed'], FAILED: ['danger', 'Failed'], DRAFT: ['neutral', 'Draft'], PENDING: ['warning', 'Pending'],
+    UNPAID: ['warning', 'Unpaid'], PARTIALLY_PAID: ['warning', 'Partly paid'], PARTIAL: ['warning', 'Partly paid'], PAID: ['success', 'Paid'],
+    COMPLETED: ['success', 'Completed'], DISPENSED: ['info', 'Dispensed'], OVERDUE: ['danger', 'Overdue'], CANCELLED: ['neutral', 'Cancelled'],
+    REFUNDED: ['info', 'Refunded'], VOID: ['neutral', 'Void'],
+  },
+  dispense: {
+    QUEUED: ['neutral', 'Queued'], PENDING: ['neutral', 'Queued'], IN_REVIEW: ['info', 'In review'],
+    PARTIALLY_FILLED: ['warning', 'Partly filled'], PARTIALLY_DISPENSED: ['warning', 'Partly filled'], PARTIAL: ['warning', 'Partly filled'],
+    PAUSED: ['warning', 'Paused'], READY_TO_BILL: ['highlight', 'Ready to bill'], READY: ['highlight', 'Ready to bill'], PAID: ['info', 'Paid'],
+    DISPENSED: ['success', 'Dispensed'], COMPLETED: ['success', 'Dispensed'], EXPIRED: ['danger', 'Expired'], CANCELLED: ['neutral', 'Cancelled'],
+    DRAFT: ['neutral', 'Draft'],
+  },
+  stock: {
+    UNMATCHED: ['neutral', 'Not linked'], IN_STOCK: ['success', 'In stock'], AVAILABLE: ['success', 'Available'], NORMAL: ['success', 'Normal'],
+    LOW_STOCK: ['warning', 'Low stock'], LOW: ['warning', 'Low'], EXPIRING: ['warning', 'Expiring'], OUT_OF_STOCK: ['danger', 'Out of stock'],
+    OUT: ['danger', 'Out'], EXPIRED: ['danger', 'Expired'], CRITICAL: ['danger', 'Critical'],
+  },
+  room: {
+    AVAILABLE: ['success', 'Available'], FREE: ['success', 'Free'], OCCUPIED: ['warning', 'Occupied'], BOOKED: ['info', 'Booked'],
+    RESERVED: ['info', 'Reserved'], MAINTENANCE: ['danger', 'Maintenance'], CLEANING: ['warning', 'Cleaning'], INACTIVE: ['neutral', 'Inactive'],
+  },
+  workflow: {
+    SUBMITTED: ['info', 'Submitted'], STOCK_COMMITTED: ['success', 'Stock committed'], PARTIAL_STOCK_COMMITTED: ['warning', 'Partly committed'],
+    RECONCILIATION_REQUIRED: ['danger', 'Needs reconciliation'], DRAFT: ['neutral', 'Draft'], PENDING: ['warning', 'Pending'],
+    IN_PROGRESS: ['info', 'In progress'], APPROVED: ['success', 'Approved'], POSTED: ['success', 'Posted'], COMPLETED: ['success', 'Completed'],
+    CANCELLED: ['neutral', 'Cancelled'], REJECTED: ['danger', 'Rejected'], FAILED: ['danger', 'Failed'], ERROR: ['danger', 'Error'],
+  },
+  priority: { CRITICAL: ['danger', 'Critical'], HIGH: ['warning', 'High'], MEDIUM: ['warning', 'Medium'], LOW: ['neutral', 'Low'] },
+  confidence: { HIGH: ['success', 'High'], MEDIUM: ['info', 'Medium'], LOW: ['warning', 'Low'], COLD_START: ['neutral', 'Cold start'] },
+};
+
+const normalize = (status: string | null | undefined) => status?.trim().toUpperCase().replace(/[\s-]+/g, '_') ?? '';
+const presentation = (domain: StatusDomain, status: string | null | undefined): Presentation | undefined => {
+  const key = normalize(status);
+  return Object.hasOwn(statuses[domain], key) ? statuses[domain][key] : undefined;
 };
 
 /**
@@ -19,5 +57,17 @@ const statuses: Record<StatusDomain, Readonly<Record<string, StatusVariant>>> = 
  * return neutral, never imply success. Case, spaces and hyphens are normalized.
  */
 export function statusVariant(domain: StatusDomain, status: string | null | undefined): StatusVariant {
-  return statuses[domain][status?.trim().toUpperCase().replace(/[\s-]+/g, '_') ?? ''] ?? 'neutral';
+  return presentation(domain, status)?.[0] ?? 'neutral';
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] domain-status-label
+ * Status text MUST be the domain's human label. An unknown status MUST read as
+ * sentence-case words, never as a raw enum such as SCHEDULED or LOW_STOCK.
+ */
+export function statusLabel(domain: StatusDomain, status: string | null | undefined): string {
+  const known = presentation(domain, status)?.[1];
+  if (known) return known;
+  const words = normalize(status).replace(/_/g, ' ').trim().toLowerCase();
+  return words ? words[0].toUpperCase() + words.slice(1) : 'Unknown';
 }

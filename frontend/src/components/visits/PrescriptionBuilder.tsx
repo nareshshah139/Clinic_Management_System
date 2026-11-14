@@ -4990,145 +4990,139 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             <CollapsibleSection title="Treatment" section="treatment">
               <div className="space-y-3 overflow-visible">
                 {shouldShowLearnedPlanPanel && (
-                  <div className="relative overflow-hidden rounded-lg border border-slate-900/10 bg-primary-soft p-[1px] shadow-sm">
-                    <div className="relative overflow-hidden rounded-lg bg-slate-950/90 px-5 py-5 text-white">
-                      <div className="pointer-events-none absolute inset-0 bg-transparent" />
-                      <div className="relative flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                        <div className="space-y-3">
-                          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-teal-100">
-                            <Sparkles className="h-3.5 w-3.5" />
-                            Treatment suggestions
+                  <div className="rounded-lg border bg-card px-5 py-5 text-foreground shadow-sm">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="space-y-3">
+                        <div className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Treatment suggestions
+                        </div>
+                        <div>
+                          <div className="text-xl font-semibold tracking-tight">{learnedPlanTitle}</div>
+                          <div className={`mt-1 max-w-3xl text-sm leading-6 ${learningSourcesStatus === 'loading' && !learnedPlan ? 'text-muted-foreground animate-pulse' : 'text-muted-foreground'}`}>
+                            {learnedPlanDescription}
                           </div>
-                          <div>
-                            <div className="text-xl font-semibold tracking-tight">{learnedPlanTitle}</div>
-                            <div className={`mt-1 max-w-3xl text-sm leading-6 ${learningSourcesStatus === 'loading' && !learnedPlan ? 'text-white/80 animate-pulse' : 'text-white/74'}`}>
-                              {learnedPlanDescription}
-                            </div>
-                          </div>
+                        </div>
 
-                          {learnedPlan && (
-                            <>
-                              <div className="flex flex-wrap gap-2 text-xs">
-                                <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 font-medium text-white/90">
-                                  {learnedPlan.sourceLabel}
+                        {learnedPlan && (
+                          <>
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              <span className="inline-flex items-center rounded-full border bg-muted px-3 py-1 font-medium text-muted-foreground">
+                                {learnedPlan.sourceLabel}
+                              </span>
+                              <span className="inline-flex items-center rounded-full border border-success-border bg-success-soft px-3 py-1 font-medium text-success-text">
+                                {learnedPlanConfidenceLabel}
+                              </span>
+                              {learnedPlan.diagnosisText && (
+                                <span className="inline-flex items-center rounded-full border bg-muted px-3 py-1 font-medium text-muted-foreground">
+                                  Matched on {learnedPlan.diagnosisText}
                                 </span>
-                                <span className="inline-flex items-center rounded-full border border-emerald-200/20 bg-emerald-300/10 px-3 py-1 font-medium text-emerald-100">
-                                  {learnedPlanConfidenceLabel}
-                                </span>
-                                {learnedPlan.diagnosisText && (
-                                  <span className="inline-flex items-center rounded-full border border-white/10 bg-slate-900/40 px-3 py-1 font-medium text-white/75">
-                                    Matched on {learnedPlan.diagnosisText}
-                                  </span>
+                              )}
+                            </div>
+
+                            {learnedPlanVisibleComboNames.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {learnedPlanVisibleComboNames.map((drugName) => (
+                                  <div
+                                    key={drugName}
+                                    className="inline-flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-foreground"
+                                  >
+                                    <Pill className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span>{drugName}</span>
+                                  </div>
+                                ))}
+                                {learnedPlanHiddenComboCount > 0 && (
+                                  <div className="inline-flex items-center rounded-lg border bg-muted px-3 py-2 text-sm font-medium text-muted-foreground">
+                                    +{learnedPlanHiddenComboCount} more
+                                  </div>
                                 )}
                               </div>
+                            )}
 
-                              {learnedPlanVisibleComboNames.length > 0 && (
-                                <div className="flex flex-wrap gap-2">
-                                  {learnedPlanVisibleComboNames.map((drugName) => (
-                                    <div
-                                      key={drugName}
-                                      className="inline-flex items-center gap-2 rounded-2xl border border-white/12 bg-white/10 px-3 py-2 text-sm font-medium text-white shadow-sm"
-                                    >
-                                      <Pill className="h-3.5 w-3.5 text-teal-200" />
-                                      <span>{drugName}</span>
-                                    </div>
-                                  ))}
-                                  {learnedPlanHiddenComboCount > 0 && (
-                                    <div className="inline-flex items-center rounded-2xl border border-white/12 bg-white/5 px-3 py-2 text-sm font-medium text-white/70">
-                                      +{learnedPlanHiddenComboCount} more
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                            {learnedPlan.supportingLabel && (
+                              <div className="text-xs text-muted-foreground">{learnedPlan.supportingLabel}</div>
+                            )}
+                          </>
+                        )}
+                      </div>
 
-                              {learnedPlan.supportingLabel && (
-                                <div className="text-xs text-white/70">{learnedPlan.supportingLabel}</div>
-                              )}
-                            </>
+                      <div className="xl:min-w-[280px]">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-lg border bg-muted/60 p-3">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Pill className="h-3.5 w-3.5" />
+                              Combo
+                            </div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.comboDrugNames.length : '—'}</div>
+                            <div className="text-xs text-muted-foreground">meds prefilled</div>
+                          </div>
+                          <div className="rounded-lg border bg-muted/60 p-3">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <CalendarDays className="h-3.5 w-3.5" />
+                              Review
+                            </div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan?.reviewDays ? `${learnedPlan.reviewDays}d` : '—'}</div>
+                            <div className="text-xs text-muted-foreground">suggested window</div>
+                          </div>
+                          <div className="rounded-lg border bg-muted/60 p-3">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <FlaskConical className="h-3.5 w-3.5" />
+                              Labs
+                            </div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.investigations.length : '—'}</div>
+                            <div className="text-xs text-muted-foreground">auto-suggested</div>
+                          </div>
+                          <div className="rounded-lg border bg-muted/60 p-3">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Wand2 className="h-3.5 w-3.5" />
+                              Evidence
+                            </div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.evidenceCount : '—'}</div>
+                            <div className="text-xs text-muted-foreground">matching plans</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {learnedPlan && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => { void applyLearnedPlan(learnedPlan, { force: true }); }}
+                            >
+                              <Wand2 className="mr-2 h-4 w-4" />
+                              Reapply learned plan
+                            </Button>
+                          )}
+                          {learnedPlan && treatmentHasMeaningfulData && !learnedPlanCurrent && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => { void mergeLearnedPlanMissingFields(learnedPlan); }}
+                            >
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              Fill missing only
+                            </Button>
+                          )}
+                          {autofillUndoSnapshot && learnedPlanCurrent && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={undoLearnedAutofill}
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              {lastAutofillMode === 'merge' ? 'Undo quick-fill' : 'Undo autofill'}
+                            </Button>
                           )}
                         </div>
 
-                        <div className="relative xl:min-w-[280px]">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-                              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/50">
-                                <Pill className="h-3.5 w-3.5" />
-                                Combo
-                              </div>
-                              <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.comboDrugNames.length : '—'}</div>
-                              <div className="text-xs text-white/60">meds prefilled</div>
-                            </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-                              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/50">
-                                <CalendarDays className="h-3.5 w-3.5" />
-                                Review
-                              </div>
-                              <div className="mt-2 text-lg font-semibold">{learnedPlan?.reviewDays ? `${learnedPlan.reviewDays}d` : '—'}</div>
-                              <div className="text-xs text-white/60">suggested window</div>
-                            </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-                              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/50">
-                                <FlaskConical className="h-3.5 w-3.5" />
-                                Labs
-                              </div>
-                              <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.investigations.length : '—'}</div>
-                              <div className="text-xs text-white/60">auto-suggested</div>
-                            </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-                              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/50">
-                                <Wand2 className="h-3.5 w-3.5" />
-                                Evidence
-                              </div>
-                              <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.evidenceCount : '—'}</div>
-                              <div className="text-xs text-white/60">matching plans</div>
-                            </div>
+                        {learningSourcesError && (
+                          <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-text">
+                            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span>{learningSourcesError}</span>
                           </div>
-
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {learnedPlan && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="bg-white text-slate-950 hover:bg-white/90"
-                                onClick={() => { void applyLearnedPlan(learnedPlan, { force: true }); }}
-                              >
-                                <Wand2 className="mr-2 h-4 w-4" />
-                                Reapply learned plan
-                              </Button>
-                            )}
-                            {learnedPlan && treatmentHasMeaningfulData && !learnedPlanCurrent && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-                                onClick={() => { void mergeLearnedPlanMissingFields(learnedPlan); }}
-                              >
-                                <Sparkles className="mr-2 h-4 w-4" />
-                                Fill missing only
-                              </Button>
-                            )}
-                            {autofillUndoSnapshot && learnedPlanCurrent && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-                                onClick={undoLearnedAutofill}
-                              >
-                                <RotateCcw className="mr-2 h-4 w-4" />
-                                {lastAutofillMode === 'merge' ? 'Undo quick-fill' : 'Undo autofill'}
-                              </Button>
-                            )}
-                          </div>
-
-                          {learningSourcesError && (
-                            <div className="mt-3 flex items-start gap-2 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                              <span>{learningSourcesError}</span>
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
                   </div>

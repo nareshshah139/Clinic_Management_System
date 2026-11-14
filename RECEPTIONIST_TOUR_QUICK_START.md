@@ -24,7 +24,7 @@ npm run dev
 - **Role:** RECEPTION
 
 ### 3. Start the Tour
-Once logged in, look for the **"Start Tour"** button in the header (top-right area, next to the branded mode toggle).
+Once logged in, look for the **"Start Tour"** button in the header (top-right area, next to the notifications bell).
 
 Click it to begin the guided tour!
 

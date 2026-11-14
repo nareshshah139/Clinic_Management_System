@@ -116,7 +116,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <DashboardUserProvider value={contextValue}>
       <AnalyticsMount user={user} />
-      <div className="h-screen flex bg-gray-50">
+      <div className="h-screen flex bg-background">
         {/* Sidebar */}
         <div className="hidden shrink-0 md:block">
           <Suspense

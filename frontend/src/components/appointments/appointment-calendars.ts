@@ -19,7 +19,7 @@ const patients = (n: number) => `${n} ${n === 1 ? 'patient' : 'patients'}`;
 export const CALENDARS: Record<AppointmentCalendar, CalendarSpec> = {
   SCHEDULED: {
     title: 'Scheduled',
-    accentColor: '#94a3b8',
+    accentColor: 'var(--muted-foreground)',
     description: 'Booked ahead. Call to confirm.',
     count: (n) => `${patients(n)} to confirm`,
     empty: 'No one left to confirm',
@@ -29,7 +29,7 @@ export const CALENDARS: Record<AppointmentCalendar, CalendarSpec> = {
   },
   CONFIRMED: {
     title: 'Confirmed',
-    accentColor: '#0ea5e9',
+    accentColor: 'var(--info)',
     description: 'Confirmed, walk-ins and visits.',
     count: (n) => `${patients(n)} confirmed`,
     empty: 'No confirmed patients yet',
