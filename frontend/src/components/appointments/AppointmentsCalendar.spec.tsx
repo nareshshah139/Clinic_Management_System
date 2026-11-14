@@ -71,24 +71,7 @@ describe('AppointmentsCalendar room filter', () => {
   });
 });
 
-describe('AppointmentsCalendar toolbar and legend', () => {
-  it('keeps the legend closed until its button opens it, and Escape closes it', async () => {
-    const user = userEvent.setup();
-    render(<AppointmentsCalendar controlledDoctorId="d1" controlledDate="2099-01-01" hideHeaderControls />);
-    await screen.findByRole('region', { name: 'Confirmed' });
-    expect(screen.queryByText('Booking In Progress')).toBeNull();
-    expect(screen.queryByText('Doctor Calendar')).toBeNull();
-
-    const legend = screen.getByRole('button', { name: 'Legend' });
-    await user.click(legend);
-    expect(await screen.findByText('Booking In Progress')).toBeInTheDocument();
-    expect(screen.getByText(/press/)).toHaveTextContent('Open a scheduled patient and press Confirm to move them to Confirmed at the same time.');
-
-    await user.keyboard('{Escape}');
-    await waitFor(() => expect(screen.queryByText('Booking In Progress')).toBeNull());
-    expect(legend).toHaveFocus();
-  });
-
+describe('AppointmentsCalendar toolbar', () => {
   it('puts visit type, room, patient search and grid interval in one toolbar', async () => {
     render(<AppointmentsCalendar controlledDoctorId="d1" controlledDate="2099-01-01" hideHeaderControls />);
     const toolbar = await screen.findByRole('toolbar', { name: 'Calendar filters' });
@@ -96,5 +79,6 @@ describe('AppointmentsCalendar toolbar and legend', () => {
       expect(within(toolbar).getByRole('combobox', { name })).toBeInTheDocument();
     }
     expect(within(toolbar).getByRole('textbox', { name: 'Patient' })).toBeInTheDocument();
+    expect(within(toolbar).queryByRole('button', { name: 'Legend' })).toBeNull();
   });
 });

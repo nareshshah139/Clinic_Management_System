@@ -6,10 +6,16 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * @cc [owner:nareshshah139,label:accessibility] non-modal-menus
+ * Menus MUST NOT hide the page from assistive technology while open. A focusable
+ * page under aria-hidden fails WCAG 4.1.2. Escape and outside clicks still close them.
+ */
 function DropdownMenu({
+  modal = false,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" modal={modal} {...props} />
 }
 
 function DropdownMenuPortal({

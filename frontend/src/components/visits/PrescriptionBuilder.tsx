@@ -5607,7 +5607,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               </div>
             </div>
 
-                          <div className="flex items-center justify-between pt-2 opacity-100">
+            <div data-rx-actions className="sticky -bottom-4 z-20 flex items-center justify-between gap-3 border-t bg-background pb-4 pt-2 md:-bottom-6 md:pb-6">
               <div className="text-sm text-muted-foreground">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
               <div className="flex gap-2">
                 <div className="hidden sm:flex items-center gap-2">

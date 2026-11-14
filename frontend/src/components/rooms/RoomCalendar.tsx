@@ -150,6 +150,19 @@ export default function RoomCalendar() {
     };
   }, [selectedDate, rooms]);
 
+  const [gridScroller, setGridScroller] = useState<HTMLDivElement | null>(null);
+  const [moreRoomsRight, setMoreRoomsRight] = useState(false);
+  useEffect(() => {
+    if (!gridScroller) return;
+    const update = () => setMoreRoomsRight(gridScroller.scrollLeft + gridScroller.clientWidth < gridScroller.scrollWidth - 1);
+    update();
+    gridScroller.addEventListener('scroll', update, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    observer?.observe(gridScroller);
+    if (gridScroller.firstElementChild) observer?.observe(gridScroller.firstElementChild);
+    return () => { gridScroller.removeEventListener('scroll', update); observer?.disconnect(); };
+  }, [gridScroller]);
+
   const filteredRooms = Array.isArray(rooms) ? rooms.filter(room => {
     const matchesType = selectedRoomType === 'all' || room.type === selectedRoomType;
     const matchesQuery = !search.trim() || room.name.toLowerCase().includes(search.trim().toLowerCase());
@@ -361,11 +374,13 @@ export default function RoomCalendar() {
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             Room Occupancy Calendar
+            {moreRoomsRight && <span className="ml-auto text-sm font-normal text-muted-foreground">Scroll sideways for more rooms</span>}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto pb-2" role="region" aria-label="Room occupancy by time" tabIndex={0}>
-            <div className="grid gap-2" style={{ gridTemplateColumns: `6rem repeat(${filteredRooms.length}, minmax(9.5rem, 1fr))` }}>
+          <div className="relative">
+          <div ref={setGridScroller} className="overflow-x-auto pb-2" role="region" aria-label="Room occupancy by time" tabIndex={0}>
+            <div className="grid gap-2" style={{ gridTemplateColumns: `5rem repeat(${filteredRooms.length}, minmax(8rem, 1fr))` }}>
               <div className="sticky left-0 z-20 bg-card p-2 text-sm font-semibold text-muted-foreground">Time</div>
               {filteredRooms.map((room) => (
                 <div key={room.id} className="min-w-0 rounded-md bg-muted p-2 text-center">
@@ -519,6 +534,8 @@ export default function RoomCalendar() {
                 );
               })}
             </div>
+          </div>
+          {moreRoomsRight && <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />}
           </div>
         </CardContent>
       </Card>
