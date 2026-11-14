@@ -106,7 +106,7 @@ function AppointmentsPageInner() {
         role={user?.role}
         leadingControls={
           <>
-            <div data-tour="doctor-select" className="w-48">
+            <div data-tour="doctor-select" className="flex-[1_1_9rem] sm:flex-none sm:w-48">
               <label className="text-sm text-gray-700">Doctor</label>
               <Select value={doctorId} onValueChange={setDoctorId}>
                 <SelectTrigger aria-label="Doctor"><SelectValue placeholder="Select doctor" /></SelectTrigger>
@@ -117,7 +117,7 @@ function AppointmentsPageInner() {
                 </SelectContent>
               </Select>
             </div>
-            <div data-tour="date-picker" className="w-44">
+            <div data-tour="date-picker" className="flex-[1_1_9rem] sm:flex-none sm:w-44">
               <label className="text-sm text-gray-700">Date</label>
               <Input aria-label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>

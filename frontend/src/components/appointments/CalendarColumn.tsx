@@ -72,6 +72,7 @@ const CHIP_HIDDEN_FROM: Record<ChipWidth, string> = {
  * column switches together, and a row without a bill chip has the room sooner.
  */
 const STATUS_IN_WORDS = {
+  withAction: { dot: '@min-[40rem]/row:hidden', words: 'hidden @min-[40rem]/row:inline-flex' },
   withChip: { dot: '@min-[30rem]/row:hidden', words: 'hidden @min-[30rem]/row:inline-flex' },
   withoutChip: { dot: '@min-[22rem]/row:hidden', words: 'hidden @min-[22rem]/row:inline-flex' },
 };
@@ -244,7 +245,7 @@ export default function CalendarColumn({
           const chip = apt.billing ? billingChip(apt.billing, apt.billType) : null;
           const confirms = spec.move.primary && apt.status === spec.move.offeredWhile;
           const primaryLabel = confirms ? spec.move.label : visitActionFor(role, apt);
-          const statusFit = chip ? STATUS_IN_WORDS.withChip : STATUS_IN_WORDS.withoutChip;
+          const statusFit = primaryLabel ? STATUS_IN_WORDS.withAction : chip ? STATUS_IN_WORDS.withChip : STATUS_IN_WORDS.withoutChip;
           return (
             <div
               key={key}
@@ -284,7 +285,7 @@ export default function CalendarColumn({
                         {patientName}
                       </span>
                       {apt.billType && (
-                        <span data-bill-type title={BILL_TYPE_LABEL[apt.billType]} className={`hidden shrink-0 font-semibold @min-[18em]:inline ${BILL_TYPE_TONE[apt.billType]}`}>
+                        <span data-bill-type title={BILL_TYPE_LABEL[apt.billType]} className={`hidden min-w-0 shrink-[100] truncate font-semibold @min-[18em]:inline ${BILL_TYPE_TONE[apt.billType]}`}>
                           {BILL_TYPE_LABEL[apt.billType]}
                         </span>
                       )}

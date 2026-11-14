@@ -265,7 +265,7 @@ describe('DoctorDayCalendar visit action by role, on the row and in the details 
   beforeEach(() => jest.clearAllMocks());
   const withVisit = { id: 'a2', slot: '11:00-11:30', status: 'IN_PROGRESS', calendar: 'CONFIRMED', visitType: 'OPD', visit: { id: 'v1', status: 'IN_PROGRESS' }, patient: { id: 'p2', name: 'Priya Nair' } };
   const noVisit = { id: 'a3', slot: '12:00-12:30', status: 'CONFIRMED', calendar: 'CONFIRMED', visitType: 'OPD', patient: { id: 'p3', name: 'Suresh Babu' } };
-  const visitButtons = (scope: { queryAllByRole: ReturnType<typeof within>['queryAllByRole'] }) => scope.queryAllByRole('button', { name: /^(Start|Continue|Open) visit$/i }).map((b) => b.textContent);
+  const visitButtons = (scope: { queryAllByRole: ReturnType<typeof within>['queryAllByRole'] }) => scope.queryAllByRole('button', { name: /^(Start|Continue|Open) visit$/i }).map((b: HTMLElement) => b.textContent);
   const show = async (role: string, appointments: object[]) => {
     api.getDoctorSchedule.mockResolvedValue({ appointments } as never);
     render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" role={role} onSelectSlot={jest.fn()} />);

@@ -436,7 +436,7 @@ function DoctorDayCalendarForSelection({
 
   return (
     <>
-      <Card>
+      <Card className="gap-0 py-0">
         <CardContent className="p-3 sm:p-4">
           {(visitTypeFilter !== 'ALL' || roomFilter !== 'ALL') && (
             <div className="mb-4 p-3 bg-blue-50 rounded-lg">
