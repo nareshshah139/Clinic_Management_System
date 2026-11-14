@@ -41,18 +41,16 @@ export default function PatientPicker({ selectedPatientId, selectedLabel, onSele
   const listId = `${baseId}-list`;
   const rootRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
-  const [options, setOptions] = useState<PatientMatch[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [results, setResults] = useState<{ query: string; options: PatientMatch[] } | null>(null);
+  const [failedQuery, setFailedQuery] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
-  const generation = useRef(0);
-  const loadedFor = useRef<string | null>(null);
   const typing = useRef(false);
   const chosenLabel = useRef('');
-  const [resultsFor, setResultsFor] = useState<string | null>(null);
+  const rowsReady = results?.query === query;
+  const failed = !rowsReady && failedQuery === query;
+  const visibleOptions = rowsReady ? results.options : [];
 
-  // A selection made outside the picker (a link) is shown unless the user is typing.
   useEffect(() => {
     if (!selectedPatientId) {
       chosenLabel.current = '';
@@ -65,37 +63,23 @@ export default function PatientPicker({ selectedPatientId, selectedLabel, onSele
   }, [selectedPatientId, selectedLabel]);
 
   useEffect(() => {
-    if (!open) return;
-    if (loadedFor.current === query) {
-      // The rows on screen already belong to this text; an abandoned newer search must not leave "Searching…" up.
-      setLoading(false);
-      return;
-    }
-    const current = ++generation.current;
-    setLoading(true);
+    if (!open || rowsReady) return;
+    let cancelled = false;
     const timer = setTimeout(async () => {
       try {
-        const res = await apiClient.getPatients({ search: query || undefined, limit: 10 });
-        if (current !== generation.current) return;
-        setOptions(extractPatients(res));
-        setError(false);
-        loadedFor.current = query;
-        setResultsFor(query);
+        const options = extractPatients(await apiClient.getPatients({ search: query || undefined, limit: 10 }));
+        if (cancelled) return;
+        setResults({ query, options });
+        setFailedQuery(null);
       } catch {
-        if (current !== generation.current) return;
-        setOptions([]);
-        setError(true);
-        loadedFor.current = null;
-        setResultsFor(null);
-      } finally {
-        if (current === generation.current) setLoading(false);
+        if (!cancelled) setFailedQuery(query);
       }
     }, 250);
     return () => {
+      cancelled = true;
       clearTimeout(timer);
-      generation.current += 1;
     };
-  }, [query, open]);
+  }, [query, open, rowsReady]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -127,9 +111,6 @@ export default function PatientPicker({ selectedPatientId, selectedLabel, onSele
     setHighlight(-1);
     if (selectedPatientId && value !== chosenLabel.current) onClear();
   };
-
-  const rowsReady = !loading && !error && resultsFor === query;
-  const visibleOptions = rowsReady ? options : [];
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -192,11 +173,11 @@ export default function PatientPicker({ selectedPatientId, selectedLabel, onSele
           aria-label="Patients"
           className="absolute z-20 mt-1 w-full bg-white border rounded-md shadow-sm max-h-64 overflow-auto"
         >
-          {loading && <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>}
-          {!loading && error && (
+          {!rowsReady && !failed && <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>}
+          {failed && (
             <div className="px-3 py-2 text-xs text-red-600">Couldn&apos;t search patients. Try again.</div>
           )}
-          {!loading && !error && visibleOptions.length === 0 && resultsFor === query && (
+          {rowsReady && visibleOptions.length === 0 && (
             <div className="px-3 py-2 text-xs text-gray-500">No results</div>
           )}
           {visibleOptions.map((p, idx) => {

@@ -8,7 +8,13 @@ One row per reviewed section. Each round: a reviewer walks the section in a brow
 
 ## Visits page, 2026-11-13
 
-Demo data for this section: `scripts/stack/scenarios/ux-visits-seed.cjs` (run it as a command to get a seeded stack that stays up).
+Demo data for this section comes from `scripts/stack/scenarios/ux-visits-seed.cjs`. To get a seeded stack that stays up for 20 minutes, run:
+
+```bash
+STACK_DATABASE_URL=postgresql://user@127.0.0.1:5432/db node scripts/stack/scenarios/ux-visits-seed.cjs --minutes 20
+```
+
+Three things in that data are unrealistic on purpose, so do not read them as evidence. A second doctor is listed before the signed-in doctor. The owner, the admin and the second doctor hold every permission. Past visit dates are written directly to the database, because the API always stamps the current time.
 
 ### Shipped
 

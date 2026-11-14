@@ -245,7 +245,6 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
     </div>
   );
 }
-// Patient History Timeline Component
 export function PatientHistoryTimeline({ patientId }: { patientId: string }) {
   const { entries: history, loading, error: historyError, refresh } = usePatientHistory(patientId);
   const [viewingPrescription, setViewingPrescription] = useState<{
@@ -293,10 +292,8 @@ export function PatientHistoryTimeline({ patientId }: { patientId: string }) {
       </div>
       
       <div className="relative">
-        {/* Timeline line */}
         <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
         
-        {/* Timeline items */}
         <div className="space-y-6">
           {history.map((visit, index) => {
             const isProcedure = JSON.stringify(visit.scribeJson ?? visit.visitType ?? '')
@@ -306,7 +303,6 @@ export function PatientHistoryTimeline({ patientId }: { patientId: string }) {
             
             return (
               <div key={visit.id} className="relative flex items-start space-x-4">
-                {/* Timeline dot */}
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center ${
                   index === 0 
                     ? 'bg-blue-100 border-blue-500 text-blue-600'
@@ -319,7 +315,6 @@ export function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                   )}
                 </div>
                 
-                {/* Visit details */}
                 <div className="flex-1 min-w-0">
                   <PatientHistoryVisitCard
                     visit={visit as unknown as Record<string, unknown>}

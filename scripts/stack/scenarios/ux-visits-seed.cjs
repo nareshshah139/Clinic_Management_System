@@ -1,16 +1,3 @@
-// Fake data for hand-testing and recording the Visits page (/dashboard/visits) on the demo stack.
-//
-// As a module:   const { seedVisitsDemo, openAs } = require("./ux-visits-seed.cjs");
-//                const demo = await seedVisitsDemo(stack, browser);
-// As a command:  STACK_DATABASE_URL=postgresql://user@127.0.0.1:5432/db node scripts/stack/scenarios/ux-visits-seed.cjs [--minutes 20]
-//                boots a stack, seeds it, writes output/stack/ux-visits/demo.json and keeps the stack up
-//                until Ctrl-C or the time limit, then stops it.
-//
-// Seeding the same stack twice is safe: the second call returns the first call's result.
-// What is deliberately unrealistic is listed at the bottom of this comment so nobody reads it as evidence:
-//   - Dr. Arjun Bhatt is created so that he is listed before Dr. Priya Menon (the stack's own doctor login).
-//   - Owner, admin and the second doctor get every permission.
-//   - Past visit dates are written straight to the database (the API always stamps "now").
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -20,27 +7,25 @@ const PHONE = { width: 390, height: 844 };
 const seeded = new WeakMap();
 
 const PATIENTS = [
-  // name, gender, phone, age, email
-  ["Asha Verma", "FEMALE", "9000000018", 34, "asha.verma@example.invalid"],
-  ["Asha Varma", "FEMALE", "9000000019", 61, null],
-  ["Ashok Verma", "MALE", "9000000020", 52, "ashok.v@example.invalid"],
-  ["Asha Venkatesh", "FEMALE", "", 29, "asha.venkatesh@example.invalid"],
-  ["Bhavna Shah", "FEMALE", "9000000031", 37, "bhavna.shah@example.invalid"],
-  ["Chetan Joshi", "MALE", "9000000032", 45, null],
-  ["Deepa Nair", "FEMALE", "9000000033", 31, "deepa.nair@example.invalid"],
-  ["Farhan Qureshi", "MALE", "9000000034", 26, null],
-  ["Gita Rao", "FEMALE", "", 63, null],
-  ["Harish Patel", "MALE", "9000000036", 48, "harish.p@example.invalid"],
-  ["Imran Sheikh", "MALE", "9000000037", 22, null],
-  ["Jaya Krishnan", "FEMALE", "9000000038", 39, "jaya.k@example.invalid"],
-  ["Kavita Deshpande", "FEMALE", "9000000039", 57, null],
-  ["Lakshman Iyer", "MALE", "9000000040", 70, null],
-  ["Meena Kapoor", "FEMALE", "9000000041", 33, null],
-  ["Venkata Subramanian Ramachandran Krishnamurthy Iyengar", "MALE", "9000000043", 58, "vsr.krishnamurthy.iyengar@example.invalid"],
-  ["Nitin Gokhale", "MALE", "9000000042", 44, null],
+  { name: "Asha Verma", gender: "FEMALE", phone: "9000000018", age: 34, email: "asha.verma@example.invalid" },
+  { name: "Asha Varma", gender: "FEMALE", phone: "9000000019", age: 61, email: null },
+  { name: "Ashok Verma", gender: "MALE", phone: "9000000020", age: 52, email: "ashok.v@example.invalid" },
+  { name: "Asha Venkatesh", gender: "FEMALE", phone: "", age: 29, email: "asha.venkatesh@example.invalid" },
+  { name: "Bhavna Shah", gender: "FEMALE", phone: "9000000031", age: 37, email: "bhavna.shah@example.invalid" },
+  { name: "Chetan Joshi", gender: "MALE", phone: "9000000032", age: 45, email: null },
+  { name: "Deepa Nair", gender: "FEMALE", phone: "9000000033", age: 31, email: "deepa.nair@example.invalid" },
+  { name: "Farhan Qureshi", gender: "MALE", phone: "9000000034", age: 26, email: null },
+  { name: "Gita Rao", gender: "FEMALE", phone: "", age: 63, email: null },
+  { name: "Harish Patel", gender: "MALE", phone: "9000000036", age: 48, email: "harish.p@example.invalid" },
+  { name: "Imran Sheikh", gender: "MALE", phone: "9000000037", age: 22, email: null },
+  { name: "Jaya Krishnan", gender: "FEMALE", phone: "9000000038", age: 39, email: "jaya.k@example.invalid" },
+  { name: "Kavita Deshpande", gender: "FEMALE", phone: "9000000039", age: 57, email: null },
+  { name: "Lakshman Iyer", gender: "MALE", phone: "9000000040", age: 70, email: null },
+  { name: "Meena Kapoor", gender: "FEMALE", phone: "9000000041", age: 33, email: null },
+  { name: "Venkata Subramanian Ramachandran Krishnamurthy Iyengar", gender: "MALE", phone: "9000000043", age: 58, email: "vsr.krishnamurthy.iyengar@example.invalid" },
+  { name: "Nitin Gokhale", gender: "MALE", phone: "9000000042", age: 44, email: null },
 ];
 
-// Asha Verma's history, oldest first. The newest is left in progress.
 const ASHA_VISITS = [
   { complaint: "Acne on the face", daysAgo: 120, complete: true },
   {
@@ -70,7 +55,6 @@ async function api(page, method, url, body) {
   return result.body;
 }
 
-/** Opens a signed-in page for one of stack.users (doctor, doctor2, owner, admin, reception, pharmacist). */
 async function openAs(browser, stack, who, viewport = DESKTOP, contextOptions = {}) {
   const context = await browser.newContext({ viewport, ...contextOptions });
   const page = await context.newPage();
@@ -79,26 +63,32 @@ async function openAs(browser, stack, who, viewport = DESKTOP, contextOptions = 
   return { context, page };
 }
 
+function backdateVisit(db, visitId, daysAgo, completed) {
+  const when = new Date(Date.now() - daysAgo * 864e5);
+  return db.visit.update({ where: { id: visitId }, data: { createdAt: when, ...(completed && { completedAt: when }) } });
+}
+
 async function seedVisitsDemo(stack, browser) {
   if (seeded.has(stack)) return seeded.get(stack);
   const { db, branch, users } = stack;
 
   const owner = await db.user.findUnique({ where: { id: users.owner.id } });
   await db.user.update({ where: { id: owner.id }, data: { permissions: JSON.stringify(["*"]) } });
-  const addUser = async (key, role, firstName, lastName) => {
+  const addUserWithEveryPermission = async (key, role, firstName, lastName) => {
     const email = `${firstName}.${lastName}@stack.example.invalid`.toLowerCase();
     const user = await db.user.create({
       data: { branchId: branch.id, email, firstName, lastName, role, password: owner.password, permissions: JSON.stringify(["*"]) },
     });
     users[key] = { id: user.id, email, password: users.owner.password, role, firstName, lastName };
   };
-  await addUser("admin", "ADMIN", "Meera", "Kulkarni");
-  await addUser("doctor2", "DOCTOR", "Arjun", "Bhatt");
+  await addUserWithEveryPermission("admin", "ADMIN", "Meera", "Kulkarni");
+  const addDoctorListedBeforeTheSignedInOne = (key, firstName, lastName) => addUserWithEveryPermission(key, "DOCTOR", firstName, lastName);
+  await addDoctorListedBeforeTheSignedInOne("doctor2", "Arjun", "Bhatt");
 
   const patients = {};
   let code = 100;
-  for (const [name, gender, phone, age, email] of PATIENTS)
-    patients[name] = await db.patient.create({ data: { branchId: branch.id, name, gender, phone, age, email, patientCode: `V${code++}` } });
+  for (const patient of PATIENTS)
+    patients[patient.name] = await db.patient.create({ data: { branchId: branch.id, ...patient, patientCode: `V${code++}` } });
 
   const { context, page } = await openAs(browser, stack, "doctor");
   const visits = [];
@@ -109,15 +99,13 @@ async function seedVisitsDemo(stack, browser) {
       const visit = await api(page, "POST", "/visits", { patientId, doctorId, complaints: [{ complaint: spec.complaint }] });
       if (spec.rx) await api(page, "POST", "/prescriptions", { patientId, doctorId, visitId: visit.id, items: spec.rx });
       if (spec.complete) await api(page, "POST", `/visits/${visit.id}/complete`, {});
-      const when = new Date(Date.now() - spec.daysAgo * 864e5);
-      await db.visit.update({ where: { id: visit.id }, data: { createdAt: when, ...(spec.complete && { completedAt: when }) } });
+      await backdateVisit(db, visit.id, spec.daysAgo, spec.complete);
       visits.push({ id: visit.id, complaint: spec.complaint, complete: spec.complete, hasPrescription: Boolean(spec.rx) });
     }
   } finally {
     await context.close();
   }
 
-  // Today's appointments for the signed-in doctor: one not started, one cancelled.
   const today = new Date(new Date().toISOString().slice(0, 10));
   const appointment = (patient, slot, status, tokenNumber) =>
     db.appointment.create({ data: { branchId: branch.id, doctorId: users.doctor.id, patientId: patients[patient].id, date: today, slot, status, tokenNumber } });

@@ -68,13 +68,9 @@ function VisitsPageInner() {
   const [formSaveStatus, setFormSaveStatus] = useState<FormSaveStatus>('idle');
   const [pendingLeave, setPendingLeave] = useState<'setup' | 'calendar' | null>(null);
   const [formSession, setFormSession] = useState({ key: '', visitDate: '' });
-  const processedLinkRef = useRef<string | null>(null);
-  const currentLinkRef = useRef('');
   const selectedPatientIdRef = useRef(selectedPatientId);
   selectedPatientIdRef.current = selectedPatientId;
   const keepEditingRef = useRef<HTMLButtonElement>(null);
-  // The form reports 'unsaved' on an untouched new visit (and keeps it, since autosave needs a
-  // visitId), so the leave dialog also requires an edit by the user during this form session.
   const formTouchedRef = useRef(false);
 
   const [loadError, setLoadError] = useState(false);
@@ -250,15 +246,14 @@ function VisitsPageInner() {
     void loadData();
   }, [loadData]);
 
-  // Each distinct query string is processed once. Strict Mode re-runs this effect, so in-flight
-  // work is never cancelled from a cleanup; stale results are dropped by comparing query strings.
   const linkQuery = searchParams.toString();
   useEffect(() => {
-    currentLinkRef.current = linkQuery;
-    if (processedLinkRef.current === linkQuery) return;
-    processedLinkRef.current = linkQuery;
     if (!linkQuery) return;
-    void processVisitLink(new URLSearchParams(linkQuery), () => currentLinkRef.current === linkQuery);
+    let superseded = false;
+    void processVisitLink(new URLSearchParams(linkQuery), () => !superseded);
+    return () => {
+      superseded = true;
+    };
   }, [linkQuery, processVisitLink]);
 
   useEffect(() => {
@@ -268,7 +263,6 @@ function VisitsPageInner() {
   const selectedPatient = useRecordById<PatientMatch>(selectedPatientId, fetchPatientById);
   const selectedDoctor = useRecordById<DoctorSummary>(selectedDoctorId, fetchDoctorById);
 
-  // A patient link opens the form once, as soon as a doctor is known.
   useEffect(() => {
     if (!openRequestPatientId || openRequestPatientId !== selectedPatientId || !selectedDoctorId) return;
     setOpenRequestPatientId(null);
@@ -292,7 +286,6 @@ function VisitsPageInner() {
   const boundVisitId = bindingApplies ? binding.visitId || boundAppointment?.visit?.id || undefined : undefined;
   const formKey = `${selectedPatientId}:${boundVisitId || boundAppointment?.id || 'new'}`;
 
-  // One visit date and a fresh save status per form opening.
   const formSessionKey = showForm ? formKey : '';
   if (formSession.key !== formSessionKey) {
     setFormSession({ key: formSessionKey, visitDate: new Date().toISOString() });
@@ -501,7 +494,6 @@ function VisitsPageInner() {
               </div>
             </div>
 
-            {/* Start row and history: Start stays above the history */}
             {selectedPatientId && (
               <div className="mt-6 space-y-4">
                 {selectedDoctorId ? (
