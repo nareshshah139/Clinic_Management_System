@@ -9,9 +9,18 @@ module.exports = journey(
   async (ui) => {
     const page = ui.page;
     const line = (key) => page.locator(`[id$="-${key}"]`).first();
-    const stockOf = async () => {
+    const batches = async () => {
       const result = await ui.api("GET", `/inventory/workspace/stock?search=${encodeURIComponent("Tretinoin")}&limit=50&page=1`);
-      return (result.rows || []).filter((r) => r.name === ITEM).reduce((sum, r) => sum + Number(r.currentStock || 0), 0);
+      return (result.rows || []).filter((r) => r.name === ITEM);
+    };
+    const stockOf = async () => (await batches()).reduce((sum, r) => sum + Number(r.currentStock || 0), 0);
+    const inView = async (locator) => {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const box = await locator.boundingBox();
+        if (box && box.y >= 0 && box.y + box.height <= 850) return true;
+        await page.waitForTimeout(250);
+      }
+      return false;
     };
 
     await ui.start("/dashboard");
@@ -49,8 +58,12 @@ module.exports = journey(
     const confirm = page.getByRole("button", { name: "Confirm reviewed values & add stock" });
     await confirm.waitFor();
     await ui.click(confirm, "Invoice actions: Confirm reviewed values & add stock");
-    await page.getByText(`${ITEM}: 20 added.`).first().waitFor();
-    await page.getByRole("button", { name: "Enter another bill" }).waitFor();
+    const addedNotice = page.getByText(`${ITEM}: 20 added.`).first();
+    await addedNotice.waitFor();
+    const another = page.getByRole("button", { name: "Enter another bill" }).first();
+    await another.waitFor();
+    const noticeSeen = await inView(addedNotice);
+    const buttonSeen = await inView(another);
     await ui.screen("stock-added");
 
     const after = await stockOf();
@@ -58,10 +71,13 @@ module.exports = journey(
     const bill = (bills.data || []).find((b) => b.invoiceNumber === BILL && b.status === "STOCK_COMMITTED");
     const saved = bill && (await ui.api("GET", `/pharmacy/purchase-invoices/${bill.id}`));
     const item = saved?.items?.[0];
+    const batch = (await batches()).find((r) => r.batchNumber === "TR2611");
     const batchKept = item?.productName === ITEM && item.batchNumber === "TR2611" && Number(item.expiryMonth) === 10 && Number(item.expiryYear) === 2028
-      && item.packUnitType === "Tube" && item.packSize === "1 unit" && item.hsnCode === "30049099" && Number(item.mrp) === 165 && saved.distributorDlNo === "MH-PUN-3187";
-    ui.goal(after - before === 20 && !!bill && batchKept,
-      "Tretinoin Cream stock rose by 20; bill AMA/2026/1187 is stock-committed with batch TR2611, expiry 10/2028, unit Tube, the saved pack, HSN, MRP and supplier licence");
+      && item.packUnitType === "Tube" && item.packSize === "1 unit" && item.hsnCode === "30049099" && saved.distributorDlNo === "MH-PUN-3187";
+    const taxAsBilled = Number(item?.cgstPercent) === 6 && Number(item?.sgstPercent) === 6 && Number(item?.igstPercent) === 0
+      && Number(item?.mrp) === 165 && Number(item?.gstAmount) === 220.8 && Number(batch?.gstRate) === 12 && Number(batch?.mrp) === 165;
+    ui.goal(after - before === 20 && !!bill && batchKept && taxAsBilled && noticeSeen && buttonSeen,
+      "Tretinoin Cream stock rose by 20; bill AMA/2026/1187 is stock-committed with batch TR2611, expiry 10/2028, unit Tube, the saved pack, HSN and supplier licence; the line and the new batch carry GST 12% (CGST 6, SGST 6) and MRP 165 as on the paper bill; the added notice and Enter another bill are visible without scrolling");
   },
 );
 if (require.main === module) module.exports.cli();
