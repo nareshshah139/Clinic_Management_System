@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PatientsManagement from './PatientsManagement';
 import { apiClient } from '@/lib/api';
@@ -85,5 +85,49 @@ describe('PatientsManagement table', () => {
     expect(gender).toHaveFocus();
     expect(within(dialog).getByRole('textbox', { name: 'Phone' })).not.toHaveAttribute('aria-invalid');
     expect(apiClient.createPatient).not.toHaveBeenCalled();
+  });
+
+  it('shows a save error from the server beside Create and moves focus to it', async () => {
+    (apiClient.createPatient as jest.Mock).mockRejectedValueOnce(new Error('Phone number already registered'));
+    render(<PatientsManagement />);
+    await screen.findByRole('link', { name: 'Ananya Reddy' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'New Patient' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'First Name' }), 'Meera');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Phone' }), '9848010000');
+    Element.prototype.hasPointerCapture = () => false;
+    Element.prototype.scrollIntoView = () => undefined;
+    fireEvent.keyDown(within(dialog).getByRole('combobox', { name: 'Gender' }), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Female' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent('Phone number already registered');
+    expect(alert).toHaveFocus();
+    expect(alert.parentElement).toBe(within(dialog).getByRole('button', { name: 'Create' }).parentElement);
+  });
+
+  it('exports the columns the table shows plus the patient code', async () => {
+    let exported: Blob | undefined;
+    const createObjectURL = jest.fn((blob: Blob) => { exported = blob; return 'blob:patients'; });
+    Object.assign(URL, { createObjectURL, revokeObjectURL: jest.fn() });
+    const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    render(<PatientsManagement />);
+    await screen.findByRole('link', { name: 'Ananya Reddy' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+    await waitFor(() => expect(exported).toBeDefined());
+    const text = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.readAsText(exported as Blob);
+    });
+    expect(text.split('\n')).toEqual([
+      'Patient code,Name,Phone,Age,Sex,Last visit,Portal linked',
+      'ES93U,Ananya Reddy,9848010000,28,Female,10 Nov 2026,No',
+      ',Karthik N,9848010959,30,Male,,No',
+    ]);
+    click.mockRestore();
   });
 });
