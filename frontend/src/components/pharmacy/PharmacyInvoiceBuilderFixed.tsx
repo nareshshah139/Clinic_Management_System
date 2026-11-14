@@ -43,6 +43,7 @@ import {
   Package as PackageIcon,
   FileText,
   Printer,
+  Check,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
@@ -2983,11 +2984,13 @@ export function PharmacyInvoiceBuilderFixed({
                     <Button
                       key={value}
                       type="button"
-                      variant={invoiceData.paymentMethod === value ? 'default' : 'outline'}
+                      variant="outline"
+                      className={invoiceData.paymentMethod === value ? 'border-primary bg-primary/10 font-semibold ring-2 ring-primary' : undefined}
                       aria-pressed={invoiceData.paymentMethod === value}
                       disabled={loading}
                       onClick={() => setInvoiceData((prev) => ({ ...prev, paymentMethod: value }))}
                     >
+                      {invoiceData.paymentMethod === value && <Check aria-hidden="true" className="mr-1.5 h-4 w-4" />}
                       {label}
                     </Button>
                   ))}

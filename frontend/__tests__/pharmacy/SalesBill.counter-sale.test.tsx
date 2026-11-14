@@ -114,6 +114,8 @@ it('shows payment as buttons with Cash chosen, and confirms, prints and opens th
   render(<SalesBillPage />);
   await pickPatient();
   expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'true');
+  const solid = (name: string) => screen.getByRole('button', { name }).classList.contains('bg-primary');
+  expect([solid('Cash'), solid('UPI'), solid('Confirm and print')]).toEqual([false, false, true]);
   const search = screen.getByLabelText('Medicine');
   fireEvent.change(search, { target: { value: 'Cetirizine' } });
   fireEvent.keyDown(search, { key: 'Enter' });
