@@ -39,7 +39,9 @@ import {
 } from '@/lib/whatsapp-settings';
 import { formatRupee } from '@/components/pharmacy/reports/report-format';
 
-import { DAILY_COLLECTION, EXPIRING_LIST, LOW_STOCK_LIST, appointmentsOn } from '@/lib/dashboard-links';
+import { DAILY_COLLECTION, EXPIRING_LIST, LOW_STOCK_LIST, appointmentsOn, stockLeft } from '@/lib/dashboard-links';
+import { APPOINTMENT_READ_ROLES } from '@/lib/appointment-access';
+import { CLINIC_STAFF_ROLES } from '@/lib/clinic-staff-roles';
 
 const REPORT_ROLES = ['OWNER', 'ADMIN', 'MANAGER'];
 
@@ -133,6 +135,8 @@ export function Header() {
   }, [user]);
 
   const isDoctor = String(user?.role || '').toUpperCase() === 'DOCTOR';
+  const role = String(user?.role || '');
+  const canSearch = CLINIC_STAFF_ROLES.includes(role);
 
   useEffect(() => {
     if (!settingsOpen || !isDoctor || loading) return;
@@ -182,7 +186,7 @@ export function Header() {
         href: href(bill),
         variant: bill.status === 'OVERDUE' ? 'destructive' : 'warning',
       }));
-    const onBillDay = (bill: any) => appointmentsOn(bill.billDate);
+    const onBillDay = (bill: any) => (alerts?.canTakePayment ? '/dashboard' : appointmentsOn(bill.billDate));
 
     const roleUpper = (role || '').toUpperCase();
     switch (roleUpper) {
@@ -213,7 +217,7 @@ export function Header() {
         const stockItems: NotificationItem[] = (lowStock || []).map((i: any) => ({
           id: `stock-${i.itemId}`,
           title: `Low stock: ${i.itemName}`,
-          description: `Stock ${i.currentStock} • Minimum ${i.reorderLevel}`,
+          description: `${stockLeft(i)} • Minimum ${i.reorderLevel}`,
           href: LOW_STOCK_LIST,
           variant: 'destructive',
         }));
@@ -238,7 +242,7 @@ export function Header() {
           variant: 'warning',
         }));
         pushMany(payItems, 5);
-        pushMany(billItems(() => DAILY_COLLECTION), 3);
+        pushMany(billItems((bill) => (alerts?.canTakePayment ? onBillDay(bill) : DAILY_COLLECTION)), 3);
         break;
       }
       case 'OWNER':
@@ -385,7 +389,6 @@ export function Header() {
       setIsSearching(true);
       const results: SearchResult[] = [];
 
-      // Search patients
       try {
         const patientRes: any = await apiClient.getPatients({ search: query, limit: 5 });
         const patients = patientRes.data || patientRes.patients || [];
@@ -404,30 +407,31 @@ export function Header() {
         console.error('Failed to search patients', e);
       }
 
-      // Search appointments (recent ones)
-      try {
-        const appointmentRes: any = await apiClient.getAppointments({ 
-          search: query, 
-          limit: 5,
-          sortBy: 'date',
-          sortOrder: 'desc'
-        });
-        const appointments = appointmentRes.appointments || appointmentRes.data || [];
-        appointments.forEach((appointment: any) => {
-          const patientName = appointment.patient?.name || `${appointment.patient?.firstName || ''} ${appointment.patient?.lastName || ''}`.trim() || 'Unknown Patient';
-          const doctorName = appointment.doctor ? `${appointment.doctor.firstName || ''} ${appointment.doctor.lastName || ''}`.trim() : 'Unknown Doctor';
-          results.push({
-            id: appointment.id,
-            type: 'appointment',
-            title: `${patientName} - ${appointment.slot}`,
-            subtitle: `Dr. ${doctorName}`,
-            description: `Appointment • ${displayUtcDate(appointment.date)} • ${appointment.visitType || 'OPD'}`,
-            icon: Calendar,
-            href: appointmentsOn(appointment.date),
+      if (APPOINTMENT_READ_ROLES.includes(role)) {
+        try {
+          const appointmentRes: any = await apiClient.getAppointments({ 
+            search: query, 
+            limit: 5,
+            sortBy: 'date',
+            sortOrder: 'desc'
           });
-        });
-      } catch (e) {
-        console.error('Failed to search appointments', e);
+          const appointments = appointmentRes.appointments || appointmentRes.data || [];
+          appointments.forEach((appointment: any) => {
+            const patientName = appointment.patient?.name || `${appointment.patient?.firstName || ''} ${appointment.patient?.lastName || ''}`.trim() || 'Unknown Patient';
+            const doctorName = appointment.doctor ? `${appointment.doctor.firstName || ''} ${appointment.doctor.lastName || ''}`.trim() : 'Unknown Doctor';
+            results.push({
+              id: appointment.id,
+              type: 'appointment',
+              title: `${patientName} - ${appointment.slot}`,
+              subtitle: `Dr. ${doctorName}`,
+              description: `Appointment • ${displayUtcDate(appointment.date)} • ${appointment.visitType || 'OPD'}`,
+              icon: Calendar,
+              href: appointmentsOn(appointment.date),
+            });
+          });
+        } catch (e) {
+          console.error('Failed to search appointments', e);
+        }
       }
 
       setSearchResults(results);
@@ -465,6 +469,7 @@ export function Header() {
           }
         }}
       >
+        {canSearch && (<>
         <form onSubmit={handleSearchSubmit}>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -544,6 +549,7 @@ export function Header() {
             </CardContent>
           </Card>
         )}
+        </>)}
       </div>
 
       {/* Right section */

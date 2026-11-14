@@ -115,7 +115,7 @@ describe.each([UserRole.DOCTOR, UserRole.ADMIN] as const)('%s clinic-day queries
       } else {
         expect(apiClient.getAppointments).toHaveBeenCalledWith({
           date: expectedDate,
-          limit: 5,
+          limit: 100,
           sortBy: 'slot',
           sortOrder: 'asc',
         });

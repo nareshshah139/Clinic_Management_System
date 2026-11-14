@@ -72,7 +72,7 @@ export function DoctorPatientPanels({ doctorId }: { doctorId: string }) {
           <CardTitle className="flex items-center"><UserRound className="h-5 w-5 text-blue-500 mr-2" />My patients{patients.status === 'ready' ? ` (${patients.value.total})` : ''}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Input aria-label="Search my patients" placeholder="Find a patient" value={search}
+          <Input aria-label="Search my patients" placeholder="Search my patients" value={search}
             onChange={event => { setSearch(event.target.value); setPage(1); }} />
           {patients.status === 'loading' && <p role="status" className="text-sm text-gray-500">Loading your patients…</p>}
           {patients.status === 'error' && <p role="alert" className="text-sm text-red-700">Could not load your patients. Refresh to try again.</p>}
