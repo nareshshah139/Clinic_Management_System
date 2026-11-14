@@ -98,7 +98,7 @@ function injectTourStyles() {
       .introjs-nextbutton:hover {
         background: linear-gradient(135deg, var(--info) 0%, var(--info) 100%) !important;
         transform: translateY(-1px) !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--info) 40%, transparent) !important;
       }
       
       .introjs-prevbutton {
@@ -140,7 +140,7 @@ function injectTourStyles() {
         background: var(--destructive) !important;
         color: var(--destructive-foreground) !important;
         transform: translateY(-1px) scale(1.05) !important;
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5) !important;
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--destructive) 50%, transparent) !important;
         border-color: var(--destructive) !important;
       }
       
@@ -200,7 +200,7 @@ function injectTourStyles() {
       
       /* Highlighted element */
       .introjs-helperLayer {
-        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7), 0 0 20px rgba(16, 185, 129, 0.5) !important;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7), 0 0 20px color-mix(in srgb, var(--success) 50%, transparent) !important;
         border-radius: 8px !important;
       }
       

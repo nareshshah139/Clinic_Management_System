@@ -303,7 +303,7 @@ export default function CalendarColumn({
                         e.stopPropagation();
                         onOpen(apt);
                       }}
-                      className="bg-muted-foreground hover:bg-muted-foreground text-white text-xs leading-4 px-2 py-0.5 rounded shadow-sm transition-colors font-medium"
+                      className="bg-muted-foreground hover:bg-muted-foreground/90 text-white text-xs leading-4 px-2 py-0.5 rounded shadow-sm transition-colors font-medium"
                       aria-label={`${enumLabel('appointmentAction', 'DETAILS')} for ${patientName}`}
                       disabled={isOptimistic}
                     >
@@ -316,7 +316,7 @@ export default function CalendarColumn({
                           e.stopPropagation();
                           onReschedule(apt);
                         }}
-                        className="bg-warning hover:bg-warning text-white text-xs leading-4 px-2 py-0.5 rounded shadow-sm transition-colors font-medium"
+                        className="bg-warning hover:bg-warning/90 text-white text-xs leading-4 px-2 py-0.5 rounded shadow-sm transition-colors font-medium"
                         aria-label={`${enumLabel('appointmentAction', 'RESCHEDULE')} ${patientName}`}
                         disabled={isOptimistic}
                       >
@@ -329,7 +329,7 @@ export default function CalendarColumn({
                         e.stopPropagation();
                         onStartVisit(apt);
                       }}
-                      className="bg-info hover:bg-info text-white text-xs leading-4 px-2 py-0.5 rounded shadow-sm transition-colors font-medium"
+                      className="bg-info hover:bg-info/90 text-white text-xs leading-4 px-2 py-0.5 rounded shadow-sm transition-colors font-medium"
                       aria-label={`${visitAction} for ${patientName}`}
                       disabled={isOptimistic}
                     >
@@ -416,8 +416,8 @@ export default function CalendarColumn({
                 opacity: past && !hasAny ? 0.6 : 1,
                 boxShadow: (() => {
                   const parts: string[] = [];
-                  if (isNewlyBooked) parts.push('0 0 0 2px rgba(34, 197, 94, 0.3)');
-                  else if (isBookingInProgress) parts.push('0 0 0 2px rgba(251, 191, 36, 0.3)');
+                  if (isNewlyBooked) parts.push('0 0 0 2px color-mix(in srgb, var(--success) 30%, transparent)');
+                  else if (isBookingInProgress) parts.push('0 0 0 2px color-mix(in srgb, var(--warning) 30%, transparent)');
                   if (showNowLine) parts.push('inset 0 2px 0 var(--destructive)');
                   else if (isHourStart && !(hasAny && crossesTop)) parts.push('inset 0 1px 0 var(--border)');
                   return parts.length ? parts.join(', ') : 'none';

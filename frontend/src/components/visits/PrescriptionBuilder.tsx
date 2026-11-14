@@ -6351,7 +6351,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="pt-2 grid grid-cols-2 gap-2">
                   {(
                     <Button
-                      className="col-span-2 bg-success hover:bg-success text-white"
+                      className="col-span-2 bg-success hover:bg-success/90 text-white"
                       disabled={!canCreate || savingFromPreview || savingForExport}
                       onClick={() => void create(true)}
                     >
