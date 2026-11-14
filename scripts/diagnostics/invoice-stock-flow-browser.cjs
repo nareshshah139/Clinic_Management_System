@@ -64,7 +64,7 @@ async function verifyPurchaseFlow() {
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'The invoice must fit the phone viewport');
       await page.screenshot({ path: path.join(output, newInvoice ? 'new-mobile.png' : 'mobile.png') });
       await page.evaluate(() => {
-        const options = [...document.querySelectorAll('[aria-label="Invoice actions"] summary')].find(summary => summary.textContent === 'More options');
+        const options = [...document.querySelectorAll('[aria-label="Invoice actions"] summary')].find(summary => summary.textContent === 'Automatic processing');
         if (options) options.parentElement.open = true;
       });
       assert(await page.evaluate(() => {
@@ -72,7 +72,7 @@ async function verifyPurchaseFlow() {
         if (!panel) return true;
         const bounds = panel.getBoundingClientRect();
         return bounds.left >= 0 && bounds.right <= innerWidth;
-      }), 'More options must stay within the phone viewport');
+      }), 'Automatic processing must stay within the phone viewport');
       await page.screenshot({ path: path.join(output, newInvoice ? 'new-mobile-options.png' : 'mobile-options.png') });
       await page.evaluate(() => document.querySelectorAll('[aria-label="Invoice actions"] details').forEach(details => { details.open = false; }));
     }

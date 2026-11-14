@@ -323,7 +323,7 @@ type MasterConfirmationResponse = {
   action: "MATCH_EXISTING" | "CREATE_NEW";
   drug: MasterDrug;
   linePatch?: Partial<
-    Record<keyof LineForm, string | number | null | undefined>
+    Record<keyof LineForm | "catalogueGstRate", string | number | null | undefined>
   >;
   message?: string;
 };
@@ -455,7 +455,7 @@ function emptyLine(serialNumber: number): LineForm {
     productName: "",
     manufacturer: "",
     packSize: "",
-    packUnitType: "Strip",
+    packUnitType: "",
     hsnCode: "",
     batchNumber: "",
     expiryMonth: "12",
@@ -624,8 +624,8 @@ function isExpiredLine(line: LineForm) {
 function validateDraft(header: HeaderForm, lines: LineForm[]) {
   const errors: string[] = [];
   const requiredHeader: Array<[keyof HeaderForm, string]> = [
-    ["distributorName", "Distributor name"],
-    ["distributorGstin", "Distributor GSTIN"],
+    ["distributorName", "Supplier name"],
+    ["distributorGstin", "Supplier GSTIN"],
     ["invoiceNumber", "Invoice number"],
     ["invoiceDate", "Invoice date"],
   ];
@@ -638,7 +638,7 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
     errors.push("Select the verified bill type");
   const gstin = header.distributorGstin.trim().toUpperCase();
   if (gstin && !GSTIN_PATTERN.test(gstin)) {
-    errors.push("Distributor GSTIN must be a valid 15-character GSTIN");
+    errors.push("Supplier GSTIN must be a valid 15-character GSTIN");
   }
 
   const invoiceDate = parseDateInput(header.invoiceDate);
@@ -1216,6 +1216,7 @@ function PurchaseInvoiceEditor({
     section?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   });
 
+  const [catalogueRates, setCatalogueRates] = useState<Record<string, number>>({});
   const [masterStatuses, setMasterStatuses] = useState<
     Record<number, MasterStatus>
   >({});
@@ -1487,18 +1488,19 @@ function PurchaseInvoiceEditor({
     setHeader(next);
   };
 
-  const updateLine = (localId: string, key: keyof LineForm, value: string) => {
+  const updateLine = (localId: string, key: keyof LineForm, value: string, also: Partial<LineForm> = {}) => {
     invalidatePending();
     setManualReviewCandidateId(null);
 
     if (["productName", "packSize", "packUnitType"].includes(key)) {
       setMasterMatches([]);
       setMasterStatuses({});
+    setCatalogueRates({});
     }
     const index = lines.findIndex(line => line.localId === localId);
     const line = lines[index];
     if (!line) return;
-    const next = { ...line, [key]: value };
+    const next = { ...line, ...also, [key]: value };
     const review = confirmPurchaseChecks(currentLineFlags[index], next, checkedOcr[localId], index, key);
     setCheckedOcr(current => ({ ...current, [localId]: review.checked }));
     setLines(current => current.map(row => row.localId === localId ? { ...next, ocrFlags: review.flags.join(', ') } : row));
@@ -1519,6 +1521,7 @@ function PurchaseInvoiceEditor({
     const removedIndex = lines.findIndex((line) => line.localId === localId);
     setMasterMatches([]);
     setMasterStatuses({});
+    setCatalogueRates({});
     setOriginalAmounts((current) =>
       current && Array.isArray(current.items)
         ? {
@@ -1590,6 +1593,7 @@ function PurchaseInvoiceEditor({
     setMasterConfirming(null);
     setMasterRefreshing(false);
     setMasterStatuses({});
+    setCatalogueRates({});
     setValidationErrors([]);
     setNotice(null);
     setError(null);
@@ -1685,6 +1689,7 @@ function PurchaseInvoiceEditor({
     setOcrSummary(extraction || null);
     setMasterMatches(matches?.matches || []);
     setMasterStatuses({});
+    setCatalogueRates({});
     setValidationErrors([]);
   };
 
@@ -1701,6 +1706,9 @@ function PurchaseInvoiceEditor({
     if (!patch) return;
     invalidatePending();
     setManualReviewCandidateId(null);
+    const matchedLine = lines[lineIndex];
+    const catalogueRate = Number(patch.catalogueGstRate);
+    if (matchedLine && patch.catalogueGstRate != null && Number.isFinite(catalogueRate)) setCatalogueRates(current => ({ ...current, [matchedLine.localId]: catalogueRate }));
 
     setLines((current) =>
       current.map((line, index) => {
@@ -1723,6 +1731,7 @@ function PurchaseInvoiceEditor({
             patch.packUnitType !== undefined
               ? formString(patch.packUnitType)
               : line.packUnitType,
+          hsnCode: patch.hsnCode !== undefined ? formString(patch.hsnCode) : line.hsnCode,
           mrp: patch.mrp !== undefined ? formString(patch.mrp) : line.mrp,
           purchaseRate:
             patch.purchaseRate !== undefined
@@ -2557,7 +2566,7 @@ function PurchaseInvoiceEditor({
         setNotice(
           invoice.workflowReceiptId
             ? `Bill ${invoice.invoiceNumber} posted. Stock received earlier · 0 added again.`
-            : `Stock added for ${invoice.invoiceNumber}. The saved record confirms the operation completed.`,
+            : `Stock added for ${invoice.invoiceNumber}. ${(invoice.items || []).map(item => `${item.productName}: ${Number(item.quantityPurchased) + Number(item.freeQuantity || 0)} added.`).join(" ")}`,
         );
         window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
       }
@@ -3293,7 +3302,6 @@ function PurchaseInvoiceEditor({
     const lineId = issue.lineIndex === undefined ? undefined : lines[issue.lineIndex]?.localId;
     const id = lineId && issue.field ? `${lineId}-${issue.target}` : issue.target;
     if (fieldTones[id] !== "error") fieldTones[id] = tone;
-    if (issue.field === "expiryMonth" && lineId) fieldTones[`${lineId}-expiry-year`] = tone;
   };
   if (editingChecks && !stockStatusUnknown && !draftWriteBlocked) {
     Object.entries(checkedOcr).forEach(([scope, entries]) => {
@@ -3308,7 +3316,7 @@ function PurchaseInvoiceEditor({
     currentHeaderFlags.forEach(flag => { const issue = purchaseReviewIssue(flag); markField(issue, purchaseCheckInvalid(issue, header) ? "error" : "warning"); });
     currentLineFlags.forEach((flags, index) => flags.forEach(flag => { const issue = purchaseReviewIssue(flag, index); markField(issue, purchaseCheckInvalid(issue, lines[index]) ? "error" : "warning"); }));
   }
-  correctionIssues.forEach(issue => markField(issue, issue.category === "historical" || issue.category === "manual" ? "warning" : "error"));
+  if (hasDraftContent) correctionIssues.forEach(issue => markField(issue, issue.category === "historical" || issue.category === "manual" ? "warning" : "error"));
   const checkSession = `${previewDocument?.id || "manual"}:${activeInvoice?.id || "new"}`;
   const checksRemaining = confirmationCount + correctionIssues.length + manualConfidenceLines.length + catalogueChecks;
   const reviewChecklist = (
@@ -3321,14 +3329,14 @@ function PurchaseInvoiceEditor({
         <h4 id="purchase-review-checklist-title" className="font-semibold">
           Check before adding stock
         </h4>
-        <div className="mt-1 flex items-center gap-1">
+        {hasDraftContent && <div className="mt-1 flex items-center gap-1">
           <PurchaseStatusCue tone={Object.values(fieldTones).includes("error") || correctionIssues.some(issue => issue.category !== "historical") ? "error" : confirmationCount || otherReviewIssues.length || !invoiceVerified ? "warning" : "success"}>
             {editingChecks ? checksRemaining > 0 ? `${checksRemaining} check${checksRemaining === 1 ? "" : "s"} to finish` : invoiceVerified ? "Review confirmed" : "Ready for your final check" : "Open Review issues to continue"}
           </PurchaseStatusCue>
           <PurchaseHelp label="Review checks">Correct any mistakes against the original. The final action confirms all current valid values together; missing or invalid values still need correction.</PurchaseHelp>
-        </div>
+        </div>}
       </div>
-      {catalogueChecks > 0 && <section aria-label="Invoice product checks" className="space-y-3 rounded-md border border-amber-300 bg-amber-50/40 p-4 text-sm">
+      {catalogueChecks > 0 && lines.some(line => line.productName.trim()) && <section aria-label="Invoice product checks" className="space-y-3 rounded-md border border-amber-300 bg-amber-50/40 p-4 text-sm">
         <h5 className="font-semibold">{catalogue.state === 'pending' ? 'Checking invoice products…' : 'Products need attention'}</h5>
         {catalogue.state === 'failed' && <p role="alert">{catalogue.productSaved ? 'Product details saved. Invoice check could not finish. Retry the check without saving again.' : 'Invoice products could not be checked. Retry the check before final review.'}</p>}
         {catalogueBlockers.map(row => <div key={row.localId} className="space-y-2">
@@ -3340,7 +3348,6 @@ function PurchaseInvoiceEditor({
           </> : <p>{row.resolution.state === 'missing' ? 'No exact active product matches this name and pack. Correct the invoice identity or choose an existing product. Create a product only if none exists.' : row.resolution.state === 'ambiguous' ? 'More than one active product has this identity. Correct the manufacturer or pack, or ask a catalogue editor to resolve duplicate records.' : 'This product has not been checked. Retry before final review.'}</p>}
           {row.resolution.state !== 'incomplete' && access.create && !savedFormLocked && <Button type="button" variant="outline" disabled={busy} onClick={() => focusPurchaseField('purchase-master-matching')}>Resolve line {row.lineIndex + 1} product</Button>}
         </div>)}
-        {catalogue.state !== 'pending' && !catalogueBlockers.length && <p>Check the saved products before final review. Your invoice entries are retained.</p>}
         <div className="flex flex-wrap gap-2">
           {(access.create || access.review) && <Button type="button" variant="outline" disabled={busy || masterRefreshing || masterConfirming !== null} onClick={() => refreshMasterMatches()}>Retry product check</Button>}
           <Button type="button" variant="outline" onClick={copyHandoff}>Copy product handoff</Button>
@@ -3359,7 +3366,7 @@ function PurchaseInvoiceEditor({
         readOnly={!editingChecks}
         disabled={busy}
         nextAction={postingLabel}
-        onChange={(distributorName, distributorGstin) => {
+        onChange={(distributorName, distributorGstin, licence) => {
           invalidatePending();
 
           setManualReviewCandidateId(null);
@@ -3367,6 +3374,7 @@ function PurchaseInvoiceEditor({
             ...current,
             distributorName,
             distributorGstin,
+            ...(licence && (!current.distributorDlNo.trim() || current.distributorDlNo === licence.previous) ? { distributorDlNo: licence.next } : {}),
           }));
         }}
         onSaved={() => setManualReviewCandidateId(null)}
@@ -3384,7 +3392,7 @@ function PurchaseInvoiceEditor({
           {lines.map((line, index) => <PurchaseOcrChecklist key={line.localId} flags={currentLineFlags[index]} checked={checkedOcr[line.localId]} lineIndex={index} lineId={line.localId} values={line} />)}
         </>
       )}
-      {correctionIssues.length > 0 && (
+      {hasDraftContent && correctionIssues.length > 0 && (
         <ul className="space-y-2 text-sm">
           {correctionIssues.map((issue) => {
             const lineId =
@@ -3677,9 +3685,10 @@ function PurchaseInvoiceEditor({
       {batchState.kind === 'applied' && <Button type="button" variant="outline" disabled={batchDisabled || batchState.invoiceId !== editingId} onClick={undoShared}>Undo shared terms</Button>}
     </div>
   </details>;
+  const showPostingGuidance = !stockAdded && !stockStatusUnknown && activeInvoice?.status !== 'CANCELLED' && hasDraftContent;
   const invoiceActions = (
     <section aria-label="Invoice actions" className="sticky bottom-0 z-20 space-y-2 border-t bg-background py-3">
-      {!stockAdded && !stockStatusUnknown && activeInvoice?.status !== 'CANCELLED' && <p id="purchase-posting-guidance" className="text-sm">{editingChecks && postingBlocker ? <>{postingBlocker}{!checkStops.length && <> <a className="underline underline-offset-4" href="#purchase-review-checklist" onClick={event => { event.preventDefault(); focusPurchaseField('purchase-review-checklist'); }}>Review checks</a></>}</> : <>Confirm values against the original. {!access.commit ? 'Saves review; stock stays unchanged.' : linkedReceipt ? 'Posts bill; no stock added again.' : 'Adds the received quantities to stock.'}</>}</p>}
+      {showPostingGuidance && <p id="purchase-posting-guidance" className="text-sm">{editingChecks && postingBlocker ? <>{postingBlocker}{!checkStops.length && <> <a className="underline underline-offset-4" href="#purchase-review-checklist" onClick={event => { event.preventDefault(); focusPurchaseField('purchase-review-checklist'); }}>Review checks</a></>}</> : <>Confirm values against the original. {!access.commit ? 'Saves review; stock stays unchanged.' : linkedReceipt ? 'Posts bill; no stock added again.' : 'Adds the received quantities to stock.'}</>}</p>}
       <div className="flex flex-wrap items-center gap-2">
         {stockStatusUnknown ? (
           <Button variant="outline" onClick={() => unknownStockInvoiceId && refreshStockStatus(unknownStockInvoiceId)} disabled={busy}>Refresh stock status</Button>
@@ -3694,7 +3703,7 @@ function PurchaseInvoiceEditor({
         ) : canReview && !access.commit && !access.create ? (
           <Button onClick={reviewInvoice} disabled={busy}>Mark Reviewed</Button>
         ) : !activeInvoice || editingSelectedInvoice ? (
-          <Button className="h-auto min-h-10 max-w-full whitespace-normal text-left" onClick={() => saveAndPostInvoice(access.commit)} disabled={busy || !!postingBlocker} aria-busy={busy} aria-label={access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"} aria-describedby="purchase-posting-guidance">
+          <Button className="h-auto min-h-10 max-w-full whitespace-normal text-left" onClick={() => saveAndPostInvoice(access.commit)} disabled={busy || !!postingBlocker} aria-busy={busy} aria-label={access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"} aria-describedby={showPostingGuidance ? "purchase-posting-guidance" : undefined}>
             {busy && <Spinner className="h-4 w-4 " />}
             {access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"}
           </Button>
@@ -3709,7 +3718,7 @@ function PurchaseInvoiceEditor({
               return errors.length ? saveIncompleteDraft() : saveDraft();
             }}>Save draft</Button>
             {access.automate && <details className="relative text-sm">
-              <summary className="cursor-pointer py-2">More options</summary>
+              <summary className="cursor-pointer py-2">Automatic processing</summary>
               <div className="absolute bottom-full left-0 w-64 space-y-2 rounded-md border bg-background p-3">
                 <p className="text-muted-foreground">Automatic processing saves corrections and adds stock if every check passes.</p>
                 <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={processSavedInvoice}>{saving ? "Saving…" : processing ? "Checking invoice…" : "Save & Process"}</Button>
@@ -3719,13 +3728,19 @@ function PurchaseInvoiceEditor({
         )}
         <span className="hidden text-sm text-muted-foreground sm:inline">{stockStatusUnknown ? "Stock status unknown" : stockAdded ? committedLabel : linkedReceipt ? "Stock received earlier · 0 added again" : activeInvoice ? "Stock not added" : "Not saved · stock not added"}</span>
       </div>
-      {checkStops.length > 0 && <nav aria-label="Invoice checks" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      {checkStops.length > 0 && hasDraftContent && <nav aria-label="Invoice checks" className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="mr-auto text-sm text-muted-foreground" aria-live="polite">{!activeCheck ? `${checkStops.length} ${checkStops.length === 1 ? 'check' : 'checks'} to review` : `Check ${activeCheckIndex + 1} of ${checkStops.length} · ${activeCheck.lineIndex === undefined ? '' : `Line ${activeCheck.lineIndex + 1} `}${activeCheck.label}`}</span>
         <Button type="button" size="sm" variant="ghost" aria-label="Previous check" disabled={busy || !adjacentCheck(-1)} onClick={() => navigateCheck(-1)}>Previous</Button>
         <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => navigateCheck(1)}>{adjacentCheck(1) ? 'Next check' : 'Back to review'}</Button>
       </nav>}
     </section>
   );
+
+  const automaticImport = access.automate && <details hidden={savedFormLocked || (!showIntakeHome && !!activeInvoice && !editingSelectedInvoice)}>
+    <summary className="cursor-pointer">Automatic import</summary>
+    <p className="my-2 text-muted-foreground">Adds stock if every automatic check passes. Choose the files first.</p>
+    <Button type="button" variant="outline" onClick={() => extractFromInvoiceFile(true)} disabled={busy || !!unknownStockInvoiceId || !ocrFile || !importReceivedDate}>Import &amp; Add Stock</Button>
+  </details>;
 
   const recentInvoices = (
     <details className="rounded-lg border p-4" open={showIntakeHome}>
@@ -3946,7 +3961,7 @@ function PurchaseInvoiceEditor({
               }}
               disabled={busy || !!unknownStockInvoiceId}
             >
-              New invoice
+              Enter another bill
             </Button>
           </nav>
         )}
@@ -4008,9 +4023,6 @@ function PurchaseInvoiceEditor({
             >
               Scan or enter bill
             </h3>
-            <p className="text-sm text-muted-foreground">
-              Upload every page. Check the reading. Add stock when ready.
-            </p>
           </div>
           <div hidden={!hasDraftContent && !manualEntry} className="flex flex-wrap gap-2">
             <Button
@@ -4021,7 +4033,7 @@ function PurchaseInvoiceEditor({
               }}
               disabled={busy || !!unknownStockInvoiceId}
             >
-              New invoice
+              Enter another bill
             </Button>
 
           </div>
@@ -4047,8 +4059,14 @@ function PurchaseInvoiceEditor({
           </div>
         )}
 
-        {!showIntakeHome && !activeInvoice && recentInvoices}
-        {!showIntakeHome && <details><summary className="cursor-pointer text-sm">Review status guide</summary><ReviewLegend /></details>}
+        {(!showIntakeHome || automaticImport) && <details className="text-sm">
+          <summary className="cursor-pointer py-1 font-medium">Recent invoices and import</summary>
+          <div className="mt-2 space-y-3">
+            {!showIntakeHome && !activeInvoice && recentInvoices}
+            {!showIntakeHome && <details><summary className="cursor-pointer">Review status guide</summary><ReviewLegend /></details>}
+            {automaticImport}
+          </div>
+        </details>}
         {!showIntakeHome && stockAdded && <PurchaseReviewSummary
           hasContent={hasDraftContent}
           stockReceivedEarlier={linkedReceipt}
@@ -4329,7 +4347,6 @@ function PurchaseInvoiceEditor({
                       : "Scan a bill"}
                   </summary>
                   <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                    <PurchaseStatusCue>Scan only · stock stays unchanged</PurchaseStatusCue>
                     <PurchaseHelp label="Invoice import">Scanning keeps the original and fills in the details for you to check. You can correct any misread value before saving.</PurchaseHelp>
                   </div>
                   <div className="mt-3 space-y-4">
@@ -4351,7 +4368,7 @@ function PurchaseInvoiceEditor({
                           disabled={extracting || saving || processing}
                         />
                         <p className="mt-1 text-xs text-muted-foreground">
-                          PDF or photos · Up to 10 files · One invoice, in page order
+                          Up to 10 pages, in order
                         </p>
                       </div>
                       <div className="flex flex-col gap-3">
@@ -4374,12 +4391,7 @@ function PurchaseInvoiceEditor({
                           {extracting ? <Spinner className="h-4 w-4 " /> : <FileSearch className="h-4 w-4" />}
                           {extracting ? "Reading bill…" : "Scan bill"}
                         </Button>
-                        <a href="#distributor-name" className="text-center text-sm underline underline-offset-4" onClick={() => { setShowIntakeHome(false); setManualEntry(true); requestAnimationFrame(() => focusPurchaseField('distributor-name')); }}>Type instead</a>
-                        {access.automate && <details className="text-sm">
-                          <summary className="cursor-pointer py-2">Automatic import</summary>
-                          <p className="my-2 text-muted-foreground">Adds stock if every automatic check passes.</p>
-                          <Button type="button" variant="outline" onClick={() => extractFromInvoiceFile(true)} disabled={busy || !!unknownStockInvoiceId || !ocrFile || !importReceivedDate}>Import &amp; Add Stock</Button>
-                        </details>}
+                        <Button type="button" variant="outline" className="w-full md:w-auto" onClick={() => { setShowIntakeHome(false); setManualEntry(true); requestAnimationFrame(() => focusPurchaseField('distributor-name')); }}>Enter bill by hand</Button>
                       </div>
                     </div>
 
@@ -4436,12 +4448,8 @@ function PurchaseInvoiceEditor({
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <Truck className="h-5 w-5" />
-                          Distributor Bill
+                          Supplier bill
                         </CardTitle>
-                        <CardDescription>
-                          Review extracted values or enter the distributor bill
-                          manually.
-                        </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-5">
                         {headerFlags && (
@@ -4478,7 +4486,7 @@ function PurchaseInvoiceEditor({
                             <>
                               <Field
                                 id="distributor-name"
-                                label="Distributor"
+                                label="Supplier name"
                                 value={header.distributorName}
                                 onChange={(event) =>
                                   updateHeader(
@@ -4486,7 +4494,7 @@ function PurchaseInvoiceEditor({
                                     event.target.value,
                                   )
                                 }
-                                placeholder="Distributor name"
+                                placeholder="Supplier name"
                               />
                               <Field
                                 id="distributor-gstin"
@@ -4681,10 +4689,10 @@ function PurchaseInvoiceEditor({
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div>
                                 <Label htmlFor="distributor-address">
-                                  Distributor Address
+                                  Supplier address
                                   <SourceFieldLink
                                     id="distributor-address"
-                                    label="Distributor address"
+                                    label="Supplier address"
                                   />
                                 </Label>
                                 <Textarea
@@ -4729,11 +4737,6 @@ function PurchaseInvoiceEditor({
                                   <FileSearch className="h-5 w-5" />
                                   Product matching and details
                                 </CardTitle>
-                                <CardDescription>
-                                  Match each invoice line to the correct saved
-                                  product and pack before adding stock.
-                                  Manufacturer is optional.
-                                </CardDescription>
                               </div>
                               <Button
                                 type="button"
@@ -4757,14 +4760,6 @@ function PurchaseInvoiceEditor({
                             </div>
                           </CardHeader>
                           <CardContent className="space-y-3">
-                            {masterMatches.length === 0 && (
-                              <p className="text-sm text-muted-foreground">
-                                Choose Refresh Matches to find saved products.
-                                Confirm a match to fill its manufacturer and
-                                pack details, then enter the stock unit (Bottle,
-                                Tube or Strip) if it is still missing.
-                              </p>
-                            )}
                             {masterMatches.map((match) => {
                               if (!access.create) return;
                               const line = lines[match.lineIndex];
@@ -4931,14 +4926,7 @@ function PurchaseInvoiceEditor({
                                             </div>
                                           ) : null}
                                         </>
-                                      ) : (
-                                        <p className="text-sm text-muted-foreground">
-                                          Choose a product kind below and save
-                                          its known details. Clinical fields are
-                                          optional for cosmetics and
-                                          consumables.
-                                        </p>
-                                      )}
+                                      ) : null}
                                     </div>
                                   </div>
 
@@ -5164,10 +5152,9 @@ function PurchaseInvoiceEditor({
                                 <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
 <Field id={`${line.localId}-product`} label="Product" value={line.productName} className="col-span-2" onChange={event => updateLine(line.localId, "productName", event.target.value)} />
 <Field id={`${line.localId}-pack-size`} label="Pack Size" value={line.packSize} onChange={event => updateLine(line.localId, "packSize", event.target.value)} />
-<Field id={`${line.localId}-unit`} label="Stock unit" value={line.packUnitType} onChange={event => updateLine(line.localId, "packUnitType", event.target.value)} />
+<Field id={`${line.localId}-unit`} label="Stock unit" value={line.packUnitType} placeholder="Tube, Strip or Bottle" onChange={event => updateLine(line.localId, "packUnitType", event.target.value)} />
 <Field id={`${line.localId}-batch`} label="Batch" value={line.batchNumber} onChange={event => updateLine(line.localId, "batchNumber", event.target.value)} />
-<Field id={`${line.localId}-expiry-month`} label="Exp. Month" value={line.expiryMonth} type="number" min="1" max="12" onChange={event => updateLine(line.localId, "expiryMonth", event.target.value)} />
-<Field id={`${line.localId}-expiry-year`} label="Exp. Year" value={line.expiryYear} type="number" min="2020" max="2100" onChange={event => updateLine(line.localId, "expiryYear", event.target.value)} />
+<ExpiryField id={`${line.localId}-expiry-month`} month={line.expiryMonth} year={line.expiryYear} onChange={(month, year) => updateLine(line.localId, "expiryMonth", month, { expiryYear: year })} />
 <Field id={`${line.localId}-qty`} label="Paid Qty" value={line.quantityPurchased} type="number" min="0" step="1" onChange={event => updateLine(line.localId, "quantityPurchased", event.target.value)} />
 <Field id={`${line.localId}-free-qty`} label="Free Qty" value={line.freeQuantity} type="number" min="0" step="1" onChange={event => updateLine(line.localId, "freeQuantity", event.target.value)} />
 <Field id={`${line.localId}-rate`} label="Rate" value={line.purchaseRate} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "purchaseRate", event.target.value)} />
@@ -5176,6 +5163,7 @@ function PurchaseInvoiceEditor({
 <Field id={`${line.localId}-cgst`} label="CGST %" value={line.cgstPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "cgstPercent", event.target.value)} />
 <Field id={`${line.localId}-sgst`} label="SGST %" value={line.sgstPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "sgstPercent", event.target.value)} />
 <Field id={`${line.localId}-igst`} label="IGST %" value={line.igstPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "igstPercent", event.target.value)} />
+{catalogueRates[line.localId] !== undefined && Math.abs(numeric(line.cgstPercent) + numeric(line.sgstPercent) + numeric(line.igstPercent) - catalogueRates[line.localId]) > 0.005 && <p role="status" className="col-span-full text-sm text-amber-700">Bill says {Number((numeric(line.cgstPercent) + numeric(line.sgstPercent) + numeric(line.igstPercent)).toFixed(2))}%. This item is usually {catalogueRates[line.localId]}%. The bill&apos;s rate is kept.</p>}
                                 </div>
                                 <details className="border-t pt-2" open={currentLineFlags[index].some(flag => ['manufacturer','hsnCode','oldMrp','specialDiscountPercent','schemeAmount'].includes(purchaseReviewIssue(flag, index).field || '')) || !line.hsnCode.trim() || validationErrors.some(message => message.startsWith(`Line ${index + 1}`)) || undefined}>
                                   <summary className="cursor-pointer py-1 text-sm font-medium">Other commercial details</summary>
@@ -5634,11 +5622,6 @@ function ReportedAmountsEditor({
       <summary className="cursor-pointer text-sm font-medium">
         Amounts read from invoice
       </summary>
-      <p className="my-3 text-xs text-muted-foreground">
-        Check these amounts against the invoice and correct any reading errors.
-        Printed amounts stay unchanged when quantities, rates or taxes change.
-        Correct these fields only against the original invoice.
-      </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {fields.map(([key, label]) => (
           <Field
@@ -5677,6 +5660,23 @@ function Field({ id, label, className, ...props }: FieldProps) {
       />
     </div>
   );
+}
+
+const expiryText = (month: string, year: string) => month || year ? `${month.padStart(2, "0")}/${year}` : "";
+
+function parseExpiry(text: string): [string, string] {
+  const match = text.trim().match(/^(\d{1,2})\s*[/.\-\s]\s*(\d{4}|\d{2})$/);
+  return match ? [String(Number(match[1])), match[2].length === 2 ? `20${match[2]}` : match[2]] : ["", ""];
+}
+
+function ExpiryField({ id, month, year, onChange }: { id: string; month: string; year: string; onChange: (month: string, year: string) => void }) {
+  const [shown, setShown] = useState({ text: expiryText(month, year), month, year });
+  if (shown.month !== month || shown.year !== year) setShown({ text: expiryText(month, year), month, year });
+  return <Field id={id} label="Expiry" value={shown.text} inputMode="numeric" placeholder="MM/YYYY" onChange={event => {
+    const [nextMonth, nextYear] = parseExpiry(event.target.value);
+    setShown({ text: event.target.value, month: nextMonth, year: nextYear });
+    onChange(nextMonth, nextYear);
+  }} />;
 }
 
 function ReadOnlyAmount({ label, value }: { label: string; value: number }) {
