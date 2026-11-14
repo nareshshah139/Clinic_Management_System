@@ -277,8 +277,24 @@ describe('/users access control', () => {
       } finally {
         Object.assign(users.target, { permissions: null, revokedPermissions: null });
       }
-      expect((await send('get', '/users/doctor/permissions', 'owner').expect(200)).body).toEqual({ permissions: [], always: ['*'] });
+      expect((await send('get', '/users/doctor/permissions', 'owner').expect(200)).body).toEqual({ permissions: ['appointments:read'], always: ['*'] });
       expect((await send('get', '/users/pharmacist/permissions', 'owner').expect(200)).body).toEqual({ permissions: [], always: ['pharmacy:*', 'inventory:*'] });
+    });
+
+    it('ticks what a wildcard covers and revokes a covered permission that is unticked', async () => {
+      const nurse = roleRecords.NURSE;
+      roleRecords.NURSE = { permissions: JSON.stringify(['inventory:*', 'appointments:read']) };
+      db.permission.findMany.mockImplementation(async () =>
+        ['inventory:*', 'inventory:item:read', 'inventory:item:delete', 'appointments:read', 'billing:invoice:read'].map((name) => ({ name })));
+      try {
+        const held = await send('get', '/users/target/permissions', 'admin').expect(200);
+        expect(held.body.permissions).toEqual(['inventory:*', 'appointments:read', 'inventory:item:read', 'inventory:item:delete']);
+        await send('patch', '/users/target/permissions', 'admin', { permissions: ['inventory:*', 'appointments:read', 'inventory:item:read'] }).expect(200);
+        expect(written()).toEqual([{ permissions: '["inventory:item:read"]', revokedPermissions: '["inventory:item:delete"]' }]);
+      } finally {
+        roleRecords.NURSE = nurse;
+        db.permission.findMany.mockImplementation(async () => [permissionRecord]);
+      }
     });
 
     it('answers 404 for an unknown user', async () => {

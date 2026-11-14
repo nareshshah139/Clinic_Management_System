@@ -9,5 +9,5 @@ export async function viewerGrants(prisma: PrismaService, viewer: { id?: string 
   const user = await prisma.user.findUnique({ where: { id: viewer.id }, select: { role: true, permissions: true, revokedPermissions: true } });
   if (!user) return NO_GRANTS;
   const record = await prisma.role.findFirst({ where: { name: user.role }, select: { permissions: true } }).catch(() => null);
-  return permissionGrants(userGrants(user, record?.permissions));
+  return userGrants(user, record?.permissions);
 }

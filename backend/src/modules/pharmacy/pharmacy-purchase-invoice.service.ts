@@ -119,7 +119,7 @@ export class PharmacyPurchaseInvoiceService {
     const universal = user.role === 'OWNER' || role === 'ADMIN' || role === 'DOCTOR';
     const eligible = universal || ['RECEPTION', 'PHARMACIST'].includes(user.role);
     const roleRecord = dbUser ? await this.prisma.role.findFirst({ where: { name: role }, select: { permissions: true } }) : null;
-    const permissions = permissionGrants(dbUser ? userGrants(dbUser, roleRecord?.permissions) : []);
+    const permissions = dbUser ? userGrants(dbUser, roleRecord?.permissions) : permissionGrants([]);
     const has = (...keys: string[]) => eligible && (universal || keys.some(key => permissions.has(key)));
     const read = has('pharmacy:purchase-invoice:read', 'inventory:po:read');
     const create = has('pharmacy:purchase-invoice:create', 'inventory:po:create');

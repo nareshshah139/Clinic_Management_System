@@ -1,4 +1,4 @@
-import { fixedGrants, heldPermissions, permissionDeltas, permissionGranted, userGrants } from './permission-grants';
+import { fixedGrants, heldPermissions, permissionDeltas, permissionGranted, tickedPermissions, userGrants } from './permission-grants';
 
 describe('permissionGranted', () => {
   it.each([
@@ -36,16 +36,21 @@ describe('permissionGranted', () => {
 
 describe('userGrants for the role-fixed rules', () => {
   it.each([
-    ['PHARMACIST', [], ['pharmacy:*', 'inventory:*']],
-    ['PHARMACIST', ['billing:invoice:read'], ['billing:invoice:read', 'pharmacy:*', 'inventory:*']],
-    ['DOCTOR', ['visits:*'], ['*']],
-    ['ADMIN', [], ['*']],
-    ['OWNER', [], ['*']],
-    ['RECEPTION', ['*', 'inventory:item:read'], ['inventory:item:read']],
-    ['MANAGER', ['pharmacy:*'], ['pharmacy:*']],
-    [undefined, ['inventory:item:read'], ['inventory:item:read']],
-  ])('gives %s with %j the grants %j', (role, stored, expected) => {
-    expect(userGrants({ role, permissions: stored, revokedPermissions: null }, null)).toEqual(expected);
+    ['PHARMACIST', [], 'pharmacy:invoice:read', true],
+    ['PHARMACIST', [], 'inventory:item:delete', true],
+    ['PHARMACIST', [], 'billing:invoice:read', false],
+    ['PHARMACIST', ['billing:invoice:read'], 'billing:invoice:read', true],
+    ['DOCTOR', ['visits:*'], 'billing:invoice:read', true],
+    ['ADMIN', [], 'users:delete', true],
+    ['OWNER', [], 'users:delete', true],
+    ['RECEPTION', ['*', 'inventory:item:read'], 'inventory:item:read', true],
+    ['RECEPTION', ['*', 'inventory:item:read'], 'billing:invoice:read', false],
+    ['MANAGER', ['pharmacy:*'], 'pharmacy:drug:read', true],
+    ['MANAGER', ['pharmacy:*'], 'inventory:item:read', false],
+    [undefined, ['inventory:item:read'], 'inventory:item:read', true],
+    [undefined, ['inventory:item:read'], 'inventory:item:update', false],
+  ])('%s with %j may use %s: %s', (role, stored, required, expected) => {
+    expect(userGrants({ role, permissions: stored, revokedPermissions: null }, null).has(required)).toBe(expected);
   });
 });
 
@@ -87,23 +92,56 @@ describe('heldPermissions', () => {
   });
 });
 
-describe('userGrants', () => {
+describe('userGrants with revocations', () => {
+  const may = (role: string, rolePermissions: string[], saved: string[] | null, revoked: string[], required: string) =>
+    userGrants({ role, permissions: json(saved), revokedPermissions: json(revoked) }, json(rolePermissions)).has(required);
+
   it.each(['OWNER', 'ADMIN', 'DOCTOR'])('gives %s every permission whatever is revoked', (role) => {
-    expect(userGrants({ role, permissions: null, revokedPermissions: '["a","*"]' }, '["a"]')).toEqual(['*']);
+    expect(may(role, ['a'], null, ['a', '*', 'users:delete'], 'users:delete')).toBe(true);
   });
 
   it('keeps the pharmacist implied grants when they are revoked', () => {
-    expect(userGrants(
-      { role: 'PHARMACIST', permissions: null, revokedPermissions: '["pharmacy:*","inventory:*","billing:invoice:read"]' },
-      '["billing:invoice:read","pharmacy:*"]',
-    )).toEqual(['pharmacy:*', 'inventory:*']);
+    const revoked = ['pharmacy:*', 'inventory:*', 'pharmacy:invoice:read', 'billing:invoice:read'];
+    expect(may('PHARMACIST', ['billing:invoice:read', 'pharmacy:*'], null, revoked, 'pharmacy:invoice:read')).toBe(true);
+    expect(may('PHARMACIST', ['billing:invoice:read', 'pharmacy:*'], null, revoked, 'inventory:item:read')).toBe(true);
+    expect(may('PHARMACIST', ['billing:invoice:read', 'pharmacy:*'], null, revoked, 'billing:invoice:read')).toBe(false);
   });
 
-  it('removes a revoked role grant from a receptionist', () => {
-    expect(userGrants(
-      { role: 'RECEPTION', permissions: null, revokedPermissions: '["inventory:storage:read"]' },
-      '["inventory:storage:read","appointments:read"]',
-    )).toEqual(['appointments:read']);
+  it('removes a revoked role grant from a receptionist and keeps the rest', () => {
+    const role = ['inventory:storage:read', 'appointments:read'];
+    expect(may('RECEPTION', role, null, ['inventory:storage:read'], 'inventory:storage:read')).toBe(false);
+    expect(may('RECEPTION', role, null, ['inventory:storage:read'], 'appointments:read')).toBe(true);
+  });
+
+  it('refuses a revoked permission that a held wildcard still covers, and nothing else under it', () => {
+    expect(may('MANAGER', ['inventory:*'], null, ['inventory:item:delete'], 'inventory:item:delete')).toBe(false);
+    expect(may('MANAGER', ['inventory:*'], null, ['inventory:item:delete'], 'inventory:item:read')).toBe(true);
+    expect(may('MANAGER', ['inventory:*'], ['inventory:item:delete'], ['inventory:item:delete'], 'inventory:item:delete')).toBe(false);
+  });
+
+  it('treats a revoked wildcard as removing that grant only, not the specific grants beside it', () => {
+    expect(may('MANAGER', ['inventory:*'], ['inventory:item:read'], ['inventory:*'], 'inventory:item:read')).toBe(true);
+    expect(may('MANAGER', ['inventory:*'], ['inventory:item:read'], ['inventory:*'], 'inventory:item:update')).toBe(false);
+  });
+});
+
+describe('tickedPermissions', () => {
+  const listed = ['inventory:*', 'inventory:item:read', 'inventory:item:delete', 'appointments:read', 'billing:invoice:read'];
+  const ticked = (role: string, rolePermissions: string[], saved: string[] | null, revoked: string[] | null) =>
+    tickedPermissions({ role, permissions: json(saved), revokedPermissions: json(revoked) }, json(rolePermissions), listed);
+
+  it('ticks what a wildcard covers and leaves a revoked permission unticked', () => {
+    expect(ticked('MANAGER', ['inventory:*', 'appointments:read'], null, ['inventory:item:delete']))
+      .toEqual(['inventory:*', 'appointments:read', 'inventory:item:read']);
+  });
+
+  it('keeps a held grant that is not listed, so saving does not drop it', () => {
+    expect(ticked('RECEPTION', ['appointments:read'], ['reports:custom'], null)).toEqual(['appointments:read', 'reports:custom']);
+  });
+
+  it('ticks every listed permission for a role that always has them', () => {
+    expect(ticked('ADMIN', [], null, ['appointments:read'])).toEqual(listed);
+    expect(ticked('PHARMACIST', [], null, ['inventory:item:read'])).toEqual(['inventory:*', 'inventory:item:read', 'inventory:item:delete']);
   });
 });
 
@@ -121,9 +159,15 @@ describe('fixedGrants', () => {
 
 describe('permissionDeltas', () => {
   it('stores extras as saved and missing role grants as revoked', () => {
-    expect(permissionDeltas('["a","b","c"]', ['b', 'x'])).toEqual({ permissions: ['x'], revokedPermissions: ['a', 'c'] });
+    expect(permissionDeltas('["a","b","c"]', ['b', 'x'], [])).toEqual({ permissions: ['x'], revokedPermissions: ['a', 'c'] });
   });
 
+  it('revokes an unticked listed permission that a ticked wildcard would still cover', () => {
+    expect(permissionDeltas('["inventory:*"]', ['inventory:*', 'inventory:item:read'], ['inventory:*', 'inventory:item:read', 'inventory:item:delete', 'billing:invoice:read']))
+      .toEqual({ permissions: ['inventory:item:read'], revokedPermissions: ['inventory:item:delete'] });
+  });
+
+  const listed = ['a', 'b', 'c', 'd', 'inventory:*', 'inventory:item:read', 'inventory:item:delete', 'appointments:read'];
   it.each([
     [[], []],
     [[], ['a', 'b']],
@@ -133,12 +177,14 @@ describe('permissionDeltas', () => {
     [['a', 'b', 'c'], ['a']],
     [['a', 'b'], ['b', 'd']],
     [['inventory:*', 'appointments:read'], ['inventory:item:read']],
-  ])('round-trips role %j to exactly the held set %j', (role, target) => {
-    const deltas = permissionDeltas(JSON.stringify(role), target);
-    const held = heldPermissions(JSON.stringify(role), {
-      permissions: JSON.stringify(deltas.permissions),
-      revokedPermissions: JSON.stringify(deltas.revokedPermissions),
-    });
-    expect([...held].sort()).toEqual([...target].sort());
+    [['inventory:*', 'appointments:read'], ['inventory:*', 'inventory:item:read']],
+    [['inventory:*'], ['inventory:item:read', 'inventory:item:delete', 'not:listed']],
+    [['inventory:item:read'], ['inventory:*']],
+  ])('round-trips role %j so that exactly %j is allowed and ticked', (role, target) => {
+    const deltas = permissionDeltas(JSON.stringify(role), target, listed);
+    const user = { role: 'RECEPTION', permissions: JSON.stringify(deltas.permissions), revokedPermissions: JSON.stringify(deltas.revokedPermissions) };
+    const grants = userGrants(user, JSON.stringify(role));
+    expect(listed.filter((permission) => grants.has(permission))).toEqual(listed.filter((permission) => target.includes(permission)));
+    expect(tickedPermissions(user, JSON.stringify(role), listed).sort()).toEqual([...target].sort());
   });
 });

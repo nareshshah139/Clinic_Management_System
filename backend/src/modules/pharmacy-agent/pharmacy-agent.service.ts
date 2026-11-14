@@ -27,7 +27,7 @@ import { InventoryService } from '../inventory/inventory.service';
 import { InventoryItemRequestService } from '../inventory/inventory-item-request.service';
 import { ITEM_NAMING_INSTRUCTIONS, ITEM_NAMING_SCHEMA, nameProposedItem, ProposedItemNaming } from './proposed-item-naming';
 import { ReportsService } from '../reports/reports.service';
-import { permissionGranted, userGrants } from '../../shared/access/permission-grants';
+import { userGrants } from '../../shared/access/permission-grants';
 import {
   CreatePharmacyAgentSessionDto,
   RejectPharmacyAgentProposalDto,
@@ -1548,7 +1548,7 @@ export class PharmacyAgentService implements OnModuleInit {
       where: { name: dbUser.role },
       select: { permissions: true },
     });
-    return permissionGranted(userGrants(dbUser, role?.permissions), permission);
+    return userGrants(dbUser, role?.permissions).has(permission);
   }
 
   private detectAttachmentKind(file: Express.Multer.File) {

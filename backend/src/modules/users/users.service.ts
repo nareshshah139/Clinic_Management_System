@@ -7,7 +7,7 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { readDoctorSignature, signatureDataUrl } from './doctor-signature';
 import { letterheadDataUrl, readDoctorLetterhead } from './doctor-letterhead';
-import { fixedGrants, heldPermissions, permissionDeltas } from '../../shared/access/permission-grants';
+import { fixedGrants, permissionDeltas, tickedPermissions } from '../../shared/access/permission-grants';
 
 @Injectable()
 export class UsersService {
@@ -372,7 +372,7 @@ export class UsersService {
       data: {
         role: assignRoleDto.role as UserRole,
         ...(assignRoleDto.permissions
-          ? deltaColumns(roleRecord.permissions, assignRoleDto.permissions)
+          ? await this.permissionColumns(assignRoleDto.role, assignRoleDto.permissions)
           : { permissions: null, revokedPermissions: null }),
       },
       include: { branch: true },
@@ -412,12 +412,21 @@ export class UsersService {
     }
 
     const roleRecord = await this.prisma.role.findFirst({ where: { name: user.role }, select: { permissions: true } });
-    return { permissions: heldPermissions(roleRecord?.permissions, user), always: fixedGrants(user.role) };
+    return {
+      permissions: tickedPermissions(user, roleRecord?.permissions, await this.listedPermissions()),
+      always: fixedGrants(user.role),
+    };
   }
 
-  private async permissionColumns(role: string, held: readonly string[]) {
+  /** The two stored columns under which a user of this role may use exactly the ticked permissions. */
+  private async permissionColumns(role: string, ticked: readonly string[]) {
     const roleRecord = await this.prisma.role.findFirst({ where: { name: role }, select: { permissions: true } });
-    return deltaColumns(roleRecord?.permissions, held);
+    const deltas = permissionDeltas(roleRecord?.permissions, ticked, await this.listedPermissions());
+    return { permissions: JSON.stringify(deltas.permissions), revokedPermissions: JSON.stringify(deltas.revokedPermissions) };
+  }
+
+  private async listedPermissions() {
+    return (await this.prisma.permission.findMany({ select: { name: true } })).map((permission) => permission.name);
   }
 
   // Branch Management Methods
@@ -955,12 +964,6 @@ export class UsersService {
       metadata: metadataParsed,
     };
   }
-}
-
-/** The two stored columns under which a user holds exactly `held` on top of this role record. */
-function deltaColumns(rolePermissions: unknown, held: readonly string[]) {
-  const deltas = permissionDeltas(rolePermissions, held);
-  return { permissions: JSON.stringify(deltas.permissions), revokedPermissions: JSON.stringify(deltas.revokedPermissions) };
 }
 
 /** Shallow-merges a metadata patch into stored JSON; null values remove keys and unreadable JSON starts empty. */

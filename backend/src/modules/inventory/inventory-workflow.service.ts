@@ -42,11 +42,7 @@ import {
   rupees,
   supplierReturnReason,
 } from './supplier-return';
-import {
-  permissionGrants,
-  PermissionGrants,
-  userGrants,
-} from '../../shared/access/permission-grants';
+import { PermissionGrants, userGrants } from '../../shared/access/permission-grants';
 import { storedOptimizationRules } from './stock-optimization';
 import {
   parseReconciliationInput,
@@ -230,7 +226,7 @@ export class InventoryWorkflowService {
       where: { name: user.role as any },
       select: { permissions: true },
     });
-    return permissionGrants(userGrants(user, role?.permissions));
+    return userGrants(user, role?.permissions);
   }
   async countStaff(branchId: string) {
     const users = await this.prisma.user.findMany({
@@ -242,7 +238,7 @@ export class InventoryWorkflowService {
       (await this.prisma.role.findMany({ where: { name: { in: [...new Set(users.map((user) => user.role))] as any } }, select: { name: true, permissions: true } })).map((role) => [role.name as string, role.permissions]),
     );
     return users
-      .filter((user) => permissionGrants(userGrants(user, roles.get(user.role))).has(this.permissionFor('COUNT', true)))
+      .filter((user) => userGrants(user, roles.get(user.role)).has(this.permissionFor('COUNT', true)))
       .map((user) => ({ id: user.id, name: `${user.firstName} ${user.lastName}`.trim(), role: user.role }));
   }
   async saveSettings(actor: WorkflowActor, input: Record<string, any>) {

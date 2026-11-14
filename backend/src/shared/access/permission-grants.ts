@@ -22,12 +22,8 @@ export function fixedGrants(role: string | null | undefined): string[] {
   return [...(IMPLIED_GRANTS[role] ?? [])];
 }
 
-function grantsForRole(role: string | null | undefined, stored: readonly string[]): string[] {
-  if (role && UNIVERSAL_ROLES.has(role)) return ['*'];
-  return [...stored.filter((grant) => grant !== '*'), ...fixedGrants(role)];
-}
-
 type StoredUserPermissions = { permissions: unknown; revokedPermissions: unknown };
+type UserWithRole = StoredUserPermissions & { role: string | null | undefined };
 
 /** (role record ∪ user's saved extras) − user's revocations, compared as exact grant strings. */
 export function heldPermissions(rolePermissions: unknown, user: StoredUserPermissions): string[] {
@@ -36,23 +32,41 @@ export function heldPermissions(rolePermissions: unknown, user: StoredUserPermis
   return [...combined].filter((grant) => !revoked.has(grant));
 }
 
-export function userGrants(
-  user: StoredUserPermissions & { role: string | null | undefined },
-  rolePermissions: unknown,
-): string[] {
-  return grantsForRole(user.role, heldPermissions(rolePermissions, user));
+/**
+ * What the user may do. A revoked permission is refused even when a broader held grant such as
+ * inventory:* covers it. Role-fixed grants are never refused, and a stored bare * grants nothing.
+ */
+export function userGrants(user: UserWithRole, rolePermissions: unknown): PermissionGrants {
+  const fixed = fixedGrants(user.role);
+  const revoked = new Set(parsePermissionList(user.revokedPermissions));
+  const held = heldPermissions(rolePermissions, user).filter((grant) => grant !== '*');
+  return {
+    has: (required) => permissionGranted(fixed, required) || (!revoked.has(required) && permissionGranted(held, required)),
+  };
 }
 
-/** The stored deltas under which heldPermissions(rolePermissions, deltas) is exactly `held`. */
+/** The boxes to tick for a user: every grant string held, plus every listed permission they may use. */
+export function tickedPermissions(user: UserWithRole, rolePermissions: unknown, listed: readonly string[]): string[] {
+  const grants = userGrants(user, rolePermissions);
+  return [...new Set([...heldPermissions(rolePermissions, user), ...listed.filter((permission) => grants.has(permission))])];
+}
+
+/**
+ * The stored deltas under which the user may use exactly the ticked permissions out of those listed.
+ * An unticked listed permission that a ticked wildcard would still cover is stored as revoked.
+ */
 export function permissionDeltas(
   rolePermissions: unknown,
-  held: readonly string[],
+  ticked: readonly string[],
+  listed: readonly string[],
 ): { permissions: string[]; revokedPermissions: string[] } {
   const role = new Set(parsePermissionList(rolePermissions));
-  const target = new Set(held);
+  const target = new Set(ticked);
+  const grants = ticked.filter((grant) => grant !== '*');
+  const stillCovered = listed.filter((permission) => !target.has(permission) && permissionGranted(grants, permission));
   return {
     permissions: [...target].filter((grant) => !role.has(grant)),
-    revokedPermissions: [...role].filter((grant) => !target.has(grant)),
+    revokedPermissions: [...new Set([...[...role].filter((grant) => !target.has(grant)), ...stillCovered])],
   };
 }
 
