@@ -20,6 +20,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { VisitsService } from './visits.service';
+import { ReviewBookingService } from './review-booking';
 import {
   CreateVisitDto,
   UpdateVisitDto,
@@ -247,7 +248,10 @@ const TRANSCRIBE_UPLOAD_LIMIT_BYTES = (() => {
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class VisitsController {
-  constructor(private readonly visitsService: VisitsService) {}
+  constructor(
+    private readonly visitsService: VisitsService,
+    private readonly reviewBooking: ReviewBookingService,
+  ) {}
   private readonly logger = new Logger(VisitsController.name);
 
   @Post()
@@ -479,12 +483,14 @@ export class VisitsController {
 
   @Post(':id/complete')
   @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
-  complete(
+  async complete(
     @Param('id') id: string,
     @Body() completeVisitDto: CompleteVisitDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.complete(id, completeVisitDto, (req.branchId ?? req.user.branchId), req.user.id);
+    const branchId = req.branchId ?? req.user.branchId;
+    const visit = await this.visitsService.complete(id, completeVisitDto, branchId);
+    return { ...visit, reviewAppointment: await this.reviewBooking.book(visit.id, branchId, req.user.id) };
   }
 
   @Delete(':id')

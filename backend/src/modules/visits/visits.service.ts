@@ -1,8 +1,6 @@
 import { mergeClinicalData, mergeClinicalEntries } from './clinical-data';
 import { consultationPatch } from './consultation';
-import { Injectable, Optional, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
-import { AppointmentsService } from '../appointments/appointments.service';
-import { bookReviewAppointment } from './review-booking';
+import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
@@ -22,10 +20,7 @@ import * as fs from 'fs';
  */
 @Injectable()
 export class VisitsService {
-  constructor(
-    private prisma: PrismaService,
-    @Optional() private appointments?: AppointmentsService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   /**
    * @cc [owner:nareshshah139,label:product;security] personal-history-source
@@ -574,8 +569,8 @@ export class VisitsService {
    * its linked appointment. Repeating completion MUST preserve the original time
    * and notes. Deleted visits MUST not complete.
    */
-  async complete(id: string, input: CompleteVisitDto, branchId: string, callerUserId?: string) {
-    const visit = await this.prisma.$transaction(async tx => {
+  async complete(id: string, input: CompleteVisitDto, branchId: string) {
+    return this.prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
       const service = new VisitsService(tx as PrismaService);
       const visit = await service.findOne(id, branchId);
@@ -600,15 +595,6 @@ export class VisitsService {
       }
       return service.findOne(id, branchId);
     });
-    const reviewAppointment = this.appointments
-      ? await bookReviewAppointment(
-          { prisma: this.prisma, appointments: this.appointments },
-          { patientId: visit.patientId, doctorId: visit.doctorId, appointmentId: visit.appointmentId, followUp: visit.followUp },
-          branchId,
-          callerUserId,
-        )
-      : undefined;
-    return { ...visit, reviewAppointment };
   }
 
   /**

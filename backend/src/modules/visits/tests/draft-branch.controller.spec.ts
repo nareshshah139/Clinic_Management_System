@@ -4,6 +4,7 @@ import requestHttp from 'supertest';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { VisitsController } from '../visits.controller';
 import { VisitsService } from '../visits.service';
+import { ReviewBookingService } from '../review-booking';
 
 jest.mock('file-type', () => ({ fileTypeFromBuffer: jest.fn() }));
 
@@ -18,7 +19,7 @@ function controller() {
       delete: async () => { throw new Error('Foreign storage was accessed'); },
     },
   };
-  return new VisitsController(new VisitsService(db));
+  return new VisitsController(new VisitsService(db), {} as ReviewBookingService);
 }
 
 it('uses the active request branch for upload, list, binary and deletion before attachment access', async () => {
@@ -43,7 +44,7 @@ it('routes legacy deletion correctly and returns the mutation version instead of
     deleteVisitAttachment: async () => ({ ok: true, visitVersion: 3 }),
     listAttachments: async () => ({ items: [], attachments: [], visitVersion: 8 }),
   };
-  const module = await Test.createTestingModule({ controllers: [VisitsController], providers: [{ provide: VisitsService, useValue: service }] })
+  const module = await Test.createTestingModule({ controllers: [VisitsController], providers: [{ provide: VisitsService, useValue: service }, { provide: ReviewBookingService, useValue: {} }] })
     .overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true }).compile();
   const app = module.createNestApplication();
   app.use((req: any, _res: any, next: () => void) => { Object.assign(req, request); next(); });

@@ -9,6 +9,7 @@ import { PatientsController } from './patients.controller';
 import { PatientsService } from './patients.service';
 import { VisitsController } from '../visits/visits.controller';
 import { VisitsService } from '../visits/visits.service';
+import { ReviewBookingService } from '../visits/review-booking';
 
 describe('clinical patient and visit access', () => {
   let app: INestApplication;
@@ -25,6 +26,7 @@ describe('clinical patient and visit access', () => {
       providers: [
         { provide: PatientsService, useValue: patients },
         { provide: VisitsService, useValue: visits },
+        { provide: ReviewBookingService, useValue: {} },
         { provide: APP_GUARD, useValue: auth },
         { provide: APP_GUARD, useClass: RolesGuard },
       ],
