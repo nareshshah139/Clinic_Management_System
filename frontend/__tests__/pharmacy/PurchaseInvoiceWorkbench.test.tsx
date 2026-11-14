@@ -2689,4 +2689,44 @@ describe('PurchaseInvoiceWorkbench', () => {
     })));
   });
 
+
+  it('fills pack, unit, HSN, GST and MRP from the saved product picked for a typed exact name', async () => {
+    const drug = { id: 'drug-tr', name: 'Tretinoin Cream 0.025% 20g', price: 165, manufacturerName: 'Glenmark', packSizeLabel: '1 unit', catalogIssues: [] };
+    api.suggestPharmacyPurchaseMasterMatches.mockImplementation(async ({ items }: any) => ({ matches: items.map((item: any, lineIndex: number) => ({
+      lineIndex, ocr: item, matchLabel: 'Same product', recommendedAction: 'MATCH_EXISTING', catalogueResolution: { state: 'missing' },
+      candidates: [{ drug, score: 68, confidence: 'MEDIUM', reasons: ['name exact match'] }] })) }));
+    api.confirmPharmacyPurchaseMaster.mockResolvedValue({ action: 'MATCH_EXISTING', drug, message: 'Matched',
+      linePatch: { productName: drug.name, manufacturer: 'Glenmark', packSize: '1 unit', packUnitType: 'Tube', hsnCode: '30049099', gstRate: 18, mrp: 165, purchaseRate: 92 } });
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Enter bill by hand' }));
+    expect(screen.getByLabelText('Stock unit')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('Product'), { target: { value: drug.name } });
+    fireEvent.change(screen.getByLabelText('Rate'), { target: { value: '92' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm Match' }));
+    await waitFor(() => expect(screen.getByLabelText('Stock unit')).toHaveValue('Tube'));
+    expect(api.confirmPharmacyPurchaseMaster).toHaveBeenCalledWith(expect.objectContaining({ action: 'MATCH_EXISTING', drugId: 'drug-tr', item: expect.objectContaining({ packSize: '', packUnitType: '' }) }));
+    expect(screen.getByLabelText('Pack Size')).toHaveValue('1 unit');
+    expect(screen.getByLabelText('HSN')).toHaveValue('30049099');
+    expect(screen.getByLabelText('MRP')).toHaveValue(165);
+    expect(screen.getByLabelText('CGST %')).toHaveValue(9);
+    expect(screen.getByLabelText('SGST %')).toHaveValue(9);
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+
+  it('opens a blank hand-typed bill without errors and shows the checks once something is typed', async () => {
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Enter bill by hand' }));
+    await screen.findByLabelText('Supplier name');
+    expect(screen.queryByText(/checks? to finish/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Invoice checks' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Invoice product checks' })).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[aria-invalid="true"]')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Supplier name'), { target: { value: 'Apex Medico Agencies' } });
+    expect(await screen.findByText(/checks to finish/)).toBeInTheDocument();
+    expect(screen.getByLabelText('DL No.')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
+  });
+
 });

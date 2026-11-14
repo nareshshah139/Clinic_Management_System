@@ -84,6 +84,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
       },
       inventoryItem: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -584,6 +585,19 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(JSON.parse(audit.newValues)).toMatchObject({ mismatchAcknowledged: true, nameEvidence: false, mismatches: ['Product names differ', 'Product kinds differ', 'Pack sizes or types differ'] });
     expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
     expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
+  });
+
+  it('fills a blank stock unit and HSN and the GST rate from the matched stocked item, keeping typed values', async () => {
+    prisma.drug.findFirst.mockResolvedValue(completeDrug({ packSizeLabel: '1 unit' }));
+    prisma.drug.update.mockImplementation(async ({ data }: any) => completeDrug({ packSizeLabel: '1 unit', ...data }));
+    prisma.inventoryItem.findFirst.mockResolvedValue({ unit: 'TUBES', hsnCode: '30049099', gstRate: 12 });
+    const blank = { ...validDto().items[0], packSize: '', packUnitType: '', hsnCode: '' };
+    const filled = await service.confirmMasterRecord({ action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING, drugId: 'drug-1', item: blank }, branchId);
+    expect(filled.linePatch).toMatchObject({ packSize: '1 unit', packUnitType: 'Tube', hsnCode: '30049099', gstRate: 12 });
+    expect(prisma.inventoryItem.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { branchId, status: 'ACTIVE', drugs: { some: { id: 'drug-1' } } } }));
+    const typed = await service.confirmMasterRecord({ action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING, drugId: 'drug-1', item: { ...blank, packUnitType: 'Box', hsnCode: '3004' } }, branchId);
+    expect(typed.linePatch).toMatchObject({ packUnitType: 'Box', hsnCode: '3004' });
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
   });
 
   it('CR-15: same normalized name is labelled Same product without a price or manufacturer boost', async () => {

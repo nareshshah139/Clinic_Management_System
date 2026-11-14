@@ -92,6 +92,11 @@ type MasterMatchDrug = {
   strength?: string | null;
 };
 
+const STOCK_UNIT_LABELS: Record<string, string> = {
+  PIECES: 'Piece', BOXES: 'Box', BOTTLES: 'Bottle', STRIPS: 'Strip', TUBES: 'Tube',
+  VIALS: 'Vial', AMPOULES: 'Ampoule', SYRINGES: 'Syringe', PACKS: 'Pack', KITS: 'Kit',
+};
+
 @Injectable()
 export class PharmacyPurchaseInvoiceService {
   /**
@@ -836,11 +841,16 @@ export class PharmacyPurchaseInvoiceService {
         } });
         return saved;
       });
+      const stocked = await this.prisma.inventoryItem.findFirst({
+        where: { branchId, status: 'ACTIVE', drugs: { some: { id: existing.id } } },
+        select: { unit: true, hsnCode: true, gstRate: true },
+        orderBy: { updatedAt: 'desc' },
+      });
 
       return {
         action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING,
         drug: this.masterDrugSummary(updated),
-        linePatch: this.linePatchFromDrug(updated, item),
+        linePatch: this.linePatchFromDrug(updated, item, stocked),
         message: `Matched ${item.productName} to ${updated.name}`,
       };
     }
@@ -2281,12 +2291,15 @@ export class PharmacyPurchaseInvoiceService {
   private linePatchFromDrug(
     drug: MasterMatchDrug | any,
     item: CreatePharmacyPurchaseInvoiceItemDto,
+    stocked?: { unit: string; hsnCode: string | null; gstRate: number | null } | null,
   ) {
     return {
       productName: drug.name,
       manufacturer: drug.manufacturerName,
       packSize: drug.packSizeLabel,
-      packUnitType: item.packUnitType,
+      packUnitType: item.packUnitType?.trim() || (stocked ? STOCK_UNIT_LABELS[stocked.unit] : undefined) || item.packUnitType,
+      hsnCode: item.hsnCode?.trim() || stocked?.hsnCode || item.hsnCode,
+      ...(stocked?.gstRate != null ? { gstRate: stocked.gstRate } : {}),
       mrp: this.money(item.mrp || drug.price || 0),
       purchaseRate: this.money(item.purchaseRate),
     };

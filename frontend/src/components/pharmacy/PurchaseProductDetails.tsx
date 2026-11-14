@@ -62,7 +62,7 @@ export function PurchaseProductDetails({ id, product, disabled, onSave, createLa
   };
   return <section data-purchase-catalogue-editor aria-label={product ? 'Edit saved product details' : 'New product details'} className="space-y-3 border-t pt-3 text-sm">
     <p className="font-medium">{product ? 'Edit saved product details' : 'New product details'}</p>
-    <p className="text-muted-foreground">Choose the product kind after checking its label or saved catalog. Enter known details only. Invoice pack size is not medicine strength.</p>
+    {!product && <p className="text-muted-foreground">Pack size is not strength.</p>}
     <fieldset disabled={disabled || saving} className="space-y-3">
       <div>
         <Label htmlFor={`${id}-kind`}>Product kind</Label>
