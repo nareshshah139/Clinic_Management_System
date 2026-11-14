@@ -238,7 +238,7 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 
-import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { isValidId } from '@/lib/id';
 import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -483,6 +483,8 @@ function VisitsPageInner() {
   const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
   const [appointmentFailed, setAppointmentFailed] = useState(false);
   const [startedVisitId, setStartedVisitId] = useState<string | null>(null);
+  const [appointmentDismissed, setAppointmentDismissed] = useState(false);
+  const appointmentDismissedRef = useRef(false);
 
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get('patientId');
@@ -492,7 +494,7 @@ function VisitsPageInner() {
 
   const appointmentDoctorId = appointmentData?.doctorId;
   const appointmentPending = Boolean(
-    urlPatientId && appointmentIdParam && !appointmentData && !appointmentFailed,
+    urlPatientId && appointmentIdParam && !appointmentData && !appointmentFailed && !appointmentDismissed,
   );
   const selectedDoctorId = resolveDefaultDoctorId({
     role: currentUser?.role,
@@ -547,7 +549,7 @@ function VisitsPageInner() {
   const fetchAppointmentData = useCallback(async (appointmentId: string) => {
     try {
       const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
-      setAppointmentData(appointment);
+      if (!appointmentDismissedRef.current) setAppointmentData(appointment);
     } catch (error) {
       console.error('Failed to fetch appointment data:', error);
       setAppointmentFailed(true);
@@ -728,8 +730,14 @@ function VisitsPageInner() {
   const doctorLocked = Boolean(appointmentDoctorId) || visitAlreadyStarted;
 
   const pickPatient = (id: string) => {
+    if (id !== selectedPatientId) setStartedVisitId(null);
     setSelectedPatientId(id);
-    if (appointmentData && appointmentData.patientId !== id) setAppointmentData(null);
+    const appointmentPatientId = appointmentData?.patientId ?? urlPatientId;
+    if (appointmentIdParam && id !== appointmentPatientId) {
+      appointmentDismissedRef.current = true;
+      setAppointmentDismissed(true);
+      setAppointmentData(null);
+    }
   };
 
   const startNewVisit = () => {

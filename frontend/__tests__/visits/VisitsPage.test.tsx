@@ -144,6 +144,32 @@ describe('VisitsPage', () => {
       spy.mockRestore();
     });
 
+    it('drops the appointment when a different patient is chosen, so the doctor defaults again', async () => {
+      const spy = open({ id: 'doctor-1', role: 'DOCTOR' }, 'me-first');
+      render(<VisitsPage />);
+      await screen.findByTestId('medical-visit-form');
+      jest.mocked(apiClient.getPatients).mockResolvedValue({
+        data: [
+          { id: 'patient-123', name: 'Patient' },
+          { id: 'patient-456', name: 'Rahul Kumar' },
+        ],
+      } as any);
+      fireEvent.click(screen.getByRole('button', { name: /Back to Setup/ }));
+      fireEvent.focus(await screen.findByPlaceholderText('Search name, phone, or email'));
+      fireEvent.click(await screen.findByRole('button', { name: /Rahul Kumar/ }));
+      const setupPicker = screen.getAllByRole('combobox').find((el) => !el.hasAttribute('aria-label'))!;
+      await waitFor(() => expect(setupPicker).toHaveTextContent('Dr. Shravya Rao'));
+      expect(setupPicker).toBeEnabled();
+      fireEvent.click(await screen.findByRole('button', { name: 'Start Visit Documentation' }));
+      await waitFor(() =>
+        expect(screen.getByTestId('medical-visit-form')).toHaveTextContent('Patient: patient-456, Doctor: doctor-1'),
+      );
+      const picker = screen.getByRole('combobox', { name: 'Attending doctor' });
+      expect(picker).toBeEnabled();
+      expect(screen.queryByText(/Booked with/)).not.toBeInTheDocument();
+      spy.mockRestore();
+    });
+
     it('selects the appointment doctor for a receptionist without a note', async () => {
       const spy = open({ id: 'rec-1', role: 'RECEPTIONIST' }, 'me-first');
       render(<VisitsPage />);
