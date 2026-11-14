@@ -3,7 +3,8 @@ import DashboardPage from './page';
 import { apiClient } from '@/lib/api';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
+let mockGuide: { sections: { title: string; items: string[] }[] } | null = null;
+jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: (props: typeof mockGuide) => { mockGuide = props; return null; } }));
 jest.mock('@/components/dashboard/DoctorPatientPanels', () => ({ DoctorPatientPanels: () => null }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
 let mockRole = 'RECEPTION';
@@ -18,6 +19,7 @@ jest.mock('@/lib/api', () => ({
     getDoctorSchedule: jest.fn(),
     getInventoryItemRequestPendingCount: jest.fn(),
     getInvoiceById: jest.fn(),
+    processPayment: jest.fn(),
   },
 }));
 
@@ -30,14 +32,19 @@ const day = [
   booked('a2', '11:30-11:45', 'CONFIRMED', 'Vikram Patil'),
   booked('a3', '10:30-10:45', 'IN_PROGRESS', 'Ananya Joshi', { visit: { id: 'v3', status: 'IN_PROGRESS' } }),
 ];
+const rohan = { id: 'b2', invoiceNo: 'INV-20261113-002', balance: 1450, status: 'DRAFT', billDate: '2026-11-13', patient: { id: 'p2', name: 'Rohan Kulkarni' }, appointment: { id: 'a8', doctorId: 'doc-1', day: '2026-11-13' } };
 const alerts = {
   counts: { billsDue: 2, lowStockAlerts: 4, expiryAlerts: 1 },
   billsDueBalance: 3810,
+  canTakePayment: true,
   billsDue: [
-    { id: 'b1', invoiceNo: 'INV-20261108-001', balance: 2360, status: 'OVERDUE', billDate: '2026-11-08', patient: { id: 'p6', name: 'Aditya Bhosale' } },
-    { id: 'b2', invoiceNo: 'INV-20261113-002', balance: 1450, status: 'PARTIALLY_PAID', billDate: '2026-11-13', patient: { id: 'p2', name: 'Rohan Kulkarni' } },
+    { id: 'b1', invoiceNo: 'INV-20261108-001', balance: 2360, status: 'DRAFT', billDate: '2026-11-08', patient: { id: 'p6', name: 'Aditya Bhosale' }, appointment: { id: 'a9', doctorId: 'doc-1', day: '2026-11-08' } },
+    rohan,
   ],
-  lowStockAlerts: [{ itemId: 'i1', itemName: 'Clobetasol Cream', currentStock: 0 }, { itemId: 'i2', itemName: 'Tretinoin Cream', currentStock: 3 }],
+  lowStockAlerts: [
+    { itemId: 'i1', itemName: 'Clobetasol Cream', currentStock: 0, available: 0, availableInAll: 0 },
+    { itemId: 'i2', itemName: 'Adapalene Gel', currentStock: 13, available: 13, availableInAll: 34 },
+  ],
   expiryAlerts: [{ itemId: 'i3', itemName: 'Fluconazole Tablet', currentStock: 10, daysUntilExpiry: 21 }],
 };
 const collection = {
@@ -58,6 +65,7 @@ const hrefOf = (name: string | RegExp) => screen.getByRole('link', { name }).get
 
 beforeEach(() => {
   mockRole = 'RECEPTION';
+  mockGuide = null;
   Object.values(api).forEach((fn) => fn.mockReset());
   api.getSystemAlerts.mockResolvedValue(alerts);
   api.getAppointments.mockResolvedValue({ appointments: day });
@@ -113,13 +121,48 @@ it('gives reception the two front-desk buttons, the day with the next patient fi
   expect(rows.map(text)).toEqual([
     '10:30-10:45Ananya JoshiIn progress',
     '11:30-11:45Vikram PatilConfirmed',
-    '09:00-09:15Meera ShahCompleted₹500 · Paid',
+    '09:00-09:15Meera ShahCompleted₹500.00 · Paid',
   ]);
   expect([hrefOf(/Book appointment/), hrefOf(/New patient/)]).toEqual(['/dashboard/appointments', '/dashboard/patients?new=walkin']);
-  const bills = within(await screen.findByRole('list', { name: 'Bills to collect' })).getAllByRole('link');
-  expect(bills.map((link) => [text(link), link.getAttribute('href')])).toEqual([
-    ['Aditya Bhosale₹2,360.00', '/dashboard/appointments?date=2026-11-08'],
-    ['Rohan Kulkarni₹1,450.00', '/dashboard/appointments?date=2026-11-13'],
+  const bills = within(await screen.findByRole('list', { name: 'Bills to collect' })).getAllByRole('button');
+  expect(bills.map(text)).toEqual(['Aditya Bhosale₹2,360.00', 'Rohan Kulkarni₹1,450.00']);
+});
+
+it('takes the money for a bill due right on the landing page, and the bill leaves the list once paid', async () => {
+  const owed = booked('a9', '17:00-17:15', 'COMPLETED', 'Aditya Bhosale', {
+    billing: { state: 'DUE', total: 2360, received: 0, due: 2360, attention: true, invoices: [{ id: 'inv-9', invoiceNo: 'INV-20261108-001', total: 2360, received: 0, due: 2360 }] },
+  });
+  api.getDoctorSchedule.mockImplementation(async (_doctor: string, date: string) => ({
+    doctorId: 'doc-1',
+    appointments: date === '2026-11-08' ? [owed] : day,
+    billingAccess: { read: true, createBill: true, takePayment: true, editFees: false },
+  }));
+  api.getInvoiceById.mockResolvedValue({ id: 'inv-9', invoiceNo: 'INV-20261108-001', total: 2360, balance: 2360, received: 0, items: [], payments: [] });
+  api.processPayment.mockResolvedValue({});
+  render(<DashboardPage />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Aditya Bhosale ₹2,360.00' }));
+  expect(await screen.findByRole('heading', { name: 'Bill for Aditya Bhosale' })).toBeInTheDocument();
+  expect(api.getDoctorSchedule).toHaveBeenCalledWith('doc-1', '2026-11-08');
+
+  api.getSystemAlerts.mockResolvedValue({ ...alerts, counts: { ...alerts.counts, billsDue: 1 }, billsDueBalance: 1450, billsDue: [rohan] });
+  fireEvent.click(await screen.findByRole('button', { name: 'Record ₹2,360 payment' }));
+
+  const billsBehindDialog = () => within(screen.getByRole('list', { name: 'Bills to collect', hidden: true })).getAllByRole('button', { hidden: true });
+  await waitFor(() => expect(billsBehindDialog().map(text)).toEqual(['Rohan Kulkarni₹1,450.00']));
+  expect(api.processPayment).toHaveBeenCalledWith({ invoiceId: 'inv-9', amount: 2360, method: 'CASH' });
+});
+
+it('shows a bill due as plain text to a role that cannot take the payment', async () => {
+  mockRole = 'MANAGER';
+  api.getSystemAlerts.mockResolvedValue({ ...alerts, canTakePayment: false });
+  render(<DashboardPage />);
+
+  const list = await screen.findByRole('list', { name: 'Bills due' });
+  expect([within(list).getAllByRole('listitem').map(text), within(list).queryAllByRole('button'), within(list).queryAllByRole('link')]).toEqual([
+    ['Aditya Bhosale₹2,360.00', 'Rohan Kulkarni₹1,450.00'],
+    [],
+    [],
   ]);
 });
 
@@ -165,8 +208,48 @@ it("shows the owner today's collection, who owes what, approvals and the low ite
     '/dashboard/inventory?area=stock&view=list&stock=LOW',
     '/dashboard/inventory?area=stock&view=list&expiryMonths=3',
   ]);
-  expect(within(screen.getByRole('list', { name: 'Low stock (4)' })).getAllByRole('listitem').map(text)).toEqual(['Clobetasol Cream0 left', 'Tretinoin Cream3 left']);
+  expect(within(screen.getByRole('list', { name: 'Low stock (4)' })).getAllByRole('listitem').map(text)).toEqual(['Clobetasol Cream0 left', 'Adapalene Gel13 in one batch (34 in all)']);
   expect(screen.getByRole('button', { name: /Create Backup/ })).toBeInTheDocument();
+});
+
+it("leads the owner's appointments with the next patients, not the ones already seen", async () => {
+  mockRole = 'OWNER';
+  render(<DashboardPage />);
+
+  const rows = within(await screen.findByRole('list', { name: "Today's appointments" })).getAllByRole('listitem');
+  expect(rows.map(text)).toEqual(['10:30-10:45Ananya JoshiIn progress', '11:30-11:45Vikram PatilConfirmed', '09:00-09:15Meera ShahCompleted']);
+});
+
+it.each(['MANAGER', 'ACCOUNTANT'])('titles the figure a pharmacy collection for %s, who cannot see clinic takings', async (role) => {
+  mockRole = role;
+  const pharmacyOnly = {
+    wholeDay: null,
+    collection: { expectedTotal: 199, modes: [{ mode: 'CASH', label: 'Cash', expected: 199 }, { mode: 'UPI', label: 'UPI', expected: 0 }, { mode: 'CARD', label: 'Card', expected: 0 }] },
+  };
+  api.get.mockImplementation(async (url: string) => (url === '/inventory/workspace/overview' ? { pendingEdits: null } : pharmacyOnly));
+  render(<DashboardPage />);
+
+  expect(await screen.findByRole('link', { name: 'Pharmacy collection today' })).toHaveAttribute('href', '/dashboard/pharmacy/reports?report=daily-collection');
+  expect([screen.getByText('₹199.00'), line('Cash ₹199.00 · UPI ₹0.00 · Card ₹0.00')].every(Boolean)).toBe(true);
+  expect([screen.queryByText("Today's collection"), screen.queryByText(/Clinic/)]).toEqual([null, null]);
+});
+
+it('never tells a manager about approvals it cannot see, and names only what the role can press', async () => {
+  mockRole = 'MANAGER';
+  api.get.mockImplementation(async (url: string) => (url === '/inventory/workspace/overview' ? { pendingEdits: null } : collection));
+  api.getSystemAlerts.mockResolvedValue({ ...alerts, canTakePayment: false });
+  render(<DashboardPage />);
+
+  await screen.findByRole('list', { name: 'Bills due' });
+  expect(mockGuide?.sections.find((s) => s.title === 'Today')?.items).toEqual(['The collection figure opens Daily Collection.', 'Bills due lists who still owes.']);
+});
+
+it('tells a lab technician that nothing is assigned to the role here, and asks for nothing', async () => {
+  mockRole = 'LAB_TECH';
+  render(<DashboardPage />);
+
+  expect(screen.getByText('Nothing is assigned to your role on this page.')).toBeInTheDocument();
+  expect([api.get, api.getSystemAlerts, api.getAppointments, api.getDoctorSchedule].map((fn) => fn.mock.calls.length)).toEqual([0, 0, 0, 0]);
 });
 
 it('never asks a manager for the new-item approvals it would be refused, and shows no approvals figure', async () => {

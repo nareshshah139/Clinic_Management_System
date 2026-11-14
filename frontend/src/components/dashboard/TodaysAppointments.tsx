@@ -11,10 +11,11 @@ import { visitHref } from '@/lib/dashboard-links';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AppointmentBillDialog } from '@/components/appointments/AppointmentBillDialog';
-import { billingChip, type BillingTone } from '@/components/appointments/appointment-billing-view';
+import { billingChip, parseRupees, type BillingTone } from '@/components/appointments/appointment-billing-view';
+import { formatRupee } from '@/components/pharmacy/reports/report-format';
 import { LoadFailureState, loadFailure, type LoadFailure } from './load-failure';
 
-/** desk: every doctor's day with its bills; doctor: the signed-in doctor's day with its visits; summary: the first few bookings. */
+/** desk: every doctor's day with its bills; doctor: the signed-in doctor's day with its visits; summary: the next few bookings. */
 export type AppointmentsMode = 'desk' | 'doctor' | 'summary';
 
 type Row = AppointmentInSlot & { doctorName?: string };
@@ -38,11 +39,14 @@ const CHIP_TONE: Record<BillingTone, string> = {
   quiet: 'bg-gray-50 text-gray-700 ring-gray-200',
 };
 
-const NO_BILL_ACCESS: ClinicBillAccess = { read: false, createBill: false, takePayment: false, editFees: false };
+export const NO_BILL_ACCESS: ClinicBillAccess = { read: false, createBill: false, takePayment: false, editFees: false };
 
 type Schedule = GetDoctorScheduleResponse['appointments'][number];
 
-function toRow(a: Schedule, doctorName?: string): Row {
+/** The chip keeps the calendar's wording; its amounts take the dashboard's one money format. */
+const inPageRupees = (chipText: string) => chipText.replace(/₹[\d,]+(\.\d+)?/g, (amount) => formatRupee(parseRupees(amount) ?? 0));
+
+export function toRow(a: Schedule, doctorName?: string): Row {
   return {
     id: a.id,
     slot: a.slot,
@@ -60,6 +64,8 @@ function toRow(a: Schedule, doctorName?: string): Row {
   };
 }
 
+const SUMMARY_ROWS = 5;
+
 const nextFirst = (rows: Row[]) =>
   [...rows].sort((a, b) => Number(FINISHED.has(a.status)) - Number(FINISHED.has(b.status)) || a.slot.localeCompare(b.slot));
 
@@ -68,9 +74,9 @@ async function loadDay(mode: AppointmentsMode, doctorId: string | undefined, dat
     const schedule = await apiClient.getDoctorSchedule(doctorId ?? '', date);
     return { rows: (schedule?.appointments ?? []).map((a) => toRow(a)), access: NO_BILL_ACCESS };
   }
-  const res: any = await apiClient.getAppointments({ date, limit: mode === 'desk' ? 100 : 5, sortBy: 'slot', sortOrder: 'asc' });
+  const res: any = await apiClient.getAppointments({ date, limit: 100, sortBy: 'slot', sortOrder: 'asc' });
   const booked: any[] = res?.appointments || res?.data || [];
-  if (mode === 'summary') return { rows: booked.map((a) => toRow(a)), access: NO_BILL_ACCESS };
+  if (mode === 'summary') return { rows: nextFirst(booked.map((a) => toRow(a))).slice(0, SUMMARY_ROWS), access: NO_BILL_ACCESS };
   const doctors = new Map<string, string>();
   for (const a of booked) if (a.doctorId) doctors.set(a.doctorId, [a.doctor?.firstName, a.doctor?.lastName].filter(Boolean).join(' '));
   const schedules = await Promise.all([...doctors.keys()].map((id) => apiClient.getDoctorSchedule(id, date)));
@@ -96,7 +102,7 @@ export function TodaysAppointments({ mode, doctorId }: { mode: AppointmentsMode;
   const load = useCallback(async () => {
     try {
       const day = await loadDay(mode, doctorId, today);
-      setState({ status: 'ready', rows: mode === 'summary' ? day.rows : nextFirst(day.rows), access: day.access });
+      setState({ status: 'ready', rows: nextFirst(day.rows), access: day.access });
     } catch (error) {
       console.error("Failed to load today's appointments", error);
       setState({ status: 'error', failure: loadFailure(error) });
@@ -131,9 +137,9 @@ export function TodaysAppointments({ mode, doctorId }: { mode: AppointmentsMode;
                 const action = mode === 'doctor' ? visitLabel(row) : null;
                 return (
                   <li key={row.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 ${FINISHED.has(row.status) ? 'text-gray-500' : ''}`}>
-                    <span className="w-28 shrink-0 whitespace-nowrap text-sm tabular-nums">{row.slot}</span>
+                    <span data-appointment-time className="w-28 shrink-0 whitespace-nowrap text-sm tabular-nums">{row.slot}</span>
                     <span className="order-first basis-full text-sm font-medium text-gray-900 sm:order-none sm:min-w-0 sm:flex-1 sm:basis-0 sm:truncate">
-                      {row.patient.name}
+                      <span data-patient-name>{row.patient.name}</span>
                       {row.doctorName && <span className="font-normal text-gray-500"> · Dr. {row.doctorName}</span>}
                     </span>
                     <span className="mr-auto text-xs text-gray-600 sm:mr-0" data-appointment-status={row.status}>{STATUS_WORDS[row.status as AppointmentStatus] ?? row.status}</span>
@@ -141,11 +147,11 @@ export function TodaysAppointments({ mode, doctorId }: { mode: AppointmentsMode;
                       <button
                         type="button"
                         onClick={() => setBillForId(row.id)}
-                        aria-label={chip.label}
-                        title={chip.label}
+                        aria-label={inPageRupees(chip.label)}
+                        title={inPageRupees(chip.label)}
                         className={`rounded px-2 py-0.5 text-xs font-semibold ring-1 ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${CHIP_TONE[chip.tone]}`}
                       >
-                        {chip.text}
+                        {inPageRupees(chip.text)}
                       </button>
                     )}
                     {action && (

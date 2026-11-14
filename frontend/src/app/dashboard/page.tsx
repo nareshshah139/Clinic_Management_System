@@ -16,6 +16,7 @@ import { DoctorPatientPanels } from '@/components/dashboard/DoctorPatientPanels'
 import { TodaysAppointments } from '@/components/dashboard/TodaysAppointments';
 import { ApprovalsFigure, BillsDue, CollectionFigure, NeedsAttention, PharmacyWork, type Loadable } from '@/components/dashboard/LandingCards';
 import { loadFailure } from '@/components/dashboard/load-failure';
+import { ITEM_REQUEST_APPROVER_ROLES } from '@/lib/inventory-item-requests';
 
 /**
  * @cc [owner:nareshshah139,label:product] dashboard-clinic-day
@@ -48,19 +49,27 @@ const LANDING: Record<string, Section[]> = {
 };
 const READS_ALERTS: Section[] = ['billsToCollect', 'pharmacy', 'figures', 'attention'];
 
-const GUIDE: Record<Section, { title: string; items: string[] } | null> = {
-  deskActions: { title: 'Start here', items: ['Book appointment opens the calendar.', 'New patient registers a walk-in.'] },
-  deskDay: { title: "Today's appointments", items: ['The next patient is at the top; finished visits move to the bottom.', "Press a bill to see it, create it or take a payment."] },
-  billsToCollect: { title: 'Bills to collect', items: ['Each open bill with what is still owed. Press a name to open the calendar on that day.'] },
-  doctorDay: { title: "Today's patients", items: ['Your next patient is at the top.', 'Start visit opens a new visit; Continue visit opens one already started.'] },
-  doctorPatients: { title: 'My patients', items: ['Type a name, phone or code to find one of your patients.', 'Recent visits below open the visit.'] },
-  pharmacy: { title: 'Pharmacy', items: ['Bill opens a bill filled from the prescription.', 'New sale starts a bill for a walk-in.', 'Low stock and Expiring in 3 months open those Inventory lists.'] },
-  figures: { title: 'Today', items: ["Today's collection opens Daily Collection.", 'Bills due lists who still owes; press a name to open that day.', 'Waiting for approval opens the Inventory approvals.'] },
-  attention: { title: 'Needs attention', items: ['Low stock and expiring medicines by name; each heading opens the Inventory list.'] },
-  summaryDay: { title: "Today's appointments", items: ['The first bookings of the day; View All Appointments opens the calendar.'] },
-  collection: { title: "Today's collection", items: ['Opens Daily Collection.'] },
-  backup: { title: 'Database backup', items: ['Backups stay on the server and contain sensitive data.'] },
-};
+type Guide = { title: string; items: string[] };
+
+function guideFor(section: Section, { canTakePayment, approves }: { canTakePayment: boolean; approves: boolean }): Guide | null {
+  const pressBill = canTakePayment ? ' Press a name to take the payment.' : '';
+  switch (section) {
+    case 'deskActions': return { title: 'Start here', items: ['Book appointment opens the calendar.', 'New patient registers a walk-in.'] };
+    case 'deskDay': return { title: "Today's appointments", items: ['The next patient is at the top; finished visits move to the bottom.', 'Press a bill to see it, create it or take a payment.'] };
+    case 'billsToCollect': return { title: 'Bills to collect', items: [`Each open bill with what is still owed.${pressBill}`] };
+    case 'doctorDay': return { title: "Today's patients", items: ['Your next patient is at the top.', 'Start visit opens a new visit; Continue visit opens one already started.'] };
+    case 'doctorPatients': return { title: 'My patients', items: ['Type a name, phone or code to find one of your patients.', 'Recent visits below open the visit.'] };
+    case 'pharmacy': return { title: 'Pharmacy', items: ['Bill opens a bill filled from the prescription.', 'New sale starts a bill for a walk-in.', 'Low stock and Expiring in 3 months open those Inventory lists.'] };
+    case 'figures': return {
+      title: 'Today',
+      items: ['The collection figure opens Daily Collection.', `Bills due lists who still owes.${pressBill}`, ...(approves ? ['Waiting for approval opens the Inventory approvals.'] : [])],
+    };
+    case 'attention': return { title: 'Needs attention', items: ['Low stock and expiring medicines by name; each heading opens the Inventory list.'] };
+    case 'summaryDay': return { title: "Today's appointments", items: ['The next bookings of the day; View All Appointments opens the calendar.'] };
+    case 'collection': return { title: 'Collection', items: ['The collection figure opens Daily Collection.'] };
+    case 'backup': return { title: 'Database backup', items: ['Backups stay on the server and contain sensitive data.'] };
+  }
+}
 
 function greeting(firstName?: string) {
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
@@ -85,11 +94,12 @@ export default function DashboardPage() {
     if (!loading && readsAlerts) loadAlerts();
   }, [loading, readsAlerts, loadAlerts]);
 
+  const guideFacts = { canTakePayment: alerts.status === 'ready' && !!alerts.value.canTakePayment, approves: ITEM_REQUEST_APPROVER_ROLES.includes(role) };
   const header = (
     <PageHeader
       title={greeting(user?.firstName)}
       actions={sections.length > 0 && (
-        <QuickGuide title="Dashboard guide" sections={sections.map((s) => GUIDE[s]).filter((g): g is { title: string; items: string[] } => !!g)} />
+        <QuickGuide title="Dashboard guide" sections={sections.map((s) => guideFor(s, guideFacts)).filter((g): g is Guide => !!g)} />
       )}
     />
   );
@@ -134,6 +144,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {header}
+      {sections.length === 0 && <p className="text-gray-700">Nothing is assigned to your role on this page.</p>}
       {sections.map((section) => (
         <section key={section}>{render[section]()}</section>
       ))}

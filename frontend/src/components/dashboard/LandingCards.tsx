@@ -4,13 +4,16 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
 import { getISTDateString } from '@/lib/utils';
-import { APPROVALS, DAILY_COLLECTION, EXPIRING_LIST, LOW_STOCK_LIST, appointmentsOn, type ClinicAlerts } from '@/lib/dashboard-links';
+import { APPROVALS, DAILY_COLLECTION, EXPIRING_LIST, LOW_STOCK_LIST, stockLeft, type BillDue, type ClinicAlerts } from '@/lib/dashboard-links';
+import type { AppointmentInSlot, ClinicBillAccess } from '@/lib/types';
 import { ITEM_REQUEST_APPROVER_ROLES } from '@/lib/inventory-item-requests';
 import { formatRupee } from '@/components/pharmacy/reports/report-format';
 import type { DailyCollectionReport } from '@/components/pharmacy/reports/report-types';
 import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AppointmentBillDialog } from '@/components/appointments/AppointmentBillDialog';
+import { NO_BILL_ACCESS, toRow } from './TodaysAppointments';
 import { LoadFailureState, loadFailure, type LoadFailure } from './load-failure';
 
 export type Loadable<T> = { status: 'loading' } | { status: 'error'; failure: LoadFailure } | { status: 'ready'; value: T };
@@ -39,11 +42,14 @@ const fetchCollection = () => apiClient.get<DailyCollectionReport>('/pharmacy/re
 
 export function CollectionFigure() {
   const [state, retry] = useLoad(fetchCollection);
+  const pharmacyOnly = state.status === 'ready' && !state.value.wholeDay;
   return (
     <Card className="relative gap-3">
       <CardHeader>
         <CardTitle className="text-base">
-          <Link href={DAILY_COLLECTION} className="after:absolute after:inset-0 hover:underline">Today&apos;s collection</Link>
+          <Link href={DAILY_COLLECTION} className="after:absolute after:inset-0 hover:underline">
+            {pharmacyOnly ? 'Pharmacy collection today' : "Today's collection"}
+          </Link>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -78,7 +84,32 @@ function Parts({ parts }: { parts: string[] }) {
   );
 }
 
+type BillAppointment = NonNullable<BillDue['appointment']>;
+type OpenBill = { booked: BillAppointment; appointment: AppointmentInSlot; access: ClinicBillAccess };
+
+/** The bill dialog takes the appointment as the calendar row has it, so read that row from the doctor's day. */
+async function billOf(booked: BillAppointment): Promise<OpenBill | null> {
+  const schedule = await apiClient.getDoctorSchedule(booked.doctorId, booked.day);
+  const row = schedule?.appointments?.find((a) => a.id === booked.id);
+  return row ? { booked, appointment: toRow(row), access: schedule.billingAccess ?? NO_BILL_ACCESS } : null;
+}
+
 export function BillsDue({ alerts, onRetry, title = 'Bills due' }: { alerts: Loadable<ClinicAlerts>; onRetry: () => void; title?: string }) {
+  const [open, setOpen] = useState<OpenBill | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
+  const canTakePayment = alerts.status === 'ready' && !!alerts.value.canTakePayment;
+
+  const openBill = async (bill: BillDue) => {
+    setOpenError(null);
+    const found = bill.appointment ? await billOf(bill.appointment).catch(() => null) : null;
+    if (found) setOpen(found);
+    else setOpenError(`Couldn't open the bill for ${bill.patient?.name ?? bill.invoiceNo}. Try again from the calendar.`);
+  };
+  const onPaid = async () => {
+    onRetry();
+    if (open) setOpen(await billOf(open.booked).catch(() => open));
+  };
+
   return (
     <Card className="gap-3">
       <CardHeader>
@@ -94,21 +125,38 @@ export function BillsDue({ alerts, onRetry, title = 'Bills due' }: { alerts: Loa
               <div className="space-y-2">
                 <p className="text-3xl font-semibold tabular-nums">{formatRupee(value.billsDueBalance ?? 0)}</p>
                 <ul className="space-y-1" aria-label={title}>
-                  {bills.map((bill) => (
-                    <li key={bill.id}>
-                      <Link href={appointmentsOn(bill.billDate)} className="flex justify-between gap-3 rounded px-1 text-sm hover:bg-gray-50 hover:underline">
-                        <span className="truncate">{bill.patient?.name ?? bill.invoiceNo}</span>
+                  {bills.map((bill) => {
+                    const name = bill.patient?.name ?? bill.invoiceNo;
+                    const content = (
+                      <>
+                        <span className="truncate">{name}</span>
                         <span className="shrink-0 font-medium tabular-nums">{formatRupee(bill.balance)}</span>
-                      </Link>
-                    </li>
-                  ))}
+                      </>
+                    );
+                    return (
+                      <li key={bill.id}>
+                        {canTakePayment && bill.appointment ? (
+                          <button type="button" onClick={() => void openBill(bill)} aria-label={`${name} ${formatRupee(bill.balance)}`}
+                            className="flex w-full justify-between gap-3 rounded px-1 text-left text-sm hover:bg-gray-50 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                            {content}
+                          </button>
+                        ) : (
+                          <div className="flex justify-between gap-3 px-1 text-sm">{content}</div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
                 {more > 0 && <p className="text-xs text-gray-500">and {more} more</p>}
+                {openError && <p role="alert" className="text-sm text-red-700">{openError}</p>}
               </div>
             );
           }}
         </Loaded>
       </CardContent>
+      {open && (
+        <AppointmentBillDialog appointment={open.appointment} date={open.booked.day} access={open.access} onClose={() => setOpen(null)} onChanged={onPaid} />
+      )}
     </Card>
   );
 }
@@ -155,7 +203,7 @@ export function NeedsAttention({ alerts, onRetry }: { alerts: Loadable<ClinicAle
           {(value) => (
             <div className="grid gap-4 md:grid-cols-2">
               <StockList href={LOW_STOCK_LIST} title={`Low stock (${value.counts?.lowStockAlerts ?? 0})`}
-                rows={(value.lowStockAlerts ?? []).map((i) => [i.itemId, i.itemName, `${i.currentStock} left`])} />
+                rows={(value.lowStockAlerts ?? []).map((i) => [i.itemId, i.itemName, stockLeft(i)])} />
               <StockList href={EXPIRING_LIST} title={`Expiring in 3 months (${value.counts?.expiryAlerts ?? 0})`}
                 rows={(value.expiryAlerts ?? []).map((i) => [i.itemId, i.itemName, `${i.daysUntilExpiry} days`])} />
             </div>

@@ -20,14 +20,32 @@ export type BillDue = {
   status: string;
   billDate: string;
   patient?: { id: string; name: string } | null;
+  /** day is the appointment's calendar day, as the doctor schedule takes it. */
+  appointment?: { id: string; doctorId: string; day: string } | null;
 };
 
-export type StockAlert = { itemId: string; itemName: string; currentStock: number; reorderLevel?: number; daysUntilExpiry?: number };
+export type StockAlert = {
+  itemId: string;
+  itemName: string;
+  currentStock: number;
+  available?: number;
+  availableInAll?: number;
+  reorderLevel?: number;
+  daysUntilExpiry?: number;
+};
+
+/** The low-stock rule is per batch, so a batch is named as one when the item has more in other batches. */
+export function stockLeft(item: StockAlert): string {
+  const available = item.available ?? item.currentStock;
+  const inAll = item.availableInAll ?? available;
+  return inAll > available ? `${available} in one batch (${inAll} in all)` : `${available} left`;
+}
 
 /** The system alerts: each section is empty when the viewer lacks its permission. */
 export type ClinicAlerts = {
   counts?: { billsDue?: number; lowStockAlerts?: number; expiryAlerts?: number; pendingPayments?: number; upcomingAppointments?: number };
   billsDueBalance?: number;
+  canTakePayment?: boolean;
   billsDue?: BillDue[];
   lowStockAlerts?: StockAlert[];
   expiryAlerts?: StockAlert[];
