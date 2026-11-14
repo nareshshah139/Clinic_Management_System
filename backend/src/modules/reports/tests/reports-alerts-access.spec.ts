@@ -27,12 +27,14 @@ const prisma = {
   role: { findFirst: async () => null },
   newInvoice: { findMany: async () => [{ id: 'overdue-1', invoiceNo: 'INV-9', total: 500 }] },
   inventoryItem: {
-    findMany: async ({ where }: any) => where.expiryDate
-      ? [{ id: 'cream', name: 'Synthetic Cream', expiryDate: new Date(Date.now() + 5 * 86400000 - 1000), currentStock: 4 }]
-      : [{ id: 'gel', name: 'Adapalene Gel', currentStock: 0, minStockLevel: 6 }],
+    findMany: async () => [{ id: 'cream', name: 'Synthetic Cream', expiryDate: new Date(Date.now() + 5 * 86400000 - 1000), currentStock: 4 }],
   },
+  $queryRaw: async () => [{ id: 'gel', name: 'Adapalene Gel', currentStock: 0, heldStock: 0, minStockLevel: 6, reorderLevel: null, total: BigInt(1) }],
   newPayment: { findMany: async () => [{ id: 'pay-1', amount: 100 }] },
-  appointment: { findMany: async () => [{ id: 'appt-1', date: new Date(), status: 'SCHEDULED', visitType: 'OPD', patient: { name: 'Kiran Bhatt' }, doctor: { firstName: 'Priya', lastName: 'Menon' } }] },
+  appointment: {
+    findMany: async ({ where }: any) => where.date instanceof Date ? [] : [{ id: 'appt-1', date: new Date(Date.now() + 86400000), slot: '10:00-10:15', status: 'SCHEDULED', visitType: 'OPD', patient: { name: 'Kiran Bhatt' }, doctor: { firstName: 'Priya', lastName: 'Menon' } }],
+    count: async () => 1,
+  },
 };
 
 const alertsFor = (id: string) => new ReportsService(prisma as any).getSystemAlerts('b', { id, role: STORED[id]?.role });

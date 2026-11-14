@@ -1,31 +1,3 @@
-// System Statistics from backend
-export interface SystemStatistics {
-  users: {
-    total: number;
-    active: number;
-  };
-  branches: {
-    total: number;
-    active: number;
-  };
-  system: {
-    status: string;
-    version: string;
-    uptime: number;
-  };
-  generatedAt: string;
-}
-
-// System Alert
-export interface SystemAlert {
-  id: string;
-  title: string;
-  message: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  type: string;
-  createdAt: string;
-}
-
 // Enums
 import type { AppointmentStatus, AppointmentCalendar } from '@cms/shared-types';
 export type { AppointmentCalendar } from '@cms/shared-types';

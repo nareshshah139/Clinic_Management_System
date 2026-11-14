@@ -38,6 +38,7 @@ const presentDrugs = {
   },
 };
 const available = Prisma.sql`(i."currentStock" - i."heldStock")`;
+const LOW_STOCK = Prisma.sql`${available} <= coalesce(i."minStockLevel", i."reorderLevel", -1)`;
 const margin = Prisma.sql`CASE WHEN i.mrp > 0 THEN floor(((i.mrp - i."costPrice") / i.mrp * 100 + 2.220446049250313e-16) * 100 + 0.5) / 100 END`;
 const landing = Prisma.sql`inventory_read_number(i.meta->>'landingCostPerStockUnit')`;
 const issues = {
@@ -84,6 +85,40 @@ export async function readStockGaps(db: StockDatabase, branchId: string): Promis
   const ordered = {} as Record<QualityGap, number>;
   for (const gap of Object.keys(QUALITY_GAPS) as QualityGap[]) ordered[gap] = Number(row.gaps[gap]);
   return ordered;
+}
+/**
+ * @cc [owner:nareshshah139,label:product] low-stock-definition
+ * A batch is low stock when its available quantity (on hand less held) is at or below its saved
+ * minimum, or its reorder level when it has no minimum, within one branch. Inventory Today, the
+ * stock list's Low filter, Pharmacy Desk and system alerts MUST all count with this one condition.
+ */
+export const isLowStock = (item: {
+  currentStock: number;
+  heldStock: number;
+  minStockLevel: number | null;
+  reorderLevel: number | null;
+}) =>
+  item.currentStock - item.heldStock <=
+  (item.minStockLevel ?? item.reorderLevel ?? -1);
+export async function readLowStock(
+  db: Pick<Prisma.TransactionClient, '$queryRaw'>,
+  branchId: string,
+  take: number,
+) {
+  const rows = await db.$queryRaw<
+    {
+      id: string;
+      name: string;
+      currentStock: number;
+      heldStock: number;
+      minStockLevel: number | null;
+      reorderLevel: number | null;
+      total: bigint;
+    }[]
+  >(Prisma.sql`SELECT i.id, i.name, i."currentStock", i."heldStock", i."minStockLevel", i."reorderLevel", count(*) OVER () AS total
+    FROM inventory_items i WHERE i."branchId" = ${branchId} AND ${LOW_STOCK}
+    ORDER BY ${available} ASC, i.name ASC LIMIT ${Math.max(1, take)}`);
+  return { total: Number(rows[0]?.total ?? 0), items: rows };
 }
 const totals = Prisma.sql`jsonb_build_object(
   'batches', count(*), 'units', coalesce(sum(i."currentStock"), 0),
@@ -206,7 +241,7 @@ export async function readStockPage(
         : Prisma.sql`strpos(lower(coalesce(i."hsnCode", '')), ${String(q.hsn).toLowerCase()}) > 0`,
     );
   const stockFilters: Record<string, Prisma.Sql> = {
-    LOW: Prisma.sql`${available} <= coalesce(i."minStockLevel", i."reorderLevel", -1)`,
+    LOW: LOW_STOCK,
     ZERO: Prisma.sql`i."currentStock" = 0`,
     AVAILABLE: Prisma.sql`${available} > 0`,
     HIGH: Prisma.sql`i."maxStockLevel" IS NOT NULL AND i."currentStock" > i."maxStockLevel"`,

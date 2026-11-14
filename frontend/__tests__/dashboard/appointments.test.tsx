@@ -6,7 +6,7 @@ import { apiClient } from '@/lib/api';
 
 jest.mock('@/lib/api', () => ({
   apiClient: {
-    getSystemStatistics: jest.fn(),
+    get: jest.fn(),
     getSystemAlerts: jest.fn(),
     getDoctorSchedule: jest.fn(),
     getAppointments: jest.fn(),
@@ -45,8 +45,8 @@ function renderDashboard(role: UserRole.DOCTOR | UserRole.ADMIN = UserRole.DOCTO
 beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers().setSystemTime(new Date('2026-11-05T06:00:00.000Z'));
-  (apiClient.getSystemStatistics as jest.Mock).mockResolvedValue({});
-  (apiClient.getSystemAlerts as jest.Mock).mockResolvedValue({});
+  (apiClient.get as jest.Mock).mockResolvedValue({ headline: { value: 0 } });
+  (apiClient.getSystemAlerts as jest.Mock).mockResolvedValue({ counts: { upcomingAppointments: 0 } });
   (apiClient.getDoctorSchedule as jest.Mock).mockResolvedValue({ appointments });
   (apiClient.getAppointments as jest.Mock).mockResolvedValue({ appointments });
 });
@@ -57,7 +57,7 @@ afterEach(() => {
 
 it('displays the canonical patient names for six booked appointments', async () => {
   renderDashboard();
-  await screen.findByRole('button', { name: 'View All Appointments' });
+  await screen.findByRole('list', { name: 'Your appointments today' });
 
   for (const booking of bookings) {
     expect(screen.getByText(booking.name, { exact: true })).toBeVisible();
@@ -66,7 +66,7 @@ it('displays the canonical patient names for six booked appointments', async () 
 
 it('shows each booked slot without a clock time derived from its date', async () => {
   renderDashboard();
-  await screen.findByRole('button', { name: 'View All Appointments' });
+  await screen.findByRole('list', { name: 'Your appointments today' });
 
   for (const booking of bookings) {
     expect(screen.getByText(booking.slot, { exact: true })).toBeVisible();
@@ -113,13 +113,13 @@ describe.each([UserRole.DOCTOR, UserRole.ADMIN] as const)('%s clinic-day queries
       } else {
         expect(apiClient.getAppointments).toHaveBeenCalledWith({
           date: expectedDate,
-          limit: 5,
+          limit: 100,
           sortBy: 'slot',
           sortOrder: 'asc',
         });
       }
     });
-    expect(await screen.findByRole('button', { name: 'View All Appointments' })).toBeVisible();
-    expect(screen.queryByText('No appointments scheduled for today')).not.toBeInTheDocument();
+    expect(await screen.findByText('Asha Rao', { exact: true })).toBeVisible();
+    expect(screen.queryByText(/No appointments (scheduled for today|booked with you today)/)).not.toBeInTheDocument();
   });
 });

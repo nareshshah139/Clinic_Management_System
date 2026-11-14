@@ -9,6 +9,7 @@ import { UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { Prisma } from '@prisma/client';
 import { generatePatientCode } from '../../shared/ids/patient-code.util';
+import { readUpcomingAppointments } from '../appointments/upcoming-appointments';
 
 /**
  * @cc [owner:nareshshah139,label:security] portal-user-safe-fields
@@ -299,21 +300,16 @@ export class PatientsService {
   }
 
   async getNextAppointment(patientId: string, branchId: string) {
-    const now = new Date();
-    const appt = await this.prisma.appointment.findFirst({
-      where: {
-        patientId,
-        branchId,
-        date: { gte: now },
-        status: { in: ['SCHEDULED', 'CONFIRMED'] as any },
-      },
-      orderBy: { date: 'asc' },
-      include: {
+    const { rows } = await readUpcomingAppointments(
+      this.prisma,
+      { patientId, branchId },
+      1,
+      {
         doctor: { select: { firstName: true, lastName: true } },
         room: { select: { name: true } },
       },
-    });
-    return appt;
+    );
+    return rows[0] ?? null;
   }
 
   async sendAppointmentReminder(patientId: string, branchId: string) {

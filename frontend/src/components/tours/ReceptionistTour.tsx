@@ -296,12 +296,12 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         element: '[data-tour="dashboard-stats"]',
         intro: `
           <div class="space-y-2">
-            <h4 class="font-semibold">Today's Overview</h4>
-            <p>View quick stats for today including:</p>
+            <h4 class="font-semibold">What needs attention</h4>
+            <p>Each row counts one job and opens the appointments page:</p>
             <ul class="list-disc pl-5 space-y-1 text-sm">
-              <li>Number of appointments scheduled</li>
-              <li>Patient registrations</li>
-              <li>Room occupancy status</li>
+              <li>Today's bookings not yet confirmed</li>
+              <li>Tomorrow's bookings to confirm</li>
+              <li>Patients checked in and waiting for the doctor</li>
             </ul>
           </div>
         `,
@@ -312,7 +312,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-2">
             <h4 class="font-semibold">Today's Appointments</h4>
-            <p>See all appointments scheduled for today. Click on any appointment to view details, reschedule, or cancel.</p>
+            <p>Every appointment today, grouped by doctor in time order. Click a patient to open their record.</p>
           </div>
         `,
         position: 'top',

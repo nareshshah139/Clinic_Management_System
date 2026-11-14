@@ -397,7 +397,7 @@ export class ApiClient {
   }
 
   async getPatientNextAppointment(patientId: string) {
-    return this.get(`/patients/${patientId}/next-appointment`);
+    return this.get<{ appointment: { id: string; date: string; slot: string; doctor?: { firstName?: string; lastName?: string } | null } | null }>(`/patients/${patientId}/next-appointment`);
   }
 
   async sendAppointmentReminder(patientId: string) {
@@ -849,10 +849,6 @@ export class ApiClient {
 
   async getDoctorReport(params: Record<string, unknown>) {
     return this.get('/reports/doctors', params);
-  }
-
-  async getSystemStatistics() {
-    return this.get('/auth/statistics');
   }
 
   async getSystemAlerts<T = unknown>() {
