@@ -1497,13 +1497,6 @@ export class PharmacyInvoiceService {
   }
 
   /**
-   * @cc [owner:nareshshah139,label:product;security] prescription-billing-eligibility
-   * Creating or relinking a prescription bill and every first stock posting MUST require an ACTIVE,
-   * unexpired prescription on an undeleted visit belonging to the selected patient, doctor and branch.
-   * Eligibility MUST be re-read under prescription then visit row locks retained through commit,
-   * so a cancellation that wins the prescription lock prevents stock posting.
-   */
-  /**
    * A walk-in sale has no patient record, so the bill itself carries who bought it.
    * Prescription bills always belong to the prescription's patient.
    */
@@ -1522,6 +1515,13 @@ export class PharmacyInvoiceService {
       );
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;security] prescription-billing-eligibility
+   * Creating or relinking a prescription bill and every first stock posting MUST require an ACTIVE,
+   * unexpired prescription on an undeleted visit belonging to the selected patient, doctor and branch.
+   * Eligibility MUST be re-read under prescription then visit row locks retained through commit,
+   * so a cancellation that wins the prescription lock prevents stock posting.
+   */
   private async requireEligiblePrescription(
     tx: Prisma.TransactionClient,
     input: {
