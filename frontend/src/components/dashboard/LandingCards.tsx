@@ -15,7 +15,6 @@ import { LoadFailureState, loadFailure, type LoadFailure } from './load-failure'
 
 export type Loadable<T> = { status: 'loading' } | { status: 'error'; failure: LoadFailure } | { status: 'ready'; value: T };
 
-/** Loads once on mount; the retry reloads only this card. */
 function useLoad<T>(fetch: () => Promise<T>): [Loadable<T>, () => void] {
   const [state, setState] = useState<Loadable<T>>({ status: 'loading' });
   const load = useCallback(() => {
@@ -38,7 +37,6 @@ const ALWAYS_SHOWN_MODES = new Set(['CASH', 'UPI', 'CARD']);
 
 const fetchCollection = () => apiClient.get<DailyCollectionReport>('/pharmacy/reports/daily-collection', { from: getISTDateString() });
 
-/** The whole day's take, clinic beside pharmacy and by payment mode, from the Daily Collection report. */
 export function CollectionFigure() {
   const [state, retry] = useLoad(fetchCollection);
   return (
@@ -70,7 +68,6 @@ export function CollectionFigure() {
   );
 }
 
-/** Figures joined by dots, each kept whole when the line wraps. */
 function Parts({ parts }: { parts: string[] }) {
   return (
     <p className="text-sm text-gray-700 tabular-nums">
@@ -81,7 +78,6 @@ function Parts({ parts }: { parts: string[] }) {
   );
 }
 
-/** Every open clinic bill by patient, each opening the calendar on the day it was raised. */
 export function BillsDue({ alerts, onRetry, title = 'Bills due' }: { alerts: Loadable<ClinicAlerts>; onRetry: () => void; title?: string }) {
   return (
     <Card className="gap-3">
@@ -148,7 +144,6 @@ export function ApprovalsFigure({ role }: { role: string }) {
   );
 }
 
-/** Low stock and expiring medicines by name, each heading opening the matching Inventory list. */
 export function NeedsAttention({ alerts, onRetry }: { alerts: Loadable<ClinicAlerts>; onRetry: () => void }) {
   return (
     <Card className="gap-3">
@@ -204,7 +199,6 @@ const fetchWaiting = () =>
 
 const waited = (hours: number) => (hours < 1 ? `${Math.max(1, Math.round(hours * 60))} min` : `${Math.round(hours)} h`);
 
-/** The counter's work: prescriptions to bill, a walk-in sale, and the stock lists to act on. */
 export function PharmacyWork({ alerts, onRetry }: { alerts: Loadable<ClinicAlerts>; onRetry: () => void }) {
   const [state, retry] = useLoad(fetchWaiting);
   const waiting = state.status === 'ready' ? state.value.data : [];

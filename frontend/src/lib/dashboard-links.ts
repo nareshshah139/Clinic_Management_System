@@ -1,4 +1,3 @@
-/** Where alert rows, bell rows and landing-page figures lead, so every surface opens the same list. */
 export const DAILY_COLLECTION = '/dashboard/pharmacy/reports?report=daily-collection';
 export const LOW_STOCK_LIST = '/dashboard/inventory?area=stock&view=list&stock=LOW';
 export const EXPIRING_LIST = '/dashboard/inventory?area=stock&view=list&expiryMonths=3';

@@ -60,7 +60,6 @@ function toRow(a: Schedule, doctorName?: string): Row {
   };
 }
 
-/** Bookings still to be seen come first, in slot order; finished ones follow. */
 const nextFirst = (rows: Row[]) =>
   [...rows].sort((a, b) => Number(FINISHED.has(a.status)) - Number(FINISHED.has(b.status)) || a.slot.localeCompare(b.slot));
 
@@ -88,10 +87,6 @@ function visitLabel(row: Row): string | null {
   return row.visit.status === 'COMPLETED' ? 'Open visit' : 'Continue visit';
 }
 
-/**
- * Today's bookings for the landing page: the desk sees every doctor's day with the bill chip that
- * opens the bill, a doctor sees their own patients with the visit to start or continue.
- */
 export function TodaysAppointments({ mode, doctorId }: { mode: AppointmentsMode; doctorId?: string }) {
   const router = useRouter();
   const [state, setState] = useState<{ status: 'loading' } | { status: 'error'; failure: LoadFailure } | { status: 'ready'; rows: Row[]; access: ClinicBillAccess }>({ status: 'loading' });
