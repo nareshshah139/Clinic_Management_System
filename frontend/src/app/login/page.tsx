@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { Spinner } from '@/components/ui/spinner';
 import { useState, Suspense } from 'react';
@@ -8,10 +7,12 @@ import { Switch } from '@/components/ui/switch';
 import { Palette } from 'lucide-react';
 import { useBrandedMode } from '@/components/layout/branded-mode-context';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { AuthCard } from '@/components/auth/AuthCard';
+import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api';
+import { splitErrorReference } from '@/lib/utils';
 
 /**
  * @cc [owner:nareshshah139,label:security] login-local-redirect
@@ -34,11 +35,15 @@ function LoginPageInner() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [missing, setMissing] = useState({ identifier: false, password: false });
 
   const submit = async () => {
     const trimmedIdentifier = identifier.trim();
-    if (!trimmedIdentifier || !password) {
-      setError('Phone or email and password are required');
+    const nowMissing = { identifier: !trimmedIdentifier, password: !password };
+    setMissing(nowMissing);
+    if (nowMissing.identifier || nowMissing.password) {
+      setError(null);
+      document.getElementById(nowMissing.identifier ? 'login-identifier' : 'login-password')?.focus();
       return;
     }
 
@@ -54,11 +59,13 @@ function LoginPageInner() {
     }
   };
 
+  const shownError = error ? splitErrorReference(error) : null;
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-brand-gradient-soft px-4 py-16 relative">
-      <div className="absolute top-4 right-4 flex items-center gap-2">
-        <Palette className="h-4 w-4 text-gray-500" />
-        <span className="text-xs text-gray-600">Branded</span>
+    <>
+      <div className="fixed top-4 right-4 flex items-center gap-2">
+        <Palette className="h-4 w-4 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Branded</span>
         <Switch
           checked={brandedEnabled}
           onCheckedChange={() => toggleBranded()}
@@ -66,60 +73,60 @@ function LoginPageInner() {
           disabled={brandedLoading}
         />
       </div>
-      <Card className="w-full max-w-md border-border/70 bg-card">
-        <CardHeader className="items-center gap-5 pb-2">
-          <div className="relative mx-auto h-24 w-56 overflow-hidden rounded-md">
-            <Image src="/letterhead.png" alt="Linaé Skin, Hair & Aesthetic Clinic" width={1100} height={1520} priority className="absolute -left-5 -top-[30px] h-auto w-[672px] max-w-none" />
+      <AuthCard title="Sign in to Linaé">
+        <form
+          onSubmit={(e) => { e.preventDefault(); void submit(); }}
+          autoComplete="on"
+          noValidate
+          className="space-y-4"
+        >
+          <div className="space-y-1">
+            <Label htmlFor="login-identifier">Phone or email</Label>
+            <Input
+              id="login-identifier"
+              name="username"
+              type="text"
+              inputMode="email"
+              autoComplete="username"
+              autoCapitalize="off"
+              autoCorrect="off"
+              value={identifier}
+              onChange={(e) => { setIdentifier(e.target.value); setMissing((m) => ({ ...m, identifier: false })); }}
+              aria-invalid={missing.identifier || undefined}
+              aria-describedby={missing.identifier ? 'login-identifier-error' : undefined}
+              autoFocus
+            />
+            {missing.identifier && <p id="login-identifier-error" className="text-sm text-destructive">Enter your phone number or email.</p>}
           </div>
-          <h1 className="text-center text-2xl font-semibold tracking-tight">ClinicMS Login</h1>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <form
-            onSubmit={(e) => { e.preventDefault(); void submit(); }}
-            autoComplete="on"
-            className="space-y-4"
-          >
-            <div>
-              <label className="text-sm text-gray-700" htmlFor="login-identifier">Phone or email</label>
-              <Input
-                id="login-identifier"
-                name="username"
-                type="text"
-                inputMode="email"
-                autoComplete="username"
-                autoCapitalize="off"
-                autoCorrect="off"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="Phone or email"
-                autoFocus
-                required
-              />
+          <div className="space-y-1">
+            <Label htmlFor="login-password">Password</Label>
+            <Input
+              id="login-password"
+              name="current-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setMissing((m) => ({ ...m, password: false })); }}
+              aria-invalid={missing.password || undefined}
+              aria-describedby={missing.password ? 'login-password-error' : undefined}
+            />
+            {missing.password && <p id="login-password-error" className="text-sm text-destructive">Enter your password.</p>}
+          </div>
+          {shownError && (
+            <div role="alert" className="text-sm text-destructive">
+              <p>{shownError.text}</p>
+              {shownError.reference && <p className="select-all text-xs text-muted-foreground">Reference: {shownError.reference}</p>}
             </div>
-            <div>
-              <label className="text-sm text-gray-700" htmlFor="login-password">Password</label>
-              <Input
-                id="login-password"
-                name="current-password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
-            </div>
-            {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-            <Button className="w-full" type="submit" disabled={loading || !identifier.trim() || !password}>
-              {loading && <Spinner label="Signing in…" />}
-              {loading ? 'Signing in…' : 'Sign in'}
-            </Button>
-            <p className="text-xs text-gray-500 text-center">Use your registered phone number or email with your password.</p>
-            <p className="text-sm text-center text-gray-600">Forgot password? Ask your clinic admin for a reset code, then <Link href="/reset-password" className="text-blue-700 underline underline-offset-2">enter your reset code</Link>.</p>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+          )}
+          <Button className="w-full" type="submit" disabled={loading}>
+            {loading && <Spinner label="Signing in…" />}
+            {loading ? 'Signing in…' : 'Sign in'}
+          </Button>
+          <p className="text-xs text-muted-foreground text-center">Use your registered phone number or email with your password.</p>
+          <p className="text-sm text-center text-muted-foreground">Forgot password? Ask your clinic admin for a reset code, then <Link href="/reset-password" className="text-primary underline underline-offset-2">enter your reset code</Link>.</p>
+        </form>
+      </AuthCard>
+    </>
   );
 }
 

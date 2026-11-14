@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar, ChevronLeft, ChevronRight, Clock, User, Stethoscope } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { getISTDateString, minutesToHHMM, hhmmToMinutes, isSlotInPast } from '@/lib/utils';
+import { RoomTypeIcon } from './room-type-icon';
 import type { RoomSchedule } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 
@@ -196,18 +197,6 @@ export default function RoomCalendar() {
   const roomTypes = ['all', ...new Set(Array.isArray(rooms) ? rooms.map(room => room.type) : [])];
 
 
-  const getRoomTypeIcon = (type: string) => {
-    switch (type) {
-      case 'Consultation': return '🩺';
-      case 'Procedure': return '⚕️';
-      case 'Operation': return '🏥';
-      case 'Telemedicine':
-      case 'Telemed':
-        return '💻';
-      case 'Emergency': return '🚨';
-      default: return '🏢';
-    }
-  };
 
   const getVisitTypeColor = (visitType: string) => {
     const vt = (visitType || '').toUpperCase();
@@ -267,7 +256,7 @@ export default function RoomCalendar() {
             <SelectContent>
               {roomTypes.map((type) => (
                 <SelectItem key={type} value={type}>
-                  {type === 'all' ? 'All Room Types' : `${getRoomTypeIcon(type)} ${type}`}
+                  {type === 'all' ? 'All Room Types' : <span className="flex items-center gap-2"><RoomTypeIcon type={type} />{type}</span>}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -379,7 +368,7 @@ export default function RoomCalendar() {
                   <div key={room.id} className="text-center p-2 bg-gray-50 rounded-md">
                     <div className="font-semibold text-sm">{room.name}</div>
                     <div className="text-xs text-gray-600 flex items-center justify-center gap-1">
-                      <span>{getRoomTypeIcon(room.type)}</span>
+                      <RoomTypeIcon type={room.type} className="size-3.5" />
                       <span>{room.type}</span>
                       <Badge variant="outline" className="text-xs">
                         Cap: {room.capacity}

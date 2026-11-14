@@ -5,7 +5,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,12 +14,17 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiClient } from '@/lib/api';
 import type { User } from '@/lib/types';
-import { Plus, Edit, Trash2, Settings } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings, KeyRound, Clock, MessageSquare, MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { PageHeader } from '@/components/ui/page-header';
+import { QuickGuide } from '@/components/common/QuickGuide';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { getErrorMessage } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import React, { useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { BranchHolidaySettings, DoctorAvailabilitySettings } from '@/components/users/DoctorAvailabilitySettings';
-import { ResetCodeButton } from '@/components/users/ResetCodeButton';
+import { ResetCodeDialog } from '@/components/users/ResetCodeDialog';
 
 import {
   parseMetadataObject,
@@ -29,6 +34,8 @@ import {
 
 type UserForm = { id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string };
 const EMPTY_FORM: UserForm = { firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE' };
+const ROLE_LABELS: Record<string, string> = { OWNER: 'Owner', ADMIN: 'Admin', MANAGER: 'Manager', DOCTOR: 'Doctor', NURSE: 'Nurse', RECEPTION: 'Receptionist', PHARMACIST: 'Pharmacist', ACCOUNTANT: 'Accountant' };
+const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Active', INACTIVE: 'Inactive', SUSPENDED: 'Suspended', PENDING: 'Pending' };
 // The API serves at most 100 permissions per page.
 const PERMISSIONS_PAGE_SIZE = 100;
 
@@ -38,6 +45,9 @@ const coveredBy = (permission: string, listed: string[]) =>
 
 export default function UsersManagement() {
   const { toast } = useToast();
+  const [confirm, confirmDialog] = useConfirm();
+  const [formError, setFormError] = useState<string | null>(null);
+  const [resetUser, setResetUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -119,16 +129,17 @@ export default function UsersManagement() {
   const submit = async () => {
     try {
       setLoading(true);
+      setFormError(null);
       const trimmedPhone = form.phone.trim();
       if (!trimmedPhone) {
-        alert('Phone number is required');
+        setFormError('Enter a phone number.');
         return;
       }
 
       const payload = { firstName: form.firstName, lastName: form.lastName, email: form.email, phone: trimmedPhone, role: form.role, status: form.status } as any;
       if (!form.id) {
         if (!form.password || form.password.length < 8 || form.password.length > 20) {
-          alert('Password must be 8-20 characters');
+          setFormError('Use a password of 8 to 20 characters.');
           return;
         }
         payload.password = form.password;
@@ -141,6 +152,8 @@ export default function UsersManagement() {
       setOpen(false);
       setForm(EMPTY_FORM);
       await fetchUsers();
+    } catch (e) {
+      setFormError(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -149,18 +162,32 @@ export default function UsersManagement() {
   // "New User" always starts blank, even after an edit was cancelled.
   const onCreate = () => {
     setForm(EMPTY_FORM);
+    setFormError(null);
     setOpen(true);
   };
 
   const onEdit = (u: User) => {
     setForm({ id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, phone: u.phone || '', role: String(u.role), status: String(u.status) });
+    setFormError(null);
     setOpen(true);
   };
 
   const onDelete = async (u: User) => {
-    if (!confirm('Delete user?')) return;
-    await apiClient.deleteUser(u.id);
-    await fetchUsers();
+    const name = `${u.firstName} ${u.lastName}`.trim();
+    const ok = await confirm({
+      title: `Delete ${name}?`,
+      description: `${name} will no longer be able to sign in. This cannot be undone.`,
+      confirmLabel: 'Delete user',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await apiClient.deleteUser(u.id);
+      toast({ title: `${name} deleted` });
+      await fetchUsers();
+    } catch (e) {
+      toast({ variant: 'destructive', title: `Could not delete ${name}`, description: getErrorMessage(e) });
+    }
   };
 
   const openWhatsAppSettings = (u: User) => {
@@ -246,7 +273,7 @@ export default function UsersManagement() {
 
   const saveTemplate = async () => {
     if (!tplName || !tplText) {
-      alert('Name and Plain Text are required');
+      toast({ variant: 'warning', title: 'Template incomplete', description: 'Enter a name and the plain text.' });
       return;
     }
     const placeholders = new Set([...extractPlaceholders(tplHtml), ...extractPlaceholders(tplText)]);
@@ -255,7 +282,7 @@ export default function UsersManagement() {
       if (!tplVars.includes(p)) missing.push(p);
     });
     if (missing.length) {
-      alert(`Add these variables or remove placeholders: ${missing.join(', ')}`);
+      toast({ variant: 'warning', title: 'Unknown placeholders', description: `Add these variables or remove the placeholders: ${missing.join(', ')}` });
       return;
     }
 
@@ -281,23 +308,24 @@ export default function UsersManagement() {
       });
     }
     await loadTemplates();
-    alert('Template saved');
+    toast({ title: 'Template saved' });
   };
 
   const deleteTemplate = async (tpl: any) => {
     if (!tpl?.id) return;
-    if (!confirm('Delete this template?')) return;
+    const ok = await confirm({ title: tpl.name ? `Delete template ${tpl.name}?` : 'Delete this template?', confirmLabel: 'Delete template', destructive: true });
+    if (!ok) return;
     await apiClient.deleteWhatsAppTemplate(String(tpl.id));
     await loadTemplates();
   };
 
   const testSendTemplate = async () => {
     if (!tplEditing?.id) {
-      alert('Save the template before sending a test');
+      toast({ variant: 'warning', title: 'Save the template before sending a test' });
       return;
     }
     if (!tplTestTo) {
-      alert('Enter a phone number in E.164 format (e.g., +15551234567)');
+      toast({ variant: 'warning', title: 'Enter a test phone number', description: 'Use international format, for example +919876543210.' });
       return;
     }
     try {
@@ -417,10 +445,10 @@ export default function UsersManagement() {
       await fetchUsers();
     } catch (error) {
       console.error('Error applying role:', error);
-      alert('Failed to update role. Please try again.');
+      toast({ variant: 'destructive', title: 'Could not change the role', description: getErrorMessage(error) });
       return;
     }
-    alert(`Role updated to ${role} successfully!`);
+    toast({ title: 'Role changed', description: `${selectedUser.firstName} ${selectedUser.lastName} is now ${ROLE_LABELS[role] ?? role}.` });
     if (request !== permRequest.current) return;
     setSelectedUser({ ...selectedUser, role: role as any });
     setPermLoad('loading');
@@ -443,18 +471,37 @@ export default function UsersManagement() {
     try {
       await apiClient.updateUserPermissions(selectedUser.id, perms);
       await fetchUsers();
-      alert('Permissions updated successfully!');
+      toast({ title: 'Permissions saved' });
     } catch (error) {
       console.error('Error updating permissions:', error);
-      alert('Failed to update permissions. Please try again.');
+      toast({ variant: 'destructive', title: 'Could not save permissions', description: getErrorMessage(error) });
     }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><h2 className="text-lg font-semibold text-gray-900">Users</h2><p className="mt-1 text-sm text-gray-600">Manage users, roles, and statuses</p></div>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader title="Users" description="Clinic staff accounts, their roles and what they can open." actions={<>
+        <QuickGuide
+          title="Users guide"
+          sections={[
+            {
+              title: "Adding users",
+              items: [
+                "Press New User to create a staff account",
+                "Choose the role: Admin, Doctor, Nurse, Receptionist, Manager or Pharmacist",
+                "Enter their name, phone and a starting password",
+              ]
+            },
+            {
+              title: "Managing users",
+              items: [
+                "Press Edit in a user's row to change their details or status",
+                "The More actions menu in each row holds Reset password, Role & Permissions, and for doctors Working Hours and WhatsApp Settings",
+                "Delete is last in that menu and asks before removing the account",
+              ]
+            }
+          ]}
+        />
         <Dialog open={holidaysOpen} onOpenChange={setHolidaysOpen}>
           <DialogTrigger asChild>
             <Button variant="outline">Clinic Holidays</Button>
@@ -520,20 +567,16 @@ export default function UsersManagement() {
                 </div>
               )}
             </div>
+            {formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
               <Button onClick={submit} disabled={loading}>{form.id ? 'Save' : 'Create'}</Button>
             </div>
           </DialogContent>
         </Dialog>
-        </div>
-      </div>
+      </>} />
 
       <Card>
-        <CardHeader>
-          <CardTitle>All Users</CardTitle>
-          <CardDescription>Manage system users and roles</CardDescription>
-        </CardHeader>
         <CardContent>
           {loading ? (
             <LoadingSkeleton label="Loading users…" />
@@ -556,193 +599,24 @@ export default function UsersManagement() {
                     <TableRow key={u.id}>
                       <TableCell>{u.firstName} {u.lastName}</TableCell>
                       <TableCell>{u.email}</TableCell>
-                      <TableCell>{u.role}</TableCell>
-                      <TableCell>{u.status}</TableCell>
+                      <TableCell>{ROLE_LABELS[String(u.role)] ?? u.role}</TableCell>
+                      <TableCell>{STATUS_LABELS[String(u.status)] ?? u.status}</TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-2 [&_button]:whitespace-nowrap">
-                          <Button variant="outline" size="sm" onClick={() => onEdit(u)}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
-                          <Button variant="outline" size="sm" onClick={() => void onDelete(u)}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>
-                          <ResetCodeButton user={u} />
-                          {u.role === 'DOCTOR' && (
-                            <Dialog open={whOpen && selectedUser?.id === u.id} onOpenChange={(open: boolean) => { setWhOpen(open); if (!open) setSelectedUser(null); }}>
-                              <DialogTrigger asChild>
-                                <Button variant="outline" size="sm" onClick={() => { setSelectedUser(u); setWhOpen(true); }}>Working Hours</Button>
-                              </DialogTrigger>
-                              <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-                                <DialogHeader>
-                                  <DialogTitle>Availability: Dr. {u.firstName} {u.lastName}</DialogTitle>
-                                </DialogHeader>
-                                {whOpen && selectedUser?.id === u.id && <DoctorAvailabilitySettings doctorId={u.id} canManageHolidays />}
-                              </DialogContent>
-                            </Dialog>
-                          )}
-                          <Dialog open={permOpen && selectedUser?.id === u.id} onOpenChange={(open: boolean) => { setPermOpen(open); if (!open) setSelectedUser(null); }}>
-                            <DialogTrigger asChild>
-                              <Button variant="outline" size="sm" onClick={() => openRolePerms(u)}><Settings className="h-3 w-3 mr-1" /> Role & Permissions</Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-2xl">
-                              <DialogHeader>
-                                <DialogTitle>Role & Permissions</DialogTitle>
-                              </DialogHeader>
-                              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                                <div className="md:col-span-4 space-y-3">
-                                  <div>
-                                    <Label>Role</Label>
-                                    <Select value={roleSelect} onValueChange={(v: string) => setRoleSelect(v)}>
-                                      <SelectTrigger className="mt-1"><SelectValue placeholder="Select role" /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="ADMIN">Admin</SelectItem>
-                                        <SelectItem value="MANAGER">Manager</SelectItem>
-                                        <SelectItem value="DOCTOR">Doctor</SelectItem>
-                                        <SelectItem value="NURSE">Nurse</SelectItem>
-                                        <SelectItem value="RECEPTION">Receptionist</SelectItem>
-                                        <SelectItem value="PHARMACIST">Pharmacist</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <div className="flex gap-2 mt-2">
-                                      <Button size="sm" onClick={() => void applyRole(roleSelect as string)}>Apply Role</Button>
-                                      <Button size="sm" variant="outline" onClick={() => setRolePerms([])}>Clear All</Button>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <Label>Permissions</Label>
-                                    <div className="text-xs text-gray-500">Selected: {rolePerms.length}</div>
-                                    {alwaysPerms.length > 0 && (
-                                      <p className="text-xs text-gray-500">
-                                        This role always has {alwaysPerms.includes('*') ? 'every permission' : alwaysPerms.join(', ')}; unticking cannot remove them.
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="md:col-span-8">
-                                  {permLoad === 'failed' && (
-                                    <p role="alert" className="text-sm text-red-600">Could not load roles and permissions. Close this window and try again.</p>
-                                  )}
-                                  <div className="mt-2 max-h-80 overflow-auto space-y-4 pr-1">
-                                    {Object.entries(groupedPermissions).map(([group, perms]) => (
-                                      <div key={group}>
-                                        <div className="flex items-center justify-between">
-                                          <div className="font-medium capitalize">{group} <span className="text-xs text-gray-500">({perms.length})</span></div>
-                                          <div className="flex gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => {
-                                              const next = new Set(rolePerms);
-                                              perms.forEach((p) => next.add(p));
-                                              setRolePerms(Array.from(next));
-                                            }}>Select all</Button>
-                                            <Button variant="outline" size="sm" onClick={() => {
-                                              const next = new Set(rolePerms);
-                                              perms.forEach((p) => next.delete(p));
-                                              setRolePerms(Array.from(next));
-                                            }}>Clear</Button>
-                                          </div>
-                                        </div>
-                                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                          {perms.map((p) => {
-                                            const checked = rolePerms.includes(p);
-                                            return (
-                                              <label key={p} className="flex items-center gap-2 text-sm">
-                                                <input
-                                                  aria-label={p}
-                                                  type="checkbox"
-                                                  checked={checked}
-                                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                                    const next = new Set(rolePerms);
-                                                    if (!e.target.checked) next.delete(p);
-                                                    else [p, ...coveredBy(p, allPermissions)].forEach((name) => next.add(name));
-                                                    setRolePerms(Array.from(next));
-                                                  }}
-                                                />
-                                                <span className="truncate" title={p}>{p}</span>
-                                              </label>
-                                            );
-                                          })}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <div className="flex justify-end mt-3">
-                                    <Button disabled={permLoad !== 'ready'} onClick={() => void applyPermissions(rolePerms)}>Save Permissions</Button>
-                                  </div>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                          {u.role === 'DOCTOR' && (
-                            <Dialog open={waOpen && selectedUser?.id === u.id} onOpenChange={(open: boolean) => { setWaOpen(open); if (!open) setSelectedUser(null); }}>
-                              <DialogTrigger asChild>
-                                <Button variant="outline" size="sm" onClick={() => openWhatsAppSettings(u)}>WhatsApp Settings</Button>
-                              </DialogTrigger>
-                              <DialogContent className="sm:max-w-[520px]">
-                                <DialogHeader>
-                                  <DialogTitle>Doctor WhatsApp Settings</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div className="border rounded-md p-3 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                      <div>
-                                        <div className="font-medium">Send WhatsApp on appointment creation</div>
-                                        <div className="text-xs text-gray-500">Automatic confirmation to patients when this doctor is assigned.</div>
-                                      </div>
-                                      <Switch checked={waAutoConfirm} onCheckedChange={(v: boolean) => setWaAutoConfirm(v)} />
-                                    </div>
-                                    <div className="text-xs text-gray-500">Requires backend WhatsApp credentials. Uses text messages by default.</div>
-                                  </div>
-
-                                  <div className="border rounded-md p-3 space-y-3">
-                                    <div className="grid grid-cols-1 gap-3">
-                                      <div>
-                                        <Label className="text-sm">Doctor WhatsApp Phone Number ID</Label>
-                                        <Input value={waPhoneNumberId} onChange={(e) => setWaPhoneNumberId(e.target.value)} placeholder="e.g., 123456789012345" />
-                                        <div className="text-xs text-gray-500 mt-1">Optional. Overrides clinic default phone number ID.</div>
-                                      </div>
-                                      <div>
-                                        <Label className="text-sm">Doctor WhatsApp Access Token</Label>
-                                        <Input type="password" value={waAccessToken} onChange={(e) => setWaAccessToken(e.target.value)} placeholder="Paste long-lived access token" />
-                                        <div className="text-xs text-gray-500 mt-1">Optional. Stored in user metadata. Leave blank to keep existing.</div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="border rounded-md p-3 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                      <div>
-                                        <div className="font-medium">Use WhatsApp Template</div>
-                                        <div className="text-xs text-gray-500">Recommended for messages outside the 24h window.</div>
-                                      </div>
-                                      <Switch checked={waUseTemplate} onCheckedChange={(v: boolean) => setWaUseTemplate(v)} />
-                                    </div>
-                                    {waUseTemplate && (
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div>
-                                          <Label className="text-sm">Template Name</Label>
-                                          <Input value={waTemplateName} onChange={(e) => setWaTemplateName(e.target.value)} placeholder="e.g., appointment_confirm" />
-                                        </div>
-                                        <div>
-                                          <Label className="text-sm">Language Code</Label>
-                                          <Input value={waTemplateLanguage} onChange={(e) => setWaTemplateLanguage(e.target.value)} placeholder="e.g., en, en_US, hi" />
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <div className="border rounded-md p-3 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                      <div>
-                                        <div className="font-medium">Templates</div>
-                                        <div className="text-xs text-gray-500">Create and customize WhatsApp templates for common actions.</div>
-                                      </div>
-                                      <Button size="sm" variant="outline" onClick={() => void openTemplateEditor()}>Manage</Button>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex justify-end gap-2">
-                                    <Button variant="outline" onClick={() => setWaOpen(false)}>Close</Button>
-                                    <Button onClick={() => void saveWhatsAppSettings()}>Save</Button>
-                                  </div>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          )}
+                        <div className="flex items-center gap-1">
+                          <Button variant="outline" size="sm" onClick={() => onEdit(u)}><Edit /> Edit</Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="size-8" aria-label={`More actions for ${u.firstName} ${u.lastName}`.trim()}><MoreHorizontal /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onSelect={() => setResetUser(u)}><KeyRound /> Reset password</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => void openRolePerms(u)}><Settings /> Role & Permissions</DropdownMenuItem>
+                              {u.role === 'DOCTOR' && <DropdownMenuItem onSelect={() => { setSelectedUser(u); setWhOpen(true); }}><Clock /> Working Hours</DropdownMenuItem>}
+                              {u.role === 'DOCTOR' && <DropdownMenuItem onSelect={() => openWhatsAppSettings(u)}><MessageSquare /> WhatsApp Settings</DropdownMenuItem>}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem variant="destructive" onSelect={() => void onDelete(u)}><Trash2 /> Delete</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -753,6 +627,176 @@ export default function UsersManagement() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={whOpen && !!selectedUser} onOpenChange={(open: boolean) => { setWhOpen(open); if (!open) setSelectedUser(null); }}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Availability: Dr. {selectedUser?.firstName} {selectedUser?.lastName}</DialogTitle>
+          </DialogHeader>
+          {whOpen && selectedUser && <DoctorAvailabilitySettings doctorId={selectedUser.id} canManageHolidays />}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={permOpen && !!selectedUser} onOpenChange={(open: boolean) => { setPermOpen(open); if (!open) setSelectedUser(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Role & Permissions for {selectedUser?.firstName} {selectedUser?.lastName}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div className="md:col-span-4 space-y-3">
+              <div>
+                <Label>Role</Label>
+                <Select value={roleSelect} onValueChange={(v: string) => setRoleSelect(v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select role" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                    <SelectItem value="MANAGER">Manager</SelectItem>
+                    <SelectItem value="DOCTOR">Doctor</SelectItem>
+                    <SelectItem value="NURSE">Nurse</SelectItem>
+                    <SelectItem value="RECEPTION">Receptionist</SelectItem>
+                    <SelectItem value="PHARMACIST">Pharmacist</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" onClick={() => void applyRole(roleSelect as string)}>Apply Role</Button>
+                  <Button size="sm" variant="outline" onClick={() => setRolePerms([])}>Clear All</Button>
+                </div>
+              </div>
+              <div>
+                <Label>Permissions</Label>
+                <div className="text-xs text-gray-500">Selected: {rolePerms.length}</div>
+                {alwaysPerms.length > 0 && (
+                  <p className="text-xs text-gray-500">
+                    This role always has {alwaysPerms.includes('*') ? 'every permission' : alwaysPerms.join(', ')}; unticking cannot remove them.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="md:col-span-8">
+              {permLoad === 'failed' && (
+                <p role="alert" className="text-sm text-red-600">Could not load roles and permissions. Close this window and try again.</p>
+              )}
+              <div className="mt-2 max-h-80 overflow-auto space-y-4 pr-1">
+                {Object.entries(groupedPermissions).map(([group, perms]) => (
+                  <div key={group}>
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium capitalize">{group} <span className="text-xs text-gray-500">({perms.length})</span></div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => {
+                          const next = new Set(rolePerms);
+                          perms.forEach((p) => next.add(p));
+                          setRolePerms(Array.from(next));
+                        }}>Select all</Button>
+                        <Button variant="outline" size="sm" onClick={() => {
+                          const next = new Set(rolePerms);
+                          perms.forEach((p) => next.delete(p));
+                          setRolePerms(Array.from(next));
+                        }}>Clear</Button>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {perms.map((p) => {
+                        const checked = rolePerms.includes(p);
+                        return (
+                          <label key={p} className="flex items-center gap-2 text-sm">
+                            <input
+                              aria-label={p}
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                const next = new Set(rolePerms);
+                                if (!e.target.checked) next.delete(p);
+                                else [p, ...coveredBy(p, allPermissions)].forEach((name) => next.add(name));
+                                setRolePerms(Array.from(next));
+                              }}
+                            />
+                            <span className="truncate" title={p}>{p}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end mt-3">
+                <Button disabled={permLoad !== 'ready'} onClick={() => void applyPermissions(rolePerms)}>Save Permissions</Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={waOpen && !!selectedUser} onOpenChange={(open: boolean) => { setWaOpen(open); if (!open) setSelectedUser(null); }}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Doctor WhatsApp Settings</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="border rounded-md p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">Send WhatsApp on appointment creation</div>
+                  <div className="text-xs text-gray-500">Automatic confirmation to patients when this doctor is assigned.</div>
+                </div>
+                <Switch checked={waAutoConfirm} onCheckedChange={(v: boolean) => setWaAutoConfirm(v)} />
+              </div>
+              <div className="text-xs text-gray-500">Requires backend WhatsApp credentials. Uses text messages by default.</div>
+            </div>
+
+            <div className="border rounded-md p-3 space-y-3">
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <Label className="text-sm">Doctor WhatsApp Phone Number ID</Label>
+                  <Input value={waPhoneNumberId} onChange={(e) => setWaPhoneNumberId(e.target.value)} placeholder="e.g., 123456789012345" />
+                  <div className="text-xs text-gray-500 mt-1">Optional. Overrides clinic default phone number ID.</div>
+                </div>
+                <div>
+                  <Label className="text-sm">Doctor WhatsApp Access Token</Label>
+                  <Input type="password" value={waAccessToken} onChange={(e) => setWaAccessToken(e.target.value)} placeholder="Paste long-lived access token" />
+                  <div className="text-xs text-gray-500 mt-1">Optional. Stored in user metadata. Leave blank to keep existing.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="border rounded-md p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">Use WhatsApp Template</div>
+                  <div className="text-xs text-gray-500">Recommended for messages outside the 24h window.</div>
+                </div>
+                <Switch checked={waUseTemplate} onCheckedChange={(v: boolean) => setWaUseTemplate(v)} />
+              </div>
+              {waUseTemplate && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-sm">Template Name</Label>
+                    <Input value={waTemplateName} onChange={(e) => setWaTemplateName(e.target.value)} placeholder="e.g., appointment_confirm" />
+                  </div>
+                  <div>
+                    <Label className="text-sm">Language Code</Label>
+                    <Input value={waTemplateLanguage} onChange={(e) => setWaTemplateLanguage(e.target.value)} placeholder="e.g., en, en_US, hi" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border rounded-md p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">Templates</div>
+                  <div className="text-xs text-gray-500">Create and customize WhatsApp templates for common actions.</div>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => void openTemplateEditor()}>Manage</Button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setWaOpen(false)}>Close</Button>
+              <Button onClick={() => void saveWhatsAppSettings()}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {resetUser && <ResetCodeDialog user={resetUser} open onOpenChange={(open: boolean) => { if (!open) setResetUser(null); }} />}
+      {confirmDialog}
 
       {/* WhatsApp Template Editor Modal */}
       <Dialog open={tplOpen} onOpenChange={setTplOpen}>

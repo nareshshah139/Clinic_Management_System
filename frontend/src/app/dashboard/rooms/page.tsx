@@ -16,9 +16,9 @@ export default function RoomsPage() {
   const canManageRooms = role === 'ADMIN' || role === 'DOCTOR' || role === 'OWNER';
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <PageHeader title={<>Room Management</>} description={<>Manage room schedules, occupancy, and configurations</>} actions={<><QuickGuide
-          title="Room Management Guide"
+    <div className="space-y-6">
+      <PageHeader title="Rooms" description="Room schedules, occupancy and setup." actions={<><QuickGuide
+          title="Rooms guide"
           sections={[
             {
               title: "Calendar View",
@@ -65,10 +65,6 @@ export default function RoomsPage() {
         </TabsList>
 
         <TabsContent value="calendar" className="space-y-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar className="h-5 w-5 text-blue-600" />
-            <h2 className="text-xl font-semibold">Room Calendar & Occupancy</h2>
-          </div>
           <div data-tour="room-calendar">
             <RoomCalendar />
           </div>
@@ -76,10 +72,6 @@ export default function RoomsPage() {
 
         {canManageRooms && (
           <TabsContent value="management" className="space-y-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Settings className="h-5 w-5 text-blue-600" />
-              <h2 className="text-xl font-semibold">Room Configuration & Management</h2>
-            </div>
             <RoomsManagement />
           </TabsContent>
         )}

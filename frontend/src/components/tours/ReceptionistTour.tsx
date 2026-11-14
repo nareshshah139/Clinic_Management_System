@@ -271,7 +271,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
       {
         intro: `
           <div class="space-y-2">
-            <h3 class="text-lg font-semibold">Welcome to the Receptionist Dashboard! 🎉</h3>
+            <h3 class="text-lg font-semibold">Welcome to the Receptionist Dashboard!</h3>
             <p>Let's take a quick tour of your main responsibilities and how to navigate the system effectively.</p>
           </div>
         `,
@@ -327,7 +327,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
-              <span class="text-3xl">📅</span>
               <h3 class="text-xl font-bold text-blue-600">Welcome to Appointment Management!</h3>
             </div>
             <p class="text-base leading-relaxed">
@@ -337,7 +336,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </p>
             <div class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-md">
               <p class="text-sm text-blue-900">
-                <strong>📚 What you'll learn:</strong> Doctor selection, date navigation, booking appointments, 
+                <strong>What you'll learn:</strong> Doctor selection, date navigation, booking appointments, 
                 managing schedules, and handling common scenarios.
               </p>
             </div>
@@ -350,14 +349,13 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3">
             <div class="flex items-center gap-2">
-              <span class="text-2xl">👨‍⚕️</span>
               <h4 class="text-lg font-semibold">Step 1: Select a Doctor</h4>
             </div>
             <p class="text-sm leading-relaxed">
               <strong>Start here every time!</strong> Choose which doctor's schedule you want to view and manage.
             </p>
             <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-md text-sm">
-              <p class="font-semibold text-amber-900 mb-1">💡 Pro Tip:</p>
+              <p class="font-semibold text-amber-900 mb-1">Pro Tip:</p>
               <p class="text-amber-800">
                 The system remembers your last selected doctor, so you don't have to re-select 
                 on every visit. Great for front desk staff assigned to specific doctors!
@@ -376,7 +374,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3">
             <div class="flex items-center gap-2">
-              <span class="text-2xl">📆</span>
               <h4 class="text-lg font-semibold">Step 2: Choose the Date</h4>
             </div>
             <p class="text-sm leading-relaxed">
@@ -385,19 +382,16 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </p>
             <div class="space-y-2 text-sm mt-3">
               <div class="flex items-start gap-2">
-                <span class="text-green-600 font-bold">✓</span>
                 <div>
                   <strong>Same-day appointments:</strong> Keep today's date selected
                 </div>
               </div>
               <div class="flex items-start gap-2">
-                <span class="text-blue-600 font-bold">✓</span>
                 <div>
                   <strong>Future bookings:</strong> Pick any upcoming date (up to 3 months ahead)
                 </div>
               </div>
               <div class="flex items-start gap-2">
-                <span class="text-purple-600 font-bold">✓</span>
                 <div>
                   <strong>Rescheduling:</strong> Change dates to find available slots
                 </div>
@@ -416,7 +410,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3">
             <div class="flex items-center gap-2">
-              <span class="text-2xl">👁️</span>
               <h4 class="text-lg font-semibold">Step 3: Choose Your View</h4>
             </div>
             <p class="text-sm leading-relaxed mb-3">
@@ -453,7 +446,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </div>
             
             <div class="bg-purple-50 border-l-4 border-purple-500 p-3 rounded-md text-xs mt-3">
-              <strong class="text-purple-900">💡 When to use what:</strong>
+              <strong class="text-purple-900">When to use what:</strong>
               <p class="text-purple-800 mt-1">
                 Use <strong>Calendar</strong> when the schedule is complex or you need to see the big picture. 
                 Use <strong>Slots</strong> for straightforward, quick bookings.
@@ -468,7 +461,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
-              <span class="text-3xl">➕</span>
               <h3 class="text-xl font-bold text-green-600">Booking a New Appointment</h3>
             </div>
             
@@ -525,7 +517,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </div>
             
             <div class="bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded-md text-sm">
-              <p class="font-semibold text-yellow-900">⚡ Speed Booking Shortcut:</p>
+              <p class="font-semibold text-yellow-900">Speed Booking Shortcut:</p>
               <p class="text-yellow-800 text-xs mt-1">
                 Most appointments are 30 minutes. Select patient → click slot → press Enter. 
                 The system auto-selects 30-min duration!
@@ -539,7 +531,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
-              <span class="text-3xl">🎨</span>
               <h3 class="text-xl font-bold text-indigo-600">Understanding Appointment Colors</h3>
             </div>
             
@@ -577,8 +568,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
               
               <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(226, 232, 240, 0.5); border-left: 4px solid #94a3b8;">
-                <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-xl"
-                     style="background-color: rgba(226, 232, 240, 0.95); color: #475569;">✓</div>
                 <div class="flex-1">
                   <p class="font-bold text-slate-900">Completed (Lighter Gray)</p>
                   <p class="text-xs text-slate-800">Doctor finished consultation - ready for billing</p>
@@ -587,8 +576,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
               
               <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(34, 197, 94, 0.15); border-left: 4px solid #22c55e;">
-                <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center text-white font-bold text-xl"
-                     style="background-color: #22c55e;">★</div>
                 <div class="flex-1">
                   <p class="font-bold text-green-900">Newly Booked (Green Highlight)</p>
                   <p class="text-xs text-green-800">Just booked in the last few seconds - temporary visual feedback</p>
@@ -596,8 +583,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
               
               <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(251, 191, 36, 0.15); border-left: 4px solid #fbbf24;">
-                <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center text-white font-bold text-lg"
-                     style="background-color: #fbbf24;">⏳</div>
                 <div class="flex-1">
                   <p class="font-bold text-amber-900">Booking In Progress (Yellow)</p>
                   <p class="text-xs text-amber-800">Someone is currently booking this slot - wait for it to complete</p>
@@ -606,7 +591,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </div>
             
             <div class="p-3 rounded-lg text-xs mt-3" style="background-color: rgba(219, 234, 254, 0.5); border: 1px solid #93c5fd;">
-              <p class="font-semibold text-blue-900 mb-1">ℹ️ Viewing Appointment Status:</p>
+              <p class="font-semibold text-blue-900 mb-1">Viewing Appointment Status:</p>
               <p class="text-blue-800">
                 To see if a patient is <strong>SCHEDULED, CHECKED-IN, or IN-PROGRESS</strong>, 
                 <strong>double-click the appointment</strong> to open the details dialog. 
@@ -615,7 +600,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </div>
             
             <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(237, 233, 254, 0.5); border: 1px solid #d8b4fe;">
-              <p class="font-semibold text-purple-900 mb-1">🔍 Finding the Legend:</p>
+              <p class="font-semibold text-purple-900 mb-1">Finding the Legend:</p>
               <p class="text-purple-800">
                 The calendar page shows a color legend at the top explaining all colors. 
                 Refer to it anytime you need a reminder of what each color means!
@@ -623,7 +608,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </div>
             
             <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(251, 191, 36, 0.15); border: 1px solid #fcd34d;">
-              <p class="font-semibold text-amber-900 mb-1">💡 Pro Tip:</p>
+              <p class="font-semibold text-amber-900 mb-1">Pro Tip:</p>
               <p class="text-amber-800">
                 <strong>Past appointments</strong> show in even lighter shades. 
                 <strong>Cancelled appointments</strong> don't appear in the calendar at all - 
@@ -638,7 +623,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
-              <span class="text-3xl">✏️</span>
               <h3 class="text-xl font-bold text-orange-600">Modifying Appointments</h3>
             </div>
             
@@ -648,7 +632,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             
             <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
               <p class="font-semibold text-orange-900 mb-3 flex items-center gap-2">
-                <span class="text-lg">👆</span> Interacting with Appointments:
+                Interacting with Appointments:
               </p>
               
               <div class="space-y-3 text-sm">
@@ -686,7 +670,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </div>
             
             <div class="bg-gradient-to-r from-pink-50 to-purple-50 p-3 rounded-lg border border-pink-200 text-sm mt-3">
-              <p class="font-bold text-pink-900 mb-2">📞 Common Receptionist Scenarios:</p>
+              <p class="font-bold text-pink-900 mb-2">Common Receptionist Scenarios:</p>
               <div class="space-y-2 text-xs">
                 <div class="flex gap-2">
                   <span class="text-pink-600 font-bold">1.</span>
@@ -722,7 +706,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
-              <span class="text-3xl">🚀</span>
               <h3 class="text-xl font-bold text-teal-600">Pro Tips & Time Savers</h3>
             </div>
             
@@ -733,7 +716,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <div class="space-y-3">
               <div class="bg-gradient-to-r from-teal-50 to-cyan-50 p-3 rounded-lg border-l-4 border-teal-500">
                 <div class="flex items-start gap-2">
-                  <span class="text-2xl">🖱️</span>
                   <div class="flex-1">
                     <p class="font-bold text-teal-900 text-sm">Drag to Select Time Range</p>
                     <p class="text-xs text-teal-800 mt-1">
@@ -746,7 +728,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               
               <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border-l-4 border-blue-500">
                 <div class="flex items-start gap-2">
-                  <span class="text-2xl">💾</span>
                   <div class="flex-1">
                     <p class="font-bold text-blue-900 text-sm">Auto-Save Your Preferences</p>
                     <p class="text-xs text-blue-800 mt-1">
@@ -758,7 +739,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               
               <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg border-l-4 border-purple-500">
                 <div class="flex items-start gap-2">
-                  <span class="text-2xl">⏰</span>
                   <div class="flex-1">
                     <p class="font-bold text-purple-900 text-sm">Smart Slot Detection</p>
                     <p class="text-xs text-purple-800 mt-1">
@@ -770,7 +750,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               
               <div class="bg-gradient-to-r from-amber-50 to-orange-50 p-3 rounded-lg border-l-4 border-amber-500">
                 <div class="flex items-start gap-2">
-                  <span class="text-2xl">🔍</span>
                   <div class="flex-1">
                     <p class="font-bold text-amber-900 text-sm">Quick Patient Search</p>
                     <p class="text-xs text-amber-800 mt-1">
@@ -783,7 +762,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               
               <div class="bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded-lg border-l-4 border-green-500">
                 <div class="flex items-start gap-2">
-                  <span class="text-2xl">📋</span>
                   <div class="flex-1">
                     <p class="font-bold text-green-900 text-sm">Batch Operations</p>
                     <p class="text-xs text-green-800 mt-1">
@@ -796,9 +774,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             
             <div class="bg-gradient-to-br from-rose-100 via-purple-100 to-blue-100 p-4 rounded-lg border-2 border-purple-300 mt-4">
               <p class="font-bold text-purple-900 text-center mb-2 flex items-center justify-center gap-2">
-                <span class="text-xl">⭐</span>
                 <span>Golden Rule for Busy Days</span>
-                <span class="text-xl">⭐</span>
               </p>
               <p class="text-sm text-purple-900 text-center leading-relaxed">
                 Use <strong>Calendar View</strong> during peak hours to see the big picture. 
@@ -814,9 +790,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-4 p-1">
             <div class="flex items-center gap-2 justify-center">
-              <span class="text-4xl">🎉</span>
               <h3 class="text-2xl font-bold text-green-600">You're All Set!</h3>
-              <span class="text-4xl">🎉</span>
             </div>
             
             <div class="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border-2 border-green-300">
@@ -825,22 +799,22 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </p>
               
               <div class="bg-white p-4 rounded-lg shadow-sm">
-                <p class="font-bold text-green-900 mb-2 text-center">📚 Quick Recap:</p>
+                <p class="font-bold text-green-900 mb-2 text-center">Quick Recap:</p>
                 <div class="grid grid-cols-2 gap-3 text-xs">
                   <div class="text-center p-2 bg-green-50 rounded-md">
-                    <div class="font-bold text-green-900">✓ Doctor & Date</div>
+                    <div class="font-bold text-green-900">Doctor & Date</div>
                     <div class="text-green-700">Always select first</div>
                   </div>
                   <div class="text-center p-2 bg-blue-50 rounded-md">
-                    <div class="font-bold text-blue-900">✓ Search Patient</div>
+                    <div class="font-bold text-blue-900">Search Patient</div>
                     <div class="text-blue-700">Before clicking slots</div>
                   </div>
                   <div class="text-center p-2 bg-purple-50 rounded-md">
-                    <div class="font-bold text-purple-900">✓ Click Slot</div>
+                    <div class="font-bold text-purple-900">Click Slot</div>
                     <div class="text-purple-700">Or drag for longer</div>
                   </div>
                   <div class="text-center p-2 bg-orange-50 rounded-md">
-                    <div class="font-bold text-orange-900">✓ Double-Click</div>
+                    <div class="font-bold text-orange-900">Double-Click</div>
                     <div class="text-orange-700">To modify existing</div>
                   </div>
                 </div>
@@ -855,7 +829,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </div>
             
             <div class="text-center text-sm text-gray-600">
-              <p>Happy scheduling! 😊</p>
+              <p>Happy scheduling!</p>
             </div>
           </div>
         `,
@@ -870,7 +844,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
       {
         intro: `
           <div class="space-y-2">
-            <h3 class="text-lg font-semibold">Patient Management 👥</h3>
+            <h3 class="text-lg font-semibold">Patient Management</h3>
             <p>Register new patients, search existing records, and manage patient information efficiently.</p>
           </div>
         `,
@@ -920,7 +894,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
       {
         intro: `
           <div class="space-y-2">
-            <h4 class="font-semibold">💡 Pro Tips</h4>
+            <h4 class="font-semibold">Pro Tips</h4>
             <ul class="list-disc pl-5 space-y-1 text-sm">
               <li>Always verify patient contact information during check-in</li>
               <li>Keep emergency contact details updated</li>
@@ -939,7 +913,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
       {
         intro: `
           <div class="space-y-2">
-            <h3 class="text-lg font-semibold">Room Management 🚪</h3>
+            <h3 class="text-lg font-semibold">Room Management</h3>
             <p>Track room availability and assign patients to consultation rooms.</p>
           </div>
         `,

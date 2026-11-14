@@ -32,7 +32,7 @@ interface PatientFormState {
   firstName: string;
   lastName: string;
   age: string;
-  gender: Gender;
+  gender: Gender | '';
   phone: string;
   email?: string;
   address?: string;
@@ -55,6 +55,14 @@ interface PatientFormState {
  * @cc [owner:nareshshah139,label:accessibility] patient-row-actions
  * Every patient row MUST show Start Visit and a "More actions for <name>" menu inside the table's visible box at 1280px and wider, without horizontal scrolling.
  */
+const REQUIRED_PATIENT_FIELDS = ['firstName', 'gender', 'phone'] as const;
+type RequiredPatientField = (typeof REQUIRED_PATIENT_FIELDS)[number];
+const MISSING_FIELD_MESSAGE: Record<RequiredPatientField, string> = {
+  firstName: "Enter the patient's first name.",
+  gender: "Choose the patient's gender.",
+  phone: "Enter the patient's phone number.",
+};
+
 export default function PatientsManagement() {
   const router = useRouter();
   const { toast } = useToast();
@@ -81,6 +89,7 @@ export default function PatientsManagement() {
     return 20;
   });
   const [error, setError] = useState<string | null>(null);
+  const [missingFields, setMissingFields] = useState<RequiredPatientField[]>([]);
   const [doctors, setDoctors] = useState<Array<{ id: string; firstName?: string; lastName?: string }>>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [linkPortalOpen, setLinkPortalOpen] = useState<boolean>(false);
@@ -94,7 +103,7 @@ export default function PatientsManagement() {
     firstName: '',
     lastName: '',
     age: '',
-    gender: 'OTHER',
+    gender: '',
     phone: '',
     email: '',
     address: '',
@@ -427,7 +436,7 @@ export default function PatientsManagement() {
       firstName: '',
       lastName: '',
       age: '',
-      gender: 'OTHER',
+      gender: '',
       phone: '',
       email: '',
       address: '',
@@ -440,7 +449,19 @@ export default function PatientsManagement() {
       walkinRoomId: '',
     });
     setError(null);
+    setMissingFields([]);
   };
+
+  const clearMissing = (field: RequiredPatientField) =>
+    setMissingFields((fields) => fields.filter((f) => f !== field));
+  const missingProps = (field: RequiredPatientField) =>
+    missingFields.includes(field)
+      ? { 'aria-invalid': true as const, 'aria-describedby': `${field}-missing` }
+      : {};
+  const missingMessage = (field: RequiredPatientField) =>
+    missingFields.includes(field) ? (
+      <p id={`${field}-missing`} className="mt-1 text-sm text-destructive">{MISSING_FIELD_MESSAGE[field]}</p>
+    ) : null;
 
   const submitPatient = async () => {
     try {
@@ -448,8 +469,10 @@ export default function PatientsManagement() {
       setError(null);
       
       // Basic validation
-      if (!form.firstName.trim() || !form.phone.trim()) {
-        setError('Please fill in all required fields (Name, Phone)');
+      const missing = REQUIRED_PATIENT_FIELDS.filter((field) => !String(form[field] ?? '').trim());
+      setMissingFields(missing);
+      if (missing.length) {
+        document.getElementById(missing[0])?.focus();
         return;
       }
       if (form.abhaId && form.abhaId.trim().length > 0) {
@@ -587,7 +610,7 @@ export default function PatientsManagement() {
       firstName: p.firstName,
       lastName: p.lastName,
       age: resolvedAge != null ? String(resolvedAge) : '',
-      gender: (p.gender as Gender) || 'OTHER',
+      gender: (['MALE', 'FEMALE', 'OTHER'] as const).find((g) => g === p.gender) ?? '',
       phone: p.phone,
       email: p.email || '',
       address: p.address || '',
@@ -764,14 +787,16 @@ export default function PatientsManagement() {
               <DialogTitle>{form.id ? 'Edit Patient' : 'Create Patient'}</DialogTitle>
             </DialogHeader>
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+              <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
                 {error}
               </div>
             )}
+            <p className="text-sm text-muted-foreground">Fields marked <span aria-hidden="true">*</span> are required.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+                <Label htmlFor="firstName">First Name<span aria-hidden="true" className="text-destructive"> *</span></Label>
+                <Input id="firstName" required aria-required="true" {...missingProps('firstName')} value={form.firstName} onChange={(e) => { setForm({ ...form, firstName: e.target.value }); clearMissing('firstName'); }} />
+                {missingMessage('firstName')}
               </div>
               <div>
                 <Label htmlFor="lastName">Last Name</Label>
@@ -782,9 +807,9 @@ export default function PatientsManagement() {
                 <Input id="age" type="number" min="0" max="150" placeholder="e.g. 35" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
               </div>
               <div>
-                <Label id="gender-label" htmlFor="gender">Gender</Label>
-                <Select value={form.gender} onValueChange={(v: Gender) => setForm({ ...form, gender: v })}>
-                  <SelectTrigger id="gender" aria-labelledby="gender-label">
+                <Label id="gender-label" htmlFor="gender">Gender<span aria-hidden="true" className="text-destructive"> *</span></Label>
+                <Select value={form.gender} onValueChange={(v: Gender) => { setForm({ ...form, gender: v }); clearMissing('gender'); }}>
+                  <SelectTrigger id="gender" aria-labelledby="gender-label" aria-required="true" {...missingProps('gender')}>
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
                   <SelectContent>
@@ -793,10 +818,12 @@ export default function PatientsManagement() {
                     <SelectItem value="OTHER">Other</SelectItem>
                   </SelectContent>
                 </Select>
+                {missingMessage('gender')}
               </div>
               <div className="md:col-span-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <Label htmlFor="phone">Phone<span aria-hidden="true" className="text-destructive"> *</span></Label>
+                <Input id="phone" type="tel" required aria-required="true" {...missingProps('phone')} value={form.phone} onChange={(e) => { setForm({ ...form, phone: e.target.value }); clearMissing('phone'); }} />
+                {missingMessage('phone')}
               </div>
               <div className="md:col-span-2">
                 <Label htmlFor="abhaId">ABHA ID (Ayushman Bharat Health Account)</Label>

@@ -243,6 +243,14 @@ export function getErrorMessage(error: any): string {
   return 'An unexpected error occurred';
 }
 
+const REFERENCE_SUFFIX = /\s*\(Reference: ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)\s*$/i;
+
+/** Splits the "(Reference: <uuid>)" that API errors end with, so the sentence can lead and the reference sit apart. */
+export function splitErrorReference(message: string): { text: string; reference?: string } {
+  const match = REFERENCE_SUFFIX.exec(message);
+  return match ? { text: message.slice(0, match.index), reference: match[1] } : { text: message };
+}
+
 export function isConflictError(error: any): boolean {
   return error?.status === 409;
 }

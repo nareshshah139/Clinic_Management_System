@@ -1,6 +1,9 @@
 import { PATIENT_HISTORY_CHANGED } from './patient-history';
 import { diagnosticResource, newRequestId, recordApiDiagnostic, validRequestId, type DiagnosticCode } from './api-diagnostics';
 const API_BASE_URL = '/api';
+/** Replace the framework's bare refusals so staff read what happened and what to do. */
+export const NO_ACCESS_MESSAGE = "You don't have access to this. Ask an admin to grant it.";
+export const TOO_MANY_REQUESTS_MESSAGE = 'Too many attempts. Wait a minute, then try again.';
 
 export interface ApiError extends Error {
   status?: number;
@@ -260,6 +263,12 @@ export class ApiClient {
             }
           }
 
+          if (response.status === 403 && (!body?.message || body.message === 'Forbidden resource')) {
+            body = { ...body, message: NO_ACCESS_MESSAGE };
+          }
+          if (response.status === 429 && (!body?.message || body.message.startsWith('ThrottlerException'))) {
+            body = { ...body, message: TOO_MANY_REQUESTS_MESSAGE };
+          }
           const apiErr: ApiError = new Error((body && body.message) || `HTTP ${response.status}`);
           apiErr.status = response.status;
           apiErr.body = body;

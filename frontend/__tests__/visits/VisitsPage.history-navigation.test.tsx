@@ -32,3 +32,13 @@ it('opens a patient deep link and allows returning to setup', async () => {
   await screen.findByRole('tab', { name: 'Patient History' });
   await waitFor(() => expect(screen.queryByTestId('medical-form')).not.toBeInTheDocument());
 });
+it('opens on the patient and doctor pickers, and lists matches by name and phone without internal ids', async () => {
+  jest.mocked(apiClient.getPatients).mockResolvedValue({ patients: [{ id: 'cmwft0hg900047d31j1bsifdp', name: 'Ananya Reddy', phone: '9848010000' }] } as never);
+  render(<VisitsPage />);
+  const search = await screen.findByPlaceholderText('Search name, phone, or email');
+  expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual(['Visit Documentation']);
+  expect(['Start New Visit', 'Your Role & Permissions', 'Available Features'].map((text) => screen.queryByText(text) !== null)).toEqual([true, false, false]);
+  fireEvent.focus(search);
+  const match = await screen.findByRole('button', { name: /Ananya Reddy/ });
+  expect(match).toHaveTextContent(/^Ananya Reddy9848010000$/);
+});

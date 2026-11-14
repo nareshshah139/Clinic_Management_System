@@ -47,7 +47,12 @@ import {
   Upload,
   History,
   Image,
-  Keyboard
+  Keyboard,
+  AlertTriangle,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react';
 import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import { apiClient } from '@/lib/api';
@@ -1734,7 +1739,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                   </div>
                   {patientDetails.allergies && (
                     <div className="p-2 bg-red-50 border border-red-200 rounded-md">
-                      <div className="text-xs font-medium text-red-800">⚠️ ALLERGIES</div>
+                      <div className="flex items-center gap-1 text-xs font-medium text-red-800"><AlertTriangle className="size-3.5" aria-hidden="true" /> Allergies</div>
                       <div className="text-sm text-red-700">{patientDetails.allergies}</div>
                     </div>
                   )}
@@ -1749,7 +1754,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
               
               {!patientDetails && patientId && (
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                  <div className="text-xs font-medium text-yellow-800">⚠️ Patient Loading</div>
+                  <div className="text-xs font-medium text-yellow-800">Loading patient</div>
                   <div className="text-sm text-yellow-700">
                     Loading patient data for ID: {patientId}
                     {patientName && <div className="mt-1">Name: {patientName}</div>}
@@ -2504,10 +2509,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                           <Input type="number" value={contentOffsetYPx} onChange={(e) => setContentOffsetYPx(Number(e.target.value) || 0)} />
                         </div>
                         <div className="flex gap-2">
-                          <Button type="button" variant="outline" onClick={() => setContentOffsetYPx((v) => v - 1)}>↑</Button>
-                          <Button type="button" variant="outline" onClick={() => setContentOffsetYPx((v) => v + 1)}>↓</Button>
-                          <Button type="button" variant="outline" onClick={() => setContentOffsetXPx((v) => v - 1)}>←</Button>
-                          <Button type="button" variant="outline" onClick={() => setContentOffsetXPx((v) => v + 1)}>→</Button>
+                          <Button type="button" variant="outline" size="icon" aria-label="Move content up" onClick={() => setContentOffsetYPx((v) => v - 1)}><ArrowUp /></Button>
+                          <Button type="button" variant="outline" size="icon" aria-label="Move content down" onClick={() => setContentOffsetYPx((v) => v + 1)}><ArrowDown /></Button>
+                          <Button type="button" variant="outline" size="icon" aria-label="Move content left" onClick={() => setContentOffsetXPx((v) => v - 1)}><ArrowLeft /></Button>
+                          <Button type="button" variant="outline" size="icon" aria-label="Move content right" onClick={() => setContentOffsetXPx((v) => v + 1)}><ArrowRight /></Button>
                         </div>
                         <div>
                           <Button type="button" variant="secondary" onClick={() => { setContentOffsetXPx(0); setContentOffsetYPx(0); }}>Reset Offsets</Button>

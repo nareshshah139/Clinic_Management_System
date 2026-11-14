@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { apiClient } from '@/lib/api';
 jest.mock('@/lib/api', () => ({ apiClient: { getAllPatientVisitHistory: jest.fn(), get: jest.fn() } }));
@@ -40,15 +40,13 @@ it('advances the editor version only from a successful photo mutation', async ()
   (global.fetch as jest.Mock).mockImplementation(async (_url, init) => ({ ok: true, json: async () => init?.method === 'DELETE'
     ? { items: [], visitVersion: 8 }
     : { items: [{ url: '/visits/current/photos/photo' }], visitVersion: 7 } }));
-  const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
-  try {
-    render(<VisitPhotos patientId="p" visitId="current" allowDelete onVisitVersion={onVisitVersion} />);
-    await screen.findByAltText('visit');
-    expect(onVisitVersion).not.toHaveBeenCalled();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
-    await screen.findByText('No photos attached to this visit');
-    expect(onVisitVersion).toHaveBeenCalledWith(8);
-  } finally { confirm.mockRestore(); }
+  render(<VisitPhotos patientId="p" visitId="current" allowDelete onVisitVersion={onVisitVersion} />);
+  await screen.findByAltText('visit');
+  expect(onVisitVersion).not.toHaveBeenCalled();
+  fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
+  fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete photo' }));
+  await screen.findByText('No photos attached to this visit');
+  expect(onVisitVersion).toHaveBeenCalledWith(8);
 });
 
 
@@ -58,15 +56,13 @@ it.each(['/visits/current/photos/photo', '/uploads/legacy.jpg', '/visits/photos/
   (global.fetch as jest.Mock).mockImplementation(async (_url, init) => init?.method === 'DELETE'
     ? { ok: false, status: 409 }
     : { ok: true, json: async () => ({ items: [{ url }], visitVersion: 4 }) });
-  const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
-  try {
-    render(<VisitPhotos patientId="p" visitId="current" allowDelete onClinicalConflict={onClinicalConflict} onVisitVersion={onVisitVersion} />);
-    await screen.findByAltText('visit');
-    fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
-    await waitFor(() => expect(onClinicalConflict).toHaveBeenCalledTimes(1));
-    expect(onVisitVersion).not.toHaveBeenCalled();
-    expect(screen.getByAltText('visit')).toBeInTheDocument();
-  } finally { confirm.mockRestore(); }
+  render(<VisitPhotos patientId="p" visitId="current" allowDelete onClinicalConflict={onClinicalConflict} onVisitVersion={onVisitVersion} />);
+  await screen.findByAltText('visit');
+  fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
+  fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete photo' }));
+  await waitFor(() => expect(onClinicalConflict).toHaveBeenCalledTimes(1));
+  expect(onVisitVersion).not.toHaveBeenCalled();
+  expect(screen.getByAltText('visit')).toBeInTheDocument();
 });
 
 

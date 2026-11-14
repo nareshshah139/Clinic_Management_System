@@ -10,7 +10,7 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
-jest.mock('@/lib/api', () => ({ apiClient: { getPatients: jest.fn() } }));
+jest.mock('@/lib/api', () => ({ apiClient: { getPatients: jest.fn(), getUsers: jest.fn().mockResolvedValue({ users: [] }), getRooms: jest.fn().mockResolvedValue([]), createPatient: jest.fn() } }));
 
 const PATIENTS = [
   { id: 'p-ananya', patientCode: 'ES93U', name: 'Ananya Reddy', gender: 'FEMALE', age: 28, phone: '9848010000', abhaId: '12345678901234', referralSource: 'Instagram', consultationType: 'OFFLINE', lastVisitAt: '2026-11-10T06:00:00.000Z', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
@@ -64,5 +64,26 @@ describe('PatientsManagement table', () => {
     push.mockReset();
     fireEvent.click(within(rowOf('Karthik N')).getByRole('button', { name: 'Start Visit' }));
     expect(push.mock.calls).toEqual([['/dashboard/visits?patientId=p-karthik&autoStart=true']]);
+  });
+
+  it('starts New Patient with no gender, marks required fields, and will not create until gender is chosen', async () => {
+    render(<PatientsManagement />);
+    await screen.findByRole('link', { name: 'Ananya Reddy' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'New Patient' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('combobox', { name: 'Gender' })).toHaveTextContent('Select gender');
+    expect(['First Name', 'Phone'].map((label) => within(dialog).getByRole('textbox', { name: label }).hasAttribute('required'))).toEqual([true, true]);
+    expect(within(dialog).getByText(/are required\./)).toHaveTextContent('Fields marked * are required.');
+
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'First Name' }), 'Meera');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Phone' }), '9848012345');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    const gender = within(dialog).getByRole('combobox', { name: 'Gender' });
+    expect(gender).toHaveAttribute('aria-invalid', 'true');
+    expect(gender).toHaveAccessibleDescription("Choose the patient's gender.");
+    expect(gender).toHaveFocus();
+    expect(within(dialog).getByRole('textbox', { name: 'Phone' })).not.toHaveAttribute('aria-invalid');
+    expect(apiClient.createPatient).not.toHaveBeenCalled();
   });
 });

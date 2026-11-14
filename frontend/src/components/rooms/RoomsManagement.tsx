@@ -3,7 +3,7 @@
 import { displayClinicDate } from '@/lib/date-display';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +17,8 @@ import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { Plus, Edit, Trash2, MapPin, Users } from 'lucide-react';
 
 import type { Room } from '@/lib/types';
+import { RoomTypeIcon } from './room-type-icon';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface RoomFormData {
   name: string;
@@ -32,6 +34,7 @@ export default function RoomsManagement() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const { toast } = useToast();
+  const [confirm, confirmDialog] = useConfirm();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -43,16 +46,16 @@ export default function RoomsManagement() {
   });
 
   const roomTypes = [
-    { value: 'Consultation', label: 'Consultation Room', icon: '🩺' },
-    { value: 'Procedure', label: 'Procedure Room', icon: '🏥' },
-    { value: 'Operation', label: 'Operation Theater', icon: '⚕️' },
-    { value: 'Telemed', label: 'Telemedicine Suite', icon: '💻' },
-    { value: 'Emergency', label: 'Emergency Room', icon: '🚨' },
-    { value: 'Recovery', label: 'Recovery Room', icon: '🛏️' },
-    { value: 'Waiting', label: 'Waiting Area', icon: '⏳' },
-    { value: 'Laboratory', label: 'Laboratory', icon: '🔬' },
-    { value: 'Imaging', label: 'Imaging Room', icon: '📷' },
-    { value: 'Pharmacy', label: 'Pharmacy', icon: '💊' },
+    { value: 'Consultation', label: 'Consultation Room' },
+    { value: 'Procedure', label: 'Procedure Room' },
+    { value: 'Operation', label: 'Operation Theater' },
+    { value: 'Telemed', label: 'Telemedicine Suite' },
+    { value: 'Emergency', label: 'Emergency Room' },
+    { value: 'Recovery', label: 'Recovery Room' },
+    { value: 'Waiting', label: 'Waiting Area' },
+    { value: 'Laboratory', label: 'Laboratory' },
+    { value: 'Imaging', label: 'Imaging Room' },
+    { value: 'Pharmacy', label: 'Pharmacy' },
   ];
 
   useEffect(() => {
@@ -125,9 +128,13 @@ export default function RoomsManagement() {
   };
 
   const handleDelete = async (room: Room) => {
-    if (!confirm(`Are you sure you want to delete "${room.name}"?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Delete ${room.name}?`,
+      description: 'A room that has ever had an appointment cannot be deleted. Turn it inactive instead.',
+      confirmLabel: 'Delete room',
+      destructive: true,
+    });
+    if (!ok) return;
 
     try {
       setLoading(true);
@@ -165,7 +172,7 @@ export default function RoomsManagement() {
   };
 
   const getRoomTypeInfo = (type: string) => {
-    return roomTypes.find(rt => rt.value === type) || { value: type, label: type, icon: '🏢' };
+    return roomTypes.find(rt => rt.value === type) || { value: type, label: type };
   };
 
   const getRoomStats = () => {
@@ -191,18 +198,6 @@ export default function RoomsManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Rooms Management</h2>
-          <p className="text-gray-600">Manage clinic rooms and their configurations</p>
-        </div>
-        <Button onClick={handleOpenAddDialog} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Add Room
-        </Button>
-      </div>
-
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -220,7 +215,7 @@ export default function RoomsManagement() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <span className="text-lg">🩺</span>
+              <RoomTypeIcon type="Consultation" className="size-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-gray-600">Consultation</p>
                 <p className="text-2xl font-bold">{stats.typeStats.find(s => s.value === 'Consultation')?.count || 0}</p>
@@ -232,7 +227,7 @@ export default function RoomsManagement() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <span className="text-lg">🏥</span>
+              <RoomTypeIcon type="Procedure" className="size-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-gray-600">Procedure</p>
                 <p className="text-2xl font-bold">{stats.typeStats.find(s => s.value === 'Procedure')?.count || 0}</p>
@@ -244,7 +239,7 @@ export default function RoomsManagement() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <span className="text-lg">💻</span>
+              <RoomTypeIcon type="Telemed" className="size-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-gray-600">Telemedicine</p>
                 <p className="text-2xl font-bold">{stats.typeStats.find(s => s.value === 'Telemed')?.count || 0}</p>
@@ -259,6 +254,12 @@ export default function RoomsManagement() {
         <CardHeader>
           <CardTitle>All Rooms</CardTitle>
           <CardDescription>View and manage all clinic rooms</CardDescription>
+          <CardAction>
+            <Button onClick={handleOpenAddDialog}>
+              <Plus className="h-4 w-4" />
+              Add Room
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent>
           {/* Filters */}
@@ -316,7 +317,7 @@ export default function RoomsManagement() {
                       <TableCell className="font-medium">{room.name}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span>{typeInfo.icon}</span>
+                          <RoomTypeIcon type={room.type} className="size-4 text-muted-foreground" />
                           <span>{typeInfo.label}</span>
                         </div>
                       </TableCell>
@@ -405,7 +406,7 @@ export default function RoomsManagement() {
                   {roomTypes.map((type) => (
                     <SelectItem key={type.value} value={type.value}>
                       <div className="flex items-center gap-2">
-                        <span>{type.icon}</span>
+                        <RoomTypeIcon type={type.value} />
                         <span>{type.label}</span>
                       </div>
                     </SelectItem>
@@ -448,6 +449,7 @@ export default function RoomsManagement() {
           </form>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </div>
   );
 } 

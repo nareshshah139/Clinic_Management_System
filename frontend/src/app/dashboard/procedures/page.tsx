@@ -17,30 +17,28 @@ import { Zap, User, Activity, Settings, Save } from 'lucide-react';
 import type { Patient, StaffSummary, VisitSummary, ProcedureVisitResponse } from '@/lib/types';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
+import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage } from '@/lib/utils';
 
 // Machine configurations
 const MACHINES = {
   'endymed-pro-max': {
     name: 'Endymed Pro Max',
-    icon: '⚡',
     parameters: ['Intensity', 'RF', 'Depth', 'Area Treated', 'Mode'],
     maxPasses: 8
   },
   'fotona-starwalker': {
     name: 'Fotona Starwalker',
-    icon: '✨',
     parameters: ['Area', 'Spot Size', 'Energy', 'Fluency', 'Frequency', 'Wavelength', 'PTP Mode', 'Area'],
     maxPasses: 8
   },
   'soprano-platinum-lhr': {
     name: 'Soprano Platinum LHR',
-    icon: '💫',
     parameters: ['Area', 'Fluence', 'Spot Size'],
     maxPasses: 8
   },
   'hydrafacial': {
     name: 'Hydrafacial',
-    icon: '💧',
     parameters: ['Actives Used', 'Area'],
     maxPasses: 1
   }
@@ -122,7 +120,8 @@ const formatDoctorName = (doctor?: StaffSummary | null): string => {
   return ['Dr.', doctor.firstName, doctor.lastName].filter(Boolean).join(' ');
 };
 
-export default function SmartProceduresPage() {
+export default function ProceduresPage() {
+  const { toast } = useToast();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<StaffSummary[]>([]);
   const [nurses, setNurses] = useState<StaffSummary[]>([]);
@@ -260,7 +259,7 @@ export default function SmartProceduresPage() {
    */
   const saveProcedure = async () => {
     if (!procedureData.patientId || !procedureData.doctorId || !procedureData.selectedMachine) {
-      alert('Please fill in all required fields');
+      toast({ variant: 'warning', title: 'Choose a patient, a doctor and a machine before saving.' });
       return;
     }
 
@@ -297,7 +296,7 @@ export default function SmartProceduresPage() {
       };
 
       await apiClient.createVisit(payload);
-      alert('Procedure saved successfully!');
+      toast({ variant: 'success', title: 'Procedure saved' });
       
       // Reset form
       setProcedureData({
@@ -310,7 +309,7 @@ export default function SmartProceduresPage() {
       });
     } catch (error) {
       console.error('Failed to save procedure:', error);
-      alert('Failed to save procedure. Please try again.');
+      toast({ variant: 'destructive', title: 'Could not save the procedure', description: getErrorMessage(error) });
     } finally {
       setSaving(false);
     }
@@ -448,7 +447,6 @@ export default function SmartProceduresPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <span className="text-2xl">{machine.icon}</span>
             {machine.name} Parameters
           </CardTitle>
           <CardDescription>Configure parameters for each pass</CardDescription>
@@ -494,12 +492,8 @@ export default function SmartProceduresPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <Card>
-        <CardHeader>
-          <PageHeader title="Smart Procedures Management" description="Advanced procedure planning and tracking with machine-specific parameters" actions={<><QuickGuide
-              title="Procedures Management Guide"
-              triggerVariant="ghost"
+      <PageHeader title="Procedures" description="Record a procedure session and the machine settings for each pass." actions={<><QuickGuide
+              title="Procedures guide"
               sections={[
                 {
                   title: "Creating Procedures",
@@ -530,14 +524,11 @@ export default function SmartProceduresPage() {
                 }
               ]}
             /></>} />
-        </CardHeader>
-      </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="new">New Procedure</TabsTrigger>
           <TabsTrigger value="history">Procedure History</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="new" className="space-y-6">
@@ -753,11 +744,10 @@ export default function SmartProceduresPage() {
                     key={key}
                     type="button"
                     variant={procedureData.selectedMachine === key ? 'default' : 'outline'}
-                    className="h-20 flex flex-col items-center justify-center"
+                    className="h-14"
                     onClick={() => updateProcedureData('selectedMachine', key)}
                   >
-                    <span className="text-2xl mb-1">{machine.icon}</span>
-                    <span className="text-xs text-center">{machine.name}</span>
+                    {machine.name}
                   </Button>
                 ))}
               </div>
@@ -832,21 +822,6 @@ export default function SmartProceduresPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="analytics" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Procedure Analytics</CardTitle>
-              <CardDescription>Insights and statistics about procedures</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-gray-500">
-                <Activity className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                <p>Analytics dashboard coming soon</p>
-                <p className="text-sm">Track procedure outcomes and performance metrics</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );

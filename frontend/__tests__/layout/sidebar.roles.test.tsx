@@ -81,7 +81,7 @@ describe('Daily Collection in the main menu', () => {
 });
 
 it.each([
-  ['OWNER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users', 'Fee list', 'Test Transcribe']],
+  ['OWNER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users', 'Fee list']],
   ['MANAGER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users']],
   ['NURSE', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Rooms']],
   ['RECEPTION', ['Dashboard', 'Patients', 'Appointments', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],
@@ -90,4 +90,13 @@ it.each([
   mockRole = role as string;
   render(<Sidebar />);
   expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getAllByRole('link').map((a) => a.textContent)).toEqual(expected);
+});
+
+it('carries the Linaé name instead of a generic product name, and no developer page', () => {
+  mockRole = 'OWNER';
+  mockPath = '/dashboard';
+  mockQuery = '';
+  render(<Sidebar />);
+  expect(screen.getByRole('img', { name: 'Linaé' })).toHaveAttribute('src', expect.stringContaining('linae-name.png'));
+  expect(screen.queryByText(/ClinicMS|Test Transcribe/)).not.toBeInTheDocument();
 });

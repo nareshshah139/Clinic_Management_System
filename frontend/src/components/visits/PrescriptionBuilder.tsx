@@ -6146,7 +6146,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             <div data-prescription-preview-sidebar className="print:hidden w-full sm:w-96 shrink-0 border-t sm:border-t-0 sm:border-l h-1/2 sm:h-full min-h-0 overflow-auto">
               <div className="p-4 space-y-4">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
+                  <div className="text-sm font-medium text-blue-900 mb-1">Print settings tip</div>
                   <div className="text-xs text-blue-700">
                     To remove browser headers/footers: In your browser's print dialog, go to <strong>More settings</strong> → 
                     turn OFF <strong>"Headers and footers"</strong> for a clean prescription print.
