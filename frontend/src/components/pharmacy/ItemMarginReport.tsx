@@ -347,7 +347,7 @@ export function ItemMarginReport() {
           />
         )}
         {state.status === "loaded" && (
-          <Table aria-label="Item-wise margin" className="min-w-[72rem]">
+          <Table aria-label="Item-wise margin" className="min-w-[72rem]" containerClassName="max-h-[70vh]">
             <TableHeader>
               <TableRow>
                 {COLUMNS.map((column) => (

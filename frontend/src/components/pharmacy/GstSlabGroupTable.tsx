@@ -63,7 +63,7 @@ export function GstSlabGroupTable({
   });
   const bandHead = "border-l px-2 text-center";
   return (
-    <Table aria-label={label} className="w-max min-w-full">
+    <Table aria-label={label} className="w-max min-w-full" containerClassName="max-h-[70vh]">
       <TableHeader className="z-30">
         <TableRow>
           {frozenColumns.map((column, index) => {
