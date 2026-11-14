@@ -16,6 +16,7 @@ import type {
   DrugInventoryChangeStatus,
   InventoryItem,
   RescheduleAppointmentPayload,
+  UserPermissions,
 } from './types';
 import type { InventoryItemRequest, InventoryItemRequestStatus, PendingApprovalResponse } from './inventory-item-requests';
 
@@ -921,6 +922,10 @@ export class ApiClient {
 
   async assignRole(userId: string, payload: { role: string; permissions?: string[] }) {
     return this.patch(`/users/${userId}/role`, payload);
+  }
+
+  async getUserPermissions(userId: string) {
+    return this.get<UserPermissions>(`/users/${userId}/permissions`);
   }
 
   async updateUserPermissions(userId: string, permissions: string[]) {

@@ -7,6 +7,7 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { readDoctorSignature, signatureDataUrl } from './doctor-signature';
 import { letterheadDataUrl, readDoctorLetterhead } from './doctor-letterhead';
+import { fixedGrants, permissionDeltas, tickedPermissions } from '../../shared/access/permission-grants';
 
 @Injectable()
 export class UsersService {
@@ -116,8 +117,10 @@ export class UsersService {
         ...createUserDto,
         password: hashedPassword,
         branchId: createUserDto.branchId || branchId,
-        status: UserStatus.ACTIVE,
-        permissions: createUserDto.permissions ? JSON.stringify(createUserDto.permissions) : null,
+        status: createUserDto.status ?? UserStatus.ACTIVE,
+        ...(createUserDto.permissions
+          ? await this.permissionColumns(createUserDto.role, createUserDto.permissions)
+          : { permissions: null }),
         metadata: createUserDto.metadata ? JSON.stringify(createUserDto.metadata) : null,
       },
       include: {
@@ -237,7 +240,10 @@ export class UsersService {
     const updateData: any = { ...updateUserDto };
     
     if (updateUserDto.permissions) {
-      updateData.permissions = JSON.stringify(updateUserDto.permissions);
+      Object.assign(updateData, await this.permissionColumns(updateUserDto.role ?? existingUser.role, updateUserDto.permissions));
+    } else if (updateUserDto.role && updateUserDto.role !== existingUser.role) {
+      // Saved and revoked permissions are relative to the old role; the user starts on the new role's own.
+      Object.assign(updateData, { permissions: null, revokedPermissions: null });
     }
     
     return this.formatUser(await this.saveUser(id, updateData));
@@ -364,26 +370,13 @@ export class UsersService {
       throw new NotFoundException('Role not found');
     }
 
-    // Determine permissions to set on user
-    let permissionsToSet: string[] | null = null;
-    if (assignRoleDto.permissions && Array.isArray(assignRoleDto.permissions)) {
-      permissionsToSet = assignRoleDto.permissions;
-    } else if (roleRecord.permissions) {
-      try {
-        const parsed = JSON.parse(roleRecord.permissions);
-        if (Array.isArray(parsed)) {
-          permissionsToSet = parsed.filter((p) => typeof p === 'string');
-        }
-      } catch {
-        permissionsToSet = null;
-      }
-    }
-
     const updated = await this.prisma.user.update({
       where: { id },
       data: {
         role: assignRoleDto.role as UserRole,
-        permissions: permissionsToSet ? JSON.stringify(permissionsToSet) : null,
+        ...(assignRoleDto.permissions
+          ? await this.permissionColumns(assignRoleDto.role, assignRoleDto.permissions)
+          : { permissions: null, revokedPermissions: null }),
       },
       include: { branch: true },
     });
@@ -402,13 +395,41 @@ export class UsersService {
 
     const updatedUser = await this.prisma.user.update({
       where: { id },
-      data: { permissions: JSON.stringify(updatePermissionsDto.permissions) },
+      data: await this.permissionColumns(user.role, updatePermissionsDto.permissions),
       include: {
         branch: true,
       },
     });
 
     return this.formatUser(updatedUser);
+  }
+
+  async getUserPermissions(id: string, branchId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, branchId },
+      select: { role: true, permissions: true, revokedPermissions: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const roleRecord = await this.prisma.role.findFirst({ where: { name: user.role }, select: { permissions: true } });
+    return {
+      permissions: tickedPermissions(user, roleRecord?.permissions, await this.listedPermissions()),
+      always: fixedGrants(user.role),
+    };
+  }
+
+  /** The two stored columns under which a user of this role may use exactly the ticked permissions. */
+  private async permissionColumns(role: string, ticked: readonly string[]) {
+    const roleRecord = await this.prisma.role.findFirst({ where: { name: role }, select: { permissions: true } });
+    const deltas = permissionDeltas(role, roleRecord?.permissions, ticked, await this.listedPermissions());
+    return { permissions: JSON.stringify(deltas.permissions), revokedPermissions: JSON.stringify(deltas.revokedPermissions) };
+  }
+
+  private async listedPermissions() {
+    return (await this.prisma.permission.findMany({ select: { name: true } })).map((permission) => permission.name);
   }
 
   // Branch Management Methods
@@ -582,7 +603,7 @@ export class UsersService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       }),
       this.prisma.permission.count({ where }),
     ]);
@@ -920,7 +941,7 @@ export class UsersService {
    * Formatted user responses MUST omit whatsappAccessToken from metadata while retaining
    * other settings; malformed stored metadata MUST NOT expose its raw value.
    */
-  private formatUser({ password: _password, resetToken: _resetToken, resetTokenExpiry: _resetTokenExpiry, googleRefreshToken: _googleRefreshToken, ...user }: any) {
+  private formatUser({ password: _password, resetToken: _resetToken, resetTokenExpiry: _resetTokenExpiry, googleRefreshToken: _googleRefreshToken, revokedPermissions: _revokedPermissions, ...user }: any) {
     let permissionsParsed: string[] | null = null;
     let metadataParsed: any = null;
     try {

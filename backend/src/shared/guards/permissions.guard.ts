@@ -2,15 +2,16 @@ import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY, PermissionRequirement } from '../decorators/permissions.decorator';
 import { PrismaService } from '../database/prisma.service';
-import { grantsForRole, parsePermissionList, permissionGrants } from '../access/permission-grants';
+import { userGrants } from '../access/permission-grants';
 
 /**
  * @cc [owner:nareshshah139,label:security] permission-gate
  * OWNER (from the token) and ADMIN or DOCTOR (from the stored user role, not the token) MUST
  * pass every Permissions() requirement. Other users MUST hold every string requirement and one
- * entry of every alternative group in the union of their role and user grants, plus pharmacy:*
- * and inventory:* for a stored PHARMACIST. A missing user, id or record, malformed grant JSON or
- * an empty group MUST grant nothing.
+ * entry of every alternative group in their role and saved user grants minus their revoked grants,
+ * and a revoked permission MUST be refused even when a broader held grant covers it. A stored
+ * PHARMACIST always holds pharmacy:* and inventory:*. A missing user, id or record, malformed
+ * grant JSON or an empty group MUST grant nothing.
  */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -54,7 +55,7 @@ export class PermissionsGuard implements CanActivate {
 
     const dbUser = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { permissions: true, role: true },
+      select: { permissions: true, revokedPermissions: true, role: true },
     });
 
     if (!dbUser) {
@@ -69,12 +70,7 @@ export class PermissionsGuard implements CanActivate {
     const roleRecord = await this.prisma.role
       .findFirst({ where: { name: dbUser.role }, select: { permissions: true } })
       .catch(() => null);
-    const grants = permissionGrants(
-      grantsForRole(dbUser.role, [
-        ...parsePermissionList(roleRecord?.permissions),
-        ...parsePermissionList(dbUser.permissions),
-      ]),
-    );
+    const grants = userGrants(dbUser, roleRecord?.permissions);
 
     return requiredPermissions.every((requirement) =>
       typeof requirement === 'string'

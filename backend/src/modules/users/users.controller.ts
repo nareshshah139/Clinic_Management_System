@@ -93,55 +93,6 @@ export class UsersController {
     return this.usersService.getUserDashboard(query, req.user.branchId);
   }
 
-  @Get(':id')
-  findUserById(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.usersService.findUserById(id, req.user.branchId);
-  }
-
-  @Patch(':id')
-  @Roles(...MANAGE)
-  updateUser(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.updateUser(id, updateUserDto, req.user.branchId);
-  }
-
-  @Delete(':id')
-  @Roles(...MANAGE)
-  deleteUser(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.usersService.deleteUser(id, req.user.branchId);
-  }
-
-  @Post(':id/change-password')
-  @Authenticated()
-  changePassword(@Param('id') id: string, @Body() changePasswordDto: ChangePasswordDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.changePassword(id, changePasswordDto, req.user);
-  }
-
-
-
-  @Patch(':id/profile')
-  @Authenticated()
-  updateProfile(@Param('id') id: string, @Body() updateProfileDto: UpdateProfileDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.updateProfile(id, updateProfileDto, req.user);
-  }
-
-  @Patch(':id/role')
-  @Roles(...MANAGE)
-  assignRole(@Param('id') id: string, @Body() assignRoleDto: AssignRoleDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.assignRole(id, assignRoleDto, req.user.branchId);
-  }
-
-  @Patch(':id/permissions')
-  @Roles(...MANAGE)
-  updatePermissions(@Param('id') id: string, @Body() updatePermissionsDto: UpdatePermissionsDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.updatePermissions(id, updatePermissionsDto, req.user.branchId);
-  }
-
-  @Patch(':id/status')
-  @Roles(...MANAGE)
-  updateUserStatus(@Param('id') id: string, @Body() userStatusDto: UserStatusDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.updateUserStatus(id, userStatusDto, req.user.branchId);
-  }
-
   // Branch Management Endpoints
   @Post('branches')
   @Roles(...MANAGE)
@@ -227,5 +178,64 @@ export class UsersController {
   @Roles(...MANAGE)
   deleteRole(@Param('id') id: string) {
     return this.usersService.deleteRole(id);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] users-static-routes-before-id
+   * GET /users/branches, /users/permissions, /users/roles, /users/statistics and /users/dashboard
+   * MUST reach their own handlers and never be read as a user id. Nest matches in declaration
+   * order, so every route that starts with `:id` stays below this line.
+   */
+  @Get(':id')
+  findUserById(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.usersService.findUserById(id, req.user.branchId);
+  }
+
+  @Patch(':id')
+  @Roles(...MANAGE)
+  updateUser(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req: AuthenticatedRequest) {
+    return this.usersService.updateUser(id, updateUserDto, req.user.branchId);
+  }
+
+  @Delete(':id')
+  @Roles(...MANAGE)
+  deleteUser(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.usersService.deleteUser(id, req.user.branchId);
+  }
+
+  @Post(':id/change-password')
+  @Authenticated()
+  changePassword(@Param('id') id: string, @Body() changePasswordDto: ChangePasswordDto, @Request() req: AuthenticatedRequest) {
+    return this.usersService.changePassword(id, changePasswordDto, req.user);
+  }
+
+  @Patch(':id/profile')
+  @Authenticated()
+  updateProfile(@Param('id') id: string, @Body() updateProfileDto: UpdateProfileDto, @Request() req: AuthenticatedRequest) {
+    return this.usersService.updateProfile(id, updateProfileDto, req.user);
+  }
+
+  @Patch(':id/role')
+  @Roles(...MANAGE)
+  assignRole(@Param('id') id: string, @Body() assignRoleDto: AssignRoleDto, @Request() req: AuthenticatedRequest) {
+    return this.usersService.assignRole(id, assignRoleDto, req.user.branchId);
+  }
+
+  @Get(':id/permissions')
+  @Roles(...MANAGE)
+  getUserPermissions(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.usersService.getUserPermissions(id, req.user.branchId);
+  }
+
+  @Patch(':id/permissions')
+  @Roles(...MANAGE)
+  updatePermissions(@Param('id') id: string, @Body() updatePermissionsDto: UpdatePermissionsDto, @Request() req: AuthenticatedRequest) {
+    return this.usersService.updatePermissions(id, updatePermissionsDto, req.user.branchId);
+  }
+
+  @Patch(':id/status')
+  @Roles(...MANAGE)
+  updateUserStatus(@Param('id') id: string, @Body() userStatusDto: UserStatusDto, @Request() req: AuthenticatedRequest) {
+    return this.usersService.updateUserStatus(id, userStatusDto, req.user.branchId);
   }
 }

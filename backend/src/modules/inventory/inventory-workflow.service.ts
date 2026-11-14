@@ -42,12 +42,7 @@ import {
   rupees,
   supplierReturnReason,
 } from './supplier-return';
-import {
-  grantsForRole,
-  parsePermissionList,
-  permissionGrants,
-  PermissionGrants,
-} from '../../shared/access/permission-grants';
+import { PermissionGrants, userGrants } from '../../shared/access/permission-grants';
 import { storedOptimizationRules } from './stock-optimization';
 import {
   parseReconciliationInput,
@@ -125,7 +120,7 @@ export class InventoryWorkflowService {
       throw new ForbiddenException('Authenticated branch and user required');
     const user = await this.prisma.user.findFirst({
       where: { id: actor.id, branchId: actor.branchId },
-      select: { permissions: true, role: true },
+      select: { permissions: true, revokedPermissions: true, role: true },
     });
     if (!user || user.role !== actor.role)
       throw new ForbiddenException(
@@ -226,29 +221,24 @@ export class InventoryWorkflowService {
     for (const key of LEGACY_COUNT_SETTINGS) delete value[key];
     return value;
   }
-  async grantsOf(user: { role: string; permissions: unknown }) {
+  async grantsOf(user: { role: string; permissions: unknown; revokedPermissions: unknown }) {
     const role = await this.prisma.role.findFirst({
       where: { name: user.role as any },
       select: { permissions: true },
     });
-    return permissionGrants(
-      grantsForRole(user.role, [
-        ...parsePermissionList(user.permissions),
-        ...parsePermissionList(role?.permissions),
-      ]),
-    );
+    return userGrants(user, role?.permissions);
   }
   async countStaff(branchId: string) {
     const users = await this.prisma.user.findMany({
       where: { branchId, isActive: true },
-      select: { id: true, firstName: true, lastName: true, role: true, permissions: true },
+      select: { id: true, firstName: true, lastName: true, role: true, permissions: true, revokedPermissions: true },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
     const roles = new Map(
       (await this.prisma.role.findMany({ where: { name: { in: [...new Set(users.map((user) => user.role))] as any } }, select: { name: true, permissions: true } })).map((role) => [role.name as string, role.permissions]),
     );
     return users
-      .filter((user) => permissionGrants(grantsForRole(user.role, [...parsePermissionList(user.permissions), ...parsePermissionList(roles.get(user.role))])).has(this.permissionFor('COUNT', true)))
+      .filter((user) => userGrants(user, roles.get(user.role)).has(this.permissionFor('COUNT', true)))
       .map((user) => ({ id: user.id, name: `${user.firstName} ${user.lastName}`.trim(), role: user.role }));
   }
   async saveSettings(actor: WorkflowActor, input: Record<string, any>) {

@@ -12,7 +12,7 @@ import { diagnosticValidationPipe } from '../../../shared/logging/http-observabi
 const row = (id: string, role: string) => ({
   id, role, branchId: 'branch', isActive: true, firstName: id, lastName: 'Synthetic', email: `${id}@example.test`,
   password: '$2b$10$synthetic-hash', resetToken: 'synthetic-reset', resetTokenExpiry: new Date(), googleRefreshToken: 'synthetic-refresh',
-  permissions: null, metadata: role === 'DOCTOR' ? JSON.stringify({ whatsappAccessToken: 'synthetic-whatsapp-token', textSize: 'LARGE' }) : null, branch: { id: 'branch' },
+  permissions: null, revokedPermissions: null, metadata: role === 'DOCTOR' ? JSON.stringify({ whatsappAccessToken: 'synthetic-whatsapp-token', textSize: 'LARGE' }) : null, branch: { id: 'branch' },
 });
 
 const matches = (record: Record<string, unknown>, where: Record<string, unknown> = {}) =>
@@ -48,13 +48,18 @@ describe('/users access control', () => {
     target: row('target', 'NURSE'), lab: row('lab', 'LAB_TECH'),
   };
   const roleRecord = { id: 'role-admin', name: 'ADMIN', permissions: null };
+  const roleRecords: Record<string, { permissions: string | null }> = {
+    ADMIN: roleRecord,
+    NURSE: { permissions: JSON.stringify(['appointments:read', 'visits:read', 'patients:read']) },
+  };
   const branchRecord = { id: 'empty-branch', name: 'Empty' };
-  const permissionRecord = { id: 'perm', name: 'perm' };
+  const permissionRecord = { id: 'perm', name: 'appointments:read' };
   const byWhere = (where: any) => Object.values(users).find(user => matches(user, where)) ?? null;
   const db: any = {
     user: {
       findMany: jest.fn(async () => Object.values(users)),
       count: jest.fn(async ({ where }) => Object.values(users).filter(user => matches(user, where)).length),
+      groupBy: jest.fn(async () => []),
       findFirst: jest.fn(async ({ where }) => byWhere(where)),
       findUnique: jest.fn(async ({ where }) => users[where.id] ?? null),
       create: jest.fn(async ({ data }) => ({ ...data, id: 'created' })),
@@ -63,7 +68,9 @@ describe('/users access control', () => {
       delete: jest.fn(async ({ where }) => users[where.id]),
     },
     role: {
-      findFirst: jest.fn(async ({ where }) => where.name === roleRecord.name ? roleRecord : null),
+      findFirst: jest.fn(async ({ where }) => roleRecords[where.name] ?? null),
+      findMany: jest.fn(async () => [roleRecord]),
+      count: jest.fn(async () => 1),
       findUnique: jest.fn(async ({ where }) => where.id === roleRecord.id ? roleRecord : null),
       create: jest.fn(async ({ data }) => ({ ...data, id: 'created' })),
       update: jest.fn(async ({ data }) => ({ ...roleRecord, ...data })),
@@ -71,6 +78,8 @@ describe('/users access control', () => {
     },
     branch: {
       findFirst: jest.fn(async () => null),
+      findMany: jest.fn(async () => [branchRecord]),
+      count: jest.fn(async () => 1),
       findUnique: jest.fn(async ({ where }) => where.id === branchRecord.id ? branchRecord : null),
       create: jest.fn(async ({ data }) => ({ ...data, id: 'created' })),
       update: jest.fn(async ({ data }) => ({ ...branchRecord, ...data })),
@@ -78,6 +87,8 @@ describe('/users access control', () => {
     },
     permission: {
       findFirst: jest.fn(async () => null),
+      findMany: jest.fn(async () => [permissionRecord]),
+      count: jest.fn(async () => 1),
       findUnique: jest.fn(async ({ where }) => where.id === permissionRecord.id ? permissionRecord : null),
       create: jest.fn(async ({ data }) => ({ ...data, id: 'created' })),
       update: jest.fn(async ({ data }) => ({ ...permissionRecord, ...data })),
@@ -183,6 +194,134 @@ describe('/users access control', () => {
     await request(app.getHttpServer()).patch('/users/reception/profile').set(as('admin')).send({ firstName: 'Riya' }).expect(200);
     await request(app.getHttpServer()).post('/users/admin/change-password').set(as('reception'))
       .send({ currentPassword: 'Password1!', newPassword: 'Password2!', confirmPassword: 'Password2!' }).expect(403);
+  });
+
+  describe('list routes that share a path shape with /users/:id', () => {
+    it.each([
+      ['/users/roles?limit=100', 'roles', roleRecord],
+      ['/users/permissions?limit=100', 'permissions', permissionRecord],
+      ['/users/branches?limit=100', 'branches', branchRecord],
+    ] as const)('GET %s returns the list, not a user lookup', async (path, key, record) => {
+      const res = await request(app.getHttpServer()).get(path).set(as('admin')).expect(200);
+      expect(res.body[key]).toEqual([record]);
+      expect(res.body.pagination).toMatchObject({ total: 1, totalPages: 1 });
+      expect(db.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it.each(['/users/statistics', '/users/dashboard'])('GET %s returns counts, not a user lookup', async (path) => {
+      const res = await request(app.getHttpServer()).get(path).set(as('admin')).expect(200);
+      expect(res.body.totalUsers ?? res.body.summary.totalUsers).toBe(Object.keys(users).length);
+      expect(db.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('still serves one user by id', async () => {
+      const res = await request(app.getHttpServer()).get('/users/target').set(as('admin')).expect(200);
+      expect(res.body).toMatchObject({ id: 'target', role: 'NURSE' });
+    });
+  });
+
+  describe('status on the user form', () => {
+    it('saves the status sent with an edit', async () => {
+      const res = await send('patch', '/users/target', 'admin', { firstName: 'Tara', status: 'INACTIVE' }).expect(200);
+      expect(res.body).toMatchObject({ id: 'target', firstName: 'Tara', status: 'INACTIVE' });
+      expect(db.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'target' }, data: { firstName: 'Tara', status: 'INACTIVE' } }));
+    });
+
+    it('creates a user with the chosen status, and ACTIVE when none is sent', async () => {
+      const body = { firstName: 'New', lastName: 'Person', email: 'new@example.test', password: 'Password1!', role: 'NURSE' };
+      await send('post', '/users', 'admin', { ...body, status: 'PENDING' }).expect(201);
+      await send('post', '/users', 'admin', body).expect(201);
+      expect(db.user.create.mock.calls.map(([{ data }]: any) => data.status)).toEqual(['PENDING', 'ACTIVE']);
+    });
+
+    it.each([
+      ['patch', '/users/target', { status: 'RETIRED' }],
+      ['post', '/users', { firstName: 'New', lastName: 'Person', email: 'new@example.test', password: 'Password1!', role: 'NURSE', status: 'RETIRED' }],
+    ] as const)('rejects an unknown status on %s %s without a write', async (method, path, body) => {
+      await send(method, path, 'admin', body).expect(400);
+      expect(writes()).toEqual([]);
+    });
+  });
+
+  describe('the permissions a user holds', () => {
+    const written = () => db.user.update.mock.calls.map(([{ data }]: any) => data);
+
+    it('stores a ticked subset of the role as revocations plus extras', async () => {
+      await send('patch', '/users/target/permissions', 'admin', { permissions: ['appointments:read', 'billing:invoice:read'] }).expect(200);
+      expect(written()).toEqual([{ permissions: '["billing:invoice:read"]', revokedPermissions: '["visits:read","patients:read"]' }]);
+    });
+
+    it('stores deltas against the new role when an edit changes role and permissions together', async () => {
+      await send('patch', '/users/reception', 'admin', { role: 'NURSE', permissions: ['appointments:read', 'billing:invoice:read'] }).expect(200);
+      expect(written()).toEqual([{ role: 'NURSE', permissions: '["billing:invoice:read"]', revokedPermissions: '["visits:read","patients:read"]' }]);
+    });
+
+    it('drops saved and revoked permissions when an edit changes the role, and keeps them when it does not', async () => {
+      await send('patch', '/users/target', 'admin', { role: 'RECEPTION', firstName: 'Tara' }).expect(200);
+      await send('patch', '/users/target', 'admin', { role: 'NURSE', firstName: 'Tara' }).expect(200);
+      expect(written()).toEqual([
+        { role: 'RECEPTION', firstName: 'Tara', permissions: null, revokedPermissions: null },
+        { role: 'NURSE', firstName: 'Tara' },
+      ]);
+    });
+
+    it('clears both columns when a role is assigned without permissions', async () => {
+      await send('patch', '/users/target/role', 'admin', { role: 'ADMIN' }).expect(200);
+      expect(written()).toEqual([{ role: 'ADMIN', permissions: null, revokedPermissions: null }]);
+    });
+
+    it('stores deltas against the assigned role when permissions are sent with it', async () => {
+      await send('patch', '/users/target/role', 'admin', { role: 'NURSE', permissions: ['visits:read'] }).expect(200);
+      expect(written()).toEqual([{ role: 'NURSE', permissions: '[]', revokedPermissions: '["appointments:read","patients:read"]' }]);
+    });
+
+    it('returns the held set and what the role always has', async () => {
+      Object.assign(users.target, { permissions: '["billing:invoice:read"]', revokedPermissions: '["visits:read"]' });
+      try {
+        const res = await send('get', '/users/target/permissions', 'admin').expect(200);
+        expect(res.body).toEqual({ permissions: ['appointments:read', 'patients:read', 'billing:invoice:read'], always: [] });
+        const user = (await send('get', '/users/target', 'admin').expect(200)).body;
+        expect(user.permissions).toEqual(['billing:invoice:read']);
+        expect(user).not.toHaveProperty('revokedPermissions');
+      } finally {
+        Object.assign(users.target, { permissions: null, revokedPermissions: null });
+      }
+      expect((await send('get', '/users/doctor/permissions', 'owner').expect(200)).body).toEqual({ permissions: ['appointments:read'], always: ['*'] });
+      expect((await send('get', '/users/pharmacist/permissions', 'owner').expect(200)).body).toEqual({ permissions: [], always: ['pharmacy:*', 'inventory:*'] });
+    });
+
+    it('ticks what a wildcard covers and revokes a covered permission that is unticked', async () => {
+      const nurse = roleRecords.NURSE;
+      roleRecords.NURSE = { permissions: JSON.stringify(['inventory:*', 'appointments:read']) };
+      db.permission.findMany.mockImplementation(async () =>
+        ['inventory:*', 'inventory:item:read', 'inventory:item:delete', 'appointments:read', 'billing:invoice:read'].map((name) => ({ name })));
+      try {
+        const held = await send('get', '/users/target/permissions', 'admin').expect(200);
+        expect(held.body.permissions).toEqual(['inventory:*', 'appointments:read', 'inventory:item:read', 'inventory:item:delete']);
+        await send('patch', '/users/target/permissions', 'admin', { permissions: ['inventory:*', 'appointments:read', 'inventory:item:read'] }).expect(200);
+        expect(written()).toEqual([{ permissions: '[]', revokedPermissions: '["inventory:item:delete"]' }]);
+      } finally {
+        roleRecords.NURSE = nurse;
+        db.permission.findMany.mockImplementation(async () => [permissionRecord]);
+      }
+    });
+
+    it.each([
+      ['patch', '/users/target/permissions', { permissions: ['appointments:read', 5] }],
+      ['patch', '/users/target/role', { role: 'NURSE', permissions: [{ name: 'appointments:read' }] }],
+      ['patch', '/users/target', { permissions: [null] }],
+    ] as const)('rejects a permission that is not a string on %s %s without a write', async (method, path, body) => {
+      await send(method, path, 'admin', body).expect(400);
+      expect(writes()).toEqual([]);
+    });
+
+    it('answers 404 for an unknown user', async () => {
+      await send('get', '/users/nobody/permissions', 'admin').expect(404);
+    });
+
+    it.each(NON_MANAGERS)('forbids %s from reading a user\'s permissions', async (staff) => {
+      await send('get', '/users/target/permissions', staff).expect(403);
+    });
   });
 
   describe('/users/me assets', () => {

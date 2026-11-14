@@ -3,7 +3,7 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { roleMeetsRoles } from '../../shared/guards/roles.guard';
 import { ROLES_KEY } from '../../shared/decorators/roles.decorator';
 import { PERMISSIONS_KEY, PermissionRequirement } from '../../shared/decorators/permissions.decorator';
-import { grantsForRole, parsePermissionList, permissionGrants, PermissionGrants } from '../../shared/access/permission-grants';
+import { PermissionGrants, userGrants } from '../../shared/access/permission-grants';
 import { BillingController } from './billing.controller';
 import { canEditFees } from './clinic-fees.service';
 
@@ -39,12 +39,10 @@ export async function clinicBillAccess(
   viewer: { id: string; role: string },
 ): Promise<ClinicBillAccess> {
   if (!roleMeetsRoles(viewer.role, ROUTES.read.roles)) return NO_CLINIC_BILL_ACCESS;
-  const user = await prisma.user.findUnique({ where: { id: viewer.id }, select: { role: true, permissions: true } });
+  const user = await prisma.user.findUnique({ where: { id: viewer.id }, select: { role: true, permissions: true, revokedPermissions: true } });
   if (!user) return NO_CLINIC_BILL_ACCESS;
   const record = await prisma.role.findFirst({ where: { name: user.role }, select: { permissions: true } }).catch(() => null);
-  const grants = permissionGrants(
-    grantsForRole(user.role, [...parsePermissionList(user.permissions), ...parsePermissionList(record?.permissions)]),
-  );
+  const grants = userGrants(user, record?.permissions);
   const admits = (route: RoutePolicy) =>
     roleMeetsRoles(viewer.role, route.roles) &&
     (viewer.role === UserRole.OWNER || route.permissions.every((requirement) => holds(grants, requirement)));

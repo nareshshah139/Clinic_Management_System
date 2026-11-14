@@ -41,3 +41,22 @@ it('offers batch delete only to roles the delete route admits', async () => {
   expect(await canDelete('OWNER')).toBe(true);
   expect(await canDelete('MANAGER')).toBe(false);
 });
+
+it('refuses a role grant the user has had revoked, in checks and in the count staff list', async () => {
+  const user = { id: 'reception', firstName: 'Riya', lastName: 'Rao', role: 'RECEPTION', permissions: null, revokedPermissions: '["inventory:*","pharmacy:compliance:audit"]' };
+  const prisma = {
+    user: { findFirst: jest.fn().mockResolvedValue(user), findMany: jest.fn().mockResolvedValue([user]) },
+    role: {
+      findFirst: jest.fn().mockResolvedValue({ permissions: '["inventory:*","inventory:po:read","pharmacy:compliance:audit"]' }),
+      findMany: jest.fn().mockResolvedValue([{ name: 'RECEPTION', permissions: '["inventory:*","inventory:po:read","pharmacy:compliance:audit"]' }]),
+    },
+  };
+  const workflow = new InventoryWorkflowService(prisma as any);
+  const actor = { id: 'reception', branchId: 'branch', role: 'RECEPTION' } as any;
+
+  await expect(workflow.authorize(actor, 'PURCHASE_ORDER', true)).rejects.toThrow();
+  await expect(workflow.authorize(actor, 'PURCHASE_ORDER', false)).resolves.toBeUndefined();
+  expect(await workflow.countStaff('branch')).toEqual([]);
+  user.revokedPermissions = null;
+  expect(await workflow.countStaff('branch')).toEqual([{ id: 'reception', name: 'Riya Rao', role: 'RECEPTION' }]);
+});

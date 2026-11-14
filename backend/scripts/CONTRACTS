@@ -11,18 +11,20 @@ backfill_reception_permissions.ts MUST add the RECEPTION defaults to the RECEPTI
 every user whose role is RECEPTION, keeping each permission already stored, and MUST NOT remove a
 permission or change a user of any other role, any other Role row, or any table other than roles and
 users. It MUST set the RECEPTION Role active, and it MUST replace unparseable stored permissions with
-the defaults. It MAY be rerun, because a second run adds nothing. A rerun re-grants any default an
-admin removed from a RECEPTION user (inventory:item:delete, billing:payment:process), and the header
-comment, which says only null or invalid permissions are targeted, is wrong: every RECEPTION user is
-merged. verify_rerun_safety.ts, run in CI, fails unless the second run is a no-op.
+the defaults. It MAY be rerun, because a second run adds nothing. A rerun does not undo a removal
+stored in users.revokedPermissions, where Role & Permissions records an unticked permission: this
+script does not touch that column and it wins over the stored permissions. The header comment, which
+says only null or invalid permissions are targeted, is wrong: every RECEPTION user is merged.
+verify_rerun_safety.ts, run in CI, fails unless the second run is a no-op.
 
 @cc [owner:nareshshah139,label:security] reception-inventory-merge-only-adds-permissions
 merge_reception_full_inventory.ts MUST add the thirty inventory:* permissions to the RECEPTION Role
 row and to every user whose role is RECEPTION, keeping each permission already stored, and MUST NOT
 remove a permission, change another role's users or Role rows, or touch any inventory item,
 transaction or stock quantity. It MUST set the RECEPTION Role active and replace unparseable stored
-permissions with the thirty. It MAY be rerun, because a second run adds nothing, but a rerun
-re-grants inventory delete, bulk and purchase-order rights an admin removed from a RECEPTION user.
+permissions with the thirty. It MAY be rerun, because a second run adds nothing. A rerun does not
+undo a removal stored in users.revokedPermissions, where Role & Permissions records an unticked
+permission: this script does not touch that column and it wins.
 verify_rerun_safety.ts, run in CI, fails unless the second run is a no-op.
 
 @cc [owner:nareshshah139,label:security;target] rbac-scripts-confirm-target-database

@@ -49,6 +49,10 @@ export class CreateUserDto {
   @IsEnum(UserRoleEnum)
   role: UserRole;
 
+  @IsEnum(UserStatusEnum)
+  @IsOptional()
+  status?: UserStatus;
+
   @IsUUID()
   @IsOptional()
   branchId?: string;
@@ -94,6 +98,7 @@ export class CreateUserDto {
   emergencyPhone?: string;
 
   @IsArray()
+  @IsString({ each: true })
   @IsOptional()
   permissions?: string[];
 
@@ -125,6 +130,10 @@ export class UpdateUserDto {
   @IsEnum(UserRoleEnum)
   @IsOptional()
   role?: UserRole;
+
+  @IsEnum(UserStatusEnum)
+  @IsOptional()
+  status?: UserStatus;
 
   @IsString()
   @IsOptional()
@@ -167,6 +176,7 @@ export class UpdateUserDto {
   emergencyPhone?: string;
 
   @IsArray()
+  @IsString({ each: true })
   @IsOptional()
   permissions?: string[];
 
@@ -242,12 +252,14 @@ export class AssignRoleDto {
   role: UserRole;
 
   @IsArray()
+  @IsString({ each: true })
   @IsOptional()
   permissions?: string[];
 }
 
 export class UpdatePermissionsDto {
   @IsArray()
+  @IsString({ each: true })
   permissions: string[];
 }
 

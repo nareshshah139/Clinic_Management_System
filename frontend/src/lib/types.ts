@@ -205,7 +205,14 @@ export interface User {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  permissions?: string[] | null;
   metadata?: Record<string, any> | null;
+}
+
+/** What a user holds now, and what their role grants whatever is unticked. */
+export interface UserPermissions {
+  permissions: string[];
+  always: string[];
 }
 
 // API Response wrappers
