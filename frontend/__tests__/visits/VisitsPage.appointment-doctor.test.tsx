@@ -65,7 +65,7 @@ it('disables the picker once a visit is created in this session', async () => {
     return {} as any;
   });
   render(<VisitsPage />);
-  fireEvent.click(await screen.findByRole('combobox'));
+  fireEvent.click(await screen.findByRole('combobox', { name: 'Select Doctor' }));
   fireEvent.click(await screen.findByRole('option', { name: /Dr\. Shravya Rao/ }));
   const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
   expect(picker).toBeEnabled();

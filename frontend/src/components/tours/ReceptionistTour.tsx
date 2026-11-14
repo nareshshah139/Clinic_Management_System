@@ -594,7 +594,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               <p class="font-semibold text-blue-900 mb-1">Viewing Appointment Status:</p>
               <p class="text-blue-800">
                 To see if a patient is <strong>SCHEDULED, CHECKED-IN, or IN-PROGRESS</strong>, 
-                <strong>double-click the appointment</strong> to open the details dialog. 
+                <strong>click the appointment</strong> to open the details dialog. 
                 The status is shown as text in the dialog.
               </p>
             </div>
@@ -602,8 +602,8 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(237, 233, 254, 0.5); border: 1px solid #d8b4fe;">
               <p class="font-semibold text-purple-900 mb-1">Finding the Legend:</p>
               <p class="text-purple-800">
-                The calendar page shows a color legend at the top explaining all colors. 
-                Refer to it anytime you need a reminder of what each color means!
+                Press the <strong>Legend</strong> button in the calendar toolbar to see what each color means.
+                Press it again, or Esc, to close it.
               </p>
             </div>
             

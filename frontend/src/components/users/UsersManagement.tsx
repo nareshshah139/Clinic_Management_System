@@ -519,25 +519,25 @@ export default function UsersManagement() {
             <DialogHeader><DialogTitle>{form.id ? 'Edit User' : 'Create User'}</DialogTitle></DialogHeader>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label>First Name</Label>
-                <Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+                <Label htmlFor="user-first-name">First Name</Label>
+                <Input id="user-first-name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
               </div>
               <div>
-                <Label>Last Name</Label>
-                <Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+                <Label htmlFor="user-last-name">Last Name</Label>
+                <Input id="user-last-name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
               </div>
               <div className="md:col-span-2">
-                <Label>Email</Label>
-                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <Label htmlFor="user-email">Email</Label>
+                <Input id="user-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div className="md:col-span-2">
-                <Label>Phone</Label>
-                <Input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <Label htmlFor="user-phone">Phone</Label>
+                <Input id="user-phone" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </div>
               <div>
-                <Label>Role</Label>
+                <Label htmlFor="user-role">Role</Label>
                 <Select value={form.role} onValueChange={(v: string) => setForm({ ...form, role: v })}>
-                  <SelectTrigger><SelectValue placeholder="Role" /></SelectTrigger>
+                  <SelectTrigger id="user-role"><SelectValue placeholder="Role" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ADMIN">Admin</SelectItem>
                     <SelectItem value="DOCTOR">Doctor</SelectItem>
@@ -549,9 +549,9 @@ export default function UsersManagement() {
                 </Select>
               </div>
               <div>
-                <Label>Status</Label>
+                <Label htmlFor="user-status">Status</Label>
                 <Select value={form.status} onValueChange={(v: string) => setForm({ ...form, status: v })}>
-                  <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectTrigger id="user-status"><SelectValue placeholder="Status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ACTIVE">Active</SelectItem>
                     <SelectItem value="INACTIVE">Inactive</SelectItem>
@@ -562,8 +562,8 @@ export default function UsersManagement() {
               </div>
               {!form.id && (
                 <div className="md:col-span-2">
-                  <Label>Password (8-20 chars)</Label>
-                  <Input type="password" value={form.password || ''} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                  <Label htmlFor="user-password">Password (8-20 chars)</Label>
+                  <Input id="user-password" type="password" value={form.password || ''} onChange={(e) => setForm({ ...form, password: e.target.value })} />
                 </div>
               )}
             </div>
@@ -644,9 +644,9 @@ export default function UsersManagement() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             <div className="md:col-span-4 space-y-3">
               <div>
-                <Label>Role</Label>
+                <Label htmlFor="user-permissions-role">Role</Label>
                 <Select value={roleSelect} onValueChange={(v: string) => setRoleSelect(v)}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select role" /></SelectTrigger>
+                  <SelectTrigger id="user-permissions-role" className="mt-1"><SelectValue placeholder="Select role" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ADMIN">Admin</SelectItem>
                     <SelectItem value="MANAGER">Manager</SelectItem>
@@ -736,7 +736,7 @@ export default function UsersManagement() {
                   <div className="font-medium">Send WhatsApp on appointment creation</div>
                   <div className="text-xs text-gray-500">Automatic confirmation to patients when this doctor is assigned.</div>
                 </div>
-                <Switch checked={waAutoConfirm} onCheckedChange={(v: boolean) => setWaAutoConfirm(v)} />
+                <Switch aria-label="Send WhatsApp on appointment creation" checked={waAutoConfirm} onCheckedChange={(v: boolean) => setWaAutoConfirm(v)} />
               </div>
               <div className="text-xs text-gray-500">Requires backend WhatsApp credentials. Uses text messages by default.</div>
             </div>
@@ -744,13 +744,13 @@ export default function UsersManagement() {
             <div className="border rounded-md p-3 space-y-3">
               <div className="grid grid-cols-1 gap-3">
                 <div>
-                  <Label className="text-sm">Doctor WhatsApp Phone Number ID</Label>
-                  <Input value={waPhoneNumberId} onChange={(e) => setWaPhoneNumberId(e.target.value)} placeholder="e.g., 123456789012345" />
+                  <Label htmlFor="user-wa-phone-id" className="text-sm">Doctor WhatsApp Phone Number ID</Label>
+                  <Input id="user-wa-phone-id" value={waPhoneNumberId} onChange={(e) => setWaPhoneNumberId(e.target.value)} placeholder="e.g., 123456789012345" />
                   <div className="text-xs text-gray-500 mt-1">Optional. Overrides clinic default phone number ID.</div>
                 </div>
                 <div>
-                  <Label className="text-sm">Doctor WhatsApp Access Token</Label>
-                  <Input type="password" value={waAccessToken} onChange={(e) => setWaAccessToken(e.target.value)} placeholder="Paste long-lived access token" />
+                  <Label htmlFor="user-wa-token" className="text-sm">Doctor WhatsApp Access Token</Label>
+                  <Input id="user-wa-token" type="password" value={waAccessToken} onChange={(e) => setWaAccessToken(e.target.value)} placeholder="Paste long-lived access token" />
                   <div className="text-xs text-gray-500 mt-1">Optional. Stored in user metadata. Leave blank to keep existing.</div>
                 </div>
               </div>
@@ -762,17 +762,17 @@ export default function UsersManagement() {
                   <div className="font-medium">Use WhatsApp Template</div>
                   <div className="text-xs text-gray-500">Recommended for messages outside the 24h window.</div>
                 </div>
-                <Switch checked={waUseTemplate} onCheckedChange={(v: boolean) => setWaUseTemplate(v)} />
+                <Switch aria-label="Use WhatsApp template" checked={waUseTemplate} onCheckedChange={(v: boolean) => setWaUseTemplate(v)} />
               </div>
               {waUseTemplate && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-sm">Template Name</Label>
-                    <Input value={waTemplateName} onChange={(e) => setWaTemplateName(e.target.value)} placeholder="e.g., appointment_confirm" />
+                    <Label htmlFor="user-wa-template-name" className="text-sm">Template Name</Label>
+                    <Input id="user-wa-template-name" value={waTemplateName} onChange={(e) => setWaTemplateName(e.target.value)} placeholder="e.g., appointment_confirm" />
                   </div>
                   <div>
-                    <Label className="text-sm">Language Code</Label>
-                    <Input value={waTemplateLanguage} onChange={(e) => setWaTemplateLanguage(e.target.value)} placeholder="e.g., en, en_US, hi" />
+                    <Label htmlFor="user-wa-template-language" className="text-sm">Language Code</Label>
+                    <Input id="user-wa-template-language" value={waTemplateLanguage} onChange={(e) => setWaTemplateLanguage(e.target.value)} placeholder="e.g., en, en_US, hi" />
                   </div>
                 </div>
               )}
@@ -838,13 +838,13 @@ export default function UsersManagement() {
             <div className="md:col-span-7 border rounded-md p-3 space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-sm">Name</Label>
-                  <Input value={tplName} onChange={(e) => setTplName(e.target.value)} placeholder="e.g., Appointment Confirmation" />
+                  <Label htmlFor="template-name" className="text-sm">Name</Label>
+                  <Input id="template-name" value={tplName} onChange={(e) => setTplName(e.target.value)} placeholder="e.g., Appointment Confirmation" />
                 </div>
                 <div>
-                  <Label className="text-sm">Touchpoint</Label>
+                  <Label htmlFor="template-touchpoint" className="text-sm">Touchpoint</Label>
                   <Select value={tplTouchpoint} onValueChange={(v: string) => setTplTouchpoint(v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="template-touchpoint"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="appointment_confirmation">Appointment Confirmation</SelectItem>
                       <SelectItem value="appointment_reminder">Appointment Reminder</SelectItem>
@@ -854,13 +854,13 @@ export default function UsersManagement() {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-sm">Language</Label>
-                  <Input value={tplLanguage} onChange={(e) => setTplLanguage(e.target.value)} placeholder="e.g., en, en_US, hi" />
+                  <Label htmlFor="template-language" className="text-sm">Language</Label>
+                  <Input id="template-language" value={tplLanguage} onChange={(e) => setTplLanguage(e.target.value)} placeholder="e.g., en, en_US, hi" />
                 </div>
                 <div>
-                  <Label className="text-sm">Ownership</Label>
+                  <Label htmlFor="template-ownership" className="text-sm">Ownership</Label>
                   <Select value={tplOwnerScope} onValueChange={(v: string) => setTplOwnerScope(v as 'ME' | 'BRANCH')}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="template-ownership"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ME">My Template</SelectItem>
                       <SelectItem value="BRANCH">Branch Template (Admin)</SelectItem>
@@ -868,15 +868,15 @@ export default function UsersManagement() {
                   </Select>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={tplActive} onCheckedChange={setTplActive} />
+                  <Switch aria-label="Active" checked={tplActive} onCheckedChange={setTplActive} />
                   <span className="text-sm">Active</span>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                 <div className="md:col-span-9">
-                  <Label className="text-sm">Generator Hints (optional)</Label>
-                  <Input value={genHints} onChange={(e) => setGenHints(e.target.value)} placeholder="Add context like clinic name, specialty, signature" />
+                  <Label htmlFor="template-hints" className="text-sm">Generator Hints (optional)</Label>
+                  <Input id="template-hints" value={genHints} onChange={(e) => setGenHints(e.target.value)} placeholder="Add context like clinic name, specialty, signature" />
                 </div>
                 <div className="md:col-span-3 flex gap-2">
                   <Button
@@ -933,6 +933,9 @@ export default function UsersManagement() {
                 <div
                   ref={editorRef}
                   contentEditable
+                  role="textbox"
+                  aria-multiline="true"
+                  aria-label="Template designer"
                   className="border rounded-md min-h-32 p-2 prose prose-sm max-w-none"
                   onInput={() => {
                     const html = editorRef.current?.innerHTML || '';
@@ -953,6 +956,7 @@ export default function UsersManagement() {
                 </div>
                 <div className="flex gap-2 mt-2">
                   <Input
+                    aria-label="New variable"
                     placeholder="Add variable (letters/numbers/underscore)"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -983,8 +987,8 @@ export default function UsersManagement() {
               </div>
 
               <div>
-                <Label className="text-sm">Plain Text (fallback)</Label>
-                <Input value={tplText} onChange={(e) => setTplText(e.target.value)} placeholder="Auto-filled from WYSIWYG. You can edit." />
+                <Label htmlFor="template-text" className="text-sm">Plain Text (fallback)</Label>
+                <Input id="template-text" value={tplText} onChange={(e) => setTplText(e.target.value)} placeholder="Auto-filled from WYSIWYG. You can edit." />
               </div>
 
               <div className="flex justify-end gap-2">
@@ -1002,8 +1006,8 @@ export default function UsersManagement() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="md:col-span-2">
-                    <Label className="text-sm">Test Phone (E.164)</Label>
-                    <Input value={tplTestTo} onChange={(e) => setTplTestTo(e.target.value)} placeholder="+15551234567" />
+                    <Label htmlFor="template-test-phone" className="text-sm">Test Phone (E.164)</Label>
+                    <Input id="template-test-phone" value={tplTestTo} onChange={(e) => setTplTestTo(e.target.value)} placeholder="+15551234567" />
                   </div>
                   <div className="text-xs text-gray-500">
                     Variables will be sent blank unless you extend UI mapping; backend will still accept.

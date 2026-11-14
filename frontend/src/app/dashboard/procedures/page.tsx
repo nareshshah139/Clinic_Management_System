@@ -542,9 +542,9 @@ export default function ProceduresPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-700">Patient *</label>
+                <label htmlFor="procedure-patient" className="text-sm font-medium text-gray-700">Patient *</label>
                 <Select value={procedureData.patientId} onValueChange={(value: string) => updateProcedureData('patientId', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="procedure-patient">
                     <SelectValue placeholder="Select patient" />
                   </SelectTrigger>
                   <SelectContent>
@@ -558,9 +558,9 @@ export default function ProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">Doctor *</label>
+                <label htmlFor="procedure-doctor" className="text-sm font-medium text-gray-700">Doctor *</label>
                 <Select value={procedureData.doctorId} onValueChange={(value: string) => updateProcedureData('doctorId', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="procedure-doctor">
                     <SelectValue placeholder="Select doctor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -574,9 +574,9 @@ export default function ProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">Nurse/Therapist</label>
+                <label htmlFor="procedure-therapist" className="text-sm font-medium text-gray-700">Nurse/Therapist</label>
                 <Select value={procedureData.therapistId} onValueChange={(value: string) => updateProcedureData('therapistId', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="procedure-therapist">
                     <SelectValue placeholder="Select nurse" />
                   </SelectTrigger>
                   <SelectContent>
@@ -602,23 +602,23 @@ export default function ProceduresPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Session No.</label>
-                  <Input placeholder="Session number" value={procedureData.sessionNo} onChange={(e) => updateProcedureData('sessionNo', parseInt(e.target.value) || 1)} />
+                  <label htmlFor="procedure-session" className="text-sm font-medium text-gray-700">Session No.</label>
+                  <Input id="procedure-session" placeholder="Session number" value={procedureData.sessionNo} onChange={(e) => updateProcedureData('sessionNo', parseInt(e.target.value) || 1)} />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Shot Count (Begin)</label>
-                  <Input placeholder="e.g. 50" value={procedureData.shotCountBegin} onChange={(e) => updateProcedureData('shotCountBegin', parseInt(e.target.value) || 0)} />
+                  <label htmlFor="procedure-shots-begin" className="text-sm font-medium text-gray-700">Shot Count (Begin)</label>
+                  <Input id="procedure-shots-begin" placeholder="e.g. 50" value={procedureData.shotCountBegin} onChange={(e) => updateProcedureData('shotCountBegin', parseInt(e.target.value) || 0)} />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Shot Count (End)</label>
-                  <Input placeholder="e.g. 50" value={procedureData.shotCountEnd} onChange={(e) => updateProcedureData('shotCountEnd', parseInt(e.target.value) || 0)} />
+                  <label htmlFor="procedure-shots-end" className="text-sm font-medium text-gray-700">Shot Count (End)</label>
+                  <Input id="procedure-shots-end" placeholder="e.g. 50" value={procedureData.shotCountEnd} onChange={(e) => updateProcedureData('shotCountEnd', parseInt(e.target.value) || 0)} />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Total Shots</label>
-                  <Input
+                  <label htmlFor="procedure-shots-total" className="text-sm font-medium text-gray-700">Total Shots</label>
+                  <Input id="procedure-shots-total"
                     value={procedureData.shotCountEnd - procedureData.shotCountBegin}
                     disabled
                     className="bg-gray-50"
@@ -628,13 +628,14 @@ export default function ProceduresPage() {
 
               {/* Body Parts */}
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Body Parts</label>
-                <div className="flex flex-wrap gap-2">
+                <p id="procedure-body-parts" className="text-sm font-medium text-gray-700 mb-2 block">Body Parts</p>
+                <div role="group" aria-labelledby="procedure-body-parts" className="flex flex-wrap gap-2">
                   {BODY_PARTS.map((part) => (
                     <Button
                       key={part}
                       type="button"
                       variant={procedureData.bodyPart.includes(part) ? 'default' : 'outline'}
+                      aria-pressed={procedureData.bodyPart.includes(part)}
                       size="sm"
                       onClick={() => toggleBodyPart(part)}
                     >
@@ -646,8 +647,8 @@ export default function ProceduresPage() {
 
               {/* Indications */}
               <div>
-                <label className="text-sm font-medium text-gray-700">Indications</label>
-                <Textarea
+                <label htmlFor="procedure-indications" className="text-sm font-medium text-gray-700">Indications</label>
+                <Textarea id="procedure-indications"
                   placeholder="Enter procedure indications..."
                   value={procedureData.indications}
                   onChange={(e) => updateProcedureData('indications', e.target.value)}
@@ -664,9 +665,9 @@ export default function ProceduresPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-700">Fitzpatrick Type</label>
+                <label htmlFor="procedure-fitzpatrick" className="text-sm font-medium text-gray-700">Fitzpatrick Type</label>
                 <Select value={procedureData.fitzpatrickType} onValueChange={(value: string) => updateProcedureData('fitzpatrickType', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="procedure-fitzpatrick">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -680,9 +681,9 @@ export default function ProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">Robert Type</label>
+                <label htmlFor="procedure-robert" className="text-sm font-medium text-gray-700">Robert Type</label>
                 <Select value={procedureData.robertType} onValueChange={(value: string) => updateProcedureData('robertType', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="procedure-robert">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -696,9 +697,9 @@ export default function ProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">Scar Type</label>
+                <label htmlFor="procedure-scar" className="text-sm font-medium text-gray-700">Scar Type</label>
                 <Select value={procedureData.scarType} onValueChange={(value: string) => updateProcedureData('scarType', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="procedure-scar">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -712,9 +713,9 @@ export default function ProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">Herpes Status</label>
+                <label htmlFor="procedure-herpes" className="text-sm font-medium text-gray-700">Herpes Status</label>
                 <Select value={procedureData.herpesStatus} onValueChange={(value: string) => updateProcedureData('herpesStatus', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="procedure-herpes">
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -744,6 +745,7 @@ export default function ProceduresPage() {
                     key={key}
                     type="button"
                     variant={procedureData.selectedMachine === key ? 'default' : 'outline'}
+                    aria-pressed={procedureData.selectedMachine === key}
                     className="h-14"
                     onClick={() => updateProcedureData('selectedMachine', key)}
                   >

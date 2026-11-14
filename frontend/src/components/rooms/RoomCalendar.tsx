@@ -228,6 +228,7 @@ export default function RoomCalendar() {
             <Button
               variant="outline"
               size="sm"
+              aria-label="Previous day"
               onClick={() => navigateDate('prev')}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -241,6 +242,7 @@ export default function RoomCalendar() {
             <Button
               variant="outline"
               size="sm"
+              aria-label="Next day"
               onClick={() => navigateDate('next')}
             >
               <ChevronRight className="h-4 w-4" />
@@ -250,7 +252,7 @@ export default function RoomCalendar() {
 
         <div className="flex max-w-full flex-wrap items-center gap-4">
           <Select value={selectedRoomType} onValueChange={setSelectedRoomType}>
-            <SelectTrigger className="w-[200px] max-w-full">
+            <SelectTrigger className="w-[200px] max-w-full" aria-label="Room type">
               <SelectValue placeholder="Filter by room type" />
             </SelectTrigger>
             <SelectContent>
@@ -263,6 +265,7 @@ export default function RoomCalendar() {
           </Select>
           <input
             className="border rounded-md px-3 py-2 text-sm w-[220px] max-w-full"
+            aria-label="Search rooms"
             placeholder="Search room name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -275,7 +278,7 @@ export default function RoomCalendar() {
           </Button>
           <Button variant="outline" onClick={scrollToCurrentHour}>Now</Button>
           <Select value={String(gridMinutes)} onValueChange={(v: string) => setGridMinutes(Math.max(10, parseInt(v, 10) || 10))}>
-            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Grid" /></SelectTrigger>
+            <SelectTrigger className="w-[140px]" aria-label="Grid interval"><SelectValue placeholder="Grid" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="10">Grid: 10m</SelectItem>
               <SelectItem value="15">Grid: 15m</SelectItem>

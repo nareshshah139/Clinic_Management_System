@@ -65,6 +65,7 @@ const PRINT_LINE_SPACING_OPTIONS: Array<{ value: PrintLineSpacing; label: string
 const CONTINUATION_NUDGE_PX = 36;
 const CONTINUATION_RESERVE_PX = 48;
 const PRINT_PX_PER_MM = 96 / 25.4;
+const SUGGESTION_CLASS = 'w-full px-3 py-1 text-left text-sm hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
 
 type DosageUnit = 'MG' | 'ML' | 'MCG' | 'IU' | 'TABLET' | 'CAPSULE' | 'DROP' | 'SPRAY' | 'PATCH' | 'INJECTION';
 
@@ -192,7 +193,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
           aria-labelledby={collapsible ? undefined : headingId}
         >
           <div className="flex items-center gap-2">
-            <CardTitle id={headingId} className="text-base" role={collapsible ? 'heading' : undefined} aria-level={collapsible ? 3 : undefined}>
+            <CardTitle id={headingId} className="text-base" role={collapsible ? 'heading' : undefined} aria-level={collapsible ? 2 : undefined}>
               {collapsible ? (
                 <button
                   type="button"
@@ -4598,7 +4599,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">BMI</label>
-                    <Input key="vitals-bmi" value={vitalsBmi ?? ''} readOnly />
+                    <Input key="vitals-bmi" aria-label="BMI" value={vitalsBmi ?? ''} readOnly />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">BP (Sys)</label>
@@ -4694,17 +4695,23 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             >
               <div className="opacity-100">
                 <label className="text-xs text-gray-600 flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                <div className="relative complaint-autocomplete flex items-start">
-                  <Textarea key="chief-complaints" rows={2} value={chiefComplaints} onFocus={() => setComplaintFieldFocused(true)} onBlur={() => setComplaintFieldFocused(false)} onChange={(e) => setChiefComplaints(e.target.value)} />
+                <div
+                  className="relative complaint-autocomplete flex items-start"
+                  onFocus={() => setComplaintFieldFocused(true)}
+                  onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setComplaintFieldFocused(false); }}
+                >
+                  <Textarea key="chief-complaints" aria-label="Chief complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
                   <VoiceButton fieldName="chiefComplaints" />
                   {complaintFieldFocused && complaintOptions.length > 0 && (
-                    <div className="absolute left-0 top-full z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                    <ul aria-label="Complaint suggestions" className="absolute left-0 top-full z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {complaintOptions.map((opt) => (
-                        <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setChiefComplaints(opt); setComplaintOptions([]); pushRecent('chiefComplaints', opt); }}>
-                          {opt}
-                        </div>
+                        <li key={opt}>
+                          <button type="button" className={SUGGESTION_CLASS} onClick={() => { setChiefComplaints(opt); setComplaintOptions([]); pushRecent('chiefComplaints', opt); }}>
+                            {opt}
+                          </button>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   )}
                 </div>
                 <div className="mt-2">
@@ -4715,6 +4722,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         key={c}
                         type="button"
                         variant={skinConcerns.has(c) ? 'default' : 'outline'}
+                        aria-pressed={skinConcerns.has(c)}
                         size="sm"
                         onClick={() => toggleSet(skinConcerns, c, setSkinConcerns)}
                       >
@@ -4738,13 +4746,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="relative diag-autocomplete">
                   <Input key="diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
                   {diagOptions.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                    <ul aria-label="Diagnosis suggestions" className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {diagOptions.map((opt) => (
-                        <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setDiagnosis(opt); setDiagOptions([]); pushRecent('diagnosis', opt); }}>
-                          {opt}
-                        </div>
+                        <li key={opt}>
+                          <button type="button" className={SUGGESTION_CLASS} onClick={() => { setDiagnosis(opt); setDiagOptions([]); pushRecent('diagnosis', opt); }}>
+                            {opt}
+                          </button>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   )}
                 </div>
               </div>
@@ -4802,7 +4812,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <label className="text-xs text-gray-600">Fitzpatrick Skin Type</label>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {FITZPATRICK.map(ft => (
-                        <Button key={ft} type="button" variant={exSkinType === ft ? 'default' : 'outline'} size="sm" onClick={() => setExSkinType(exSkinType === ft ? '' : ft)}>{ft}</Button>
+                        <Button key={ft} type="button" variant={exSkinType === ft ? 'default' : 'outline'} aria-pressed={exSkinType === ft} size="sm" onClick={() => setExSkinType(exSkinType === ft ? '' : ft)}>{ft}</Button>
                       ))}
                     </div>
                   </div>
@@ -4821,12 +4831,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="flex flex-wrap gap-2 mt-1">
                     {MORPHOLOGY.map(m => (
                       <div key={m} className="relative">
-                        <Button type="button" variant={exMorphology.has(m) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(exMorphology, m, setExMorphology)}>{m}</Button>
+                        <Button type="button" variant={exMorphology.has(m) ? 'default' : 'outline'} aria-pressed={exMorphology.has(m)} size="sm" onClick={() => toggleSet(exMorphology, m, setExMorphology)}>{m}</Button>
                         {customMorphology.some(x => x.toLowerCase() === m.toLowerCase()) && (
                           <button
                             type="button"
                             aria-label="Remove custom morphology"
-                            className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-white border shadow-sm flex items-center justify-center hover:bg-gray-50"
+                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-white border shadow-sm flex items-center justify-center hover:bg-gray-50"
                             onClick={(e) => {
                               e.stopPropagation();
                               const lowered = m.toLowerCase();
@@ -4891,12 +4901,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="flex flex-wrap gap-2 mt-1">
                     {DISTRIBUTION.map(d => (
                       <div key={d} className="relative">
-                        <Button type="button" variant={exDistribution.has(d) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(exDistribution, d, setExDistribution)}>{d}</Button>
+                        <Button type="button" variant={exDistribution.has(d) ? 'default' : 'outline'} aria-pressed={exDistribution.has(d)} size="sm" onClick={() => toggleSet(exDistribution, d, setExDistribution)}>{d}</Button>
                         {customDistribution.some(x => x.toLowerCase() === d.toLowerCase()) && (
                           <button
                             type="button"
                             aria-label="Remove custom distribution"
-                            className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-white border shadow-sm flex items-center justify-center hover:bg-gray-50"
+                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-white border shadow-sm flex items-center justify-center hover:bg-gray-50"
                             onClick={(e) => {
                               e.stopPropagation();
                               const lowered = d.toLowerCase();
@@ -4961,7 +4971,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <label className="text-xs text-gray-600">Dermatology Diagnoses</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {DERM_DIAGNOSES.map(dx => (
-                      <Button key={dx} type="button" variant={exDermDx.has(dx) ? 'default' : 'outline'} size="sm" onClick={() => setExDermDx(prev => { const next = new Set(prev); next.has(dx) ? next.delete(dx) : next.add(dx); return next; })}>{dx}</Button>
+                      <Button key={dx} type="button" variant={exDermDx.has(dx) ? 'default' : 'outline'} aria-pressed={exDermDx.has(dx)} size="sm" onClick={() => setExDermDx(prev => { const next = new Set(prev); next.has(dx) ? next.delete(dx) : next.add(dx); return next; })}>{dx}</Button>
                     ))}
                   </div>
                 </div>
@@ -5480,9 +5490,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="text-sm text-gray-700">Language</label>
+                    <label htmlFor="rx-language" className="text-sm text-gray-700">Language</label>
                     <Select value={language} onValueChange={(v: Language) => setLanguage(v)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger id="rx-language"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="EN">English</SelectItem>
                         <SelectItem value="TE">Telugu</SelectItem>
@@ -5559,7 +5569,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="hidden sm:flex items-center gap-2">
                   <span className="text-sm text-gray-700">Print</span>
                   <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={printCompact}>
-                    <SelectTrigger className="w-36 h-9">
+                    <SelectTrigger className="w-36 h-9" aria-label="Print format">
                       <SelectValue placeholder="Format" />
                     </SelectTrigger>
                     <SelectContent>
@@ -6285,7 +6295,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Print Format</span>
                     <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={printCompact}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full" aria-label="Print format">
                         <SelectValue placeholder="Select format" />
                       </SelectTrigger>
                       <SelectContent>
@@ -6297,7 +6307,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Letterhead</span>
                     <Select value={letterheadOption} onValueChange={(v: 'default' | 'none') => setLetterheadOption(v)}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full" aria-label="Letterhead">
                         <SelectValue placeholder="Select letterhead" />
                       </SelectTrigger>
                       <SelectContent>
@@ -6320,7 +6330,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Printer profile</span>
                     <Select value={activeProfileId || ''} onValueChange={(v: string) => setActiveProfileId(v)}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full" aria-label="Printer profile">
                         <SelectValue placeholder="Select profile" />
                       </SelectTrigger>
                       <SelectContent>
@@ -6564,9 +6574,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div>
-                    <label className="text-xs text-gray-600">Skin Type</label>
+                    <label htmlFor="rx-template-skin-type" className="text-xs text-gray-600">Skin Type</label>
                     <Select value={newTplSkinType} onValueChange={setNewTplSkinType}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectTrigger id="rx-template-skin-type"><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent>
                         {FITZPATRICK.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
                       </SelectContent>
@@ -6581,7 +6591,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="text-xs text-gray-600 mb-1">Morphology</div>
                   <div className="flex flex-wrap gap-2">
                     {MORPHOLOGY.map(m => (
-                      <Button key={m} type="button" variant={newTplMorphology.has(m) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(newTplMorphology, m, setNewTplMorphology)}>{m}</Button>
+                      <Button key={m} type="button" variant={newTplMorphology.has(m) ? 'default' : 'outline'} aria-pressed={newTplMorphology.has(m)} size="sm" onClick={() => toggleSet(newTplMorphology, m, setNewTplMorphology)}>{m}</Button>
                     ))}
                   </div>
                 </div>
@@ -6589,7 +6599,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="text-xs text-gray-600 mb-1">Distribution</div>
                   <div className="flex flex-wrap gap-2">
                     {DISTRIBUTION.map(d => (
-                      <Button key={d} type="button" variant={newTplDistribution.has(d) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(newTplDistribution, d, setNewTplDistribution)}>{d}</Button>
+                      <Button key={d} type="button" variant={newTplDistribution.has(d) ? 'default' : 'outline'} aria-pressed={newTplDistribution.has(d)} size="sm" onClick={() => toggleSet(newTplDistribution, d, setNewTplDistribution)}>{d}</Button>
                     ))}
                   </div>
                 </div>
@@ -6597,7 +6607,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="text-xs text-gray-600 mb-1">Skin Concerns</div>
                   <div className="flex flex-wrap gap-2">
                     {SKIN_CONCERNS.map((c) => (
-                      <Button key={c} type="button" variant={newTplSkinConcerns.has(c) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(newTplSkinConcerns, c, setNewTplSkinConcerns)}>{c}</Button>
+                      <Button key={c} type="button" variant={newTplSkinConcerns.has(c) ? 'default' : 'outline'} aria-pressed={newTplSkinConcerns.has(c)} size="sm" onClick={() => toggleSet(newTplSkinConcerns, c, setNewTplSkinConcerns)}>{c}</Button>
                     ))}
                   </div>
                 </div>

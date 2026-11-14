@@ -991,7 +991,7 @@ export default function PatientsManagement() {
                 </div>
               )}
               {search.length === 0 && (
-                <div className="text-xs text-gray-400">
+                <div className="text-xs text-muted-foreground">
                   Try: 9xxx… (phone), abha…, @email
                 </div>
               )}

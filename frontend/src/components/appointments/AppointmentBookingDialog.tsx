@@ -266,9 +266,9 @@ export default function AppointmentBookingDialog({
 
           {/* Duration selector */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Duration</label>
+            <label htmlFor="booking-duration" className="text-sm font-medium text-gray-700 mb-2 block">Duration</label>
             <Select value={String(durationMinutes)} onValueChange={(v: string) => setDurationMinutes(parseInt(v, 10))}>
-              <SelectTrigger>
+              <SelectTrigger id="booking-duration">
                 <SelectValue placeholder="Select duration" />
               </SelectTrigger>
               <SelectContent>
@@ -306,14 +306,14 @@ export default function AppointmentBookingDialog({
 
           {/* Appointment Type Selection */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Appointment Type *</label>
+            <label htmlFor="booking-visit-type" className="text-sm font-medium text-gray-700 mb-2 block">Appointment Type *</label>
             <Select value={visitType} onValueChange={(value: VisitType) => {
               setVisitType(value);
               setSelectedRoomId('');
               setProcedureName('');
               setErrors([]);
             }}>
-              <SelectTrigger>
+              <SelectTrigger id="booking-visit-type">
                 <SelectValue placeholder="Select appointment type" />
               </SelectTrigger>
               <SelectContent>
@@ -331,8 +331,8 @@ export default function AppointmentBookingDialog({
 
           {visitType === 'PROCEDURE' && (
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Procedure Name</label>
-              <Input
+              <label htmlFor="booking-procedure-name" className="text-sm font-medium text-gray-700 mb-2 block">Procedure Name</label>
+              <Input id="booking-procedure-name"
                 placeholder="e.g. Chemical Peel, Botox, Laser Hair Removal"
                 value={procedureName}
                 onChange={(e) => setProcedureName(e.target.value)}

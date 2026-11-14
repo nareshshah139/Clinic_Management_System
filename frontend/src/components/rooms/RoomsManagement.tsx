@@ -265,13 +265,14 @@ export default function RoomsManagement() {
           {/* Filters */}
           <div className="flex flex-col md:flex-row gap-3 mb-4">
             <Input
+              aria-label="Search rooms"
               placeholder="Search by room name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="md:max-w-xs"
             />
             <Select value={typeFilter} onValueChange={(v: string) => setTypeFilter(v)}>
-              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Type" /></SelectTrigger>
+              <SelectTrigger className="w-[200px]" aria-label="Room type"><SelectValue placeholder="Type" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All types</SelectItem>
                 {roomTypes.map((t) => (
@@ -280,7 +281,7 @@ export default function RoomsManagement() {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(v: string) => setStatusFilter(v)}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="w-[160px]" aria-label="Status"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
@@ -387,8 +388,8 @@ export default function RoomsManagement() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Room Name *</label>
-              <Input
+              <label htmlFor="room-name" className="text-sm font-medium text-gray-700 mb-1 block">Room Name *</label>
+              <Input id="room-name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., Consultation Room 1"
@@ -397,9 +398,9 @@ export default function RoomsManagement() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Room Type *</label>
+              <label htmlFor="room-type" className="text-sm font-medium text-gray-700 mb-1 block">Room Type *</label>
               <Select value={formData.type} onValueChange={(value: string) => setFormData({ ...formData, type: value })}>
-                <SelectTrigger>
+                <SelectTrigger id="room-type">
                   <SelectValue placeholder="Select room type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -416,8 +417,8 @@ export default function RoomsManagement() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Capacity *</label>
-              <Input
+              <label htmlFor="room-capacity" className="text-sm font-medium text-gray-700 mb-1 block">Capacity *</label>
+              <Input id="room-capacity"
                 type="number"
                 min="1"
                 max="20"

@@ -183,8 +183,8 @@ export default function PatientQuickCreateDialog({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <Label>First Name *</Label>
-              <Input
+              <Label htmlFor="quick-patient-first-name">First Name *</Label>
+              <Input id="quick-patient-first-name"
                 value={form.firstName}
                 onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
                 placeholder="Patient first name"
@@ -192,16 +192,16 @@ export default function PatientQuickCreateDialog({
               />
             </div>
             <div>
-              <Label>Last Name</Label>
-              <Input
+              <Label htmlFor="quick-patient-last-name">Last Name</Label>
+              <Input id="quick-patient-last-name"
                 value={form.lastName}
                 onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
                 placeholder="Patient last name"
               />
             </div>
             <div>
-              <Label>Age (years)</Label>
-              <Input
+              <Label htmlFor="quick-patient-age">Age (years)</Label>
+              <Input id="quick-patient-age"
                 type="number"
                 min="0"
                 max="150"
@@ -211,12 +211,12 @@ export default function PatientQuickCreateDialog({
               />
             </div>
             <div>
-              <Label>Gender *</Label>
+              <Label htmlFor="quick-patient-gender">Gender *</Label>
               <Select
                 value={form.gender}
                 onValueChange={(value: string) => setForm((prev) => ({ ...prev, gender: value }))}
               >
-                <SelectTrigger>
+                <SelectTrigger id="quick-patient-gender">
                   <SelectValue placeholder="Select gender" />
                 </SelectTrigger>
                 <SelectContent>
@@ -227,8 +227,8 @@ export default function PatientQuickCreateDialog({
               </Select>
             </div>
             <div className="md:col-span-2">
-              <Label>Phone *</Label>
-              <Input
+              <Label htmlFor="quick-patient-phone">Phone *</Label>
+              <Input id="quick-patient-phone"
                 value={form.phone}
                 onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
                 placeholder="Phone number (e.g., +1234567890 or 9876543210)"
@@ -236,8 +236,8 @@ export default function PatientQuickCreateDialog({
               />
             </div>
             <div className="md:col-span-2">
-              <Label>Email</Label>
-              <Input
+              <Label htmlFor="quick-patient-email">Email</Label>
+              <Input id="quick-patient-email"
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
@@ -245,20 +245,20 @@ export default function PatientQuickCreateDialog({
               />
             </div>
             <div className="md:col-span-2">
-              <Label>ABHA ID</Label>
-              <Input
+              <Label htmlFor="quick-patient-abha">ABHA ID</Label>
+              <Input id="quick-patient-abha"
                 value={form.abhaId}
                 onChange={(e) => setForm((prev) => ({ ...prev, abhaId: e.target.value }))}
                 placeholder="Optional - 14-digit ABHA number"
               />
             </div>
             <div className="md:col-span-2">
-              <Label>Consultation Type</Label>
+              <Label htmlFor="quick-patient-consultation">Consultation Type</Label>
               <Select
                 value={form.consultationType}
                 onValueChange={(value: string) => setForm((prev) => ({ ...prev, consultationType: value }))}
               >
-                <SelectTrigger>
+                <SelectTrigger id="quick-patient-consultation">
                   <SelectValue placeholder="Select consultation type" />
                 </SelectTrigger>
                 <SelectContent>
