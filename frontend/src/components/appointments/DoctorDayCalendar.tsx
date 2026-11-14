@@ -55,9 +55,7 @@ export interface DoctorDayCalendarProps {
   onAppointmentUpdate?: () => void;
   timeSlotConfig?: TimeSlotConfig;
   disableSlotBooking?: boolean;
-  /** The patient being booked; when the doctor already sees them this day, a line above the calendar says so. */
   selectedPatientId?: string;
-  /** True for a role the server lets start visits; a confirmed row then shows Start visit. */
   canStartVisit?: boolean;
   selectedRoomName?: string;
   /** Patients the doctor may see in one slot of one calendar. 1 (the default) keeps every occupied tile closed. */

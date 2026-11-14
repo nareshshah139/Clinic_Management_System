@@ -342,7 +342,7 @@ export default function CalendarColumn({
                     title={primaryLabel}
                     onClick={() => (confirms ? onMoveCalendar(apt, spec.move.to) : onStartVisit(apt))}
                     disabled={isOptimistic}
-                    className="my-px mr-0.5 shrink-0 self-start whitespace-nowrap rounded bg-blue-700 px-2 text-[11px] font-semibold leading-4 text-white hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="my-px mr-0.5 hidden shrink-0 self-start whitespace-nowrap rounded @min-[16rem]/row:inline-block bg-blue-700 px-2 text-[11px] font-semibold leading-4 text-white hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     {primaryLabel}
                   </button>

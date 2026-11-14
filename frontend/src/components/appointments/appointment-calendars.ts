@@ -6,7 +6,6 @@ export interface CalendarSpec {
   title: string;
   accentColor: string;
   description: string;
-  /** The one line a column header carries; the legend spells out `description`. */
   hint: string;
   count: (patients: number) => string;
   empty: string;
