@@ -5,6 +5,8 @@ import { apiClient } from '@/lib/api';
 import { AppointmentStatus, type AppointmentCalendar } from '@cms/shared-types';
 
 const stableToast = jest.fn();
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: stableToast }),
 }));
@@ -34,9 +36,13 @@ const conflict = (overbook?: object) => Object.assign(new Error('Scheduling conf
 });
 
 async function renderDay(...rows: Fixture[]) {
+  return renderDayAs({}, ...rows);
+}
+
+async function renderDayAs(props: { canStartVisit?: boolean; selectedPatientId?: string }, ...rows: Fixture[]) {
   api.getDoctorSchedule.mockResolvedValue(toSchedule(rows));
   const onSelectSlot = jest.fn();
-  render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" onSelectSlot={onSelectSlot} />);
+  render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" onSelectSlot={onSelectSlot} {...props} />);
   await screen.findByRole('region', { name: 'Scheduled' });
   return onSelectSlot;
 }
@@ -202,5 +208,64 @@ describe('DoctorDayCalendar Scheduled and Confirmed calendars', () => {
     await renderDay(ravi);
     const dialog = await openDetails('Ravi Kumar');
     expect(dialog.getByRole('link', { name: '+91 98450 12345' })).toHaveAttribute('href', 'tel:+919845012345');
+  });
+});
+
+describe('DoctorDayCalendar primary action on each row', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('confirms a scheduled patient from the row with the same call as the details dialog, without opening details', async () => {
+    await renderDay(ravi);
+    api.rescheduleAppointment.mockResolvedValueOnce({ id: 'a1' } as never);
+    api.getDoctorSchedule.mockResolvedValue(toSchedule([{ ...ravi, status: AppointmentStatus.CONFIRMED, calendar: 'CONFIRMED' }]));
+
+    fireEvent.click(column('Scheduled').getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => expect(column('Confirmed').getByRole('button', { name: 'Ravi Kumar, 10:00-10:30, Confirmed' })).toBeInTheDocument());
+    expect(api.rescheduleAppointment.mock.calls).toEqual([['a1', { date: '2099-01-01', slot: '10:00-10:30', roomId: undefined, calendar: 'CONFIRMED' }]]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows Start visit on a confirmed row to a role that may start visits, and opens that visit', async () => {
+    api.getDoctorSchedule.mockResolvedValue({
+      appointments: [
+        { id: 'a1', slot: '10:00-10:30', status: 'SCHEDULED', calendar: 'SCHEDULED', visitType: 'OPD', patient: { id: 'p1', name: 'Ravi Kumar' } },
+        { id: 'a2', slot: '11:00-11:30', status: 'CONFIRMED', calendar: 'CONFIRMED', visitType: 'OPD', patient: { id: 'p2', name: 'Priya Nair' } },
+      ],
+    } as never);
+    render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" canStartVisit onSelectSlot={jest.fn()} />);
+    await screen.findByRole('button', { name: 'Start visit' });
+
+    expect(column('Scheduled').queryByRole('button', { name: 'Start visit' })).toBeNull();
+    fireEvent.click(column('Confirmed').getByRole('button', { name: 'Start visit' }));
+    expect(mockPush).toHaveBeenCalledWith('/dashboard/visits?patientId=p2&appointmentId=a2&autoStart=true');
+  });
+
+  it('shows no Start visit to a role that may not start visits', async () => {
+    await renderDayAs({ canStartVisit: false }, priya);
+    expect(screen.queryByRole('button', { name: /visit/i })).toBeNull();
+  });
+});
+
+describe('DoctorDayCalendar patient already booked that day', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('says so above the calendar when the selected patient has a time that day, and still offers every free time', async () => {
+    api.getDoctorSchedule.mockResolvedValue({
+      appointments: [{ id: 'a1', slot: '10:00-10:15', status: 'CONFIRMED', calendar: 'CONFIRMED', visitType: 'OPD', patient: { id: 'p9', name: 'Kavita Naik' } }],
+    } as never);
+    render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" selectedPatientId="p9" onSelectSlot={jest.fn()} />);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Kavita Naik already has 10:00 on 01 Jan 2099');
+    expect(column('Confirmed').getAllByRole('button', { name: /^Book / }).length).toBeGreaterThan(0);
+  });
+
+  it('stays silent for a patient with nothing that day', async () => {
+    api.getDoctorSchedule.mockResolvedValue({
+      appointments: [{ id: 'a1', slot: '10:00-10:15', status: 'CONFIRMED', calendar: 'CONFIRMED', visitType: 'OPD', patient: { id: 'p9', name: 'Kavita Naik' } }],
+    } as never);
+    render(<DoctorDayCalendar doctorId="doc-1" date="2099-01-01" selectedPatientId="p2" onSelectSlot={jest.fn()} />);
+    await screen.findByRole('region', { name: 'Confirmed' });
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });

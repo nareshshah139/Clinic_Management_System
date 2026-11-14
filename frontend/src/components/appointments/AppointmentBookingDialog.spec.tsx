@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
+import { apiClient } from '@/lib/api';
 
 jest.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: jest.fn() }),
@@ -51,5 +52,24 @@ describe('AppointmentBookingDialog', () => {
       visitType: 'OPD',
       slot: '10:00-10:30',
     }));
+  });
+
+  it('offers a room as an optional choice for a consultation and books without one', async () => {
+    jest.mocked(apiClient.getRooms).mockResolvedValueOnce({ rooms: [{ id: 'r1', name: 'Consultation Room 1', type: 'Consultation', capacity: 3, isActive: true }] } as never);
+    render(<AppointmentBookingDialog {...baseProps} />);
+
+    expect(await screen.findByText('Room (optional)')).toBeInTheDocument();
+    expect(await screen.findByRole('combobox', { name: 'Room' })).toHaveTextContent('No room');
+    fireEvent.click(screen.getByRole('button', { name: 'Book' }));
+
+    await waitFor(() => expect(baseProps.onConfirm).toHaveBeenCalledWith({ visitType: 'OPD', roomId: undefined, slot: '10:00-10:30', notes: undefined }));
+  });
+
+  it('carries no helper sentences, capacity lines or Confirm Booking button', async () => {
+    render(<AppointmentBookingDialog {...baseProps} />);
+    await screen.findByRole('button', { name: 'Book' });
+    for (const gone of [/Adjusts end time/, /Regular outpatient consultation/, /Room selection is optional/, /Capacity/, /Confirm Booking/]) {
+      expect(screen.queryByText(gone)).toBeNull();
+    }
   });
 });
