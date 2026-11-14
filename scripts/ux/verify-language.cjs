@@ -60,7 +60,7 @@ async function main() {
       assert.match(text, /HITL/);
       assert.match(text, /FEFO/);
     } else {
-      assert.match(text, /Pharmacist review/);
+      assert.match(text, /\d+\/\d+ lines reviewed/);
       assert.match(text, /05 Nov 2026, 02:30 pm/);
       assert.match(text, /30 Nov 2026/);
       assert.doesNotMatch(text, /\bHITL\b|\bFEFO\b|Agentic Pharmacy/);

@@ -31,13 +31,14 @@ async function main() {
       else if (url.pathname === '/api/patients') body = { patients: [{ id: 'search-fixture', firstName: 'Search', lastName: 'Fixture', gender: 'OTHER' }], data: [{ id: 'search-fixture', firstName: 'Search', lastName: 'Fixture', gender: 'OTHER' }], total: 1 };
       else if (url.pathname === '/api/appointments') body = { appointments: [], data: [] };
       else if (url.pathname === '/api/users') body = { users: [], data: [] };
+      else if (url.pathname === '/api/pharmacy/reports/daily-collection') body = { wholeDay: null, collection: { expectedTotal: 0, modes: [] } };
       await request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     });
     const base = process.env.CLINIC_URL || 'http://localhost:3000';
     await page.setCookie({ name: 'auth_token', value: 'navigation-check-fixture', url: base });
     await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(() => document.body.innerText.includes('Navigation Check'));
-    const input = 'input[placeholder="Search patients, appointments, doctors..."]';
+    const input = 'input[placeholder="Find a patient"]';
     await page.waitForSelector(input);
     await page.type(input, 'Search');
     assert.equal(await page.evaluate(() => document.body.innerText.includes('No results found')), false, 'Debounced search must not report an empty result before responding');
