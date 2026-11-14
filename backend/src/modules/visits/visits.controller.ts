@@ -631,6 +631,21 @@ export class VisitsController {
     return new StreamableFile(data);
   }
 
+  @Patch(':id/photos/:attachmentId')
+  async retagVisitPhoto(
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+    @Body() body: { position?: string },
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const position = typeof body?.position === 'string' ? body.position.toUpperCase() : '';
+    if (!['FRONT', 'LEFT_PROFILE', 'RIGHT_PROFILE', 'BACK', 'CLOSE_UP', 'OTHER'].includes(position)) {
+      throw new BadRequestException('Unknown photo position');
+    }
+    const { visitVersion } = await this.visitsService.retagVisitAttachment(id, attachmentId, position, (req.branchId ?? req.user.branchId));
+    return { ...await this.visitsService.listAttachments(id, (req.branchId ?? req.user.branchId)), visitVersion };
+  }
+
   @Delete(':id/photos/legacy')
   @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   async deleteLegacyPhoto(

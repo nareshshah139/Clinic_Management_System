@@ -244,6 +244,15 @@ databaseTests('Visit and prescription lifecycle against PostgreSQL', () => {
     expect((await visits.listAttachments(v.id, branchId)).visitVersion).toBe(3);
   });
 
+  it('retags a photo position, reorders it and acknowledges the new visit version', async () => {
+    const v = await visit();
+    const added = await visits.createVisitAttachment(v.id, branchId, { preferredExt: 'png', contentType: 'image/png', buffer: Buffer.from('SYNTHETIC'), position: 'FRONT', displayOrder: 1 });
+    const retagged = await visits.retagVisitAttachment(v.id, added.id, 'CLOSE_UP', branchId);
+    expect(retagged.visitVersion).toBe(2);
+    expect((await visits.listAttachments(v.id, branchId)).items).toEqual([expect.objectContaining({ url: `/visits/${v.id}/photos/${added.id}`, position: 'CLOSE_UP', displayOrder: 5 })]);
+    await expect(visits.retagVisitAttachment(v.id, added.id, 'BACK', otherBranchId)).rejects.toThrow('Attachment not found');
+  });
+
   it('authorizes every draft operation against the authenticated branch', async () => {
     const file = await draft(foreignPatient.id, otherBranchId);
     await expect(draft(foreignPatient.id, branchId)).rejects.toThrow('Patient not found in this branch');

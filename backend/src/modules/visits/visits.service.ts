@@ -1219,6 +1219,19 @@ export class VisitsService {
     });
   }
 
+  async retagVisitAttachment(visitId: string, attachmentId: string, position: string, branchId: string) {
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${visitId} FOR UPDATE`;
+      const attachment = await tx.visitAttachment.findFirst({ where: {
+        id: attachmentId, visitId, visit: { deletedAt: null, patient: { branchId }, doctor: { branchId } },
+      }, select: { id: true } });
+      if (!attachment) throw new NotFoundException('Attachment not found');
+      await tx.visitAttachment.update({ where: { id: attachmentId }, data: { position: position as any, displayOrder: this.positionOrderValue(position) } });
+      const updated = await tx.visit.update({ where: { id: visitId }, data: { version: { increment: 1 } }, select: { version: true } });
+      return { ok: true, visitVersion: updated.version };
+    });
+  }
+
   async deleteLegacyAttachment(visitId: string, url: string, branchId: string) {
     const visit = await this.prisma.visit.findFirst({ where: { id: visitId, deletedAt: null }, include: { patient: true, doctor: true } });
     if (!visit) throw new NotFoundException('Visit not found');
