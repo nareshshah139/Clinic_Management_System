@@ -5588,6 +5588,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="md:col-span-1">
                 <label className="text-sm text-foreground">Review Date</label>
                 <Input aria-label="Review date" type="date" value={reviewDate || ''} onChange={(e) => onChangeReviewDate?.(e.target.value)} />
+                <p className="mt-1 text-xs text-muted-foreground">When you complete the visit, the first free slot that day is booked.</p>
                 {reviewDateShortcutDays.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {reviewDateShortcutDays.map((days) => (

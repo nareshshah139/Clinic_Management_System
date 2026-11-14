@@ -334,6 +334,7 @@ describe('VisitsController', () => {
         visitId,
         completeDto,
         mockRequest.user.branchId,
+        mockRequest.user.id,
       );
     });
   });

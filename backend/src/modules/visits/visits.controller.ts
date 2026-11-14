@@ -484,7 +484,7 @@ export class VisitsController {
     @Body() completeVisitDto: CompleteVisitDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.complete(id, completeVisitDto, (req.branchId ?? req.user.branchId));
+    return this.visitsService.complete(id, completeVisitDto, (req.branchId ?? req.user.branchId), req.user.id);
   }
 
   @Delete(':id')
