@@ -90,6 +90,11 @@ export default function DashboardPage() {
       (error) => setAlerts({ status: 'error', failure: loadFailure(error) }),
     );
   }, []);
+  const [billsChanged, setBillsChanged] = useState(0);
+  const billChanged = useCallback(() => {
+    setBillsChanged((n) => n + 1);
+    loadAlerts();
+  }, [loadAlerts]);
   useEffect(() => {
     if (!loading && readsAlerts) loadAlerts();
   }, [loading, readsAlerts, loadAlerts]);
@@ -123,8 +128,8 @@ export default function DashboardPage() {
         </Button>
       </div>
     ),
-    deskDay: () => <TodaysAppointments mode="desk" />,
-    billsToCollect: () => <BillsDue alerts={alerts} onRetry={loadAlerts} title="Bills to collect" />,
+    deskDay: () => <TodaysAppointments mode="desk" refresh={billsChanged} onBillChanged={billChanged} />,
+    billsToCollect: () => <BillsDue alerts={alerts} onRetry={loadAlerts} onBillChanged={billChanged} title="Bills to collect" />,
     doctorDay: () => <TodaysAppointments mode="doctor" doctorId={user?.id} />,
     doctorPatients: () => (user?.id ? <DoctorPatientPanels doctorId={user.id} /> : null),
     pharmacy: () => <PharmacyWork alerts={alerts} onRetry={loadAlerts} />,

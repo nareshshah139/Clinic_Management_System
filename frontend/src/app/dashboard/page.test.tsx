@@ -151,6 +151,20 @@ it('takes the money for a bill due right on the landing page, and the bill leave
   const billsBehindDialog = () => within(screen.getByRole('list', { name: 'Bills to collect', hidden: true })).getAllByRole('button', { hidden: true });
   await waitFor(() => expect(billsBehindDialog().map(text)).toEqual(['Rohan Kulkarni₹1,450.00']));
   expect(api.processPayment).toHaveBeenCalledWith({ invoiceId: 'inv-9', amount: 2360, method: 'CASH' });
+  expect(api.getAppointments).toHaveBeenCalledTimes(2);
+});
+
+it("reloads the bills to collect after a payment taken from an appointment's chip", async () => {
+  render(<DashboardPage />);
+
+  await screen.findByRole('list', { name: 'Bills to collect' });
+  api.getInvoiceById.mockResolvedValue({ id: 'inv-1', invoiceNo: 'INV-1', total: 500, balance: 200, received: 300, items: [], payments: [] });
+  api.processPayment.mockResolvedValue({});
+  api.getAppointments.mockResolvedValue({ appointments: day.map((a) => (a.id === 'a1' ? { ...a, billing: { ...paid, state: 'DUE', received: 300, due: 200 } } : a)) });
+  fireEvent.click(await screen.findByRole('button', { name: /paid/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Record ₹200 payment' }));
+
+  await waitFor(() => expect(api.getSystemAlerts).toHaveBeenCalledTimes(2));
 });
 
 it('shows a bill due as plain text to a role that cannot take the payment', async () => {

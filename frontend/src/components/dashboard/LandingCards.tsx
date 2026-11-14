@@ -94,7 +94,7 @@ async function billOf(booked: BillAppointment): Promise<OpenBill | null> {
   return row ? { booked, appointment: toRow(row), access: schedule.billingAccess ?? NO_BILL_ACCESS } : null;
 }
 
-export function BillsDue({ alerts, onRetry, title = 'Bills due' }: { alerts: Loadable<ClinicAlerts>; onRetry: () => void; title?: string }) {
+export function BillsDue({ alerts, onRetry, onBillChanged = onRetry, title = 'Bills due' }: { alerts: Loadable<ClinicAlerts>; onRetry: () => void; onBillChanged?: () => void; title?: string }) {
   const [open, setOpen] = useState<OpenBill | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const canTakePayment = alerts.status === 'ready' && !!alerts.value.canTakePayment;
@@ -106,7 +106,7 @@ export function BillsDue({ alerts, onRetry, title = 'Bills due' }: { alerts: Loa
     else setOpenError(`Couldn't open the bill for ${bill.patient?.name ?? bill.invoiceNo}. Try again from the calendar.`);
   };
   const onPaid = async () => {
-    onRetry();
+    onBillChanged();
     if (open) setOpen(await billOf(open.booked).catch(() => open));
   };
 

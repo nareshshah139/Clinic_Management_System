@@ -93,7 +93,8 @@ function visitLabel(row: Row): string | null {
   return row.visit.status === 'COMPLETED' ? 'Open visit' : 'Continue visit';
 }
 
-export function TodaysAppointments({ mode, doctorId }: { mode: AppointmentsMode; doctorId?: string }) {
+/** refresh reloads the day when it changes; onBillChanged replaces the day's own reload after a bill changes, so the page can reload every list that shows bills. */
+export function TodaysAppointments({ mode, doctorId, refresh, onBillChanged }: { mode: AppointmentsMode; doctorId?: string; refresh?: number; onBillChanged?: () => void }) {
   const router = useRouter();
   const [state, setState] = useState<{ status: 'loading' } | { status: 'error'; failure: LoadFailure } | { status: 'ready'; rows: Row[]; access: ClinicBillAccess }>({ status: 'loading' });
   const [billForId, setBillForId] = useState<string | null>(null);
@@ -111,7 +112,7 @@ export function TodaysAppointments({ mode, doctorId }: { mode: AppointmentsMode;
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refresh]);
 
   const rows = state.status === 'ready' ? state.rows : [];
   const nextId = rows.find((row) => !FINISHED.has(row.status))?.id;
@@ -175,7 +176,7 @@ export function TodaysAppointments({ mode, doctorId }: { mode: AppointmentsMode;
           date={today}
           access={state.status === 'ready' ? state.access : NO_BILL_ACCESS}
           onClose={() => setBillForId(null)}
-          onChanged={load}
+          onChanged={onBillChanged ?? load}
         />
       )}
     </Card>
