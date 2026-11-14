@@ -39,12 +39,9 @@ import {
 } from '@/lib/whatsapp-settings';
 import { formatRupee } from '@/components/pharmacy/reports/report-format';
 
-const DAILY_COLLECTION = '/dashboard/pharmacy/reports?report=daily-collection';
-const LOW_STOCK_LIST = '/dashboard/inventory?area=stock&view=list&stock=LOW';
-const EXPIRING_LIST = '/dashboard/inventory?area=stock&view=list&expiryMonths=3';
+import { DAILY_COLLECTION, EXPIRING_LIST, LOW_STOCK_LIST, appointmentsOn } from '@/lib/dashboard-links';
+
 const REPORT_ROLES = ['OWNER', 'ADMIN', 'MANAGER'];
-const dayOf = (value: string) => String(value).slice(0, 10);
-const appointmentsOn = (day: string) => `/dashboard/appointments?date=${day}`;
 
 interface SearchResult {
   id: string;
@@ -205,7 +202,7 @@ export function Header() {
           id: `appt-${a.id}`,
           title: `${a.patientName || 'Patient'} on ${displayUtcDate(a.time)}`,
           description: `${a.visitType || 'Visit'} • Dr. ${a.doctorName || ''}`.trim(),
-          href: appointmentsOn(dayOf(a.time)),
+          href: appointmentsOn(a.time),
         }));
         pushMany(apptItems, 4);
         pushMany(billItems(onBillDay), 3);
@@ -426,7 +423,7 @@ export function Header() {
             subtitle: `Dr. ${doctorName}`,
             description: `Appointment • ${displayUtcDate(appointment.date)} • ${appointment.visitType || 'OPD'}`,
             icon: Calendar,
-            href: appointmentsOn(dayOf(appointment.date)),
+            href: appointmentsOn(appointment.date),
           });
         });
       } catch (e) {

@@ -1,27 +1,21 @@
 'use client';
 
+import Link from 'next/link';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { CalendarPlus, Download, UserPlus } from 'lucide-react';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
-import { EmptyState } from '@/components/ui/empty-state';
 import { Spinner } from '@/components/ui/spinner';
 import { PageHeader } from '@/components/ui/page-header';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Package, TrendingUp, AlertTriangle, Clock, Database, Download } from 'lucide-react';
-import { apiClient, type ApiError } from '@/lib/api';
-import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
+import { apiClient } from '@/lib/api';
+import type { ClinicAlerts } from '@/lib/dashboard-links';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
-import { useRouter } from 'next/navigation';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { DoctorPatientPanels } from '@/components/dashboard/DoctorPatientPanels';
-import { formatPatientName, getISTDateString } from '@/lib/utils';
-import { APPOINTMENT_READ_ROLES } from '@/lib/appointment-access';
-
-type LoadFailure = 'forbidden' | 'unavailable';
-
-const loadFailure = (error: unknown): LoadFailure =>
-  (error as ApiError)?.status === 403 ? 'forbidden' : 'unavailable';
+import { TodaysAppointments } from '@/components/dashboard/TodaysAppointments';
+import { ApprovalsFigure, BillsDue, CollectionFigure, NeedsAttention, PharmacyWork, type Loadable } from '@/components/dashboard/LandingCards';
+import { loadFailure } from '@/components/dashboard/load-failure';
 
 /**
  * @cc [owner:nareshshah139,label:product] dashboard-clinic-day
@@ -38,437 +32,141 @@ const loadFailure = (error: unknown): LoadFailure =>
  * Appointment rows MUST display the booked slot unchanged, without a clock time
  * derived from the appointment's calendar date.
  */
+
+type Section = 'deskActions' | 'deskDay' | 'billsToCollect' | 'doctorDay' | 'doctorPatients' | 'pharmacy' | 'figures' | 'attention' | 'summaryDay' | 'collection' | 'backup';
+
+/** Each role's landing page, top to bottom: its own work first, rare admin controls last. */
+const LANDING: Record<string, Section[]> = {
+  RECEPTION: ['deskActions', 'deskDay', 'billsToCollect'],
+  DOCTOR: ['doctorDay', 'doctorPatients'],
+  PHARMACIST: ['pharmacy'],
+  OWNER: ['figures', 'attention', 'summaryDay', 'backup'],
+  ADMIN: ['figures', 'attention', 'summaryDay', 'backup'],
+  MANAGER: ['figures', 'attention', 'summaryDay'],
+  NURSE: ['summaryDay'],
+  ACCOUNTANT: ['collection'],
+};
+const READS_ALERTS: Section[] = ['billsToCollect', 'pharmacy', 'figures', 'attention'];
+
+const GUIDE: Record<Section, { title: string; items: string[] } | null> = {
+  deskActions: { title: 'Start here', items: ['Book appointment opens the calendar.', 'New patient registers a walk-in.'] },
+  deskDay: { title: "Today's appointments", items: ['The next patient is at the top; finished visits move to the bottom.', "Press a bill to see it, create it or take a payment."] },
+  billsToCollect: { title: 'Bills to collect', items: ['Each open bill with what is still owed. Press a name to open the calendar on that day.'] },
+  doctorDay: { title: "Today's patients", items: ['Your next patient is at the top.', 'Start visit opens a new visit; Continue visit opens one already started.'] },
+  doctorPatients: { title: 'My patients', items: ['Type a name, phone or code to find one of your patients.', 'Recent visits below open the visit.'] },
+  pharmacy: { title: 'Pharmacy', items: ['Bill opens a bill filled from the prescription.', 'New sale starts a bill for a walk-in.', 'Low stock and Expiring in 3 months open those Inventory lists.'] },
+  figures: { title: 'Today', items: ["Today's collection opens Daily Collection.", 'Bills due lists who still owes; press a name to open that day.', 'Waiting for approval opens the Inventory approvals.'] },
+  attention: { title: 'Needs attention', items: ['Low stock and expiring medicines by name; each heading opens the Inventory list.'] },
+  summaryDay: { title: "Today's appointments", items: ['The first bookings of the day; View All Appointments opens the calendar.'] },
+  collection: { title: "Today's collection", items: ['Opens Daily Collection.'] },
+  backup: { title: 'Database backup', items: ['Backups stay on the server and contain sensitive data.'] },
+};
+
+function greeting(firstName?: string) {
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+  const part = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  return firstName ? `${part}, ${firstName}` : part;
+}
+
 export default function DashboardPage() {
-  const [statistics, setStatistics] = useState<SystemStatistics | null>(null);
-  const [alerts, setAlerts] = useState<SystemAlert[]>([]);
-  const [todaysAppointments, setTodaysAppointments] = useState<Appointment[]>([]);
-  const [alertsFailure, setAlertsFailure] = useState<LoadFailure | null>(null);
-  const [appointmentsFailure, setAppointmentsFailure] = useState<LoadFailure | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [backupLoading, setBackupLoading] = useState(false);
-  const { user: currentUser, loading: userLoading } = useDashboardUser();
-  const readsAppointments = APPOINTMENT_READ_ROLES.includes(currentUser?.role ?? '');
-  const router = useRouter();
+  const { user, loading } = useDashboardUser();
+  const role = user?.role ?? '';
+  const sections = LANDING[role] ?? [];
+  const readsAlerts = sections.some((s) => READS_ALERTS.includes(s));
+  const [alerts, setAlerts] = useState<Loadable<ClinicAlerts>>({ status: 'loading' });
 
-  const showAdminControls = useMemo(() => {
-    const role = currentUser?.role;
-    return role === 'ADMIN' || role === 'OWNER';
-  }, [currentUser?.role]);
-
-  const loadAlerts = useCallback(async () => {
-    try {
-      const alertsData = await apiClient.getSystemAlerts<any>();
-      const transformedAlerts: SystemAlert[] = [];
-
-      // Transform overdue invoices to alerts
-      if (alertsData.overdueInvoices && alertsData.overdueInvoices.length > 0) {
-        const count = alertsData.overdueInvoices.length;
-        transformedAlerts.push({
-          id: 'overdue-invoices-summary',
-          title: 'Overdue Invoices',
-          message: `${count} invoice${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} overdue. Total amount: ₹${alertsData.overdueInvoices.reduce((sum: number, inv: any) => sum + (inv.total || 0), 0).toFixed(2)}`,
-          severity: 'HIGH',
-          type: 'billing',
-          createdAt: alertsData.generatedAt || new Date().toISOString(),
-        });
-      }
-
-      // Transform low stock alerts
-      if (alertsData.lowStockAlerts && alertsData.lowStockAlerts.length > 0) {
-        const count = alertsData.lowStockAlerts.length;
-        transformedAlerts.push({
-          id: 'low-stock-summary',
-          title: 'Low Stock Alert',
-          message: `${count} item${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} below reorder level`,
-          severity: 'MEDIUM',
-          type: 'inventory',
-          createdAt: alertsData.generatedAt || new Date().toISOString(),
-        });
-      }
-
-      // Transform expiry alerts
-      if (alertsData.expiryAlerts && alertsData.expiryAlerts.length > 0) {
-        const count = alertsData.expiryAlerts.length;
-        const expiringSoon = alertsData.expiryAlerts.filter((a: any) => a.daysUntilExpiry <= 7).length;
-        transformedAlerts.push({
-          id: 'expiry-alerts-summary',
-          title: 'Expiring Items',
-          message: `${count} item${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} expiring within 30 days${expiringSoon > 0 ? ` (${expiringSoon} within 7 days)` : ''}`,
-          severity: expiringSoon > 0 ? 'HIGH' : 'MEDIUM',
-          type: 'inventory',
-          createdAt: alertsData.generatedAt || new Date().toISOString(),
-        });
-      }
-
-      // Transform pending payments
-      if (alertsData.pendingPayments && alertsData.pendingPayments.length > 0) {
-        const count = alertsData.pendingPayments.length;
-        transformedAlerts.push({
-          id: 'pending-payments-summary',
-          title: 'Pending Payments',
-          message: `${count} payment${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} pending reconciliation`,
-          severity: 'LOW',
-          type: 'billing',
-          createdAt: alertsData.generatedAt || new Date().toISOString(),
-        });
-      }
-
-      // Add system status alert (always present)
-      transformedAlerts.push({
-        id: 'system-status',
-        title: 'System Status',
-        message: 'All systems operational',
-        severity: 'LOW',
-        type: 'system',
-        createdAt: new Date().toISOString(),
-      });
-
-      setAlerts(transformedAlerts);
-      setAlertsFailure(null);
-    } catch (error: unknown) {
-      console.warn('Unable to load system alerts', error);
-      setAlerts([]);
-      setAlertsFailure(loadFailure(error));
-    }
+  const loadAlerts = useCallback(() => {
+    apiClient.getSystemAlerts<ClinicAlerts>().then(
+      (value) => setAlerts({ status: 'ready', value: value ?? {} }),
+      (error) => setAlerts({ status: 'error', failure: loadFailure(error) }),
+    );
   }, []);
-
-  const loadTodaysAppointments = useCallback(async () => {
-    const todayDate = getISTDateString();
-    try {
-      let appointments: Appointment[];
-      if (currentUser?.role === 'DOCTOR' && currentUser?.id) {
-        const schedule = await apiClient.getDoctorSchedule(currentUser.id, todayDate);
-        appointments = schedule?.appointments ?? [];
-      } else {
-        const res: any = await apiClient.getAppointments({ date: todayDate, limit: 5, sortBy: 'slot', sortOrder: 'asc' });
-        appointments = res?.appointments || res?.data || [];
-      }
-      setTodaysAppointments(appointments);
-      setAppointmentsFailure(null);
-    } catch (error) {
-      console.error("Failed to load today's appointments", error);
-      setTodaysAppointments([]);
-      setAppointmentsFailure(loadFailure(error));
-    }
-  }, [currentUser?.id, currentUser?.role]);
-
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      if (userLoading) return;
-      try {
-        setLoading(true);
-        
-        // Fetch system statistics (ignore if unauthorized for role)
-        try {
-          const stats = await apiClient.getSystemStatistics();
-          setStatistics(stats as SystemStatistics);
-        } catch (error: unknown) {
-          setStatistics(null);
-          console.warn('Unable to load system statistics', error);
-        }
+    if (!loading && readsAlerts) loadAlerts();
+  }, [loading, readsAlerts, loadAlerts]);
 
-        await Promise.all([loadAlerts(), readsAppointments ? loadTodaysAppointments() : undefined]);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        // Set fallback data on error
-        setStatistics({
-          users: { total: 0, active: 0 },
-          branches: { total: 0, active: 0 },
-          system: { status: 'error', version: '1.0.0', uptime: 0 },
-          generatedAt: new Date().toISOString(),
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void fetchDashboardData();
-  }, [loadAlerts, loadTodaysAppointments, readsAppointments, userLoading]);
-
-  const handleBackup = async () => {
-    try {
-      setBackupLoading(true);
-      const result = await apiClient.createDatabaseBackup();
-      
-      // Show success message
-      const backupInfo = (result as unknown as { backup: { timestamp: string; directory: string; size: number } }).backup;
-      alert(`✅ Database backup created successfully!\n\nTimestamp: ${backupInfo.timestamp}\nLocation: ${backupInfo.directory}\nSize: ${(backupInfo.size / 1024).toFixed(1)} KB\n\nBackup saved to local server directory.`);
-      
-    } catch (error: unknown) {
-      console.error('Backup failed:', error);
-      const message = (error as { message?: string })?.message || 'Backup creation failed';
-      alert(`❌ Backup Failed\n\n${message}`);
-    } finally {
-      setBackupLoading(false);
-    }
-  };
-
-  if (userLoading || loading) {
+  const header = (
+    <PageHeader
+      title={greeting(user?.firstName)}
+      actions={sections.length > 0 && (
+        <QuickGuide title="Dashboard guide" sections={sections.map((s) => GUIDE[s]).filter((g): g is { title: string; items: string[] } => !!g)} />
+      )}
+    />
+  );
+  if (loading) {
     return (
       <div className="space-y-6">
-        <div>
-          <PageHeader title="Dashboard" description="Welcome back! Here’s what’s happening at your clinic today." />
-        </div>
+        {header}
         <LoadingSkeleton variant="cards" label="Loading dashboard…" />
       </div>
     );
   }
 
-  const statCards = [
-    {
-      title: 'Total Users',
-      value: statistics?.users?.total || 0,
-      icon: Users,
-    },
-    {
-      title: 'Active Users',
-      value: statistics?.users?.active || 0,
-      icon: Users,
-    },
-    {
-      title: 'Total Branches',
-      value: statistics?.branches?.total || 0,
-      icon: Package,
-    },
-    {
-      title: 'System Status',
-      value: statistics?.system?.status || 'unknown',
-      icon: TrendingUp,
-    },
-  ];
+  const render: Record<Section, () => ReactNode> = {
+    deskActions: () => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" data-tour="desk-actions">
+        <Button asChild size="lg" className="h-16 text-lg">
+          <Link href="/dashboard/appointments"><CalendarPlus className="mr-2 h-6 w-6" />Book appointment</Link>
+        </Button>
+        <Button asChild size="lg" variant="outline" className="h-16 text-lg">
+          <Link href="/dashboard/patients?new=walkin"><UserPlus className="mr-2 h-6 w-6" />New patient</Link>
+        </Button>
+      </div>
+    ),
+    deskDay: () => <TodaysAppointments mode="desk" />,
+    billsToCollect: () => <BillsDue alerts={alerts} onRetry={loadAlerts} title="Bills to collect" />,
+    doctorDay: () => <TodaysAppointments mode="doctor" doctorId={user?.id} />,
+    doctorPatients: () => (user?.id ? <DoctorPatientPanels doctorId={user.id} /> : null),
+    pharmacy: () => <PharmacyWork alerts={alerts} onRetry={loadAlerts} />,
+    figures: () => (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <CollectionFigure />
+        <BillsDue alerts={alerts} onRetry={loadAlerts} />
+        <ApprovalsFigure role={role} />
+      </div>
+    ),
+    attention: () => <NeedsAttention alerts={alerts} onRetry={loadAlerts} />,
+    summaryDay: () => <TodaysAppointments mode="summary" />,
+    collection: () => <div className="max-w-md"><CollectionFigure /></div>,
+    backup: () => <BackupCard />,
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <PageHeader title="Dashboard" description="Welcome back! Here’s what’s happening at your clinic today." actions={<><QuickGuide
-          title="Dashboard Guide"
-          sections={[
-            {
-              title: "Overview",
-              items: [
-                "View key metrics including total users, active users, and branches",
-                "Monitor system status and health at a glance",
-                "Check today's appointments and upcoming schedule"
-              ]
-            },
-            {
-              title: "System Alerts",
-              items: [
-                "Important notifications appear in the alerts section",
-                "Alerts are color-coded by severity (red=high, yellow=medium, blue=low)",
-                "Click on any alert to view more details"
-              ]
-            },
-            ...(showAdminControls ? [{
-              title: "Admin Controls",
-              items: [
-                "Create database backups from the admin controls section",
-                "Backups are stored locally on the server",
-                "Regular backups are recommended for data safety"
-              ]
-            }] : [])
-          ]}
-        /></>} />
-
-      {currentUser?.role === 'DOCTOR' && currentUser.id ? <DoctorPatientPanels doctorId={currentUser.id} /> : null}
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-tour="dashboard-stats">
-        {statCards.map((stat, index) => (
-          <Card key={index}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                  <p className="text-2xl font-semibold tabular-nums text-gray-900">{stat.value}</p>
-                </div>
-                <div className="rounded-md bg-primary-soft p-3">
-                  <stat.icon className="h-6 w-6 text-foreground" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Admin Controls */}
-      {showAdminControls ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Database className="h-5 w-5 text-purple-500 mr-2" />
-              Admin Controls
-            </CardTitle>
-            <CardDescription>
-              Administrative tools and system management
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <h4 className="font-medium text-gray-900">Database Backup</h4>
-                  <p className="text-sm text-gray-600">Create a complete backup of the database</p>
-                </div>
-                <Button 
-                  onClick={handleBackup} 
-                  disabled={backupLoading}
-                  className="flex items-center"
-                >
-                  {backupLoading ? (
-                    <>
-                      <Spinner className="  h-4 w-4   mr-2" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-4 w-4 mr-2" />
-                      Create Backup
-                    </>
-                  )}
-                </Button>
-              </div>
-              <div className="text-xs text-gray-500">
-                ⚠️ Backups are stored locally on the server and contain sensitive data.
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* System Alerts */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-orange-500 mr-2" />
-              System Alerts
-            </CardTitle>
-            <CardDescription>
-              Important notifications requiring your attention
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {alertsFailure ? (
-              <LoadFailureState failure={alertsFailure} subject="clinic alerts" onRetry={() => void loadAlerts()} />
-            ) : alerts.length === 0 ? (
-              <EmptyState icon={AlertTriangle} title="No alerts at this time" description="New clinic notifications will appear here." action={<Button variant="outline" onClick={() => window.location.reload()}>Refresh dashboard</Button>} />
-            ) : (
-              <div className="space-y-3">
-                {alerts.map((alert, index) => (
-                  <div
-                    key={index}
-                    className="flex items-start space-x-3 p-3 rounded-lg bg-gray-50"
-                  >
-                    <div className={`p-1 rounded-full ${
-                      alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                        ? 'bg-red-100'
-                        : alert.severity === 'MEDIUM' 
-                        ? 'bg-yellow-100'
-                        : 'bg-blue-100'
-                    }`}>
-                      <AlertTriangle className={`h-4 w-4 ${
-                        alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                          ? 'text-red-600'
-                          : alert.severity === 'MEDIUM' 
-                          ? 'text-yellow-600'
-                          : 'text-blue-600'
-                      }`} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{alert.title}</p>
-                      <p className="text-xs text-gray-600">{alert.message}</p>
-                    </div>
-                    <Badge variant={
-                      alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                        ? 'danger'
-                        : alert.severity === 'MEDIUM' 
-                        ? 'warning'
-                        : 'info'
-                    }>
-                      {alert.severity}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {readsAppointments && (
-          <Card data-tour="appointments-list">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Clock className="h-5 w-5 text-blue-500 mr-2" />
-                Today&apos;s Appointments
-              </CardTitle>
-              <CardDescription>
-                Upcoming appointments for today
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {appointmentsFailure ? (
-                <LoadFailureState failure={appointmentsFailure} subject="today's appointments" onRetry={() => void loadTodaysAppointments()} />
-              ) : todaysAppointments.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">No appointments scheduled for today</p>
-              ) : (
-                <div className="space-y-3">
-                  {todaysAppointments.map((appointment, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {formatPatientName(appointment.patient)}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {appointment.slot}
-                        </p>
-                      </div>
-                      <Badge variant={
-                        appointment.status === 'CONFIRMED' 
-                          ? 'default' 
-                          : appointment.status === 'IN_PROGRESS'
-                          ? 'warning'
-                          : appointment.status === 'COMPLETED'
-                          ? 'default'
-                          : 'outline'
-                      }>
-                        {appointment.status}
-                      </Badge>
-                    </div>
-                  ))}
-                  <Button
-                    variant="outline"
-                    className="w-full mt-4"
-                    onClick={() => router.push('/dashboard/appointments')}
-                  >
-                    View All Appointments
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      {header}
+      {sections.map((section) => (
+        <section key={section}>{render[section]()}</section>
+      ))}
     </div>
   );
 }
 
-function LoadFailureState({ failure, subject, onRetry }: { failure: LoadFailure; subject: string; onRetry: () => void }) {
+function BackupCard() {
+  const [busy, setBusy] = useState(false);
+  const backup = async () => {
+    try {
+      setBusy(true);
+      const result = await apiClient.createDatabaseBackup();
+      const info = (result as unknown as { backup: { timestamp: string; directory: string; size: number } }).backup;
+      alert(`Database backup created.\n\nTimestamp: ${info.timestamp}\nLocation: ${info.directory}\nSize: ${(info.size / 1024).toFixed(1)} KB`);
+    } catch (error: unknown) {
+      console.error('Backup failed:', error);
+      alert(`Backup failed\n\n${(error as { message?: string })?.message || 'Backup creation failed'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <div role="alert">
-      <EmptyState
-        icon={AlertTriangle}
-        title={`Couldn't load ${subject}`}
-        description={
-          failure === 'forbidden'
-            ? 'Your account does not have access to this yet. Ask an admin to check your role permissions.'
-            : 'This is not an empty list. Check your connection and try again.'
-        }
-        action={<Button variant="outline" onClick={onRetry}>Try again</Button>}
-      />
-    </div>
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Database backup</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-gray-500">⚠️ Backups are stored locally on the server and contain sensitive data.</p>
+        <Button variant="outline" onClick={() => void backup()} disabled={busy}>
+          {busy ? <><Spinner className="h-4 w-4 mr-2" />Creating...</> : <><Download className="h-4 w-4 mr-2" />Create Backup</>}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
