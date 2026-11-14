@@ -648,7 +648,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 
                 <div class="bg-white p-3 rounded-md border-l-4 border-warning">
                   <p class="font-bold text-foreground mb-1">
-                    <span class="bg-warning-border text-white px-2 py-1 rounded-md text-xs mr-2">DOUBLE CLICK</span>
+                    <span class="bg-warning text-warning-foreground px-2 py-1 rounded-md text-xs mr-2">DOUBLE CLICK</span>
                     Open Full Details
                   </p>
                   <p class="text-xs text-foreground mb-2">
