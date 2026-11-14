@@ -67,6 +67,7 @@ describe('UsersManagement', () => {
     await userEvent.click(within(confirmBox).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(api.deleteUser).not.toHaveBeenCalled();
+    await waitFor(() => expect(within(rowOf('Riya Sharma')).getByRole('button', { name: 'More actions for Riya Sharma' })).toHaveFocus());
 
     await chooseRowAction('Riya Sharma', 'Delete');
     confirmBox = await screen.findByRole('alertdialog');
