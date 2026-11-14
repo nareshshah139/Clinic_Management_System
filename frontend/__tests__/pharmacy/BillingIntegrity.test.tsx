@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PharmacyInvoiceBuilderFixed } from "@/components/pharmacy/PharmacyInvoiceBuilderFixed";
 import { PharmacyInvoiceList } from "@/components/pharmacy/PharmacyInvoiceList";
 import { apiClient } from "@/lib/api";
@@ -85,8 +85,6 @@ const invoice = {
 beforeEach(() => {
   jest.clearAllMocks();
   sessionStorage.clear();
-  jest.spyOn(window, "confirm").mockReturnValue(true);
-  jest.spyOn(window, "alert").mockImplementation(() => {});
   (apiClient.get as jest.Mock).mockResolvedValue({ data: [] });
   (apiClient.getPatients as jest.Mock).mockResolvedValue({ data: [] });
   (apiClient.getUsers as jest.Mock).mockResolvedValue({ users: [] });
@@ -96,6 +94,14 @@ beforeEach(() => {
   });
 });
 afterEach(() => jest.restoreAllMocks());
+
+const markPaid = async (button: string) => {
+  fireEvent.click(await screen.findByTitle(button));
+  const dialog = await screen.findByRole("alertdialog");
+  const asked = dialog.textContent;
+  fireEvent.click(within(dialog).getByRole("button", { name: "Mark as paid" }));
+  return asked;
+};
 
 it("reconciles the same checkout payload after a lost response and remount", async () => {
   sessionStorage.setItem(
@@ -158,12 +164,8 @@ it("collects the authoritative remaining 20 rather than the original 100", async
     amount: 20,
   });
   render(<PharmacyInvoiceList />);
-  fireEvent.click(await screen.findByTitle("Mark as Paid"));
-  await waitFor(() =>
-    expect(window.alert).toHaveBeenCalledWith(
-      "Invoice marked as paid successfully",
-    ),
-  );
+  await markPaid("Mark as Paid");
+  await waitFor(() => expect(mockToast).toHaveBeenCalledWith({ title: "PHI-2026-001 marked as paid" }));
   expect((apiClient.post as jest.Mock).mock.calls[0]).toEqual([
     "/pharmacy/invoices/invoice-1/payments",
     {
@@ -189,11 +191,11 @@ it("collects what the ledger leaves due after a refund: paid 200, revised to 150
   });
   (apiClient.post as jest.Mock).mockResolvedValue({ id: "payment-2", amount: 30 });
   render(<PharmacyInvoiceList />);
-  fireEvent.click(await screen.findByTitle("Mark as Paid"));
-  await waitFor(() => expect(window.alert).toHaveBeenCalledWith("Invoice marked as paid successfully"));
-  expect([(apiClient.post as jest.Mock).mock.calls[0][1].amount, (window.confirm as jest.Mock).mock.calls[0][0]]).toEqual([
+  const asked = await markPaid("Mark as Paid");
+  await waitFor(() => expect(mockToast).toHaveBeenCalledWith({ title: "PHI-2026-001 marked as paid" }));
+  expect([(apiClient.post as jest.Mock).mock.calls[0][1].amount, asked]).toEqual([
     30,
-    "Mark invoice PHI-2026-001 as paid?\n\nRemaining payment: ₹30.00",
+    "Mark PHI-2026-001 as paid?Records a payment of ₹30.00, the remaining balance.CancelMark as paid",
   ]);
 });
 
@@ -206,12 +208,8 @@ it("reuses the original payment after a lost response even when reloaded balance
     new Error("Response lost"),
   );
   const first = render(<PharmacyInvoiceList />);
-  fireEvent.click(await screen.findByTitle("Mark as Paid"));
-  await waitFor(() =>
-    expect(window.alert).toHaveBeenCalledWith(
-      "Payment could not be confirmed. Retry to reconcile the same payment.",
-    ),
-  );
+  await markPaid("Mark as Paid");
+  await waitFor(() => expect(mockToast).toHaveBeenCalledWith({ variant: "destructive", title: "Payment could not be confirmed", description: "Retry to reconcile the same payment." }));
   const saved = JSON.parse(
     sessionStorage.getItem("pharmacy-payment-attempt:invoice-1")!,
   );
@@ -230,12 +228,8 @@ it("reuses the original payment after a lost response even when reloaded balance
     pagination: { page: 1, limit: 20, total: 1, pages: 1 },
   });
   render(<PharmacyInvoiceList />);
-  fireEvent.click(await screen.findByTitle("Retry Payment"));
-  await waitFor(() =>
-    expect(window.alert).toHaveBeenCalledWith(
-      "Invoice marked as paid successfully",
-    ),
-  );
+  await markPaid("Retry Payment");
+  await waitFor(() => expect(mockToast).toHaveBeenCalledWith({ title: "PHI-2026-001 marked as paid" }));
   expect((apiClient.post as jest.Mock).mock.calls).toEqual([
     ["/pharmacy/invoices/invoice-1/payments", saved],
     ["/pharmacy/invoices/invoice-1/payments", saved],

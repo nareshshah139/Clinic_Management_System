@@ -96,6 +96,14 @@ function processCurrentInvoice() {
   fireEvent.click(screen.getByRole('button', { name: 'Save & Process' }));
 }
 
+async function giveRecoveryReason(reason: string) {
+  const dialog = await screen.findByRole('alertdialog', { name: 'Recover the interrupted import?' });
+  const recover = within(dialog).getByRole('button', { name: 'Recover import' });
+  expect(recover).toBeDisabled();
+  fireEvent.change(within(dialog).getByRole('textbox', { name: 'What interrupted the import?' }), { target: { value: reason } });
+  fireEvent.click(recover);
+}
+
 function importAutomatically() {
   fireEvent.click(screen.getByText('Automatic import'));
   fireEvent.click(screen.getByRole('button', { name: 'Import & Add Stock' }));
@@ -987,21 +995,19 @@ describe('PurchaseInvoiceWorkbench', () => {
 
   it('recovers a missing invoice opened directly and retains an inventory reconciliation path', async () => {
     api.getPharmacyPurchaseInvoiceById.mockRejectedValue(Object.assign(new Error('Invoice not found'), { status: 404 }));
-    const prompt = jest.spyOn(window, 'prompt').mockReturnValue('Missing saved invoice opened from handoff');
     api.post.mockImplementation(async (url, body: any) => {
       expect(url).toBe('/pharmacy/purchase-invoices/ocr/recover-unlinked');
       expect(body).toEqual(expect.objectContaining({ legacy: true, invoiceId: 'missing-invoice', reason: 'Missing saved invoice opened from handoff' }));
       expect(JSON.parse(sessionStorage.getItem('purchase-intake:branch-1:user-1:missing-invoice')!).unlinkedRecoveryId).toBe(body.recoveryId);
       return { attemptId: body.recoveryId, outcome: 'RETRY_REJECTED', stockOutcome: 'UNVERIFIED', invoiceId: 'missing-invoice' } as any;
     });
-    try {
-      render(<PurchaseInvoiceWorkbench invoiceId="missing-invoice" />);
-      fireEvent.click(await screen.findByRole('button', { name: 'Recover legacy or missing invoice' }));
-      expect(await screen.findByRole('region', { name: 'Rejected uncertain import' })).toHaveTextContent('does not mean no stock was posted');
-      expect(screen.getByRole('link', { name: /Reconcile physical inventory/ })).toHaveAttribute('href', '/dashboard/inventory?area=stock&view=COUNT');
-      expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
-      expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
-    } finally { prompt.mockRestore(); }
+    render(<PurchaseInvoiceWorkbench invoiceId="missing-invoice" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Recover legacy or missing invoice' }));
+    await giveRecoveryReason('Missing saved invoice opened from handoff');
+    expect(await screen.findByRole('region', { name: 'Rejected uncertain import' })).toHaveTextContent('does not mean no stock was posted');
+    expect(screen.getByRole('link', { name: /Reconcile physical inventory/ })).toHaveAttribute('href', '/dashboard/inventory?area=stock&view=COUNT');
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 
   it('opens interrupted import recovery from a fresh intake without browser draft state', async () => {
@@ -1215,7 +1221,6 @@ describe('PurchaseInvoiceWorkbench', () => {
     delete old.importAttemptId;
     sessionStorage.setItem(key, JSON.stringify(old));
     const second = render(<PurchaseInvoiceWorkbench />);
-    jest.spyOn(window, 'prompt').mockReturnValue('Legacy response lost');
     api.post.mockImplementation(async (url, body: any) => {
       expect(url).toBe('/pharmacy/purchase-invoices/ocr/recover-unlinked');
       expect(body.legacy).toBe(true);
@@ -1223,6 +1228,7 @@ describe('PurchaseInvoiceWorkbench', () => {
       return { attemptId: body.recoveryId, outcome: 'RETRY_REJECTED', stockOutcome: 'UNVERIFIED', invoiceId: null } as any;
     });
     fireEvent.click(await screen.findByRole('button', { name: 'Recover legacy or missing invoice' }));
+    await giveRecoveryReason('Legacy response lost');
     expect(await screen.findByRole('region', { name: 'Rejected uncertain import' })).toHaveTextContent('does not mean no stock was posted');
     second.unmount();
     render(<PurchaseInvoiceWorkbench />);
@@ -1231,7 +1237,6 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.queryByRole('button', { name: 'Recover legacy or missing invoice' })).not.toBeInTheDocument();
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
-    jest.mocked(window.prompt).mockRestore();
   });
 
   it.each(['wrong-id', 'missing-stock-qualification', 'failed'])('keeps an orphan import locked after %s recovery', async mode => {
@@ -1240,19 +1245,18 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['synthetic'], 'orphan.jpg', { type: 'image/jpeg' })] } });
     importAutomatically();
     await screen.findByText(/Stock status unknown. Check the saved purchase/);
-    jest.spyOn(window, 'prompt').mockReturnValue('Linked invoice missing');
     api.post.mockImplementation(async (_url, body: any) => {
       if (mode === 'failed') throw new Error('Unavailable');
       return { attemptId: mode === 'wrong-id' ? 'foreign' : body.recoveryId, outcome: 'RETRY_REJECTED',
         stockOutcome: mode === 'missing-stock-qualification' ? undefined : 'UNVERIFIED' } as any;
     });
     fireEvent.click(screen.getByRole('button', { name: 'Recover legacy or missing invoice' }));
+    await giveRecoveryReason('Linked invoice missing');
     await waitFor(() => expect(api.post).toHaveBeenCalled());
     expect(screen.queryByRole('region', { name: 'Rejected uncertain import' })).not.toBeInTheDocument();
     expect(screen.getByText(/Stock status unknown. Check the saved purchase/)).toBeVisible();
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
-    jest.mocked(window.prompt).mockRestore();
   });
 
   it('resumes the exact recovered legacy invoice without creating another receipt', async () => {
@@ -1261,14 +1265,13 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['synthetic'], 'legacy.jpg', { type: 'image/jpeg' })] } });
     importAutomatically();
     await screen.findByText(/Stock status unknown. Check the saved purchase/);
-    jest.spyOn(window, 'prompt').mockReturnValue('Recover exact original');
     api.post.mockImplementation(async (_url, body: any) => ({ attemptId: body.recoveryId, outcome: 'DRAFT_SAVED', invoiceId: draftInvoice.id }) as any);
     fireEvent.click(screen.getByRole('button', { name: 'Recover legacy or missing invoice' }));
+    await giveRecoveryReason('Recover exact original');
     await waitFor(() => expect(api.getPharmacyPurchaseInvoiceById).toHaveBeenCalledWith(draftInvoice.id));
     await waitFor(() => expect(screen.queryByText(/Stock status unknown. Check the saved purchase/)).not.toBeInTheDocument());
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
-    jest.mocked(window.prompt).mockRestore();
   });
 
   it('resolves an OCR failure without an invoice ID and unlocks retained-original manual recovery', async () => {
@@ -1322,17 +1325,18 @@ describe('PurchaseInvoiceWorkbench', () => {
   });
 
   it('replaces an incomplete OCR reading with blank manual fields while retaining its original', async () => {
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
     (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({ draft: { ...draftInvoice, ocrFlags: ['document_completeness_unconfirmed'] }, sourceDocument: { id: 'doc-1', fileName: 'incomplete.pdf', mimeType: 'application/pdf', sizeBytes: 100 } }) });
     render(<PurchaseInvoiceWorkbench />);
     fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['synthetic'], 'incomplete.pdf', { type: 'application/pdf' })] } });
     fireEvent.click(screen.getByRole('button', { name: 'Scan bill' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Enter complete invoice manually' }));
-    expect(screen.getByLabelText('Invoice No.')).toHaveValue('');
+    const dialog = await screen.findByRole('alertdialog', { name: 'Discard the OCR reading?' });
+    expect(screen.getByLabelText('Invoice No.')).not.toHaveValue('');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enter manually' }));
+    await waitFor(() => expect(screen.getByLabelText('Invoice No.')).toHaveValue(''));
     expect(screen.getByRole('link', { name: /Download original: incomplete.pdf/ })).toBeVisible();
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
-    jest.mocked(window.confirm).mockRestore();
   });
 
   it('renders and saves all 20 OCR batch rows, including repeated products and a correction on the last row', async () => {

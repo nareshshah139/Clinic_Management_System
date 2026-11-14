@@ -18,7 +18,7 @@ import {
   ArrowRight,
   Bot,
   ClipboardCheck,
-  DollarSign,
+  IndianRupee,
   MessageSquare,
   Package,
   Pill,
@@ -51,7 +51,6 @@ interface PharmacyDashboardData {
   totalInvoices?: number;
   todayCompletedInvoices?: number;
   completedInvoices?: number;
-  totalDrugs?: number;
   lowStockDrugs?: number;
   packagesCount?: number;
 }
@@ -137,7 +136,6 @@ function PharmacyPageContent() {
   const invoicesToday = dash?.todayInvoices ?? dash?.totalInvoices ?? 0;
   const completedInvoices = dash?.todayCompletedInvoices ?? dash?.completedInvoices ?? 0;
   const pendingInvoices = Math.max(0, invoicesToday - completedInvoices);
-  const totalDrugs = dash?.totalDrugs ?? 0;
   const lowStockDrugs = dash?.lowStockDrugs ?? 0;
   const packagesCount = dash?.packagesCount ?? 0;
 
@@ -164,7 +162,6 @@ function PharmacyPageContent() {
               todayGrowth={todayGrowth}
               invoicesToday={invoicesToday}
               pendingInvoices={pendingInvoices}
-              totalDrugs={totalDrugs}
               lowStockDrugs={lowStockDrugs}
               packagesCount={packagesCount}
               isAgentDockOpen={isAgentDockOpen}
@@ -202,7 +199,6 @@ function PharmacyDeskPanel({
   todayGrowth,
   invoicesToday,
   pendingInvoices,
-  totalDrugs,
   lowStockDrugs,
   packagesCount,
   isAgentDockOpen,
@@ -217,7 +213,6 @@ function PharmacyDeskPanel({
   todayGrowth: number;
   invoicesToday: number;
   pendingInvoices: number;
-  totalDrugs: number;
   lowStockDrugs: number;
   packagesCount: number;
   isAgentDockOpen: boolean;
@@ -257,9 +252,9 @@ function PharmacyDeskPanel({
 
       {sells && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricStrip label="Sales" value={`₹${todaySales.toFixed(2)}`} detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`} icon={<DollarSign className="h-4 w-4" />} />
+          <MetricStrip label="Sales" value={`₹${todaySales.toFixed(2)}`} detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`} icon={<IndianRupee className="h-4 w-4" />} />
           <MetricStrip label="Invoices" value={invoicesToday} detail={`${pendingInvoices} pending`} icon={<Receipt className="h-4 w-4" />} />
-          <MetricStrip label="Stock" value={totalDrugs} detail={`${lowStockDrugs} low`} icon={<Pill className="h-4 w-4" />} />
+          <MetricStrip label="Low stock" value={lowStockDrugs} detail="at or below minimum stock" icon={<Pill className="h-4 w-4" />} />
           <MetricStrip label="Packages" value={packagesCount} detail="bundles" icon={<Package className="h-4 w-4" />} />
         </div>
       )}

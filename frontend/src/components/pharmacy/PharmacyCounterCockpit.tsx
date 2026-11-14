@@ -28,7 +28,6 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { apiClient } from '@/lib/api';
 import { stockCheckLineName } from '@/lib/bill-line-name';
-import { statusLabel } from '@/lib/status-variants';
 import { PrescriptionInventoryLink, type InventorySuggestion } from './PrescriptionInventoryLink';
 
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
@@ -161,17 +160,6 @@ type StockCheckResponse = {
 };
 
 type LineAction = 'pending' | 'accepted' | 'substitute' | 'edit' | 'unavailable';
-
-const lifecycleSteps: DispenseLifecycle[] = [
-  'Queued',
-  'In Review',
-  'Partially Filled',
-  'Paused',
-  'Ready to Bill',
-  'Paid',
-  'Dispensed',
-  'Cancelled',
-];
 
 const reasonOptions = [
   'Substitution requested',
@@ -603,7 +591,7 @@ export function PharmacyCounterCockpit({
           </>
         }
       />
-      <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border bg-card shadow-sm xl:h-[calc(100vh-196px)]">
+      <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border bg-card shadow-sm xl:min-h-[calc(100vh-196px)]">
         {error || stockError ? (
           <div role="alert" className="border-b border-destructive-border bg-destructive-soft px-5 py-3 text-sm font-medium text-destructive-text">
             {error || stockError}
@@ -715,7 +703,8 @@ function QueueColumn({
           </button>
         ))}
       </div>
-      <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
+      <div className="relative mt-2 min-h-40 flex-1">
+      <div className="overflow-y-auto pr-1 xl:absolute xl:inset-0">
         {loading && queue.length === 0 ? (
           <LoadingSkeleton label="Loading prescription queue…" />
         ) : queue.length === 0 ? (
@@ -748,6 +737,7 @@ function QueueColumn({
           </Button>
         ) : null}
       </div>
+      </div>
     </div>
   );
 }
@@ -772,13 +762,13 @@ function QueueRow({
     >
       <button type="button" onClick={onSelect} className="w-full px-2.5 py-2 text-left">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p id={nameId} className="truncate text-sm font-semibold">{entry.patient.name}</p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {entry.patient.patientCode || entry.patient.id}
-            </p>
+            {entry.patient.patientCode ? (
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.patient.patientCode}</p>
+            ) : null}
           </div>
-          <StatusBadge domain="dispense" status={entry.dispenseStatus ?? QUEUE_STATUS_AS_DISPENSE[entry.status]} />
+          <StatusBadge className="shrink-0" domain="dispense" status={entry.dispenseStatus ?? QUEUE_STATUS_AS_DISPENSE[entry.status]} />
         </div>
         <div className={`mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground ${onBill ? 'pr-20' : ''}`}>
           <span>{entry.medications.length} medicines</span>
@@ -844,22 +834,21 @@ function ActiveDispenseColumn({
       />
 
       {activeEntry ? (
-        <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="mt-2 flex flex-1 flex-col">
           <div className="shrink-0 overflow-hidden rounded-lg border border-border bg-white">
-            <div className="grid gap-2 bg-muted px-3 py-2 @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-center">
+            <div className="bg-muted px-3 py-2">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-base font-semibold">
+                  <p className="min-w-0 truncate text-base font-semibold">
                     {activeEntry.patient.name}
                   </p>
                   <StatusBadge domain="dispense" status={activeLifecycle} />
                   {activeEntry.linkedInvoiceIds.length > 0 ? <Badge variant="info">Invoice</Badge> : null}
                 </div>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  Dr. {activeEntry.doctor.name} · {displayClinicDateTime(activeEntry.createdAt)} · {activeEntry.prescriptionId}
+                  Dr. {activeEntry.doctor.name} · {displayClinicDateTime(activeEntry.createdAt)}
                 </p>
               </div>
-              <LifecycleRail active={activeLifecycle} />
             </div>
           </div>
 
@@ -882,6 +871,7 @@ function ActiveDispenseColumn({
           <div className="mt-2 shrink-0 rounded-lg border border-border bg-muted/80 p-2">
             <div className="grid gap-2 @md:grid-cols-[210px_minmax(0,1fr)]">
               <select
+                aria-label="Reason"
                 value={reasonType}
                 onChange={(event) => setReasonType(event.target.value)}
                 className="h-9 rounded-md border border-border bg-white px-2 text-sm"
@@ -896,6 +886,7 @@ function ActiveDispenseColumn({
                 value={reasonNote}
                 onChange={(event) => setReasonNote(event.target.value)}
                 placeholder="Reason or pharmacist note"
+                aria-label="Pharmacist note"
                 className="min-h-9 resize-none rounded-md py-2"
               />
             </div>
@@ -964,15 +955,15 @@ function MedicationReviewTable({
   onInventoryLinked?: () => Promise<void>;
 }) {
   return (
-    <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
-      <div className="hidden shrink-0 grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] gap-2 border-b border-border bg-muted px-2.5 py-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground @3xl:grid">
+    <div className="mt-2 shrink-0 overflow-hidden rounded-lg border border-border">
+      <div className="hidden grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] gap-2 border-b border-border bg-muted px-2.5 py-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground @3xl:grid">
         <span>Prescription</span>
         <span>Inventory Match</span>
         <span>Stock</span>
         <span>Shelf and batch</span>
         <span>Action</span>
       </div>
-      <div className="min-h-0 divide-y divide-border overflow-y-auto">
+      <div className="divide-y divide-border">
         {activeEntry.medications.map((medication, index) => {
           const stock = stockByLine[medication.sourceLineKey ?? String(index)];
           return (
@@ -1179,14 +1170,14 @@ function FulfillmentColumn({
         />
       </div>
 
-      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border shadow-sm">
-        <div className="shrink-0 border-b border-border bg-muted px-2.5 py-2">
+      <div className="mt-2 shrink-0 overflow-hidden rounded-lg border border-border shadow-sm">
+        <div className="border-b border-border bg-muted px-2.5 py-2">
           <p className="text-sm font-semibold text-foreground">Pick Assist</p>
           <p className="text-xs text-muted-foreground">
             Shelf, batch, and split-stock view.
           </p>
         </div>
-        <div className="min-h-0 divide-y divide-border overflow-y-auto">
+        <div className="divide-y divide-border">
           {pickLines.length === 0 ? (
             <div className="p-3 text-sm text-muted-foreground">
               Select a prescription to show pick instructions.
@@ -1228,7 +1219,7 @@ function FulfillmentColumn({
         </div>
       </div>
 
-      <div className="mt-2 grid shrink-0 gap-1.5">
+      <div className="mt-auto grid shrink-0 gap-1.5 pt-2">
         {activeEntry && activeEntry.linkedInvoiceIds.length > 0 ? (
           <Button asChild size="sm">
             <Link href={`/dashboard/pharmacy/invoices?search=${encodeURIComponent(activeEntry.patient.name)}`}>
@@ -1270,31 +1261,6 @@ function PanelHeader({
           <p className="text-xs text-muted-foreground">{detail}</p>
         </div>
       </div>
-    </div>
-  );
-}
-
-function LifecycleRail({ active }: { active: DispenseLifecycle }) {
-  return (
-    <div className="flex max-w-full flex-wrap gap-1 @2xl:justify-end">
-      {lifecycleSteps.map((step) => {
-        const isActive = active === step;
-        const isExceptional = step === 'Paused' || step === 'Cancelled';
-        return (
-          <div
-            key={step}
-            className={`rounded-full border px-2 py-0.5 text-center text-xs font-semibold ${
-              isActive
-                ? isExceptional
-                  ? 'border-warning-border bg-warning-soft text-warning-text'
-                  : 'border-primary bg-primary text-primary-foreground'
-                : 'border-border bg-card text-muted-foreground'
-            }`}
-          >
-            {statusLabel('dispense', step)}
-          </div>
-        );
-      })}
     </div>
   );
 }

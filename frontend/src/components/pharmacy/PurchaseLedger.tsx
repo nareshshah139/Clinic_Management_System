@@ -417,7 +417,7 @@ export function PurchaseLedger({
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-6 2xl:grid-cols-[1.4fr_1fr]">
         <Card>
           <CardHeader>
             <CardTitle>Distributor Summary</CardTitle>
@@ -580,14 +580,14 @@ export function PurchaseLedger({
         <CardContent className="space-y-5">
           <div className="grid gap-4 md:grid-cols-5">
             <div className="md:col-span-2">
-              <Label>Distributor</Label>
+              <Label htmlFor="ledger-distributor">Distributor</Label>
               <Select
                 value={selectedGstin}
                 onValueChange={(value: string) =>
                   void handleDistributorChange(value)
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="ledger-distributor">
                   <SelectValue placeholder="Select distributor" />
                 </SelectTrigger>
                 <SelectContent>
@@ -603,20 +603,21 @@ export function PurchaseLedger({
               </Select>
             </div>
             <div>
-              <Label>Payment Date</Label>
+              <Label htmlFor="ledger-payment-date">Payment Date</Label>
               <Input
+                id="ledger-payment-date"
                 type="date"
                 value={paymentDate}
                 onChange={(event) => setPaymentDate(event.target.value)}
               />
             </div>
             <div>
-              <Label>Mode</Label>
+              <Label htmlFor="ledger-payment-mode">Mode</Label>
               <Select
                 value={mode}
                 onValueChange={(value: string) => setMode(value as PaymentMode)}
               >
-                <SelectTrigger>
+                <SelectTrigger id="ledger-payment-mode">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -629,8 +630,9 @@ export function PurchaseLedger({
               </Select>
             </div>
             <div>
-              <Label>Amount</Label>
+              <Label htmlFor="ledger-amount">Amount</Label>
               <Input
+                id="ledger-amount"
                 inputMode="decimal"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
@@ -641,16 +643,18 @@ export function PurchaseLedger({
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label>Reference No</Label>
+              <Label htmlFor="ledger-reference">Reference No</Label>
               <Input
+                id="ledger-reference"
                 value={referenceNo}
                 onChange={(event) => setReferenceNo(event.target.value)}
                 placeholder="Cheque, UTR, or receipt number"
               />
             </div>
             <div>
-              <Label>Notes</Label>
+              <Label htmlFor="ledger-notes">Notes</Label>
               <Textarea
+                id="ledger-notes"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder="Optional payment note"

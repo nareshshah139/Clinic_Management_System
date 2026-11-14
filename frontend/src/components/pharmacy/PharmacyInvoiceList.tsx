@@ -3,11 +3,12 @@
 import { billLineName } from '@/lib/bill-line-name';
 import { displayClinicDate } from '@/lib/date-display';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,10 +20,9 @@ import {
   Eye,
   Trash2,
   Download,
-  Calendar,
   CreditCard,
   FileText,
-  DollarSign,
+  IndianRupee,
   CheckCircle,
   Pencil,
 } from 'lucide-react';
@@ -63,6 +63,8 @@ export function PharmacyInvoiceList() {
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const paymentInFlight = useRef(false);
+  const [confirm, confirmDialog] = useConfirm();
+  const { toast } = useToast();
   const [pendingPaymentIds, setPendingPaymentIds] = useState<string[]>([]);
   useEffect(() => {
     setPendingPaymentIds(invoices.filter(invoice => sessionStorage.getItem(`pharmacy-payment-attempt:${invoice.id}`)).map(invoice => invoice.id));
@@ -163,7 +165,7 @@ export function PharmacyInvoiceList() {
       
       const win = window.open('', '_blank');
       if (!win) {
-        alert('Please allow pop-ups to view the invoice');
+        toast({ variant: 'warning', title: 'Allow pop-ups to view the invoice' });
         return;
       }
       const html = renderPharmacyInvoiceHtml(invoice);
@@ -172,23 +174,30 @@ export function PharmacyInvoiceList() {
       win.document.close();
     } catch (error) {
       console.error('Failed to load invoice:', error);
-      alert('Failed to load invoice. Please try again.');
+      toast({ variant: 'destructive', title: 'Could not load the invoice', description: 'Try again.' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteInvoice = async (invoice: PharmacyInvoiceSummary) => {
-    if (!confirm('Are you sure you want to delete this invoice?')) return;
+    const label = billNumberLabel(invoice);
+    const bill = `${label === invoice.invoiceNumber ? label : `the ${label.toLowerCase()}`} for ${invoice.patient.name}`;
+    if (!(await confirm({
+      title: `Delete ${bill}?`,
+      description: 'It will be removed from the invoice list.',
+      confirmLabel: 'Delete invoice',
+      destructive: true,
+    }))) return;
 
     try {
       await apiClient.delete(`/pharmacy/invoices/${encodeURIComponent(invoice.id)}?version=${invoice.mutationVersion}`);
       await loadInvoices();
-      alert('Invoice deleted successfully');
+      toast({ title: `Deleted ${bill}` });
     } catch (error) {
       console.error('Failed to delete invoice:', error);
       await loadInvoices();
-      alert(getErrorMessage(error));
+      toast({ variant: 'destructive', title: `Could not delete ${bill}`, description: getErrorMessage(error) });
     }
   };
 
@@ -207,7 +216,7 @@ export function PharmacyInvoiceList() {
       await downloadInvoicePdf(source, (invoice as any)?.invoiceNumber || invoiceId);
     } catch (error) {
       console.error('Failed to download invoice:', error);
-      alert('Failed to download invoice. Please try again.');
+      toast({ variant: 'destructive', title: 'Could not download the invoice', description: 'Try again.' });
     } finally {
       setLoading(false);
     }
@@ -234,7 +243,7 @@ export function PharmacyInvoiceList() {
         const amount = settlementOf(latest).due;
         if (amount <= 0) {
           await loadInvoices();
-          alert('This invoice has no remaining balance.');
+          toast({ title: `${invoice.invoiceNumber} has no remaining balance` });
           return;
         }
         payment = {
@@ -244,14 +253,18 @@ export function PharmacyInvoiceList() {
           reference: `Payment for ${invoice.invoiceNumber}`,
         };
       }
-      if (!confirm(`Mark invoice ${invoice.invoiceNumber} as paid?\n\nRemaining payment: ₹${payment.amount.toFixed(2)}`)) return;
+      if (!(await confirm({
+        title: `Mark ${invoice.invoiceNumber} as paid?`,
+        description: `Records a payment of ₹${payment.amount.toFixed(2)}, the remaining balance.`,
+        confirmLabel: 'Mark as paid',
+      }))) return;
       sessionStorage.setItem(storageKey, JSON.stringify(payment));
       setPendingPaymentIds(previous => [...new Set([...previous, invoice.id])]);
       await apiClient.post(`/pharmacy/invoices/${invoice.id}/payments`, payment);
       sessionStorage.removeItem(storageKey);
       setPendingPaymentIds(previous => previous.filter(id => id !== invoice.id));
       await loadInvoices();
-      alert('Invoice marked as paid successfully');
+      toast({ title: `${invoice.invoiceNumber} marked as paid` });
     } catch (error: unknown) {
       const status = (error as { status?: number })?.status;
       if (status === 400 || status === 404) {
@@ -259,7 +272,7 @@ export function PharmacyInvoiceList() {
         setPendingPaymentIds(previous => previous.filter(id => id !== invoice.id));
       }
       console.error('Failed to mark invoice as paid:', error);
-      alert('Payment could not be confirmed. Retry to reconcile the same payment.');
+      toast({ variant: 'destructive', title: 'Payment could not be confirmed', description: 'Retry to reconcile the same payment.' });
     } finally {
       paymentInFlight.current = false;
       setLoading(false);
@@ -288,9 +301,7 @@ export function PharmacyInvoiceList() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <PageHeader title="Pharmacy Invoices" description="Manage and track pharmacy billing" />
-
+      {confirmDialog}
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -312,7 +323,7 @@ export function PharmacyInvoiceList() {
                 <p className="text-sm text-muted-foreground">Total Amount</p>
                 <p className="text-2xl font-bold">₹{stats.totalAmount.toFixed(2)}</p>
               </div>
-              <DollarSign className="h-8 w-8 text-success-text" />
+              <IndianRupee className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
@@ -324,7 +335,7 @@ export function PharmacyInvoiceList() {
                 <p className="text-sm text-muted-foreground">Completed</p>
                 <p className="text-2xl font-bold">{stats.completedInvoices}</p>
               </div>
-              <Calendar className="h-8 w-8 text-highlight-text" />
+              <CheckCircle className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
@@ -347,10 +358,11 @@ export function PharmacyInvoiceList() {
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div>
-              <Label>Search</Label>
+              <Label htmlFor="invoice-search">Search</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
+                  id="invoice-search"
                   placeholder="Invoice number, patient..."
                   value={searchQuery}
                   onChange={(e) => {
@@ -363,7 +375,7 @@ export function PharmacyInvoiceList() {
             </div>
             
             <div>
-              <Label>Status</Label>
+              <Label htmlFor="invoice-status-filter">Status</Label>
               <Select
                 value={statusFilter}
                 onValueChange={(value: string) => {
@@ -371,7 +383,7 @@ export function PharmacyInvoiceList() {
                   setPagination(prev => ({ ...prev, page: 1 }));
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="invoice-status-filter">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -386,7 +398,7 @@ export function PharmacyInvoiceList() {
             </div>
             
             <div>
-              <Label>Payment Status</Label>
+              <Label htmlFor="invoice-payment-status-filter">Payment Status</Label>
               <Select
                 value={paymentStatusFilter}
                 onValueChange={(value: string) => {
@@ -394,7 +406,7 @@ export function PharmacyInvoiceList() {
                   setPagination(prev => ({ ...prev, page: 1 }));
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="invoice-payment-status-filter">
                   <SelectValue placeholder="All payments" />
                 </SelectTrigger>
                 <SelectContent>
@@ -409,7 +421,7 @@ export function PharmacyInvoiceList() {
             </div>
             
             <div>
-              <Label>Payment Method</Label>
+              <Label htmlFor="invoice-payment-method-filter">Payment Method</Label>
               <Select
                 value={paymentMethodFilter}
                 onValueChange={(value: string) => {
@@ -417,7 +429,7 @@ export function PharmacyInvoiceList() {
                   setPagination(prev => ({ ...prev, page: 1 }));
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="invoice-payment-method-filter">
                   <SelectValue placeholder="All methods" />
                 </SelectTrigger>
                 <SelectContent>
@@ -432,7 +444,7 @@ export function PharmacyInvoiceList() {
             </div>
             
             <div>
-              <Label>Date Range</Label>
+              <Label htmlFor="invoice-date-filter">Date Range</Label>
               <Select
                 value={dateRange}
                 onValueChange={(value: string) => {
@@ -440,7 +452,7 @@ export function PharmacyInvoiceList() {
                   setPagination(prev => ({ ...prev, page: 1 }));
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="invoice-date-filter">
                   <SelectValue placeholder="All dates" />
                 </SelectTrigger>
                 <SelectContent>
@@ -497,7 +509,7 @@ export function PharmacyInvoiceList() {
                           {invoice.doctor && (
                             <p><strong>Doctor:</strong> {invoice.doctor.firstName} {invoice.doctor.lastName}</p>
                           )}
-                          <p><strong>Payment:</strong> {invoice.paymentMethod}</p>
+                          <p><strong>Payment:</strong> {PharmacyPaymentMethodLabels[invoice.paymentMethod] ?? invoice.paymentMethod}</p>
                         </div>
                         <div>
                           <p><strong>Items:</strong> {invoice.items.length}</p>

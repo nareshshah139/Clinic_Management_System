@@ -2313,7 +2313,7 @@ export function PharmacyInvoiceBuilderFixed({
                         setInvoiceData((prev) => ({ ...prev, doctorId: value }))
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="doctor">
                         <SelectValue placeholder="Select doctor" />
                       </SelectTrigger>
                       <SelectContent>
@@ -2565,12 +2565,7 @@ export function PharmacyInvoiceBuilderFixed({
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               {isPrescriptionItem(item.id) && (
-                                <span
-                                  className="text-info-text text-lg"
-                                  title="From Prescription"
-                                >
-                                  📋
-                                </span>
+                                <Badge variant="info">From prescription</Badge>
                               )}
                               {item.itemType === 'DRUG' ? (
                                 <Pill className="h-4 w-4 text-info" />
@@ -2699,6 +2694,7 @@ export function PharmacyInvoiceBuilderFixed({
                             <Label htmlFor={`quantity-${item.id}`} className="text-xs">Quantity</Label>
                             <Input
                               id={`quantity-${item.id}`}
+                              aria-label={`Quantity for ${billLineName(item)}`}
                               type="number"
                               min="1"
                               value={item.quantity}
@@ -2713,8 +2709,10 @@ export function PharmacyInvoiceBuilderFixed({
                             />
                           </div>
                           <div>
-                            <Label className="text-xs">Unit Price</Label>
+                            <Label htmlFor={`price-${item.id}`} className="text-xs">Unit Price</Label>
                             <Input
+                              id={`price-${item.id}`}
+                              aria-label={`Unit price for ${billLineName(item)}`}
                               type="number"
                               min="0"
                               step="0.01"
@@ -2729,8 +2727,10 @@ export function PharmacyInvoiceBuilderFixed({
                             />
                           </div>
                           <div>
-                            <Label className="text-xs">Discount %</Label>
+                            <Label htmlFor={`discount-${item.id}`} className="text-xs">Discount %</Label>
                             <Input
+                              id={`discount-${item.id}`}
+                              aria-label={`Discount % for ${billLineName(item)}`}
                               type="number"
                               min="0"
                               max="100"
@@ -2749,6 +2749,7 @@ export function PharmacyInvoiceBuilderFixed({
                             <Label htmlFor={`gst-${item.id}`} className="text-xs">Tax %</Label>
                             <Input
                               id={`gst-${item.id}`}
+                              aria-label={`Tax % for ${billLineName(item)}`}
                               type="number"
                               min="0"
                               max="100"
@@ -2767,8 +2768,10 @@ export function PharmacyInvoiceBuilderFixed({
                             />
                           </div>
                           <div>
-                            <Label className="text-xs">Total</Label>
+                            <Label htmlFor={`total-${item.id}`} className="text-xs">Total</Label>
                             <Input
+                              id={`total-${item.id}`}
+                              aria-label={`Total for ${billLineName(item)}`}
                               value={item.taxPercent === null ? 'GST pending' : `₹${item.totalAmount.toFixed(2)}`}
                               readOnly
                               className="h-8 bg-muted font-medium"
@@ -2819,8 +2822,10 @@ export function PharmacyInvoiceBuilderFixed({
                             </div>
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                               <div>
-                                <Label className="text-xs">Dosage</Label>
+                                <Label htmlFor={`dosage-${item.id}`} className="text-xs">Dosage</Label>
                                 <Input
+                                  id={`dosage-${item.id}`}
+                                  aria-label={`Dosage for ${billLineName(item)}`}
                                   value={item.dosage || ''}
                                   onChange={(event) =>
                                     updateItemPrescriptionField(
@@ -2834,8 +2839,10 @@ export function PharmacyInvoiceBuilderFixed({
                                 />
                               </div>
                               <div>
-                                <Label className="text-xs">Frequency</Label>
+                                <Label htmlFor={`frequency-${item.id}`} className="text-xs">Frequency</Label>
                                 <Input
+                                  id={`frequency-${item.id}`}
+                                  aria-label={`Frequency for ${billLineName(item)}`}
                                   value={item.frequency || ''}
                                   onChange={(event) =>
                                     updateItemPrescriptionField(
@@ -2849,8 +2856,10 @@ export function PharmacyInvoiceBuilderFixed({
                                 />
                               </div>
                               <div>
-                                <Label className="text-xs">Duration</Label>
+                                <Label htmlFor={`duration-${item.id}`} className="text-xs">Duration</Label>
                                 <Input
+                                  id={`duration-${item.id}`}
+                                  aria-label={`Duration for ${billLineName(item)}`}
                                   value={item.duration || ''}
                                   onChange={(event) =>
                                     updateItemPrescriptionField(
@@ -2865,8 +2874,10 @@ export function PharmacyInvoiceBuilderFixed({
                               </div>
                             </div>
                             <div className="mt-3">
-                              <Label className="text-xs">Instructions</Label>
+                              <Label htmlFor={`instructions-${item.id}`} className="text-xs">Instructions</Label>
                               <Textarea
+                                id={`instructions-${item.id}`}
+                                aria-label={`Instructions for ${billLineName(item)}`}
                                 value={item.instructions || ''}
                                 onChange={(event) =>
                                   updateItemPrescriptionField(
@@ -2982,7 +2993,7 @@ export function PharmacyInvoiceBuilderFixed({
                       }))
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="paymentMethod">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -3174,14 +3185,14 @@ export function PharmacyInvoiceBuilderFixed({
               </Button>
 
               <div className="space-y-2">
-                <Label className="text-xs">Copy Type</Label>
+                <Label htmlFor="print-copy-type" className="text-xs">Copy Type</Label>
                 <Select
                   value={printPreviewCopyType}
                   onValueChange={(value: 'ORIGINAL' | 'DUPLICATE') =>
                     setPrintPreviewCopyType(value)
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="print-copy-type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

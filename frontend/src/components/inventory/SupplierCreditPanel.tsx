@@ -6,6 +6,7 @@ import { apiClient } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { fmtMoney, workflowKinds } from "./workspace-model";
 import { SetOffCreditDialog } from "./purchase/SetOffCreditDialog";
+import { usePrompt } from "@/components/ui/confirm-dialog";
 /**
  * @cc [owner:nareshshah139,label:product] supplier-credit-context-allocation
  * The shared credit panel MUST constrain bill choices to the credit supplier, preselect an explicit
@@ -31,6 +32,7 @@ export function SupplierCreditPanel({
     [credit, setCredit] = useState<{ credit: any; anchor: HTMLElement } | null>(null),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
+  const [askReason, reasonDialog] = usePrompt();
   const load = () => {
     setError("");
     return apiClient
@@ -58,6 +60,7 @@ export function SupplierCreditPanel({
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
+      {reasonDialog}
       {credit && (
         <SetOffCreditDialog
           scope={{ creditId: credit.credit.id }}
@@ -146,9 +149,13 @@ export function SupplierCreditPanel({
                       size="sm"
                       variant="ghost"
                       onClick={async () => {
-                        const reason = window.prompt(
-                          "Reason for reversing this credit allocation",
-                        );
+                        const reason = await askReason({
+                          title: `Reverse the ${fmtMoney(a.amount)} allocation?`,
+                          description: "It stays in the allocation history, marked reversed.",
+                          inputLabel: "Reason for reversing this credit allocation",
+                          confirmLabel: "Reverse allocation",
+                          destructive: true,
+                        });
                         if (!reason) return;
                         try {
                           await apiClient.post(

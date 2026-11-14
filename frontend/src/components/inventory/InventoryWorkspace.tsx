@@ -273,7 +273,7 @@ export function InventoryWorkspace() {
     setInitial(null);
   };
   return (
-    <main className="inventory-surface min-w-0 space-y-5 pb-12">
+    <section className="inventory-surface min-w-0 space-y-5 pb-12">
       <PageHeader title={<>Inventory</>} description={<>Receive, review and manage pharmacy stock.</>} actions={<><InventoryAction
           label="Refresh inventory"
           onClick={() => {
@@ -600,7 +600,7 @@ export function InventoryWorkspace() {
           )}
         </>
       )}
-    </main>
+    </section>
   );
 }
 /**
