@@ -407,7 +407,7 @@ function DoctorDayCalendarForSelection({
     return (
       <Card>
         <CardContent className="p-8 text-center">
-          <div className="text-gray-500">Loading schedule...</div>
+          <div className="text-muted-foreground">Loading schedule...</div>
         </CardContent>
       </Card>
     );
@@ -417,7 +417,7 @@ function DoctorDayCalendarForSelection({
     return (
       <Card>
         <CardContent className="p-8 text-center">
-          <div className="text-red-600 mb-4">Failed to load schedule</div>
+          <div className="text-destructive-text mb-4">Failed to load schedule</div>
           <Button onClick={() => void fetchSchedule()} variant="outline">
             Retry
           </Button>
@@ -434,8 +434,8 @@ function DoctorDayCalendarForSelection({
       <Card className="gap-0 py-0">
         <CardContent className="p-3 sm:p-4">
           {(visitTypeFilter !== 'ALL' || roomFilter !== 'ALL') && (
-            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-              <div className="text-sm text-blue-700">
+            <div className="mb-4 p-3 bg-info-soft rounded-lg">
+              <div className="text-sm text-info-text">
                 <span className="font-medium">Filters Active:</span>
                 {visitTypeFilter !== 'ALL' && <Badge variant="secondary" className="ml-2">{visitTypeFilter}</Badge>}
                 {roomFilterLabel && (
@@ -449,14 +449,14 @@ function DoctorDayCalendarForSelection({
 
           <div className="relative" aria-busy={loading}>
             {move && (
-              <div role="status" className="sticky top-0 z-20 mb-3 flex items-start justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+              <div role="status" className="sticky top-0 z-20 mb-3 flex items-start justify-between gap-2 rounded-lg border border-warning-border bg-warning-soft p-3 text-sm">
                 <div>
-                  <div className="font-medium text-amber-800">
+                  <div className="font-medium text-warning-text">
                     {move.refused
                       ? `Moving ${formatPatientName(move.appointment.patient)} to ${CALENDARS[move.refused.calendar].title}`
                       : `Rescheduling ${formatPatientName(move.appointment.patient)}`}
                   </div>
-                  <div className="text-amber-700">
+                  <div className="text-warning-text">
                     {moveHint(move, date)}
                   </div>
                 </div>
@@ -467,8 +467,8 @@ function DoctorDayCalendarForSelection({
             )}
             {showLoadingOverlay && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm transition-opacity duration-200">
-                <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
-                <span className="mt-2 text-sm font-medium text-blue-700">Refreshing schedule…</span>
+                <div className="animate-spin h-8 w-8 border-2 border-info border-t-transparent rounded-full" />
+                <span className="mt-2 text-sm font-medium text-info-text">Refreshing schedule…</span>
               </div>
             )}
             <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_minmax(0,1fr)] grid-rows-[auto_auto] gap-x-1.5 gap-y-1 sm:grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-3">
@@ -513,7 +513,7 @@ function DoctorDayCalendarForSelection({
           </div>
 
           {filteredSchedule.length === 0 && schedule.length > 0 && (
-            <div className="text-center text-gray-500 mt-4 p-4">
+            <div className="text-center text-muted-foreground mt-4 p-4">
               No appointments match the current filters.
             </div>
           )}
@@ -540,34 +540,34 @@ function DoctorDayCalendarForSelection({
           </DialogHeader>
           {selectedAppointment && (
             <div className="space-y-3 text-sm">
-              <div><span className="text-gray-600">Date:</span> {date}</div>
-              <div><span className="text-gray-600">Slot:</span> {selectedAppointment.slot}</div>
-              <div><span className="text-gray-600">Calendar:</span> {CALENDARS[selectedAppointment.calendar].title}</div>
-              <div><span className="text-gray-600">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
+              <div><span className="text-muted-foreground">Date:</span> {date}</div>
+              <div><span className="text-muted-foreground">Slot:</span> {selectedAppointment.slot}</div>
+              <div><span className="text-muted-foreground">Calendar:</span> {CALENDARS[selectedAppointment.calendar].title}</div>
+              <div><span className="text-muted-foreground">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
               {selectedAppointment.patient?.phone && (
                 <div>
-                  <span className="text-gray-600">Phone:</span>{' '}
-                  <a href={`tel:${selectedAppointment.patient.phone.replace(/[^\d+]/g, '')}`} className="font-medium text-blue-700 underline underline-offset-2">
+                  <span className="text-muted-foreground">Phone:</span>{' '}
+                  <a href={`tel:${selectedAppointment.patient.phone.replace(/[^\d+]/g, '')}`} className="font-medium text-info-text underline underline-offset-2">
                     {selectedAppointment.patient.phone}
                   </a>
                 </div>
               )}
               {selectedAppointment.patient?.email && (
-                <div><span className="text-gray-600">Email:</span> {selectedAppointment.patient.email}</div>
+                <div><span className="text-muted-foreground">Email:</span> {selectedAppointment.patient.email}</div>
               )}
               {selectedAppointment.patient?.age !== undefined && (
-                <div><span className="text-gray-600">Age:</span> {selectedAppointment.patient.age} years</div>
+                <div><span className="text-muted-foreground">Age:</span> {selectedAppointment.patient.age} years</div>
               )}
               {selectedAppointment.patient?.gender && (
-                <div><span className="text-gray-600">Sex:</span> {selectedAppointment.patient.gender}</div>
+                <div><span className="text-muted-foreground">Sex:</span> {selectedAppointment.patient.gender}</div>
               )}
               {selectedAppointment.billType && (
-                <div><span className="text-gray-600">Bill type:</span> {BILL_TYPE_LABEL[selectedAppointment.billType]}</div>
+                <div><span className="text-muted-foreground">Bill type:</span> {BILL_TYPE_LABEL[selectedAppointment.billType]}</div>
               )}
               {selectedAppointment.billing && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-gray-600">Bill:</span>
-                  <span className={selectedAppointment.billing.attention ? 'font-semibold text-amber-800' : 'font-medium'}>
+                  <span className="text-muted-foreground">Bill:</span>
+                  <span className={selectedAppointment.billing.attention ? 'font-semibold text-warning-text' : 'font-medium'}>
                     {billingChip(selectedAppointment.billing).text}
                   </span>
                   <Button
@@ -583,19 +583,19 @@ function DoctorDayCalendarForSelection({
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <span className="text-gray-600">Type:</span>
+                <span className="text-muted-foreground">Type:</span>
                 <Badge variant={selectedAppointment.visitType === 'PROCEDURE' ? 'destructive' : selectedAppointment.visitType === 'TELEMED' ? 'secondary' : 'default'}>
                   {selectedAppointment.visitType || 'OPD'}
                 </Badge>
               </div>
               {selectedAppointment.visitType === 'PROCEDURE' && selectedAppointment.notes && (
-                <div><span className="text-gray-600">Procedure:</span> {selectedAppointment.notes}</div>
+                <div><span className="text-muted-foreground">Procedure:</span> {selectedAppointment.notes}</div>
               )}
               {selectedAppointment.room && (
-                <div><span className="text-gray-600">Room:</span> {selectedAppointment.room.name} ({selectedAppointment.room.type})</div>
+                <div><span className="text-muted-foreground">Room:</span> {selectedAppointment.room.name} ({selectedAppointment.room.type})</div>
               )}
               {selectedAppointment.status && (
-                <div><span className="text-gray-600">Status:</span> {selectedAppointment.status}</div>
+                <div><span className="text-muted-foreground">Status:</span> {selectedAppointment.status}</div>
               )}
             </div>
           )}
@@ -649,16 +649,16 @@ function DoctorDayCalendarForSelection({
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
+              <AlertTriangle className="h-5 w-5 text-destructive" />
               Cancel Appointment
             </DialogTitle>
           </DialogHeader>
           {selectedAppointment && (
             <div className="space-y-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Are you sure you want to cancel this appointment? This action cannot be undone.
               </p>
-              <div className="bg-gray-50 p-3 rounded-lg space-y-2 text-sm">
+              <div className="bg-muted p-3 rounded-lg space-y-2 text-sm">
                 <div><span className="font-medium">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
                 <div><span className="font-medium">Date:</span> {date}</div>
                 <div><span className="font-medium">Time:</span> {selectedAppointment.slot}</div>

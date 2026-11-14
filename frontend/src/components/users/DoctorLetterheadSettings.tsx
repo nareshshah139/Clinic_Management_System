@@ -36,24 +36,24 @@ export function DoctorLetterheadSettings({ doctorId }: { doctorId: string }) {
   return (
     <section aria-labelledby="doctor-letterhead-heading" className="border rounded-md p-3 space-y-3">
       <h3 id="doctor-letterhead-heading" className="font-medium">Prescription letterhead</h3>
-      <p id="doctor-letterhead-help" className="text-sm text-gray-600">
+      <p id="doctor-letterhead-help" className="text-sm text-muted-foreground">
         Your prescriptions print on this full-page image. Use an A4 portrait PNG or JPG, up to 5 MB.
       </p>
-      {loading ? <p role="status" className="text-sm text-gray-600">Loading letterhead…</p> : letterhead ? (
+      {loading ? <p role="status" className="text-sm text-muted-foreground">Loading letterhead…</p> : letterhead ? (
         <div className="rounded-md border bg-white p-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={letterhead.url} alt="Your prescription letterhead" className="h-40 max-w-full object-contain" />
-          {letterhead.source === 'bundled' && <p className="mt-2 text-xs text-gray-600">Clinic-supplied letterhead.</p>}
+          {letterhead.source === 'bundled' && <p className="mt-2 text-xs text-muted-foreground">Clinic-supplied letterhead.</p>}
         </div>
-      ) : <p className="text-sm text-gray-600">No letterhead uploaded. Prescriptions print on plain paper.</p>}
+      ) : <p className="text-sm text-muted-foreground">No letterhead uploaded. Prescriptions print on plain paper.</p>}
       <div className="space-y-2">
         <label htmlFor="doctor-letterhead-file" className="text-sm font-medium">{letterhead ? 'Replace letterhead' : 'Upload letterhead'}</label>
         <Input id="doctor-letterhead-file" type="file" accept="image/png,image/jpeg" aria-describedby="doctor-letterhead-help" disabled={loading || saving}
           onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void changeLetterhead(file); }} />
       </div>
       {letterhead && <Button type="button" variant="outline" size="sm" disabled={loading || saving} onClick={() => void changeLetterhead(null)}>Remove letterhead</Button>}
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-      <p role="status" className="text-sm text-gray-600">{saving ? 'Saving letterhead…' : status || 'Only you can change your letterhead. Changes save immediately.'}</p>
+      {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
+      <p role="status" className="text-sm text-muted-foreground">{saving ? 'Saving letterhead…' : status || 'Only you can change your letterhead. Changes save immediately.'}</p>
     </section>
   );
 }

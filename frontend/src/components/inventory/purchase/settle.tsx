@@ -83,7 +83,7 @@ function OwedBadge({ row }: { row: PurchaseRegisterRow }) {
     case 'OVERDUE':
       return (
         <span className="flex flex-col items-start gap-0.5">
-          <Badge variant="destructive" className={cn(badgeText, 'bg-destructive-text text-white dark:bg-destructive')}>
+          <Badge variant="destructive" className={cn(badgeText, 'bg-destructive-text text-white')}>
             Overdue · <OverdueDays days={overdueDays} />
           </Badge>
           {partlyPaid && note(`${formatRupees(settled)} paid`)}

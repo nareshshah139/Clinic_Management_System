@@ -506,12 +506,12 @@ export default function AppointmentsCalendar({
                         <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                         <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                       </svg>
-                      <span className="text-xs font-medium text-green-700">Syncing</span>
+                      <span className="text-xs font-medium text-success-text">Syncing</span>
                     </div>
-                    <Badge variant="outline" className="text-xs border-green-200 bg-green-50 text-green-700">
+                    <Badge variant="outline" className="text-xs border-success-border bg-success-soft text-success-text">
                       {googleStatus.email || googleStatus.calendarId || 'Connected'}
                     </Badge>
-                    <Button variant="ghost" size="sm" className="text-xs text-gray-500 hover:text-red-600" onClick={disconnectGoogle} disabled={googleLoading}>
+                    <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-destructive-text" onClick={disconnectGoogle} disabled={googleLoading}>
                       {googleLoading ? 'Disconnecting...' : 'Disconnect'}
                     </Button>
                   </>
@@ -519,7 +519,7 @@ export default function AppointmentsCalendar({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-2 border-gray-300"
+                    className="gap-2 border-border"
                     onClick={startGoogleConnect}
                     disabled={googleLoading}
                   >
@@ -539,7 +539,7 @@ export default function AppointmentsCalendar({
 
           {/* Doctor-specific Google Calendar status */}
           {googleConfigured !== false && doctorId && !doctorGoogleStatus.connected && googleStatus.connected && (
-            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="flex items-center gap-2 rounded border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-text">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>
                 {currentDoctorName}&apos;s Google Calendar is not connected. Appointments won&apos;t sync to their calendar.
@@ -548,7 +548,7 @@ export default function AppointmentsCalendar({
             </div>
           )}
           {googleConfigured !== false && doctorId && doctorGoogleStatus.connected && (
-            <div className="flex items-center gap-2 rounded border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700">
+            <div className="flex items-center gap-2 rounded border border-success-border bg-success-soft px-3 py-1.5 text-xs text-success-text">
               <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
@@ -568,7 +568,7 @@ export default function AppointmentsCalendar({
           )}
 
           {!selectedPatientId && patientSearch && (
-            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="flex items-center gap-2 rounded border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-text">
               <AlertCircle className="h-4 w-4" />
               <span>Select a patient from the list or add them as new before booking.</span>
             </div>
@@ -580,7 +580,7 @@ export default function AppointmentsCalendar({
                 <li key={p.id}>
                   <button
                     type="button"
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     onClick={() => {
                       setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
                       setSelectedPatientId(p.id);
@@ -598,7 +598,7 @@ export default function AppointmentsCalendar({
           )}
 
           {patientSearch && patients.length === 0 && !selectedPatientId && !searchingPatients && (
-            <div className="rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+            <div className="rounded border border-dashed border-border bg-muted p-4 text-sm text-foreground">
               <div className="flex items-center justify-between">
                 <span>No matching patients found.</span>
                 <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
@@ -608,7 +608,7 @@ export default function AppointmentsCalendar({
             </div>
           )}
           {patientSearch && !patients.length && !quickCreateOpen && !selectedPatientId && !searchingPatients && (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-muted-foreground">
               Tip: enter patient name and phone, then use "Add" to create a new record instantly.
             </div>
           )}
@@ -618,14 +618,14 @@ export default function AppointmentsCalendar({
               className="p-4 rounded-r text-sm shadow-sm"
               role="status"
               style={{
-                backgroundColor: '#f0fdf4',
-                borderLeft: '4px solid #22c55e',
-                color: '#15803d'
+                backgroundColor: 'var(--success-soft)',
+                borderLeft: '4px solid var(--success)',
+                color: 'var(--success-text)'
               }}
             >
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5" style={{ color: '#22c55e' }} viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5" style={{ color: 'var(--success)' }} viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                 </div>
@@ -643,7 +643,7 @@ export default function AppointmentsCalendar({
           )}
 
           {doctorDay && doctorDay.blocked.length > 0 && (
-            <div role="status" className="p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
+            <div role="status" className="p-3 bg-destructive-soft border border-destructive-border rounded-md text-destructive-text text-sm">
               Not bookable: {doctorDay.blocked.map(describeBlock).join('; ')}
             </div>
           )}

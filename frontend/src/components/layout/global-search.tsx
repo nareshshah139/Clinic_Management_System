@@ -23,9 +23,9 @@ interface SearchResult {
 
 const TYPE_LABEL: Record<SearchResult['type'], string> = { patient: 'Patient', appointment: 'Appointment', user: 'Staff' };
 const TYPE_TINT: Record<SearchResult['type'], string> = {
-  patient: 'bg-blue-100 text-blue-600',
-  appointment: 'bg-green-100 text-green-600',
-  user: 'bg-purple-100 text-purple-600',
+  patient: 'bg-info-soft text-info-text',
+  appointment: 'bg-success-soft text-success-text',
+  user: 'bg-highlight-soft text-highlight-text',
 };
 
 async function searchEverything(query: string): Promise<SearchResult[]> {
@@ -168,7 +168,7 @@ export function GlobalSearch() {
   return (
     <div className="flex-1 max-w-md relative" ref={rootRef}>
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <Input
           type="text"
           role="combobox"
@@ -207,7 +207,7 @@ export function GlobalSearch() {
                   id={optionId(index)}
                   role="option"
                   aria-selected={index === activeIndex}
-                  className="flex items-center gap-3 p-3 hover:bg-gray-50 aria-selected:bg-muted cursor-pointer border-b border-gray-100 last:border-b-0"
+                  className="flex items-center gap-3 p-3 hover:bg-accent aria-selected:bg-muted cursor-pointer border-b border-border last:border-b-0"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => openResult(result)}
                 >
@@ -217,9 +217,9 @@ export function GlobalSearch() {
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{result.title}</p>
-                    {result.subtitle && <p className="text-xs text-gray-600 truncate">{result.subtitle}</p>}
-                    {result.description && <p className="text-xs text-gray-500 truncate">{result.description}</p>}
+                    <p className="text-sm font-medium text-foreground truncate">{result.title}</p>
+                    {result.subtitle && <p className="text-xs text-muted-foreground truncate">{result.subtitle}</p>}
+                    {result.description && <p className="text-xs text-muted-foreground truncate">{result.description}</p>}
                   </div>
                   <div className="flex-shrink-0">
                     <Badge variant="outline" className="text-xs">{TYPE_LABEL[result.type]}</Badge>
@@ -228,7 +228,7 @@ export function GlobalSearch() {
               );
             })}
           </ul>
-          <p className="p-3 bg-gray-50 border-t text-xs text-gray-500 text-center">
+          <p className="p-3 bg-muted border-t text-xs text-muted-foreground text-center">
             ↑ ↓ to choose, Enter to open, Esc to close
           </p>
         </div>
@@ -237,7 +237,7 @@ export function GlobalSearch() {
       {open && results.length === 0 && query.length >= 2 && !searching && (
         <Card className="absolute top-full left-0 right-0 mt-1 z-50 shadow-sm">
           <CardContent className="p-4 text-center" role="status">
-            <p className="text-sm text-gray-500">No results found for &quot;{query}&quot;</p>
+            <p className="text-sm text-muted-foreground">No results found for &quot;{query}&quot;</p>
             <p className="text-xs text-muted-foreground mt-1">Try searching for patient names, phone numbers, or doctor names</p>
           </CardContent>
         </Card>

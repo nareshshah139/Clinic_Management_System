@@ -66,8 +66,8 @@ function FeeRow({ fee }: { fee: ClinicFee }) {
     >
       <div className="min-w-0">
         <h2 id={`${ids}-name`} className="text-base font-semibold">{fee.label}</h2>
-        <p className="text-sm text-gray-600">{WHEN[fee.billType]}</p>
-        <p data-testid="fee-status" className="mt-1 text-sm text-gray-700">
+        <p className="text-sm text-muted-foreground">{WHEN[fee.billType]}</p>
+        <p data-testid="fee-status" className="mt-1 text-sm text-foreground">
           {base.version === 0
             ? 'No fee set yet'
             : `${base.amount === null ? 'No fee' : rupee(base.amount)} · ${base.amount === null ? 'cleared' : 'changed'} ${displayClinicDateTime(base.updatedAt)}${base.updatedBy ? ` by ${base.updatedBy}` : ''}`}
@@ -77,7 +77,7 @@ function FeeRow({ fee }: { fee: ClinicFee }) {
         <label className="flex flex-col gap-1 text-sm font-medium">
           <span className="sr-only">{fee.label} fee in rupees</span>
           <span className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-500" aria-hidden="true">₹</span>
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground" aria-hidden="true">₹</span>
             <Input
               inputMode="decimal"
               placeholder="Not set"
@@ -97,8 +97,8 @@ function FeeRow({ fee }: { fee: ClinicFee }) {
         </Button>
       </div>
       <div id={`${ids}-help`} className="sm:col-span-2">
-        {invalid && <p className="text-sm text-red-700">Enter an amount above 0 and up to {rupee(MAX_FEE)}, for example 500.</p>}
-        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+        {invalid && <p className="text-sm text-destructive-text">Enter an amount above 0 and up to {rupee(MAX_FEE)}, for example 500.</p>}
+        {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
       </div>
     </form>
   );
@@ -129,7 +129,7 @@ export function ClinicFeeList() {
 
   if (loadError)
     return (
-      <div role="alert" className="space-y-2 rounded-lg border p-4 text-sm text-red-700">
+      <div role="alert" className="space-y-2 rounded-lg border p-4 text-sm text-destructive-text">
         <p>Could not load the fee list: {loadError}</p>
         <Button size="sm" variant="outline" onClick={() => void load()}>Retry</Button>
       </div>

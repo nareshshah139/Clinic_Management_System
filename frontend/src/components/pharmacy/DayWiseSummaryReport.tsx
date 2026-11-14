@@ -70,7 +70,7 @@ export function DayWiseSummaryReport() {
         <span key="bills" title={cell.title} className="block leading-snug">
           <span className={row.noBills ? "italic" : "font-medium"}>{cell.primary}</span>
           {cell.gap && (
-            <span className="ml-1 rounded bg-amber-100 px-1 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+            <span className="ml-1 rounded bg-warning-soft px-1 text-xs font-medium text-warning-text">
               {cell.gap}
             </span>
           )}

@@ -814,11 +814,11 @@ export function PharmacyPackageManager() {
                       <span>Package Price:</span>
                       <span>₹{formData.packagePrice.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between font-semibold text-green-600">
+                    <div className="flex justify-between font-semibold text-success-text">
                       <span>Savings:</span>
                       <span>₹{(calculateOriginalPrice() - formData.packagePrice).toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between font-semibold text-green-600">
+                    <div className="flex justify-between font-semibold text-success-text">
                       <span>Discount:</span>
                       <span>
                         {calculateOriginalPrice() > 0 
@@ -947,7 +947,7 @@ export function PharmacyPackageManager() {
               {selectedPackage.instructions && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <CheckCircle className="h-4 w-4 text-success" />
                     Usage Instructions
                   </h4>
                   <p className="text-sm text-muted-foreground">{selectedPackage.instructions}</p>
@@ -957,7 +957,7 @@ export function PharmacyPackageManager() {
               {selectedPackage.indications && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-blue-500" />
+                    <CheckCircle className="h-4 w-4 text-info" />
                     Indications
                   </h4>
                   <p className="text-sm text-muted-foreground">{selectedPackage.indications}</p>
@@ -967,7 +967,7 @@ export function PharmacyPackageManager() {
               {selectedPackage.contraindications && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
                     Contraindications
                   </h4>
                   <p className="text-sm text-muted-foreground">{selectedPackage.contraindications}</p>

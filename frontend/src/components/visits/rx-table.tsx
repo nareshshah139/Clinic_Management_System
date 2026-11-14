@@ -63,12 +63,12 @@ function layoutFor(variant: keyof typeof tracks) {
     wrapper: '@container',
     table: 'block w-full text-sm @6xl:table @6xl:table-fixed',
     columns: 'hidden @6xl:table-column-group',
-    head: 'sr-only block bg-gray-50 text-xs text-gray-600 @lg:not-sr-only @6xl:table-header-group @6xl:text-sm @6xl:text-gray-700',
+    head: 'sr-only block bg-muted text-xs text-muted-foreground @lg:not-sr-only @6xl:table-header-group @6xl:text-sm @6xl:text-foreground',
     headRow: `${rowBox} ${tracks[variant]} gap-y-0.5 py-1.5`,
     actionsHead: `${snug} sr-only col-start-3 @lg:col-start-5 @lg:row-start-2 @6xl:not-sr-only`,
     body: 'block @6xl:table-row-group',
-    row: `${rowBox} ${tracks[variant]} gap-y-1 border-t py-1 even:bg-slate-50 @lg:gap-y-1.5 @lg:py-1.5 [&_[role=combobox]]:bg-white [&_input]:bg-white [&_textarea]:bg-white`,
-    empty: 'block w-full px-3 py-3 text-center text-gray-500 @6xl:table-cell',
+    row: `${rowBox} ${tracks[variant]} gap-y-1 border-t py-1 even:bg-muted @lg:gap-y-1.5 @lg:py-1.5 [&_[role=combobox]]:bg-white [&_input]:bg-white [&_textarea]:bg-white`,
+    empty: 'block w-full px-3 py-3 text-center text-muted-foreground @6xl:table-cell',
     medicine: `${roomy} col-span-full @lg:col-start-1 @lg:col-end-3 @lg:row-start-1`,
     frequency: pair
       ? `${roomy} col-span-full @lg:col-start-3 @lg:col-end-4 @lg:row-start-1`
@@ -88,7 +88,7 @@ export const rxLayout = { prescription: layoutFor('prescription'), template: lay
 export const rxSelect = 'w-full gap-1 px-1.5 py-1.5';
 
 /** The stock hint sits on the medicine field's top border in the compact rows so the name keeps the width. */
-export const rxStock = 'pointer-events-none absolute right-2 top-0 -translate-y-1/2 whitespace-nowrap rounded-sm bg-white px-1 text-[11px] leading-none text-gray-500 @6xl:pointer-events-auto @6xl:static @6xl:translate-y-0 @6xl:bg-transparent @6xl:px-0 @6xl:text-xs';
+export const rxStock = 'pointer-events-none absolute right-2 top-0 -translate-y-1/2 whitespace-nowrap rounded-sm bg-white px-1 text-[11px] leading-none text-muted-foreground @6xl:pointer-events-auto @6xl:static @6xl:translate-y-0 @6xl:bg-transparent @6xl:px-0 @6xl:text-xs';
 
 const FIELD_TEXT = 'px-3 py-1 text-base md:py-1.5 md:text-sm [overflow-wrap:anywhere]';
 

@@ -76,13 +76,13 @@ function injectTourStyles() {
       
       /* Button container */
       .introjs-tooltipbuttons {
-        border-top: 1px solid #e5e7eb !important;
+        border-top: 1px solid var(--border) !important;
         padding: 16px 20px !important;
         display: flex !important;
         justify-content: space-between !important;
         align-items: center !important;
         gap: 8px !important;
-        background-color: #fafafa !important;
+        background-color: var(--muted) !important;
         border-bottom-left-radius: 12px !important;
         border-bottom-right-radius: 12px !important;
         margin: 0 !important;
@@ -91,32 +91,32 @@ function injectTourStyles() {
       }
       
       .introjs-nextbutton {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        background: linear-gradient(135deg, var(--info) 0%, var(--info) 100%) !important;
         border: none !important;
       }
       
       .introjs-nextbutton:hover {
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+        background: linear-gradient(135deg, var(--info) 0%, var(--info) 100%) !important;
         transform: translateY(-1px) !important;
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
       }
       
       .introjs-prevbutton {
-        background: #f3f4f6 !important;
-        color: #374151 !important;
-        border: 1px solid #d1d5db !important;
+        background: var(--muted) !important;
+        color: var(--foreground) !important;
+        border: 1px solid var(--border) !important;
       }
       
       .introjs-prevbutton:hover {
-        background: #e5e7eb !important;
+        background: var(--muted) !important;
         transform: translateY(-1px) !important;
       }
       
       .introjs-skipbutton {
-        background: #ef4444 !important;
+        background: var(--destructive) !important;
         color: var(--destructive-foreground) !important;
         font-weight: 700 !important;
-        border: 2px solid #ef4444 !important;
+        border: 2px solid var(--destructive) !important;
         border-radius: 50% !important;
         padding: 8px !important;
         width: 36px !important;
@@ -137,11 +137,11 @@ function injectTourStyles() {
       }
       
       .introjs-skipbutton:hover {
-        background: #dc2626 !important;
+        background: var(--destructive) !important;
         color: var(--destructive-foreground) !important;
         transform: translateY(-1px) scale(1.05) !important;
         box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5) !important;
-        border-color: #dc2626 !important;
+        border-color: var(--destructive) !important;
       }
       
       .introjs-skipbutton:before {
@@ -173,22 +173,22 @@ function injectTourStyles() {
       
       /* Progress bar */
       .introjs-progress {
-        background-color: #e5e7eb !important;
+        background-color: var(--muted) !important;
       }
       
       .introjs-progressbar {
-        background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%) !important;
+        background: linear-gradient(90deg, var(--info) 0%, var(--highlight) 100%) !important;
       }
       
       /* Bullets */
       .introjs-bullets ul li a {
         width: 10px !important;
         height: 10px !important;
-        background: #d1d5db !important;
+        background: var(--border) !important;
       }
       
       .introjs-bullets ul li a.active {
-        background: #3b82f6 !important;
+        background: var(--info) !important;
         width: 24px !important;
         border-radius: 5px !important;
       }
@@ -327,15 +327,15 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
-              <h3 class="text-xl font-bold text-blue-600">Welcome to Appointment Management!</h3>
+              <h3 class="text-xl font-bold text-info-text">Welcome to Appointment Management!</h3>
             </div>
             <p class="text-base leading-relaxed">
               As a receptionist, booking and managing appointments is your core responsibility. 
               This tour will walk you through a <strong>real-world workflow</strong> - from booking 
               a new patient to handling last-minute changes.
             </p>
-            <div class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-md">
-              <p class="text-sm text-blue-900">
+            <div class="bg-info-soft border-l-4 border-info p-3 rounded-md">
+              <p class="text-sm text-info-text">
                 <strong>What you'll learn:</strong> Doctor selection, date navigation, booking appointments, 
                 managing schedules, and handling common scenarios.
               </p>
@@ -354,14 +354,14 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <p class="text-sm leading-relaxed">
               <strong>Start here every time!</strong> Choose which doctor's schedule you want to view and manage.
             </p>
-            <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-md text-sm">
-              <p class="font-semibold text-amber-900 mb-1">Pro Tip:</p>
-              <p class="text-amber-800">
+            <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-sm">
+              <p class="font-semibold text-warning-text mb-1">Pro Tip:</p>
+              <p class="text-warning-text">
                 The system remembers your last selected doctor, so you don't have to re-select 
                 on every visit. Great for front desk staff assigned to specific doctors!
               </p>
             </div>
-            <div class="text-xs text-gray-600 mt-2 p-2 bg-gray-50 rounded-md">
+            <div class="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded-md">
               <strong>Try it:</strong> Click the dropdown to see all available doctors
             </div>
           </div>
@@ -397,7 +397,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
             </div>
-            <div class="text-xs text-gray-600 mt-2 p-2 bg-gray-50 rounded-md">
+            <div class="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded-md">
               <strong>Quick tip:</strong> Use keyboard to type dates faster (YYYY-MM-DD format)
             </div>
           </div>
@@ -417,13 +417,13 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </p>
             
             <div class="grid gap-3">
-              <div class="bg-gradient-to-r from-blue-50 to-blue-100 p-3 rounded-lg border border-blue-200">
+              <div class="bg-gradient-to-r from-info-soft to-info-soft p-3 rounded-lg border border-info-border">
                 <div class="flex items-center gap-2 mb-2">
-                  <div class="w-6 h-6 bg-blue-600 rounded-md flex items-center justify-center text-white text-xs font-bold">C</div>
-                  <strong class="text-blue-900">Calendar View</strong>
-                  <span class="ml-auto text-xs bg-blue-600 text-white px-2 py-1 rounded-md">Recommended</span>
+                  <div class="w-6 h-6 bg-info rounded-md flex items-center justify-center text-white text-xs font-bold">C</div>
+                  <strong class="text-info-text">Calendar View</strong>
+                  <span class="ml-auto text-xs bg-info text-white px-2 py-1 rounded-md">Recommended</span>
                 </div>
-                <ul class="text-xs text-blue-900 space-y-1 ml-8">
+                <ul class="text-xs text-info-text space-y-1 ml-8">
                   <li>• Visual timeline of the entire day</li>
                   <li>• See appointment gaps at a glance</li>
                   <li>• Drag to select custom time ranges</li>
@@ -431,12 +431,12 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </ul>
               </div>
               
-              <div class="bg-gradient-to-r from-green-50 to-green-100 p-3 rounded-lg border border-green-200">
+              <div class="bg-gradient-to-r from-success-soft to-success-soft p-3 rounded-lg border border-success-border">
                 <div class="flex items-center gap-2 mb-2">
-                  <div class="w-6 h-6 bg-green-600 rounded-md flex items-center justify-center text-white text-xs font-bold">S</div>
-                  <strong class="text-green-900">Slots View</strong>
+                  <div class="w-6 h-6 bg-success rounded-md flex items-center justify-center text-white text-xs font-bold">S</div>
+                  <strong class="text-success-text">Slots View</strong>
                 </div>
-                <ul class="text-xs text-green-900 space-y-1 ml-8">
+                <ul class="text-xs text-success-text space-y-1 ml-8">
                   <li>• Traditional time slot grid</li>
                   <li>• Quick 15-minute increments</li>
                   <li>• Familiar booking interface</li>
@@ -445,9 +445,9 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-purple-50 border-l-4 border-purple-500 p-3 rounded-md text-xs mt-3">
-              <strong class="text-purple-900">When to use what:</strong>
-              <p class="text-purple-800 mt-1">
+            <div class="bg-highlight-soft border-l-4 border-highlight p-3 rounded-md text-xs mt-3">
+              <strong class="text-highlight-text">When to use what:</strong>
+              <p class="text-highlight-text mt-1">
                 Use <strong>Calendar</strong> when the schedule is complex or you need to see the big picture. 
                 Use <strong>Slots</strong> for straightforward, quick bookings.
               </p>
@@ -461,20 +461,20 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
-              <h3 class="text-xl font-bold text-green-600">Booking a New Appointment</h3>
+              <h3 class="text-xl font-bold text-success-text">Booking a New Appointment</h3>
             </div>
             
-            <div class="bg-gradient-to-br from-green-50 to-blue-50 p-4 rounded-lg border-2 border-green-200">
-              <p class="font-semibold text-green-900 mb-3">Follow these steps in order:</p>
+            <div class="bg-gradient-to-br from-success-soft to-info-soft p-4 rounded-lg border-2 border-success-border">
+              <p class="font-semibold text-success-text mb-3">Follow these steps in order:</p>
               
               <div class="space-y-3">
                 <div class="flex gap-3">
-                  <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</div>
+                  <div class="flex-shrink-0 w-7 h-7 bg-success text-white rounded-full flex items-center justify-center font-bold text-sm">1</div>
                   <div class="flex-1">
-                    <p class="font-semibold text-sm text-gray-900">Search for Patient</p>
-                    <p class="text-xs text-gray-700 mt-1">
+                    <p class="font-semibold text-sm text-foreground">Search for Patient</p>
+                    <p class="text-xs text-foreground mt-1">
                       Look at the top of the calendar. Type patient's name or phone number in the search box.
-                      <span class="block mt-1 text-green-700 font-medium">
+                      <span class="block mt-1 text-success-text font-medium">
                         → New patient? Click "Add Patient" button first
                       </span>
                     </p>
@@ -482,22 +482,22 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
                 
                 <div class="flex gap-3">
-                  <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</div>
+                  <div class="flex-shrink-0 w-7 h-7 bg-success text-white rounded-full flex items-center justify-center font-bold text-sm">2</div>
                   <div class="flex-1">
-                    <p class="font-semibold text-sm text-gray-900">Select the Patient</p>
-                    <p class="text-xs text-gray-700 mt-1">
+                    <p class="font-semibold text-sm text-foreground">Select the Patient</p>
+                    <p class="text-xs text-foreground mt-1">
                       Click on the patient from the search results. Their name will appear in a blue badge.
                     </p>
                   </div>
                 </div>
                 
                 <div class="flex gap-3">
-                  <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</div>
+                  <div class="flex-shrink-0 w-7 h-7 bg-success text-white rounded-full flex items-center justify-center font-bold text-sm">3</div>
                   <div class="flex-1">
-                    <p class="font-semibold text-sm text-gray-900">Click Available Time Slot</p>
-                    <p class="text-xs text-gray-700 mt-1">
+                    <p class="font-semibold text-sm text-foreground">Click Available Time Slot</p>
+                    <p class="text-xs text-foreground mt-1">
                       Click any <strong>empty white time slot</strong> in the calendar grid.
-                      <span class="block mt-1 text-blue-700 font-medium">
+                      <span class="block mt-1 text-info-text font-medium">
                         → Advanced: Drag across multiple slots for longer appointments
                       </span>
                     </p>
@@ -505,10 +505,10 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
                 
                 <div class="flex gap-3">
-                  <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">4</div>
+                  <div class="flex-shrink-0 w-7 h-7 bg-success text-white rounded-full flex items-center justify-center font-bold text-sm">4</div>
                   <div class="flex-1">
-                    <p class="font-semibold text-sm text-gray-900">Configure & Confirm</p>
-                    <p class="text-xs text-gray-700 mt-1">
+                    <p class="font-semibold text-sm text-foreground">Configure & Confirm</p>
+                    <p class="text-xs text-foreground mt-1">
                       A dialog opens → Choose duration (15/30/45/60/90 min) → Add notes if needed → Click "Book Appointment"
                     </p>
                   </div>
@@ -516,9 +516,9 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded-md text-sm">
-              <p class="font-semibold text-yellow-900">Speed Booking Shortcut:</p>
-              <p class="text-yellow-800 text-xs mt-1">
+            <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-sm">
+              <p class="font-semibold text-warning-text">Speed Booking Shortcut:</p>
+              <p class="text-warning-text text-xs mt-1">
                 Most appointments are 30 minutes. Select patient → click slot → press Enter. 
                 The system auto-selects 30-min duration!
               </p>
@@ -531,85 +531,85 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
-              <h3 class="text-xl font-bold text-indigo-600">Understanding Appointment Colors</h3>
+              <h3 class="text-xl font-bold text-info-text">Understanding Appointment Colors</h3>
             </div>
             
-            <p class="text-sm text-gray-700 leading-relaxed">
+            <p class="text-sm text-foreground leading-relaxed">
               Appointments in the calendar are color-coded by <strong>visit type</strong>, 
               not by status. This helps you quickly identify different types of consultations at a glance.
             </p>
             
             <div class="space-y-2 mt-3">
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(219, 234, 254, 0.5); border-left: 4px solid #3b82f6;">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(219, 234, 254, 0.5); border-left: 4px solid var(--info);">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-sm"
-                     style="background-color: rgba(219, 234, 254, 0.95); color: #1e40af;">OPD</div>
+                     style="background-color: rgba(219, 234, 254, 0.95); color: var(--info-text);">OPD</div>
                 <div class="flex-1">
-                  <p class="font-bold text-blue-900">OPD Consultations (Light Blue)</p>
-                  <p class="text-xs text-blue-800">Standard outpatient appointments for regular consultations</p>
+                  <p class="font-bold text-info-text">OPD Consultations (Light Blue)</p>
+                  <p class="text-xs text-info-text">Standard outpatient appointments for regular consultations</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(237, 233, 254, 0.5); border-left: 4px solid #a855f7;">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(237, 233, 254, 0.5); border-left: 4px solid var(--highlight);">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-xs"
-                     style="background-color: rgba(237, 233, 254, 0.95); color: #6b21a8;">PROC</div>
+                     style="background-color: rgba(237, 233, 254, 0.95); color: var(--highlight-text);">PROC</div>
                 <div class="flex-1">
-                  <p class="font-bold text-purple-900">Procedures (Light Purple)</p>
-                  <p class="text-xs text-purple-800">Clinical procedures, treatments, laser sessions, and aesthetic services</p>
+                  <p class="font-bold text-highlight-text">Procedures (Light Purple)</p>
+                  <p class="text-xs text-highlight-text">Clinical procedures, treatments, laser sessions, and aesthetic services</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(243, 244, 246, 0.8); border-left: 4px solid #9ca3af;">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(243, 244, 246, 0.8); border-left: 4px solid var(--border);">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-xs"
-                     style="background-color: rgba(243, 244, 246, 0.95); color: #374151;">TELE</div>
+                     style="background-color: rgba(243, 244, 246, 0.95); color: var(--foreground);">TELE</div>
                 <div class="flex-1">
-                  <p class="font-bold text-gray-900">Telemedicine (Light Gray)</p>
-                  <p class="text-xs text-gray-800">Virtual consultations via phone or video call</p>
+                  <p class="font-bold text-foreground">Telemedicine (Light Gray)</p>
+                  <p class="text-xs text-foreground">Virtual consultations via phone or video call</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(226, 232, 240, 0.5); border-left: 4px solid #94a3b8;">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(226, 232, 240, 0.5); border-left: 4px solid var(--border);">
                 <div class="flex-1">
-                  <p class="font-bold text-slate-900">Completed (Lighter Gray)</p>
-                  <p class="text-xs text-slate-800">Doctor finished consultation - ready for billing</p>
-                  <p class="text-xs text-slate-700 mt-1 font-medium">→ Your action: Process payment if not done yet</p>
+                  <p class="font-bold text-foreground">Completed (Lighter Gray)</p>
+                  <p class="text-xs text-foreground">Doctor finished consultation - ready for billing</p>
+                  <p class="text-xs text-foreground mt-1 font-medium">→ Your action: Process payment if not done yet</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(34, 197, 94, 0.15); border-left: 4px solid #22c55e;">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(34, 197, 94, 0.15); border-left: 4px solid var(--success);">
                 <div class="flex-1">
-                  <p class="font-bold text-green-900">Newly Booked (Green Highlight)</p>
-                  <p class="text-xs text-green-800">Just booked in the last few seconds - temporary visual feedback</p>
+                  <p class="font-bold text-success-text">Newly Booked (Green Highlight)</p>
+                  <p class="text-xs text-success-text">Just booked in the last few seconds - temporary visual feedback</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(251, 191, 36, 0.15); border-left: 4px solid #fbbf24;">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(251, 191, 36, 0.15); border-left: 4px solid var(--warning);">
                 <div class="flex-1">
-                  <p class="font-bold text-amber-900">Booking In Progress (Yellow)</p>
-                  <p class="text-xs text-amber-800">Someone is currently booking this slot - wait for it to complete</p>
+                  <p class="font-bold text-warning-text">Booking In Progress (Yellow)</p>
+                  <p class="text-xs text-warning-text">Someone is currently booking this slot - wait for it to complete</p>
                 </div>
               </div>
             </div>
             
-            <div class="p-3 rounded-lg text-xs mt-3" style="background-color: rgba(219, 234, 254, 0.5); border: 1px solid #93c5fd;">
-              <p class="font-semibold text-blue-900 mb-1">Viewing Appointment Status:</p>
-              <p class="text-blue-800">
+            <div class="p-3 rounded-lg text-xs mt-3" style="background-color: rgba(219, 234, 254, 0.5); border: 1px solid var(--info-border);">
+              <p class="font-semibold text-info-text mb-1">Viewing Appointment Status:</p>
+              <p class="text-info-text">
                 To see if a patient is <strong>SCHEDULED, CHECKED-IN, or IN-PROGRESS</strong>, 
                 <strong>click the appointment</strong> to open the details dialog. 
                 The status is shown as text in the dialog.
               </p>
             </div>
             
-            <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(237, 233, 254, 0.5); border: 1px solid #d8b4fe;">
-              <p class="font-semibold text-purple-900 mb-1">Finding the Legend:</p>
-              <p class="text-purple-800">
+            <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(237, 233, 254, 0.5); border: 1px solid var(--highlight-border);">
+              <p class="font-semibold text-highlight-text mb-1">Finding the Legend:</p>
+              <p class="text-highlight-text">
                 Press the <strong>Legend</strong> button in the calendar toolbar to see what each color means.
                 Press it again, or Esc, to close it.
               </p>
             </div>
             
-            <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(251, 191, 36, 0.15); border: 1px solid #fcd34d;">
-              <p class="font-semibold text-amber-900 mb-1">Pro Tip:</p>
-              <p class="text-amber-800">
+            <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(251, 191, 36, 0.15); border: 1px solid var(--warning-border);">
+              <p class="font-semibold text-warning-text mb-1">Pro Tip:</p>
+              <p class="text-warning-text">
                 <strong>Past appointments</strong> show in even lighter shades. 
                 <strong>Cancelled appointments</strong> don't appear in the calendar at all - 
                 they're filtered out to keep the view clean!
@@ -623,40 +623,40 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
-              <h3 class="text-xl font-bold text-orange-600">Modifying Appointments</h3>
+              <h3 class="text-xl font-bold text-warning-text">Modifying Appointments</h3>
             </div>
             
-            <p class="text-sm text-gray-700 leading-relaxed mb-3">
+            <p class="text-sm text-foreground leading-relaxed mb-3">
               Patients call to reschedule or cancel? No problem! Here's how to manage changes:
             </p>
             
-            <div class="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
-              <p class="font-semibold text-orange-900 mb-3 flex items-center gap-2">
+            <div class="bg-warning-soft p-4 rounded-lg border-2 border-warning-border">
+              <p class="font-semibold text-warning-text mb-3 flex items-center gap-2">
                 Interacting with Appointments:
               </p>
               
               <div class="space-y-3 text-sm">
-                <div class="bg-white p-3 rounded-md border-l-4 border-orange-400">
-                  <p class="font-bold text-gray-900 mb-1">
-                    <span class="bg-orange-200 px-2 py-1 rounded-md text-xs mr-2">SINGLE CLICK</span>
+                <div class="bg-white p-3 rounded-md border-l-4 border-warning">
+                  <p class="font-bold text-foreground mb-1">
+                    <span class="bg-warning-soft px-2 py-1 rounded-md text-xs mr-2">SINGLE CLICK</span>
                     Select Appointment
                   </p>
-                  <p class="text-xs text-gray-700">
+                  <p class="text-xs text-foreground">
                     Highlights the appointment. Shows quick info in a side panel (if available).
                   </p>
                 </div>
                 
-                <div class="bg-white p-3 rounded-md border-l-4 border-orange-600">
-                  <p class="font-bold text-gray-900 mb-1">
-                    <span class="bg-orange-400 text-white px-2 py-1 rounded-md text-xs mr-2">DOUBLE CLICK</span>
+                <div class="bg-white p-3 rounded-md border-l-4 border-warning">
+                  <p class="font-bold text-foreground mb-1">
+                    <span class="bg-warning-border text-white px-2 py-1 rounded-md text-xs mr-2">DOUBLE CLICK</span>
                     Open Full Details
                   </p>
-                  <p class="text-xs text-gray-700 mb-2">
+                  <p class="text-xs text-foreground mb-2">
                     Opens a dialog with complete appointment information and action buttons.
                   </p>
-                  <div class="bg-orange-50 p-2 rounded-md text-xs mt-2">
-                    <p class="font-semibold text-orange-900 mb-1">Available actions:</p>
-                    <ul class="space-y-1 text-orange-800 ml-3">
+                  <div class="bg-warning-soft p-2 rounded-md text-xs mt-2">
+                    <p class="font-semibold text-warning-text mb-1">Available actions:</p>
+                    <ul class="space-y-1 text-warning-text ml-3">
                       <li>• <strong>Confirm:</strong> Move a Scheduled patient to the Confirmed calendar after they confirm on the call</li>
                       <li>• <strong>Edit:</strong> Change time, duration, or notes</li>
                       <li>• <strong>Reschedule:</strong> Move to different date/time</li>
@@ -669,30 +669,30 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-gradient-to-r from-pink-50 to-purple-50 p-3 rounded-lg border border-pink-200 text-sm mt-3">
-              <p class="font-bold text-pink-900 mb-2">Common Receptionist Scenarios:</p>
+            <div class="bg-gradient-to-r from-highlight-soft to-highlight-soft p-3 rounded-lg border border-highlight-border text-sm mt-3">
+              <p class="font-bold text-highlight-text mb-2">Common Receptionist Scenarios:</p>
               <div class="space-y-2 text-xs">
                 <div class="flex gap-2">
-                  <span class="text-pink-600 font-bold">1.</span>
-                  <p class="text-pink-900">
+                  <span class="text-highlight-text font-bold">1.</span>
+                  <p class="text-highlight-text">
                     <strong>"Patient running 15 mins late"</strong> → Double-click → Edit → Adjust time by 15 min
                   </p>
                 </div>
                 <div class="flex gap-2">
-                  <span class="text-purple-600 font-bold">2.</span>
-                  <p class="text-purple-900">
+                  <span class="text-highlight-text font-bold">2.</span>
+                  <p class="text-highlight-text">
                     <strong>"Patient wants to reschedule"</strong> → Double-click → Reschedule → Pick new date/time
                   </p>
                 </div>
                 <div class="flex gap-2">
-                  <span class="text-blue-600 font-bold">3.</span>
-                  <p class="text-blue-900">
+                  <span class="text-info-text font-bold">3.</span>
+                  <p class="text-info-text">
                     <strong>"Patient just walked in"</strong> → Double-click → Check-in button → Assign room
                   </p>
                 </div>
                 <div class="flex gap-2">
-                  <span class="text-red-600 font-bold">4.</span>
-                  <p class="text-red-900">
+                  <span class="text-destructive-text font-bold">4.</span>
+                  <p class="text-destructive-text">
                     <strong>"Patient no-show"</strong> → Double-click → Cancel → Select reason "No-show"
                   </p>
                 </div>
@@ -706,19 +706,19 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
-              <h3 class="text-xl font-bold text-teal-600">Pro Tips & Time Savers</h3>
+              <h3 class="text-xl font-bold text-success-text">Pro Tips & Time Savers</h3>
             </div>
             
-            <p class="text-sm text-gray-700 mb-3">
+            <p class="text-sm text-foreground mb-3">
               Master these techniques to work faster and more efficiently:
             </p>
             
             <div class="space-y-3">
-              <div class="bg-gradient-to-r from-teal-50 to-cyan-50 p-3 rounded-lg border-l-4 border-teal-500">
+              <div class="bg-gradient-to-r from-success-soft to-info-soft p-3 rounded-lg border-l-4 border-success">
                 <div class="flex items-start gap-2">
                   <div class="flex-1">
-                    <p class="font-bold text-teal-900 text-sm">Drag to Select Time Range</p>
-                    <p class="text-xs text-teal-800 mt-1">
+                    <p class="font-bold text-success-text text-sm">Drag to Select Time Range</p>
+                    <p class="text-xs text-success-text mt-1">
                       In Calendar view, <strong>click and drag</strong> across multiple time slots to book longer appointments. 
                       Perfect for initial consultations or procedures!
                     </p>
@@ -726,33 +726,33 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border-l-4 border-blue-500">
+              <div class="bg-gradient-to-r from-info-soft to-info-soft p-3 rounded-lg border-l-4 border-info">
                 <div class="flex items-start gap-2">
                   <div class="flex-1">
-                    <p class="font-bold text-blue-900 text-sm">Auto-Save Your Preferences</p>
-                    <p class="text-xs text-blue-800 mt-1">
+                    <p class="font-bold text-info-text text-sm">Auto-Save Your Preferences</p>
+                    <p class="text-xs text-info-text mt-1">
                       The system remembers your last selected doctor and date. When you return, you'll be right where you left off!
                     </p>
                   </div>
                 </div>
               </div>
               
-              <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg border-l-4 border-purple-500">
+              <div class="bg-gradient-to-r from-highlight-soft to-highlight-soft p-3 rounded-lg border-l-4 border-highlight">
                 <div class="flex items-start gap-2">
                   <div class="flex-1">
-                    <p class="font-bold text-purple-900 text-sm">Smart Slot Detection</p>
-                    <p class="text-xs text-purple-800 mt-1">
+                    <p class="font-bold text-highlight-text text-sm">Smart Slot Detection</p>
+                    <p class="text-xs text-highlight-text mt-1">
                       The calendar automatically finds 15-minute slots even in larger grid views. No need to zoom in - just click where you want to book!
                     </p>
                   </div>
                 </div>
               </div>
               
-              <div class="bg-gradient-to-r from-amber-50 to-orange-50 p-3 rounded-lg border-l-4 border-amber-500">
+              <div class="bg-gradient-to-r from-warning-soft to-warning-soft p-3 rounded-lg border-l-4 border-warning">
                 <div class="flex items-start gap-2">
                   <div class="flex-1">
-                    <p class="font-bold text-amber-900 text-sm">Quick Patient Search</p>
-                    <p class="text-xs text-amber-800 mt-1">
+                    <p class="font-bold text-warning-text text-sm">Quick Patient Search</p>
+                    <p class="text-xs text-warning-text mt-1">
                       Type just <strong>3-4 letters</strong> of a name or <strong>last 4 digits</strong> of phone number. 
                       The smart search finds patients instantly!
                     </p>
@@ -760,11 +760,11 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded-lg border-l-4 border-green-500">
+              <div class="bg-gradient-to-r from-success-soft to-success-soft p-3 rounded-lg border-l-4 border-success">
                 <div class="flex items-start gap-2">
                   <div class="flex-1">
-                    <p class="font-bold text-green-900 text-sm">Batch Operations</p>
-                    <p class="text-xs text-green-800 mt-1">
+                    <p class="font-bold text-success-text text-sm">Batch Operations</p>
+                    <p class="text-xs text-success-text mt-1">
                       Checking in multiple patients? Keep the appointment details dialog open and use keyboard shortcuts (Enter to confirm, Esc to close).
                     </p>
                   </div>
@@ -772,11 +772,11 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-gradient-to-br from-rose-100 via-purple-100 to-blue-100 p-4 rounded-lg border-2 border-purple-300 mt-4">
-              <p class="font-bold text-purple-900 text-center mb-2 flex items-center justify-center gap-2">
+            <div class="bg-gradient-to-br from-destructive-soft via-highlight-soft to-info-soft p-4 rounded-lg border-2 border-highlight-border mt-4">
+              <p class="font-bold text-highlight-text text-center mb-2 flex items-center justify-center gap-2">
                 <span>Golden Rule for Busy Days</span>
               </p>
-              <p class="text-sm text-purple-900 text-center leading-relaxed">
+              <p class="text-sm text-highlight-text text-center leading-relaxed">
                 Use <strong>Calendar View</strong> during peak hours to see the big picture. 
                 Switch to <strong>Slots View</strong> during quiet times for quick bookings. 
                 The "Quick Guide" button (Info icon) is always there if you need a refresher!
@@ -790,45 +790,45 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-4 p-1">
             <div class="flex items-center gap-2 justify-center">
-              <h3 class="text-2xl font-bold text-green-600">You're All Set!</h3>
+              <h3 class="text-2xl font-bold text-success-text">You're All Set!</h3>
             </div>
             
-            <div class="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border-2 border-green-300">
-              <p class="text-base text-gray-800 text-center leading-relaxed mb-3">
+            <div class="bg-gradient-to-br from-success-soft to-success-soft p-4 rounded-xl border-2 border-success-border">
+              <p class="text-base text-foreground text-center leading-relaxed mb-3">
                 You now know everything you need to <strong>efficiently manage appointments</strong> like a pro! 
               </p>
               
               <div class="bg-white p-4 rounded-lg shadow-sm">
-                <p class="font-bold text-green-900 mb-2 text-center">Quick Recap:</p>
+                <p class="font-bold text-success-text mb-2 text-center">Quick Recap:</p>
                 <div class="grid grid-cols-2 gap-3 text-xs">
-                  <div class="text-center p-2 bg-green-50 rounded-md">
-                    <div class="font-bold text-green-900">Doctor & Date</div>
-                    <div class="text-green-700">Always select first</div>
+                  <div class="text-center p-2 bg-success-soft rounded-md">
+                    <div class="font-bold text-success-text">Doctor & Date</div>
+                    <div class="text-success-text">Always select first</div>
                   </div>
-                  <div class="text-center p-2 bg-blue-50 rounded-md">
-                    <div class="font-bold text-blue-900">Search Patient</div>
-                    <div class="text-blue-700">Before clicking slots</div>
+                  <div class="text-center p-2 bg-info-soft rounded-md">
+                    <div class="font-bold text-info-text">Search Patient</div>
+                    <div class="text-info-text">Before clicking slots</div>
                   </div>
-                  <div class="text-center p-2 bg-purple-50 rounded-md">
-                    <div class="font-bold text-purple-900">Click Slot</div>
-                    <div class="text-purple-700">Or drag for longer</div>
+                  <div class="text-center p-2 bg-highlight-soft rounded-md">
+                    <div class="font-bold text-highlight-text">Click Slot</div>
+                    <div class="text-highlight-text">Or drag for longer</div>
                   </div>
-                  <div class="text-center p-2 bg-orange-50 rounded-md">
-                    <div class="font-bold text-orange-900">Double-Click</div>
-                    <div class="text-orange-700">To modify existing</div>
+                  <div class="text-center p-2 bg-warning-soft rounded-md">
+                    <div class="font-bold text-warning-text">Double-Click</div>
+                    <div class="text-warning-text">To modify existing</div>
                   </div>
                 </div>
               </div>
             </div>
             
-            <div class="bg-blue-600 text-white p-4 rounded-lg text-center">
+            <div class="bg-info text-white p-4 rounded-lg text-center">
               <p class="font-semibold mb-2">Need Help Later?</p>
               <p class="text-sm">
                 Click the <strong>"Start Tour"</strong> button in the top-right corner anytime to replay this guide!
               </p>
             </div>
             
-            <div class="text-center text-sm text-gray-600">
+            <div class="text-center text-sm text-muted-foreground">
               <p>Happy scheduling!</p>
             </div>
           </div>

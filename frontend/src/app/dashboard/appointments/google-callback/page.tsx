@@ -69,22 +69,22 @@ function GoogleCallbackInner() {
         <CardContent className="flex flex-col items-center gap-4 py-12">
           {status === 'exchanging' && (
             <>
-              <Spinner className="h-10 w-10  text-blue-600" />
-              <p className="text-sm text-gray-600">{message}</p>
+              <Spinner className="h-10 w-10  text-info-text" />
+              <p className="text-sm text-muted-foreground">{message}</p>
             </>
           )}
           {status === 'success' && (
             <>
-              <CheckCircle2 className="h-10 w-10 text-green-600" />
-              <p className="text-sm font-medium text-green-700">{message}</p>
-              <p className="text-xs text-gray-500">Redirecting to appointments...</p>
+              <CheckCircle2 className="h-10 w-10 text-success-text" />
+              <p className="text-sm font-medium text-success-text">{message}</p>
+              <p className="text-xs text-muted-foreground">Redirecting to appointments...</p>
             </>
           )}
           {status === 'error' && (
             <>
-              <XCircle className="h-10 w-10 text-red-500" />
-              <p className="text-sm font-medium text-red-600">{message}</p>
-              <p className="text-xs text-gray-500">Redirecting back...</p>
+              <XCircle className="h-10 w-10 text-destructive" />
+              <p className="text-sm font-medium text-destructive-text">{message}</p>
+              <p className="text-xs text-muted-foreground">Redirecting back...</p>
             </>
           )}
         </CardContent>
@@ -95,7 +95,7 @@ function GoogleCallbackInner() {
 
 export default function GoogleCallbackPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><Spinner className="h-8 w-8  text-blue-600" /></div>}>
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><Spinner className="h-8 w-8  text-info-text" /></div>}>
       <GoogleCallbackInner />
     </Suspense>
   );

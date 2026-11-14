@@ -663,9 +663,9 @@ export default function UsersManagement() {
               </div>
               <div>
                 <Label>Permissions</Label>
-                <div className="text-xs text-gray-500">Selected: {rolePerms.length}</div>
+                <div className="text-xs text-muted-foreground">Selected: {rolePerms.length}</div>
                 {alwaysPerms.length > 0 && (
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     This role always has {alwaysPerms.includes('*') ? 'every permission' : alwaysPerms.join(', ')}; unticking cannot remove them.
                   </p>
                 )}
@@ -673,13 +673,13 @@ export default function UsersManagement() {
             </div>
             <div className="md:col-span-8">
               {permLoad === 'failed' && (
-                <p role="alert" className="text-sm text-red-600">Could not load roles and permissions. Close this window and try again.</p>
+                <p role="alert" className="text-sm text-destructive-text">Could not load roles and permissions. Close this window and try again.</p>
               )}
               <div className="mt-2 max-h-80 overflow-auto space-y-4 pr-1">
                 {Object.entries(groupedPermissions).map(([group, perms]) => (
                   <div key={group}>
                     <div className="flex items-center justify-between">
-                      <div className="font-medium capitalize">{group} <span className="text-xs text-gray-500">({perms.length})</span></div>
+                      <div className="font-medium capitalize">{group} <span className="text-xs text-muted-foreground">({perms.length})</span></div>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => {
                           const next = new Set(rolePerms);
@@ -734,11 +734,11 @@ export default function UsersManagement() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-medium">Send WhatsApp on appointment creation</div>
-                  <div className="text-xs text-gray-500">Automatic confirmation to patients when this doctor is assigned.</div>
+                  <div className="text-xs text-muted-foreground">Automatic confirmation to patients when this doctor is assigned.</div>
                 </div>
                 <Switch aria-label="Send WhatsApp on appointment creation" checked={waAutoConfirm} onCheckedChange={(v: boolean) => setWaAutoConfirm(v)} />
               </div>
-              <div className="text-xs text-gray-500">Requires backend WhatsApp credentials. Uses text messages by default.</div>
+              <div className="text-xs text-muted-foreground">Requires backend WhatsApp credentials. Uses text messages by default.</div>
             </div>
 
             <div className="border rounded-md p-3 space-y-3">
@@ -746,12 +746,12 @@ export default function UsersManagement() {
                 <div>
                   <Label htmlFor="user-wa-phone-id" className="text-sm">Doctor WhatsApp Phone Number ID</Label>
                   <Input id="user-wa-phone-id" value={waPhoneNumberId} onChange={(e) => setWaPhoneNumberId(e.target.value)} placeholder="e.g., 123456789012345" />
-                  <div className="text-xs text-gray-500 mt-1">Optional. Overrides clinic default phone number ID.</div>
+                  <div className="text-xs text-muted-foreground mt-1">Optional. Overrides clinic default phone number ID.</div>
                 </div>
                 <div>
                   <Label htmlFor="user-wa-token" className="text-sm">Doctor WhatsApp Access Token</Label>
                   <Input id="user-wa-token" type="password" value={waAccessToken} onChange={(e) => setWaAccessToken(e.target.value)} placeholder="Paste long-lived access token" />
-                  <div className="text-xs text-gray-500 mt-1">Optional. Stored in user metadata. Leave blank to keep existing.</div>
+                  <div className="text-xs text-muted-foreground mt-1">Optional. Stored in user metadata. Leave blank to keep existing.</div>
                 </div>
               </div>
             </div>
@@ -760,7 +760,7 @@ export default function UsersManagement() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-medium">Use WhatsApp Template</div>
-                  <div className="text-xs text-gray-500">Recommended for messages outside the 24h window.</div>
+                  <div className="text-xs text-muted-foreground">Recommended for messages outside the 24h window.</div>
                 </div>
                 <Switch aria-label="Use WhatsApp template" checked={waUseTemplate} onCheckedChange={(v: boolean) => setWaUseTemplate(v)} />
               </div>
@@ -782,7 +782,7 @@ export default function UsersManagement() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-medium">Templates</div>
-                  <div className="text-xs text-gray-500">Create and customize WhatsApp templates for common actions.</div>
+                  <div className="text-xs text-muted-foreground">Create and customize WhatsApp templates for common actions.</div>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => void openTemplateEditor()}>Manage</Button>
               </div>
@@ -812,16 +812,16 @@ export default function UsersManagement() {
               </div>
               <div className="space-y-2 max-h-96 overflow-auto">
                 {tplLoading ? (
-                  <div className="text-sm text-gray-500">Loading templates...</div>
+                  <div className="text-sm text-muted-foreground">Loading templates...</div>
                 ) : tplList.length === 0 ? (
-                  <div className="text-sm text-gray-500">No templates yet.</div>
+                  <div className="text-sm text-muted-foreground">No templates yet.</div>
                 ) : (
                   tplList.map((t) => (
-                    <div key={t.id} className={`border rounded-md p-2 ${tplEditing?.id === t.id ? 'ring-1 ring-blue-500' : ''}`}>
+                    <div key={t.id} className={`border rounded-md p-2 ${tplEditing?.id === t.id ? 'ring-1 ring-info' : ''}`}>
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium text-sm">{t.name}</div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-muted-foreground">
                             {t.touchpoint} • {t.language || 'en'} {t.ownerId ? '• Mine' : '• Branch'} {t.isActive === false ? '• Inactive' : ''}
                           </div>
                         </div>
@@ -944,7 +944,7 @@ export default function UsersManagement() {
                   }}
                   dangerouslySetInnerHTML={{ __html: tplHtml }}
                 />
-                <div className="text-xs text-gray-500 mt-1">Use variables to personalize messages.</div>
+                <div className="text-xs text-muted-foreground mt-1">Use variables to personalize messages.</div>
               </div>
 
               <div>
@@ -1000,7 +1000,7 @@ export default function UsersManagement() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-medium">Send Test</div>
-                    <div className="text-xs text-gray-500">Send a test message to verify mapping.</div>
+                    <div className="text-xs text-muted-foreground">Send a test message to verify mapping.</div>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => void testSendTemplate()} disabled={!tplEditing?.id}>Send Test</Button>
                 </div>
@@ -1009,12 +1009,12 @@ export default function UsersManagement() {
                     <Label htmlFor="template-test-phone" className="text-sm">Test Phone (E.164)</Label>
                     <Input id="template-test-phone" value={tplTestTo} onChange={(e) => setTplTestTo(e.target.value)} placeholder="+15551234567" />
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-muted-foreground">
                     Variables will be sent blank unless you extend UI mapping; backend will still accept.
                   </div>
                 </div>
                 {tplTestStatus && (
-                  <div className={`text-sm ${tplTestStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
+                  <div className={`text-sm ${tplTestStatus.ok ? 'text-success-text' : 'text-destructive-text'}`}>
                     {tplTestStatus.msg}
                   </div>
                 )}

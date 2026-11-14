@@ -58,7 +58,7 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
   const normalized = normalizePrescription(prescription);
 
   if (!normalized) {
-    return <p className="text-sm text-red-600">Unable to display prescription data.</p>;
+    return <p className="text-sm text-destructive-text">Unable to display prescription data.</p>;
   }
 
   const {
@@ -78,57 +78,57 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-medium text-gray-900">Prescription Overview</h3>
+        <h3 className="text-lg font-medium text-foreground">Prescription Overview</h3>
         <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           {prescriptionNumber && (
             <div>
-              <span className="text-gray-600">Prescription #:</span>
-              <span className="ml-2 text-gray-900">{prescriptionNumber}</span>
+              <span className="text-muted-foreground">Prescription #:</span>
+              <span className="ml-2 text-foreground">{prescriptionNumber}</span>
             </div>
           )}
           {id && (
             <div>
-              <span className="text-gray-600">ID:</span>
-              <span className="ml-2 text-gray-900">{id}</span>
+              <span className="text-muted-foreground">ID:</span>
+              <span className="ml-2 text-foreground">{id}</span>
             </div>
           )}
           {status && (
             <div>
-              <span className="text-gray-600">Status:</span>
-              <span className="ml-2 text-gray-900 capitalize">{status.toLowerCase()}</span>
+              <span className="text-muted-foreground">Status:</span>
+              <span className="ml-2 text-foreground capitalize">{status.toLowerCase()}</span>
             </div>
           )}
           {createdAt && (
             <div>
-              <span className="text-gray-600">Created:</span>
-              <span className="ml-2 text-gray-900">{createdAt}</span>
+              <span className="text-muted-foreground">Created:</span>
+              <span className="ml-2 text-foreground">{createdAt}</span>
             </div>
           )}
           {reviewDate && (
             <div>
-              <span className="text-gray-600">Review Date:</span>
-              <span className="ml-2 text-gray-900">{reviewDate}</span>
+              <span className="text-muted-foreground">Review Date:</span>
+              <span className="ml-2 text-foreground">{reviewDate}</span>
             </div>
           )}
           {doctor && (
             <div>
-              <span className="text-gray-600">Doctor:</span>
-              <span className="ml-2 text-gray-900">{doctor}</span>
+              <span className="text-muted-foreground">Doctor:</span>
+              <span className="ml-2 text-foreground">{doctor}</span>
             </div>
           )}
           {patient && (
             <div>
-              <span className="text-gray-600">Patient:</span>
-              <span className="ml-2 text-gray-900">{patient}</span>
+              <span className="text-muted-foreground">Patient:</span>
+              <span className="ml-2 text-foreground">{patient}</span>
             </div>
           )}
         </div>
       </div>
 
       <div>
-        <h4 className="text-md font-medium text-gray-900">Medications</h4>
+        <h4 className="text-md font-medium text-foreground">Medications</h4>
         {items.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-500">No medication items recorded.</p>
+          <p className="mt-2 text-sm text-muted-foreground">No medication items recorded.</p>
         ) : (
           <div className="mt-3 space-y-3">
             {items.map((item, idx) => {
@@ -175,20 +175,20 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
               }
 
               return (
-                <div key={idx} className="rounded-md border border-gray-200 p-3">
+                <div key={idx} className="rounded-md border border-border p-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="font-medium text-gray-900">{name}</p>
-                      <p className="text-sm text-gray-600">
+                      <p className="font-medium text-foreground">{name}</p>
+                      <p className="text-sm text-muted-foreground">
                         {dosage && <span className="mr-2">Dosage: {dosage}</span>}
                         {frequency && <span className="mr-2">Frequency: {frequency.replaceAll('_', ' ')}</span>}
                         {duration && <span className="mr-2">Duration: {duration} {durationUnit ?? ''}</span>}
                       </p>
                       {instructionsText && (
-                        <p className="text-sm text-gray-700 mt-1">Instructions: {instructionsText}</p>
+                        <p className="text-sm text-foreground mt-1">Instructions: {instructionsText}</p>
                       )}
                       {additional.length > 0 && (
-                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-600">
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                           {additional.map((entry, additionalIdx) => (
                             <li key={additionalIdx}>{entry}</li>
                           ))}
@@ -207,20 +207,20 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
         <div className="space-y-3">
           {notes && (
             <div>
-              <h4 className="text-md font-medium text-gray-900">Notes</h4>
-              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{notes}</p>
+              <h4 className="text-md font-medium text-foreground">Notes</h4>
+              <p className="mt-1 text-sm text-foreground whitespace-pre-line">{notes}</p>
             </div>
           )}
           {instructions && (
             <div>
-              <h4 className="text-md font-medium text-gray-900">General Instructions</h4>
-              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{instructions}</p>
+              <h4 className="text-md font-medium text-foreground">General Instructions</h4>
+              <p className="mt-1 text-sm text-foreground whitespace-pre-line">{instructions}</p>
             </div>
           )}
           {pharmacistNotes && (
             <div>
-              <h4 className="text-md font-medium text-gray-900">Pharmacist Notes</h4>
-              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{pharmacistNotes}</p>
+              <h4 className="text-md font-medium text-foreground">Pharmacist Notes</h4>
+              <p className="mt-1 text-sm text-foreground whitespace-pre-line">{pharmacistNotes}</p>
             </div>
           )}
         </div>
@@ -297,7 +297,7 @@ const PhotosPanel = dynamic<ComponentType<{ visitId: string }>>(
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center justify-center py-6 text-sm text-gray-500">
+      <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
         Loading photos…
       </div>
     ),
@@ -315,7 +315,7 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
   const [prescriptionLoading, setPrescriptionLoading] = useState(false);
   const [prescriptionError, setPrescriptionError] = useState<string | null>(null);
 
-  if (historyError) return <div role="alert" className="p-4 text-red-700">Unable to load patient history. {historyError} <Button onClick={() => void refresh()}>Retry</Button></div>;
+  if (historyError) return <div role="alert" className="p-4 text-destructive-text">Unable to load patient history. {historyError} <Button onClick={() => void refresh()}>Retry</Button></div>;
 
   if (loading) {
     return (
@@ -325,8 +325,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
 
   if (!patientId) {
     return (
-      <div className="text-center py-8 text-gray-500">
-        <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+      <div className="text-center py-8 text-muted-foreground">
+        <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
         <p>Select a patient to view their visit history</p>
       </div>
     );
@@ -334,8 +334,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
 
   if (history.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
-        <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+      <div className="text-center py-8 text-muted-foreground">
+        <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
         <p>No documented history to show</p>
       </div>
     );
@@ -344,13 +344,13 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900">Patient History</h3><Button variant="outline" onClick={() => void refresh()}>Refresh</Button>
+        <h3 className="text-lg font-medium text-foreground">Patient History</h3><Button variant="outline" onClick={() => void refresh()}>Refresh</Button>
         <Badge variant="secondary">{history.length} Records</Badge>
       </div>
       
       <div className="relative">
         {/* Timeline line */}
-        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-muted"></div>
         
         {/* Timeline items */}
         <div className="space-y-6">
@@ -365,8 +365,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                 {/* Timeline dot */}
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center ${
                   index === 0 
-                    ? 'bg-blue-100 border-blue-500 text-blue-600'
-                    : 'bg-gray-100 border-gray-300 text-gray-500'
+                    ? 'bg-info-soft border-info text-info-text'
+                    : 'bg-muted border-border text-muted-foreground'
                 }`}>
                   {isProcedure ? (
                     <Activity className="h-4 w-4" />
@@ -448,8 +448,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
             </DialogDescription>
           </DialogHeader>
 
-          {prescriptionLoading && <p className="text-sm text-gray-500">Loading prescription…</p>}
-          {prescriptionError && <p className="text-sm text-red-600">{prescriptionError}</p>}
+          {prescriptionLoading && <p className="text-sm text-muted-foreground">Loading prescription…</p>}
+          {prescriptionError && <p className="text-sm text-destructive-text">{prescriptionError}</p>}
 
           {!prescriptionLoading && viewingPrescription && !prescriptionError && (
             <PrescriptionSummary
@@ -738,21 +738,21 @@ function VisitsPageInner() {
         <CardContent>
           <div className="space-y-4">
             {patients.length === 0 && (
-              <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
-                <Users className="h-5 w-5 text-red-500" />
+              <div className="flex items-center gap-3 p-3 bg-destructive-soft rounded-lg">
+                <Users className="h-5 w-5 text-destructive" />
                 <div>
-                  <p className="text-sm font-medium text-red-700">No patients found</p>
-                  <p className="text-xs text-red-600">Add at least one patient to create visits</p>
+                  <p className="text-sm font-medium text-destructive-text">No patients found</p>
+                  <p className="text-xs text-destructive-text">Add at least one patient to create visits</p>
                 </div>
               </div>
             )}
             
             {doctors.length === 0 && (
-              <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
-                <Stethoscope className="h-5 w-5 text-red-500" />
+              <div className="flex items-center gap-3 p-3 bg-destructive-soft rounded-lg">
+                <Stethoscope className="h-5 w-5 text-destructive" />
                 <div>
-                  <p className="text-sm font-medium text-red-700">No doctors found</p>
-                  <p className="text-xs text-red-600">Add at least one doctor to create visits</p>
+                  <p className="text-sm font-medium text-destructive-text">No doctors found</p>
+                  <p className="text-xs text-destructive-text">Add at least one doctor to create visits</p>
                 </div>
               </div>
             )}
@@ -836,7 +836,7 @@ function VisitsPageInner() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="relative">
-                <label htmlFor="visit-landing-patient" className="text-sm font-medium text-gray-700 mb-2 block">
+                <label htmlFor="visit-landing-patient" className="text-sm font-medium text-foreground mb-2 block">
                   Select Patient
                 </label>
                 <div className="relative">
@@ -871,10 +871,10 @@ function VisitsPageInner() {
                   {showPatientMenu && (
                     <div className="absolute z-20 mt-1 w-full bg-white border rounded-md shadow-sm max-h-64 overflow-auto">
                       {searchingPatients && (
-                        <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+                        <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
                       )}
                       {!searchingPatients && patientOptions.length === 0 && (
-                        <div className="px-3 py-2 text-xs text-gray-500">No results</div>
+                        <div className="px-3 py-2 text-xs text-muted-foreground">No results</div>
                       )}
                       <div id="visit-landing-patient-options" role="listbox" aria-label="Patients">
                       {!searchingPatients && patientOptions.map((p, idx) => (
@@ -891,7 +891,7 @@ function VisitsPageInner() {
                             setPatientQuery(p.name || p.phone || p.email || p.id);
                             setShowPatientMenu(false);
                           }}
-                          className={`w-full text-left px-3 py-2 text-sm ${selectedPatientId === p.id ? 'bg-gray-50' : ''} ${idx === highlightedIndex ? 'bg-blue-50' : ''}`}
+                          className={`w-full text-left px-3 py-2 text-sm ${selectedPatientId === p.id ? 'bg-muted' : ''} ${idx === highlightedIndex ? 'bg-info-soft' : ''}`}
                         >
                           <div className="flex items-center gap-2">
                             <Users className="h-4 w-4" />
@@ -912,7 +912,7 @@ function VisitsPageInner() {
               </div>
 
               <div>
-                <label htmlFor="visit-landing-doctor" className="text-sm font-medium text-gray-700 mb-2 block">
+                <label htmlFor="visit-landing-doctor" className="text-sm font-medium text-foreground mb-2 block">
                   Select Doctor
                 </label>
                 <Select value={selectedDoctorId} onValueChange={setChosenDoctorId} disabled={doctorLocked}>
@@ -927,7 +927,7 @@ function VisitsPageInner() {
                           <span>
                             Dr. {doctor.firstName} {doctor.lastName}
                             {doctor.specialization && (
-                              <span className="text-xs text-gray-500 ml-2">
+                              <span className="text-xs text-muted-foreground ml-2">
                                 {doctor.specialization}
                               </span>
                             )}
@@ -954,9 +954,9 @@ function VisitsPageInner() {
                       <div className="pt-4 border-t">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="text-sm font-medium text-gray-900">Ready to start visit</h3>
+                            <h3 className="text-sm font-medium text-foreground">Ready to start visit</h3>
                             <VisitIdentityBar
-                              className="mt-1 !text-xs !text-gray-500"
+                              className="mt-1 !text-xs !text-muted-foreground"
                               patient={selectedPatient}
                               doctor={selectedDoctor}
                             />
@@ -968,8 +968,8 @@ function VisitsPageInner() {
                       </div>
                     )}
                     {!selectedDoctorId && (
-                      <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                        <p className="text-sm text-yellow-800">Please select a doctor to start the visit.</p>
+                      <div className="p-4 bg-warning-soft rounded-lg border border-warning-border">
+                        <p className="text-sm text-warning-text">Please select a doctor to start the visit.</p>
                       </div>
                     )}
                   </TabsContent>
@@ -993,7 +993,7 @@ function VisitsPageInner() {
           <div className="flex flex-wrap items-center gap-2">
             <PageHeader title={<>Visit Documentation</>} />
             {appointmentData && (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+              <Badge variant="secondary" className="bg-info-soft text-info-text">
                 <Calendar className="h-3 w-3 mr-1" />
                 From Appointment
               </Badge>

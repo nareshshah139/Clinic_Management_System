@@ -220,14 +220,14 @@ function InventoryControlCard({
   points: string[];
 }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="font-semibold text-slate-950">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{detail}</p>
+    <div className="rounded-md border border-border bg-white p-4 shadow-sm">
+      <p className="font-semibold text-foreground">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         {points.map((point) => (
           <span
             key={point}
-            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+            className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground"
           >
             {point}
           </span>
@@ -297,12 +297,12 @@ function WorkbenchHeader({
   detail: string;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 rounded-md border border-border bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-lg font-semibold text-slate-950">{title}</p>
-        <p className="text-sm text-slate-600">{detail}</p>
+        <p className="text-lg font-semibold text-foreground">{title}</p>
+        <p className="text-sm text-muted-foreground">{detail}</p>
       </div>
-      <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+      <div className="flex items-center gap-2 rounded-full border border-success-border bg-success-soft px-3 py-1 text-xs font-semibold text-success-text">
         <CheckCircle2 className="h-3.5 w-3.5" />
         Validate before adding stock
       </div>

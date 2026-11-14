@@ -69,10 +69,10 @@ const STATUS_IN_WORDS = {
 };
 
 const BILLING_TONE: Record<BillingTone, string> = {
-  paid: 'flex bg-emerald-50 text-emerald-800 ring-emerald-300',
-  due: 'flex bg-amber-100 text-amber-900 ring-amber-400',
-  unbilled: 'flex bg-amber-100 text-amber-900 ring-amber-400',
-  quiet: 'hidden bg-white/70 text-gray-600 ring-gray-300 @min-[14rem]:flex',
+  paid: 'flex bg-success-soft text-success-text ring-success-border',
+  due: 'flex bg-warning-soft text-warning-text ring-warning',
+  unbilled: 'flex bg-warning-soft text-warning-text ring-warning',
+  quiet: 'hidden bg-white/70 text-muted-foreground ring-border @min-[14rem]:flex',
 };
 
 export type SlotAction =
@@ -209,9 +209,9 @@ export default function CalendarColumn({
       style={{ gridColumnStart: column }}
     >
       <header className="min-w-0 border-b-2 pb-1.5" style={{ borderBottomColor: spec.accentColor }}>
-        <h2 id={titleId} className="font-semibold leading-tight text-gray-900">{spec.title}</h2>
-        <p className="text-xs font-medium leading-tight text-gray-800">{appointments.length ? spec.count(appointments.length) : spec.empty}</p>
-        <p className="text-xs leading-tight text-gray-600">{spec.description}</p>
+        <h2 id={titleId} className="font-semibold leading-tight text-foreground">{spec.title}</h2>
+        <p className="text-xs font-medium leading-tight text-foreground">{appointments.length ? spec.count(appointments.length) : spec.empty}</p>
+        <p className="text-xs leading-tight text-muted-foreground">{spec.description}</p>
       </header>
       <div
         className="grid grid-cols-1 gap-0"
@@ -245,7 +245,7 @@ export default function CalendarColumn({
               }}
             >
               <div
-                className={`flex h-full w-full overflow-hidden rounded-md border-l-[3px] shadow-sm ${status.accent} ${apt.slot === recentBookedSlot ? 'ring-2 ring-green-500/60' : ''}`}
+                className={`flex h-full w-full overflow-hidden rounded-md border-l-[3px] shadow-sm ${status.accent} ${apt.slot === recentBookedSlot ? 'ring-2 ring-success/60' : ''}`}
                 style={{ backgroundColor: blockBackground(apt) }}
               >
                 <div className="relative h-full min-w-0 flex-1">
@@ -255,14 +255,14 @@ export default function CalendarColumn({
                     title={accessibleName}
                     onClick={() => onOpen(apt)}
                     disabled={isOptimistic}
-                    className="@container flex h-full w-full items-start overflow-hidden px-1.5 py-0 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                    className="@container flex h-full w-full items-start overflow-hidden px-1.5 py-0 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     style={{ fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))' }}
                   >
-                    <span className={`flex w-full min-w-0 items-center gap-1 whitespace-nowrap ${CLOSED.has(apt.status) ? 'text-foreground/70' : 'text-gray-900'}`}>
+                    <span className={`flex w-full min-w-0 items-center gap-1 whitespace-nowrap ${CLOSED.has(apt.status) ? 'text-foreground/70' : 'text-foreground'}`}>
                       {apt.tokenNumber != null && (
                         <span className="shrink-0 font-semibold">#{apt.tokenNumber}</span>
                       )}
-                      <span data-appointment-time className="hidden shrink-0 font-bold tabular-nums text-blue-700 @min-[15em]:inline">{`${start}-${end}`}</span>
+                      <span data-appointment-time className="hidden shrink-0 font-bold tabular-nums text-info-text @min-[15em]:inline">{`${start}-${end}`}</span>
                       <span
                         data-patient-name
                         className={`min-w-0 flex-auto truncate font-semibold ${STRUCK_THROUGH.has(apt.status) ? 'line-through' : ''}`}
@@ -283,11 +283,11 @@ export default function CalendarColumn({
                       </span>
                       <span className="hidden min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden @min-[36em]:flex">
                         {apt.visitType === 'PROCEDURE' && apt.notes && (
-                          <span className="truncate font-medium text-purple-700">({apt.notes})</span>
+                          <span className="truncate font-medium text-highlight-text">({apt.notes})</span>
                         )}
                         {(!apt.billType || apt.visitType === 'TELEMED') && <span className="font-medium text-highlight-text">{apt.visitType || 'OPD'}</span>}
-                        {apt.patient?.age !== undefined && <span className="text-gray-600">{apt.patient.age}y</span>}
-                        {apt.patient?.gender && <span className="rounded bg-gray-100 px-1 text-gray-600">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
+                        {apt.patient?.age !== undefined && <span className="text-muted-foreground">{apt.patient.age}y</span>}
+                        {apt.patient?.gender && <span className="rounded bg-muted px-1 text-muted-foreground">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
                         {apt.room?.name && <span className="truncate font-medium text-success-text">{apt.room.name}</span>}
                       </span>
                     </span>
@@ -300,7 +300,7 @@ export default function CalendarColumn({
                         e.stopPropagation();
                         onOpen(apt);
                       }}
-                      className="bg-gray-500 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                      className="bg-muted-foreground hover:bg-muted-foreground text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
                       title="View Appointment Details"
                       disabled={isOptimistic}
                     >
@@ -313,7 +313,7 @@ export default function CalendarColumn({
                           e.stopPropagation();
                           onReschedule(apt);
                         }}
-                        className="bg-amber-700 hover:bg-amber-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                        className="bg-warning hover:bg-warning text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
                         title="Reschedule Appointment"
                         disabled={isOptimistic}
                       >
@@ -326,7 +326,7 @@ export default function CalendarColumn({
                         e.stopPropagation();
                         onStartVisit(apt);
                       }}
-                      className="bg-blue-700 hover:bg-blue-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                      className="bg-info hover:bg-info text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
                       title={apt.visit?.id ? 'Continue Visit' : 'Start Visit'}
                       disabled={isOptimistic}
                     >
@@ -343,7 +343,7 @@ export default function CalendarColumn({
                     title={chip.label}
                     onClick={() => onOpenBill?.(apt)}
                     disabled={isOptimistic || !onOpenBill}
-                    className={`my-0.5 mr-0.5 shrink-0 items-center gap-1 self-start whitespace-nowrap rounded px-1.5 text-[11px] font-semibold leading-4 ring-1 ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${BILLING_TONE[chip.tone]}`}
+                    className={`my-0.5 mr-0.5 shrink-0 items-center gap-1 self-start whitespace-nowrap rounded px-1.5 text-[11px] font-semibold leading-4 ring-1 ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${BILLING_TONE[chip.tone]}`}
                   >
                     {(chip.tone === 'due' || chip.tone === 'unbilled') && <CircleAlert className="hidden size-3 shrink-0 @min-[12rem]:block" aria-hidden="true" />}
                     {chip.steps.map((step, i) => (
@@ -501,7 +501,7 @@ export default function CalendarColumn({
                   }}
                 >
                   {hasAny && (
-                    <span data-overbook-capacity className="pointer-events-none absolute right-1 top-0.5 rounded bg-amber-100 px-1 text-[10px] font-medium leading-4 text-amber-800">
+                    <span data-overbook-capacity className="pointer-events-none absolute right-1 top-0.5 rounded bg-warning-soft px-1 text-[10px] font-medium leading-4 text-warning-text">
                       Overbook {overlappingAppointments.length}/{maxBookingsPerSlot}
                     </span>
                   )}

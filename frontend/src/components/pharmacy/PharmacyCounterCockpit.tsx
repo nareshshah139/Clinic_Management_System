@@ -605,12 +605,12 @@ export function PharmacyCounterCockpit({
       />
       <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border bg-card shadow-sm xl:h-[calc(100vh-196px)]">
         {error || stockError ? (
-          <div role="alert" className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm font-medium text-red-700">
+          <div role="alert" className="border-b border-destructive-border bg-destructive-soft px-5 py-3 text-sm font-medium text-destructive-text">
             {error || stockError}
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 gap-2 bg-slate-100/70 p-2 xl:grid-cols-[280px_minmax(0,1fr)_290px] 2xl:grid-cols-[300px_minmax(0,1fr)_330px]">
+        <div className="grid min-h-0 flex-1 gap-2 bg-muted/70 p-2 xl:grid-cols-[280px_minmax(0,1fr)_290px] 2xl:grid-cols-[300px_minmax(0,1fr)_330px]">
           <QueueColumn
             queue={queue}
             queueTotal={queueTotal}
@@ -684,7 +684,7 @@ function QueueColumn({
   onShowMore?: () => void;
 }) {
   return (
-    <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
+    <div className="flex min-h-0 flex-col rounded-lg border border-border bg-white p-2.5 shadow-sm">
       <PanelHeader
         icon={<ClipboardCheck className="h-4 w-4" />}
         title="Prescription queue"
@@ -719,12 +719,12 @@ function QueueColumn({
         {loading && queue.length === 0 ? (
           <LoadingSkeleton label="Loading prescription queue…" />
         ) : queue.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+          <div className="rounded-lg border border-dashed border-border bg-muted p-3 text-sm text-muted-foreground">
             {filter.status ? (
               'No items match this filter.'
             ) : (
               <>
-                <p className="font-semibold text-slate-950">No prescriptions waiting</p>
+                <p className="font-semibold text-foreground">No prescriptions waiting</p>
                 <p className="mt-1">Prescriptions saved in a visit appear here.</p>
               </>
             )}
@@ -832,7 +832,7 @@ function ActiveDispenseColumn({
   savingTask: boolean;
 }) {
   return (
-    <div className="@container flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
+    <div className="@container flex min-h-0 flex-col rounded-lg border border-border bg-white p-2.5 shadow-sm">
       <PanelHeader
         icon={<Pill className="h-4 w-4" />}
         title="Active Dispense"
@@ -845,7 +845,7 @@ function ActiveDispenseColumn({
 
       {activeEntry ? (
         <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="shrink-0 overflow-hidden rounded-lg border border-border bg-white">
             <div className="grid gap-2 bg-muted px-3 py-2 @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-center">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -864,7 +864,7 @@ function ActiveDispenseColumn({
           </div>
 
           {loadingStock ? (
-            <div className="mt-2 flex h-32 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
+            <div className="mt-2 flex h-32 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted text-sm text-muted-foreground">
               <Spinner className="mr-2 h-4 w-4 " />
               Checking stock and batch expiry
             </div>
@@ -879,12 +879,12 @@ function ActiveDispenseColumn({
             </fieldset>
           )}
 
-          <div className="mt-2 shrink-0 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
+          <div className="mt-2 shrink-0 rounded-lg border border-border bg-muted/80 p-2">
             <div className="grid gap-2 @md:grid-cols-[210px_minmax(0,1fr)]">
               <select
                 value={reasonType}
                 onChange={(event) => setReasonType(event.target.value)}
-                className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm"
+                className="h-9 rounded-md border border-border bg-white px-2 text-sm"
               >
                 {reasonOptions.map((option) => (
                   <option key={option} value={option}>
@@ -901,9 +901,9 @@ function ActiveDispenseColumn({
             </div>
           </div>
 
-          <div className="mt-2 shrink-0 flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm @md:flex-row @md:items-center @md:justify-between">
+          <div className="mt-2 shrink-0 flex flex-col gap-2 rounded-lg border border-border bg-white p-2 shadow-sm @md:flex-row @md:items-center @md:justify-between">
             <div className="text-sm">
-              <p className="font-semibold text-slate-950">
+              <p className="font-semibold text-foreground">
                 {readyForBilling ? 'Ready for billing review' : 'Review every medicine before billing'}
               </p>
             </div>
@@ -942,10 +942,10 @@ function ActiveDispenseColumn({
           </div>
         </div>
       ) : (
-        <div className="mt-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center">
-          <Pill className="mx-auto h-8 w-8 text-slate-400" />
-          <p className="mt-3 font-semibold text-slate-950">No active prescription</p>
-          <p className="mt-1 text-sm text-slate-600">Select a prescription in the queue to review its medicines.</p>
+        <div className="mt-2 rounded-lg border border-dashed border-border bg-muted p-4 text-center">
+          <Pill className="mx-auto h-8 w-8 text-muted-foreground" />
+          <p className="mt-3 font-semibold text-foreground">No active prescription</p>
+          <p className="mt-1 text-sm text-muted-foreground">Select a prescription in the queue to review its medicines.</p>
         </div>
       )}
     </div>
@@ -964,15 +964,15 @@ function MedicationReviewTable({
   onInventoryLinked?: () => Promise<void>;
 }) {
   return (
-    <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200">
-      <div className="hidden shrink-0 grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] gap-2 border-b border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-semibold uppercase tracking-normal text-slate-500 @3xl:grid">
+    <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
+      <div className="hidden shrink-0 grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] gap-2 border-b border-border bg-muted px-2.5 py-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground @3xl:grid">
         <span>Prescription</span>
         <span>Inventory Match</span>
         <span>Stock</span>
         <span>Shelf and batch</span>
         <span>Action</span>
       </div>
-      <div className="min-h-0 divide-y divide-slate-100 overflow-y-auto">
+      <div className="min-h-0 divide-y divide-border overflow-y-auto">
         {activeEntry.medications.map((medication, index) => {
           const stock = stockByLine[medication.sourceLineKey ?? String(index)];
           return (
@@ -1029,24 +1029,24 @@ function MedicationReviewRow({
   const warnings = stock ? stockWarnings(stock) : [];
 
   return (
-    <div role="group" aria-label={medication.drugName} className="grid gap-2 bg-white px-2.5 py-2 transition hover:bg-slate-50 @3xl:grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] @3xl:items-center">
+    <div role="group" aria-label={medication.drugName} className="grid gap-2 bg-white px-2.5 py-2 transition hover:bg-accent @3xl:grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] @3xl:items-center">
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-slate-950">{medication.drugName}</p>
-        <p className="truncate text-xs text-slate-600">
+        <p className="truncate text-sm font-semibold text-foreground">{medication.drugName}</p>
+        <p className="truncate text-xs text-muted-foreground">
           {[medication.dosage, medication.dosageUnit, medication.frequency]
             .filter(Boolean)
             .join(' ') || 'Dose not specified'}
         </p>
-        <p className="truncate text-xs text-slate-500">
+        <p className="truncate text-xs text-muted-foreground">
           {[medication.duration, medication.durationUnit].filter(Boolean).join(' ') || 'Duration not set'}
         </p>
       </div>
 
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-slate-950">
+        <p className="truncate text-sm font-semibold text-foreground">
           {stock ? (isLinked(stock) ? stockCheckLineName(stock) : 'Not linked') : 'Checking stock'}
         </p>
-        <p className="truncate text-xs text-slate-600">{availableText(stock)}</p>
+        <p className="truncate text-xs text-muted-foreground">{availableText(stock)}</p>
         {warnings.length > 0 ? (
           <div className="mt-1 flex flex-wrap gap-1">
             {warnings.slice(0, 2).map((warning) => (
@@ -1067,7 +1067,7 @@ function MedicationReviewRow({
         </Badge>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 rounded-md border border-slate-200 bg-slate-50 p-1.5 @3xl:grid-cols-1">
+      <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-muted p-1.5 @3xl:grid-cols-1">
         <CompactFact value={recommendedBatch?.storageLocation || 'Unmapped'} />
         <CompactFact value={recommendedBatch?.batchNumber || 'No batch'} />
         <CompactFact value={recommendedBatch?.expiryDate ? displayUtcDate(recommendedBatch.expiryDate) : 'No expiry'} />
@@ -1108,7 +1108,7 @@ function FulfillmentColumn({
 }) {
   const nextPick = pickLines.find((line) => line.recommendedBatch) || pickLines[0] || null;
   return (
-    <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
+    <div className="flex min-h-0 flex-col rounded-lg border border-border bg-white p-2.5 shadow-sm">
       <PanelHeader
         icon={<PackageCheck className="h-4 w-4" />}
         title="Pick + Pay"
@@ -1179,27 +1179,27 @@ function FulfillmentColumn({
         />
       </div>
 
-      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 shadow-sm">
-        <div className="shrink-0 border-b border-slate-100 bg-slate-50 px-2.5 py-2">
-          <p className="text-sm font-semibold text-slate-950">Pick Assist</p>
-          <p className="text-xs text-slate-500">
+      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border shadow-sm">
+        <div className="shrink-0 border-b border-border bg-muted px-2.5 py-2">
+          <p className="text-sm font-semibold text-foreground">Pick Assist</p>
+          <p className="text-xs text-muted-foreground">
             Shelf, batch, and split-stock view.
           </p>
         </div>
-        <div className="min-h-0 divide-y divide-slate-100 overflow-y-auto">
+        <div className="min-h-0 divide-y divide-border overflow-y-auto">
           {pickLines.length === 0 ? (
-            <div className="p-3 text-sm text-slate-600">
+            <div className="p-3 text-sm text-muted-foreground">
               Select a prescription to show pick instructions.
             </div>
           ) : (
             pickLines.map((line) => (
-              <div key={line.medication.drugName} className="px-2.5 py-2 transition hover:bg-slate-50">
+              <div key={line.medication.drugName} className="px-2.5 py-2 transition hover:bg-accent">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-950">
+                    <p className="truncate text-sm font-semibold text-foreground">
                       {line.medication.drugName}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       Pick {line.requiredQuantity} · {availableText(line.stock)}
                     </p>
                   </div>
@@ -1218,7 +1218,7 @@ function FulfillmentColumn({
                   />
                 </div>
                 {line.alternateCount > 0 ? (
-                  <p className="mt-2 text-xs font-medium text-blue-700">
+                  <p className="mt-2 text-xs font-medium text-info-text">
                     {line.alternateCount} alternate batch{line.alternateCount === 1 ? '' : 'es'} available if shelf stock is short.
                   </p>
                 ) : null}
@@ -1262,12 +1262,12 @@ function PanelHeader({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-800 ring-1 ring-slate-200">
+        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-foreground ring-1 ring-border">
           {icon}
         </span>
         <div>
-          <p className="text-sm font-semibold text-slate-950">{title}</p>
-          <p className="text-xs text-slate-500">{detail}</p>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-xs text-muted-foreground">{detail}</p>
         </div>
       </div>
     </div>
@@ -1315,17 +1315,17 @@ const availableText = (stock?: StockCheckItem) =>
 function MiniFact({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs font-semibold uppercase tracking-normal text-slate-500">
+      <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
         {label}
       </p>
-      <p className="truncate text-sm font-medium text-slate-950">{value}</p>
+      <p className="truncate text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }
 
 function CompactFact({ value }: { value: string | number }) {
   return (
-    <p className="truncate text-xs font-semibold text-slate-800">{value}</p>
+    <p className="truncate text-xs font-semibold text-foreground">{value}</p>
   );
 }
 
@@ -1376,7 +1376,7 @@ function ChecklistItem({
   done: boolean;
 }) {
   return (
-    <div className="flex gap-2 rounded-md border border-slate-200 bg-white p-1.5 shadow-sm">
+    <div className="flex gap-2 rounded-md border border-border bg-white p-1.5 shadow-sm">
       <div
         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
           done ? 'bg-success-soft text-success-text' : 'bg-muted text-muted-foreground'
@@ -1385,8 +1385,8 @@ function ChecklistItem({
         {done ? <CheckCircle2 className="h-4 w-4" /> : icon}
       </div>
       <div>
-        <p className="text-xs font-semibold text-slate-950">{title}</p>
-        <p className="text-xs leading-4 text-slate-500 xl:hidden 2xl:block">{detail}</p>
+        <p className="text-xs font-semibold text-foreground">{title}</p>
+        <p className="text-xs leading-4 text-muted-foreground xl:hidden 2xl:block">{detail}</p>
       </div>
     </div>
   );

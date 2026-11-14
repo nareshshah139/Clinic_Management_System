@@ -65,7 +65,7 @@ const PRINT_LINE_SPACING_OPTIONS: Array<{ value: PrintLineSpacing; label: string
 const CONTINUATION_NUDGE_PX = 36;
 const CONTINUATION_RESERVE_PX = 48;
 const PRINT_PX_PER_MM = 96 / 25.4;
-const SUGGESTION_CLASS = 'w-full px-3 py-1 text-left text-sm hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
+const SUGGESTION_CLASS = 'w-full px-3 py-1 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
 
 type DosageUnit = 'MG' | 'ML' | 'MCG' | 'IU' | 'TABLET' | 'CAPSULE' | 'DROP' | 'SPRAY' | 'PATCH' | 'INJECTION';
 
@@ -185,7 +185,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   const collapsible = open !== undefined;
   const expanded = open ?? true;
   return (
-    <Card className={`overflow-visible ${highlight ? 'bg-green-50 border-green-300' : ''}`}>
+    <Card className={`overflow-visible ${highlight ? 'bg-success-soft border-success-border' : ''}`}>
       <CardHeader className="pb-2">
         <div
           className="flex items-center justify-between w-full"
@@ -210,7 +210,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
               )}
             </CardTitle>
             {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
-            {highlight && <div className="text-xs text-green-700">Auto-included in preview</div>}
+            {highlight && <div className="text-xs text-success-text">Auto-included in preview</div>}
           </div>
         </div>
       </CardHeader>
@@ -535,7 +535,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       type="button"
       variant="ghost"
       size="sm"
-      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-red-100 text-red-600' : ''}`}
+      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
       onClick={() => void startVoiceInput(fieldName)}
       disabled={isTranscribing || (isListening && activeVoiceField !== fieldName)}
       aria-label={
@@ -1589,7 +1589,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const parts = text.split(regex);
     return parts.map((part, index) => 
       regex.test(part) ? 
-        <span key={index} className="bg-yellow-200 font-semibold">{part}</span> :
+        <span key={index} className="bg-warning-soft font-semibold">{part}</span> :
         part
     );
   };
@@ -1640,8 +1640,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   // Get relevance badge for search results
   const getRelevanceBadge = (drug: any, query: string, index: number) => {
-    if (index === 0) return <Badge variant="default" className="text-xs ml-2 bg-green-100 text-green-800">Best Match</Badge>;
-    if (index < 3) return <Badge variant="secondary" className="text-xs ml-2 bg-blue-100 text-blue-800">High Match</Badge>;
+    if (index === 0) return <Badge variant="default" className="text-xs ml-2 bg-success-soft text-success-text">Best Match</Badge>;
+    if (index < 3) return <Badge variant="secondary" className="text-xs ml-2 bg-info-soft text-info-text">High Match</Badge>;
     return null;
   };
 
@@ -4521,7 +4521,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             {hydrated && showTemplatesBar && templatesReady && allTemplates.length > 0 ? (
               <div className="flex flex-wrap gap-2 items-end">
                 <div className="min-w-[240px]">
-                  <label className="text-xs text-gray-600">Templates</label>
+                  <label className="text-xs text-muted-foreground">Templates</label>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild disabled={!templatesReady || loadingTemplates}>
                       <Button variant="outline" className="w-full justify-between font-normal">
@@ -4576,7 +4576,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {loadingTemplates ? 'Loading templates…' : 'Templates will appear once loaded.'}
               </div>
             )}
@@ -4590,27 +4590,27 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {/* Vitals */}
                 <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
                   <div>
-                    <label className="text-xs text-gray-600">Height (cm)</label>
+                    <label className="text-xs text-muted-foreground">Height (cm)</label>
                     <Input key="vitals-height" aria-label="Height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Weight (kg)</label>
+                    <label className="text-xs text-muted-foreground">Weight (kg)</label>
                     <Input key="vitals-weight" aria-label="Weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">BMI</label>
+                    <label className="text-xs text-muted-foreground">BMI</label>
                     <Input key="vitals-bmi" aria-label="BMI" value={vitalsBmi ?? ''} readOnly />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">BP (Sys)</label>
+                    <label className="text-xs text-muted-foreground">BP (Sys)</label>
                     <Input key="vitals-bp-sys" aria-label="Systolic blood pressure" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">BP (Dia)</label>
+                    <label className="text-xs text-muted-foreground">BP (Dia)</label>
                     <Input key="vitals-bp-dia" aria-label="Diastolic blood pressure" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Pulse (bpm)</label>
+                    <label className="text-xs text-muted-foreground">Pulse (bpm)</label>
                     <Input key="vitals-pulse" aria-label="Pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div></div>
@@ -4630,20 +4630,20 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 </DialogHeader>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs text-gray-600">Name</label>
+                    <label className="text-xs text-muted-foreground">Name</label>
                     <Input value={newDrugForm.name} onChange={(e) => setNewDrugForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g., Paracetamol 500mg Tablet" />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Manufacturer</label>
+                    <label className="text-xs text-muted-foreground">Manufacturer</label>
                     <Input value={newDrugForm.manufacturerName} onChange={(e) => setNewDrugForm((p) => ({ ...p, manufacturerName: e.target.value }))} placeholder="e.g., Sun Pharmaceuticals" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs text-gray-600">Price (₹)</label>
+                      <label className="text-xs text-muted-foreground">Price (₹)</label>
                       <Input type="number" value={newDrugForm.price} onChange={(e) => setNewDrugForm((p) => ({ ...p, price: e.target.value }))} placeholder="e.g., 25" />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-600">Pack Size Label</label>
+                      <label className="text-xs text-muted-foreground">Pack Size Label</label>
                       <Input value={newDrugForm.packSizeLabel} onChange={(e) => setNewDrugForm((p) => ({ ...p, packSizeLabel: e.target.value }))} placeholder="e.g., strip of 10 tablets" />
                     </div>
                   </div>
@@ -4666,7 +4666,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </DialogHeader>
                     <div className="space-y-3">
                       <div>
-                        <label className="text-xs text-gray-600">Value</label>
+                        <label className="text-xs text-muted-foreground">Value</label>
                         <Input
                           value={customDialogInput}
                           onChange={(e) => setCustomDialogInput(e.target.value)}
@@ -4694,7 +4694,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               badge={hasChiefComplaints ? 'Has Data' : ''}
             >
               <div className="opacity-100">
-                <label className="text-xs text-gray-600 flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                <label className="text-xs text-muted-foreground flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                 <div
                   className="relative complaint-autocomplete flex items-start"
                   onFocus={() => setComplaintFieldFocused(true)}
@@ -4715,7 +4715,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   )}
                 </div>
                 <div className="mt-2">
-                  <div className="text-xs text-gray-600 mb-1">Skin Concerns</div>
+                  <div className="text-xs text-muted-foreground mb-1">Skin Concerns</div>
                   <div className="flex flex-wrap gap-2">
                     {SKIN_CONCERNS.map((c) => (
                       <Button
@@ -4742,7 +4742,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               badge={hasDiagnosis ? 'Has Data' : ''}
             >
               <div className="opacity-100">
-                <label className="text-xs text-gray-600 flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                <label className="text-xs text-muted-foreground flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                 <div className="relative diag-autocomplete">
                   <Input key="diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
                   {diagOptions.length > 0 && (
@@ -4770,19 +4770,19 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Past History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <label className="text-xs text-muted-foreground flex items-center gap-1">Past History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                     <Textarea key="past-history" aria-label="Past history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} onBlur={(e) => pushRecent('pastHistory', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Medication History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <label className="text-xs text-muted-foreground flex items-center gap-1">Medication History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                     <Textarea key="medication-history" aria-label="Medication history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} onBlur={(e) => pushRecent('medicationHistory', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Menstrual History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <label className="text-xs text-muted-foreground flex items-center gap-1">Menstrual History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                     <Textarea key="menstrual-history" aria-label="Menstrual history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} onBlur={(e) => pushRecent('menstrualHistory', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <label className="text-xs text-muted-foreground flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                     <div className="flex flex-wrap gap-2 text-xs mt-1">
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => { setFamilyHistoryDM(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'dm']))); }} /> Diabetes</label>
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => { setFamilyHistoryHTN(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'htn']))); }} /> Hypertension</label>
@@ -4792,7 +4792,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                 </div>
                 <div className="mt-3">
-                  <label htmlFor="personal-history" className="text-xs text-gray-600 flex items-center gap-1">Personal history{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                  <label htmlFor="personal-history" className="text-xs text-muted-foreground flex items-center gap-1">Personal history{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                   <Textarea id="personal-history" rows={2} placeholder="Diet, sleep, habits, occupation, cosmetics/products used" value={personalHistory ?? ''} onChange={(e) => setPersonalHistory(e.target.value)} />
                 </div>
               </div>
@@ -4809,7 +4809,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <div>
-                    <label className="text-xs text-gray-600">Fitzpatrick Skin Type</label>
+                    <label className="text-xs text-muted-foreground">Fitzpatrick Skin Type</label>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {FITZPATRICK.map(ft => (
                         <Button key={ft} type="button" variant={exSkinType === ft ? 'default' : 'outline'} aria-pressed={exSkinType === ft} size="sm" onClick={() => setExSkinType(exSkinType === ft ? '' : ft)}>{ft}</Button>
@@ -4817,17 +4817,17 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Acne Severity</label>
+                    <label className="text-xs text-muted-foreground">Acne Severity</label>
                     <Input placeholder="mild/moderate/severe" value={exAcneSeverity} onChange={(e) => setExAcneSeverity(e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Itch Score (0-10)</label>
+                    <label className="text-xs text-muted-foreground">Itch Score (0-10)</label>
                     <Input placeholder="0-10" value={exItchScore} onChange={(e) => setExItchScore(e.target.value)} />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-600">Morphology</label>
+                  <label className="text-xs text-muted-foreground">Morphology</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {MORPHOLOGY.map(m => (
                       <div key={m} className="relative">
@@ -4836,7 +4836,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <button
                             type="button"
                             aria-label="Remove custom morphology"
-                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-white border shadow-sm flex items-center justify-center hover:bg-gray-50"
+                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-white border shadow-sm flex items-center justify-center hover:bg-accent"
                             onClick={(e) => {
                               e.stopPropagation();
                               const lowered = m.toLowerCase();
@@ -4897,7 +4897,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-600">Distribution / Body Areas</label>
+                  <label className="text-xs text-muted-foreground">Distribution / Body Areas</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {DISTRIBUTION.map(d => (
                       <div key={d} className="relative">
@@ -4906,7 +4906,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <button
                             type="button"
                             aria-label="Remove custom distribution"
-                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-white border shadow-sm flex items-center justify-center hover:bg-gray-50"
+                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-white border shadow-sm flex items-center justify-center hover:bg-accent"
                             onClick={(e) => {
                               e.stopPropagation();
                               const lowered = d.toLowerCase();
@@ -4968,7 +4968,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 
 
                 <div>
-                  <label className="text-xs text-gray-600">Dermatology Diagnoses</label>
+                  <label className="text-xs text-muted-foreground">Dermatology Diagnoses</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {DERM_DIAGNOSES.map(dx => (
                       <Button key={dx} type="button" variant={exDermDx.has(dx) ? 'default' : 'outline'} aria-pressed={exDermDx.has(dx)} size="sm" onClick={() => setExDermDx(prev => { const next = new Set(prev); next.has(dx) ? next.delete(dx) : next.add(dx); return next; })}>{dx}</Button>
@@ -4977,7 +4977,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-600">Detailed Examination</label>
+                  <label className="text-xs text-muted-foreground">Detailed Examination</label>
                   <div className="flex items-center">
                     <Textarea placeholder="Detailed physical examination findings..." value={exObjective} onChange={(e) => setExObjective(e.target.value)} rows={3} />
                     <VoiceButton fieldName="objective" />
@@ -5128,7 +5128,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                 )}
                 <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-600">Total items: {items.length}</div>
+                  <div className="text-sm text-muted-foreground">Total items: {items.length}</div>
                   <div className="flex gap-2">
                     {canAddDrugToDB && (
                       <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
@@ -5142,7 +5142,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="flex flex-col gap-2 text-xs">
                   {(recentDrugsForPatient.length > 0 || recentDrugsGlobal.length > 0) && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-gray-600">Recent meds:</span>
+                      <span className="text-muted-foreground">Recent meds:</span>
                       {(recentDrugsForPatient.length ? recentDrugsForPatient : recentDrugsGlobal).map((d) => (
                         <Button key={d} size="sm" variant="outline" onClick={() => {
                           const target = activeRowIdx ?? (items.length > 0 ? items.length - 1 : 0);
@@ -5154,7 +5154,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                   )}
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-gray-600">Presets:</span>
+                    <span className="text-muted-foreground">Presets:</span>
                     {frequencyPresets.map((p) => (
                       <Button
                         key={p.label}
@@ -5265,11 +5265,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               />
                               <span className={rxStock}>
                                 Stock:{' '}
-                                {(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return stock != null ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span> : <span className="text-gray-400">—</span>; })()}
+                                {(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return stock != null ? <span className={stock <= 5 ? 'text-destructive-text' : 'text-foreground'}>{stock}</span> : <span className="text-muted-foreground">—</span>; })()}
                               </span>
                             </div>
-                            {it.regimenState?.loading && <p className="mt-1 text-xs text-slate-500" role="status">Loading usual values…</p>}
-                            {it.regimenState?.failed && <p className="mt-1 text-xs text-amber-700" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
+                            {it.regimenState?.loading && <p className="mt-1 text-xs text-muted-foreground" role="status">Loading usual values…</p>}
+                            {it.regimenState?.failed && <p className="mt-1 text-xs text-warning-text" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
                           </td>
                           <td className={rx.frequency}>
                             <div>
@@ -5291,7 +5291,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   {Array.from(new Set([...dosePatternOptions, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -5307,7 +5307,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 {Array.from(new Set([...getTimingOptionsForFrequency(it.frequency), it.timing].filter((t): t is string => Boolean(t)))).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
                                 ))}
-                                <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                               </SelectContent>
                             </Select>
                             {regimenHint(it, idx, 'timing')}
@@ -5324,7 +5324,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   {Array.from(new Set([...durationUnitOptions, it.durationUnit].filter(Boolean))).map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -5351,7 +5351,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   {getInstructionSuggestions(it.drugName, it.instructions || '').map((s) => (
                                     <div
                                       key={s}
-                                      className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer"
+                                      className="px-3 py-1 text-sm hover:bg-accent cursor-pointer"
                                       onMouseDown={() => {
                                         updateItem(idx, { instructions: s });
                                         const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
@@ -5392,11 +5392,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             >
               <div className="space-y-3 opacity-100">
                 <div>
-                  <label className="text-xs text-gray-600 flex items-center gap-1">Procedures{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                  <label className="text-xs text-muted-foreground flex items-center gap-1">Procedures{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                   <Textarea aria-label="Procedures performed" rows={2} value={procedures} onChange={(e) => setProcedures(e.target.value)} onBlur={(e) => pushRecent('procedures', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-600 flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                  <label className="text-xs text-muted-foreground flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                   <Textarea aria-label="Procedures planned" rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
                 </div>
               </div>
@@ -5420,7 +5420,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 </div>
                 <div className="flex gap-2 items-end pt-2 border-t">
                   <div className="flex-1">
-                    <label htmlFor="custom-investigation-name" className="text-xs text-gray-600 mb-1 block">Add Custom Investigation</label>
+                    <label htmlFor="custom-investigation-name" className="text-xs text-muted-foreground mb-1 block">Add Custom Investigation</label>
                     <Input
                       id="custom-investigation-name"
                       placeholder="e.g., MRI Brain, CT Scan"
@@ -5458,11 +5458,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       <CardContent className="p-3 space-y-2">
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
                           <div className="md:col-span-2">
-                            <label className="text-xs text-gray-600">Section Title</label>
+                            <label className="text-xs text-muted-foreground">Section Title</label>
                             <Input value={s.title} onChange={(e) => updateCustomSection(s.id, { title: e.target.value })} />
                           </div>
                           <div className="md:col-span-3">
-                            <label className="text-xs text-gray-600">Content</label>
+                            <label className="text-xs text-muted-foreground">Content</label>
                             <Input value={s.content} onChange={(e) => updateCustomSection(s.id, { content: e.target.value })} />
                           </div>
                           <div className="md:col-span-1 flex justify-end">
@@ -5484,7 +5484,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
-                    <label htmlFor="rx-language" className="text-sm text-gray-700">Language</label>
+                    <label htmlFor="rx-language" className="text-sm text-foreground">Language</label>
                     <Select value={language} onValueChange={(v: Language) => setLanguage(v)}>
                       <SelectTrigger id="rx-language"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -5497,7 +5497,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 </div>
 
                 {language !== 'EN' && (
-                  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                  <div className="rounded-md border border-info-border bg-info-soft p-3 text-xs text-info-text">
                     <div className="font-medium mb-1">Translation enabled</div>
                     <div>
                       On print preview, free‑form fields will be translated to {language === 'HI' ? 'Hindi' : 'Telugu'}.
@@ -5510,7 +5510,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm text-gray-700 flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <label className="text-sm text-foreground flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-info-text" aria-label="Translated on print" />)}</label>
                     <Input key="followup-instructions" aria-label="Follow-up instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
                     {followUpSuggestions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -5536,7 +5536,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             {/* Review Date (bottom of builder) */}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 opacity-100">
               <div className="md:col-span-1">
-                <label className="text-sm text-gray-700">Review Date</label>
+                <label className="text-sm text-foreground">Review Date</label>
                 <Input aria-label="Review date" type="date" value={reviewDate || ''} onChange={(e) => onChangeReviewDate?.(e.target.value)} />
                 {reviewDateShortcutDays.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -5558,10 +5558,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             </div>
 
                           <div className="flex items-center justify-between pt-2 opacity-100">
-              <div className="text-sm text-gray-600">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
+              <div className="text-sm text-muted-foreground">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
               <div className="flex gap-2">
                 <div className="hidden sm:flex items-center gap-2">
-                  <span className="text-sm text-gray-700">Print</span>
+                  <span className="text-sm text-foreground">Print</span>
                   <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={printCompact}>
                     <SelectTrigger className="w-36 h-9" aria-label="Print format">
                       <SelectValue placeholder="Format" />
@@ -5756,12 +5756,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             <div id="print-preview-scroll" data-prescription-preview-scroll className="flex-1 min-h-0 min-w-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
               <div data-prescription-preview-toolbar className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-white/90 backdrop-blur border-b text-sm">
                 <div className="space-y-0.5">
-                  <div className="flex flex-wrap gap-2 items-center text-gray-800">
+                  <div className="flex flex-wrap gap-2 items-center text-foreground">
                     <span className="font-semibold">{previewPatientName}</span>
-                    <span className="text-gray-500">•</span>
+                    <span className="text-muted-foreground">•</span>
                     <span>{printedDoctorName || 'Doctor'}</span>
                   </div>
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-muted-foreground">
                     Date: {displayClinicDate(new Date())} {isTeleVideo ? '• Consultation: Tele-video' : ''} {standaloneReason ? `• Reason: ${standaloneReason}` : ''}
                   </div>
                 </div>
@@ -5774,11 +5774,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 </div>
               </div>
               {previewJustUpdated && (
-                <div data-prescription-preview-status className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
+                <div data-prescription-preview-status className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded-md bg-success-soft text-success-text border border-success-border">Updated</div>
               )}
               {/* Page indicator */}
               {totalPreviewPages > 1 && (
-                <div data-prescription-preview-status className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20 text-xs px-3 py-1.5 rounded-full bg-gray-900 text-white shadow-sm">
+                <div data-prescription-preview-status className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20 text-xs px-3 py-1.5 rounded-full bg-foreground text-white shadow-sm">
                   Page {currentPreviewPage} of {totalPreviewPages}
                 </div>
               )}
@@ -5801,7 +5801,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div
                 id="prescription-print-root"
                 ref={printRef}
-                className="bg-white text-gray-900"
+                className="bg-white text-foreground"
                 style={{
                   display: 'none', // Hidden - used only as source for Paged.js
                   fontFamily: "Fira Sans, 'Segoe UI Symbol', 'Arial Unicode MS', system-ui, sans-serif",
@@ -5810,7 +5810,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               >
                 <div id="prescription-print-content" data-line-spacing={lineSpacing} data-fit-to-page={fitToPage ? '' : undefined}>
                   {(!printCompact || isTeleVideo) && (
-                    <div className="text-sm text-gray-700 mb-2">{todayStr}{isTeleVideo && <span data-consultation-label> • Consultation: Tele-video</span>}</div>
+                    <div className="text-sm text-foreground mb-2">{todayStr}{isTeleVideo && <span data-consultation-label> • Consultation: Tele-video</span>}</div>
                   )}
                   {/* Optional plain text preview block (shown only when TEXT format) */}
                   {rxPrintFormat === 'TEXT' && (
@@ -5890,23 +5890,23 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   {includeSections.patientInfo && (
                     printCompact ? (
                       <div className={`${fitToPage ? 'print-fit-block' : 'py-1'} text-sm flex flex-wrap gap-x-4 gap-y-1 items-baseline`}>
-                        <span className="text-gray-800">{todayStr}</span>
+                        <span className="text-foreground">{todayStr}</span>
                         <span className="font-semibold">{patientName}</span>
-                        {patientAgeSex ? <span className="text-gray-700">{patientAgeSex}</span> : null}
-                        {patientCodeDisplay ? <span className="text-gray-700">{patientCodeDisplay}</span> : <span className="text-gray-500">—</span>}
+                        {patientAgeSex ? <span className="text-foreground">{patientAgeSex}</span> : null}
+                        {patientCodeDisplay ? <span className="text-foreground">{patientCodeDisplay}</span> : <span className="text-muted-foreground">—</span>}
                       </div>
                     ) : (
                       <div className="flex justify-between text-sm py-3">
                         <div>
-                          <div className="text-gray-600">Patient</div>
+                          <div className="text-muted-foreground">Patient</div>
                           <div className="font-medium">{patientName}</div>
                         </div>
                         <div>
-                          <div className="text-gray-600">Patient Code</div>
+                          <div className="text-muted-foreground">Patient Code</div>
                           <div className="font-medium">{patientCodeDisplay || '—'}</div>
                         </div>
                         <div>
-                          <div className="text-gray-600">Gender / Age</div>
+                          <div className="text-muted-foreground">Gender / Age</div>
                           <div className="font-medium">{patientAgeSex || '—'}</div>
                         </div>
                       </div>
@@ -5941,13 +5941,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         {printCompact ? (
                           <div className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
                             {entries.map((e, idx) => (
-                              <span key={`vitals-${idx}`} className="text-gray-800"><span className="text-gray-600 mr-1">{e.label}:</span>{e.value}</span>
+                              <span key={`vitals-${idx}`} className="text-foreground"><span className="text-muted-foreground mr-1">{e.label}:</span>{e.value}</span>
                             ))}
                           </div>
                         ) : (
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                             {entries.map((e, idx) => (
-                              <div key={`vitals-${idx}`}><span className="text-gray-600 mr-1">{e.label}:</span><span className="font-medium">{e.value}</span></div>
+                              <div key={`vitals-${idx}`}><span className="text-muted-foreground mr-1">{e.label}:</span><span className="font-medium">{e.value}</span></div>
                             ))}
                           </div>
                         )}
@@ -6040,7 +6040,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         </div>
                       )
                     ) : (
-                      <div className="text-sm text-gray-600">—</div>
+                      <div className="text-sm text-muted-foreground">—</div>
                     )}
                   </div>
                 )}
@@ -6125,7 +6125,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Keep the required disclaimer with the signature, independently of signature visibility. */}
                 <div data-prescription-signoff className={pageBreakClass(breakBeforeSignature) || undefined} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                {isTeleVideo && <p data-tele-video-disclaimer className="mt-4 border-t pt-3 text-sm text-gray-700">{TELE_VIDEO_DISCLAIMER}</p>}
+                {isTeleVideo && <p data-tele-video-disclaimer className="mt-4 border-t pt-3 text-sm text-foreground">{TELE_VIDEO_DISCLAIMER}</p>}
                 {/* Signature */}
                 {includeSections.doctorSignature && (
                   <div className={`doctor-signature-block border-t ${fitToPage ? 'print-fit-sign' : printCompact ? 'pt-2 mt-2' : 'pt-6 mt-4'}`} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
@@ -6136,7 +6136,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <img data-doctor-signature src={printedSignatureUrl} alt="Doctor’s signature" width={signatureWidth} height={signatureHeight} style={{ display: 'block', width: signatureWidth, height: signatureHeight, marginLeft: 'auto', marginBottom: 4 }} />
                         ) : <div className="h-10" />}
                         {printedDoctorName && <div className="font-medium">{printedDoctorName}</div>}
-                        {!printCompact && <div className="text-gray-600">Signature</div>}
+                        {!printCompact && <div className="text-muted-foreground">Signature</div>}
                       </div>
                     </div>
                   </div>
@@ -6149,9 +6149,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             {/* Right Sidebar Controls */}
             <div data-prescription-preview-sidebar className="print:hidden w-full sm:w-96 shrink-0 border-t sm:border-t-0 sm:border-l h-1/2 sm:h-full min-h-0 overflow-auto">
               <div className="p-4 space-y-4">
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="text-sm font-medium text-blue-900 mb-1">Print settings tip</div>
-                  <div className="text-xs text-blue-700">
+                <div className="p-3 bg-info-soft border border-info-border rounded-lg">
+                  <div className="text-sm font-medium text-info-text mb-1">Print settings tip</div>
+                  <div className="text-xs text-info-text">
                     To remove browser headers/footers: In your browser's print dialog, go to <strong>More settings</strong> → 
                     turn OFF <strong>"Headers and footers"</strong> for a clean prescription print.
                   </div>
@@ -6163,7 +6163,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   
                   {/* Unified Pagination Info */}
                   {pagedJsProcessing && (
-                    <div className="p-2 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-800">
+                    <div className="p-2 bg-info-soft border border-info-border rounded-md text-xs text-info-text">
                       <div className="flex items-center gap-2">
                         <Spinner label="Processing pagination…" />
                         <span>Processing pagination...</span>
@@ -6173,10 +6173,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                   {/* Page Navigation Controls */}
                   {totalPreviewPages > 1 && (
-                    <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div className="space-y-2 p-3 bg-muted border border-border rounded-lg">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">Page Navigation</span>
-                        <span className="text-xs text-gray-600">{currentPreviewPage} / {totalPreviewPages}</span>
+                        <span className="text-sm font-medium text-foreground">Page Navigation</span>
+                        <span className="text-xs text-muted-foreground">{currentPreviewPage} / {totalPreviewPages}</span>
                       </div>
                       <div className="flex gap-2">
                         <Button 
@@ -6199,7 +6199,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         </Button>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-600">Go to:</span>
+                        <span className="text-xs text-muted-foreground">Go to:</span>
                         <input 
                           type="number" 
                           min={1} 
@@ -6211,18 +6211,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               setCurrentPreviewPage(page);
                             }
                           }}
-                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md"
+                          className="flex-1 px-2 py-1 text-sm border border-border rounded-md"
                         />
                       </div>
                     </div>
                   )}
                   
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <div className="flex items-center gap-2 text-sm text-foreground">
                     <span>Zoom</span>
                     <input className="flex-1" type="range" min={0.6} max={1.4} step={0.05} value={previewZoom} onChange={(e) => setPreviewZoom(Number(e.target.value))} />
                     <span className="w-10 text-right">{Math.round(previewZoom * 100)}%</span>
                   </div>
-                  <div className="space-y-2 text-sm text-gray-700">
+                  <div className="space-y-2 text-sm text-foreground">
                     <div className="flex items-center justify-between">
                       <label className="block">Top margin</label>
                       <span className="tabular-nums">{effectiveTopMarginMm} mm</span>
@@ -6252,28 +6252,28 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <label className="flex items-center gap-2 text-sm text-foreground">
                       <input type="checkbox" checked={printCompact} disabled={fitToPage} onChange={(e) => setSpaceOptimized(e.target.checked)} />
                       Space-optimized layout
                     </label>
-                    <p className="text-xs text-gray-500">Inline headers for patient info, vitals, diagnosis, histories, and procedures. Forces Rx table format.</p>
+                    <p className="text-xs text-muted-foreground">Inline headers for patient info, vitals, diagnosis, histories, and procedures. Forces Rx table format.</p>
                   </div>
                   <div className="space-y-1">
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <label className="flex items-center gap-2 text-sm text-foreground">
                       <input type="checkbox" checked={fitToPage} onChange={(e) => setFitToPage(e.target.checked)} />
                       Fit to 1 page
                     </label>
-                    <p className="text-xs text-gray-500">Uses the space-optimized layout, then picks the roomiest spacing and largest text that fit on one page. Text never goes below {PRINT_FIT_MIN_FONT_PX} px. Page breaks and line spacing are set automatically.</p>
+                    <p className="text-xs text-muted-foreground">Uses the space-optimized layout, then picks the roomiest spacing and largest text that fit on one page. Text never goes below {PRINT_FIT_MIN_FONT_PX} px. Page breaks and line spacing are set automatically.</p>
                     {fitToPage && fitResult && !pagedJsProcessing && (
                       fitResult.fits ? (
-                        <p data-fit-status className="text-xs text-emerald-700">Fits on 1 page{fitResult.fontPx < 14 ? ` with text at ${fitResult.fontPx} px` : ''}.</p>
+                        <p data-fit-status className="text-xs text-success-text">Fits on 1 page{fitResult.fontPx < 14 ? ` with text at ${fitResult.fontPx} px` : ''}.</p>
                       ) : (
-                        <p data-fit-status role="status" className="text-xs text-amber-700">Too much content for one page at a readable size. Printing on {fitResult.pages} pages with text at {fitResult.fontPx} px.</p>
+                        <p data-fit-status role="status" className="text-xs text-warning-text">Too much content for one page at a readable size. Printing on {fitResult.pages} pages with text at {fitResult.fontPx} px.</p>
                       )
                     )}
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm text-gray-700">Line spacing</span>
+                    <span className="text-sm text-foreground">Line spacing</span>
                     <Select value={lineSpacing} onValueChange={(v: PrintLineSpacing) => setLineSpacing(v)} disabled={fitToPage}>
                       <SelectTrigger className="w-full" aria-label="Line spacing">
                         <SelectValue placeholder="Select line spacing" />
@@ -6284,10 +6284,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-gray-500">Reduces the gap between lines on the printout. Text size stays the same.</p>
+                    <p className="text-xs text-muted-foreground">Reduces the gap between lines on the printout. Text size stays the same.</p>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm text-gray-700">Print Format</span>
+                    <span className="text-sm text-foreground">Print Format</span>
                     <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={printCompact}>
                       <SelectTrigger className="w-full" aria-label="Print format">
                         <SelectValue placeholder="Select format" />
@@ -6299,7 +6299,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm text-gray-700">Letterhead</span>
+                    <span className="text-sm text-foreground">Letterhead</span>
                     <Select value={letterheadOption} onValueChange={(v: 'default' | 'none') => setLetterheadOption(v)}>
                       <SelectTrigger className="w-full" aria-label="Letterhead">
                         <SelectValue placeholder="Select letterhead" />
@@ -6309,11 +6309,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         <SelectItem value="none">None (Plain)</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-gray-500">Applies to preview and PDF download.</p>
+                    <p className="text-xs text-muted-foreground">Applies to preview and PDF download.</p>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm text-gray-700">Page Breaks</span>
-                    <div className="space-y-2 text-sm text-gray-700">
+                    <span className="text-sm text-foreground">Page Breaks</span>
+                    <div className="space-y-2 text-sm text-foreground">
                       <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeMedications} disabled={fitToPage} onChange={(e) => setBreakBeforeMedications(e.target.checked)} /> Break before Rx</label>
                       <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeInvestigations} disabled={fitToPage} onChange={(e) => setBreakBeforeInvestigations(e.target.checked)} /> Break before Investigations</label>
                       <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeFollowUp} disabled={fitToPage} onChange={(e) => setBreakBeforeFollowUp(e.target.checked)} /> Break before Follow-up</label>
@@ -6322,7 +6322,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm text-gray-700">Printer profile</span>
+                    <span className="text-sm text-foreground">Printer profile</span>
                     <Select value={activeProfileId || ''} onValueChange={(v: string) => setActiveProfileId(v)}>
                       <SelectTrigger className="w-full" aria-label="Printer profile">
                         <SelectValue placeholder="Select profile" />
@@ -6334,15 +6334,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       </SelectContent>
                     </Select>
                   </div>
-                  <label className="text-sm text-gray-700 flex items-center gap-2">
+                  <label className="text-sm text-foreground flex items-center gap-2">
                     <input type="checkbox" checked={showRefillStamp} onChange={(e) => setShowRefillStamp(e.target.checked)} />
                     Refill stamp
                   </label>
-                  <label className="text-sm text-gray-700 flex items-center gap-2">
+                  <label className="text-sm text-foreground flex items-center gap-2">
                     <input type="checkbox" checked={showSignature} disabled={savingForExport || sharingEmail || (!showSignature && (signatureLoading || !signatureUrl))} onChange={event => setShowSignature(event.target.checked)} aria-describedby="signature-preview-help" />
                     Show signature
                   </label>
-                  <div id="signature-preview-help" className="text-xs text-gray-600">
+                  <div id="signature-preview-help" className="text-xs text-muted-foreground">
                     {signatureLoading ? 'Loading signature…' : signatureError ? (
                       <><span role="alert">{signatureError}</span> <button type="button" className="underline" onClick={reloadSignature}>Retry</button></>
                     ) : !signatureUrl ? 'No signature uploaded. The doctor can add one in My Settings → Doctor signature.' : 'Remembered for this doctor on this browser. Applies to print, PDF, WhatsApp and Email.'}
@@ -6351,7 +6351,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="pt-2 grid grid-cols-2 gap-2">
                   {(
                     <Button
-                      className="col-span-2 bg-green-600 hover:bg-green-700 text-white"
+                      className="col-span-2 bg-success hover:bg-success text-white"
                       disabled={!canCreate || savingFromPreview || savingForExport}
                       onClick={() => void create(true)}
                     >
@@ -6497,15 +6497,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             </DialogHeader>
             <div className="max-h-[60vh] overflow-auto text-sm">
               {interactions.length === 0 ? (
-                <div className="text-gray-600">No interactions found.</div>
+                <div className="text-muted-foreground">No interactions found.</div>
               ) : (
                 <ul className="space-y-2">
                   {interactions.map((it, idx) => (
                     <li key={`ix-${idx}`} className="border rounded-md p-2">
                       <div className="font-medium">{it.drug1} × {it.drug2}</div>
-                      <div className="text-xs text-gray-600">Severity: {it.severity}</div>
+                      <div className="text-xs text-muted-foreground">Severity: {it.severity}</div>
                       <div className="mt-1">{it.description}</div>
-                      {it.recommendation && <div className="mt-1 text-xs text-gray-700">Recommendation: {it.recommendation}</div>}
+                      {it.recommendation && <div className="mt-1 text-xs text-foreground">Recommendation: {it.recommendation}</div>}
                     </li>
                   ))}
                 </ul>
@@ -6540,7 +6540,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-gray-600">Name</label>
+                <label className="text-xs text-muted-foreground">Name</label>
                 <Input 
                   value={newTplName} 
                   onChange={(e) => { setNewTplName(e.target.value); if (newTplNameError) setNewTplNameError(''); }} 
@@ -6549,26 +6549,26 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   aria-describedby={newTplNameError ? 'new-tpl-name-error' : undefined}
                 />
                 {newTplNameError ? (
-                  <p id="new-tpl-name-error" className="text-sm text-red-600">{newTplNameError}</p>
+                  <p id="new-tpl-name-error" className="text-sm text-destructive-text">{newTplNameError}</p>
                 ) : null}
               </div>
               <div>
-                <label className="text-xs text-gray-600">Chief Complaints</label>
+                <label className="text-xs text-muted-foreground">Chief Complaints</label>
                 <Textarea rows={2} value={newTplChiefComplaints} onChange={(e) => setNewTplChiefComplaints(e.target.value)} />
               </div>
               <div>
-                <label className="text-xs text-gray-600">Diagnosis</label>
+                <label className="text-xs text-muted-foreground">Diagnosis</label>
                 <Input value={newTplDiagnosis} onChange={(e) => setNewTplDiagnosis(e.target.value)} placeholder="e.g., Acne vulgaris" />
               </div>
               <div className="space-y-2">
                 <div className="text-sm font-medium">On Examination</div>
                 <div>
-                  <label className="text-xs text-gray-600">General Appearance</label>
+                  <label className="text-xs text-muted-foreground">General Appearance</label>
                   <Textarea rows={2} value={newTplExObjective} onChange={(e) => setNewTplExObjective(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div>
-                    <label htmlFor="rx-template-skin-type" className="text-xs text-gray-600">Skin Type</label>
+                    <label htmlFor="rx-template-skin-type" className="text-xs text-muted-foreground">Skin Type</label>
                     <Select value={newTplSkinType} onValueChange={setNewTplSkinType}>
                       <SelectTrigger id="rx-template-skin-type"><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent>
@@ -6577,12 +6577,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </Select>
                   </div>
                   <div className="md:col-span-1">
-                    <label className="text-xs text-gray-600">Itch Score (0-10)</label>
+                    <label className="text-xs text-muted-foreground">Itch Score (0-10)</label>
                     <Input value={newTplItchScore} onChange={(e) => setNewTplItchScore(e.target.value)} placeholder="e.g., 4" />
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-600 mb-1">Morphology</div>
+                  <div className="text-xs text-muted-foreground mb-1">Morphology</div>
                   <div className="flex flex-wrap gap-2">
                     {MORPHOLOGY.map(m => (
                       <Button key={m} type="button" variant={newTplMorphology.has(m) ? 'default' : 'outline'} aria-pressed={newTplMorphology.has(m)} size="sm" onClick={() => toggleSet(newTplMorphology, m, setNewTplMorphology)}>{m}</Button>
@@ -6590,7 +6590,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-600 mb-1">Distribution</div>
+                  <div className="text-xs text-muted-foreground mb-1">Distribution</div>
                   <div className="flex flex-wrap gap-2">
                     {DISTRIBUTION.map(d => (
                       <Button key={d} type="button" variant={newTplDistribution.has(d) ? 'default' : 'outline'} aria-pressed={newTplDistribution.has(d)} size="sm" onClick={() => toggleSet(newTplDistribution, d, setNewTplDistribution)}>{d}</Button>
@@ -6598,7 +6598,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-600 mb-1">Skin Concerns</div>
+                  <div className="text-xs text-muted-foreground mb-1">Skin Concerns</div>
                   <div className="flex flex-wrap gap-2">
                     {SKIN_CONCERNS.map((c) => (
                       <Button key={c} type="button" variant={newTplSkinConcerns.has(c) ? 'default' : 'outline'} aria-pressed={newTplSkinConcerns.has(c)} size="sm" onClick={() => toggleSet(newTplSkinConcerns, c, setNewTplSkinConcerns)}>{c}</Button>
@@ -6609,7 +6609,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               </div>
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm text-gray-700">Add Medicine</label>
+                  <label className="text-sm text-foreground">Add Medicine</label>
                   <Input 
                     key="newtpl-drug-search"
                     placeholder="Search drug name or brand (min 2 chars)" 
@@ -6619,25 +6619,25 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   {newTplDrugQuery.trim().length >= 2 && (
                     <div className="mt-2 border rounded-md divide-y max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {newTplLoadingDrugs && (
-                        <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+                        <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
                       )}
                       {!newTplLoadingDrugs && newTplDrugResults.length === 0 && (
-                        <div className="px-3 py-2 text-xs text-gray-500">No results</div>
+                        <div className="px-3 py-2 text-xs text-muted-foreground">No results</div>
                       )}
                       {!newTplLoadingDrugs && newTplDrugResults.length > 0 && (
                         <>
                           {newTplDrugResults.map((d: any, index: number) => (
                             <div 
                               key={`${d.id}-${d.name}`} 
-                              className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 ${
-                                index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' :
-                                index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                              className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-accent ${
+                                index === 0 ? 'bg-success-soft border-l-4 border-l-success' :
+                                index < 3 ? 'bg-info-soft border-l-4 border-l-info' : ''
                               }`}
                               onMouseEnter={() => prefetchDrugStockById(d.id, d.inventoryItemId)}
                             >
                               <div className="flex-1">
                                 <div className="font-medium">{d.name}</div>
-                                <div className="text-xs text-gray-500">{d.manufacturer || d.manufacturerName || d.genericName || ''} {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}</div>
+                                <div className="text-xs text-muted-foreground">{d.manufacturer || d.manufacturerName || d.genericName || ''} {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}</div>
                               </div>
                               <Button size="sm" variant="outline" onClick={() => { addItemFromDrugToNewTpl(d); }}>Add</Button>
                             </div>
@@ -6648,7 +6648,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   )}
                 </div>
                 <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-600">Total items: {newTplItems.length}</div>
+                  <div className="text-sm text-muted-foreground">Total items: {newTplItems.length}</div>
                   <Button size="sm" variant="outline" onClick={addNewTplItem}>Add Row</Button>
                 </div>
                 <div className={`${rxTemplate.wrapper} border rounded-md`}>
@@ -6702,7 +6702,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   {dosePatternOptions.map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                               <Select value={it.frequency} onValueChange={(v: Frequency) => {
@@ -6717,7 +6717,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   {frequencyOptions.map(f => (
                                     <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -6732,7 +6732,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 {getTimingOptionsForFrequency(it.frequency).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
                                 ))}
-                                <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                               </SelectContent>
                             </Select>
                           </td>
@@ -6748,7 +6748,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   {durationUnitOptions.map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -6959,7 +6959,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               aria-describedby={templateNameError ? 'template-name-error' : undefined}
               />
             {templateNameError ? (
-              <p id="template-name-error" className="text-sm text-red-600">{templateNameError}</p>
+              <p id="template-name-error" className="text-sm text-destructive-text">{templateNameError}</p>
             ) : null}
             </div>
             <DialogFooter>
@@ -7002,7 +7002,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       {/* Fixed position drug search dropdown - rendered outside table structure */}
       {activeSearchRow !== null && dropdownPosition && (rowDrugQueries[activeSearchRow] || '').trim().length >= 2 && (
         <div 
-          className="fixed z-[10000] bg-white border-2 border-blue-500 rounded-lg shadow-sm max-h-64 overflow-auto"
+          className="fixed z-[10000] bg-white border-2 border-info rounded-lg shadow-sm max-h-64 overflow-auto"
           style={{ 
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
@@ -7012,19 +7012,19 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           onMouseDown={(e) => e.preventDefault()}
         >
           {rowLoadingDrugs[activeSearchRow] && (
-            <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+            <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
           )}
           {!rowLoadingDrugs[activeSearchRow] && (!rowDrugResults[activeSearchRow] || rowDrugResults[activeSearchRow].length === 0) && (
-            <div className="px-3 py-2 text-xs text-gray-500">No results found</div>
+            <div className="px-3 py-2 text-xs text-muted-foreground">No results found</div>
           )}
           {!rowLoadingDrugs[activeSearchRow] && rowDrugResults[activeSearchRow] && rowDrugResults[activeSearchRow].length > 0 && (
             <>
               {rowDrugResults[activeSearchRow].map((d: any, index: number) => (
                 <div 
                   key={`${d.id}-${d.name}`} 
-                  className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${
-                    index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' :
-                    index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                  className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-accent cursor-pointer border-b last:border-b-0 ${
+                    index === 0 ? 'bg-success-soft border-l-4 border-l-success' :
+                    index < 3 ? 'bg-info-soft border-l-4 border-l-info' : ''
                   }`}
                   onMouseEnter={() => prefetchDrugStockById(d.id, d.inventoryItemId)}
                   onClick={() => { addItemFromDrugToRow(activeSearchRow, d); }}
@@ -7041,18 +7041,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       </div>
                       {getRelevanceBadge(d, rowDrugQueries[activeSearchRow], index)}
                     </div>
-                    {d.strengthMissing && <div className="text-xs text-amber-700">Strength missing</div>}
-                    <div className="text-xs text-gray-500">
+                    {d.strengthMissing && <div className="text-xs text-warning-text">Strength missing</div>}
+                    <div className="text-xs text-muted-foreground">
                       {highlightMatch(d.manufacturer || d.manufacturerName || d.genericName || '', rowDrugQueries[activeSearchRow])}
                       {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
                     </div>
                     <div className="text-xs mt-0.5">
-                      <span className="text-gray-500">Stock:</span>{' '}
+                      <span className="text-muted-foreground">Stock:</span>{' '}
                       {(() => {
                         const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
                         return stock != null
-                          ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span>
-                          : <span className="text-gray-400">—</span>;
+                          ? <span className={stock <= 5 ? 'text-destructive-text' : 'text-foreground'}>{stock}</span>
+                          : <span className="text-muted-foreground">—</span>;
                       })()}
                     </div>
                   </div>

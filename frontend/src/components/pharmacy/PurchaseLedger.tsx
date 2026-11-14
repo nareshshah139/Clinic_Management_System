@@ -448,7 +448,7 @@ export function PurchaseLedger({
                       <div className="font-medium">
                         {summary.distributorName}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         {summary.distributorGstin}
                       </div>
                       <div className="mt-1 flex flex-wrap gap-1">
@@ -482,7 +482,7 @@ export function PurchaseLedger({
                     </TableCell>
                     <TableCell className="text-right">
                       {summary.tcsApproaching && (
-                        <Badge className="mb-1 bg-amber-100 text-amber-800">
+                        <Badge className="mb-1 bg-warning-soft text-warning-text">
                           Watch
                         </Badge>
                       )}
@@ -494,7 +494,7 @@ export function PurchaseLedger({
                   <TableRow>
                     <TableCell
                       colSpan={7}
-                      className="py-8 text-center text-sm text-gray-500"
+                      className="py-8 text-center text-sm text-muted-foreground"
                     >
                       No distributor ledger rows found.
                     </TableCell>
@@ -517,14 +517,14 @@ export function PurchaseLedger({
                   className="flex items-center justify-between rounded-md border p-3"
                 >
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-gray-500" />
+                    <Clock className="h-4 w-4 text-muted-foreground" />
                     <span className="font-medium">{bucket.label}</span>
                   </div>
                   <div className="text-right">
                     <div className="font-semibold">
                       {formatMoney(bucket.amount)}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground">
                       {bucket.count} invoices
                     </div>
                   </div>
@@ -539,22 +539,22 @@ export function PurchaseLedger({
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <AlertLine
-                icon={<Bell className="h-4 w-4 text-blue-600" />}
+                icon={<Bell className="h-4 w-4 text-info-text" />}
                 label="Due in 7 days"
                 count={alerts?.counts.dueIn7Days || 0}
               />
               <AlertLine
-                icon={<Clock className="h-4 w-4 text-amber-600" />}
+                icon={<Clock className="h-4 w-4 text-warning-text" />}
                 label="Due today"
                 count={alerts?.counts.dueToday || 0}
               />
               <AlertLine
-                icon={<AlertTriangle className="h-4 w-4 text-red-600" />}
+                icon={<AlertTriangle className="h-4 w-4 text-destructive-text" />}
                 label="Overdue"
                 count={alerts?.counts.overdue || 0}
               />
               <AlertLine
-                icon={<CreditCard className="h-4 w-4 text-purple-600" />}
+                icon={<CreditCard className="h-4 w-4 text-highlight-text" />}
                 label="TCS approaching"
                 count={alerts?.counts.tcsApproaching || 0}
               />
@@ -690,7 +690,7 @@ export function PurchaseLedger({
                       Cash paid {formatMoney(invoice.paid)} · Credits{" "}
                       {formatMoney(invoice.creditApplied || 0)}
                     </p>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground">
                       Due {displayUtcDate(invoice.dueDate, "-")}
                     </div>
                   </TableCell>
@@ -730,7 +730,7 @@ export function PurchaseLedger({
                 <TableRow>
                   <TableCell
                     colSpan={4}
-                    className="py-8 text-center text-sm text-gray-500"
+                    className="py-8 text-center text-sm text-muted-foreground"
                   >
                     No outstanding invoices for this distributor.
                   </TableCell>
@@ -741,12 +741,12 @@ export function PurchaseLedger({
 
           <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm">
-              <span className="text-gray-500">Allocated total </span>
+              <span className="text-muted-foreground">Allocated total </span>
               <span className="font-semibold">
                 {formatMoney(allocationTotal)}
               </span>
-              <span className="mx-2 text-gray-300">/</span>
-              <span className="text-gray-500">Payment amount </span>
+              <span className="mx-2 text-muted-foreground">/</span>
+              <span className="text-muted-foreground">Payment amount </span>
               <span className="font-semibold">
                 {formatMoney(Number(amount || 0))}
               </span>

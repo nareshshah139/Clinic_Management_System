@@ -65,7 +65,7 @@ export function shelfLifeText(days: number | null) {
 }
 
 export const shelfLifeTone = (days: number | null) =>
-  days === null ? 'text-muted-foreground' : days < 0 ? 'text-red-700 dark:text-red-400' : days < 90 ? 'text-amber-800 dark:text-amber-300' : '';
+  days === null ? 'text-muted-foreground' : days < 0 ? 'text-destructive-text' : days < 90 ? 'text-warning-text' : '';
 
 export const lastSoldText = (row: Pick<OptimizationRow, 'lastSaleAt' | 'idleDays'>) =>
   row.lastSaleAt ? `Last sold ${plural(row.idleDays, 'day')} ago` : `Never sold · in stock ${plural(row.idleDays, 'day')}`;
