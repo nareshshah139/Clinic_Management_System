@@ -12,7 +12,6 @@ import { UserRole } from '@cms/shared-types';
 import { apiClient } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { calculateAge, filterRoomsByVisitType } from '@/lib/utils';
-import { displayCalendarDate } from '@/lib/date-display';
 import { overbookFlag } from '@/lib/overbooking';
 import { useOverbookConfirm } from '@/components/appointments/useOverbookConfirm';
 import type { Room, VisitType } from '@/lib/types';
@@ -50,11 +49,11 @@ const EMPTY: Fields = {
 type Doctor = { id: string; firstName?: string; lastName?: string };
 
 type Outcome =
-  | { kind: 'booked'; name: string; doctor: string; date: string; today: boolean; slot: string; token?: number }
+  | { kind: 'booked'; name: string; doctor: string; date: string; slot: string; token?: number }
+  | { kind: 'no-time'; name: string; doctor: string; patientId: string }
   | { kind: 'not-booked'; patientId: string; reason: string };
 
-const DOCTOR_KEY = 'appointments.doctorId';
-const DAYS_AHEAD = 7;
+const DOCTOR_KEY = 'patients.walkinDoctorId';
 
 const doctorLabel = (d: Doctor) => `Dr. ${`${d.firstName || ''} ${d.lastName || ''}`.trim().replace(/^dr\.?\s+/i, '')}`;
 
@@ -127,7 +126,7 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showMore, setShowMore] = useState(false);
-  const [bookToday, setBookToday] = useState(true);
+  const [bookingOn, setBookingOn] = useState(true);
   const [doctorId, setDoctorId] = useState('');
   const [visitType, setVisitType] = useState<VisitType>('OPD');
   const [roomId, setRoomId] = useState('');
@@ -141,7 +140,7 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
     setError(null);
     setOutcome(null);
     setShowMore(false);
-    setBookToday(true);
+    setBookingOn(true);
     setVisitType('OPD');
     setRoomId('');
     setBusy(false);
@@ -178,50 +177,45 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
 
   const set = <K extends keyof Fields>(key: K, value: Fields[K]) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  const bookNextFreeTime = async (id: string, name: string): Promise<Outcome> => {
-    const today = isoDate(new Date());
-    for (let i = 0; i <= DAYS_AHEAD; i++) {
-      const day = new Date();
-      day.setDate(day.getDate() + i);
-      const date = isoDate(day);
-      const res = (await apiClient.getAvailableSlots({ doctorId, date, durationMinutes: 30, calendar: 'CONFIRMED' })) as any;
-      let slots: string[] = res?.availableSlots || [];
-      if (roomId) {
-        try {
-          const schedule = await apiClient.getRoomSchedule(roomId, date);
-          const occupied = new Set(((schedule as any)?.appointments || []).map((a: any) => a.slot));
-          slots = slots.filter((s) => !occupied.has(s));
-        } catch {
-          // The room schedule is a refinement; the doctor's free time still decides.
-        }
+  const bookToday = async (id: string, name: string): Promise<Outcome> => {
+    const date = isoDate(new Date());
+    const doctor = doctors.find((d) => d.id === doctorId);
+    const doctorName = doctor ? doctorLabel(doctor) : 'the doctor';
+    const res = (await apiClient.getAvailableSlots({ doctorId, date, durationMinutes: 30, calendar: 'CONFIRMED' })) as any;
+    let slots: string[] = res?.availableSlots || [];
+    if (roomId) {
+      try {
+        const schedule = await apiClient.getRoomSchedule(roomId, date);
+        const occupied = new Set(((schedule as any)?.appointments || []).map((a: any) => a.slot));
+        slots = slots.filter((s) => !occupied.has(s));
+      } catch {
+        // The room schedule is a refinement; the doctor's free time still decides.
       }
-      if (slots.length === 0) continue;
-      const slot = slots[0];
-      const booked = await sendWithOverbookConfirm((allowOverbook) => apiClient.createAppointment({
-        patientId: id,
-        doctorId,
-        date,
-        slot,
-        visitType,
-        source: 'WALK_IN',
-        calendar: 'CONFIRMED',
-        notes: 'Auto-booked next available slot for walk-in',
-        ...(roomId ? { roomId } : {}),
-        ...overbookFlag(allowOverbook),
-      }));
-      if (!booked) return { kind: 'not-booked', patientId: id, reason: 'that time was taken and you chose not to overbook it.' };
-      track('appointment_booked', { source: 'walk_in' });
-      const doctor = doctors.find((d) => d.id === doctorId);
-      return { kind: 'booked', name, doctor: doctor ? doctorLabel(doctor) : 'the doctor', date, today: date === today, slot, token: (booked as { tokenNumber?: number }).tokenNumber };
     }
-    return { kind: 'not-booked', patientId: id, reason: `no free time in the next ${DAYS_AHEAD} days.` };
+    if (slots.length === 0) return { kind: 'no-time', name, doctor: doctorName, patientId: id };
+    const slot = slots[0];
+    const booked = await sendWithOverbookConfirm((allowOverbook) => apiClient.createAppointment({
+      patientId: id,
+      doctorId,
+      date,
+      slot,
+      visitType,
+      source: 'WALK_IN',
+      calendar: 'CONFIRMED',
+      notes: 'Auto-booked next available slot for walk-in',
+      ...(roomId ? { roomId } : {}),
+      ...overbookFlag(allowOverbook),
+    }));
+    if (!booked) return { kind: 'not-booked', patientId: id, reason: 'that time was taken and you chose not to overbook it.' };
+    track('appointment_booked', { source: 'walk_in' });
+    return { kind: 'booked', name, doctor: doctorName, date, slot, token: (booked as { tokenNumber?: number }).tokenNumber };
   };
 
   const submit = async () => {
     const missing = [!form.name.trim() && 'name', !form.phone.trim() && 'phone', !editing && !form.gender && 'gender'].filter(Boolean);
     if (missing.length) { setError(`Required: ${missing.join(', ')}.`); return; }
     if (form.abhaId.trim() && !/^\d{14}$/.test(form.abhaId.trim())) { setError('ABHA ID must be 14 digits.'); return; }
-    const booking = !editing && bookToday;
+    const booking = !editing && bookingOn;
     if (booking && !doctorId) { setError('Choose a doctor, or switch to Register only.'); return; }
     setBusy(true);
     setError(null);
@@ -244,7 +238,7 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
     if (booking && id) {
       try { localStorage.setItem(DOCTOR_KEY, doctorId); } catch {}
       try {
-        result = await bookNextFreeTime(id, form.name.trim());
+        result = await bookToday(id, form.name.trim());
       } catch (err: any) {
         result = { kind: 'not-booked', patientId: id, reason: err?.message || 'the booking failed.' };
       }
@@ -308,7 +302,7 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
           </SelectContent>
         </Select>
       </div>
-      {!editing && bookToday && (
+      {!editing && bookingOn && (
         <>
           <div>
             <Label id="walkinVisitType-label" htmlFor="walkinVisitType">Appointment type</Label>
@@ -341,12 +335,16 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
 
   const resultView = outcome && (
     <div className="space-y-4">
-      {outcome.kind === 'booked' ? (
+      {outcome.kind === 'booked' && (
         <p role="status" className="text-sm text-gray-900">
-          {outcome.name} is booked with {outcome.doctor} {outcome.today ? 'today' : `on ${displayCalendarDate(outcome.date)}`} at {outcome.slot}
-          {outcome.token != null ? `, token ${outcome.token}` : ''}.{outcome.today ? '' : ' Today had no free time.'}
+          {outcome.name} is booked with {outcome.doctor} today at {outcome.slot}
+          {outcome.token != null ? `, token ${outcome.token}` : ''}.
         </p>
-      ) : (
+      )}
+      {outcome.kind === 'no-time' && (
+        <p role="status" className="text-sm text-gray-900">{outcome.name} is registered. No free time today with {outcome.doctor}.</p>
+      )}
+      {outcome.kind === 'not-booked' && (
         <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           Patient saved, not booked: {outcome.reason}
         </p>
@@ -354,9 +352,13 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
         {outcome.kind === 'booked' ? (
-          <Button asChild><Link href={`/dashboard/appointments?date=${outcome.date}`}>{outcome.today ? "Open today's list" : 'Open that day’s list'}</Link></Button>
+          <Button asChild><Link href={`/dashboard/appointments?date=${outcome.date}`}>Open today&apos;s list</Link></Button>
         ) : (
-          <Button asChild><Link href={`/dashboard/appointments?patientId=${encodeURIComponent(outcome.patientId)}`}>Open Appointments</Link></Button>
+          <Button asChild>
+            <Link href={`/dashboard/appointments?patientId=${encodeURIComponent(outcome.patientId)}`}>
+              {outcome.kind === 'no-time' ? 'Book another day' : 'Open Appointments'}
+            </Link>
+          </Button>
         )}
       </div>
     </div>
@@ -403,10 +405,10 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
                   {!editing && (
                     <div className="md:col-span-2 space-y-3 rounded-md border border-gray-200 p-3">
                       <div className="flex gap-2">
-                        <Button type="button" size="sm" aria-pressed={bookToday} variant={bookToday ? 'default' : 'outline'} onClick={() => setBookToday(true)}>Book for today</Button>
-                        <Button type="button" size="sm" aria-pressed={!bookToday} variant={!bookToday ? 'default' : 'outline'} onClick={() => setBookToday(false)}>Register only</Button>
+                        <Button type="button" size="sm" aria-pressed={bookingOn} variant={bookingOn ? 'default' : 'outline'} onClick={() => setBookingOn(true)}>Book for today</Button>
+                        <Button type="button" size="sm" aria-pressed={!bookingOn} variant={!bookingOn ? 'default' : 'outline'} onClick={() => setBookingOn(false)}>Register only</Button>
                       </div>
-                      {bookToday && (
+                      {bookingOn && (
                         <div>
                           <Label id="walkinDoctorId-label" htmlFor="walkinDoctorId">Doctor *</Label>
                           <Select value={doctorId} onValueChange={setDoctorId}>
@@ -435,7 +437,7 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
               <div className="flex justify-end gap-2 pt-4">
                 <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                 <Button onClick={submit} disabled={busy || !loaded}>
-                  {editing ? 'Save changes' : bookToday ? 'Register and book' : 'Register'}
+                  {editing ? 'Save changes' : bookingOn ? 'Register and book' : 'Register'}
                 </Button>
               </div>
             </>

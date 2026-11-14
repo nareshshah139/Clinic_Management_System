@@ -82,20 +82,19 @@ describe('registering a patient', () => {
     expect(screen.getByRole('link', { name: "Open today's list" })).toHaveAttribute('href', `/dashboard/appointments?date=${isoDate(0)}`);
     expect(api.createAppointment).toHaveBeenCalledWith(expect.objectContaining({ patientId: 'p9', doctorId: 'doc-1', date: isoDate(0), slot: '15:30-16:00' }));
     expect(onSaved).toHaveBeenCalledTimes(1);
-    expect(localStorage.getItem('appointments.doctorId')).toBe('doc-1');
+    expect(localStorage.getItem('patients.walkinDoctorId')).toBe('doc-1');
   });
 
-  it('says which day when today has no free time', async () => {
+  it('books only today: with no free time the patient is saved and Book another day opens Appointments for them', async () => {
     const user = userEvent.setup();
     api.getAvailableSlots.mockImplementation((async ({ date }: { date: string }) => ({ availableSlots: date === isoDate(1) ? ['09:00-09:30'] : [] })) as never);
-    api.createAppointment.mockResolvedValue({ id: 'a1', tokenNumber: 1 } as never);
     renderNew();
     await fillNewPatient(user);
     await user.click(screen.getByRole('button', { name: 'Register and book' }));
-    const status = await screen.findByRole('status');
-    expect(status).toHaveTextContent('at 09:00-09:30, token 1. Today had no free time.');
-    expect(status).not.toHaveTextContent('today at');
-    expect(api.createAppointment).toHaveBeenCalledWith(expect.objectContaining({ date: isoDate(1) }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Farhan Qureshi is registered. No free time today with Dr. Priya Menon.');
+    expect(screen.getByRole('link', { name: 'Book another day' })).toHaveAttribute('href', '/dashboard/appointments?patientId=p9');
+    expect(api.getAvailableSlots).toHaveBeenCalledTimes(1);
+    expect(api.createAppointment).not.toHaveBeenCalled();
   });
 
   it('does not book another day when the booking call fails, and links to Appointments', async () => {
@@ -111,15 +110,23 @@ describe('registering a patient', () => {
     expect(api.getAvailableSlots).toHaveBeenCalledTimes(1);
   });
 
-  it('reports when no day in the next week has a free time', async () => {
+  it('preselects no doctor when there are several and none was used here, and requires the choice', async () => {
     const user = userEvent.setup();
-    api.getAvailableSlots.mockResolvedValue({ availableSlots: [] } as never);
+    api.getUsers.mockResolvedValue({ data: [{ id: 'doc-1', firstName: 'Priya', lastName: 'Menon' }, { id: 'doc-2', firstName: 'Arjun', lastName: 'Rao' }] } as never);
+    localStorage.setItem('appointments.doctorId', 'doc-2');
     renderNew();
     await fillNewPatient(user);
+    expect(screen.getByRole('combobox', { name: /Doctor/ })).toHaveTextContent('Select doctor');
     await user.click(screen.getByRole('button', { name: 'Register and book' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Patient saved, not booked: no free time in the next 7 days.');
-    expect(api.getAvailableSlots).toHaveBeenCalledTimes(8);
-    expect(api.createAppointment).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Choose a doctor, or switch to Register only.');
+    expect(api.createPatient).not.toHaveBeenCalled();
+  });
+
+  it('preselects the doctor last booked from this dialog when there are several', async () => {
+    api.getUsers.mockResolvedValue({ data: [{ id: 'doc-1', firstName: 'Priya', lastName: 'Menon' }, { id: 'doc-2', firstName: 'Arjun', lastName: 'Rao' }] } as never);
+    localStorage.setItem('patients.walkinDoctorId', 'doc-2');
+    renderNew();
+    expect(await screen.findByRole('combobox', { name: /Doctor/ })).toHaveTextContent('Dr. Arjun Rao');
   });
 
   it('registers without booking when Register only is chosen', async () => {
