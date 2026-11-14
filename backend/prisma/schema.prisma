@@ -89,6 +89,7 @@ model User {
   tradeTermsUpdated             PharmacyTradeTerm[]          @relation("PharmacyTradeTermUpdatedBy")
   inventoryItemRequestsMade     InventoryItemRequest[]       @relation("InventoryItemRequestedBy")
   inventoryItemRequestsReviewed InventoryItemRequest[]       @relation("InventoryItemReviewedBy")
+  whatsappConnectionsLinked     WhatsAppConnection[]         @relation("WhatsAppConnectionLinkedBy")
 
   // Back-relations
   createdPrescriptionTemplates PrescriptionTemplate[]
@@ -167,6 +168,8 @@ model Branch {
   doctorTimeOff            DoctorTimeOff[]
   clinicInvestigations     ClinicInvestigation[]
   clinicFees               ClinicFee[]
+  whatsappConnection       WhatsAppConnection?
+  whatsappMessages         WhatsAppMessage[]
 
   @@map("branches")
 }
@@ -2470,6 +2473,64 @@ model WhatsAppTemplate {
   @@index([ownerId])
   @@index([touchpoint])
   @@map("whatsapp_templates")
+}
+
+/// The clinic's own WhatsApp Business number. One per branch; the access token is stored only as aes-256-gcm ciphertext.
+model WhatsAppConnection {
+  branchId                       String   @id
+  phoneNumberId                  String
+  businessAccountId              String?
+  displayPhoneNumber             String
+  verifiedName                   String
+  qualityRating                  String?
+  accessTokenCipher              String
+  prescriptionTemplateName       String?
+  prescriptionTemplateLanguage   String?
+  prescriptionTemplateBodyParams Int      @default(0)
+  linkedById                     String?
+  verifiedAt                     DateTime
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @updatedAt
+
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  linkedBy User?  @relation("WhatsAppConnectionLinkedBy", fields: [linkedById], references: [id], onDelete: SetNull)
+
+  @@map("whatsapp_connections")
+}
+
+enum WhatsAppMessageKind {
+  PRESCRIPTION
+  TEST_PRESCRIPTION
+  APPOINTMENT
+  TEXT
+}
+
+enum WhatsAppMessageStatus {
+  ACCEPTED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+/// A message Meta accepted, keyed by its wamid so delivery webhooks can advance its status.
+model WhatsAppMessage {
+  id             String                @id @default(cuid())
+  branchId       String
+  wamid          String                @unique
+  toPhone        String
+  kind           WhatsAppMessageKind
+  prescriptionId String?
+  status         WhatsAppMessageStatus @default(ACCEPTED)
+  errorCode      Int?
+  errorTitle     String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId, createdAt])
+  @@map("whatsapp_messages")
 }
 
 // Centralized atomic sequence storage for numbering (e.g., invoices)
