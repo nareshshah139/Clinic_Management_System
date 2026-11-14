@@ -415,8 +415,13 @@ describe('PrescriptionBuilder - Paged.js margin wiring', () => {
   it('prints from a temporary body-level host so dialog positioning does not affect browser print', async () => {
     const printSpy = jest.spyOn(window, 'print').mockImplementation(() => {});
 
-    render(<PrescriptionBuilder patientId="p3" doctorId="d3" onBeforeExport={async () => "v3"} /> as any);
+    paginateSourceContent = true;
+    const item = { drugName: 'Synthetic medicine', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
+    const get = jest.spyOn(apiClient, 'get').mockResolvedValue({ prescription: { id: 'rx3', items: [item] } });
+    const patch = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'rx3' });
+    render(<PrescriptionBuilder patientId="p3" visitId="v3" doctorId="d3" onBeforeExport={async () => "v3"} /> as any);
 
+    await screen.findByDisplayValue('Synthetic medicine');
     await openPreview();
     await settlePreviewPagination();
 
@@ -437,6 +442,8 @@ describe('PrescriptionBuilder - Paged.js margin wiring', () => {
     expect(document.getElementById('prescription-print-host')).toBeNull();
 
     printSpy.mockRestore();
+    get.mockRestore();
+    patch.mockRestore();
   });
 
   it('preserves custom-letterhead continuation offsets', async () => {
@@ -476,6 +483,7 @@ describe('saving before prescription export', () => {
     mockPdfOutput.mockClear();
     const print = jest.spyOn(window, 'print').mockImplementation(() => {});
     const onBeforeExport = jest.fn(async () => { throw new Error('Save failed'); });
+    localStorage.setItem('rxDraft:failed-patient:visit', JSON.stringify({ items: [rxDrug('Amoxicillin')] }));
     render(<PrescriptionBuilder patientId="failed-patient" visitId="visit" doctorId="doctor" onBeforeExport={onBeforeExport} />);
     await openPreview();
     await settlePreviewPagination();
@@ -599,7 +607,7 @@ it.each([
     };
     assertHistory(document.getElementById('prescription-print-root'));
     assertHistory(document.getElementById('pagedjs-container'));
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Print', exact: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Print$/ })); });
     expect(print).toHaveBeenCalled();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download PDF' })); });
     await waitFor(() => expect(mockPdfOutput).toHaveBeenCalled());
@@ -781,7 +789,7 @@ it('toggles and remembers the doctor signature across preview, print, PDF, Whats
     for (const enabled of [true, false, true]) {
       fireEvent.click(toggle);
       // Exports stay disabled until pagination reflects the new selection.
-      expect(screen.getByRole('button', { name: 'Print', exact: true })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^Print$/ })).toBeDisabled();
       await settlePreviewPagination();
       const assertSignature = (root: Element | null) => {
         expect(root).toHaveTextContent('Dr. Praneeta Jain');
@@ -793,7 +801,7 @@ it('toggles and remembers the doctor signature across preview, print, PDF, Whats
         } else expect(image).toBeNull();
       };
       assertSignature(document.getElementById('pagedjs-container'));
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Print', exact: true })); });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^Print$/ })); });
       expect(print).toHaveBeenCalled();
       assertSignature(document.getElementById('prescription-print-host'));
       act(() => { window.dispatchEvent(new Event('afterprint')); });
@@ -849,6 +857,7 @@ it.each(['Download PDF', 'PDF via WhatsApp', 'Print', 'Email'])('reports delegat
   const get = jest.spyOn(apiClient, 'get').mockResolvedValue({ id: 'visit', prescription: { id: 'rx' }, patient: { email: 'synthetic@example.com' } });
   const print = jest.spyOn(window, 'print').mockImplementation(() => {});
   const onClinicalConflict = jest.fn();
+  localStorage.setItem('rxDraft:conflict-patient:visit', JSON.stringify({ items: [rxDrug('Amoxicillin')] }));
   try {
     render(<PrescriptionBuilder patientId="conflict-patient" visitId="visit" doctorId="doctor" onClinicalConflict={onClinicalConflict} onBeforeExport={async () => { throw Object.assign(new Error('Visit changed; reload before saving'), { status: 409 }); }} />);
     await openPreview(); await settlePreviewPagination();
@@ -884,4 +893,26 @@ it('reports an Rx conflict between the successful visit save and PDF output', as
     expect(onClinicalConflict).toHaveBeenCalledTimes(1);
     expect(mockPdfOutput).not.toHaveBeenCalled();
   } finally { create.mockRestore(); }
+});
+
+it('disables Print while the prescription has no medicines', async () => {
+  render(<PrescriptionBuilder patientId="empty-patient" visitId={null} doctorId="doctor" standalone />);
+  await openPreview();
+  await settlePreviewPagination();
+  expect(screen.getByRole('button', { name: /^Print$/ })).toBeDisabled();
+});
+
+it('names the resolved doctor in the toolbar and the signature block of an unsaved visit', async () => {
+  const get = jest.spyOn(apiClient, 'get');
+  try {
+    render(<PrescriptionBuilder patientId="named-patient" visitId={null} doctorId="doctor-abcdef123" doctorName="Dr. Shravya Rao" standalone />);
+    await openPreview();
+    await settlePreviewPagination();
+    const toolbar = document.querySelector('[data-prescription-preview-toolbar]') as HTMLElement;
+    expect(toolbar).toHaveTextContent('Dr. Shravya Rao');
+    const signature = document.querySelector('.doctor-signature-block') as HTMLElement;
+    expect(signature).toHaveTextContent('Dr. Shravya Rao');
+    expect(signature).not.toHaveTextContent(/^Dr\.\s*Signature/);
+    expect(get).not.toHaveBeenCalledWith('/users/doctor-abcdef123');
+  } finally { get.mockRestore(); }
 });

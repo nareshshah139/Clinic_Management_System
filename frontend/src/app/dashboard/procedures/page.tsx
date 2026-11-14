@@ -16,6 +16,7 @@ import { apiClient } from '@/lib/api';
 import { Zap, User, Activity, Settings, Save } from 'lucide-react';
 import type { Patient, StaffSummary, VisitSummary, ProcedureVisitResponse } from '@/lib/types';
 import { QuickGuide } from '@/components/common/QuickGuide';
+import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
 
 // Machine configurations
 const MACHINES = {
@@ -178,22 +179,14 @@ export default function SmartProceduresPage() {
       setDoctors(doctorsData);
       setNurses(nursesData);
 
-      if (patientsData.length > 0) {
-        setProcedureData((prev) => {
-          const updated = { ...prev, patientId: prev.patientId || patientsData[0].id };
-          if (!prev.patientId) {
-            void loadVisitsWithProcedures(patientsData[0].id);
-          }
-          return updated;
-        });
-      }
-
-      if (doctorsData.length > 0) {
-        setProcedureData((prev) => ({ ...prev, doctorId: prev.doctorId || doctorsData[0].id }));
-      }
-
-      if (nursesData.length > 0) {
-        setProcedureData((prev) => ({ ...prev, therapistId: prev.therapistId || nursesData[0].id }));
+      try {
+        const me = await apiClient.get<{ id?: string; role?: string }>('/auth/me');
+        setProcedureData((prev) => ({
+          ...prev,
+          doctorId: resolveDefaultDoctorId({ role: me?.role, userId: me?.id, current: prev.doctorId }),
+        }));
+      } catch (error) {
+        console.error('Failed to resolve signed-in user:', error);
       }
     } catch (error) {
       console.error('Failed to load data:', error);

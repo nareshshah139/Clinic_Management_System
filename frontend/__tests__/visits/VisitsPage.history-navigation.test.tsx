@@ -11,7 +11,7 @@ beforeEach(() => {
   mockQuery = '';
   jest.clearAllMocks();
   jest.mocked(apiClient.getPatients).mockResolvedValue({ patients: [{ id: 'patient-123', name: 'Synthetic Patient' }] });
-  jest.mocked(apiClient.get).mockImplementation(async (endpoint) => endpoint === '/auth/me' ? { role: 'ADMIN' } : { users: [{ id: 'doctor-123', firstName: 'Synthetic', lastName: 'Doctor' }] });
+  jest.mocked(apiClient.get).mockImplementation(async (endpoint) => endpoint === '/auth/me' ? { id: 'doctor-123', role: 'DOCTOR' } : { users: [{ id: 'doctor-123', firstName: 'Synthetic', lastName: 'Doctor' }] });
 });
 it('keeps setup and history accessible after selecting a patient', async () => {
   render(<VisitsPage />);

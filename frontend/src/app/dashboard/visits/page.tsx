@@ -238,7 +238,7 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 
-import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { isValidId } from '@/lib/id';
 import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -259,6 +259,8 @@ import { User, Users, Stethoscope, FileText, Calendar, Activity, ArrowLeft } fro
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { formatPatientName } from '@/lib/utils';
+import { UserRole } from '@cms/shared-types';
+import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
 import { useRecordById } from '@/components/visits/useRecordById';
 import type {
@@ -465,7 +467,8 @@ function VisitsPageInner() {
   const [patients, setPatients] = useState<PatientMatch[]>([]);
   const [doctors, setDoctors] = useState<DoctorSummary[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+  const [chosenDoctorId, setChosenDoctorId] = useState<string>('');
+  const [currentUser, setCurrentUser] = useState<{ id?: string; role?: string } | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>('DOCTOR');
   const [recentVisitId, setRecentVisitId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -478,13 +481,28 @@ function VisitsPageInner() {
   const [showPatientMenu, setShowPatientMenu] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
+  const [appointmentFailed, setAppointmentFailed] = useState(false);
+  const [startedVisitId, setStartedVisitId] = useState<string | null>(null);
+  const [appointmentDismissed, setAppointmentDismissed] = useState(false);
+  const appointmentDismissedRef = useRef(false);
 
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get('patientId');
   const appointmentIdParam = searchParams.get('appointmentId');
   const urlDoctorId = searchParams.get('doctorId');
   const urlVisitId = searchParams.get('visitId');
-  const autoStartParam = searchParams.get('autoStart') === 'true';
+
+  const appointmentDoctorId = appointmentData?.doctorId;
+  const appointmentPending = Boolean(
+    urlPatientId && appointmentIdParam && !appointmentData && !appointmentFailed && !appointmentDismissed,
+  );
+  const selectedDoctorId = resolveDefaultDoctorId({
+    role: currentUser?.role,
+    userId: currentUser?.id,
+    current: chosenDoctorId,
+    appointmentDoctorId,
+    appointmentPending,
+  });
 
   const extractPatients = useCallback((payload: unknown): PatientMatch[] => {
     if (!payload) return [];
@@ -531,12 +549,10 @@ function VisitsPageInner() {
   const fetchAppointmentData = useCallback(async (appointmentId: string) => {
     try {
       const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
-      setAppointmentData(appointment);
-      if (appointment?.doctorId) {
-        setSelectedDoctorId(appointment.doctorId);
-      }
+      if (!appointmentDismissedRef.current) setAppointmentData(appointment);
     } catch (error) {
       console.error('Failed to fetch appointment data:', error);
+      setAppointmentFailed(true);
     }
   }, []);
 
@@ -564,21 +580,16 @@ function VisitsPageInner() {
       if (usersRes.status === 'fulfilled') {
         const doctorsData = usersRes.value;
         setDoctors(doctorsData);
-        if (doctorsData.length > 0) {
-          const candidate = doctorsData[0]?.id;
-          if (!candidate) {
-            console.warn('[VisitsPage] First doctor missing id, requiring manual selection');
-          }
-          setSelectedDoctorId((prev) => prev || (candidate || ''));
-        }
       }
 
       try {
-        const currentUser = await apiClient.get<{ role?: string }>('/auth/me');
-        setCurrentUserRole(currentUser?.role ?? 'DOCTOR');
+        const me = await apiClient.get<{ id?: string; role?: string }>('/auth/me');
+        setCurrentUserRole(me?.role ?? 'DOCTOR');
+        setCurrentUser(me ?? {});
       } catch (error) {
         console.error('Failed to get current user:', error);
         setCurrentUserRole('DOCTOR');
+        setCurrentUser({});
       }
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -603,16 +614,13 @@ function VisitsPageInner() {
     if (urlPatientId) {
       setSelectedPatientId(urlPatientId);
       if (urlDoctorId && isValidId(urlDoctorId)) {
-        setSelectedDoctorId(urlDoctorId);
+        setChosenDoctorId(urlDoctorId);
       }
       if (appointmentIdParam) {
         void fetchAppointmentData(appointmentIdParam);
       }
-      if (autoStartParam) {
-        setShowForm(true);
-      }
     }
-  }, [appointmentIdParam, autoStartParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
+  }, [appointmentIdParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
 
   // Handle direct visit resume via visitId in URL
   useEffect(() => {
@@ -623,14 +631,13 @@ function VisitsPageInner() {
         const pid = visit?.patient?.id;
         const did = visit?.doctor?.id;
         if (typeof pid === 'string') setSelectedPatientId(pid);
-        if (typeof did === 'string') setSelectedDoctorId(did);
+        if (typeof did === 'string') setChosenDoctorId(did);
         // Populate appointment context if present (non-blocking)
         const apptId = visit?.appointment?.id;
         if (typeof apptId === 'string') {
           try {
             const appt = await apiClient.getAppointment<AppointmentWithVisit>(apptId);
             setAppointmentData(appt);
-            if (appt?.doctorId) setSelectedDoctorId(appt.doctorId);
           } catch {}
         }
         setShowForm(true);
@@ -699,6 +706,39 @@ function VisitsPageInner() {
 
   const selectedPatient = useRecordById<PatientMatch>(selectedPatientId, fetchPatientById);
   const selectedDoctor = useRecordById<DoctorSummary>(selectedDoctorId, fetchDoctorById);
+
+  const doctorNameById = (id: string | undefined) => {
+    const doctor = doctors.find((d) => d.id === id);
+    return doctor ? `Dr. ${doctor.firstName} ${doctor.lastName}`.trim() : undefined;
+  };
+  const selectedDoctorName =
+    doctorNameById(selectedDoctorId) ??
+    (selectedDoctor.status === 'ready'
+      ? `Dr. ${selectedDoctor.record.firstName} ${selectedDoctor.record.lastName}`.trim()
+      : undefined);
+  const bookedWithName =
+    appointmentDoctorId &&
+    currentUser?.role === UserRole.DOCTOR &&
+    currentUser.id &&
+    currentUser.id !== appointmentDoctorId
+      ? doctorNameById(appointmentDoctorId)
+      : undefined;
+
+  const visitAlreadyStarted = Boolean(
+    urlVisitId || startedVisitId || (appointmentData?.visit && 'id' in appointmentData.visit),
+  );
+  const doctorLocked = Boolean(appointmentDoctorId) || visitAlreadyStarted;
+
+  const pickPatient = (id: string) => {
+    if (id !== selectedPatientId) setStartedVisitId(null);
+    setSelectedPatientId(id);
+    const appointmentPatientId = appointmentData?.patientId ?? urlPatientId;
+    if (appointmentIdParam && id !== appointmentPatientId) {
+      appointmentDismissedRef.current = true;
+      setAppointmentDismissed(true);
+      setAppointmentData(null);
+    }
+  };
 
   const startNewVisit = () => {
     if (selectedPatientId && selectedDoctorId) {
@@ -868,7 +908,7 @@ function VisitsPageInner() {
                         e.preventDefault();
                         const sel = patientOptions[highlightedIndex];
                         if (sel) {
-                          setSelectedPatientId(sel.id);
+                          pickPatient(sel.id);
                           setPatientQuery(sel.name || sel.phone || sel.email || sel.id);
                           setShowPatientMenu(false);
                         }
@@ -890,7 +930,7 @@ function VisitsPageInner() {
                           type="button"
                           onMouseEnter={() => setHighlightedIndex(idx)}
                           onClick={() => {
-                            setSelectedPatientId(p.id);
+                            pickPatient(p.id);
                             setPatientQuery(p.name || p.phone || p.email || p.id);
                             setShowPatientMenu(false);
                           }}
@@ -918,7 +958,7 @@ function VisitsPageInner() {
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
                   Select Doctor
                 </label>
-                <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                <Select value={selectedDoctorId} onValueChange={setChosenDoctorId} disabled={doctorLocked}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose a doctor..." />
                   </SelectTrigger>
@@ -1146,23 +1186,48 @@ function VisitsPageInner() {
         </div>
       </div>
 
-      <div className="sticky -top-4 z-30 -mx-4 md:-top-6 border-b bg-background px-4 py-2 md:-mx-6 md:px-6">
+      <div className="sticky -top-4 z-30 -mx-4 md:-top-6 flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-2 md:-mx-6 md:px-6">
         <VisitIdentityBar
           patient={selectedPatient}
           doctor={selectedDoctor}
           appointment={appointmentData}
+          hideDoctor
         />
+        <div className="flex items-center gap-2">
+          <label htmlFor="visit-doctor" className="text-sm font-medium text-foreground">
+            Attending doctor
+          </label>
+          <Select value={selectedDoctorId} onValueChange={setChosenDoctorId} disabled={doctorLocked}>
+            <SelectTrigger id="visit-doctor" className="h-9 w-64" aria-label="Attending doctor">
+              <SelectValue placeholder="Choose a doctor..." />
+            </SelectTrigger>
+            <SelectContent>
+              {doctors.map((doctor) => (
+                <SelectItem key={doctor.id} value={doctor.id}>
+                  Dr. {doctor.firstName} {doctor.lastName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {bookedWithName && (
+            <span className="text-sm text-muted-foreground">
+              Booked with {bookedWithName}. Change the appointment&apos;s doctor to see this patient yourself.
+            </span>
+          )}
+        </div>
       </div>
 
       <MedicalVisitForm
         key={`${selectedPatientId}:${urlVisitId || appointmentData?.id || "new"}`}
         patientId={selectedPatientId} 
         doctorId={selectedDoctorId}
+        doctorName={selectedDoctorName}
         userRole={currentUserRole}
         patientName={selectedPatient.status === 'ready' ? formatPatientName(selectedPatient.record) : ''}
         visitDate={new Date().toISOString()}
         appointmentId={appointmentData?.id}
         appointmentData={appointmentData}
+        onVisitIdChange={setStartedVisitId}
         initialVisitId={urlVisitId || (appointmentData?.visit && 'id' in (appointmentData as any).visit ? (appointmentData as any).visit.id : undefined)}
       />
       

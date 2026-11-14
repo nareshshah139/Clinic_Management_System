@@ -118,6 +118,7 @@ interface Props {
   patientId: string;
   visitId: string | null;
   doctorId: string;
+  doctorName?: string;
   userRole?: string;
   onCreated?: (id?: string) => void;
   onClinicalDataChange?: (patch: Record<string, unknown>) => void;
@@ -267,7 +268,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
 const inventoryNamesOf = (drug: any): string[] =>
   [drug?.name, ...(Array.isArray(drug?.knownNames) ? drug.knownNames : [])].map((name) => String(name || '').trim().toLowerCase()).filter(Boolean);
 
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
@@ -2457,11 +2458,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return (visitData as any)?.patient?.name || (patientData as any)?.name || patientId || '—';
   }, [visitData, patientData, patientId]);
 
-  const previewDoctorName = useMemo(() => {
-    const doc = (visitData as any)?.doctor;
-    if (doc) return `Dr. ${(doc.firstName ?? '')} ${(doc.lastName ?? '')}`.trim();
-    return doctorId ? `Doctor ${String(doctorId).slice(0, 6)}` : 'Doctor';
-  }, [visitData, doctorId]);
+  const printedDoctorName = useMemo(() => {
+    const visitDoctor = (visitData as any)?.doctor;
+    if (visitDoctor) return `Dr. ${visitDoctor.firstName ?? ''} ${visitDoctor.lastName ?? ''}`.trim();
+    return doctorName ?? '';
+  }, [visitData, doctorName]);
 
   const summaryChips = useMemo(() => {
     return [
@@ -5571,8 +5572,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   variant="outline"
                   onClick={async () => {
                     if (language === 'EN') {
-                      console.debug('[PrescriptionBuilder] Print Preview: language EN, skipping translation');
-                      toast({ title: 'Print Preview', description: 'Language is English. Skipping translation.' });
                       setTranslationsMap({});
                       setPreviewOpen(true);
                       return;
@@ -5756,7 +5755,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div className="flex flex-wrap gap-2 items-center text-gray-800">
                     <span className="font-semibold">{previewPatientName}</span>
                     <span className="text-gray-500">•</span>
-                    <span>{previewDoctorName}</span>
+                    <span>{printedDoctorName || 'Doctor'}</span>
                   </div>
                   <div className="text-xs text-gray-600">
                     Date: {displayClinicDate(new Date())} {isTeleVideo ? '• Consultation: Tele-video' : ''} {standaloneReason ? `• Reason: ${standaloneReason}` : ''}
@@ -6132,7 +6131,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           // eslint-disable-next-line @next/next/no-img-element
                           <img data-doctor-signature src={printedSignatureUrl} alt="Doctor’s signature" width={signatureWidth} height={signatureHeight} style={{ display: 'block', width: signatureWidth, height: signatureHeight, marginLeft: 'auto', marginBottom: 4 }} />
                         ) : <div className="h-10" />}
-                        <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
+                        {printedDoctorName && <div className="font-medium">{printedDoctorName}</div>}
                         {!printCompact && <div className="text-gray-600">Signature</div>}
                       </div>
                     </div>
@@ -6437,7 +6436,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </Tooltip>
                   </TooltipProvider>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
-                  <Button className="col-span-1" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={printPreviewInPlace}>Print</Button>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="col-span-1 inline-flex">
+                          <Button className="w-full" disabled={validItems.length === 0 || savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={printPreviewInPlace}>Print</Button>
+                        </span>
+                      </TooltipTrigger>
+                      {validItems.length === 0 && <TooltipContent><p>Add at least one medicine to print</p></TooltipContent>}
+                    </Tooltip>
+                  </TooltipProvider>
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
