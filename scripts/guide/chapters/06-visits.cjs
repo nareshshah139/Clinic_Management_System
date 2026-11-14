@@ -230,7 +230,7 @@ module.exports = {
           caption: "View Prescription shows what was prescribed at an earlier visit.",
           run: async (page, h) => {
             await page.getByRole("button", { name: "View Prescription" }).first().click();
-            await page.getByRole("dialog", { name: "Prescription Details" }).getByText("Medications").waitFor({ timeout: 60000 });
+            await page.getByRole("dialog", { name: "Prescription Details" }).getByText("Medications").first().waitFor({ timeout: 60000 });
             await h.settle(500);
           },
           target: '[role="dialog"]',
