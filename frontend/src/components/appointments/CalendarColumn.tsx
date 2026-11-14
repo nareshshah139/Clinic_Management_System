@@ -234,7 +234,8 @@ export default function CalendarColumn({
             `${start}-${end}`,
             status.label,
           ].filter(Boolean).join(', ');
-          const chip = apt.billing ? billingChip(apt.billing, apt.billType) : null;
+          const awaitingVisit = apt.billing?.state === 'NOT_BILLED' && !apt.billing.attention && apt.status !== AppointmentStatus.COMPLETED;
+          const chip = apt.billing && !awaitingVisit ? billingChip(apt.billing, apt.billType) : null;
           const statusFit = chip ? STATUS_IN_WORDS.withChip : STATUS_IN_WORDS.withoutChip;
           return (
             <div

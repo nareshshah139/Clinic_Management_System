@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Calendar as CalendarIcon } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { BookOpen } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -28,13 +28,14 @@ interface AppointmentsCalendarProps {
   controlledDoctorId?: string;
   controlledDate?: string;
   hideHeaderControls?: boolean;
+  toolbarLead?: React.ReactNode;
   /** False for a viewer the server refuses rooms; the room filter then stays empty and rooms are never asked for. */
   readsRooms?: boolean;
 }
 
 /**
  * @cc [owner:nareshshah139,label:product] appointment-calendar-legend
- * Calendar legend colors MUST match the doctor timeline for visit types and past or completed
+ * The legend MUST stay closed until a button named Legend opens it, and Escape MUST close it. Calendar legend colors MUST match the doctor timeline for visit types and past or completed
  * appointments in either theme. The legend MUST name the Scheduled and Confirmed calendars and
  * say how Confirm moves a patient between them.
  */
@@ -58,6 +59,7 @@ export default function AppointmentsCalendar({
   controlledDoctorId,
   controlledDate,
   hideHeaderControls,
+  toolbarLead,
   readsRooms = true,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
@@ -447,16 +449,114 @@ export default function AppointmentsCalendar({
 
   return (
     <>
-      <Card>
-        <CardHeader className="space-y-2">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5" /> 
-                Doctor Calendar
-              </CardTitle>
-              <CardDescription>Click a free time in the Scheduled or Confirmed column to book into that calendar.</CardDescription>
+      <div className="space-y-3">
+          <div role="toolbar" aria-label="Calendar filters" className="flex flex-wrap items-center gap-2">
+            {toolbarLead}
+            {!hideHeaderControls && (
+              <>
+                <Select value={doctorId} onValueChange={setDoctorId}>
+                  <SelectTrigger size="sm" aria-label="Doctor"><SelectValue placeholder="Select doctor" /></SelectTrigger>
+                  <SelectContent>
+                    {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+                <Input aria-label="Date" className="h-8 w-40" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </>
+            )}
+            <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>
+              <SelectTrigger size="sm" aria-label="Visit type"><SelectValue placeholder="All Types" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Types</SelectItem>
+                <SelectItem value="OPD">OPD Consultation</SelectItem>
+                <SelectItem value="PROCEDURE">Procedure</SelectItem>
+                <SelectItem value="TELEMED">Telemedicine</SelectItem>
+              </SelectContent>
+            </Select>
+            {readsRooms && (
+              <Select value={roomFilter} onValueChange={setRoomFilter}>
+                <SelectTrigger size="sm" aria-label="Room"><SelectValue placeholder="All Rooms" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Rooms</SelectItem>
+                  {rooms.map((room) => (
+                    <SelectItem key={room.id} value={room.id}>{room.name} ({room.type})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Input
+              aria-label="Patient"
+              className="h-8 min-w-28 flex-1"
+              placeholder="Search patient by name/phone"
+              value={patientSearch}
+              onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }}
+            />
+            <Select value={String(gridMinutes)} onValueChange={(v: string) => setGridMinutes(parseInt(v, 10))}>
+              <SelectTrigger size="sm" aria-label="Grid interval"><SelectValue placeholder="Grid granularity" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10 min</SelectItem>
+                <SelectItem value="15">15 min</SelectItem>
+                <SelectItem value="20">20 min</SelectItem>
+                <SelectItem value="30">30 min</SelectItem>
+                <SelectItem value="45">45 min</SelectItem>
+                <SelectItem value="60">60 min</SelectItem>
+              </SelectContent>
+            </Select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <BookOpen className="h-4 w-4" aria-hidden="true" />
+                  Legend
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[34rem] max-w-[90vw] p-3">
+                <div>
+            <h3 className="mb-2 font-semibold">Legend</h3>
+            <ul className="mb-3 space-y-1 text-sm">
+              {CALENDAR_ORDER.map((calendar) => (
+                <li key={calendar} className="flex items-start gap-2">
+                  <span aria-hidden="true" className="mt-1.5 h-1 w-4 shrink-0 rounded" style={{ backgroundColor: CALENDARS[calendar].accentColor }} />
+                  <span><strong>{CALENDARS[calendar].title}:</strong> {CALENDARS[calendar].description}</span>
+                </li>
+              ))}
+              <li className="text-gray-700">Open a scheduled patient and press <strong>Confirm</strong> to move them to Confirmed at the same time.</li>
+            </ul>
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(219, 234, 254, 0.95)' }} />
+                <span className="text-sm">OPD</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(237, 233, 254, 0.95)' }} />
+                <span className="text-sm">Procedure</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(243, 244, 246, 0.95)' }} />
+                <span className="text-sm">Telemedicine</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(226, 232, 240, 0.95)' }} />
+                <span className="text-sm">Completed</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(239, 246, 255, 0.95)' }} />
+                <span className="text-sm">Past (OPD)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(245, 237, 254, 0.95)' }} />
+                <span className="text-sm">Past (Procedure)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#22c55e' }} />
+                <span className="text-sm">Newly Booked</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#fbbf24' }} />
+                <span className="text-sm">Booking In Progress</span>
+              </div>
             </div>
+          </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {googleConfigured !== false && (
               <div className="flex items-center gap-2">
                 {googleStatus.connected ? (
@@ -498,6 +598,7 @@ export default function AppointmentsCalendar({
             )}
           </div>
 
+
           {/* Doctor-specific Google Calendar status */}
           {googleConfigured !== false && doctorId && !doctorGoogleStatus.connected && googleStatus.connected && (
             <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
@@ -519,72 +620,6 @@ export default function AppointmentsCalendar({
               </span>
             </div>
           )}
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-            {!hideHeaderControls && (
-              <>
-                <div>
-                  <label className="text-sm text-gray-700">Doctor</label>
-                  <Select value={doctorId} onValueChange={setDoctorId}>
-                    <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                    <SelectContent>
-                      {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-700">Date</label>
-                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                </div>
-              </>
-            )}
-            <div>
-              <label className="text-sm text-gray-700">Visit Type</label>
-              <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>
-                <SelectTrigger><SelectValue placeholder="All Types" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Types</SelectItem>
-                  <SelectItem value="OPD">OPD Consultation</SelectItem>
-                  <SelectItem value="PROCEDURE">Procedure</SelectItem>
-                  <SelectItem value="TELEMED">Telemedicine</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {readsRooms && (
-              <div>
-                <label className="text-sm text-gray-700">Room</label>
-                <Select value={roomFilter} onValueChange={setRoomFilter}>
-                  <SelectTrigger><SelectValue placeholder="All Rooms" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All Rooms</SelectItem>
-                    {rooms.map((room) => (
-                      <SelectItem key={room.id} value={room.id}>{room.name} ({room.type})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <label className="text-sm text-gray-700">Patient</label>
-              <Input placeholder="Search patient by name/phone" value={patientSearch} onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }} />
-            </div>
-            <div>
-              <label className="text-sm text-gray-700">Grid</label>
-              <Select value={String(gridMinutes)} onValueChange={(v: string) => setGridMinutes(parseInt(v, 10))}>
-                <SelectTrigger><SelectValue placeholder="Grid granularity" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10 minutes</SelectItem>
-                  <SelectItem value="15">15 minutes</SelectItem>
-                  <SelectItem value="20">20 minutes</SelectItem>
-                  <SelectItem value="30">30 minutes</SelectItem>
-                  <SelectItem value="45">45 minutes</SelectItem>
-                  <SelectItem value="60">60 minutes</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
           {selectedPatient && (
             <div className="flex items-center gap-2">
               <Badge variant="secondary">
@@ -638,54 +673,6 @@ export default function AppointmentsCalendar({
             </div>
           )}
 
-          {/* Legend */}
-          <div className="border rounded p-3 bg-gray-50">
-            <h3 className="font-semibold mb-2">Legend</h3>
-            <ul className="mb-3 space-y-1 text-sm">
-              {CALENDAR_ORDER.map((calendar) => (
-                <li key={calendar} className="flex items-start gap-2">
-                  <span aria-hidden="true" className="mt-1.5 h-1 w-4 shrink-0 rounded" style={{ backgroundColor: CALENDARS[calendar].accentColor }} />
-                  <span><strong>{CALENDARS[calendar].title}:</strong> {CALENDARS[calendar].description}</span>
-                </li>
-              ))}
-              <li className="text-gray-700">Open a scheduled patient and press <strong>Confirm</strong> to move them to Confirmed at the same time.</li>
-            </ul>
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(219, 234, 254, 0.95)' }} />
-                <span className="text-sm">OPD</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(237, 233, 254, 0.95)' }} />
-                <span className="text-sm">Procedure</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(243, 244, 246, 0.95)' }} />
-                <span className="text-sm">Telemedicine</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(226, 232, 240, 0.95)' }} />
-                <span className="text-sm">Completed</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(239, 246, 255, 0.95)' }} />
-                <span className="text-sm">Past (OPD)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(245, 237, 254, 0.95)' }} />
-                <span className="text-sm">Past (Procedure)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#22c55e' }} />
-                <span className="text-sm">Newly Booked</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#fbbf24' }} />
-                <span className="text-sm">Booking In Progress</span>
-              </div>
-            </div>
-          </div>
-
           {!!bookingDetails && (
             <div 
               className="p-4 rounded-r text-sm shadow-sm"
@@ -737,8 +724,7 @@ export default function AppointmentsCalendar({
             timeSlotConfig={{ ...slotConfig, stepMinutes: Math.max(10, gridMinutes) }}
             maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}
           />
-        </CardContent>
-      </Card>
+      </div>
 
       <AppointmentBookingDialog
         open={bookingDialogOpen}
