@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import { cn, formatPatientName, getErrorMessage } from '@/lib/utils';
-import { displayCalendarDate, displayClinicDateTime } from '@/lib/date-display';
+import { displayClinicDateTime } from '@/lib/date-display';
 import { useToast } from '@/hooks/use-toast';
 import type { AppointmentInSlot, ClinicBillAccess } from '@/lib/types';
 import { DESK_PAYMENT_MODES, paymentModeLabel, type DeskPaymentMode } from '@/lib/clinic-payment-modes';
@@ -80,13 +80,11 @@ function ModePicker({ value, onChange, label, reference, onReference }: {
  */
 export function AppointmentBillDialog({
   appointment,
-  date,
   access,
   onClose,
   onChanged,
 }: {
   appointment: AppointmentInSlot | null;
-  date: string;
   access: ClinicBillAccess;
   onClose: () => void;
   onChanged: () => Promise<void> | void;
@@ -98,6 +96,7 @@ export function AppointmentBillDialog({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [madeBill, setMadeBill] = useState(false);
   const [line, setLine] = useState('');
   const [fee, setFee] = useState('');
   const [paidNow, setPaidNow] = useState<string | null>(null);
@@ -123,6 +122,7 @@ export function AppointmentBillDialog({
   const resetForm = useCallback(() => {
     if (!appointment) return;
     setAdding(false);
+    setMadeBill(false);
     setLine(defaultBillLine(appointment.billType, appointment.visitType === 'PROCEDURE' ? appointment.notes : undefined));
     setFee(appointment.fee != null ? String(appointment.fee) : '');
     setPaidNow(null);
@@ -154,7 +154,7 @@ export function AppointmentBillDialog({
   const paidText = paidNow ?? fee;
   const paidValue = parseRupees(paidText);
   const paymentValue = parseRupees(payment);
-  const creating = access.createBill && invoices !== null && (invoices.length === 0 || adding);
+  const creating = access.createBill && invoices !== null && (adding || (invoices.length === 0 && !madeBill));
   const feeInvalid = feeValue !== null && (Number.isNaN(feeValue) || feeValue <= 0);
   const paidInvalid = paidValue !== null && (Number.isNaN(paidValue) || (feeValue !== null && paidValue > feeValue));
   const paymentInvalid = paymentValue !== null && (Number.isNaN(paymentValue) || paymentValue <= 0 || (payInvoice !== null && paymentValue > payInvoice.balance));
@@ -168,6 +168,7 @@ export function AppointmentBillDialog({
     toast({ variant: 'success', title: message });
     resetForm();
     await onChanged();
+    onClose();
   };
 
   const createBill = async () => {
@@ -187,6 +188,15 @@ export function AppointmentBillDialog({
           await apiClient.processPayment(paymentOf(created.id, paid));
         } catch (e) {
           setError(`Bill ${created.invoiceNo} was created, but the payment was not recorded: ${getErrorMessage(e)}`);
+          setMadeBill(true);
+          setAdding(false);
+          setPayFor(created.id);
+          try {
+            const made = (await apiClient.getInvoiceById(created.id)) as InvoiceDetail;
+            setInvoices((current) => [...(current ?? []).filter((i) => i.id !== made.id), made]);
+          } catch {
+            // the row reload below brings the bill in
+          }
           await onChanged();
           return;
         }
@@ -222,9 +232,7 @@ export function AppointmentBillDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Bill for {patient}</DialogTitle>
-          <DialogDescription>
-            {kind} · {displayCalendarDate(date)} · {appointment.slot}
-          </DialogDescription>
+          <DialogDescription>{kind}</DialogDescription>
         </DialogHeader>
 
         {invoices === null && !loadError && <p className="text-sm text-gray-600">Loading the bill…</p>}
@@ -347,7 +355,6 @@ export function AppointmentBillDialog({
             {feeInvalid && <p className="text-sm text-red-700">Enter the fee as an amount above 0, for example 500.</p>}
             {paidInvalid && <p className="text-sm text-red-700">Paid now can be from 0 up to the fee.</p>}
             {(paidValue ?? 0) > 0 && <ModePicker value={mode} onChange={setMode} label="Payment mode" reference={reference} onReference={setReference} />}
-            <p className="text-xs text-gray-600">Consultation and procedure fees are billed without GST.</p>
             <div className="flex gap-2">
               {adding && <Button variant="outline" className="h-10" onClick={() => setAdding(false)} disabled={saving}>Cancel</Button>}
               <Button className="h-10 flex-1" disabled={saving || feeValue === null || feeInvalid || paidInvalid || !line.trim()} onClick={() => void createBill()}>
@@ -361,7 +368,7 @@ export function AppointmentBillDialog({
           <Button variant="ghost" size="sm" className="self-start" onClick={() => setAdding(true)}>Add another bill</Button>
         )}
         {invoices && invoices.length === 0 && !access.createBill && (
-          <p className="text-sm text-gray-700">Not billed yet. The front desk creates the bill.</p>
+          <p className="text-sm text-gray-700">Not billed yet.</p>
         )}
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       </DialogContent>

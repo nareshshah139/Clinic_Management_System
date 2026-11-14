@@ -14,16 +14,14 @@ module.exports = journey(
     await ui.start("/dashboard");
     await ui.screen("dashboard");
     await ui.click(page.getByRole("link", { name: "Appointments" }), "Menu: Appointments");
-    await page.getByText("Doctor Calendar").waitFor();
+    await page.getByPlaceholder("Name or phone").waitFor();
     await page.locator('.group:has-text("Vikram Patil")').last().waitFor();
     ui.decide("Calendar: which doctor (pre-selected to the signed-in doctor)", true);
     await ui.screen("calendar");
 
     const row = page.locator('.group:has-text("Vikram Patil")').last();
     await row.scrollIntoViewIfNeeded();
-    const box = await row.boundingBox();
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await ui.click(row.locator('button[title="Start Visit"]'), "Calendar row Vikram Patil: START");
+    await ui.click(row.locator('button[title="Start visit"]'), "Calendar row Vikram Patil: Start visit");
     await page.getByText("Visit Documentation").first().waitFor();
     await ui.screen("visit-overview");
 

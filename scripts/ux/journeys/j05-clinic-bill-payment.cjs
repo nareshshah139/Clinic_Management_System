@@ -11,7 +11,7 @@ module.exports = journey(
     await ui.start("/dashboard");
     await ui.screen("dashboard");
     await ui.click(page.getByRole("link", { name: "Appointments" }), "Menu: Appointments");
-    await page.getByText("Doctor Calendar").waitFor();
+    await page.getByPlaceholder("Name or phone").waitFor();
     await sneha.waitFor();
     await ui.screen("calendar-before-billing");
 
@@ -24,9 +24,7 @@ module.exports = journey(
     ui.decide("Paid now amount", true);
     ui.decide("Payment mode", true);
     await ui.click(dialog.getByRole("button", { name: /^Create bill and record/ }), "Bill dialog: Create bill and record payment");
-    await dialog.getByText("Paid", { exact: true }).waitFor();
-    await ui.screen("sneha-paid-dialog");
-    await ui.click(page.getByRole("button", { name: "Close" }), "Bill dialog: Close");
+    await dialog.waitFor({ state: "hidden" });
     await sneha.locator('button[data-appointment-billing="PAID"]').waitFor();
     await ui.screen("calendar-sneha-paid");
 
@@ -37,9 +35,7 @@ module.exports = journey(
     ui.decide("Payment mode (UPI, not the Cash default)", false);
     await ui.click(dialog.getByRole("radio", { name: "UPI" }), "Bill dialog: mode UPI");
     await ui.click(dialog.getByRole("button", { name: /^Record .* payment$/ }), "Bill dialog: Record payment");
-    await dialog.getByText("Paid", { exact: true }).waitFor();
-    await ui.screen("rohan-paid-dialog");
-    await ui.click(page.getByRole("button", { name: "Close" }), "Bill dialog: Close");
+    await dialog.waitFor({ state: "hidden" });
     await rohan.locator('button[data-appointment-billing="PAID"]').waitFor();
     await ui.screen("calendar-both-paid");
 

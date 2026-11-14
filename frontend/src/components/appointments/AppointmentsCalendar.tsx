@@ -1,14 +1,13 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Calendar as CalendarIcon } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { usePrefilledPatient } from './usePrefilledPatient';
+import { usePatientBox } from './usePatientBox';
 import { gridHoursFor, loadDoctorDay, describeBlock, type DoctorDay } from '@/lib/doctor-availability';
 import { useToast } from '@/hooks/use-toast';
 import { createCleanupTimeouts, getISTDateString, formatPatientName } from '@/lib/utils';
@@ -17,10 +16,11 @@ import DoctorDayCalendar, { type ScopedAppointment } from '@/components/appointm
 import { Badge } from '@/components/ui/badge';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
-import { AlertCircle, Info } from 'lucide-react';
+import { AlertCircle, ChevronDown } from 'lucide-react';
 import { useOverbookConfirm } from './useOverbookConfirm';
-import { CALENDARS, CALENDAR_ORDER, type SlotChoice } from './appointment-calendars';
+import { CALENDARS, CALENDAR_ORDER, VISIT_TYPE_LABEL, type SlotChoice } from './appointment-calendars';
 import { overbookFlag } from '@/lib/overbooking';
+import { displayCalendarDate } from '@/lib/date-display';
 
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -30,7 +30,25 @@ interface AppointmentsCalendarProps {
   hideHeaderControls?: boolean;
   /** False for a viewer the server refuses rooms; the room filter then stays empty and rooms are never asked for. */
   readsRooms?: boolean;
+  /** The viewer's role, which decides the visit action a row and the details dialog offer. */
+  role?: string;
+  /** Controls the page puts first and last on the calendar's one toolbar row. */
+  leadingControls?: React.ReactNode;
+  trailingControls?: React.ReactNode;
 }
+
+const LEGEND_SWATCHES: [string, string][] = [
+  ['rgba(219, 234, 254, 0.95)', VISIT_TYPE_LABEL.OPD],
+  ['rgba(237, 233, 254, 0.95)', VISIT_TYPE_LABEL.PROCEDURE],
+  ['rgba(243, 244, 246, 0.95)', VISIT_TYPE_LABEL.TELEMED],
+  ['rgba(226, 232, 240, 0.95)', 'Completed'],
+  ['rgba(239, 246, 255, 0.95)', 'Past consultation'],
+  ['rgba(245, 237, 254, 0.95)', 'Past procedure'],
+  ['#22c55e', 'Newly Booked'],
+  ['#fbbf24', 'Booking In Progress'],
+];
+
+type SameDayBooking = { id: string; slot: string; status: string; doctor?: { id?: string; firstName?: string; lastName?: string } };
 
 /**
  * @cc [owner:nareshshah139,label:product] appointment-calendar-legend
@@ -47,6 +65,15 @@ interface AppointmentsCalendarProps {
  * @cc [owner:nareshshah139,label:product] optimistic-appointment-scope
  * An optimistic booking appears only for the doctor and date for which it was submitted.
  */
+async function findPatients(text: string): Promise<Patient[]> {
+  const res: any = await apiClient.getPatients({ search: text, limit: 10 });
+  return (res.data || res.patients || []).map((p: any) => ({
+    ...p,
+    firstName: p.firstName || p.name?.split(' ')[0] || '',
+    lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
+  }));
+}
+
 export default function AppointmentsCalendar({
   timeSlotConfig = {
     startHour: 9,
@@ -59,21 +86,24 @@ export default function AppointmentsCalendar({
   controlledDate,
   hideHeaderControls,
   readsRooms = true,
+  role,
+  leadingControls,
+  trailingControls,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
   const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
   const [slotConfig, setSlotConfig] = useState<TimeSlotConfig>(timeSlotConfig);
   const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
-  const [patientSearch, setPatientSearch] = useState<string>('');
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [panel, setPanel] = useState<'filters' | 'legend' | null>(null);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   // const [error, setError] = useState<string | null>(null);
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const patientBox = usePatientBox(findPatients);
+  const { box, type: typePatient, select: choosePatient, clear: clearPatient } = patientBox;
+  const selectedPatient = box.kind === 'selected' ? box.patient : null;
+  const selectedPatientId = selectedPatient?.id ?? '';
   const [bookingDetails, setBookingDetails] = useState<(Appointment & { calendar: AppointmentCalendar }) | null>(null);
-  const [searchingPatients, setSearchingPatients] = useState<boolean>(false);
   // const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [visitTypeFilter, setVisitTypeFilter] = useState<string>('ALL');
   const [roomFilter, setRoomFilter] = useState<string>('ALL');
@@ -99,7 +129,6 @@ export default function AppointmentsCalendar({
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
   const [pendingBooking, setPendingBooking] = useState<SlotChoice | null>(null);
   const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
-  const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
 
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
 
@@ -108,7 +137,7 @@ export default function AppointmentsCalendar({
     void fetchRooms();
   }, []);
 
-  usePrefilledPatient(prefillPatientId, selectedPatientId, setSelectedPatientId, setSelectedPatient);
+  usePrefilledPatient(prefillPatientId, patientBox);
 
   // Keep local slot config in sync with prop defaults
   useEffect(() => {
@@ -269,54 +298,9 @@ export default function AppointmentsCalendar({
     }
   };
 
-  const searchPatients = async (q: string) => {
-    setPatientSearch(q);
-
-    if (!q.trim()) {
-      setPatients([]);
-      setQuickCreateOpen(false);
-      setAutoPromptedForSearch(false);
-      setSearchingPatients(false);
-      return;
-    }
-
-    try {
-      setSearchingPatients(true);
-      const res: any = await apiClient.getPatients({ search: q, limit: 10 });
-      const matches = (res.data || res.patients || []).map((p: any) => ({
-        ...p,
-        firstName: p.firstName || p.name?.split(' ')[0] || '',
-        lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
-      }));
-      setPatients(matches);
-      if (matches.length === 0 && !autoPromptedForSearch) {
-        setQuickCreateOpen(true);
-        setAutoPromptedForSearch(true);
-      }
-      if (matches.length > 0) {
-        setQuickCreateOpen(false);
-        setAutoPromptedForSearch(false);
-      }
-      setSearchingPatients(false);
-    } catch (error) {
-      console.error('Failed to search patients', error);
-      setSearchingPatients(false);
-    }
-  };
-
   const handleBookingRequest = (slot: string, calendar: AppointmentCalendar) => {
-    if (!selectedPatient || selectedPatient.id !== selectedPatientId) {
+    if (!selectedPatient) {
       toast({ variant: 'destructive', title: 'Patient required', description: 'Select a patient before booking.' });
-      return;
-    }
-    const pid = selectedPatientId?.trim();
-    if (!pid) {
-      toast({
-        variant: 'destructive',
-        title: 'Patient required',
-        description: 'Select an existing patient or add a new one before booking.',
-      });
-      setQuickCreateOpen(true);
       return;
     }
 
@@ -347,10 +331,7 @@ export default function AppointmentsCalendar({
             phone: selectedPatient.phone,
             email: selectedPatient.email,
           }
-        : {
-            id: selectedPatientId,
-            name: patientSearch || 'Unknown Patient',
-          };
+        : { id: selectedPatientId, name: 'Unknown Patient' };
 
       const optimisticDoctor = doctors.find((d) => d.id === doctorId);
 
@@ -438,116 +419,160 @@ export default function AppointmentsCalendar({
     setPendingBooking(null);
   };
 
+  const [sameDay, setSameDay] = useState<{ key: string; bookings: SameDayBooking[] }>({ key: '', bookings: [] });
+  const sameDayKey = `${selectedPatientId}|${date}`;
+  useEffect(() => {
+    if (!selectedPatientId || !date) return;
+    let active = true;
+    apiClient.getAppointments({ patientId: selectedPatientId, date, limit: 20 })
+      .then((res: any) => {
+        if (active) setSameDay({ key: sameDayKey, bookings: res?.appointments || res?.data || [] });
+      })
+      .catch(() => {
+        if (active) setSameDay({ key: sameDayKey, bookings: [] });
+      });
+    return () => { active = false; };
+  }, [selectedPatientId, date, refreshKey, sameDayKey]);
+
+  const startSearchFromKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault();
+      clearPatient();
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      typePatient(e.key);
+    }
+  };
+
   const currentDoctor = doctors.find((d) => d.id === doctorId);
   const currentDoctorName = currentDoctor
     ? `Dr. ${currentDoctor.firstName ?? ''} ${currentDoctor.lastName ?? ''}`.trim()
     : 'the selected doctor';
+  const sameDayNote = (() => {
+    const booked = sameDay.key === sameDayKey && selectedPatient
+      ? sameDay.bookings.filter((a) => a.status !== 'CANCELLED').sort((a, b) => a.slot.localeCompare(b.slot))
+      : [];
+    if (!booked.length) return null;
+    const times = booked.map((a) => {
+      const other = a.doctor?.id && a.doctor.id !== doctorId ? `Dr. ${a.doctor.firstName ?? ''} ${a.doctor.lastName ?? ''}`.trim() : '';
+      return `${a.slot.split('-')[0]}${other ? ` with ${other}` : ''}`;
+    });
+    return `${formatPatientName(selectedPatient)} already has ${times.join(', ')} on ${displayCalendarDate(date)}`;
+  })();
   const isCurrentUserTheDoctor = googleStatus.connected && doctorGoogleStatus.connected
     && googleStatus.calendarId === doctorGoogleStatus.calendarId;
 
   return (
     <>
-      <Card>
-        <CardHeader className="space-y-2">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5" /> 
-                Doctor Calendar
-              </CardTitle>
-              <CardDescription>Click a free time in the Scheduled or Confirmed column to book into that calendar.</CardDescription>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          {leadingControls}
+          {!hideHeaderControls && (
+            <>
+              <div className="w-48">
+                <label className="text-sm text-gray-700">Doctor</label>
+                <Select value={doctorId} onValueChange={setDoctorId}>
+                  <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
+                  <SelectContent>
+                    {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-44">
+                <label className="text-sm text-gray-700">Date</label>
+                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+            </>
+          )}
+          <div className="min-w-56 flex-[3_1_16rem]">
+            <label className="text-sm text-gray-700">Patient</label>
+            <div className="relative">
+              <Input
+                placeholder="Name or phone"
+                value={box.kind === 'selected' ? `${formatPatientName(box.patient)} — ${box.patient.phone ?? ''}` : box.text}
+                readOnly={box.kind === 'selected'}
+                className={box.kind === 'selected' ? 'bg-gray-50 pr-16 font-medium' : undefined}
+                onChange={(e) => typePatient(e.target.value)}
+                onKeyDown={box.kind === 'selected' ? startSearchFromKey : undefined}
+                onPaste={box.kind === 'selected' ? (e) => { e.preventDefault(); typePatient(e.clipboardData.getData('text')); } : undefined}
+              />
+              {box.kind === 'selected' && (
+                <Button variant="ghost" size="sm" className="absolute right-1 top-1/2 h-7 -translate-y-1/2 px-2" onClick={clearPatient}>Clear</Button>
+              )}
             </div>
-            {googleConfigured !== false && (
+          </div>
+          {(['filters', 'legend'] as const).map((name) => (
+            <Button key={name} type="button" variant="outline" aria-expanded={panel === name} onClick={() => setPanel(panel === name ? null : name)}>
+              {name === 'filters' ? 'Filters' : 'Legend'}
+              <ChevronDown className={`h-4 w-4 transition-transform ${panel === name ? 'rotate-180' : ''}`} aria-hidden="true" />
+            </Button>
+          ))}
+          {trailingControls}
+          {googleConfigured !== false && (
+            googleStatus.connected ? (
               <div className="flex items-center gap-2">
-                {googleStatus.connected ? (
-                  <>
-                    <div className="flex items-center gap-1.5">
-                      <svg className="h-4 w-4" viewBox="0 0 24 24">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                      </svg>
-                      <span className="text-xs font-medium text-green-700">Syncing</span>
-                    </div>
-                    <Badge variant="outline" className="text-xs border-green-200 bg-green-50 text-green-700">
-                      {googleStatus.email || googleStatus.calendarId || 'Connected'}
-                    </Badge>
-                    <Button variant="ghost" size="sm" className="text-xs text-gray-500 hover:text-red-600" onClick={disconnectGoogle} disabled={googleLoading}>
-                      {googleLoading ? 'Disconnecting...' : 'Disconnect'}
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 border-gray-300"
-                    onClick={startGoogleConnect}
-                    disabled={googleLoading}
-                  >
-                    <svg className="h-4 w-4" viewBox="0 0 24 24">
+                <div className="flex items-center gap-1.5">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24">
                       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
                       <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                       <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                     </svg>
-                    {googleLoading ? 'Connecting...' : 'Sync with Google Calendar'}
-                  </Button>
-                )}
+                  <span className="text-xs font-medium text-green-700">Syncing</span>
+                </div>
+                <Badge variant="outline" className="text-xs border-green-200 bg-green-50 text-green-700">
+                  {googleStatus.email || googleStatus.calendarId || 'Connected'}
+                </Badge>
+                <Button variant="ghost" size="sm" className="text-xs text-gray-500 hover:text-red-600" onClick={disconnectGoogle} disabled={googleLoading}>
+                  {googleLoading ? 'Disconnecting...' : 'Disconnect'}
+                </Button>
               </div>
-            )}
-          </div>
+            ) : (
+              <Button variant="outline" className="gap-2 border-gray-300" onClick={startGoogleConnect} disabled={googleLoading}>
+                <svg className="h-4 w-4" viewBox="0 0 24 24">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                {googleLoading ? 'Connecting...' : 'Sync with Google Calendar'}
+              </Button>
+            )
+          )}
+        </div>
 
-          {/* Doctor-specific Google Calendar status */}
-          {googleConfigured !== false && doctorId && !doctorGoogleStatus.connected && googleStatus.connected && (
-            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>
-                {currentDoctorName}&apos;s Google Calendar is not connected. Appointments won&apos;t sync to their calendar.
-                {!isCurrentUserTheDoctor && ' Ask the doctor to log in and connect their own Google Calendar.'}
-              </span>
-            </div>
-          )}
-          {googleConfigured !== false && doctorId && doctorGoogleStatus.connected && (
-            <div className="flex items-center gap-2 rounded border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700">
-              <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span>
-                {currentDoctorName}&apos;s appointments will auto-sync to Google Calendar
-                {doctorGoogleStatus.email ? ` (${doctorGoogleStatus.email})` : ''}
-              </span>
-            </div>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-            {!hideHeaderControls && (
-              <>
-                <div>
-                  <label className="text-sm text-gray-700">Doctor</label>
-                  <Select value={doctorId} onValueChange={setDoctorId}>
-                    <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                    <SelectContent>
-                      {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-700">Date</label>
-                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                </div>
-              </>
-            )}
+        {googleConfigured !== false && doctorId && !doctorGoogleStatus.connected && googleStatus.connected && (
+          <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>
+              {currentDoctorName}&apos;s Google Calendar is not connected. Appointments won&apos;t sync to their calendar.
+              {!isCurrentUserTheDoctor && ' Ask the doctor to log in and connect their own Google Calendar.'}
+            </span>
+          </div>
+        )}
+        {googleConfigured !== false && doctorId && doctorGoogleStatus.connected && (
+          <div className="flex items-center gap-2 rounded border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700">
+            <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span>
+              {currentDoctorName}&apos;s appointments will auto-sync to Google Calendar
+              {doctorGoogleStatus.email ? ` (${doctorGoogleStatus.email})` : ''}
+            </span>
+          </div>
+        )}
+
+        {panel === 'filters' && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <label className="text-sm text-gray-700">Visit Type</label>
+              <label className="text-sm text-gray-700">Type</label>
               <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>
-                <SelectTrigger><SelectValue placeholder="All Types" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">All Types</SelectItem>
-                  <SelectItem value="OPD">OPD Consultation</SelectItem>
-                  <SelectItem value="PROCEDURE">Procedure</SelectItem>
-                  <SelectItem value="TELEMED">Telemedicine</SelectItem>
+                  <SelectItem value="ALL">All types</SelectItem>
+                  <SelectItem value="OPD">{VISIT_TYPE_LABEL.OPD}</SelectItem>
+                  <SelectItem value="PROCEDURE">{VISIT_TYPE_LABEL.PROCEDURE}</SelectItem>
+                  <SelectItem value="TELEMED">{VISIT_TYPE_LABEL.TELEMED}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -555,9 +580,9 @@ export default function AppointmentsCalendar({
               <div>
                 <label className="text-sm text-gray-700">Room</label>
                 <Select value={roomFilter} onValueChange={setRoomFilter}>
-                  <SelectTrigger><SelectValue placeholder="All Rooms" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="All rooms" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ALL">All Rooms</SelectItem>
+                    <SelectItem value="ALL">All rooms</SelectItem>
                     {rooms.map((room) => (
                       <SelectItem key={room.id} value={room.id}>{room.name} ({room.type})</SelectItem>
                     ))}
@@ -565,10 +590,6 @@ export default function AppointmentsCalendar({
                 </Select>
               </div>
             )}
-            <div>
-              <label className="text-sm text-gray-700">Patient</label>
-              <Input placeholder="Search patient by name/phone" value={patientSearch} onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }} />
-            </div>
             <div>
               <label className="text-sm text-gray-700">Grid</label>
               <Select value={String(gridMinutes)} onValueChange={(v: string) => setGridMinutes(parseInt(v, 10))}>
@@ -584,63 +605,35 @@ export default function AppointmentsCalendar({
               </Select>
             </div>
           </div>
+        )}
 
-          {selectedPatient && (
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">
-                Selected: {selectedPatient.firstName} {selectedPatient.lastName} — {selectedPatient.phone}
-              </Badge>
-              <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); setQuickCreateOpen(false); }}>Clear</Button>
-            </div>
-          )}
-
-          {!selectedPatientId && patientSearch && (
-            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              <AlertCircle className="h-4 w-4" />
-              <span>Select a patient from the list or add them as new before booking.</span>
-            </div>
-          )}
-
-          {patientSearch && patients.length > 0 && (
-            <div className="max-h-40 overflow-auto border rounded">
-              {patients.map((p) => (
-                <div
-                  key={p.id}
-                  className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                  onClick={() => {
-                    setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
-                    setSelectedPatientId(p.id);
-                    setSelectedPatient(p);
-                    setPatients([]);
-                    setQuickCreateOpen(false);
-                    setAutoPromptedForSearch(false);
-                  }}
-                >
-                  {p.firstName} {p.lastName} — {p.phone}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {patientSearch && patients.length === 0 && !selectedPatientId && !searchingPatients && (
-            <div className="rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-              <div className="flex items-center justify-between">
-                <span>No matching patients found.</span>
-                <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
-                  + Add "{patientSearch}" as a new patient
-                </Button>
+        {box.kind === 'searching' && box.results.length > 0 && (
+          <div className="max-h-40 overflow-auto border rounded">
+            {box.results.map((p) => (
+              <div
+                key={p.id}
+                className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                onClick={() => choosePatient(p)}
+              >
+                {p.firstName} {p.lastName} — {p.phone}
               </div>
-            </div>
-          )}
-          {patientSearch && !patients.length && !quickCreateOpen && !selectedPatientId && !searchingPatients && (
-            <div className="text-xs text-gray-500">
-              Tip: enter patient name and phone, then use "Add" to create a new record instantly.
-            </div>
-          )}
+            ))}
+          </div>
+        )}
 
-          {/* Legend */}
+        {box.kind === 'searching' && box.text.trim() && box.done && box.results.length === 0 && (
+          <div className="rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+            <div className="flex items-center justify-between">
+              <span>No matching patients found.</span>
+              <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
+                New patient
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {panel === 'legend' && (
           <div className="border rounded p-3 bg-gray-50">
-            <h3 className="font-semibold mb-2">Legend</h3>
             <ul className="mb-3 space-y-1 text-sm">
               {CALENDAR_ORDER.map((calendar) => (
                 <li key={calendar} className="flex items-start gap-2">
@@ -651,94 +644,71 @@ export default function AppointmentsCalendar({
               <li className="text-gray-700">Open a scheduled patient and press <strong>Confirm</strong> to move them to Confirmed at the same time.</li>
             </ul>
             <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(219, 234, 254, 0.95)' }} />
-                <span className="text-sm">OPD</span>
+              {LEGEND_SWATCHES.map(([color, label]) => (
+                <div key={label} className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: color }} />
+                  <span className="text-sm">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {sameDayNote && (
+          <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {sameDayNote}
+          </div>
+        )}
+
+        {!!bookingDetails && (
+          <div
+            className="p-4 rounded-r text-sm shadow-sm"
+            role="status"
+            style={{
+              backgroundColor: '#f0fdf4',
+              borderLeft: '4px solid #22c55e',
+              color: '#15803d'
+            }}
+          >
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5" style={{ color: '#22c55e' }} viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(237, 233, 254, 0.95)' }} />
-                <span className="text-sm">Procedure</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(243, 244, 246, 0.95)' }} />
-                <span className="text-sm">Telemedicine</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(226, 232, 240, 0.95)' }} />
-                <span className="text-sm">Completed</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(239, 246, 255, 0.95)' }} />
-                <span className="text-sm">Past (OPD)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(245, 237, 254, 0.95)' }} />
-                <span className="text-sm">Past (Procedure)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#22c55e' }} />
-                <span className="text-sm">Newly Booked</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#fbbf24' }} />
-                <span className="text-sm">Booking In Progress</span>
+              <div className="ml-3">
+                <p className="font-medium">
+                  Booked: {bookingDetails.patient?.name || formatPatientName(selectedPatient)}, {displayCalendarDate(date)}, {bookingDetails.slot}
+                </p>
               </div>
             </div>
           </div>
+        )}
 
-          {!!bookingDetails && (
-            <div 
-              className="p-4 rounded-r text-sm shadow-sm"
-              role="status"
-              style={{
-                backgroundColor: '#f0fdf4',
-                borderLeft: '4px solid #22c55e',
-                color: '#15803d'
-              }}
-            >
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5" style={{ color: '#22c55e' }} viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="font-medium">Appointment Successfully Booked!</p>
-                  <p style={{ color: '#16a34a' }}>
-                    {bookingDetails.patient?.name || `${selectedPatient?.firstName ?? ''} ${selectedPatient?.lastName ?? ''}`.trim()} 
-                    {' '} scheduled for {bookingDetails.slot} in the {CALENDARS[bookingDetails.calendar].title} calendar
-                    {bookingDetails.room && ` in ${bookingDetails.room.name}`}
-                    {bookingDetails.visitType && ` (${bookingDetails.visitType})`}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+        {doctorDay && doctorDay.blocked.length > 0 && (
+          <div role="status" className="p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
+            Not bookable: {doctorDay.blocked.map(describeBlock).join('; ')}
+          </div>
+        )}
 
-          {doctorDay && doctorDay.blocked.length > 0 && (
-            <div role="status" className="p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
-              Not bookable: {doctorDay.blocked.map(describeBlock).join('; ')}
-            </div>
-          )}
-
-          <DoctorDayCalendar
-            doctorId={doctorId}
-            date={date}
-            recentBookedSlot={recentBookedSlot}
-            visitTypeFilter={visitTypeFilter}
-            roomFilter={roomFilter}
-            onSelectSlot={handleBookingRequest}
-            refreshKey={refreshKey}
-            bookingInProgress={loading && pendingBooking ? pendingBooking : undefined}
-            optimisticAppointment={optimisticAppointment?.doctorId === doctorId && optimisticAppointment.date === date ? optimisticAppointment : undefined}
-            onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
-            disableSlotBooking={!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId}
-            selectedRoomName={selectedRoom?.name}
-            timeSlotConfig={{ ...slotConfig, stepMinutes: Math.max(10, gridMinutes) }}
-            maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}
-          />
-        </CardContent>
-      </Card>
+        <DoctorDayCalendar
+          doctorId={doctorId}
+          date={date}
+          recentBookedSlot={recentBookedSlot}
+          visitTypeFilter={visitTypeFilter}
+          roomFilter={roomFilter}
+          onSelectSlot={handleBookingRequest}
+          refreshKey={refreshKey}
+          bookingInProgress={loading && pendingBooking ? pendingBooking : undefined}
+          optimisticAppointment={optimisticAppointment?.doctorId === doctorId && optimisticAppointment.date === date ? optimisticAppointment : undefined}
+          onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
+          disableSlotBooking={!selectedPatient}
+          role={role}
+          selectedRoomName={selectedRoom?.name}
+          timeSlotConfig={{ ...slotConfig, stepMinutes: Math.max(10, gridMinutes) }}
+          maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}
+        />
+      </div>
 
       <AppointmentBookingDialog
         open={bookingDialogOpen}
@@ -755,21 +725,11 @@ export default function AppointmentsCalendar({
 
       <PatientQuickCreateDialog
         open={quickCreateOpen}
-        onOpenChange={(open: boolean) => {
-          setQuickCreateOpen(open);
-          if (!open && !selectedPatientId) {
-            setPatientSearch('');
-            setAutoPromptedForSearch(false);
-          }
-        }}
-        initialName={patientSearch}
+        onOpenChange={setQuickCreateOpen}
+        initialName={box.kind === 'searching' ? box.text : ''}
         onPatientCreated={(patient) => {
-          setSelectedPatientId(patient.id);
-          setSelectedPatient(patient);
-          setPatientSearch(`${patient.firstName ?? ''} ${patient.lastName ?? ''} — ${patient.phone ?? ''}`.trim());
-          setPatients([]);
+          choosePatient(patient);
           setQuickCreateOpen(false);
-          setAutoPromptedForSearch(false);
         }}
       />
     </>

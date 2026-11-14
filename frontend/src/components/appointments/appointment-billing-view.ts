@@ -1,7 +1,7 @@
 import type { AppointmentBilling, BillType } from '@/lib/types';
 
 export const BILL_TYPE_LABEL: Record<BillType, string> = {
-  FIRST_CONSULTATION: 'First consultation',
+  FIRST_CONSULTATION: 'First visit',
   REVIEW: 'Review',
   PROCEDURE: 'Procedure',
 };
@@ -17,13 +17,6 @@ export function parseRupees(text: string): number | null {
 /** The roles the fee list admits (OWNER and ADMIN); every other role gets the fee only through Create bill. */
 export const FEE_EDITOR_ROLES = ['OWNER', 'ADMIN'];
 export const FEE_LIST_PATH = '/dashboard/fees';
-
-/** The bill type on a desktop row, where the name and status need the room. */
-export const BILL_TYPE_SHORT: Record<BillType, string> = {
-  FIRST_CONSULTATION: 'First',
-  REVIEW: 'Review',
-  PROCEDURE: 'Procedure',
-};
 
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 export const rupee = (value: number) => rupees.format(value);

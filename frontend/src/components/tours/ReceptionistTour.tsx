@@ -393,7 +393,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               <div class="flex items-start gap-2">
                 <span class="text-blue-600 font-bold">✓</span>
                 <div>
-                  <strong>Future bookings:</strong> Pick any upcoming date (up to 3 months ahead)
+                  <strong>Future bookings:</strong> Pick any upcoming date
                 </div>
               </div>
               <div class="flex items-start gap-2">
@@ -404,65 +404,12 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
             </div>
             <div class="text-xs text-gray-600 mt-2 p-2 bg-gray-50 rounded-md">
-              <strong>Quick tip:</strong> Use keyboard to type dates faster (YYYY-MM-DD format)
+              <strong>Quick tip:</strong> The page opens on today every time. Type a date with the keyboard or pick it from the calendar.
             </div>
           </div>
         `,
         position: 'bottom',
         tooltipClass: 'introjs-medium-tooltip',
-      },
-      {
-        element: '[data-tour="view-tabs"]',
-        intro: `
-          <div class="space-y-3">
-            <div class="flex items-center gap-2">
-              <span class="text-2xl">👁️</span>
-              <h4 class="text-lg font-semibold">Step 3: Choose Your View</h4>
-            </div>
-            <p class="text-sm leading-relaxed mb-3">
-              Two powerful ways to visualize and manage appointments:
-            </p>
-            
-            <div class="grid gap-3">
-              <div class="bg-gradient-to-r from-blue-50 to-blue-100 p-3 rounded-lg border border-blue-200">
-                <div class="flex items-center gap-2 mb-2">
-                  <div class="w-6 h-6 bg-blue-600 rounded-md flex items-center justify-center text-white text-xs font-bold">C</div>
-                  <strong class="text-blue-900">Calendar View</strong>
-                  <span class="ml-auto text-xs bg-blue-600 text-white px-2 py-1 rounded-md">Recommended</span>
-                </div>
-                <ul class="text-xs text-blue-900 space-y-1 ml-8">
-                  <li>• Visual timeline of the entire day</li>
-                  <li>• See appointment gaps at a glance</li>
-                  <li>• Drag to select custom time ranges</li>
-                  <li>• Perfect for busy days</li>
-                </ul>
-              </div>
-              
-              <div class="bg-gradient-to-r from-green-50 to-green-100 p-3 rounded-lg border border-green-200">
-                <div class="flex items-center gap-2 mb-2">
-                  <div class="w-6 h-6 bg-green-600 rounded-md flex items-center justify-center text-white text-xs font-bold">S</div>
-                  <strong class="text-green-900">Slots View</strong>
-                </div>
-                <ul class="text-xs text-green-900 space-y-1 ml-8">
-                  <li>• Traditional time slot grid</li>
-                  <li>• Quick 15-minute increments</li>
-                  <li>• Familiar booking interface</li>
-                  <li>• Great for quick bookings</li>
-                </ul>
-              </div>
-            </div>
-            
-            <div class="bg-purple-50 border-l-4 border-purple-500 p-3 rounded-md text-xs mt-3">
-              <strong class="text-purple-900">💡 When to use what:</strong>
-              <p class="text-purple-800 mt-1">
-                Use <strong>Calendar</strong> when the schedule is complex or you need to see the big picture. 
-                Use <strong>Slots</strong> for straightforward, quick bookings.
-              </p>
-            </div>
-          </div>
-        `,
-        position: 'bottom',
-        tooltipClass: 'introjs-large-tooltip',
       },
       {
         intro: `
@@ -481,9 +428,9 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                   <div class="flex-1">
                     <p class="font-semibold text-sm text-gray-900">Search for Patient</p>
                     <p class="text-xs text-gray-700 mt-1">
-                      Look at the top of the calendar. Type patient's name or phone number in the search box.
+                      Look at the top of the calendar. Type the patient's name or phone number in the Patient box.
                       <span class="block mt-1 text-green-700 font-medium">
-                        → New patient? Click "Add Patient" button first
+                        → New patient? Press "New patient" when nothing matches
                       </span>
                     </p>
                   </div>
@@ -494,7 +441,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                   <div class="flex-1">
                     <p class="font-semibold text-sm text-gray-900">Select the Patient</p>
                     <p class="text-xs text-gray-700 mt-1">
-                      Click on the patient from the search results. Their name will appear in a blue badge.
+                      Type at least 3 letters of the name, or the start of the phone number. When one patient matches, they are picked for you and shown in the box. When several match, click the right one. To pick someone else, press Clear or just start typing again.
                     </p>
                   </div>
                 </div>
@@ -517,7 +464,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                   <div class="flex-1">
                     <p class="font-semibold text-sm text-gray-900">Configure & Confirm</p>
                     <p class="text-xs text-gray-700 mt-1">
-                      A dialog opens → Choose duration (15/30/45/60/90 min) → Add notes if needed → Click "Book Appointment"
+                      A dialog opens → Change the duration or room if needed → Press "Book"
                     </p>
                   </div>
                 </div>
@@ -527,8 +474,8 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <div class="bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded-md text-sm">
               <p class="font-semibold text-yellow-900">⚡ Speed Booking Shortcut:</p>
               <p class="text-yellow-800 text-xs mt-1">
-                Most appointments are 30 minutes. Select patient → click slot → press Enter. 
-                The system auto-selects 30-min duration!
+                Pick the patient → click a free time → press Book. 
+                The dialog starts with the length of the time you clicked.
               </p>
             </div>
           </div>
@@ -551,16 +498,16 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <div class="space-y-2 mt-3">
               <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(219, 234, 254, 0.5); border-left: 4px solid #3b82f6;">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-sm"
-                     style="background-color: rgba(219, 234, 254, 0.95); color: #1e40af;">OPD</div>
+                     style="background-color: rgba(219, 234, 254, 0.95); color: #1e40af;">Consult</div>
                 <div class="flex-1">
-                  <p class="font-bold text-blue-900">OPD Consultations (Light Blue)</p>
+                  <p class="font-bold text-blue-900">Consultations (Light Blue)</p>
                   <p class="text-xs text-blue-800">Standard outpatient appointments for regular consultations</p>
                 </div>
               </div>
               
               <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(237, 233, 254, 0.5); border-left: 4px solid #a855f7;">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-xs"
-                     style="background-color: rgba(237, 233, 254, 0.95); color: #6b21a8;">PROC</div>
+                     style="background-color: rgba(237, 233, 254, 0.95); color: #6b21a8;">Proc.</div>
                 <div class="flex-1">
                   <p class="font-bold text-purple-900">Procedures (Light Purple)</p>
                   <p class="text-xs text-purple-800">Clinical procedures, treatments, laser sessions, and aesthetic services</p>
@@ -569,9 +516,9 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               
               <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(243, 244, 246, 0.8); border-left: 4px solid #9ca3af;">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-xs"
-                     style="background-color: rgba(243, 244, 246, 0.95); color: #374151;">TELE</div>
+                     style="background-color: rgba(243, 244, 246, 0.95); color: #374151;">Video</div>
                 <div class="flex-1">
-                  <p class="font-bold text-gray-900">Telemedicine (Light Gray)</p>
+                  <p class="font-bold text-gray-900">Video calls (Light Gray)</p>
                   <p class="text-xs text-gray-800">Virtual consultations via phone or video call</p>
                 </div>
               </div>
@@ -608,17 +555,16 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <div class="p-3 rounded-lg text-xs mt-3" style="background-color: rgba(219, 234, 254, 0.5); border: 1px solid #93c5fd;">
               <p class="font-semibold text-blue-900 mb-1">ℹ️ Viewing Appointment Status:</p>
               <p class="text-blue-800">
-                To see if a patient is <strong>SCHEDULED, CHECKED-IN, or IN-PROGRESS</strong>, 
-                <strong>double-click the appointment</strong> to open the details dialog. 
-                The status is shown as text in the dialog.
+                Each appointment shows its status as a small coloured dot, or in words when there is room: 
+                <strong>Scheduled, Confirmed, Checked in, In progress or Completed</strong>. 
+                <strong>Click the appointment</strong> to see the status in the details dialog too.
               </p>
             </div>
             
             <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(237, 233, 254, 0.5); border: 1px solid #d8b4fe;">
               <p class="font-semibold text-purple-900 mb-1">🔍 Finding the Legend:</p>
               <p class="text-purple-800">
-                The calendar page shows a color legend at the top explaining all colors. 
-                Refer to it anytime you need a reminder of what each color means!
+                Press Legend above the calendar to see what each color means.
               </p>
             </div>
             
@@ -652,33 +598,23 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </p>
               
               <div class="space-y-3 text-sm">
-                <div class="bg-white p-3 rounded-md border-l-4 border-orange-400">
-                  <p class="font-bold text-gray-900 mb-1">
-                    <span class="bg-orange-200 px-2 py-1 rounded-md text-xs mr-2">SINGLE CLICK</span>
-                    Select Appointment
-                  </p>
-                  <p class="text-xs text-gray-700">
-                    Highlights the appointment. Shows quick info in a side panel (if available).
-                  </p>
-                </div>
-                
                 <div class="bg-white p-3 rounded-md border-l-4 border-orange-600">
                   <p class="font-bold text-gray-900 mb-1">
-                    <span class="bg-orange-400 text-white px-2 py-1 rounded-md text-xs mr-2">DOUBLE CLICK</span>
+                    <span class="bg-orange-400 text-white px-2 py-1 rounded-md text-xs mr-2">CLICK</span>
                     Open Full Details
                   </p>
                   <p class="text-xs text-gray-700 mb-2">
-                    Opens a dialog with complete appointment information and action buttons.
+                    Click an appointment to open a dialog with the patient, time, type, room, status and bill, and the buttons below.
                   </p>
                   <div class="bg-orange-50 p-2 rounded-md text-xs mt-2">
                     <p class="font-semibold text-orange-900 mb-1">Available actions:</p>
                     <ul class="space-y-1 text-orange-800 ml-3">
-                      <li>• <strong>Confirm:</strong> Move a Scheduled patient to the Confirmed calendar after they confirm on the call</li>
-                      <li>• <strong>Edit:</strong> Change time, duration, or notes</li>
+                      <li>• <strong>Confirm:</strong> Move a Scheduled patient to the Confirmed calendar after they confirm on the call. The same Confirm button is on the Scheduled row.</li>
+                      <li>• <strong>Move to Scheduled:</strong> Send a Confirmed patient back to Scheduled at the same time</li>
                       <li>• <strong>Reschedule:</strong> Move to different date/time</li>
-                      <li>• <strong>Check-in:</strong> Mark patient as arrived</li>
-                      <li>• <strong>Cancel:</strong> Cancel with reason</li>
-                      <li>• <strong>Complete:</strong> Mark consultation done</li>
+                      <li>• <strong>Cancel Appointment:</strong> Cancel it after you confirm</li>
+                      <li>• <strong>Open bill:</strong> See or take the clinic bill, where your role allows it</li>
+                      <li>• <strong>Start visit:</strong> Shown to doctors, admins and owners only</li>
                     </ul>
                   </div>
                 </div>
@@ -691,25 +627,25 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 <div class="flex gap-2">
                   <span class="text-pink-600 font-bold">1.</span>
                   <p class="text-pink-900">
-                    <strong>"Patient running 15 mins late"</strong> → Double-click → Edit → Adjust time by 15 min
+                    <strong>"Patient running 15 mins late"</strong> → Click the appointment → Reschedule → Click a free time
                   </p>
                 </div>
                 <div class="flex gap-2">
                   <span class="text-purple-600 font-bold">2.</span>
                   <p class="text-purple-900">
-                    <strong>"Patient wants to reschedule"</strong> → Double-click → Reschedule → Pick new date/time
+                    <strong>"Patient wants to reschedule"</strong> → Click the appointment → Reschedule → Pick new date/time
                   </p>
                 </div>
                 <div class="flex gap-2">
                   <span class="text-blue-600 font-bold">3.</span>
                   <p class="text-blue-900">
-                    <strong>"Patient just walked in"</strong> → Double-click → Check-in button → Assign room
+                    <strong>"Patient just walked in"</strong> → Type their name in Patient → Click a free time in Confirmed → Press Book
                   </p>
                 </div>
                 <div class="flex gap-2">
                   <span class="text-red-600 font-bold">4.</span>
                   <p class="text-red-900">
-                    <strong>"Patient no-show"</strong> → Double-click → Cancel → Select reason "No-show"
+                    <strong>"Patient will not come"</strong> → Click the appointment → Cancel Appointment → Yes, Cancel Appointment
                   </p>
                 </div>
               </div>
@@ -737,7 +673,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                   <div class="flex-1">
                     <p class="font-bold text-teal-900 text-sm">Drag to Select Time Range</p>
                     <p class="text-xs text-teal-800 mt-1">
-                      In Calendar view, <strong>click and drag</strong> across multiple time slots to book longer appointments. 
+                      <strong>Click and drag</strong> across multiple time slots to book longer appointments. 
                       Perfect for initial consultations or procedures!
                     </p>
                   </div>
@@ -748,9 +684,9 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 <div class="flex items-start gap-2">
                   <span class="text-2xl">💾</span>
                   <div class="flex-1">
-                    <p class="font-bold text-blue-900 text-sm">Auto-Save Your Preferences</p>
+                    <p class="font-bold text-blue-900 text-sm">Remembers Your Doctor</p>
                     <p class="text-xs text-blue-800 mt-1">
-                      The system remembers your last selected doctor and date. When you return, you'll be right where you left off!
+                      The system remembers your last selected doctor. The date always opens on today, so you start with the day's calendar.
                     </p>
                   </div>
                 </div>
@@ -774,8 +710,8 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                   <div class="flex-1">
                     <p class="font-bold text-amber-900 text-sm">Quick Patient Search</p>
                     <p class="text-xs text-amber-800 mt-1">
-                      Type just <strong>3-4 letters</strong> of a name or <strong>last 4 digits</strong> of phone number. 
-                      The smart search finds patients instantly!
+                      Type at least <strong>3 letters</strong> of a name, or the <strong>first digits</strong> of a phone number. 
+                      When only one patient matches, they are picked for you.
                     </p>
                   </div>
                 </div>
@@ -785,9 +721,9 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 <div class="flex items-start gap-2">
                   <span class="text-2xl">📋</span>
                   <div class="flex-1">
-                    <p class="font-bold text-green-900 text-sm">Batch Operations</p>
+                    <p class="font-bold text-green-900 text-sm">Confirming Several Patients</p>
                     <p class="text-xs text-green-800 mt-1">
-                      Checking in multiple patients? Keep the appointment details dialog open and use keyboard shortcuts (Enter to confirm, Esc to close).
+                      Calling patients to confirm? Press <strong>Confirm</strong> on each Scheduled row. You do not need to open the details first.
                     </p>
                   </div>
                 </div>
@@ -801,8 +737,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 <span class="text-xl">⭐</span>
               </p>
               <p class="text-sm text-purple-900 text-center leading-relaxed">
-                Use <strong>Calendar View</strong> during peak hours to see the big picture. 
-                Switch to <strong>Slots View</strong> during quiet times for quick bookings. 
+                Keep the <strong>Confirmed</strong> column in view during peak hours to see the doctor's real day. 
                 The "Quick Guide" button (Info icon) is always there if you need a refresher!
               </p>
             </div>
@@ -840,8 +775,8 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                     <div class="text-purple-700">Or drag for longer</div>
                   </div>
                   <div class="text-center p-2 bg-orange-50 rounded-md">
-                    <div class="font-bold text-orange-900">✓ Double-Click</div>
-                    <div class="text-orange-700">To modify existing</div>
+                    <div class="font-bold text-orange-900">✓ Click</div>
+                    <div class="text-orange-700">To open or change existing</div>
                   </div>
                 </div>
               </div>

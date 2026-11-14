@@ -1,4 +1,4 @@
-import { useEffect, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, type MutableRefObject } from 'react';
 import { apiClient } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import type { Patient } from '@/lib/types';
@@ -10,30 +10,23 @@ import type { Patient } from '@/lib/types';
  */
 export function usePrefilledPatient(
   prefillId: string | undefined,
-  selectedId: string,
-  setSelectedId: Dispatch<SetStateAction<string>>,
-  setPatient: Dispatch<SetStateAction<Patient | null>>,
+  box: { select: (patient: Patient) => void; clear: () => void; turn: MutableRefObject<number> },
 ) {
+  const { select, clear, turn } = box;
   useEffect(() => {
-    if (prefillId) {
-      setPatient(null);
-      setSelectedId(prefillId);
-    }
-  }, [prefillId, setPatient, setSelectedId]);
-
-  useEffect(() => {
-    if (!prefillId || selectedId !== prefillId) return;
+    if (!prefillId) return;
+    const startedAt = turn.current;
+    const newer = () => turn.current !== startedAt;
     let active = true;
     void apiClient.getPatient(prefillId).then((result) => {
       const patient = result as Patient;
       if (!patient || patient.id !== prefillId) throw new Error('Patient lookup did not match');
-      if (active) setPatient(patient);
+      if (active && !newer()) select(patient);
     }).catch(() => {
-      if (!active) return;
-      setPatient(null);
-      setSelectedId('');
+      if (!active || newer()) return;
+      clear();
       toast({ title: 'Patient unavailable', description: 'Search for the patient before booking.', variant: 'destructive' });
     });
     return () => { active = false; };
-  }, [prefillId, selectedId, setPatient, setSelectedId]);
+  }, [prefillId, select, clear, turn]);
 }

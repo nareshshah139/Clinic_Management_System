@@ -29,7 +29,8 @@ import { AppointmentStatus } from '@cms/shared-types';
 import { useOverbookConfirm } from './useOverbookConfirm';
 import { overbookFlag } from '@/lib/overbooking';
 import { displayCalendarDate } from '@/lib/date-display';
-import { CALENDARS, CALENDAR_ORDER, canMove, type SlotChoice } from './appointment-calendars';
+import { CALENDARS, CALENDAR_ORDER, STATUS_LABEL, canMove, visitTypeLabel, type SlotChoice } from './appointment-calendars';
+import { visitActionFor } from '@/lib/appointment-access';
 import CalendarColumn, { type SlotAction } from './CalendarColumn';
 import { AppointmentBillDialog } from './AppointmentBillDialog';
 import { BILL_TYPE_LABEL, billingChip } from './appointment-billing-view';
@@ -55,6 +56,8 @@ export interface DoctorDayCalendarProps {
   onAppointmentUpdate?: () => void;
   timeSlotConfig?: TimeSlotConfig;
   disableSlotBooking?: boolean;
+  /** The viewer's role, which decides the visit action a row and the details dialog offer. */
+  role?: string;
   selectedRoomName?: string;
   /** Patients the doctor may see in one slot of one calendar. 1 (the default) keeps every occupied tile closed. */
   maxBookingsPerSlot?: number;
@@ -128,6 +131,7 @@ function DoctorDayCalendarForSelection({
     timezone: 'Asia/Kolkata'
   },
   disableSlotBooking = false,
+  role,
   selectedRoomName,
   maxBookingsPerSlot = 1,
   move,
@@ -428,16 +432,17 @@ function DoctorDayCalendarForSelection({
 
   const selectedMove = selectedAppointment ? CALENDARS[selectedAppointment.calendar].move : null;
   const offersMove = !!selectedAppointment && selectedAppointment.status === selectedMove?.offeredWhile;
+  const visitAction = selectedAppointment ? visitActionFor(role, selectedAppointment) : null;
 
   return (
     <>
-      <Card>
+      <Card className="gap-0 py-0">
         <CardContent className="p-3 sm:p-4">
           {(visitTypeFilter !== 'ALL' || roomFilter !== 'ALL') && (
             <div className="mb-4 p-3 bg-blue-50 rounded-lg">
               <div className="text-sm text-blue-700">
                 <span className="font-medium">Filters Active:</span>
-                {visitTypeFilter !== 'ALL' && <Badge variant="secondary" className="ml-2">{visitTypeFilter}</Badge>}
+                {visitTypeFilter !== 'ALL' && <Badge variant="secondary" className="ml-2">{visitTypeLabel(visitTypeFilter)}</Badge>}
                 {roomFilterLabel && (
                   <Badge variant="outline" className="ml-2">
                     Room: {roomFilterLabel}
@@ -501,9 +506,11 @@ function DoctorDayCalendarForSelection({
                   maxBookingsPerSlot={maxBookingsPerSlot}
                   slotAction={slotActionFor(calendar)}
                   busy={showLoadingOverlay}
+                  role={role}
                   onOpen={setSelectedAppointment}
                   onReschedule={(appointment) => setMove({ appointment, from: date })}
                   onStartVisit={handleStartVisit}
+                  onMoveCalendar={(appointment, target) => void moveAtSameTime(appointment, target)}
                   onOpenBill={billAccess.read ? (appointment) => setBillForId(appointment.id) : undefined}
                   onBook={(slot) => onSelectSlot?.(slot, calendar)}
                   onMove={(slot) => void moveInto({ slot, calendar })}
@@ -524,7 +531,6 @@ function DoctorDayCalendarForSelection({
 
       <AppointmentBillDialog
         appointment={billFor}
-        date={date}
         access={billAccess}
         onClose={() => setBillForId(null)}
         onChanged={async () => {
@@ -585,7 +591,7 @@ function DoctorDayCalendarForSelection({
               <div className="flex items-center gap-2">
                 <span className="text-gray-600">Type:</span>
                 <Badge variant={selectedAppointment.visitType === 'PROCEDURE' ? 'destructive' : selectedAppointment.visitType === 'TELEMED' ? 'secondary' : 'default'}>
-                  {selectedAppointment.visitType || 'OPD'}
+                  {visitTypeLabel(selectedAppointment.visitType)}
                 </Badge>
               </div>
               {selectedAppointment.visitType === 'PROCEDURE' && selectedAppointment.notes && (
@@ -595,7 +601,7 @@ function DoctorDayCalendarForSelection({
                 <div><span className="text-gray-600">Room:</span> {selectedAppointment.room.name} ({selectedAppointment.room.type})</div>
               )}
               {selectedAppointment.status && (
-                <div><span className="text-gray-600">Status:</span> {selectedAppointment.status}</div>
+                <div><span className="text-gray-600">Status:</span> {STATUS_LABEL[selectedAppointment.status] ?? selectedAppointment.status}</div>
               )}
             </div>
           )}
@@ -605,10 +611,12 @@ function DoctorDayCalendarForSelection({
             </Button>
             {selectedAppointment && !selectedAppointment.id?.startsWith('optimistic-') && (
               <>
-                <Button variant={offersMove && selectedMove?.primary ? 'outline' : 'default'} onClick={() => handleStartVisit(selectedAppointment)} disabled={placing}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Start Visit
-                </Button>
+                {visitAction && (
+                  <Button variant={offersMove && selectedMove?.primary ? 'outline' : 'default'} onClick={() => handleStartVisit(selectedAppointment)} disabled={placing}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    {visitAction}
+                  </Button>
+                )}
                 {canMove(selectedAppointment.status) && (
                   <Button
                     variant="outline"
@@ -662,7 +670,7 @@ function DoctorDayCalendarForSelection({
                 <div><span className="font-medium">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
                 <div><span className="font-medium">Date:</span> {date}</div>
                 <div><span className="font-medium">Time:</span> {selectedAppointment.slot}</div>
-                <div><span className="font-medium">Type:</span> {selectedAppointment.visitType}</div>
+                <div><span className="font-medium">Type:</span> {visitTypeLabel(selectedAppointment.visitType)}</div>
               </div>
             </div>
           )}

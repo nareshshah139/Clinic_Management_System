@@ -1,13 +1,13 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
-import { useState } from 'react';
 import AppointmentsCalendar from '@/components/appointments/AppointmentsCalendar';
-import AppointmentScheduler from '@/components/appointments/AppointmentScheduler';
 import { apiClient } from '@/lib/api';
 import { usePrefilledPatient } from '@/components/appointments/usePrefilledPatient';
+import { usePatientBox } from '@/components/appointments/usePatientBox';
 
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }), toast: jest.fn() }));
 jest.mock('@/lib/api', () => ({ apiClient: {
   getPatient: jest.fn().mockResolvedValue({ id: 'patient-1', name: 'Chosen Patient' }),
+  getAppointments: jest.fn().mockResolvedValue({ appointments: [] }),
   getUsers: jest.fn().mockResolvedValue({ users: [] }),
   getUser: jest.fn().mockResolvedValue({}),
   getRooms: jest.fn().mockResolvedValue({ rooms: [] }),
@@ -24,8 +24,8 @@ jest.mock('@/components/appointments/AppointmentBookingDialog', () => ({
   default: ({ open, patient }: any) => open ? <div>Booking for {patient?.name || 'missing patient'}</div> : null,
 }));
 
-it.each([AppointmentsCalendar, AppointmentScheduler])('loads the chart patient before opening booking', async (Component) => {
-  render(<Component prefillPatientId="patient-1" controlledDoctorId="doctor-1" controlledDate="2099-01-01" hideHeaderControls />);
+it('loads the chart patient before opening booking', async () => {
+  render(<AppointmentsCalendar prefillPatientId="patient-1" controlledDoctorId="doctor-1" controlledDate="2099-01-01" hideHeaderControls />);
   await waitFor(() => expect(apiClient.getPatient).toHaveBeenCalledWith('patient-1'));
   await screen.findByRole('button', { name: 'Clear' });
   fireEvent.click(screen.getByRole('button', { name: 'Choose slot' }));
@@ -36,13 +36,22 @@ it('does not replace a newer selection when the chart lookup finishes late', asy
   let finish!: (value: any) => void;
   jest.mocked(apiClient.getPatient).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }) as any);
   const { result } = renderHook(() => {
-    const [id, setId] = useState('');
-    const [patient, setPatient] = useState<any>(null);
-    usePrefilledPatient('patient-1', id, setId, setPatient);
-    return { id, patient, setId, setPatient };
+    const patientBox = usePatientBox(async () => []);
+    usePrefilledPatient('patient-1', patientBox);
+    return patientBox;
   });
   await waitFor(() => expect(finish).toBeDefined());
-  act(() => { result.current.setId('patient-2'); result.current.setPatient({ id: 'patient-2', name: 'New choice' }); });
+  act(() => { result.current.select({ id: 'patient-2', name: 'New choice' } as any); });
   await act(async () => finish({ id: 'patient-1', name: 'Old choice' }));
-  expect(result.current.patient).toEqual({ id: 'patient-2', name: 'New choice' });
+  expect(result.current.box).toEqual({ kind: 'selected', patient: { id: 'patient-2', name: 'New choice' } });
+});
+
+it('clears the selection and says so when the chart lookup fails', async () => {
+  jest.mocked(apiClient.getPatient).mockRejectedValueOnce(new Error('gone'));
+  render(<AppointmentsCalendar prefillPatientId="patient-1" controlledDoctorId="doctor-1" controlledDate="2099-01-01" hideHeaderControls />);
+  await waitFor(() => expect(apiClient.getPatient).toHaveBeenCalled());
+  expect(screen.getByPlaceholderText('Name or phone')).toHaveValue('');
+  expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Choose slot' }));
+  expect(screen.queryByText(/Booking for/)).toBeNull();
 });

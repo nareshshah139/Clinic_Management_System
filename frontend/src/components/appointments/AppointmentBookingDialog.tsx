@@ -6,8 +6,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
@@ -36,6 +34,8 @@ interface AppointmentBookingDialogProps {
   }) => Promise<void>;
   onCancel: () => void;
 }
+
+const NO_ROOM = 'none';
 
 export default function AppointmentBookingDialog({
   open,
@@ -172,7 +172,7 @@ export default function AppointmentBookingDialog({
     const validationErrors: string[] = [];
     
     if (!visitType) {
-      validationErrors.push('Please select an appointment type');
+      validationErrors.push('Please select a type');
     }
     
     if (!patient) {
@@ -250,9 +250,9 @@ export default function AppointmentBookingDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Book Appointment</DialogTitle>
+          <DialogTitle>Book appointment</DialogTitle>
         </DialogHeader>
         
         <div className="space-y-6">
@@ -280,7 +280,6 @@ export default function AppointmentBookingDialog({
                 <SelectItem value="90">90 minutes</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-gray-500 mt-1">Adjusts end time and validates room availability for the new duration.</p>
           </div>
 
           {slotCheck.blocked && (
@@ -306,7 +305,7 @@ export default function AppointmentBookingDialog({
 
           {/* Appointment Type Selection */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Appointment Type *</label>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Type</label>
             <Select value={visitType} onValueChange={(value: VisitType) => {
               setVisitType(value);
               setSelectedRoomId('');
@@ -317,16 +316,11 @@ export default function AppointmentBookingDialog({
                 <SelectValue placeholder="Select appointment type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="OPD">OPD Consultation</SelectItem>
+                <SelectItem value="OPD">Consultation</SelectItem>
                 <SelectItem value="PROCEDURE">Procedure</SelectItem>
-                <SelectItem value="TELEMED">Telemedicine</SelectItem>
+                <SelectItem value="TELEMED">Video call</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-gray-500 mt-1">
-              {visitType === 'OPD' && 'Regular outpatient consultation'}
-              {visitType === 'PROCEDURE' && 'Medical procedure or surgery - room selection required'}
-              {visitType === 'TELEMED' && 'Virtual consultation via video call'}
-            </p>
           </div>
 
           {visitType === 'PROCEDURE' && (
@@ -337,94 +331,41 @@ export default function AppointmentBookingDialog({
                 value={procedureName}
                 onChange={(e) => setProcedureName(e.target.value)}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                This will be shown on the calendar next to the patient name for quick reference.
-              </p>
             </div>
           )}
 
-          {/* Room Selection and Availability */}
           {visitType && (
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-3 block">
-                Room Availability for {visitType} {visitType === 'PROCEDURE' && '*'}
+              <label className="text-sm font-medium text-gray-700 mb-2 block">
+                Room ({visitType === 'PROCEDURE' ? 'required' : 'optional'})
               </label>
-              
-              {fetchingRooms ? (
-                <div className="text-center py-8">Loading rooms...</div>
-              ) : fetchingSchedules ? (
-                <div className="text-center py-8">Loading room schedules...</div>
+              {fetchingRooms || fetchingSchedules ? (
+                <div className="text-sm text-gray-500">Loading rooms...</div>
               ) : relevantRooms.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No {visitType.toLowerCase()} rooms available</p>
-                  <p className="text-xs mt-2">
-                    You can still book this appointment. Room assignment can be done later.
-                  </p>
-                </div>
+                <div className="text-sm text-gray-500">No rooms available</div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {relevantRooms.map((room) => {
-                    const isAvailable = isSlotAvailable(room.id, derivedSlot);
-                    const schedule = roomSchedules[room.id];
-                    const conflictingAppointment = schedule?.appointments.find(apt => doTimeSlotsOverlap(apt.slot, derivedSlot));
-                    
-                    return (
-                      <Card 
-                        key={room.id} 
-                        className={`cursor-pointer transition-all ${
-                          selectedRoomId === room.id 
-                            ? 'ring-2 ring-blue-500 bg-blue-50'
-                            : isAvailable 
-                            ? 'hover:bg-gray-50'
-                            : 'bg-red-50 border-red-200'
-                        }`}
-                        onClick={() => {
-                          if (isAvailable) {
-                            setSelectedRoomId(selectedRoomId === room.id ? '' : room.id);
-                            setErrors([]); // Clear errors when selecting a room
-                          }
-                        }}
-                      >
-                        <CardHeader className="pb-2">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-lg">{room.name}</CardTitle>
-                            <Badge 
-                              variant={isAvailable ? 'default' : 'destructive'}
-                              className="text-xs"
-                            >
-                              {isAvailable ? 'Available' : 'Occupied'}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-gray-600">{room.type} • Capacity: {room.capacity}</p>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          {!isAvailable && conflictingAppointment && (
-                            <div className="text-sm text-red-600">
-                              <p className="font-medium">Conflict with:</p>
-                              <p>{conflictingAppointment.patient.name}</p>
-                              <p>Dr. {conflictingAppointment.doctor.firstName} {conflictingAppointment.doctor.lastName}</p>
-                            </div>
-                          )}
-                          {isAvailable && (
-                            <p className="text-sm text-green-600">✓ Available for {derivedSlot}</p>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-              
-              {visitType === 'PROCEDURE' && relevantRooms.length > 0 && (
-                <p className="text-xs text-gray-500 mt-2">
-                  * Room selection is required for procedures. Click on an available room to select it.
-                </p>
-              )}
-              
-              {visitType !== 'PROCEDURE' && (
-                <p className="text-xs text-gray-500 mt-2">
-                  Room selection is optional for {visitType.toLowerCase()} appointments.
-                </p>
+                <Select
+                  value={selectedRoomId || (visitType === 'PROCEDURE' ? '' : NO_ROOM)}
+                  onValueChange={(value: string) => {
+                    setSelectedRoomId(value === NO_ROOM ? '' : value);
+                    setErrors([]);
+                  }}
+                >
+                  <SelectTrigger aria-label="Room">
+                    <SelectValue placeholder="Choose a room" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visitType !== 'PROCEDURE' && <SelectItem value={NO_ROOM}>No room</SelectItem>}
+                    {relevantRooms.map((room) => {
+                      const isAvailable = isSlotAvailable(room.id, derivedSlot);
+                      return (
+                        <SelectItem key={room.id} value={room.id} disabled={!isAvailable}>
+                          {room.name}{isAvailable ? '' : ' (in use)'}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
               )}
             </div>
           )}
@@ -438,7 +379,7 @@ export default function AppointmentBookingDialog({
               onClick={handleConfirm} 
               disabled={loading || Boolean(slotCheck.blocked) || (visitType === 'PROCEDURE' && !selectedRoomId)}
             >
-              {loading ? 'Booking...' : 'Confirm Booking'}
+              {loading ? 'Booking...' : 'Book'}
             </Button>
           </div>
         </div>
