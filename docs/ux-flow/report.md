@@ -137,6 +137,20 @@ A new check, `scripts/contracts/compare-attachment.cjs`, compares every product 
 | Rule comparison against the starting commit | Pass |
 | Production build (`npm run build`) | Pass |
 
+### Older browser diagnostics
+
+The repo carries browser diagnostics that CI does not run. A helper ran them against the merged code, and ran each failing one against the starting commit as well.
+
+| Result | Diagnostics |
+|---|---|
+| Pass | `cr04-personal-history-browser`, `cr16-visit-history-browser` |
+| Pass after an update for a screen that changed on purpose | `verify-language`, `verify-control-freedom`, `clinic-ux-browser` |
+| Fail, and failed the same way before this run | `appointment-display-browser` (calendar case; its four dashboard cases pass), `calendar-day-layout-browser`, `calendar-overbooking-browser`, `cr02-regimen-browser`, `cr09-pharmacy-billing-browser`, `cr15-purchase-match-browser`, `invoice-stock-flow-browser`, `inventory-status-browser`, `inventory-status-regressions-browser`, `inventory-simplicity-browser`, `verify-ux` |
+| Reports changed network calls, as it is built to | `verify-ux-source` (nine files; not audited one by one) |
+| Not run | The print and PDF diagnostics, and those that need a real backend or database |
+
+`verify-ux` fails on colour contrast that predates this run: white text on the success, warning and destructive colours measures 3.30, 3.19 and 2.89 to 1 (`frontend/src/app/globals.css`).
+
 ## Decisions the owner made
 
 1. **Photos are optional** for completing a visit.
@@ -183,7 +197,9 @@ Found during the run and not fixed:
 10. **Seven components that nothing imports** (4,411 lines) were not deleted.
 11. **Names.** "Bill", "New sale" and "Medicine" are applied on the journeys' screens only.
 12. **Commit trailers.** 25 unit commits carry trailers naming the helper model. Rewriting pushed history was blocked.
-13. **GitHub issues were not filed.** `ux-flow` normally files one per proposal. They post under the owner's name and were not asked for.
+13. **Eleven older browser diagnostics fail**, as they did before this run. Most wait for text or fixtures the app no longer matches. They need repairing or retiring.
+14. **Status colours fail contrast.** White text on the success, warning and destructive colours is below 4.5 to 1.
+15. **GitHub issues were not filed.** `ux-flow` normally files one per proposal. They post under the owner's name and were not asked for.
 
 ## Already minimal
 
