@@ -948,34 +948,33 @@ function VisitsPageInner() {
         </div>
         <div className="flex gap-2">
           <QuickGuide
-            title="Visit Documentation Guide"
+            title="Visit guide"
             triggerVariant="ghost"
             sections={[
               {
-                title: "Documenting the Visit",
+                title: "The visit",
                 items: [
-                  "Fill out sections in order: Vitals → History → Examination → Assessment → Plan",
-                  "Use expandable sections to keep the form organized",
-                  "Save progress automatically as you work",
-                  "Mark visit as complete when finished"
+                  "The visit opens on the Prescription tab",
+                  "Type the chief complaint or the diagnosis",
+                  "Add medicines; a new empty row appears after each one",
+                  "Press Complete visit; it saves the prescription and returns you to the dashboard"
                 ]
               },
               {
                 title: "Prescriptions",
                 items: [
-                  "Add medications from the drug database",
-                  "Configure dosage, frequency, and duration",
-                  "Add special dermatology instructions (application site, timing, etc.)",
-                  "Preview and print prescription for the patient"
+                  "Pick medicines from the list as you type",
+                  "Set frequency and duration with the presets, or type them",
+                  "Create Prescription saves without completing the visit",
+                  "Go to pharmacy appears once the prescription is saved"
                 ]
               },
               {
-                title: "Photos & Documentation",
+                title: "Vitals, photos and lab tests",
                 items: [
-                  "Upload photos to document patient condition",
-                  "Photos are automatically attached to the visit",
-                  "Use photos to track treatment progress",
-                  "All photos are stored securely in patient records"
+                  "Fill them only when there is something to record",
+                  "A single photo uploads straight away",
+                  "Change a photo's position on its card"
                 ]
               }
             ]}
