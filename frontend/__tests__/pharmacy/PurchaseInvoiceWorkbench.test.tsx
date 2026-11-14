@@ -2693,7 +2693,7 @@ describe('PurchaseInvoiceWorkbench', () => {
 
   it('fills pack, unit, HSN, GST and MRP from the saved product picked for a typed exact name', async () => {
     const drug = { id: 'drug-tr', name: 'Tretinoin Cream 0.025% 20g', price: 165, manufacturerName: 'Glenmark', packSizeLabel: '1 unit', catalogIssues: [] };
-    api.suggestPharmacyPurchaseMasterMatches.mockImplementation(async ({ items }: any) => ({ matches: items.map((item: any, lineIndex: number) => ({
+    api.suggestPharmacyPurchaseMasterMatches.mockImplementation(async (data: Record<string, unknown>) => ({ matches: (data.items as unknown[]).map((item, lineIndex) => ({
       lineIndex, ocr: item, matchLabel: 'Same product', recommendedAction: 'MATCH_EXISTING', catalogueResolution: { state: 'missing' },
       candidates: [{ drug, score: 68, confidence: 'MEDIUM', reasons: ['name exact match'] }] })) }));
     api.confirmPharmacyPurchaseMaster.mockResolvedValue({ action: 'MATCH_EXISTING', drug, message: 'Matched',
