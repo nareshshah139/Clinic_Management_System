@@ -6,6 +6,8 @@ import { reportRange, type ReportRange } from './report-range';
 import { Prisma } from '@prisma/client';
 import { viewerGrants } from '../../shared/access/viewer-grants';
 import { readStockPage } from '../inventory/inventory-stock-query';
+import { clinicBillsDue } from '../billing/billing.service';
+import { clinicBillAccess } from '../billing/billing-access';
 import {
   RevenueReportResponseDto,
   PaymentBreakdownDto,
@@ -1141,16 +1143,21 @@ export class ReportsService {
     const now = new Date();
     const in48Hours = new Date(Date.now() + 48 * 60 * 60 * 1000);
     const noStock = { rows: [] as any[], total: 0 };
-    const openBills = { branchId, status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] }, balance: { gt: 0 } };
+    const openBills = clinicBillsDue(branchId);
 
-    const [billsDue, billsDueSum, low, expiring, pendingPaymentsList, upcomingAppointments] = await Promise.all([
+    const [billsDue, billsDueSum, billAccess, low, expiring, pendingPaymentsList, upcomingAppointments] = await Promise.all([
       !sees.invoices ? [] : this.prisma.newInvoice.findMany({
         where: openBills,
-        select: { id: true, invoiceNo: true, balance: true, status: true, createdAt: true, dueDate: true, patient: { select: { id: true, name: true } } },
+        select: {
+          id: true, invoiceNo: true, balance: true, status: true, createdAt: true, dueDate: true,
+          patient: { select: { id: true, name: true } },
+          appointment: { select: { id: true, doctorId: true, date: true } },
+        },
         orderBy: { createdAt: 'asc' },
         take: 10,
       }),
       !sees.invoices ? null : this.prisma.newInvoice.aggregate({ where: openBills, _count: true, _sum: { balance: true } }),
+      sees.invoices && viewer.id && viewer.role ? clinicBillAccess(this.prisma, { id: viewer.id, role: viewer.role }) : null,
       !sees.lowStock ? noStock : readStockPage(this.prisma, branchId, { stock: 'LOW', sortBy: 'available', limit: 10 }, (item) => item),
       !sees.expiry ? noStock : readStockPage(this.prisma, branchId, { expiryMonths: '3', sortBy: 'expiryDate', limit: 10 }, (item) => item),
       !sees.payments ? [] : this.prisma.newPayment.findMany({
@@ -1186,6 +1193,7 @@ export class ReportsService {
         upcomingAppointments: upcomingAppointments.length,
       },
       billsDueBalance: billsDueSum?._sum.balance ?? 0,
+      canTakePayment: billAccess?.takePayment ?? false,
       billsDue: billsDue.map((b) => ({
         id: b.id,
         invoiceNo: b.invoiceNo,
@@ -1194,6 +1202,7 @@ export class ReportsService {
         dueDate: b.dueDate,
         billDate: clinicDay(b.createdAt),
         patient: b.patient,
+        appointment: b.appointment && { id: b.appointment.id, doctorId: b.appointment.doctorId, day: b.appointment.date.toISOString().slice(0, 10) },
       })),
       lowStockAlerts: low.rows.map((i: any) => ({
         itemId: i.id,

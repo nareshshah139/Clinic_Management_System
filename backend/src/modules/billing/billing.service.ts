@@ -23,6 +23,9 @@ import {
 const RUPEES = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const PAYMENT_INVOICE = { invoice: { select: { id: true, invoiceNo: true, total: true } } } as const;
 
+/** A clinic bill is due while anything is left to pay on it; clinic bills carry no status, so the balance alone decides. */
+export const clinicBillsDue = (branchId: string) => ({ branchId, balance: { gt: 0 } });
+
 @Injectable()
 export class BillingService {
   constructor(private prisma: PrismaService, private invoiceNumbers: InvoiceNumbersService) {}
@@ -645,11 +648,7 @@ export class BillingService {
   async getOutstandingInvoices(query: OutstandingInvoicesDto, branchId: string) {
     const { patientId, limit = 50 } = query;
 
-    const where: any = {
-      branchId,
-      ...(patientId && { patientId }),
-      balance: { gt: 0 },
-    };
+    const where = { ...clinicBillsDue(branchId), ...(patientId && { patientId }) };
 
     const invoices = await this.prisma.newInvoice.findMany({
       where,
