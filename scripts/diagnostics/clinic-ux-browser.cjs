@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const os = require('node:os');
+const path = require('node:path');
 const puppeteer = require('puppeteer-core');
 
 const base = process.env.CLINIC_URL || 'http://127.0.0.1:3107';
@@ -89,7 +91,7 @@ async function main() {
     console.log('PASS visit explains incomplete section markers and clinical-validation limit');
     const visitOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     assert.equal(visitOverflow, false, 'visit page overflows at 1440px');
-    await page.screenshot({ path: '/private/tmp/clinic-visit-after.png' });
+    await page.screenshot({ path: path.join(os.tmpdir(), 'clinic-visit-after.png') });
     await page.locator('[data-tour="help-button"]').click();
     await page.waitForSelector('.introjs-nextbutton');
     await page.focus('.introjs-nextbutton'); await page.keyboard.press('Enter');

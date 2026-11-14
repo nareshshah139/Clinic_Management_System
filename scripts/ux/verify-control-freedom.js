@@ -40,6 +40,16 @@ async function main() {
     await page.waitForFunction(() => document.body.innerText.includes('Navigation Check'));
     const input = 'input[placeholder="Find a patient"]';
     await page.waitForSelector(input);
+    const clickOutsideSearch = async () => {
+      const point = await page.$eval(input, element => {
+        const box = element.closest('div.relative').parentElement;
+        const x = innerWidth - 12;
+        const y = Math.round(box.getBoundingClientRect().bottom + 24);
+        return box.contains(document.elementFromPoint(x, y)) ? null : { x, y };
+      });
+      assert.ok(point, 'The outside click must land outside the search box and its results');
+      await page.mouse.click(point.x, point.y);
+    };
     await page.type(input, 'Search');
     assert.equal(await page.evaluate(() => document.body.innerText.includes('No results found')), false, 'Debounced search must not report an empty result before responding');
     await page.waitForFunction(() => document.body.innerText.includes('Search Fixture'));
@@ -53,12 +63,12 @@ async function main() {
     delayedQuery = undefined;
     await page.focus(input);
     await page.waitForFunction(() => document.body.innerText.includes('Search Fixture'));
-    await page.click('h1');
+    await clickOutsideSearch();
     assert.equal(await page.evaluate(() => document.body.innerText.includes('Search Fixture')), false);
     console.log('Query retained, focus retained, results reopen, outside click dismisses: PASS');
     for (const [query, dismiss] of [
       ['Delayed escape', () => page.keyboard.press('Escape')],
-      ['Delayed outside', () => page.click('h1')],
+      ['Delayed outside', () => clickOutsideSearch()],
     ]) {
       delayedQuery = query;
       const started = new Promise(resolve => { searchStarted = resolve; });
