@@ -21,7 +21,7 @@ describe('Printer profile defaults per doctor', () => {
       create: jest.fn(),
     },
   };
-  const service = new PrescriptionsService(db, {} as any);
+  const service = new PrescriptionsService(db, {} as any, {} as any);
   const applied = async (userId: string, doctorId?: string) =>
     (await service.listPrinterProfiles('branch', userId, doctorId)).filter(p => p.appliesByDefault).map(p => p.id);
 

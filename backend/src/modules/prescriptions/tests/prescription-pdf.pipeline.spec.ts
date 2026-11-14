@@ -75,7 +75,7 @@ describe('Prescription -> saved readback -> PDF pipeline', () => {
     };
     const module = await Test.createTestingModule({
       controllers: [PrescriptionsController],
-      providers: [{ provide: PrescriptionsService, useValue: new PrescriptionsService(db, {} as any) }],
+      providers: [{ provide: PrescriptionsService, useValue: new PrescriptionsService(db, {} as any, {} as any) }],
     }).overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true }).compile();
     app = module.createNestApplication();
     if (process.env.RX_BROWSER_TEST === '1') {

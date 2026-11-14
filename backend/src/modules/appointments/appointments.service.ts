@@ -29,6 +29,7 @@ import {
 } from './appointment-calendar';
 import { AppointmentStatus, Prisma, VisitType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { WhatsAppTemplatesService } from '../whatsapp-templates/whatsapp-templates.service';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
 import { clinicBillAccess } from '../billing/billing-access';
@@ -77,6 +78,8 @@ export class AppointmentsService {
     private whatsappTemplates?: WhatsAppTemplatesService,
     @Optional()
     private googleCalendar?: GoogleCalendarService,
+    @Optional()
+    private whatsapp?: WhatsAppService,
   ) {}
 
   async create(
@@ -177,8 +180,6 @@ export class AppointmentsService {
       let useTemplate = false;
       let templateName: string | undefined;
       let templateLanguage: string | undefined;
-      let waOverrideToken: string | undefined;
-      let waOverridePhoneId: string | undefined;
       const meta = this.parseMetadataRecord(doctorSettings?.metadata);
       allowWhatsApp = !!meta?.whatsappAutoConfirmAppointments;
       useTemplate = !!meta?.whatsappUseTemplate;
@@ -189,15 +190,6 @@ export class AppointmentsService {
       templateLanguage =
         typeof meta?.whatsappTemplateLanguage === 'string'
           ? meta.whatsappTemplateLanguage
-          : undefined;
-      // Optional per-doctor credential overrides
-      waOverrideToken =
-        typeof meta?.whatsappAccessToken === 'string'
-          ? meta.whatsappAccessToken
-          : undefined;
-      waOverridePhoneId =
-        typeof meta?.whatsappPhoneNumberId === 'string'
-          ? meta.whatsappPhoneNumberId
           : undefined;
 
       const doctorName =
@@ -222,11 +214,7 @@ export class AppointmentsService {
           .catch(() => void 0);
       }
       // WhatsApp (only if doctor opted in)
-      if (allowWhatsApp && appointment.patient?.phone) {
-        // Format phone number as E.164 for WhatsApp (add + prefix if not present)
-        const e164 = appointment.patient.phone.startsWith('+')
-          ? appointment.patient.phone
-          : `+${appointment.patient.phone}`;
+      if (allowWhatsApp && appointment.patient?.phone && this.whatsapp) {
         const touchpoint = 'appointment_confirmation';
         const template =
           useTemplate && this.whatsappTemplates
@@ -253,25 +241,27 @@ export class AppointmentsService {
                   branch?.phone || process.env.WHATSAPP_HELP_NUMBER || '',
               })
             : undefined;
-        const whatsappPayload =
+        const target = {
+          branchId,
+          to: appointment.patient.phone,
+          kind: 'APPOINTMENT' as const,
+          doctorId,
+        };
+        void (
           template && template.name
-            ? {
+            ? this.whatsapp.sendTemplate({
+                ...target,
                 template: {
                   name: template.name,
                   language: template.language || templateLanguage || 'en',
                   components: templateComponents,
                 },
-              }
-            : { text: template?.contentText || summary };
-
-        this.notifications
-          .sendWhatsApp({
-            toPhoneE164: e164,
-            overrideToken: waOverrideToken,
-            overridePhoneId: waOverridePhoneId,
-            ...whatsappPayload,
-          })
-          .catch(() => void 0);
+              })
+            : this.whatsapp.sendText({
+                ...target,
+                text: template?.contentText || summary,
+              })
+        );
       }
     }
 

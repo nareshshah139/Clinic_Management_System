@@ -49,7 +49,7 @@ databaseTests('Visit and prescription lifecycle against PostgreSQL', () => {
     doctor = await db.user.create({ data: { branchId, firstName: 'Synthetic', lastName: 'Doctor', email: `${randomUUID()}@example.invalid`, password: 'NO_LOGIN', role: 'DOCTOR' } });
     foreignPatient = await db.patient.create({ data: { branchId: otherBranchId, name: 'SYNTHETIC Foreign', phone: '0000000000', gender: 'FEMALE' } });
     visits = new VisitsService(db as PrismaService);
-    prescriptions = new PrescriptionsService(db as PrismaService, {} as NotificationsService);
+    prescriptions = new PrescriptionsService(db as PrismaService, {} as NotificationsService, {} as any);
     const module = await Test.createTestingModule({
       controllers: [PatientsController, PrescriptionsController],
       providers: [

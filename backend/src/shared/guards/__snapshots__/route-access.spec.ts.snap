@@ -28,6 +28,7 @@ DELETE /visits/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIS
 DELETE /visits/:id/photos/:attachmentId | roles: DOCTOR,ADMIN,OWNER | permissions: -
 DELETE /visits/:id/photos/legacy | roles: DOCTOR,ADMIN,OWNER | permissions: -
 DELETE /visits/photos/draft/:patientId/:dateStr/:attachmentId | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+DELETE /whatsapp/connection | roles: OWNER,ADMIN | permissions: -
 DELETE /whatsapp/templates/:id | roles: ADMIN,DOCTOR | permissions: -
 GET / | public
 GET /appointments | roles: ADMIN,DOCTOR,NURSE,RECEPTION,MANAGER | permissions: appointments:read
@@ -257,7 +258,11 @@ GET /visits/photos/draft/:patientId | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RE
 GET /visits/photos/draft/:patientId/:dateStr/:attachmentId | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /visits/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /visits/transcribe/health | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /whatsapp/connection | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /whatsapp/connection/templates | roles: OWNER,ADMIN | permissions: -
+GET /whatsapp/messages | roles: OWNER,ADMIN | permissions: -
 GET /whatsapp/templates | roles: ADMIN,DOCTOR | permissions: -
+GET /whatsapp/webhook | public
 PATCH /appointments/:id | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:update
 PATCH /appointments/rooms/:roomId | roles: ADMIN,DOCTOR | permissions: rooms:manage
 PATCH /billing/invoices/:id | roles: ADMIN | permissions: billing:invoice:update
@@ -294,6 +299,7 @@ PATCH /users/branches/:id | roles: OWNER,ADMIN | permissions: -
 PATCH /users/permissions/:id | roles: OWNER,ADMIN | permissions: -
 PATCH /users/roles/:id | roles: OWNER,ADMIN | permissions: -
 PATCH /visits/:id | roles: DOCTOR,ADMIN,OWNER | permissions: -
+PATCH /whatsapp/connection/prescription-template | roles: OWNER,ADMIN | permissions: -
 PATCH /whatsapp/templates/:id | roles: ADMIN,DOCTOR | permissions: -
 POST /appointments | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:create
 POST /appointments/:id/reschedule | roles: ADMIN,DOCTOR,RECEPTION | permissions: appointments:reschedule
@@ -454,11 +460,14 @@ POST /visits/transcribe/chunk | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTIO
 POST /visits/transcribe/chunk-complete | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /visits/transcribe/chunk-start | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /visits/translate | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /whatsapp/connection/test | roles: OWNER,ADMIN | permissions: -
 POST /whatsapp/templates | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/:id/test | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/generate | roles: ADMIN,DOCTOR | permissions: -
+POST /whatsapp/webhook | public
 PUT /billing/fees/:billType | roles: ADMIN | permissions: -
 PUT /doctor-availability/:doctorId/booking-limit | roles: ADMIN,OWNER,DOCTOR | permissions: -
 PUT /doctor-availability/:doctorId/hours | roles: ADMIN,OWNER,DOCTOR | permissions: -
-PUT /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR | permissions: -"
+PUT /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR | permissions: -
+PUT /whatsapp/connection | roles: OWNER,ADMIN | permissions: -"
 `;

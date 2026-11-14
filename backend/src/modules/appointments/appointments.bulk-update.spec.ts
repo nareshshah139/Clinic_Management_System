@@ -21,7 +21,7 @@ describe('AppointmentsService.bulkUpdate', () => {
       providers: [
         AppointmentsService,
         { provide: PrismaService, useValue: prismaMock },
-        { provide: NotificationsService, useValue: { sendEmail: jest.fn(), sendWhatsApp: jest.fn() } },
+        { provide: NotificationsService, useValue: { sendEmail: jest.fn() } },
       ],
     }).compile();
 

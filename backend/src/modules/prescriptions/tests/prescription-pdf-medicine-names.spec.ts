@@ -12,7 +12,7 @@ it('reprints an old prescription without catalogue codes or pack sizes and keeps
     visit: { consultationType: 'IN_PERSON', createdAt: new Date('2026-09-27'), patient: { name: 'Synthetic Patient' }, doctor: { firstName: 'Test', lastName: 'Doctor' } },
   };
   const db = { prescription: { findFirst: jest.fn().mockResolvedValue(prescription) }, prescriptionPrintEvent: { create: jest.fn().mockResolvedValue({}) } };
-  const service = new PrescriptionsService(db as any, {} as any);
+  const service = new PrescriptionsService(db as any, {} as any, {} as any);
   const result = await service.generatePrescriptionPdf('old-rx', 'branch', {});
   const text = execFileSync(process.env.PDFTOTEXT_BIN || 'pdftotext', ['-', '-'], { input: Buffer.from(result.fileUrl.split(',')[1], 'base64') }).toString();
   expect(text.split('\n').filter((line) => /^\d\. /.test(line))).toEqual([

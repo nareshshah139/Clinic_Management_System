@@ -6,7 +6,7 @@ import { UpdatePatientDto } from './dto/update-patient.dto';
 import { LinkPatientUserDto } from './dto/link-patient-user.dto';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '@prisma/client';
-import { NotificationsService } from '../notifications/notifications.service';
+import { WhatsAppService, acceptedOrThrow } from '../whatsapp/whatsapp.service';
 import { Prisma } from '@prisma/client';
 import { generatePatientCode } from '../../shared/ids/patient-code.util';
 import { readUpcomingAppointments } from '../appointments/upcoming-appointments';
@@ -20,7 +20,7 @@ const portalUserSelect = { id: true, firstName: true, lastName: true, email: tru
 
 @Injectable()
 export class PatientsService {
-  constructor(private prisma: PrismaService, private usersService: UsersService, private notifications: NotificationsService) {}
+  constructor(private prisma: PrismaService, private usersService: UsersService, private whatsapp: WhatsAppService) {}
 
   /**
    * Normalize phone number for consistent storage (removes + and non-digit characters)
@@ -333,12 +333,8 @@ export class PatientsService {
     summaryLines.push('', 'Please arrive 10 minutes early.');
     const text = summaryLines.join('\n');
 
-    // Format phone number as E.164 for WhatsApp (add + prefix)
-    // Phone is stored without +, so we add it for E.164 format
-    const e164 = patient.phone.startsWith('+') ? patient.phone : `+${patient.phone}`;
-    await this.notifications.sendWhatsApp({ toPhoneE164: e164, text });
-
-    return { success: true };
+    const { wamid } = acceptedOrThrow(await this.whatsapp.sendText({ branchId, to: patient.phone, text, kind: 'APPOINTMENT' }));
+    return { success: true, wamid };
   }
 
   async update(id: string, updatePatientDto: UpdatePatientDto, branchId: string) {

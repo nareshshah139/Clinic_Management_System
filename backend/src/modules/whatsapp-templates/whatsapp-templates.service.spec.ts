@@ -1,7 +1,7 @@
 import { WhatsAppTemplatesService } from './whatsapp-templates.service';
 
 describe('WhatsAppTemplatesService', () => {
-  const mockNotifications = { sendWhatsApp: jest.fn() };
+  const mockWhatsApp = { sendTemplate: jest.fn() };
 
   const makePrisma = () => {
     const prisma: any = {
@@ -22,7 +22,7 @@ describe('WhatsAppTemplatesService', () => {
 
   it('rejects content placeholders not declared in variables', async () => {
     const prisma = makePrisma();
-    const svc = new WhatsAppTemplatesService(prisma as any, mockNotifications as any);
+    const svc = new WhatsAppTemplatesService(prisma as any, mockWhatsApp as any);
 
     await expect(
       svc.create('branch-1', null, {
@@ -48,9 +48,10 @@ describe('WhatsAppTemplatesService', () => {
       variables: JSON.stringify(['patient_name', 'appointment_date']),
       isActive: true,
     });
-    const svc = new WhatsAppTemplatesService(prisma as any, mockNotifications as any);
+    const svc = new WhatsAppTemplatesService(prisma as any, mockWhatsApp as any);
 
-    await svc.sendTest({
+    mockWhatsApp.sendTemplate.mockResolvedValue({ status: 'ACCEPTED', wamid: 'wamid.TPL', source: 'CLINIC' });
+    const sent = await svc.sendTest({
       templateId: 'tpl-1',
       branchId: 'branch-1',
       requesterId: 'admin-1',
@@ -62,10 +63,30 @@ describe('WhatsAppTemplatesService', () => {
       },
     });
 
-    expect(mockNotifications.sendWhatsApp).toHaveBeenCalledTimes(1);
-    const payload = mockNotifications.sendWhatsApp.mock.calls[0][0];
-    expect(payload.template.components?.[0]?.parameters?.[0]?.text).toBe('Alice');
-    expect(payload.template.components?.[0]?.parameters?.[1]?.text).toBe('2099-01-01');
+    expect(sent).toEqual({ success: true, wamid: 'wamid.TPL' });
+    expect(mockWhatsApp.sendTemplate.mock.calls).toEqual([
+      [
+        {
+          branchId: 'branch-1',
+          to: '+18005550199',
+          kind: 'TEXT',
+          template: {
+            name: 'appt_template',
+            language: 'en',
+            components: [{ type: 'body', parameters: [{ type: 'text', text: 'Alice' }, { type: 'text', text: '2099-01-01' }] }],
+          },
+        },
+      ],
+    ]);
+  });
+
+  it('reports the reason when WhatsApp refuses the test message', async () => {
+    const prisma = makePrisma();
+    prisma.whatsAppTemplate.findFirst.mockResolvedValue({ id: 'tpl-1', branchId: 'branch-1', ownerId: null, name: 'appt_template', language: 'en', contentText: 'Hi', contentHtml: null, variables: null, isActive: true });
+    mockWhatsApp.sendTemplate.mockResolvedValue({ status: 'FAILED', code: 132001, reason: 'The chosen template does not exist in that language. Pick the template again in Clinic profile.' });
+    const svc = new WhatsAppTemplatesService(prisma as any, mockWhatsApp as any);
+    await expect(svc.sendTest({ templateId: 'tpl-1', branchId: 'branch-1', requesterId: 'admin-1', isAdminOrOwner: true, toPhoneE164: '+18005550199' })).rejects.toThrow(
+      'The chosen template does not exist in that language. Pick the template again in Clinic profile.',
+    );
   });
 });
-

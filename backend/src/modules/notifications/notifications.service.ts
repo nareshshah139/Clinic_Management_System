@@ -9,40 +9,10 @@ interface EmailOptions {
   attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
-type WhatsAppTemplateParameter =
-  | { type: 'text'; text: string }
-  | { type: 'currency'; currency: { fallback_value: string; code: string; amount_1000: number } }
-  | { type: 'date_time'; date_time: { fallback_value: string } };
-
-type WhatsAppTemplateComponent =
-  | { type: 'header'; parameters?: WhatsAppTemplateParameter[] }
-  | { type: 'body'; parameters?: WhatsAppTemplateParameter[] }
-  | { type: 'button'; sub_type?: 'quick_reply' | 'url'; index?: string; parameters?: WhatsAppTemplateParameter[] };
-
-interface WhatsAppOptions {
-  toPhoneE164: string; // E.164 format, e.g., +919999999999
-  template?: { name: string; language: string; components?: WhatsAppTemplateComponent[] };
-  text?: string;
-  // Optional per-doctor overrides
-  overrideToken?: string;
-  overridePhoneId?: string; // Meta WhatsApp Business Phone Number ID
-}
-
-interface WhatsAppDocumentOptions {
-  toPhoneE164: string;
-  pdfBuffer: Buffer;
-  fileName: string;
-  caption?: string;
-  overrideToken?: string;
-  overridePhoneId?: string;
-}
-
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private readonly smtpTransporter: nodemailer.Transporter | null;
-  private readonly whatsappToken?: string;
-  private readonly whatsappPhoneId?: string; // Meta WhatsApp Business Phone Number ID
 
   constructor() {
     // SMTP init
@@ -58,61 +28,6 @@ export class NotificationsService {
       } as any);
     } else {
       this.smtpTransporter = null;
-    }
-
-    // WhatsApp init
-    this.whatsappToken = process.env.WHATSAPP_TOKEN || undefined;
-    this.whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || undefined;
-  }
-
-  private normalizeE164(phone: string | undefined | null): string | null {
-    if (!phone || typeof phone !== 'string') return null;
-    const digits = phone.replace(/[^\d+]/g, '');
-    if (!digits) return null;
-    return digits.startsWith('+') ? digits : `+${digits}`;
-  }
-
-  private async postWhatsApp(
-    phoneId: string,
-    token: string,
-    body: Record<string, any>,
-    attempt = 1,
-    maxAttempts = 2,
-  ): Promise<void> {
-    const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    } as Record<string, string>;
-
-    let res: Response;
-    try {
-      res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-    } catch (err: any) {
-      const retryable = attempt < maxAttempts;
-      this.logger.error(
-        `WhatsApp send failed (network): ${err?.message ?? err}. attempt=${attempt}/${maxAttempts}`,
-      );
-      if (retryable) {
-        return this.postWhatsApp(phoneId, token, body, attempt + 1, maxAttempts);
-      }
-      throw err;
-    }
-
-    if (!res.ok) {
-      const isRetryable = (res.status >= 500 || res.status === 429) && attempt < maxAttempts;
-      let errText: string | undefined;
-      try {
-        errText = await res.text();
-      } catch {
-        errText = undefined;
-      }
-      this.logger.error(
-        `WhatsApp send failed: status=${res.status} attempt=${attempt}/${maxAttempts} body=${errText || 'n/a'}`,
-      );
-      if (isRetryable) {
-        return this.postWhatsApp(phoneId, token, body, attempt + 1, maxAttempts);
-      }
     }
   }
 
@@ -130,98 +45,5 @@ export class NotificationsService {
       text: opts.text,
       attachments: opts.attachments,
     });
-  }
-
-  async sendWhatsApp(opts: WhatsAppOptions): Promise<void> {
-    const token = opts.overrideToken || this.whatsappToken;
-    const phoneId = opts.overridePhoneId || this.whatsappPhoneId;
-    if (!token || !phoneId) {
-      this.logger.warn('WhatsApp is not configured; skipping message');
-      return;
-    }
-    const normalized = this.normalizeE164(opts.toPhoneE164);
-    if (!normalized) {
-      this.logger.warn(`WhatsApp send skipped: invalid phone ${opts.toPhoneE164}`);
-      return;
-    }
-
-    const payload: any = {
-      messaging_product: 'whatsapp',
-      to: normalized.replace(/^\+/, ''),
-      type: opts.template ? 'template' : 'text',
-    };
-    if (opts.template) {
-      payload.template = {
-        name: opts.template.name,
-        language: { code: opts.template.language },
-        components: opts.template.components || [],
-      };
-    } else if (opts.text) {
-      payload.text = { body: opts.text };
-    } else {
-      this.logger.warn('WhatsApp send skipped: neither template nor text provided');
-      return;
-    }
-
-    await this.postWhatsApp(phoneId, token, payload);
-  }
-
-  async sendWhatsAppDocument(opts: WhatsAppDocumentOptions): Promise<void> {
-    const token = opts.overrideToken || this.whatsappToken;
-    const phoneId = opts.overridePhoneId || this.whatsappPhoneId;
-    if (!token || !phoneId) {
-      this.logger.warn('WhatsApp is not configured; skipping document send');
-      return;
-    }
-    const normalized = this.normalizeE164(opts.toPhoneE164);
-    if (!normalized) {
-      this.logger.warn(`WhatsApp document send skipped: invalid phone ${opts.toPhoneE164}`);
-      return;
-    }
-
-    // Step 1: Upload PDF to Meta media endpoint
-    const mediaUrl = `https://graph.facebook.com/v18.0/${phoneId}/media`;
-    const formData = new FormData();
-    formData.append('messaging_product', 'whatsapp');
-    formData.append('type', 'application/pdf');
-    formData.append(
-      'file',
-      new Blob([Uint8Array.from(opts.pdfBuffer)], { type: 'application/pdf' }),
-      opts.fileName,
-    );
-
-    let mediaId: string;
-    try {
-      const uploadRes = await fetch(mediaUrl, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData as any,
-      });
-      if (!uploadRes.ok) {
-        const errText = await uploadRes.text().catch(() => '');
-        this.logger.error(`WhatsApp media upload failed: status=${uploadRes.status} body=${errText}`);
-        throw new Error(`Media upload failed: ${uploadRes.status}`);
-      }
-      const uploadData = await uploadRes.json() as { id: string };
-      mediaId = uploadData.id;
-    } catch (err: any) {
-      this.logger.error(`WhatsApp media upload error: ${err?.message ?? err}`);
-      throw err;
-    }
-
-    // Step 2: Send document message referencing the uploaded media
-    const messagePayload = {
-      messaging_product: 'whatsapp',
-      to: normalized.replace(/^\+/, ''),
-      type: 'document',
-      document: {
-        id: mediaId,
-        filename: opts.fileName,
-        caption: opts.caption || undefined,
-      },
-    };
-
-    await this.postWhatsApp(phoneId, token, messagePayload);
-    this.logger.log(`WhatsApp document sent to ${normalized}: ${opts.fileName}`);
   }
 }

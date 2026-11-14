@@ -39,7 +39,6 @@ describe('AppointmentsService.create', () => {
 
   const notificationsMock: any = {
     sendEmail: jest.fn().mockResolvedValue(undefined),
-    sendWhatsApp: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {

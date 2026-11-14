@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { WhatsAppService, acceptedOrThrow } from '../whatsapp/whatsapp.service';
 
 interface CreateTemplateDto {
   name: string;
@@ -26,7 +26,7 @@ interface UpdateTemplateDto extends Partial<CreateTemplateDto> {
 export class WhatsAppTemplatesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notifications: NotificationsService,
+    private readonly whatsapp: WhatsAppService,
   ) {}
 
   async create(branchId: string, ownerId: string | null, dto: CreateTemplateDto) {
@@ -231,15 +231,19 @@ export class WhatsAppTemplatesService {
     }
     const hydrated = this.hydrate(tpl);
     const components = this.buildTemplateComponents(hydrated.variables, variables || {});
-    await this.notifications.sendWhatsApp({
-      toPhoneE164,
-      template: {
-        name: hydrated.name,
-        language: hydrated.language || 'en',
-        components,
-      },
-    });
-    return { success: true };
+    const { wamid } = acceptedOrThrow(
+      await this.whatsapp.sendTemplate({
+        branchId,
+        to: toPhoneE164,
+        kind: 'TEXT',
+        template: {
+          name: hydrated.name,
+          language: hydrated.language || 'en',
+          components,
+        },
+      }),
+    );
+    return { success: true, wamid };
   }
 
   async resolveActiveTemplate(params: {

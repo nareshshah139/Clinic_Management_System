@@ -8,8 +8,9 @@ it.each(['download', 'WHATSAPP', 'EMAIL'])('includes the tele-video disclaimer i
     visit: { consultationType: 'TELE_VIDEO', createdAt: new Date('2026-09-27'), patient: { name: 'Synthetic Patient' }, doctor: { firstName: 'Test', lastName: 'Doctor' } },
   };
   const db = { prescription: { findFirst: jest.fn().mockResolvedValue(prescription) }, prescriptionPrintEvent: { create: jest.fn().mockResolvedValue({}) } };
-  const notifications = { sendEmail: jest.fn(), sendWhatsAppDocument: jest.fn() };
-  const service = new PrescriptionsService(db as any, notifications as any);
+  const notifications = { sendEmail: jest.fn() };
+  const whatsapp = { sendPrescription: jest.fn().mockResolvedValue({ status: 'ACCEPTED', wamid: 'wamid.TELE', source: 'CLINIC' }) };
+  const service = new PrescriptionsService(db as any, notifications as any, whatsapp as any);
   for (const tele of [true, false]) {
     prescription.visit.consultationType = tele ? 'TELE_VIDEO' : 'IN_PERSON';
     let bytes: Buffer;
@@ -18,7 +19,7 @@ it.each(['download', 'WHATSAPP', 'EMAIL'])('includes the tele-video disclaimer i
       bytes = Buffer.from(result.fileUrl.split(',')[1], 'base64');
     } else {
       await service.sharePrescription('tele-rx', 'branch', 'staff', { channel: channel as any, to: 'synthetic@example.test', includePdf: true });
-      bytes = channel === 'EMAIL' ? notifications.sendEmail.mock.calls.at(-1)![0].attachments[0].content : notifications.sendWhatsAppDocument.mock.calls.at(-1)![0].pdfBuffer;
+      bytes = channel === 'EMAIL' ? notifications.sendEmail.mock.calls.at(-1)![0].attachments[0].content : whatsapp.sendPrescription.mock.calls.at(-1)![0].pdfBuffer;
     }
     const text = execFileSync(process.env.PDFTOTEXT_BIN || 'pdftotext', ['-', '-'], { input: bytes }).toString();
     if (tele) {
@@ -36,8 +37,9 @@ it.each(['download', 'WHATSAPP', 'EMAIL'])('includes the tele-video disclaimer i
 
 it('rejects cross-branch prescriptions and invalid uploads before sharing', async () => {
   const db = { prescription: { findFirst: jest.fn().mockResolvedValue(null) }, prescriptionPrintEvent: { create: jest.fn() } };
-  const notifications = { sendEmail: jest.fn(), sendWhatsAppDocument: jest.fn() };
-  const service = new PrescriptionsService(db as any, notifications as any);
+  const notifications = { sendEmail: jest.fn() };
+  const whatsapp = { sendPrescription: jest.fn() };
+  const service = new PrescriptionsService(db as any, notifications as any, whatsapp as any);
   const body = { channel: 'EMAIL' as const, to: 'synthetic@example.test' };
   const file = { buffer: Buffer.from('%PDF-synthetic'), mimetype: 'application/pdf' } as any;
   await expect(service.sharePrescriptionPreview('rx', 'branch', body, file)).rejects.toThrow('Prescription not found');
@@ -46,6 +48,6 @@ it('rejects cross-branch prescriptions and invalid uploads before sharing', asyn
   await expect(service.sharePrescriptionPreview('rx', 'branch', body, { ...file, buffer: Buffer.from('not a pdf') })).rejects.toThrow('valid prescription PDF');
   await expect(service.sharePrescriptionPreview('rx', 'branch', { ...body, to: '' }, file)).rejects.toThrow('recipient');
   expect(notifications.sendEmail).not.toHaveBeenCalled();
-  expect(notifications.sendWhatsAppDocument).not.toHaveBeenCalled();
+  expect(whatsapp.sendPrescription).not.toHaveBeenCalled();
   expect(db.prescriptionPrintEvent.create).not.toHaveBeenCalled();
 });

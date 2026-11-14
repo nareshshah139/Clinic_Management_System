@@ -287,7 +287,7 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
       await gate;
     });
     await ready;
-    const edit = new PrescriptionsService(db as any, {} as any).updatePrescription('rx-edit-race', { items: [{ drugName: 'Changed medicine' }] } as any, at.branchId);
+    const edit = new PrescriptionsService(db as any, {} as any, {} as any).updatePrescription('rx-edit-race', { items: [{ drugName: 'Changed medicine' }] } as any, at.branchId);
     release();
     await invoiceWrite;
     await expect(edit).rejects.toMatchObject({ status: 409 });

@@ -20,7 +20,8 @@ describe('Doctor signature authorization, uploads and exports', () => {
   let jpeg: Buffer;
   let activeDoctor: boolean;
   let sequence = 0;
-  const notifications = { sendEmail: jest.fn(), sendWhatsAppDocument: jest.fn(), sendWhatsApp: jest.fn() };
+  const notifications = { sendEmail: jest.fn() };
+  const whatsapp = { sendPrescription: jest.fn(async () => ({ status: 'ACCEPTED', wamid: 'wamid.SIGNED', source: 'CLINIC' })) };
   const events: any[] = [];
   const matches = (asset: any, where: any) => Object.entries(where).every(([key, value]) => key === 'owner' ? activeDoctor && asset.branchId === (value as any).branchId : asset[key] === value);
   const db: any = {
@@ -44,7 +45,7 @@ describe('Doctor signature authorization, uploads and exports', () => {
     jpeg = await sharp(png).jpeg().toBuffer();
     const module = await Test.createTestingModule({ controllers: [UsersController, PrescriptionsController], providers: [
       { provide: UsersService, useValue: new UsersService(db, {} as any) },
-      { provide: PrescriptionsService, useValue: new PrescriptionsService(db, notifications as any) },
+      { provide: PrescriptionsService, useValue: new PrescriptionsService(db, notifications as any, whatsapp as any) },
     ] }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context: any) => {
       const req = context.switchToHttp().getRequest();
       if (process.env.CR06_BROWSER_TEST === '1' && req.headers.cookie?.includes('auth_token=synthetic-signature')) {
@@ -191,20 +192,24 @@ describe('Doctor signature authorization, uploads and exports', () => {
       expect(bytes.toString('latin1').includes('/Subtype /Image')).toBe(showSignature);
       if (showSignature) expect(db.clinicAsset.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({ where: expect.objectContaining({ ownerId: 'doctor-1', branchId: 'branch' }) }));
     }
-    for (const channel of ['EMAIL', 'WHATSAPP']) {
-      await request(app.getHttpServer()).post('/prescriptions/rx/share').set('x-user', 'doctor-1').send({ channel, to: 'synthetic@example.test', includePdf: true, showSignature: true }).expect(201);
-    }
+    await request(app.getHttpServer()).post('/prescriptions/rx/share').set('x-user', 'doctor-1').send({ channel: 'EMAIL', to: 'synthetic@example.test', includePdf: true, showSignature: true }).expect(201);
+    const shared = await request(app.getHttpServer()).post('/prescriptions/rx/share').set('x-user', 'doctor-1').send({ channel: 'WHATSAPP', to: '+91 97048 02443', showSignature: true }).expect(201);
+    expect(shared.body).toEqual({ status: 'ACCEPTED', wamid: 'wamid.SIGNED', channel: 'WHATSAPP', to: '+91 97048 02443' });
     expect(notifications.sendEmail.mock.calls[0][0].attachments[0].content.toString('latin1')).toContain('/Subtype /Image');
-    expect(notifications.sendWhatsAppDocument.mock.calls[0][0].pdfBuffer.toString('latin1')).toContain('/Subtype /Image');
+    const sent = (whatsapp.sendPrescription.mock.calls as any[])[0][0];
+    expect(sent.pdfBuffer.toString('latin1')).toContain('/Subtype /Image');
+    expect([sent.branchId, sent.to, sent.fileName, sent.patientName, sent.doctorName, sent.prescriptionId, sent.kind]).toEqual(
+      ['branch', '+91 97048 02443', 'prescription-rx.pdf', 'SYNTHETIC PATIENT', 'Dr. Praneeta Jain', 'rx', 'PRESCRIPTION']);
   });
 
   it('attaches the exact preview PDF bytes in Email and WhatsApp, with branch checks before sending', async () => {
     const pdf = Buffer.from('%PDF-1.7\nsynthetic preview bytes');
-    for (const channel of ['EMAIL', 'WHATSAPP']) {
-      await request(app.getHttpServer()).post('/prescriptions/rx/share-preview').set('x-user', 'doctor-1').field('channel', channel).field('to', 'synthetic@example.test').attach('file', pdf, { filename: 'preview.pdf', contentType: 'application/pdf' }).expect(201);
+    for (const [channel, to] of [['EMAIL', 'synthetic@example.test'], ['WHATSAPP', '9704802443']]) {
+      await request(app.getHttpServer()).post('/prescriptions/rx/share-preview').set('x-user', 'doctor-1').field('channel', channel).field('to', to).attach('file', pdf, { filename: 'preview.pdf', contentType: 'application/pdf' }).expect(201);
     }
     expect(notifications.sendEmail.mock.calls[0][0].attachments[0].content).toEqual(pdf);
-    expect(notifications.sendWhatsAppDocument.mock.calls[0][0].pdfBuffer).toEqual(pdf);
+    const sent = (whatsapp.sendPrescription.mock.calls as any[]).at(-1)[0];
+    expect([sent.pdfBuffer, sent.to, sent.patientName, sent.doctorName]).toEqual([pdf, '9704802443', 'SYNTHETIC PATIENT', 'Dr. Praneeta Jain']);
     notifications.sendEmail.mockClear();
     await request(app.getHttpServer()).post('/prescriptions/rx/share-preview').set('x-user', 'doctor-1').set('x-branch', 'other').field('channel', 'EMAIL').field('to', 'synthetic@example.test').attach('file', pdf, { filename: 'preview.pdf', contentType: 'application/pdf' }).expect(404);
     await request(app.getHttpServer()).post('/prescriptions/rx/share-preview').set('x-user', 'doctor-1').field('channel', 'EMAIL').field('to', 'synthetic@example.test').attach('file', png, { filename: 'preview.pdf', contentType: 'application/pdf' }).expect(400);

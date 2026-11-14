@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException, ConflictException } from '@nest
 import { PrescriptionsService } from '../prescriptions.service';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { WhatsAppService } from '../../whatsapp/whatsapp.service';
 import { PrescriptionStatus, PrescriptionLanguage, RefillStatus, DosageUnit, Frequency, DurationUnit, CreatePrescriptionPadDto } from '../dto/prescription.dto';
 
 describe('PrescriptionsService', () => {
@@ -99,9 +100,9 @@ describe('PrescriptionsService', () => {
           provide: NotificationsService,
           useValue: {
             sendEmail: jest.fn(),
-            sendWhatsApp: jest.fn(),
           },
         },
+        { provide: WhatsAppService, useValue: {} },
       ],
     }).compile();
 

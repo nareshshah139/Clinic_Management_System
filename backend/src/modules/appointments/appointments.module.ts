@@ -5,9 +5,10 @@ import { PrismaModule } from '../../shared/database/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { WhatsAppTemplatesModule } from '../whatsapp-templates/whatsapp-templates.module';
 import { GoogleCalendarModule } from '../google-calendar/google-calendar.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 
 @Module({
-  imports: [PrismaModule, NotificationsModule, WhatsAppTemplatesModule, GoogleCalendarModule],
+  imports: [PrismaModule, NotificationsModule, WhatsAppTemplatesModule, GoogleCalendarModule, WhatsAppModule],
   controllers: [AppointmentsController],
   providers: [AppointmentsService],
   exports: [AppointmentsService],

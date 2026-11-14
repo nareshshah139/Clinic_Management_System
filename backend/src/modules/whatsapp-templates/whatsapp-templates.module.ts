@@ -2,10 +2,10 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../shared/database/prisma.module';
 import { WhatsAppTemplatesService } from './whatsapp-templates.service';
 import { WhatsAppTemplatesController } from './whatsapp-templates.controller';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 
 @Module({
-  imports: [PrismaModule, NotificationsModule],
+  imports: [PrismaModule, WhatsAppModule],
   controllers: [WhatsAppTemplatesController],
   providers: [WhatsAppTemplatesService],
   exports: [WhatsAppTemplatesService],

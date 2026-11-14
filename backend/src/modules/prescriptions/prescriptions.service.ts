@@ -14,6 +14,7 @@ import { readDoctorSignature } from '../users/doctor-signature';
 const DOCTOR_OWNED_ASSET_TYPES: readonly string[] = ['SIGNATURE', 'LETTERHEAD'];
 import { PrismaService } from '../../shared/database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WhatsAppService, acceptedOrThrow } from '../whatsapp/whatsapp.service';
 import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
 import { 
   CreatePrescriptionDto, 
@@ -47,6 +48,7 @@ export class PrescriptionsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private whatsapp: WhatsAppService,
     @Optional() private pharmacyQueue?: PharmacyPrescriptionQueueService,
   ) {}
 
@@ -1363,7 +1365,7 @@ export class PrescriptionsService {
     prescriptionId: string,
     branchId: string,
     body?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean; showSignature?: boolean },
-  ): Promise<{ pdfBuffer: Buffer; fileName: string }> {
+  ): Promise<{ pdfBuffer: Buffer; fileName: string; patientName: string; doctorName: string }> {
     const prescription = await this.prisma.prescription.findFirst({
       where: { id: prescriptionId, visit: { deletedAt: null, patient: { branchId } } },
       include: { visit: { include: { patient: true, doctor: true } } },
@@ -1416,7 +1418,12 @@ export class PrescriptionsService {
     doc.fontSize(9).text('Signature', { align: 'right' });
     doc.end();
     const pdfBuffer = await finish;
-    return { pdfBuffer, fileName: `prescription-${prescriptionId}.pdf` };
+    return {
+      pdfBuffer,
+      fileName: `prescription-${prescriptionId}.pdf`,
+      patientName: prescription.visit.patient?.name ?? '',
+      doctorName: `Dr. ${prescription.visit.doctor.firstName} ${prescription.visit.doctor.lastName}`,
+    };
   }
 
   // SERVER-SIDE PDF RENDERING (basic pdfkit layout)
@@ -1440,35 +1447,34 @@ export class PrescriptionsService {
     body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean; showSignature?: boolean },
   ) {
     await this.requireSharePrescription(prescriptionId, branchId, body);
-    const pdf = body.includePdf ? await this.buildPrescriptionPdfBuffer(prescriptionId, branchId, body) : null;
-    if (body.channel === 'EMAIL') {
-      await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is ready.',
-        attachments: pdf ? [{ filename: pdf.fileName, content: pdf.pdfBuffer, contentType: 'application/pdf' }] : undefined });
-    } else if (body.channel === 'WHATSAPP') {
-      if (body.includePdf) {
-        const { pdfBuffer, fileName } = pdf!;
-        await this.notifications.sendWhatsAppDocument({
-          toPhoneE164: body.to,
-          pdfBuffer,
-          fileName,
-          caption: body.message || 'Your prescription is ready.',
-        });
-      } else {
-        await this.notifications.sendWhatsApp({ toPhoneE164: body.to, text: body.message || 'Your prescription is ready.' });
-      }
+    const whatsapp = body.channel === 'WHATSAPP';
+    const pdf = body.includePdf || whatsapp ? await this.buildPrescriptionPdfBuffer(prescriptionId, branchId, body) : null;
+    const event = { prescriptionId, eventType: `${body.channel}_SHARE`, channel: body.to, count: 1, metadata: body.message ? JSON.stringify({ message: body.message, includePdf: !!pdf }) : null };
+    if (whatsapp) {
+      const { wamid } = acceptedOrThrow(await this.whatsapp.sendPrescription({
+        branchId, to: body.to, pdfBuffer: pdf!.pdfBuffer, fileName: pdf!.fileName, caption: body.message || 'Your prescription is ready.',
+        patientName: pdf!.patientName, doctorName: pdf!.doctorName, prescriptionId, kind: 'PRESCRIPTION',
+      }));
+      await this.prisma.prescriptionPrintEvent.create({ data: event });
+      return { status: 'ACCEPTED' as const, wamid, channel: body.channel, to: body.to };
     }
-    await this.prisma.prescriptionPrintEvent.create({
-      data: { prescriptionId, eventType: `${body.channel}_SHARE`, channel: body.to, count: 1, metadata: body.message ? JSON.stringify({ message: body.message, includePdf: !!body.includePdf }) : null },
-    });
-    return { status: 'QUEUED', channel: body.channel, to: body.to };
+    await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is ready.',
+      attachments: pdf ? [{ filename: pdf.fileName, content: pdf.pdfBuffer, contentType: 'application/pdf' }] : undefined });
+    await this.prisma.prescriptionPrintEvent.create({ data: event });
+    return { status: 'QUEUED' as const, channel: body.channel, to: body.to };
   }
 
   private async requireSharePrescription(prescriptionId: string, branchId: string, body: { channel: string; to: string }) {
     if (!['EMAIL', 'WHATSAPP'].includes(body.channel) || typeof body.to !== 'string' || !body.to.trim()) {
       throw new BadRequestException('Choose a sharing channel and recipient.');
     }
-    const prescription = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { deletedAt: null, patient: { branchId } } }, select: { id: true } });
+    const prescription = await this.prisma.prescription.findFirst({
+      where: { id: prescriptionId, visit: { deletedAt: null, patient: { branchId } } },
+      select: { id: true, visit: { select: { patient: { select: { name: true } }, doctor: { select: { firstName: true, lastName: true } } } } },
+    });
     if (!prescription) throw new NotFoundException('Prescription not found');
+    const doctor = prescription.visit?.doctor;
+    return { patientName: prescription.visit?.patient?.name ?? '', doctorName: doctor ? `Dr. ${doctor.firstName} ${doctor.lastName}` : '' };
   }
 
   /**
@@ -1485,19 +1491,24 @@ export class PrescriptionsService {
    */
   async sharePrescriptionPreview(prescriptionId: string, branchId: string,
     body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string }, file?: Express.Multer.File) {
-    await this.requireSharePrescription(prescriptionId, branchId, body);
+    const names = await this.requireSharePrescription(prescriptionId, branchId, body);
     if (!file?.buffer?.length || file.buffer.length > 15 * 1024 * 1024 || file.mimetype !== 'application/pdf' || file.buffer.subarray(0, 5).toString() !== '%PDF-') {
       throw new BadRequestException('A valid prescription PDF up to 15 MB is required.');
     }
     const fileName = `prescription-${prescriptionId}.pdf`;
-    if (body.channel === 'EMAIL') {
-      await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is attached.',
-        attachments: [{ filename: fileName, content: file.buffer, contentType: 'application/pdf' }] });
-    } else {
-      await this.notifications.sendWhatsAppDocument({ toPhoneE164: body.to, pdfBuffer: file.buffer, fileName, caption: body.message || 'Your prescription is attached.' });
+    const event = { prescriptionId, eventType: `${body.channel}_SHARE`, channel: body.to, count: 1 };
+    if (body.channel === 'WHATSAPP') {
+      const { wamid } = acceptedOrThrow(await this.whatsapp.sendPrescription({
+        branchId, to: body.to, pdfBuffer: file.buffer, fileName, caption: body.message || 'Your prescription is attached.',
+        ...names, prescriptionId, kind: 'PRESCRIPTION',
+      }));
+      await this.prisma.prescriptionPrintEvent.create({ data: event });
+      return { status: 'ACCEPTED' as const, wamid, channel: body.channel, to: body.to };
     }
-    await this.prisma.prescriptionPrintEvent.create({ data: { prescriptionId, eventType: `${body.channel}_SHARE`, channel: body.to, count: 1 } });
-    return { status: 'QUEUED', channel: body.channel, to: body.to };
+    await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is attached.',
+      attachments: [{ filename: fileName, content: file.buffer, contentType: 'application/pdf' }] });
+    await this.prisma.prescriptionPrintEvent.create({ data: event });
+    return { status: 'QUEUED' as const, channel: body.channel, to: body.to };
   }
 
   // Simple merge tags, conditionals, and macros renderer for PDF text blocks

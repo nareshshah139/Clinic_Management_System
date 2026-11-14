@@ -47,13 +47,16 @@ export function validateEnv(config: Record<string, unknown>) {
     logger.log(`Google Calendar configured. Redirect URI: ${redirectUri}`);
   }
 
-  // WhatsApp Cloud (optional)
+  // WhatsApp Cloud (optional): each clinic links its own number in Clinic profile; these are the server-wide fallback.
   const hasWhatsAppToken = !!config['WHATSAPP_TOKEN'];
   const hasWhatsAppPhoneId = !!config['WHATSAPP_PHONE_NUMBER_ID'];
   if (!hasWhatsAppToken || !hasWhatsAppPhoneId) {
     logger.warn(
-      'WhatsApp Cloud is not configured. Set WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID to enable outbound WhatsApp.',
+      'No server-wide WhatsApp number (WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID). Clinics without a linked number in Clinic profile cannot send WhatsApp.',
     );
+  }
+  if (config['WHATSAPP_WEBHOOK_VERIFY_TOKEN'] && !config['META_APP_SECRET']) {
+    logger.warn('META_APP_SECRET is not set, so WhatsApp delivery webhooks are accepted without a signature check.');
   }
 
   return config;

@@ -26,7 +26,7 @@ describe('Prescription clinical transaction', () => {
       ...payload, items: [{ ...item, dosePattern: '1-0-1', instructions: 'Recorded instructions' }],
     }, { type: 'body', metatype: CreatePrescriptionDto });
     const { db, state } = database();
-    await new PrescriptionsService(db, {} as any).createPrescription(input, 'branch');
+    await new PrescriptionsService(db, {} as any, {} as any).createPrescription(input, 'branch');
     const saved = JSON.parse(state().prescriptions[0].items)[0];
     expect(saved).toMatchObject({ dosePattern: '1-0-1', instructions: 'Recorded instructions' });
     expect(saved).not.toHaveProperty('dosage');
@@ -41,7 +41,7 @@ describe('Prescription clinical transaction', () => {
   it('validates and commits prescription plus clinical details without dropping prior fields', async () => {
     const input = await new ValidationPipe({ transform: true, whitelist: true }).transform(payload, { type: 'body', metatype: CreatePrescriptionDto });
     const { db, state } = database();
-    await new PrescriptionsService(db, {} as any).createPrescription(input, 'branch');
+    await new PrescriptionsService(db, {} as any, {} as any).createPrescription(input, 'branch');
     expect(state().prescriptions).toHaveLength(1);
     expect(JSON.parse(state().visit.history)).toEqual({ pastHistory: 'Preserve existing', triggers: 'New trigger' });
     expect(JSON.parse(state().visit.exam)).toEqual({ dermatology: { morphology: ['Keep morphology'], skinType: 'III' } });
@@ -51,12 +51,12 @@ describe('Prescription clinical transaction', () => {
   it('rolls back the clinical update if prescription insertion fails', async () => {
     const { db, state } = database(true);
     const before = structuredClone(state());
-    await expect(new PrescriptionsService(db, {} as any).createPrescription(payload as any, 'branch')).rejects.toThrow('Synthetic insert failure');
+    await expect(new PrescriptionsService(db, {} as any, {} as any).createPrescription(payload as any, 'branch')).rejects.toThrow('Synthetic insert failure');
     expect(state()).toEqual(before);
   });
   it('rejects cross-patient linkage before any write', async () => {
     const { db, state } = database();
-    await expect(new PrescriptionsService(db, {} as any).createPrescription({ ...payload, patientId: 'other' } as any, 'branch')).rejects.toThrow('does not match');
+    await expect(new PrescriptionsService(db, {} as any, {} as any).createPrescription({ ...payload, patientId: 'other' } as any, 'branch')).rejects.toThrow('does not match');
     expect(db.$transaction).not.toHaveBeenCalled();
     expect(state().prescriptions).toHaveLength(0);
   });
@@ -64,7 +64,7 @@ describe('Prescription clinical transaction', () => {
     const { db, state } = database();
     state().prescriptions.push({ id: 'rx', visitId: 'v', items: JSON.stringify(payload.items) });
     state().invoice = { id: 'invoice' };
-    await expect(new PrescriptionsService(db, {} as any).updatePrescription('rx', { items: [{ ...payload.items[0], drugName: 'Replacement' }], clinicalData: payload.clinicalData } as any, 'branch')).rejects.toThrow('medicines cannot be changed');
+    await expect(new PrescriptionsService(db, {} as any, {} as any).updatePrescription('rx', { items: [{ ...payload.items[0], drugName: 'Replacement' }], clinicalData: payload.clinicalData } as any, 'branch')).rejects.toThrow('medicines cannot be changed');
     expect(JSON.parse(state().prescriptions[0].items)[0].drugName).toBe('Synthetic');
     expect(JSON.parse(state().visit.history)).toEqual({ pastHistory: 'Preserve existing' });
   });
@@ -74,14 +74,14 @@ describe('Prescription clinical transaction', () => {
     const input = await new ValidationPipe({ transform: true, whitelist: true }).transform({ items: payload.items }, { type: 'body', metatype: UpdatePrescriptionDto });
     state().prescriptions.push({ id: 'rx', visitId: 'v', items: JSON.stringify(input.items) });
     state().invoice = { id: 'invoice' };
-    await expect(new PrescriptionsService(db, {} as any).updatePrescription('rx', input, 'branch')).resolves.toMatchObject({ id: 'rx' });
+    await expect(new PrescriptionsService(db, {} as any, {} as any).updatePrescription('rx', input, 'branch')).resolves.toMatchObject({ id: 'rx' });
   });
 
   it('updates an existing prescription using real schema fields and retains visit history', async () => {
     const { db, state } = database();
     state().prescriptions.push({ id: 'rx', visitId: 'v', items: '[]', visit: { id: 'v', patient: { id: 'p' }, doctor: { id: 'd' } } });
     const input = await new ValidationPipe({ transform: true, whitelist: true }).transform({ clinicalData: payload.clinicalData, notes: 'New note', followUpInstructions: 'New guidance', items: payload.items }, { type: 'body', metatype: UpdatePrescriptionDto });
-    const result = await new PrescriptionsService(db, {} as any).updatePrescription('rx', input, 'branch');
+    const result = await new PrescriptionsService(db, {} as any, {} as any).updatePrescription('rx', input, 'branch');
     expect(result.pharmacistNotes).toBe('New note');
     expect(result.instructions).toBe('New guidance');
     expect(result.items).toHaveLength(1);
@@ -103,7 +103,7 @@ describe('Saved clinical details in history', () => {
       scribeJson: { customSections: [{ title: 'Additional note', content: 'Full custom detail' }] },
     } };
     const input = await new ValidationPipe({ transform: true, whitelist: true }).transform(full, { type: 'body', metatype: CreatePrescriptionDto });
-    await new PrescriptionsService(db, {} as any).createPrescription(input, 'branch');
+    await new PrescriptionsService(db, {} as any, {} as any).createPrescription(input, 'branch');
     db.visit.findMany = jest.fn(async () => [{ ...state().visit, createdAt: new Date('2026-09-05'), prescription: state().prescriptions[0] }]);
     db.visitAttachment = { findMany: jest.fn().mockResolvedValue([]) };
     const history = await new VisitsService(db).getPatientVisitHistory({ patientId: 'p' }, 'branch');

@@ -81,7 +81,7 @@ it('rejects missing actors, invalid types and invalid consent at validation and 
 it.each(['create', 'update'])('enforces consent and records the actor through prescription %s clinicalData', async action => {
   const { db, read } = fixture();
   if (action === 'update') db.prescription.findFirst.mockResolvedValue({ id: 'rx', visitId: 'v', items: '[]', visit: { id: 'v', patient: { id: 'p' }, doctor: { id: 'doctor' } } });
-  const service = new PrescriptionsService(db, {} as any);
+  const service = new PrescriptionsService(db, {} as any, {} as any);
   const input = { patientId: 'p', doctorId: 'doctor', visitId: 'v', items: [{ drugName: 'Synthetic', dosageUnit: 'TABLET', frequency: 'DAILY', duration: 1, durationUnit: 'DAYS' }], clinicalData: { consultationType: tele, teleVideoConsent: false } };
   const save = async () => {
     const body = await validate(input, action === 'create' ? CreatePrescriptionDto : UpdatePrescriptionDto);

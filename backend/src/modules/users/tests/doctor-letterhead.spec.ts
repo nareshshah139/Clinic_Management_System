@@ -31,7 +31,7 @@ describe('Per-doctor letterheads', () => {
     },
   };
   db.$transaction = async (fn: any) => fn(db);
-  const prescriptions = new PrescriptionsService(db, {} as any);
+  const prescriptions = new PrescriptionsService(db, {} as any, {} as any);
 
   const as = (user: string, role = 'DOCTOR') => ({ 'x-user': user, 'x-role': role });
   const read = (doctor: string, by = doctor) => request(app.getHttpServer()).get(`/users/${doctor}/letterhead`).set(as(by));
