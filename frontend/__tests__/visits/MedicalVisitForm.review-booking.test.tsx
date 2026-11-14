@@ -9,6 +9,8 @@ jest.mock('@/components/visits/VisitPhotos', () => function Photos() { return nu
 jest.mock('@/components/tours/DoctorTour', () => ({ DoctorTour: () => null }));
 const flush = async () => { await act(async () => { await Promise.resolve(); }); };
 const booked = { id: 'r', date: '2026-11-21', slot: '10:30-11:00', doctorName: 'Shravya' };
+const seen = { id: 'a', date: '2026-11-21', slot: '10:00-10:30', doctorName: 'Dr. Shravya Rao' };
+const earlier = { id: 'e', date: '2026-11-16', slot: '09:00-09:30', doctorName: 'Shravya' };
 
 beforeEach(() => {
   jest.useFakeTimers(); jest.clearAllMocks(); localStorage.clear();
@@ -32,32 +34,27 @@ async function completeWith(reviewAppointment: unknown) {
   return mockToast.mock.calls.at(-1)![0];
 }
 
-it('says the review was booked, with day, time and doctor', async () => {
-  const toast = await completeWith({ status: 'booked', appointment: booked });
-  expect(toast).toMatchObject({ title: 'Visit completed', description: 'Review booked for Sat 21 Nov at 10:30 with Dr. Shravya', variant: 'success' });
-  expect(toast.action).toBeUndefined();
-});
+const link = (date: string) => `/dashboard/appointments?date=${date}&doctorId=d&patientId=p`;
 
-it('says the review was already booked', async () => {
-  const toast = await completeWith({ status: 'existing', appointment: booked });
-  expect(toast.description).toBe('Review already booked for Sat 21 Nov at 10:30 with Dr. Shravya');
-});
-
-it('says there is no free slot and links to Appointments on that day for the patient', async () => {
-  const toast = await completeWith({ status: 'full', date: '2026-11-21' });
-  expect(toast).toMatchObject({ description: 'No free slot on 21 Nov. Book the review from Appointments', variant: 'warning' });
-  render(toast.action);
-  expect(screen.getByRole('link', { name: 'Open Appointments' })).toHaveAttribute('href', '/dashboard/appointments?date=2026-11-21&doctorId=d&patientId=p');
-});
-
-it('says the review was not booked after a failure and gives the same link', async () => {
-  const toast = await completeWith({ status: 'failed' });
-  expect(toast.description).toBe('The review was not booked. Book it from Appointments for 21 Nov');
-  render(toast.action);
-  expect(screen.getByRole('link', { name: 'Open Appointments' })).toHaveAttribute('href', expect.stringContaining('date=2026-11-21'));
-});
-
-it('keeps the plain completion message when the server skipped booking', async () => {
-  const toast = await completeWith({ status: 'skipped', reason: 'past-date' });
-  expect(toast.description).toBe('All documentation has been marked complete.');
+it.each([
+  ['booked', { status: 'booked', appointment: booked }, 'success', 'Review booked for Sat 21 Nov at 10:30 with Dr. Shravya', null],
+  ['moved', { status: 'moved', appointment: booked, previous: { date: '2026-11-16', slot: '09:00-09:30' } }, 'success', 'Review moved to Sat 21 Nov at 10:30 (was Mon 16 Nov 09:00)', null],
+  ['existing', { status: 'existing', appointment: booked }, 'success', 'Review already booked for Sat 21 Nov at 10:30 with Dr. Shravya', null],
+  ['already-scheduled', { status: 'already-scheduled', appointment: seen }, 'success', 'Patient already sees Dr. Shravya Rao on Sat 21 Nov at 10:00, so no separate review was booked', null],
+  ['already-scheduled with an earlier review kept', { status: 'already-scheduled', appointment: seen, kept: earlier }, 'warning', 'Patient already sees Dr. Shravya Rao on Sat 21 Nov at 10:00, so no separate review was booked. The earlier review on Mon 16 Nov at 09:00 is still booked', link('2026-11-16')],
+  ['cancelled-by-staff', { status: 'skipped', reason: 'cancelled-by-staff', date: '2026-11-21' }, 'warning', 'The review on 21 Nov was cancelled at the desk, so it was not booked again', link('2026-11-21')],
+  ['full', { status: 'full', date: '2026-11-21' }, 'warning', 'No free slot on 21 Nov. Book the review from Appointments', link('2026-11-21')],
+  ['full with the earlier review kept', { status: 'full', date: '2026-11-21', kept: earlier }, 'warning', 'No free slot on 21 Nov, so the review stays on Mon 16 Nov at 09:00', link('2026-11-21')],
+  ['failed', { status: 'failed' }, 'warning', 'The review was not booked. Book it from Appointments for 21 Nov', link('2026-11-21')],
+  ['past-date', { status: 'skipped', reason: 'past-date', date: '2026-11-10' }, 'warning', 'The review date has passed, so no appointment was booked', null],
+  ['no-review-date', { status: 'skipped', reason: 'no-review-date' }, 'success', 'All documentation has been marked complete.', null],
+])('tells the doctor the %s outcome', async (_name, outcome, variant, description, href) => {
+  const toast = await completeWith(outcome);
+  expect(toast).toMatchObject({ title: 'Visit completed', description, variant });
+  if (href) {
+    render(toast.action);
+    expect(screen.getByRole('link', { name: 'Open Appointments' })).toHaveAttribute('href', href);
+  } else {
+    expect(toast.action).toBeUndefined();
+  }
 });

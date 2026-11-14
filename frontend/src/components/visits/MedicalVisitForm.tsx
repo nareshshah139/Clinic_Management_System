@@ -1548,18 +1548,19 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       
       const review = complete ? reviewBookingMessage(reviewOutcome, reviewDate) : null;
       toast({
-        variant: review?.needsAction ? 'warning' : 'success',
+        variant: review?.tone ?? 'success',
         title: complete ? 'Visit completed' : newerChanges ? 'Earlier changes saved' : 'Visit saved',
         description: review
           ? review.text
           : complete
             ? 'All documentation has been marked complete.'
             : newerChanges ? 'New edits are still waiting to save.' : 'Your draft was saved safely.',
-        ...(review?.needsAction
+        ...(review?.linkDate
           ? {
+              className: 'flex-col items-start gap-3 space-x-0',
               action: (
                 <ToastAction altText="Open Appointments" asChild>
-                  <Link href={appointmentsHref(reviewDate, doctorId, patientId)}>Open Appointments</Link>
+                  <Link href={appointmentsHref(review.linkDate, doctorId, patientId)}>Open Appointments</Link>
                 </ToastAction>
               ),
             }
