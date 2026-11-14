@@ -3,11 +3,11 @@
 
 export const GLOBAL_PRINT_CSS = `
 :root {
-  --print-ink: #262A27;
-  --print-muted: #596057;
-  --print-rule: #C6CEC3;
-  --print-surface: #F1F3EF;
-  --print-accent: #616B60;
+  --print-ink: #1A1A1A;
+  --print-muted: #555555;
+  --print-rule: #DDDDDD;
+  --print-surface: #F4F4F4;
+  --print-accent: #2563EB;
   --print-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
