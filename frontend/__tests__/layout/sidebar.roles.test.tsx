@@ -1,10 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { Sidebar } from '@/components/layout/sidebar';
 
 let mockRole = 'PHARMACIST';
 let mockPath = '/dashboard';
 let mockQuery = '';
-jest.mock('next/navigation', () => ({ usePathname: () => mockPath, useSearchParams: () => new URLSearchParams(mockQuery) }));
+const mockPrefetch = jest.fn();
+jest.mock('next/navigation', () => ({ usePathname: () => mockPath, useSearchParams: () => new URLSearchParams(mockQuery), useRouter: () => ({ prefetch: mockPrefetch }) }));
 jest.mock('@/components/layout/dashboard-user-context', () => ({
   useDashboardUser: () => ({ user: { id: 'u', firstName: 'Asha', lastName: 'Rao', role: mockRole }, logout: jest.fn(), loading: false }),
 }));
@@ -99,4 +100,15 @@ it('carries the Linaé name instead of a generic product name, and no developer 
   render(<Sidebar />);
   expect(screen.getByRole('img', { name: 'Linaé' })).toHaveAttribute('src', expect.stringContaining('linae-name.png'));
   expect(screen.queryByText(/ClinicMS|Test Transcribe/)).not.toBeInTheDocument();
+});
+
+it('fetches a menu route only when the pointer or keyboard reaches its link, not on page load', () => {
+  mockRole = 'RECEPTION';
+  mockPrefetch.mockClear();
+  render(<Sidebar />);
+  const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+  expect(mockPrefetch.mock.calls).toEqual([]);
+  fireEvent.mouseEnter(within(nav).getByRole('link', { name: 'Patients' }));
+  fireEvent.focus(within(nav).getByRole('link', { name: 'Appointments' }));
+  expect(mockPrefetch.mock.calls).toEqual([['/dashboard/patients'], ['/dashboard/appointments']]);
 });
