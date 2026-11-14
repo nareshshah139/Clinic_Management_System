@@ -376,10 +376,10 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
               {!loaded ? (
                 error ? null : <p className="text-sm text-gray-500">Loading…</p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 [&_label]:mb-1.5">
                   <div className="md:col-span-2">
                     <Label htmlFor="name">Name *</Label>
-                    <Input id="name" value={form.name} onChange={(e) => set('name', e.target.value)} />
+                    <Input id="name" autoFocus value={form.name} onChange={(e) => set('name', e.target.value)} />
                   </div>
                   <div>
                     <Label htmlFor="phone">Phone *</Label>

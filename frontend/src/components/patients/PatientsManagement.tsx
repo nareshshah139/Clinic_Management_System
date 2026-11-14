@@ -63,7 +63,7 @@ export default function PatientsManagement() {
   const [linkPortalEmail, setLinkPortalEmail] = useState<string>('');
   const [linkPortalTarget, setLinkPortalTarget] = useState<Patient | null>(null);
   const fetchIdRef = useRef(0);
-  const [sortBy, setSortBy] = useState<'NAME' | 'AGE' | 'GENDER' | 'LAST_VISIT' | 'CREATED_AT' | 'REFERRAL'>('NAME');
+  const [sortBy, setSortBy] = useState<'NAME' | 'AGE' | 'GENDER' | 'LAST_VISIT' | 'CREATED_AT'>('NAME');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   // Client-side fuzzy suggestions for pre-min-2 search
   const suggestions = useMemo(() => {
@@ -231,8 +231,6 @@ export default function PatientsManagement() {
         const da = a.lastVisitDate ? new Date(a.lastVisitDate).getTime() : -Infinity;
         const db = b.lastVisitDate ? new Date(b.lastVisitDate).getTime() : -Infinity;
         r = cmp(da, db);
-      } else if (sortBy === 'REFERRAL') {
-        r = cmp((a.referralSource || ''), (b.referralSource || ''));
       } else {
         const ca = a.createdAt ? new Date(a.createdAt).getTime() : -Infinity;
         const cb = b.createdAt ? new Date(b.createdAt).getTime() : -Infinity;
@@ -631,16 +629,11 @@ export default function PatientsManagement() {
                       <button type="button" onClick={() => toggleSort('GENDER')}>Gender {sortBy === 'GENDER' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
                     <TableHead>Contact</TableHead>
-                    <TableHead>ABHA ID</TableHead>
                     {displayPatients.some(p => !!p.lastVisitDate) && (
                       <TableHead aria-sort={sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
                         <button type="button" onClick={() => toggleSort('LAST_VISIT')}>Last Visit {sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                       </TableHead>
                     )}
-                    <TableHead aria-sort={sortBy === 'REFERRAL' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                      <button type="button" onClick={() => toggleSort('REFERRAL')}>Referral {sortBy === 'REFERRAL' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
-                    </TableHead>
-                    <TableHead>Consultation</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -698,7 +691,7 @@ export default function PatientsManagement() {
                         })()}</div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{normalizeGender(p.gender)}</Badge>
+                        <Badge variant="secondary" className="whitespace-nowrap">{normalizeGender(p.gender)}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1 text-sm text-gray-700">
@@ -706,34 +699,19 @@ export default function PatientsManagement() {
                           {p.email && <div className="flex items-center"><Mail className="h-3 w-3 mr-1" /> {p.email}</div>}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="text-sm text-gray-600">{p.abhaId || <span className="text-gray-400">—</span>}</div>
-                      </TableCell>
                       {displayPatients.some(pp => !!pp.lastVisitDate) && (
                         <TableCell>
                           <div className="text-sm text-gray-600">{p.lastVisitDate ? displayClinicDate(p.lastVisitDate) : <span className="text-gray-400">—</span>}</div>
                         </TableCell>
                       )}
                       <TableCell>
-                        <div className="text-sm text-gray-600">{p.referralSource || <span className="text-gray-400">—</span>}</div>
-                      </TableCell>
-                      <TableCell>
-                        {(p as any).consultationType === 'ONLINE' ? (
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-700">Online</Badge>
-                        ) : (p as any).consultationType === 'OFFLINE' ? (
-                          <Badge variant="secondary" className="bg-green-100 text-green-700">Offline</Badge>
-                        ) : (
-                          <span className="text-gray-400 text-sm">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/patients/${p.id}`); }}><Eye className="h-3 w-3 mr-1" /> View</Button>
-                          <Button size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visits?patientId=${p.id}&autoStart=true`); }}>
-                            <Stethoscope className="h-3 w-3 mr-1" /> Start Visit
+                        <div className="flex items-center gap-2 whitespace-nowrap">
+                          <Button variant="outline" size="sm" className="whitespace-nowrap" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/patients/${p.id}`); }}><Eye className="h-3 w-3 mr-1" /> View</Button>
+                          <Button size="sm" className="whitespace-nowrap" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visits?patientId=${p.id}&autoStart=true`); }}>
+                            <Stethoscope className="h-3 w-3 mr-1" /> Start visit
                           </Button>
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button variant="outline" size="sm" aria-label={`More actions for ${formatPatientName(p)}`} onClick={e => e.stopPropagation()}>More</Button></DropdownMenuTrigger>
+                            <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="whitespace-nowrap" aria-label={`More actions for ${formatPatientName(p)}`} onClick={e => e.stopPropagation()}>More</Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end" onClick={(e: import('react').MouseEvent) => e.stopPropagation()}>
                               <DropdownMenuItem onSelect={() => { setEditId(p.id); setFormOpen(true); }}>Edit</DropdownMenuItem>
                               <DropdownMenuItem onSelect={() => handleArchive(p)}>Archive</DropdownMenuItem>
