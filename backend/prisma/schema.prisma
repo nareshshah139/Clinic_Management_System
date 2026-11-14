@@ -45,6 +45,7 @@ model User {
   emergencyContact           String?
   emergencyPhone             String?
   permissions                String?
+  revokedPermissions         String?
   resetToken                 String?
   resetTokenExpiry           DateTime?
   statusReason               String?
