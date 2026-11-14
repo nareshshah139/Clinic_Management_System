@@ -59,8 +59,8 @@ module.exports = journey(
       visit.status === "COMPLETED" &&
         rx.prescriptions.length === 1 &&
         mometasone.frequency === "TWICE_DAILY" && Number(mometasone.duration) === 14 && mometasone.durationUnit === "DAYS" && mometasone.instructions === "Apply twice daily" &&
-        cetirizine.frequency === "ONCE_DAILY" && Number(cetirizine.duration) === 10 && cetirizine.durationUnit === "DAYS" && cetirizine.instructions === "One tablet at night",
-      "visit is COMPLETED and its one prescription holds Mometasone (twice daily, 14 days, 'Apply twice daily') and Cetirizine (once daily, 10 days, 'One tablet at night')",
+        cetirizine.frequency === "ONCE_DAILY" && cetirizine.dosePattern === "0-0-1" && Number(cetirizine.duration) === 10 && cetirizine.durationUnit === "DAYS" && cetirizine.instructions === "One tablet at night",
+      "visit is COMPLETED and its one prescription holds Mometasone (twice daily, 14 days, 'Apply twice daily') and Cetirizine (once daily at night 0-0-1, 10 days, 'One tablet at night')",
     );
   },
 );

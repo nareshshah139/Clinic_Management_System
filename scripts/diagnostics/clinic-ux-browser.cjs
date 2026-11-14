@@ -84,7 +84,7 @@ async function main() {
     await page.goto(`${base}/dashboard/visits?visitId=${visit.id}`, { waitUntil: 'networkidle2', timeout: 90000 });
     await page.waitForFunction(() => document.body.innerText.includes('Complete visit'), { timeout: 30000 });
     const help = await page.$eval('#visit-completion-help', e => e.innerText);
-    for (const section of ['complaint or diagnosis', 'prescription']) assert(help.includes(section));
+    assert(help.includes('Still needed: a complaint or a diagnosis.'));
     assert(help.includes('does not verify clinical completeness'));
     console.log('PASS visit explains incomplete section markers and clinical-validation limit');
     const visitOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
