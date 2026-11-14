@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Plus, Search, Eye, Phone, Mail, Stethoscope, Calendar, Download } from 'lucide-react';
+import { Plus, Search, Eye, Phone, Mail, Stethoscope, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatPatientName, calculateAge } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -720,8 +720,8 @@ export default function PatientsManagement() {
                               <Stethoscope className="h-3 w-3 mr-1" /> Start visit
                             </Button>
                           ) : (
-                            <Button size="sm" className="whitespace-nowrap" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/appointments?patientId=${encodeURIComponent(p.id)}`); }}>
-                              <Calendar className="h-3 w-3 mr-1" /> Book appointment
+                            <Button size="sm" className="whitespace-nowrap" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/appointments?patientId=${encodeURIComponent(p.id)}`); }} aria-label={`Book appointment for ${formatPatientName(p)}`}>
+                              Book
                             </Button>
                           )}
                           <DropdownMenu>

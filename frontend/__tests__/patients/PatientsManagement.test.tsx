@@ -78,7 +78,7 @@ describe('patients list', () => {
     render(<PatientsManagement />);
     await screen.findByText('Rohan Kulkarni');
     expect(screen.queryByRole('button', { name: 'Start visit' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Book appointment' }));
+    await user.click(screen.getByRole('button', { name: 'Book appointment for Rohan Kulkarni' }));
     expect(push).toHaveBeenCalledWith('/dashboard/appointments?patientId=p1');
   });
 });
