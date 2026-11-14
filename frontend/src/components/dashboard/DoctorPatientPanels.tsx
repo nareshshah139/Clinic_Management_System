@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { ClipboardList, UserRound } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
@@ -27,7 +27,7 @@ function diagnosisSummary(visit: RecentVisit): string {
   return typeof first === 'string' ? first : first.diagnosis || first.name || 'No diagnosis recorded';
 }
 
-/** The logged-in doctor's recent visits and the patients assigned to them as primary doctor. */
+/** The patients assigned to the logged-in doctor as primary doctor, searchable, then the doctor's recent visits. */
 export function DoctorPatientPanels({ doctorId }: { doctorId: string }) {
   const [visits, setVisits] = useState<Loadable<RecentVisit[]>>({ status: 'loading' });
   const [patients, setPatients] = useState<Loadable<{ rows: MyPatient[]; total: number }>>({ status: 'loading' });
@@ -66,43 +66,13 @@ export function DoctorPatientPanels({ doctorId }: { doctorId: string }) {
   const totalPages = patients.status === 'ready' ? Math.max(1, Math.ceil(patients.value.total / PAGE_SIZE)) : 1;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center"><ClipboardList className="h-5 w-5 text-blue-500 mr-2" />Recent Visits</CardTitle>
-          <CardDescription>Your latest consultations</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {visits.status === 'loading' && <p role="status" className="text-sm text-gray-500">Loading recent visits…</p>}
-          {visits.status === 'error' && <p role="alert" className="text-sm text-red-700">Could not load your recent visits. Refresh to try again.</p>}
-          {visits.status === 'ready' && (visits.value.length === 0
-            ? <p className="text-gray-500 text-center py-4">No visits yet</p>
-            : (
-              <ul className="space-y-2" aria-label="Recent visits">
-                {visits.value.map(visit => (
-                  <li key={visit.id}>
-                    <Link href={`/dashboard/visits?patientId=${encodeURIComponent(visit.patient.id)}&visitId=${encodeURIComponent(visit.id)}`}
-                      className="flex items-center justify-between gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2">
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium text-gray-900 truncate">{visit.patient.name}</span>
-                        <span className="block text-xs text-gray-600 truncate">{diagnosisSummary(visit)}</span>
-                      </span>
-                      <span className="shrink-0 text-xs text-gray-600 tabular-nums">{displayClinicDateTime(visit.createdAt)}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ))}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center"><UserRound className="h-5 w-5 text-blue-500 mr-2" />My Patients</CardTitle>
-          <CardDescription>Patients with you as their primary doctor{patients.status === 'ready' ? ` (${patients.value.total})` : ''}</CardDescription>
+          <CardTitle className="flex items-center"><UserRound className="h-5 w-5 text-blue-500 mr-2" />My patients{patients.status === 'ready' ? ` (${patients.value.total})` : ''}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Input aria-label="Search my patients" placeholder="Search by name, phone or code" value={search}
+          <Input aria-label="Search my patients" placeholder="Search my patients" value={search}
             onChange={event => { setSearch(event.target.value); setPage(1); }} />
           {patients.status === 'loading' && <p role="status" className="text-sm text-gray-500">Loading your patients…</p>}
           {patients.status === 'error' && <p role="alert" className="text-sm text-red-700">Could not load your patients. Refresh to try again.</p>}
@@ -133,6 +103,34 @@ export function DoctorPatientPanels({ doctorId }: { doctorId: string }) {
           )}
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center"><ClipboardList className="h-5 w-5 text-blue-500 mr-2" />Recent visits</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {visits.status === 'loading' && <p role="status" className="text-sm text-gray-500">Loading recent visits…</p>}
+          {visits.status === 'error' && <p role="alert" className="text-sm text-red-700">Could not load your recent visits. Refresh to try again.</p>}
+          {visits.status === 'ready' && (visits.value.length === 0
+            ? <p className="text-gray-500 text-center py-4">No visits yet</p>
+            : (
+              <ul className="space-y-2" aria-label="Recent visits">
+                {visits.value.map(visit => (
+                  <li key={visit.id}>
+                    <Link href={`/dashboard/visits?patientId=${encodeURIComponent(visit.patient.id)}&visitId=${encodeURIComponent(visit.id)}`}
+                      className="flex items-center justify-between gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2">
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-gray-900 truncate">{visit.patient.name}</span>
+                        <span className="block text-xs text-gray-600 truncate">{diagnosisSummary(visit)}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-gray-600 tabular-nums">{displayClinicDateTime(visit.createdAt)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ))}
+        </CardContent>
+      </Card>
+
     </div>
   );
 }

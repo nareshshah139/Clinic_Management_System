@@ -30,7 +30,7 @@ describe('DoctorPatientPanels', () => {
 
     await screen.findByText('Patient 1-0');
     expect(get).toHaveBeenCalledWith('/patients', expect.objectContaining({ primaryDoctorId: 'doc-1', page: 1 }));
-    expect(screen.getByText(/primary doctor \(12\)/)).toBeInTheDocument();
+    expect(screen.getByText('My patients (12)')).toBeInTheDocument();
     expect(screen.getAllByText('No visits yet').length).toBeGreaterThan(0);
   });
 

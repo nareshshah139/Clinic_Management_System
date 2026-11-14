@@ -5,6 +5,12 @@ import { ReportsController } from '../reports.controller';
 import { ReportsService } from '../reports.service';
 import { ROLE_PERMISSIONS } from '../../../shared/access/role-permissions';
 
+jest.mock('../../inventory/inventory-stock-query', () => ({
+  readStockPage: async (_db: unknown, _branch: string, q: Record<string, string>) => q.expiryMonths
+    ? { total: 1, rows: [{ id: 'cream', name: 'Synthetic Cream', expiryDate: new Date(Date.now() + 5 * 86400000 - 1000), currentStock: 4 }] }
+    : { total: 1, rows: [{ id: 'gel', name: 'Adapalene Gel', currentStock: 0, minStockLevel: 6 }] },
+}));
+
 const allows = (handler: keyof ReportsController, role: string) =>
   new RolesGuard(new Reflector()).canActivate({
     getHandler: () => ReportsController.prototype[handler],
@@ -25,13 +31,12 @@ const STORED: Record<string, { role: string; permissions: string }> = {
 const prisma = {
   user: { findUnique: async ({ where }: any) => STORED[where.id] ?? null },
   role: { findFirst: async () => null },
-  newInvoice: { findMany: async () => [{ id: 'overdue-1', invoiceNo: 'INV-9', total: 500 }] },
-  inventoryItem: {
-    findMany: async ({ where }: any) => where.expiryDate
-      ? [{ id: 'cream', name: 'Synthetic Cream', expiryDate: new Date(Date.now() + 5 * 86400000 - 1000), currentStock: 4 }]
-      : [{ id: 'gel', name: 'Adapalene Gel', currentStock: 0, minStockLevel: 6 }],
+  newInvoice: {
+    findMany: async () => [{ id: 'overdue-1', invoiceNo: 'INV-9', balance: 500, status: 'OVERDUE', createdAt: new Date('2026-11-08T12:10:00Z'), dueDate: null, patient: { id: 'p1', name: 'Aditya Bhosale' } }],
+    aggregate: async () => ({ _count: 1, _sum: { balance: 500 } }),
   },
   newPayment: { findMany: async () => [{ id: 'pay-1', amount: 100 }] },
+  inventoryItem: { groupBy: async () => [] },
   appointment: { findMany: async () => [{ id: 'appt-1', date: new Date(), status: 'SCHEDULED', visitType: 'OPD', patient: { name: 'Kiran Bhatt' }, doctor: { firstName: 'Priya', lastName: 'Menon' } }] },
 };
 
@@ -47,8 +52,8 @@ describe('system alerts', () => {
   it('gives a pharmacist only the stock alerts', async () => {
     const alerts = await alertsFor('pharmacist');
     expect(alerts).toMatchObject({
-      counts: { overdueInvoices: 0, lowStockAlerts: 1, expiryAlerts: 1, pendingPayments: 0, upcomingAppointments: 0 },
-      overdueInvoices: [],
+      counts: { billsDue: 0, lowStockAlerts: 1, expiryAlerts: 1, pendingPayments: 0, upcomingAppointments: 0 },
+      billsDue: [],
       pendingPayments: [],
       upcomingAppointments: [],
       lowStockAlerts: [{ itemId: 'gel', itemName: 'Adapalene Gel', currentStock: 0, reorderLevel: 6 }],
@@ -58,27 +63,31 @@ describe('system alerts', () => {
 
   it('keeps invoices, payments and appointments for a doctor', async () => {
     const alerts = await alertsFor('doctor');
-    expect(alerts.counts).toEqual({ overdueInvoices: 1, lowStockAlerts: 1, expiryAlerts: 1, pendingPayments: 1, upcomingAppointments: 1 });
+    expect(alerts.counts).toEqual({ billsDue: 1, lowStockAlerts: 1, expiryAlerts: 1, pendingPayments: 1, upcomingAppointments: 1 });
     expect(alerts.upcomingAppointments[0]).toMatchObject({ id: 'appt-1', patientName: 'Kiran Bhatt', doctorName: 'Priya Menon' });
+    expect([alerts.billsDue, alerts.billsDueBalance]).toEqual([
+      [{ id: 'overdue-1', invoiceNo: 'INV-9', balance: 500, status: 'OVERDUE', dueDate: null, billDate: '2026-11-08', patient: { id: 'p1', name: 'Aditya Bhosale' } }],
+      500,
+    ]);
   });
 
   it('gives reception the appointment and billing sections its grants cover', async () => {
-    expect((await alertsFor('reception')).counts).toEqual({ overdueInvoices: 1, lowStockAlerts: 1, expiryAlerts: 1, pendingPayments: 1, upcomingAppointments: 1 });
+    expect((await alertsFor('reception')).counts).toEqual({ billsDue: 1, lowStockAlerts: 1, expiryAlerts: 1, pendingPayments: 1, upcomingAppointments: 1 });
   });
 
   it('gives a nurse only the appointments, which it may read', async () => {
     const alerts = await alertsFor('nurse');
-    expect(alerts.counts).toEqual({ overdueInvoices: 0, lowStockAlerts: 0, expiryAlerts: 0, pendingPayments: 0, upcomingAppointments: 1 });
-    expect([alerts.overdueInvoices, alerts.pendingPayments, alerts.lowStockAlerts, alerts.expiryAlerts]).toEqual([[], [], [], []]);
+    expect(alerts.counts).toEqual({ billsDue: 0, lowStockAlerts: 0, expiryAlerts: 0, pendingPayments: 0, upcomingAppointments: 1 });
+    expect([alerts.billsDue, alerts.pendingPayments, alerts.lowStockAlerts, alerts.expiryAlerts]).toEqual([[], [], [], []]);
   });
 
   it('gives an accountant only the money sections', async () => {
-    expect((await alertsFor('accountant')).counts).toEqual({ overdueInvoices: 1, lowStockAlerts: 0, expiryAlerts: 0, pendingPayments: 1, upcomingAppointments: 0 });
+    expect((await alertsFor('accountant')).counts).toEqual({ billsDue: 1, lowStockAlerts: 0, expiryAlerts: 0, pendingPayments: 1, upcomingAppointments: 0 });
   });
 
   it('gives a manager everything and a user with no grants nothing', async () => {
-    expect((await alertsFor('manager')).counts).toEqual({ overdueInvoices: 1, lowStockAlerts: 1, expiryAlerts: 1, pendingPayments: 1, upcomingAppointments: 1 });
-    expect((await alertsFor('bare')).counts).toEqual({ overdueInvoices: 0, lowStockAlerts: 0, expiryAlerts: 0, pendingPayments: 0, upcomingAppointments: 0 });
-    expect((await alertsFor('missing')).counts).toEqual({ overdueInvoices: 0, lowStockAlerts: 0, expiryAlerts: 0, pendingPayments: 0, upcomingAppointments: 0 });
+    expect((await alertsFor('manager')).counts).toEqual({ billsDue: 1, lowStockAlerts: 1, expiryAlerts: 1, pendingPayments: 1, upcomingAppointments: 1 });
+    expect((await alertsFor('bare')).counts).toEqual({ billsDue: 0, lowStockAlerts: 0, expiryAlerts: 0, pendingPayments: 0, upcomingAppointments: 0 });
+    expect((await alertsFor('missing')).counts).toEqual({ billsDue: 0, lowStockAlerts: 0, expiryAlerts: 0, pendingPayments: 0, upcomingAppointments: 0 });
   });
 });

@@ -271,38 +271,32 @@ function getTourStepsForPage(pathname: string): TourStep[] {
       {
         intro: `
           <div class="space-y-2">
-            <h3 class="text-lg font-semibold">Welcome to the Receptionist Dashboard! 🎉</h3>
-            <p>Let's take a quick tour of your main responsibilities and how to navigate the system effectively.</p>
+            <h3 class="text-lg font-semibold">Your landing page</h3>
+            <p>A quick look at where today's front-desk work starts.</p>
           </div>
         `,
-        title: 'Welcome!',
+        title: 'Welcome',
       },
       {
         element: '[data-tour="sidebar"]',
         intro: `
           <div class="space-y-2">
-            <h4 class="font-semibold">Navigation Sidebar</h4>
-            <p>Use this sidebar to access all the modules you need:</p>
+            <h4 class="font-semibold">Menu</h4>
             <ul class="list-disc pl-5 space-y-1 text-sm">
-              <li><strong>Appointments:</strong> Schedule and manage patient appointments</li>
-              <li><strong>Patients:</strong> Register and manage patient records</li>
-              <li><strong>Rooms:</strong> Check room availability</li>
+              <li><strong>Appointments:</strong> the calendar, to book and move appointments</li>
+              <li><strong>Patients:</strong> find, register and edit patients</li>
+              <li><strong>Rooms:</strong> see which rooms are free</li>
             </ul>
           </div>
         `,
         position: 'right',
       },
       {
-        element: '[data-tour="dashboard-stats"]',
+        element: '[data-tour="desk-actions"]',
         intro: `
           <div class="space-y-2">
-            <h4 class="font-semibold">Today's Overview</h4>
-            <p>View quick stats for today including:</p>
-            <ul class="list-disc pl-5 space-y-1 text-sm">
-              <li>Number of appointments scheduled</li>
-              <li>Patient registrations</li>
-              <li>Room occupancy status</li>
-            </ul>
+            <h4 class="font-semibold">Book appointment and New patient</h4>
+            <p>Book appointment opens the calendar. New patient registers a walk-in.</p>
           </div>
         `,
         position: 'bottom',
@@ -311,8 +305,8 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         element: '[data-tour="appointments-list"]',
         intro: `
           <div class="space-y-2">
-            <h4 class="font-semibold">Today's Appointments</h4>
-            <p>See all appointments scheduled for today. Click on any appointment to view details, reschedule, or cancel.</p>
+            <h4 class="font-semibold">Today's appointments</h4>
+            <p>The next patient is at the top. Press a bill to see it, create it or take a payment.</p>
           </div>
         `,
         position: 'top',

@@ -5,6 +5,9 @@ import { addDays, clinicDay, clinicDayOf, clinicInstants } from '../pharmacy/reg
 import { reportRange, type ReportRange } from './report-range';
 import { Prisma } from '@prisma/client';
 import { viewerGrants } from '../../shared/access/viewer-grants';
+import { readStockPage } from '../inventory/inventory-stock-query';
+import { clinicBillsDue } from '../billing/billing.service';
+import { clinicBillAccess } from '../billing/billing-access';
 import {
   RevenueReportResponseDto,
   PaymentBreakdownDto,
@@ -1138,28 +1141,25 @@ export class ReportsService {
       expiry: grants.has('inventory:alerts:expiry'),
     };
     const now = new Date();
-    const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const in48Hours = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const noStock = { rows: [] as any[], total: 0 };
+    const openBills = clinicBillsDue(branchId);
 
-    const [overdueInvoices, lowStockAlerts, expiryAlerts, pendingPaymentsList, upcomingAppointments] = await Promise.all([
+    const [billsDue, billsDueSum, billAccess, low, expiring, pendingPaymentsList, upcomingAppointments] = await Promise.all([
       !sees.invoices ? [] : this.prisma.newInvoice.findMany({
-        where: { branchId, status: 'OVERDUE' },
-        select: { id: true, invoiceNo: true, total: true, dueDate: true, patient: { select: { id: true, name: true } } },
-        orderBy: { dueDate: 'asc' },
+        where: openBills,
+        select: {
+          id: true, invoiceNo: true, balance: true, status: true, createdAt: true, dueDate: true,
+          patient: { select: { id: true, name: true } },
+          appointment: { select: { id: true, doctorId: true, date: true } },
+        },
+        orderBy: { createdAt: 'asc' },
         take: 10,
       }),
-      !sees.lowStock ? [] : this.prisma.inventoryItem.findMany({
-        where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] },
-        select: { id: true, name: true, currentStock: true, minStockLevel: true },
-        orderBy: { currentStock: 'asc' },
-        take: 10,
-      }),
-      !sees.expiry ? [] : this.prisma.inventoryItem.findMany({
-        where: { branchId, expiryDate: { gt: now, lt: in30Days } },
-        select: { id: true, name: true, expiryDate: true, currentStock: true },
-        orderBy: { expiryDate: 'asc' },
-        take: 10,
-      }),
+      !sees.invoices ? null : this.prisma.newInvoice.aggregate({ where: openBills, _count: true, _sum: { balance: true } }),
+      sees.invoices && viewer.id && viewer.role ? clinicBillAccess(this.prisma, { id: viewer.id, role: viewer.role }) : null,
+      !sees.lowStock ? noStock : readStockPage(this.prisma, branchId, { stock: 'LOW', sortBy: 'available', limit: 10 }, (item) => item),
+      !sees.expiry ? noStock : readStockPage(this.prisma, branchId, { expiryMonths: '3', sortBy: 'expiryDate', limit: 10 }, (item) => item),
       !sees.payments ? [] : this.prisma.newPayment.findMany({
         where: { 
           reconStatus: 'PENDING',
@@ -1184,26 +1184,50 @@ export class ReportsService {
       }),
     ]);
 
+    const availableOf = (item: { currentStock: number; heldStock?: number | null }) => item.currentStock - (item.heldStock ?? 0);
+    const lowNames = [...new Set(low.rows.map((i: any) => i.name as string))];
+    const byName = lowNames.length
+      ? await this.prisma.inventoryItem.groupBy({
+          by: ['name'],
+          where: { branchId, status: 'ACTIVE', name: { in: lowNames }, OR: [{ expiryDate: null }, { expiryDate: { gte: now } }] },
+          _sum: { currentStock: true, heldStock: true },
+        })
+      : [];
+    const availableInAll = new Map(byName.map((g) => [g.name, (g._sum.currentStock ?? 0) - (g._sum.heldStock ?? 0)]));
+
     return {
       counts: {
-        overdueInvoices: overdueInvoices.length,
-        lowStockAlerts: lowStockAlerts.length,
-        expiryAlerts: expiryAlerts.length,
+        billsDue: billsDueSum?._count ?? 0,
+        lowStockAlerts: low.total,
+        expiryAlerts: expiring.total,
         pendingPayments: pendingPaymentsList.length,
         upcomingAppointments: upcomingAppointments.length,
       },
-      overdueInvoices,
-      lowStockAlerts: lowStockAlerts.map((i) => ({
+      billsDueBalance: billsDueSum?._sum.balance ?? 0,
+      canTakePayment: billAccess?.takePayment ?? false,
+      billsDue: billsDue.map((b) => ({
+        id: b.id,
+        invoiceNo: b.invoiceNo,
+        balance: b.balance,
+        status: b.status,
+        dueDate: b.dueDate,
+        billDate: clinicDay(b.createdAt),
+        patient: b.patient,
+        appointment: b.appointment && { id: b.appointment.id, doctorId: b.appointment.doctorId, day: b.appointment.date.toISOString().slice(0, 10) },
+      })),
+      lowStockAlerts: low.rows.map((i: any) => ({
         itemId: i.id,
         itemName: i.name,
         currentStock: i.currentStock,
-        reorderLevel: (i as any).minStockLevel || 0,
+        available: availableOf(i),
+        availableInAll: Math.max(availableOf(i), availableInAll.get(i.name) ?? 0),
+        reorderLevel: i.minStockLevel ?? i.reorderLevel ?? 0,
       })),
-      expiryAlerts: expiryAlerts.map((i) => ({
+      expiryAlerts: expiring.rows.map((i: any) => ({
         itemId: i.id,
         itemName: i.name,
-        expiryDate: i.expiryDate!,
-        daysUntilExpiry: Math.ceil(((i.expiryDate as Date).getTime() - Date.now()) / (24 * 60 * 60 * 1000)),
+        expiryDate: i.expiryDate,
+        daysUntilExpiry: Math.ceil((new Date(i.expiryDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000)),
         currentStock: i.currentStock,
       })),
       pendingPayments: pendingPaymentsList,
@@ -1212,6 +1236,7 @@ export class ReportsService {
         time: a.date,
         status: a.status,
         visitType: a.visitType,
+        patientId: (a as any).patient?.id,
         patientName: (a as any).patient?.name || 'Patient',
         doctorName: `${(a as any).doctor?.firstName || ''} ${(a as any).doctor?.lastName || (a as any).doctor?.name || ''}`.trim(),
       })),

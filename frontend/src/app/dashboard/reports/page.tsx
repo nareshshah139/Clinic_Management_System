@@ -192,7 +192,7 @@ interface ReconciliationSummary {
 
 interface SystemAlerts {
   counts: {
-    overdueInvoices: number;
+    billsDue: number;
     lowStockAlerts: number;
     expiryAlerts: number;
     pendingPayments: number;
@@ -1171,8 +1171,8 @@ export default function ReportsPage() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
               <div className="text-center">
-                <p className="text-orange-600">Overdue Invoices</p>
-                <p className="text-lg font-bold">{systemAlerts.counts.overdueInvoices}</p>
+                <p className="text-orange-600">Bills due</p>
+                <p className="text-lg font-bold">{systemAlerts.counts.billsDue}</p>
               </div>
               <div className="text-center">
                 <p className="text-red-600">Low Stock</p>

@@ -850,10 +850,6 @@ export class ApiClient {
     return this.get('/reports/doctors', params);
   }
 
-  async getSystemStatistics() {
-    return this.get('/auth/statistics');
-  }
-
   async getSystemAlerts<T = unknown>() {
     return this.get<T>('/reports/alerts');
   }

@@ -24,7 +24,6 @@ import {
   MapPin,
   Activity,
   Pill,
-  Mic,
   ShoppingBag,
   FileBarChart,
   Wallet,
@@ -149,12 +148,6 @@ const navigation: NavigationItem[] = [
     href: FEE_LIST_PATH,
     icon: ReceiptIndianRupee,
     allowedRoles: FEE_EDITOR_ROLES,
-  },
-  {
-    name: "Test Transcribe", section: "Admin",
-    href: "/test-transcribe",
-    icon: Mic,
-    allowedRoles: ["OWNER", "ADMIN", "DOCTOR"],
   },
 ];
 

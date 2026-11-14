@@ -14,6 +14,7 @@ import { Header } from "./header";
 import { apiClient } from "@/lib/api";
 import type { ApiError } from "@/lib/api";
 import type { User } from "@/lib/types";
+import { CLINIC_STAFF_ROLES } from "@/lib/clinic-staff-roles";
 import { DashboardUserProvider } from "./dashboard-user-context";
 import { AnalyticsMount } from "@/lib/analytics";
 import { Menu } from "lucide-react";
@@ -44,6 +45,24 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         branchId?: string;
       }>("/auth/me");
       if (me?.id) {
+        const minimal = {
+          id: me.id!,
+          firstName: "",
+          lastName: "",
+          name: "",
+          email: "",
+          phone: "",
+          role: (me.role as any) || "UNKNOWN",
+          status: "ACTIVE",
+          branchId: (me.branchId as any) || "",
+          isActive: true,
+          createdAt: "",
+          updatedAt: "",
+        } as unknown as User;
+        if (!CLINIC_STAFF_ROLES.includes(String(me.role))) {
+          setUser(minimal);
+          return;
+        }
         try {
           const fullUser = await apiClient.get<User>(`/users/${me.id}`);
           setUser({
@@ -55,20 +74,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             "Failed to load full user profile; using minimal identity",
             innerError,
           );
-          setUser({
-            id: me.id!,
-            firstName: "",
-            lastName: "",
-            name: "",
-            email: "",
-            phone: "",
-            role: (me.role as any) || "UNKNOWN",
-            status: "ACTIVE",
-            branchId: (me.branchId as any) || "",
-            isActive: true,
-            createdAt: "",
-            updatedAt: "",
-          } as unknown as User);
+          setUser(minimal);
         }
       } else {
         setUser(null);

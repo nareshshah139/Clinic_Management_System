@@ -6,7 +6,8 @@ import { apiClient } from '@/lib/api';
 
 jest.mock('@/lib/api', () => ({
   apiClient: {
-    getSystemStatistics: jest.fn(),
+    get: jest.fn(),
+    getInventoryItemRequestPendingCount: jest.fn(),
     getSystemAlerts: jest.fn(),
     getDoctorSchedule: jest.fn(),
     getAppointments: jest.fn(),
@@ -45,7 +46,8 @@ function renderDashboard(role: UserRole.DOCTOR | UserRole.ADMIN = UserRole.DOCTO
 beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers().setSystemTime(new Date('2026-11-05T06:00:00.000Z'));
-  (apiClient.getSystemStatistics as jest.Mock).mockResolvedValue({});
+  (apiClient.get as jest.Mock).mockResolvedValue({ wholeDay: null, collection: { expectedTotal: 0, modes: [] }, pendingEdits: 0 });
+  (apiClient.getInventoryItemRequestPendingCount as jest.Mock).mockResolvedValue({ count: 0 });
   (apiClient.getSystemAlerts as jest.Mock).mockResolvedValue({});
   (apiClient.getDoctorSchedule as jest.Mock).mockResolvedValue({ appointments });
   (apiClient.getAppointments as jest.Mock).mockResolvedValue({ appointments });
@@ -113,7 +115,7 @@ describe.each([UserRole.DOCTOR, UserRole.ADMIN] as const)('%s clinic-day queries
       } else {
         expect(apiClient.getAppointments).toHaveBeenCalledWith({
           date: expectedDate,
-          limit: 5,
+          limit: 100,
           sortBy: 'slot',
           sortOrder: 'asc',
         });
