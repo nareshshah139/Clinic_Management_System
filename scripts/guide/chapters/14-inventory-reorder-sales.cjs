@@ -601,7 +601,7 @@ module.exports = {
             await page.getByRole("button", { name: "New document" }).click();
             await page.getByLabel("Search original sale").waitFor({ timeout: 30000 });
             await page.getByLabel("Reference", { exact: true }).fill(RETURN_REF);
-            await page.getByLabel("Search original sale").fill("COUNTER-SALE");
+            await page.getByLabel("Search original sale").fill(SALE_REF);
             const pick = page.getByLabel("Add from original sale");
             await h.settle(1500);
             await pick.selectOption({ index: 1 });

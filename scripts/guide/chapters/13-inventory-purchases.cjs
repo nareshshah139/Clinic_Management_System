@@ -213,43 +213,6 @@ module.exports = {
       ],
     },
     {
-      title: "Understand bill and payment statuses",
-      who: "Pharmacists, admins, owners",
-      body: [
-        "Two separate things are tracked for each bill: whether its stock has been added, and whether the distributor has been paid. The register shows the payment state in the last column. The bill status appears in <b>More filters</b> under <b>Bill status</b>.",
-      ],
-      fields: [
-        ["Not posted", "The bill is a draft or still being checked. Stock has not been added and nothing is owed yet. Hold the mouse over the badge for the reason."],
-        ["Due", "Stock is added and the bill is unpaid but not yet past its due date."],
-        ["Overdue", "Unpaid and past its due date. The badge also tells you how many days late."],
-        ["Part paid", "Some money has been paid; a balance remains."],
-        ["Paid", "Nothing more is owed on the bill."],
-        ["Cancelled", "The bill was cancelled. It is shown crossed out and is left out of the totals."],
-        ["Draft", "Bill status: saved but not finished."],
-        ["Any review step", "Bill status: the bill is somewhere between being scanned and being added to stock."],
-        ["OCR review required", "Bill status: a scanned bill whose reading must be checked by a person."],
-        ["Reconciliation failed", "Bill status: the lines do not add up to the printed total. Correct the lines before adding stock."],
-        ["Reviewed", "Bill status: checked and ready for the final step of adding stock."],
-        ["Stock added", "Bill status: the stock is in the pharmacy and the bill is a purchase on record."],
-        ["Typed in, Scanned, CSV import, Gmail", "Source: how the bill was entered."],
-      ],
-      fieldsHeading: ["Word", "Meaning"],
-      shots: [
-        {
-          file: "bill-open",
-          as: "admin",
-          caption: "An open bill shows the distributor, the lines, the stock added and the totals. Use the back arrow to return to the list.",
-          viewport: { width: 1440, height: 1700 },
-          run: async (page, h) => {
-            await register(page, h);
-            await page.getByRole("tabpanel", { name: "Purchase" }).getByRole("button", { name: /^Open bill/ }).first().click();
-            await page.getByText("Products on this bill").first().waitFor({ timeout: 30000 });
-            await h.settle(1000);
-          },
-        },
-      ],
-    },
-    {
       title: "Enter a bill by scanning or uploading it",
       who: "Pharmacists",
       body: [
@@ -495,6 +458,43 @@ module.exports = {
         },
       ],
       warnings: ["Adding stock cannot be undone from this page. If a quantity, price or product detail is wrong afterwards, open the batch from the bill (or the stock list) and correct it there. See the chapter Inventory: today and stock."],
+    },
+    {
+      title: "Understand bill and payment statuses",
+      who: "Pharmacists, admins, owners",
+      body: [
+        "Two separate things are tracked for each bill: whether its stock has been added, and whether the distributor has been paid. The register shows the payment state in the last column. The bill status appears in <b>More filters</b> under <b>Bill status</b>.",
+      ],
+      fields: [
+        ["Not posted", "The bill is a draft or still being checked. Stock has not been added and nothing is owed yet. Hold the mouse over the badge for the reason."],
+        ["Due", "Stock is added and the bill is unpaid but not yet past its due date."],
+        ["Overdue", "Unpaid and past its due date. The badge also tells you how many days late."],
+        ["Part paid", "Some money has been paid; a balance remains."],
+        ["Paid", "Nothing more is owed on the bill."],
+        ["Cancelled", "The bill was cancelled. It is shown crossed out and is left out of the totals."],
+        ["Draft", "Bill status: saved but not finished."],
+        ["Any review step", "Bill status: the bill is somewhere between being scanned and being added to stock."],
+        ["OCR review required", "Bill status: a scanned bill whose reading must be checked by a person."],
+        ["Reconciliation failed", "Bill status: the lines do not add up to the printed total. Correct the lines before adding stock."],
+        ["Reviewed", "Bill status: checked and ready for the final step of adding stock."],
+        ["Stock added", "Bill status: the stock is in the pharmacy and the bill is a purchase on record."],
+        ["Typed in, Scanned, CSV import, Gmail", "Source: how the bill was entered."],
+      ],
+      fieldsHeading: ["Word", "Meaning"],
+      shots: [
+        {
+          file: "bill-open",
+          as: "admin",
+          caption: "An open bill shows the distributor, the lines, the stock added and the totals. Use the back arrow to return to the list.",
+          viewport: { width: 1440, height: 1700 },
+          run: async (page, h) => {
+            await register(page, h);
+            await page.getByRole("button", { name: `Open bill ${state.billNo}` }).first().click();
+            await page.getByText("Products on this bill").first().waitFor({ timeout: 30000 });
+            await h.settle(1000);
+          },
+        },
+      ],
     },
     {
       title: "Drafts and recovery",
