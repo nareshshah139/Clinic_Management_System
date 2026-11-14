@@ -1,274 +1,34 @@
 'use client';
 
-import { displayClinicDateTime, displayUtcDate } from '@/lib/date-display';
-
-type PrescriptionSummaryProps = {
-  prescription: unknown;
-  onPrint?: () => void;
-};
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-
-function normalizePrescription(prescription: unknown) {
-  if (!isPlainObject(prescription)) {
-    return null;
-  }
-
-  const itemsRaw = prescription.items;
-  let items: Array<Record<string, unknown>> = [];
-  if (Array.isArray(itemsRaw)) {
-    items = itemsRaw as Array<Record<string, unknown>>;
-  } else if (typeof itemsRaw === 'string' && itemsRaw.trim()) {
-    try {
-      const parsed = JSON.parse(itemsRaw);
-      if (Array.isArray(parsed)) {
-        items = parsed as Array<Record<string, unknown>>;
-      }
-    } catch (error) {
-      console.error('Failed to parse prescription items', error);
-    }
-  }
-
-  return {
-    id: typeof prescription.id === 'string' ? prescription.id : undefined,
-    prescriptionNumber: typeof prescription.prescriptionNumber === 'string' ? prescription.prescriptionNumber : undefined,
-    createdAt: displayClinicDateTime(prescription.createdAt as string | Date | undefined, '') || null,
-    status: typeof prescription.status === 'string' ? prescription.status : undefined,
-    doctor:
-      isPlainObject(prescription.doctor) && typeof prescription.doctor.name === 'string'
-        ? prescription.doctor.name
-        : undefined,
-    patient:
-      isPlainObject(prescription.patient) && typeof prescription.patient.name === 'string'
-        ? prescription.patient.name
-        : undefined,
-    notes: typeof prescription.notes === 'string' ? prescription.notes : undefined,
-    instructions: typeof prescription.instructions === 'string' ? prescription.instructions : undefined,
-    pharmacistNotes: typeof prescription.pharmacistNotes === 'string' ? prescription.pharmacistNotes : undefined,
-    reviewDate: displayUtcDate((prescription as Record<string, unknown>).reviewDate as string | Date | undefined, '') || null,
-    metadata: isPlainObject(prescription.metadata) ? prescription.metadata : undefined,
-    items,
-  };
-}
-
-function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps) {
-  const normalized = normalizePrescription(prescription);
-
-  if (!normalized) {
-    return <p className="text-sm text-red-600">Unable to display prescription data.</p>;
-  }
-
-  const {
-    id,
-    prescriptionNumber,
-    createdAt,
-    status,
-    doctor,
-    patient,
-    notes,
-    instructions,
-    pharmacistNotes,
-    reviewDate,
-    items,
-  } = normalized;
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900">Prescription Overview</h3>
-        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          {prescriptionNumber && (
-            <div>
-              <span className="text-gray-600">Prescription #:</span>
-              <span className="ml-2 text-gray-900">{prescriptionNumber}</span>
-            </div>
-          )}
-          {id && (
-            <div>
-              <span className="text-gray-600">ID:</span>
-              <span className="ml-2 text-gray-900">{id}</span>
-            </div>
-          )}
-          {status && (
-            <div>
-              <span className="text-gray-600">Status:</span>
-              <span className="ml-2 text-gray-900 capitalize">{status.toLowerCase()}</span>
-            </div>
-          )}
-          {createdAt && (
-            <div>
-              <span className="text-gray-600">Created:</span>
-              <span className="ml-2 text-gray-900">{createdAt}</span>
-            </div>
-          )}
-          {reviewDate && (
-            <div>
-              <span className="text-gray-600">Review Date:</span>
-              <span className="ml-2 text-gray-900">{reviewDate}</span>
-            </div>
-          )}
-          {doctor && (
-            <div>
-              <span className="text-gray-600">Doctor:</span>
-              <span className="ml-2 text-gray-900">{doctor}</span>
-            </div>
-          )}
-          {patient && (
-            <div>
-              <span className="text-gray-600">Patient:</span>
-              <span className="ml-2 text-gray-900">{patient}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <h4 className="text-md font-medium text-gray-900">Medications</h4>
-        {items.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-500">No medication items recorded.</p>
-        ) : (
-          <div className="mt-3 space-y-3">
-            {items.map((item, idx) => {
-              const name = typeof item.drugName === 'string' ? item.drugName : typeof item.name === 'string' ? item.name : `Medication ${idx + 1}`;
-              const dosage = typeof item.dosage === 'string' ? item.dosage : item.dosage ? String(item.dosage) : undefined;
-              const frequency = typeof item.frequency === 'string' ? item.frequency : undefined;
-              const duration = typeof item.duration === 'string' ? item.duration : undefined;
-              const durationUnit = typeof item.durationUnit === 'string' ? item.durationUnit : undefined;
-              const instructionsText = typeof item.instructions === 'string' ? item.instructions : undefined;
-              const additional: string[] = [];
-
-              if (typeof item.applicationSite === 'string') {
-                additional.push(`Application site: ${item.applicationSite}`);
-              }
-              if (typeof item.applicationAmount === 'string') {
-                additional.push(`Amount: ${item.applicationAmount}`);
-              }
-              if (typeof item.dayPart === 'string') {
-                additional.push(`Day part: ${item.dayPart}`);
-              }
-              if (typeof item.pulseRegimen === 'string') {
-                additional.push(`Pulse regimen: ${item.pulseRegimen}`);
-              }
-              if (typeof item.foodInstructions === 'string') {
-                additional.push(`Food instructions: ${item.foodInstructions}`);
-              }
-              if (typeof item.taperSchedule === 'string') {
-                additional.push(`Taper schedule: ${item.taperSchedule}`);
-              }
-              if (item.pregnancyWarning) {
-                additional.push('Pregnancy warning');
-              }
-              if (item.photosensitivityWarning) {
-                additional.push('Photosensitivity warning');
-              }
-              if (typeof item.weightMgPerKgPerDay === 'number') {
-                additional.push(`Weight-based dose: ${item.weightMgPerKgPerDay} mg/kg/day`);
-              }
-              if (typeof item.calculatedDailyDoseMg === 'number') {
-                additional.push(`Calculated daily dose: ${item.calculatedDailyDoseMg} mg`);
-              }
-              if (typeof item.washOffAfterMinutes === 'number') {
-                additional.push(`Wash off after: ${item.washOffAfterMinutes} minutes`);
-              }
-
-              return (
-                <div key={idx} className="rounded-md border border-gray-200 p-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">{name}</p>
-                      <p className="text-sm text-gray-600">
-                        {dosage && <span className="mr-2">Dosage: {dosage}</span>}
-                        {frequency && <span className="mr-2">Frequency: {frequency.replaceAll('_', ' ')}</span>}
-                        {duration && <span className="mr-2">Duration: {duration} {durationUnit ?? ''}</span>}
-                      </p>
-                      {instructionsText && (
-                        <p className="text-sm text-gray-700 mt-1">Instructions: {instructionsText}</p>
-                      )}
-                      {additional.length > 0 && (
-                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-600">
-                          {additional.map((entry, additionalIdx) => (
-                            <li key={additionalIdx}>{entry}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {(notes || instructions || pharmacistNotes) && (
-        <div className="space-y-3">
-          {notes && (
-            <div>
-              <h4 className="text-md font-medium text-gray-900">Notes</h4>
-              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{notes}</p>
-            </div>
-          )}
-          {instructions && (
-            <div>
-              <h4 className="text-md font-medium text-gray-900">General Instructions</h4>
-              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{instructions}</p>
-            </div>
-          )}
-          {pharmacistNotes && (
-            <div>
-              <h4 className="text-md font-medium text-gray-900">Pharmacist Notes</h4>
-              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{pharmacistNotes}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {onPrint && (
-        <DialogFooter>
-          <Button variant="outline" onClick={onPrint}>Print</Button>
-        </DialogFooter>
-      )}
-    </div>
-  );
-}
-
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 
-import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { isValidId } from '@/lib/id';
-import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
-import { usePatientHistory } from '@/components/visits/usePatientHistory';
-import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { User, Users, Stethoscope, FileText, Calendar, Activity, ArrowLeft } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { User, Users, Stethoscope, Calendar, ArrowLeft } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { formatPatientName } from '@/lib/utils';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
 import { useRecordById } from '@/components/visits/useRecordById';
+import { PatientHistoryTimeline } from '@/components/visits/PatientHistoryTimeline';
+import PatientPicker from '@/components/visits/PatientPicker';
 import type {
   Appointment,
   GetPatientsResponse,
   GetUsersResponse,
   Patient,
-  PatientVisitHistoryResponse,
   User as UserSummary,
-  VisitTimelineEntry,
 } from '@/lib/types';
 
 type AppointmentWithVisit = Appointment & { visit?: { id: string } | null };
@@ -278,188 +38,21 @@ type PatientMatch = Patient & { name?: string };
 const fetchPatientById = (id: string) => apiClient.getPatient(id);
 const fetchDoctorById = (id: string) => apiClient.getUser(id);
 
-const normalizePatientVisits = (payload: PatientVisitHistoryResponse): VisitTimelineEntry[] => {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-  if (payload && typeof payload === 'object') {
-    const { visits, data } = payload;
-    if (Array.isArray(visits)) return visits;
-    if (Array.isArray(data)) return data;
-  }
-  return [];
+type FormSaveStatus = 'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error';
+type VisitBinding = { patientId: string; doctorId: string; visitId?: string; appointment?: AppointmentWithVisit };
+type LinkNotice = { text: string; patientId: string };
+
+const LINK_NOTICES = {
+  visit: 'That visit could not be opened. Search for the patient to continue.',
+  patient: 'That patient could not be loaded. Search for the patient to continue.',
+  appointment: 'That appointment could not be opened. Search for the patient to continue.',
+} as const;
+const UNSAVED_STATUSES: FormSaveStatus[] = ['unsaved', 'saving', 'autosaving', 'error'];
+
+const clearVisitLink = () => {
+  if (window.location.search) window.history.replaceState(null, '', '/dashboard/visits');
 };
 
-const PhotosPanel = dynamic<ComponentType<{ visitId: string }>>(
-  () => import('@/components/visits/VisitPhotos'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex items-center justify-center py-6 text-sm text-gray-500">
-        Loading photos…
-      </div>
-    ),
-  }
-);
-
-// Patient History Timeline Component
-function PatientHistoryTimeline({ patientId }: { patientId: string }) {
-  const { entries: history, loading, error: historyError, refresh } = usePatientHistory(patientId);
-  const [viewingPrescription, setViewingPrescription] = useState<{
-    visitId: string;
-    prescriptionId: string;
-  } | null>(null);
-  const [prescriptionsCache, setPrescriptionsCache] = useState<Record<string, unknown>>({});
-  const [prescriptionLoading, setPrescriptionLoading] = useState(false);
-  const [prescriptionError, setPrescriptionError] = useState<string | null>(null);
-
-  if (historyError) return <div role="alert" className="p-4 text-red-700">Unable to load patient history. {historyError} <Button onClick={() => void refresh()}>Retry</Button></div>;
-
-  if (loading) {
-    return (
-      <LoadingSkeleton label="Loading visit history…" />
-    );
-  }
-
-  if (!patientId) {
-    return (
-      <div className="text-center py-8 text-gray-500">
-        <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-        <p>Select a patient to view their visit history</p>
-      </div>
-    );
-  }
-
-  if (history.length === 0) {
-    return (
-      <div className="text-center py-8 text-gray-500">
-        <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-        <p>No documented history to show</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900">Patient History</h3><Button variant="outline" onClick={() => void refresh()}>Refresh</Button>
-        <Badge variant="secondary">{history.length} Records</Badge>
-      </div>
-      
-      <div className="relative">
-        {/* Timeline line */}
-        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-        
-        {/* Timeline items */}
-        <div className="space-y-6">
-          {history.map((visit, index) => {
-            const isProcedure = JSON.stringify(visit.scribeJson ?? visit.visitType ?? '')
-              .toLowerCase()
-              .includes('procedure');
-            const hasPrescription = !!visit.prescription?.id;
-            
-            return (
-              <div key={visit.id} className="relative flex items-start space-x-4">
-                {/* Timeline dot */}
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center ${
-                  index === 0 
-                    ? 'bg-blue-100 border-blue-500 text-blue-600'
-                    : 'bg-gray-100 border-gray-300 text-gray-500'
-                }`}>
-                  {isProcedure ? (
-                    <Activity className="h-4 w-4" />
-                  ) : (
-                    <Stethoscope className="h-4 w-4" />
-                  )}
-                </div>
-                
-                {/* Visit details */}
-                <div className="flex-1 min-w-0">
-                  <PatientHistoryVisitCard
-                    visit={visit as unknown as Record<string, unknown>}
-                    visitLabel={visit.entryType === 'appointment' ? 'Appointment' : index === 0 ? 'Most recent record' : undefined}
-                    highlight={index === 0}
-                    onResume={
-                      visit.id
-                        ? () => {
-                            window.location.href = `/dashboard/visits?visitId=${encodeURIComponent(visit.id)}`;
-                          }
-                        : undefined
-                    }
-                    footerActions={
-                      hasPrescription ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            const prescriptionId = visit.prescription!.id;
-                            setViewingPrescription({ visitId: visit.id, prescriptionId });
-                            if (!prescriptionsCache[prescriptionId]) {
-                              setPrescriptionError(null);
-                              setPrescriptionLoading(true);
-                              void apiClient
-                                .getPrescription(prescriptionId)
-                                .then((data) => {
-                                  setPrescriptionsCache((prev) => ({
-                                    ...prev,
-                                    [prescriptionId]: data,
-                                  }));
-                                })
-                                .catch((error: unknown) => {
-                                  console.error('Failed to load prescription', error);
-                                  setPrescriptionError(
-                                    'Unable to load prescription. Please try again.'
-                                  );
-                                })
-                                .finally(() => {
-                                  setPrescriptionLoading(false);
-                                });
-                            }
-                          }}
-                        >
-                          View Prescription
-                        </Button>
-                      ) : undefined
-                    }
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <Dialog
-        open={!!viewingPrescription}
-        onOpenChange={(open: boolean) => {
-          if (!open) {
-            setViewingPrescription(null);
-            setPrescriptionError(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Prescription Details</DialogTitle>
-            <DialogDescription>
-              Review the medications and instructions issued during this visit.
-            </DialogDescription>
-          </DialogHeader>
-
-          {prescriptionLoading && <p className="text-sm text-gray-500">Loading prescription…</p>}
-          {prescriptionError && <p className="text-sm text-red-600">{prescriptionError}</p>}
-
-          {!prescriptionLoading && viewingPrescription && !prescriptionError && (
-            <PrescriptionSummary
-              prescription={prescriptionsCache[viewingPrescription.prescriptionId]}
-              onPrint={() => window.print()}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
 
 function VisitsPageInner() {
   const [patients, setPatients] = useState<PatientMatch[]>([]);
@@ -467,24 +60,22 @@ function VisitsPageInner() {
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [currentUserRole, setCurrentUserRole] = useState<string>('DOCTOR');
-  const [recentVisitId, setRecentVisitId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [binding, setBinding] = useState<VisitBinding | null>(null);
+  const [linkNotice, setLinkNotice] = useState<LinkNotice | null>(null);
+  const [openRequestPatientId, setOpenRequestPatientId] = useState<string | null>(null);
+  const [formSaveStatus, setFormSaveStatus] = useState<FormSaveStatus>('idle');
+  const [pendingLeave, setPendingLeave] = useState<'setup' | 'calendar' | null>(null);
+  const [formSession, setFormSession] = useState({ key: '', visitDate: '' });
+  const selectedPatientIdRef = useRef(selectedPatientId);
+  selectedPatientIdRef.current = selectedPatientId;
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+  const formTouchedRef = useRef(false);
 
-  // Autocomplete state for patients
-  const [patientQuery, setPatientQuery] = useState('');
-  const [patientOptions, setPatientOptions] = useState<PatientMatch[]>([]);
-  const [searchingPatients, setSearchingPatients] = useState(false);
-  const [showPatientMenu, setShowPatientMenu] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const searchParams = useSearchParams();
-  const urlPatientId = searchParams.get('patientId');
-  const appointmentIdParam = searchParams.get('appointmentId');
-  const urlDoctorId = searchParams.get('doctorId');
-  const urlVisitId = searchParams.get('visitId');
-  const autoStartParam = searchParams.get('autoStart') === 'true';
 
   const extractPatients = useCallback((payload: unknown): PatientMatch[] => {
     if (!payload) return [];
@@ -528,182 +119,210 @@ function VisitsPageInner() {
     return Array.from(doctorsById.values());
   }, [extractDoctors]);
 
-  const fetchAppointmentData = useCallback(async (appointmentId: string) => {
-    try {
-      const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
-      setAppointmentData(appointment);
-      if (appointment?.doctorId) {
-        setSelectedDoctorId(appointment.doctorId);
-      }
-    } catch (error) {
-      console.error('Failed to fetch appointment data:', error);
-    }
+  const failLink = useCallback((text: string, patientId: string = selectedPatientIdRef.current) => {
+    setShowForm(false);
+    setOpenRequestPatientId(null);
+    setBinding(null);
+    setSelectedPatientId(patientId);
+    setLinkNotice({ text, patientId });
+    clearVisitLink();
   }, []);
+
+  const openBoundVisit = useCallback((next: VisitBinding) => {
+    setSelectedPatientId(next.patientId);
+    setSelectedDoctorId(next.doctorId);
+    setBinding(next);
+    setLinkNotice(null);
+    setOpenRequestPatientId(null);
+    setShowForm(true);
+  }, []);
+
+  const processVisitLink = useCallback(async (params: URLSearchParams, isCurrent: () => boolean) => {
+    const visitId = params.get('visitId');
+    const patientId = params.get('patientId') || undefined;
+    const doctorId = params.get('doctorId');
+    const appointmentId = params.get('appointmentId');
+    const fetchAppointment = (id: string) =>
+      apiClient.getAppointment<AppointmentWithVisit>(id).catch((error) => {
+        console.warn('[VisitsPage] Failed to load appointment', error);
+        return null;
+      });
+
+    if (visitId) {
+      if (!isValidId(visitId)) {
+        failLink(LINK_NOTICES.visit, patientId);
+        return;
+      }
+      try {
+        const visit = await apiClient.get<{ patient?: { id?: string }; doctor?: { id?: string }; appointment?: { id?: string } | null }>(`/visits/${visitId}`);
+        const visitPatientId = visit?.patient?.id;
+        let visitDoctorId = visit?.doctor?.id;
+        if (!visitPatientId || !visitDoctorId) throw new Error('Visit has no patient or doctor');
+        const linkedAppointmentId = visit.appointment?.id || appointmentId;
+        const fetched = linkedAppointmentId ? await fetchAppointment(linkedAppointmentId) : null;
+        const appointment = fetched && fetched.patientId === visitPatientId ? fetched : undefined;
+        if (appointment?.doctorId) visitDoctorId = appointment.doctorId;
+        if (!isCurrent()) return;
+        openBoundVisit({ patientId: visitPatientId, doctorId: visitDoctorId, visitId, appointment });
+      } catch (error) {
+        console.warn('[VisitsPage] Failed to load visit by id', error);
+        if (isCurrent()) failLink(LINK_NOTICES.visit, patientId);
+      }
+      return;
+    }
+
+    if (patientId) {
+      setLinkNotice(null);
+      setSelectedPatientId(patientId);
+      if (doctorId && isValidId(doctorId)) setSelectedDoctorId(doctorId);
+      const fetched = appointmentId ? await fetchAppointment(appointmentId) : null;
+      if (!isCurrent()) return;
+      if (fetched && fetched.patientId === patientId && fetched.doctorId) {
+        openBoundVisit({ patientId, doctorId: fetched.doctorId, visitId: fetched.visit?.id, appointment: fetched });
+        return;
+      }
+      setBinding(null);
+      setOpenRequestPatientId(patientId);
+      return;
+    }
+
+    if (appointmentId) {
+      const appointment = await fetchAppointment(appointmentId);
+      if (!isCurrent()) return;
+      if (!appointment?.patientId || !appointment.doctorId) {
+        failLink(LINK_NOTICES.appointment);
+        return;
+      }
+      openBoundVisit({ patientId: appointment.patientId, doctorId: appointment.doctorId, visitId: appointment.visit?.id, appointment });
+    }
+  }, [failLink, openBoundVisit]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
-      const [patientsRes, usersRes] = await Promise.allSettled([
+      const [patientsRes, usersRes, meRes] = await Promise.allSettled([
         apiClient.getPatients({ page: 1, limit: 1 }),
-        loadDoctors()
+        loadDoctors(),
+        apiClient.get<{ id?: string; role?: string }>('/auth/me'),
       ]);
 
-      if (patientsRes.status === 'fulfilled') {
-        const patientsData = extractPatients(patientsRes.value);
-        setPatients(patientsData);
-        setPatientOptions(patientsData.slice(0, 10));
-        if (patientsData.length > 0) {
-          setSelectedPatientId((prev) => {
-            if (prev) return prev;
-            if (urlPatientId && isValidId(urlPatientId)) return urlPatientId;
-            return ''; // Require an explicit patient selection on the setup screen.
-          });
-        }
+      if (patientsRes.status === 'rejected' || usersRes.status === 'rejected') {
+        console.error('Failed to load visit setup:', patientsRes.status === 'rejected' ? patientsRes.reason : (usersRes as PromiseRejectedResult).reason);
+        setLoadError(true);
+        return;
       }
 
-      if (usersRes.status === 'fulfilled') {
-        const doctorsData = usersRes.value;
-        setDoctors(doctorsData);
-        if (doctorsData.length > 0) {
-          const candidate = doctorsData[0]?.id;
-          if (!candidate) {
-            console.warn('[VisitsPage] First doctor missing id, requiring manual selection');
-          }
-          setSelectedDoctorId((prev) => prev || (candidate || ''));
+      const patientsData = extractPatients(patientsRes.value);
+      setPatients(patientsData);
+
+      const doctorsData = usersRes.value;
+      setDoctors(doctorsData);
+      if (doctorsData.length > 0) {
+        const meId = meRes.status === 'fulfilled' ? meRes.value?.id : undefined;
+        const signedIn = meId ? doctorsData.find((doctor) => doctor.id === meId)?.id : undefined;
+        const candidate = signedIn || doctorsData[0]?.id;
+        if (!candidate) {
+          console.warn('[VisitsPage] First doctor missing id, requiring manual selection');
         }
+        setSelectedDoctorId((prev) => prev || (candidate || ''));
       }
 
-      try {
-        const currentUser = await apiClient.get<{ role?: string }>('/auth/me');
-        setCurrentUserRole(currentUser?.role ?? 'DOCTOR');
-      } catch (error) {
-        console.error('Failed to get current user:', error);
+      if (meRes.status === 'fulfilled') {
+        setCurrentUserRole(meRes.value?.role ?? 'DOCTOR');
+      } else {
+        console.error('Failed to get current user:', meRes.reason);
         setCurrentUserRole('DOCTOR');
       }
     } catch (error) {
       console.error('Failed to load data:', error);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
-  }, [loadDoctors, extractPatients, urlPatientId]);
+  }, [loadDoctors, extractPatients]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
-  // Deep links open documentation; selecting a patient in setup keeps history accessible.
+  const linkQuery = searchParams.toString();
   useEffect(() => {
-    if (urlPatientId && selectedPatientId === urlPatientId && selectedDoctorId) {
-      setShowForm(true);
-    }
-  }, [selectedPatientId, selectedDoctorId, urlPatientId]);
-
-  // Handle URL parameters for appointment linking
-  useEffect(() => {
-    if (urlPatientId) {
-      setSelectedPatientId(urlPatientId);
-      if (urlDoctorId && isValidId(urlDoctorId)) {
-        setSelectedDoctorId(urlDoctorId);
-      }
-      if (appointmentIdParam) {
-        void fetchAppointmentData(appointmentIdParam);
-      }
-      if (autoStartParam) {
-        setShowForm(true);
-      }
-    }
-  }, [appointmentIdParam, autoStartParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
-
-  // Handle direct visit resume via visitId in URL
-  useEffect(() => {
-    const run = async () => {
-      if (!urlVisitId || !isValidId(urlVisitId)) return;
-      try {
-        const visit: any = await apiClient.get(`/visits/${urlVisitId}`);
-        const pid = visit?.patient?.id;
-        const did = visit?.doctor?.id;
-        if (typeof pid === 'string') setSelectedPatientId(pid);
-        if (typeof did === 'string') setSelectedDoctorId(did);
-        // Populate appointment context if present (non-blocking)
-        const apptId = visit?.appointment?.id;
-        if (typeof apptId === 'string') {
-          try {
-            const appt = await apiClient.getAppointment<AppointmentWithVisit>(apptId);
-            setAppointmentData(appt);
-            if (appt?.doctorId) setSelectedDoctorId(appt.doctorId);
-          } catch {}
-        }
-        setShowForm(true);
-        setRecentVisitId(urlVisitId);
-      } catch (e) {
-        // If visit fetch fails, ignore and proceed with normal flow
-        console.warn('[VisitsPage] Failed to load visit by id', e);
-      }
+    if (!linkQuery) return;
+    let superseded = false;
+    void processVisitLink(new URLSearchParams(linkQuery), () => !superseded);
+    return () => {
+      superseded = true;
     };
-    void run();
-  }, [urlVisitId]);
+  }, [linkQuery, processVisitLink]);
 
   useEffect(() => {
-    const visitId = (appointmentData?.visit && 'id' in appointmentData.visit) ? appointmentData.visit.id : undefined;
-    if (typeof visitId === 'string') {
-      setRecentVisitId(visitId);
-    }
-  }, [appointmentData]);
-
-  // Debounced search for patients
-  useEffect(() => {
-    let timeoutRef: ReturnType<typeof setTimeout>;
-    const run = async () => {
-      try {
-        setSearchingPatients(true);
-        const res = await apiClient.getPatients({ search: patientQuery || undefined, limit: 10 });
-        const rows = extractPatients(res);
-        setPatientOptions(rows);
-      } catch (e) {
-        setPatientOptions([]);
-      } finally {
-        setSearchingPatients(false);
-      }
-    };
-    timeoutRef = setTimeout(() => {
-      void run();
-    }, 250);
-    return () => clearTimeout(timeoutRef);
-  }, [extractPatients, patientQuery]);
-
-  const roleInfo = useMemo(() => {
-    const permissions = {
-      THERAPIST: { 
-        label: 'Therapist',
-        description: 'Can record vitals, capture photos, and basic assessments (20-25% of visit)',
-        color: 'bg-blue-100 text-blue-700'
-      },
-      NURSE: { 
-        label: 'Nurse',
-        description: 'Can record vitals, capture photos, complaints, and basic assessments',
-        color: 'bg-green-100 text-green-700'
-      },
-      DOCTOR: { 
-        label: 'Doctor',
-        description: 'Full access to all visit documentation features',
-        color: 'bg-purple-100 text-purple-700'
-      },
-      RECEPTION: { 
-        label: 'Reception',
-        description: 'Can capture photos and basic patient information',
-        color: 'bg-orange-100 text-orange-700'
-      },
-    };
-    return permissions[currentUserRole as keyof typeof permissions] || permissions.DOCTOR;
-  }, [currentUserRole]);
+    if (linkNotice && linkNotice.patientId !== selectedPatientId) setLinkNotice(null);
+  }, [linkNotice, selectedPatientId]);
 
   const selectedPatient = useRecordById<PatientMatch>(selectedPatientId, fetchPatientById);
   const selectedDoctor = useRecordById<DoctorSummary>(selectedDoctorId, fetchDoctorById);
 
+  useEffect(() => {
+    if (!openRequestPatientId || openRequestPatientId !== selectedPatientId || !selectedDoctorId) return;
+    setOpenRequestPatientId(null);
+    setShowForm(true);
+  }, [openRequestPatientId, selectedPatientId, selectedDoctorId]);
+
+  useEffect(() => {
+    if (selectedPatient.status !== 'missing') return;
+    if (!showForm && openRequestPatientId !== selectedPatientId) return;
+    failLink(LINK_NOTICES.patient, '');
+  }, [selectedPatient.status, showForm, openRequestPatientId, selectedPatientId, failLink]);
+
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-form-patient-binding
+   * The visit form MUST receive a linked visit or appointment only while the selected
+   * patient and doctor are the ones that visit or appointment belongs to; otherwise it
+   * MUST open as a new visit.
+   */
+  const bindingApplies = binding !== null && binding.patientId === selectedPatientId && binding.doctorId === selectedDoctorId;
+  const boundAppointment = bindingApplies ? binding.appointment : undefined;
+  const boundVisitId = bindingApplies ? binding.visitId || boundAppointment?.visit?.id || undefined : undefined;
+  const formKey = `${selectedPatientId}:${boundVisitId || boundAppointment?.id || 'new'}`;
+
+  const formSessionKey = showForm ? formKey : '';
+  if (formSession.key !== formSessionKey) {
+    setFormSession({ key: formSessionKey, visitDate: new Date().toISOString() });
+    setFormSaveStatus('idle');
+    formTouchedRef.current = false;
+  }
+
+  const handleSaveStatusChange = useCallback((status: FormSaveStatus) => {
+    if (status === 'saved') formTouchedRef.current = false;
+    setFormSaveStatus(status);
+  }, []);
+  const markFormTouched = () => { formTouchedRef.current = true; };
+  const markFormTouchedByClick = (event: { target: EventTarget }) => {
+    if (!(event.target instanceof Element && event.target.closest('[role="tab"]'))) formTouchedRef.current = true;
+  };
+
   const startNewVisit = () => {
     if (selectedPatientId && selectedDoctorId) {
+      setLinkNotice(null);
+      setOpenRequestPatientId(null);
       setShowForm(true);
     }
+  };
+
+  const leaveForm = (target: 'setup' | 'calendar') => {
+    setPendingLeave(null);
+    if (target === 'calendar') {
+      window.history.back();
+      return;
+    }
+    setShowForm(false);
+    clearVisitLink();
+  };
+
+  const requestLeave = (target: 'setup' | 'calendar') => {
+    if (formTouchedRef.current && UNSAVED_STATUSES.includes(formSaveStatus)) setPendingLeave(target);
+    else leaveForm(target);
   };
  
   if (loading) {
@@ -712,6 +331,22 @@ function VisitsPageInner() {
     );
   }
  
+  if (loadError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Couldn&apos;t load visit setup</CardTitle>
+          <CardDescription>
+            Patients or doctors could not be loaded. Check your connection and try again.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button size="sm" onClick={() => void loadData()}>Retry</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!patients.some(patient => patient.id) || !doctors.some(doctor => doctor.id)) {
     return (
       <Card>
@@ -775,7 +410,7 @@ function VisitsPageInner() {
                 items: [
                   "Select a patient from the search bar or dropdown",
                   "Choose the consulting doctor",
-                  "View patient history in the 'Patient History' tab",
+                  "Review past visits below the Start button",
                   "Click 'Start Visit Documentation' to begin"
                 ]
               },
@@ -812,32 +447,6 @@ function VisitsPageInner() {
             ]}
           /></>} />
         
-        {/* Role Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Your Role & Permissions
-            </CardTitle>
-            <CardDescription>
-              Features available based on your role: {roleInfo.label}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900">Current Role</h3>
-                  <p className="text-xs text-gray-500 mt-1">{roleInfo.description}</p>
-                </div>
-                <Badge className={roleInfo.color}>
-                  {roleInfo.label}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Visit Setup */}
         <Card>
           <CardHeader>
@@ -847,79 +456,21 @@ function VisitsPageInner() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {linkNotice && <p role="alert" className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">{linkNotice.text}</p>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="relative">
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Select Patient
-                </label>
-                <div className="relative">
-                  <input
-                    className="w-full border rounded-md px-3 py-2 text-sm"
-                    placeholder="Search name, phone, or email"
-                    value={patientQuery}
-                    onChange={(e) => { setPatientQuery(e.target.value); setShowPatientMenu(true); setHighlightedIndex(0); }}
-                    onFocus={() => setShowPatientMenu(true)}
-                    onKeyDown={(e) => {
-                      if (!showPatientMenu) return;
-                      const max = patientOptions.length;
-                      if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedIndex(i => Math.min(max - 1, i + 1)); }
-                      if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedIndex(i => Math.max(0, i - 1)); }
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const sel = patientOptions[highlightedIndex];
-                        if (sel) {
-                          setSelectedPatientId(sel.id);
-                          setPatientQuery(sel.name || sel.phone || sel.email || sel.id);
-                          setShowPatientMenu(false);
-                        }
-                      }
-                      if (e.key === 'Escape') { setShowPatientMenu(false); }
-                    }}
-                  />
-                  {showPatientMenu && (
-                    <div className="absolute z-20 mt-1 w-full bg-white border rounded-md shadow-sm max-h-64 overflow-auto">
-                      {searchingPatients && (
-                        <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
-                      )}
-                      {!searchingPatients && patientOptions.length === 0 && (
-                        <div className="px-3 py-2 text-xs text-gray-500">No results</div>
-                      )}
-                      {!searchingPatients && patientOptions.map((p, idx) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onMouseEnter={() => setHighlightedIndex(idx)}
-                          onClick={() => {
-                            setSelectedPatientId(p.id);
-                            setPatientQuery(p.name || p.phone || p.email || p.id);
-                            setShowPatientMenu(false);
-                          }}
-                          className={`w-full text-left px-3 py-2 text-sm ${selectedPatientId === p.id ? 'bg-gray-50' : ''} ${idx === highlightedIndex ? 'bg-blue-50' : ''}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            <div className="flex flex-col">
-                              <span className="font-medium">{p.name || `Patient ${p.id?.slice(-4) || ''}`}</span>
-                              <div className="flex items-center gap-3 text-xs text-gray-500">
-                                <span>ID: {p.id}</span>
-                                {p.phone && <span>📞 {p.phone}</span>}
-                                {p.email && <span>✉️ {p.email}</span>}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <PatientPicker
+                selectedPatientId={selectedPatientId}
+                selectedLabel={selectedPatient.status === 'ready' ? formatPatientName(selectedPatient.record) : undefined}
+                onSelect={(patient) => setSelectedPatientId(patient.id)}
+                onClear={() => setSelectedPatientId('')}
+              />
 
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                <label htmlFor="visit-doctor" className="text-sm font-medium text-gray-700 mb-2 block">
                   Select Doctor
                 </label>
                 <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
-                  <SelectTrigger>
+                  <SelectTrigger id="visit-doctor">
                     <SelectValue placeholder="Choose a doctor..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -943,137 +494,32 @@ function VisitsPageInner() {
               </div>
             </div>
 
-            {/* Patient History Tab - Always visible when patient is selected */}
             {selectedPatientId && (
-              <div className="mt-6">
-                <Tabs defaultValue="ready" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="ready">Ready to Start</TabsTrigger>
-                    <TabsTrigger value="history">Patient History</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="ready" className="mt-4">
-                    {selectedDoctorId && (
-                      <div className="pt-4 border-t">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-900">Ready to start visit</h4>
-                            <VisitIdentityBar
-                              className="mt-1 !text-xs !text-gray-500"
-                              patient={selectedPatient}
-                              doctor={selectedDoctor}
-                            />
-                          </div>
-                          <Button onClick={startNewVisit}>
-                            Start Visit Documentation
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                    {!selectedDoctorId && (
-                      <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                        <p className="text-sm text-yellow-800">Please select a doctor to start the visit.</p>
-                      </div>
-                    )}
-                  </TabsContent>
-                  
-                  <TabsContent value="history" className="mt-4">
-                    <PatientHistoryTimeline patientId={selectedPatientId} />
-                  </TabsContent>
-                </Tabs>
+              <div className="mt-6 space-y-4">
+                {selectedDoctorId ? (
+                  <div className="pt-4 border-t flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">Ready to start visit</h4>
+                      <VisitIdentityBar
+                        className="mt-1 !text-xs !text-gray-500"
+                        patient={selectedPatient}
+                        doctor={selectedDoctor}
+                      />
+                    </div>
+                    <Button className="w-full sm:w-auto" onClick={startNewVisit}>
+                      Start Visit Documentation
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <p className="text-sm text-yellow-800">Please select a doctor to start the visit.</p>
+                  </div>
+                )}
+                <div className="border-t pt-4">
+                  <PatientHistoryTimeline patientId={selectedPatientId} />
+                </div>
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Role-based Features Preview */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Available Features</CardTitle>
-            <CardDescription>
-              Features available for your role: {roleInfo.label}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {currentUserRole === 'THERAPIST' && (
-                <>
-                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">Vitals Recording</p>
-                      <p className="text-xs text-blue-600">BP, HR, Temperature, etc.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                    <User className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">Photo Capture</p>
-                      <p className="text-xs text-blue-600">Document patient conditions</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                    <Users className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">Basic Assessment</p>
-                      <p className="text-xs text-blue-600">Initial observations</p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {currentUserRole === 'NURSE' && (
-                <>
-                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium text-green-700">Full Vitals</p>
-                      <p className="text-xs text-green-600">Complete vital signs</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                    <User className="h-5 w-5 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium text-green-700">Photo & Complaints</p>
-                      <p className="text-xs text-green-600">Document and record issues</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                    <Users className="h-5 w-5 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium text-green-700">Assessment Notes</p>
-                      <p className="text-xs text-green-600">Preliminary findings</p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {currentUserRole === 'DOCTOR' && (
-                <>
-                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-purple-500" />
-                    <div>
-                      <p className="text-sm font-medium text-purple-700">Complete Documentation</p>
-                      <p className="text-xs text-purple-600">Full SOAP notes</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
-                    <User className="h-5 w-5 text-purple-500" />
-                    <div>
-                      <p className="text-sm font-medium text-purple-700">Dermatology Specific</p>
-                      <p className="text-xs text-purple-600">Specialized assessments</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
-                    <Users className="h-5 w-5 text-purple-500" />
-                    <div>
-                      <p className="text-sm font-medium text-purple-700">Treatment Planning</p>
-                      <p className="text-xs text-purple-600">Complete care plans</p>
-                    </div>
-                  </div>
-                </>
-              )}
-        </div>
           </CardContent>
         </Card>
       </div>
@@ -1086,7 +532,7 @@ function VisitsPageInner() {
         <div className="min-w-0 max-w-full">
           <div className="flex flex-wrap items-center gap-2">
             <PageHeader title={<>Visit Documentation</>} />
-            {appointmentData && (
+            {boundAppointment && (
               <Badge variant="secondary" className="bg-blue-100 text-blue-700">
                 <Calendar className="h-3 w-3 mr-1" />
                 From Appointment
@@ -1110,7 +556,7 @@ function VisitsPageInner() {
                 items: [
                   "Fill out sections in order: Vitals → History → Examination → Assessment → Plan",
                   "Use expandable sections to keep the form organized",
-                  "Save progress automatically as you work",
+                  "New visits are kept once you click Save Draft; after that, changes save automatically",
                   "Mark visit as complete when finished"
                 ]
               },
@@ -1134,13 +580,13 @@ function VisitsPageInner() {
               }
             ]}
           />
-          {appointmentData && (
-            <Button variant="outline" onClick={() => window.history.back()}>
+          {boundAppointment && (
+            <Button variant="outline" onClick={() => requestLeave('calendar')}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Calendar
             </Button>
           )}
-          <Button variant="outline" onClick={() => setShowForm(false)}>
+          <Button variant="outline" onClick={() => requestLeave('setup')}>
             Back to Setup
           </Button>
         </div>
@@ -1150,24 +596,45 @@ function VisitsPageInner() {
         <VisitIdentityBar
           patient={selectedPatient}
           doctor={selectedDoctor}
-          appointment={appointmentData}
+          appointment={boundAppointment}
         />
       </div>
 
+      <div className="contents" onInputCapture={markFormTouched} onChangeCapture={markFormTouched} onClickCapture={markFormTouchedByClick}>
       <MedicalVisitForm
-        key={`${selectedPatientId}:${urlVisitId || appointmentData?.id || "new"}`}
-        patientId={selectedPatientId} 
+        key={formKey}
+        patientId={selectedPatientId}
         doctorId={selectedDoctorId}
         userRole={currentUserRole}
         patientName={selectedPatient.status === 'ready' ? formatPatientName(selectedPatient.record) : ''}
-        visitDate={new Date().toISOString()}
-        appointmentId={appointmentData?.id}
-        appointmentData={appointmentData}
-        initialVisitId={urlVisitId || (appointmentData?.visit && 'id' in (appointmentData as any).visit ? (appointmentData as any).visit.id : undefined)}
+        visitDate={formSession.visitDate}
+        appointmentId={boundAppointment?.id}
+        appointmentData={boundAppointment}
+        initialVisitId={boundVisitId}
+        onSaveStatusChange={handleSaveStatusChange}
       />
-      
-      {/* Show standalone photos panel only when the form is not open to avoid duplicate rendering */}
-      {!showForm && recentVisitId && <PhotosPanel visitId={recentVisitId} />}
+      </div>
+
+      <Dialog open={pendingLeave !== null} onOpenChange={(open: boolean) => { if (!open) setPendingLeave(null); }}>
+        <DialogContent
+          className="max-w-md"
+          showCloseButton={false}
+          onOpenAutoFocus={(event: Event) => { event.preventDefault(); keepEditingRef.current?.focus(); }}
+        >
+          <DialogHeader>
+            <DialogTitle>Leave without saving?</DialogTitle>
+            <DialogDescription>Some changes in this visit are not saved yet. Use Save Draft to keep them.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button ref={keepEditingRef} variant="outline" className="w-full sm:w-auto" onClick={() => setPendingLeave(null)}>
+              Keep editing
+            </Button>
+            <Button variant="destructive" className="w-full sm:w-auto" onClick={() => pendingLeave && leaveForm(pendingLeave)}>
+              Leave without saving
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
