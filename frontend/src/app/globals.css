@@ -291,4 +291,6 @@
   main :is(thead):not([data-print-preview] *, .prescription-print *, #pagedjs-container *) { position: sticky; top: 0; z-index: 1; background: var(--muted); }
   main :is(th, td):not([data-print-preview] *, .prescription-print *, #pagedjs-container *, [data-own-cell-spacing] *) { padding: 0.75rem 1rem; }
   main tbody tr:not([data-print-preview] *, .prescription-print *, #pagedjs-container *):hover { background: var(--accent-soft); }
+  /* Keep keyboard focus clear of the consultation's sticky action bar. */
+  main:has([data-rx-actions]) { scroll-padding-bottom: 7rem; }
 }
