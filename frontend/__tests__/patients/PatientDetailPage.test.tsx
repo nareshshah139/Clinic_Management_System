@@ -4,8 +4,9 @@ import PatientDetailsPage from '@/app/dashboard/patients/[id]/page';
 import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
 import { apiClient } from '@/lib/api';
 
+const push = jest.fn();
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push }),
   useParams: () => ({ id: 'p1' }),
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -25,9 +26,10 @@ const history = [
   { id: 'v1', entryType: 'visit', createdAt: '2026-09-29T05:00:00.000Z', complaints: [{ complaint: 'Acne' }], diagnosis: [{ diagnosis: 'Acne vulgaris' }], prescriptionItems: [{ drugName: 'Adapalene Gel' }, { drugName: 'Cetirizine' }] },
 ];
 
-function renderAs(role: string) {
+function renderAs(role: string, entries: unknown[] = history) {
+  push.mockClear();
   api.getPatient.mockResolvedValue(patient as never);
-  api.getAllPatientVisitHistory.mockResolvedValue(history as never);
+  api.getAllPatientVisitHistory.mockResolvedValue(entries as never);
   api.getUsers.mockResolvedValue({ data: [] } as never);
   api.getRooms.mockResolvedValue({ rooms: [] } as never);
   const user = { id: 'u1', role, firstName: 'A', lastName: 'B', email: 'a@example.test', phone: '1' };
@@ -67,10 +69,28 @@ describe('patient page', () => {
     expect(screen.queryByRole('button', { name: /Resume last visit|Start new visit/ })).not.toBeInTheDocument();
   });
 
+  it('starts a new visit when the patient has none in progress', async () => {
+    const user = userEvent.setup();
+    renderAs('DOCTOR', history.map((v) => ({ ...v, status: 'COMPLETED' })));
+    await ready();
+    await user.click(screen.getByRole('button', { name: 'Start visit' }));
+    expect(push).toHaveBeenCalledWith('/dashboard/visits?patientId=p1&autoStart=true');
+  });
+
+  it('continues the in-progress visit instead of starting another', async () => {
+    const user = userEvent.setup();
+    renderAs('DOCTOR', [{ ...history[0], status: 'IN_PROGRESS' }, { ...history[1], status: 'COMPLETED' }]);
+    await ready();
+    expect(screen.queryByRole('button', { name: 'Start visit' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue visit' }));
+    expect(push).toHaveBeenCalledWith('/dashboard/visits?visitId=v2&patientId=p1');
+  });
+
   it('does not offer Start visit to reception', async () => {
     renderAs('RECEPTION');
     await ready();
     expect(screen.queryByRole('button', { name: 'Start visit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue visit' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Book appointment' })).toBeInTheDocument();
   });
 

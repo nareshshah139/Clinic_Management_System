@@ -14,11 +14,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope, Download } from 'lucide-react';
+import { Plus, Search, Eye, Phone, Mail, Stethoscope, Calendar, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatPatientName, calculateAge } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
+import { canStartVisit } from '@/lib/visit-roles';
 import PatientFormDialog, { normalizeGender, type Gender } from './PatientFormDialog';
 import { ToastAction } from '@/components/ui/toast';
 import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta } from '@/lib/types';
@@ -33,6 +35,7 @@ import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta } from '@/
  */
 export default function PatientsManagement() {
   const router = useRouter();
+  const { user } = useDashboardUser();
   const { toast } = useToast();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [listLoading, setListLoading] = useState<boolean>(true);
@@ -42,7 +45,6 @@ export default function PatientsManagement() {
   const [genderFilter, setGenderFilter] = useState<'ALL' | Gender>('ALL');
   const [consultationTypeFilter, setConsultationTypeFilter] = useState<'ALL' | 'ONLINE' | 'OFFLINE'>('ALL');
   const [dateRangeFilter, setDateRangeFilter] = useState<'ALL' | 'LAST_1_WEEK' | 'LAST_1_MONTH'>('ALL');
-  const [abhaFilter, setAbhaFilter] = useState<'ALL' | 'HAS' | 'NONE'>('ALL');
   const searchParams = useSearchParams();
   const [formOpen, setFormOpen] = useState<boolean>(() => searchParams?.get('new') === 'walkin');
   const [editId, setEditId] = useState<string | undefined>(undefined);
@@ -102,6 +104,12 @@ export default function PatientsManagement() {
     if (q) {
       setSearch(q);
       setDebouncedSearch(q);
+    }
+    if (searchParams?.get('new') === 'walkin') {
+      const rest = new URLSearchParams(searchParams.toString());
+      rest.delete('new');
+      const tail = rest.toString();
+      router.replace(`/dashboard/patients${tail ? `?${tail}` : ''}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -707,9 +715,15 @@ export default function PatientsManagement() {
                       <TableCell>
                         <div className="flex items-center gap-2 whitespace-nowrap">
                           <Button variant="outline" size="sm" className="whitespace-nowrap" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/patients/${p.id}`); }}><Eye className="h-3 w-3 mr-1" /> View</Button>
-                          <Button size="sm" className="whitespace-nowrap" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visits?patientId=${p.id}&autoStart=true`); }}>
-                            <Stethoscope className="h-3 w-3 mr-1" /> Start visit
-                          </Button>
+                          {canStartVisit(user?.role) ? (
+                            <Button size="sm" className="whitespace-nowrap" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visits?patientId=${p.id}&autoStart=true`); }}>
+                              <Stethoscope className="h-3 w-3 mr-1" /> Start visit
+                            </Button>
+                          ) : (
+                            <Button size="sm" className="whitespace-nowrap" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/appointments?patientId=${encodeURIComponent(p.id)}`); }}>
+                              <Calendar className="h-3 w-3 mr-1" /> Book appointment
+                            </Button>
+                          )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="whitespace-nowrap" aria-label={`More actions for ${formatPatientName(p)}`} onClick={e => e.stopPropagation()}>More</Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end" onClick={(e: import('react').MouseEvent) => e.stopPropagation()}>

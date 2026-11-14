@@ -1,10 +1,15 @@
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
 import PatientsManagement from '@/components/patients/PatientsManagement';
 import { apiClient } from '@/lib/api';
 
 let query = '';
+let role = 'DOCTOR';
+const push = jest.fn();
+const replace = jest.fn();
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push, replace }),
   useSearchParams: () => new URLSearchParams(query),
 }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
@@ -16,8 +21,15 @@ jest.mock('@/lib/api', () => ({ apiClient: {
 
 const api = apiClient as jest.Mocked<typeof apiClient>;
 
+const render = (ui: React.ReactElement) => rtlRender(
+  <DashboardUserProvider value={{ user: { id: 'u1', role, firstName: 'A', lastName: 'B', email: 'a@example.test', phone: '1' } as never, loading: false, refresh: jest.fn(), logout: jest.fn() }}>{ui}</DashboardUserProvider>,
+);
+
 beforeEach(() => {
   query = '';
+  role = 'DOCTOR';
+  push.mockClear();
+  replace.mockClear();
   api.getPatients.mockResolvedValue({ data: [{ id: 'p1', name: 'Rohan Kulkarni', phone: '9822011102', gender: 'MALE', age: 38 }], meta: { total: 1, totalPages: 1 } } as never);
   api.getUsers.mockResolvedValue({ data: [{ id: 'doc-1', firstName: 'Priya', lastName: 'Menon' }] } as never);
   api.getRooms.mockResolvedValue({ rooms: [] } as never);
@@ -51,5 +63,22 @@ describe('patients list', () => {
     expect(screen.getByRole('button', { name: 'View' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start visit' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /More actions for Rohan Kulkarni/ })).toBeInTheDocument();
+  });
+
+  it('removes ?new=walkin from the address once the dialog has opened', async () => {
+    query = 'new=walkin';
+    render(<PatientsManagement />);
+    await screen.findByRole('dialog');
+    expect(replace).toHaveBeenCalledWith('/dashboard/patients');
+  });
+
+  it('offers Book appointment instead of Start visit to a role that cannot start visits', async () => {
+    const user = userEvent.setup();
+    role = 'RECEPTION';
+    render(<PatientsManagement />);
+    await screen.findByText('Rohan Kulkarni');
+    expect(screen.queryByRole('button', { name: 'Start visit' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Book appointment' }));
+    expect(push).toHaveBeenCalledWith('/dashboard/appointments?patientId=p1');
   });
 });

@@ -4,7 +4,6 @@ import { displayCalendarDate, displayUtcDate } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { UserRole } from '@cms/shared-types';
 import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,10 +20,8 @@ import { usePatientHistory } from '@/components/visits/usePatientHistory';
 import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import VisitPhotos from '@/components/visits/VisitPhotos';
+import { canStartVisit } from '@/lib/visit-roles';
 import { Calendar, Users, ArrowLeft } from 'lucide-react';
-
-/** The roles the sidebar admits to Visits. */
-const VISIT_ROLES: string[] = [UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER, UserRole.DOCTOR, UserRole.NURSE];
 
 type VisitEntry = Record<string, unknown> & {
   id?: string;
@@ -82,6 +79,11 @@ export default function PatientDetailsPage() {
       return db - da;
     });
   }, [visits]);
+
+  const inProgressVisit = useMemo(
+    () => sortedVisits.find((v) => v.entryType !== 'appointment' && String(v.status || '').toUpperCase() === 'IN_PROGRESS'),
+    [sortedVisits],
+  );
 
   const doctorOptions = useMemo(() => {
     const set = new Set<string>();
@@ -218,9 +220,16 @@ export default function PatientDetailsPage() {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => setEditOpen(true)}>Edit</Button>
             <Button variant="outline" onClick={() => router.push(`/dashboard/appointments?patientId=${encodeURIComponent(id)}`)}>Book appointment</Button>
-            {user && VISIT_ROLES.includes(user.role) && (
-              <Button onClick={() => router.push(`/dashboard/visits?patientId=${encodeURIComponent(id)}&autoStart=true`)}>
-                Start visit
+            {canStartVisit(user?.role) && (
+              <Button
+                disabled={historyLoading}
+                onClick={() => router.push(
+                  inProgressVisit?.id
+                    ? `/dashboard/visits?visitId=${encodeURIComponent(String(inProgressVisit.id))}&patientId=${encodeURIComponent(id)}`
+                    : `/dashboard/visits?patientId=${encodeURIComponent(id)}&autoStart=true`,
+                )}
+              >
+                {inProgressVisit ? 'Continue visit' : 'Start visit'}
               </Button>
             )}
             <Button variant="outline" onClick={() => router.push('/dashboard/patients')}>
