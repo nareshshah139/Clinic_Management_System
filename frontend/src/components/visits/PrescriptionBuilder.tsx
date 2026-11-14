@@ -2776,6 +2776,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     prescriptionSaveInFlight.current = true;
     setSavingFromPreview(true);
     try {
+      getClinicalSavePatch?.();
       await apiClient.cancelPrescription(activePrescriptionId, 'All medicines removed before the visit was completed');
       setCancelledPrescriptionId(activePrescriptionId);
       toast({ variant: 'success', title: 'Prescription cancelled', description: 'The pharmacy will not see its medicines.' });

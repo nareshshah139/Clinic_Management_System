@@ -143,11 +143,11 @@ it('applies the 10 day and night presets to the medicine being edited', async ()
 });
 
 type Completion = { hasComplaintOrDiagnosis: boolean; pending: 'none' | 'save' | 'cancel'; saving: boolean };
-async function mountVisit(items: object[]) {
+async function mountVisit(items: object[], extra: Record<string, unknown> = {}) {
   if (items.length) localStorage.setItem('rxDraft:patient:visit-1', JSON.stringify({ items }));
   const states: Completion[] = [];
   const settle: { current: (() => Promise<boolean>) | null } = { current: null };
-  render(<PrescriptionBuilder patientId="patient" visitId="visit-1" doctorId="doctor" onCompletionStateChange={state => states.push(state)} settlePrescriptionRef={settle} />);
+  render(<PrescriptionBuilder patientId="patient" visitId="visit-1" doctorId="doctor" onCompletionStateChange={state => states.push(state)} settlePrescriptionRef={settle} {...extra} />);
   if (items.length) await screen.findByDisplayValue((items[0] as { drugName: string }).drugName);
   const pending = () => states.at(-1)?.pending;
   const settleNow = async () => { let ok = false; await act(async () => { ok = await settle.current!(); }); return ok; };
@@ -198,6 +198,20 @@ describe('saving the prescription when the visit is completed', () => {
     jest.mocked(apiClient.cancelPrescription).mockRejectedValueOnce(Object.assign(new Error('down'), { status: 500 }));
     expect(await settleNow()).toBe(false);
     expect(pending()).toBe('cancel');
+  });
+
+  it('does not cancel after a known visit conflict', async () => {
+    let conflicted = false;
+    const onClinicalConflict = jest.fn();
+    const getClinicalSavePatch = () => { if (conflicted) throw Object.assign(new Error('Visit changed'), { status: 409 }); return {}; };
+    const { pending, settleNow } = await mountVisit([medicine('Mometasone')], { getClinicalSavePatch, onClinicalConflict });
+    await settleNow();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Mometasone' }));
+    await waitFor(() => expect(pending()).toBe('cancel'));
+    conflicted = true;
+    expect(await settleNow()).toBe(false);
+    expect(apiClient.cancelPrescription).not.toHaveBeenCalled();
+    expect(onClinicalConflict).toHaveBeenCalledTimes(1);
   });
 
   it('saves follow-up instructions written after the prescription was created onto the prescription', async () => {
