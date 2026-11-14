@@ -50,6 +50,11 @@ describe('PermissionsGuard requirement groups', () => {
     expect(await check('inventoryRead', [], ['inventory:item:read', 'first'], ['first'])).toBe(true);
     expect(await check('inventoryRead', ['inventory:item:read'], [], ['inventory:item:read'])).toBe(false);
   });
+  it('refuses a revoked permission that a broader held grant still covers', async () => {
+    expect(await checkAs('MANAGER', 'inventoryRead', [], ['inventory:*'], ['inventory:item:read'])).toBe(false);
+    expect(await checkAs('MANAGER', 'inventoryRead', [], ['inventory:*'], ['inventory:item:delete'])).toBe(true);
+    expect(await checkAs('MANAGER', 'inventoryRead', ['inventory:item:read'], [], ['inventory:*'])).toBe(true);
+  });
   it('keeps the pharmacist role-fixed grants when they are revoked', async () => {
     expect(await checkAs('PHARMACIST', 'invoiceRead', [], ['pharmacy:*'], ['pharmacy:*'])).toBe(true);
   });
