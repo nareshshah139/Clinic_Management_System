@@ -59,16 +59,25 @@ export function CollectionFigure() {
             return (
               <div className="space-y-1">
                 <p className="text-3xl font-semibold tabular-nums">{formatRupee(total)}</p>
-                {whole && <p className="text-sm text-gray-700 tabular-nums">Clinic {formatRupee(whole.clinic)} · Pharmacy {formatRupee(whole.pharmacy)}</p>}
-                <p className="text-sm text-gray-700 tabular-nums">
-                  {modes.filter((m) => ALWAYS_SHOWN_MODES.has(m.mode) || m.amount !== 0).map((m) => `${m.label} ${formatRupee(m.amount)}`).join(' · ')}
-                </p>
+                {whole && <Parts parts={[`Clinic ${formatRupee(whole.clinic)}`, `Pharmacy ${formatRupee(whole.pharmacy)}`]} />}
+                <Parts parts={modes.filter((m) => ALWAYS_SHOWN_MODES.has(m.mode) || m.amount !== 0).map((m) => `${m.label} ${formatRupee(m.amount)}`)} />
               </div>
             );
           }}
         </Loaded>
       </CardContent>
     </Card>
+  );
+}
+
+/** Figures joined by dots, each kept whole when the line wraps. */
+function Parts({ parts }: { parts: string[] }) {
+  return (
+    <p className="text-sm text-gray-700 tabular-nums">
+      {parts.map((part, i) => (
+        <span key={part}>{i > 0 && ' · '}<span className="whitespace-nowrap">{part}</span></span>
+      ))}
+    </p>
   );
 }
 

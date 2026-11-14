@@ -136,7 +136,7 @@ export function TodaysAppointments({ mode, doctorId }: { mode: AppointmentsMode;
                 const action = mode === 'doctor' ? visitLabel(row) : null;
                 return (
                   <li key={row.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 ${FINISHED.has(row.status) ? 'text-gray-500' : ''}`}>
-                    <span className="w-24 shrink-0 text-sm tabular-nums">{row.slot}</span>
+                    <span className="w-28 shrink-0 whitespace-nowrap text-sm tabular-nums">{row.slot}</span>
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
                       {row.patient.name}
                       {row.doctorName && <span className="font-normal text-gray-500"> · Dr. {row.doctorName}</span>}

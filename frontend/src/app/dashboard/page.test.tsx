@@ -53,6 +53,7 @@ const queue = {
 };
 
 const text = (el: HTMLElement) => el.textContent;
+const line = (wanted: string) => screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === wanted);
 const hrefOf = (name: string | RegExp) => screen.getByRole('link', { name }).getAttribute('href');
 
 beforeEach(() => {
@@ -154,8 +155,8 @@ it("shows the owner today's collection, who owes what, approvals and the low ite
   render(<DashboardPage />);
 
   expect(await screen.findByText('₹2,199.00')).toBeInTheDocument();
-  expect(screen.getByText('Clinic ₹2,000.00 · Pharmacy ₹199.00')).toBeInTheDocument();
-  expect(screen.getByText('Cash ₹500.00 · UPI ₹1,699.00 · Card ₹0.00')).toBeInTheDocument();
+  expect(line('Clinic ₹2,000.00 · Pharmacy ₹199.00')).toBeInTheDocument();
+  expect(line('Cash ₹500.00 · UPI ₹1,699.00 · Card ₹0.00')).toBeInTheDocument();
   expect(screen.getByText('₹3,810.00')).toBeInTheDocument();
   expect(await screen.findByText('2')).toBeInTheDocument();
   expect([hrefOf("Today's collection"), hrefOf('Waiting for approval'), hrefOf('Low stock (4)'), hrefOf('Expiring in 3 months (1)')]).toEqual([
