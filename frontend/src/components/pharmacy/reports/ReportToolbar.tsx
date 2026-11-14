@@ -9,6 +9,7 @@ import { MoreFilters } from "@/components/register/RegisterFilters";
 import { inputClass } from "@/components/inventory/workspace-model";
 import { cn } from "@/lib/utils";
 import { activeMoreFilters, exportHref, moreFilterValue, periodPresets, presetFor, shiftDay, type MoreFilter, type ReportEntry, type ReportParams } from "./report-catalog";
+import { NativeSelect } from '@/components/ui/native-select';
 
 const fieldLabel = "text-base font-medium";
 
@@ -90,13 +91,13 @@ function Select({ label, value, options, onChange }: { label: string; value: str
       <label htmlFor={id} className={fieldLabel}>
         {label}
       </label>
-      <select id={id} className={cn(inputClass, "h-11 min-w-36 text-base")} value={value} onChange={(event) => onChange(event.target.value)}>
+      <NativeSelect id={id} className="w-full h-11 min-w-36" value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </div>
   );
 }

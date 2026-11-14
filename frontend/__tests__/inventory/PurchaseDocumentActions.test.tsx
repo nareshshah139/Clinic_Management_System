@@ -44,7 +44,7 @@ it('shows actual actor/time logs and opens the exact linked receipt', async () =
   expect(onDocument).toHaveBeenCalledWith('INWARD_CHALLAN', 'receipt-1');
   fireEvent.click(screen.getByRole('button', { name: 'Logs' }));
   expect(screen.getByText('Reception reviewer')).toBeInTheDocument();
-  expect(screen.getByText('stock committed')).toBeInTheDocument();
+  expect(screen.getByText('Stock committed')).toBeInTheDocument();
 });
 
 it('keeps read-only users out of mutations and shows failures with a retry action', async () => {

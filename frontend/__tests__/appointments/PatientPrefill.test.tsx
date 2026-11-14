@@ -46,3 +46,12 @@ it('does not replace a newer selection when the chart lookup finishes late', asy
   await act(async () => finish({ id: 'patient-1', name: 'Old choice' }));
   expect(result.current.patient).toEqual({ id: 'patient-2', name: 'New choice' });
 });
+
+it('shows the chosen patient’s contact details with icons rather than emoji', async () => {
+  jest.mocked(apiClient.getPatient).mockResolvedValueOnce({ id: 'patient-1', name: 'Chosen Patient', phone: '9000000000', email: 'chosen@example.test' } as any);
+  render(<AppointmentScheduler prefillPatientId="patient-1" controlledDoctorId="doctor-1" controlledDate="2099-01-01" hideHeaderControls />);
+  const card = (await screen.findByText('Selected patient')).closest('div.rounded-md') as HTMLElement;
+  expect(card).toHaveTextContent('9000000000');
+  expect(card).toHaveTextContent('chosen@example.test');
+  expect(card.textContent).not.toMatch(/[✓📞✉]/u);
+});

@@ -28,7 +28,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { apiClient } from '@/lib/api';
 import { stockCheckLineName } from '@/lib/bill-line-name';
+import { plural } from '@/lib/labels';
+import { prescriptionAmount, prescriptionLabel } from '@/lib/prescription-labels';
 import { PrescriptionInventoryLink, type InventorySuggestion } from './PrescriptionInventoryLink';
+import { NativeSelect } from '@/components/ui/native-select';
 
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
 type CancelledDispenseTaskStatus = `CANCEL${'LED'}`;
@@ -761,17 +764,13 @@ function QueueRow({
       }`}
     >
       <button type="button" onClick={onSelect} className="w-full px-2.5 py-2 text-left">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p id={nameId} className="truncate text-sm font-semibold">{entry.patient.name}</p>
-            {entry.patient.patientCode ? (
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.patient.patientCode}</p>
-            ) : null}
-          </div>
+        <p id={nameId} className="truncate text-sm font-semibold" title={entry.patient.name}>{entry.patient.name}</p>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <span className="min-w-0 truncate text-xs text-muted-foreground">{entry.patient.patientCode}</span>
           <StatusBadge className="shrink-0" domain="dispense" status={entry.dispenseStatus ?? QUEUE_STATUS_AS_DISPENSE[entry.status]} />
         </div>
         <div className={`mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground ${onBill ? 'pr-20' : ''}`}>
-          <span>{entry.medications.length} medicines</span>
+          <span>{plural(entry.medications.length, 'medicine')}</span>
           <span>{formatAge(entry.pendingHours)}</span>
           {entry.isOverTwoHours && entry.status !== 'dispensed' ? (
             <span className="font-medium text-warning-text">over 2h</span>
@@ -869,19 +868,18 @@ function ActiveDispenseColumn({
           )}
 
           <div className="mt-2 shrink-0 rounded-lg border border-border bg-muted/80 p-2">
-            <div className="grid gap-2 @md:grid-cols-[210px_minmax(0,1fr)]">
-              <select
+            <div className="grid gap-2 @md:grid-cols-[max-content_minmax(0,1fr)]">
+              <NativeSelect
                 aria-label="Reason"
                 value={reasonType}
                 onChange={(event) => setReasonType(event.target.value)}
-                className="h-9 rounded-md border border-border bg-white px-2 text-sm"
               >
                 {reasonOptions.map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               <Textarea
                 value={reasonNote}
                 onChange={(event) => setReasonNote(event.target.value)}
@@ -1024,12 +1022,12 @@ function MedicationReviewRow({
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-foreground">{medication.drugName}</p>
         <p className="truncate text-xs text-muted-foreground">
-          {[medication.dosage, medication.dosageUnit, medication.frequency]
+          {[prescriptionAmount('dosageUnit', medication.dosage, medication.dosageUnit), prescriptionLabel('frequency', medication.frequency)]
             .filter(Boolean)
-            .join(' ') || 'Dose not specified'}
+            .join(' · ') || 'Dose not specified'}
         </p>
         <p className="truncate text-xs text-muted-foreground">
-          {[medication.duration, medication.durationUnit].filter(Boolean).join(' ') || 'Duration not set'}
+          {prescriptionAmount('durationUnit', medication.duration, medication.durationUnit) || 'Duration not set'}
         </p>
       </div>
 

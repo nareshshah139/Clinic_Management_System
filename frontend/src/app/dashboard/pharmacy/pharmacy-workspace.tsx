@@ -296,10 +296,10 @@ function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
           </div>
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold text-foreground">
-              Pharmacy AI assistant
+              Pharmacy assistant
             </h3>
             <p className="truncate text-xs text-muted-foreground">
-              Opens when needed.
+              Ask about stock and drug records. You review every change before it is saved.
             </p>
           </div>
         </div>

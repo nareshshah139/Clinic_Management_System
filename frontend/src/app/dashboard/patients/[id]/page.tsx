@@ -19,6 +19,7 @@ import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { Calendar, Users, ArrowLeft } from 'lucide-react';
 import { enumLabel } from '@/lib/labels';
+import { NativeSelect } from '@/components/ui/native-select';
 
 type NextAppointment = { date: string; slot: string; doctor?: { firstName?: string; lastName?: string } | null };
 
@@ -299,8 +300,8 @@ export default function PatientDetailsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
                     <div className="flex flex-wrap gap-2 items-center text-sm">
                       <span className="text-muted-foreground">Filter:</span>
-                      <select
-                        className="border border-border rounded-md px-3 py-2 text-sm"
+                      <NativeSelect
+                        aria-label="Filter by doctor"
                         value={doctorFilter}
                         onChange={(e) => setDoctorFilter(e.target.value)}
                       >
@@ -308,7 +309,7 @@ export default function PatientDetailsPage() {
                         {doctorOptions.map((d) => (
                           <option key={d} value={d}>{d}</option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </div>
                     <div className="flex gap-2 items-center">
                       <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="From date" />

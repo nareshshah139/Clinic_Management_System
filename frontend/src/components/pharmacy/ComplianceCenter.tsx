@@ -48,6 +48,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { plural } from '@/lib/labels';
+import { humanizeEnum } from '@/lib/labels';
 
 type GstSlab = {
   slabPercent: number;
@@ -711,7 +713,7 @@ function ExpiryTable({
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline" className="max-w-56 truncate">
-                    {row.suggestedAction.replaceAll("_", " ")}
+                    {humanizeEnum(row.suggestedAction)}
                   </Badge>
                 </TableCell>
               </TableRow>
@@ -802,7 +804,7 @@ function ReportRecords({ title, report }: { title: string; report: any }) {
           : ""}
         {report.scope?.startDate || report.scope?.start || ""} to{" "}
         {report.scope?.endDate || report.scope?.end || ""} · current branch ·{" "}
-        {rows.length} records
+        {plural(rows.length, 'record')}
       </p>
       <div className="max-h-96 overflow-auto">
         <table className="w-full text-left text-sm">
@@ -827,7 +829,7 @@ function ReportRecords({ title, report }: { title: string; report: any }) {
                   <span className="block text-xs">{r.party}</span>
                 </td>
                 <td className="p-2">{r.sourceType === "sale" ? displayClinicDate(r.invoiceDate, "") : displayUtcDate(r.invoiceDate, "")}</td>
-                <td className="p-2">{r.status}</td>
+                <td className="p-2">{humanizeEnum(r.status)}</td>
                 <td className="p-2">{currency.format(r.taxableAmount)}</td>
                 <td className="p-2">{currency.format(r.gstAmount)}</td>
                 <td className="p-2 text-right tabular-nums">{currency.format(r.totalAmount)}</td>

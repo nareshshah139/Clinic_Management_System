@@ -32,6 +32,23 @@ export function prescriptionLabel(field: PrescriptionField, value: unknown): str
   return field === 'frequency' || field === 'route' ? words.charAt(0).toUpperCase() + words.slice(1) : words;
 }
 
+export const FREQUENCY_CODES = Object.keys(labels.frequency);
+
+const plurals: Readonly<Record<string, string>> = {
+  tablet: 'tablets', capsule: 'capsules', drop: 'drops', spray: 'sprays', patch: 'patches', injection: 'injections',
+  day: 'days', week: 'weeks', month: 'months', year: 'years',
+};
+const singulars = Object.fromEntries(Object.entries(plurals).map(([one, many]) => [many, one]));
+
+/** "1 CAPSULE" parts read "1 capsule", "1 DAYS" reads "1 day"; a unit with no amount reads as nothing. */
+export function prescriptionAmount(unitField: 'dosageUnit' | 'durationUnit', amount: unknown, unit: unknown): string {
+  const count = String(amount ?? '').trim();
+  if (!count) return '';
+  const label = prescriptionLabel(unitField, unit);
+  const one = singulars[label] ?? label;
+  return `${count} ${plurals[one] && Number(count) !== 1 ? plurals[one] : one}`.trim();
+}
+
 export function isPrescriptionField(key: string): key is PrescriptionField {
   return key in labels;
 }

@@ -44,5 +44,5 @@ it('switching from automation settings to the monitor shows the monitor, not the
   expect(screen.queryByText('Automation setup & summary')).not.toBeInTheDocument();
   releaseMonitor(monitor);
   expect(await screen.findByRole('heading', { name: 'Replenishment monitor' })).toBeInTheDocument();
-  expect(screen.getByText('AUTO DRAFTED')).toBeInTheDocument();
+  expect(screen.getByText('Auto drafted')).toBeInTheDocument();
 });

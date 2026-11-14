@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { plural } from '@/lib/labels';
+import { prescriptionLabel } from '@/lib/prescription-labels';
 
 interface PharmacyPackage {
   id: string;
@@ -218,7 +220,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
                   <div className="text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Pill className="h-3 w-3" />
-                      {pkg.items.length} items
+                      {plural(pkg.items.length, 'item')}
                     </div>
                     {pkg.duration && (
                       <div className="flex items-center gap-1 mt-1">
@@ -316,7 +318,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
                             <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                               <div><strong>Quantity:</strong> {item.quantity}</div>
                               {item.dosage && <div><strong>Dosage:</strong> {item.dosage}</div>}
-                              {item.frequency && <div><strong>Frequency:</strong> {item.frequency}</div>}
+                              {item.frequency && <div><strong>Frequency:</strong> {prescriptionLabel('frequency', item.frequency)}</div>}
                               {item.duration && <div><strong>Duration:</strong> {item.duration}</div>}
                             </div>
                             {item.instructions && (

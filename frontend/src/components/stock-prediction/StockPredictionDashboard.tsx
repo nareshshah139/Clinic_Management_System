@@ -33,6 +33,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { NativeSelect } from '@/components/ui/native-select';
+import { plural } from '@/lib/labels';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -182,15 +184,15 @@ export function StockPredictionDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <select
+          <NativeSelect
+            aria-label="Forecast period"
             value={monthsAhead}
             onChange={(e) => setMonthsAhead(Number(e.target.value))}
-            className="border rounded-md px-3 py-2"
           >
             <option value={1}>1 Month</option>
             <option value={2}>2 Months</option>
             <option value={3}>3 Months</option>
-          </select>
+          </NativeSelect>
           <Button onClick={fetchPredictions} disabled={loading}>
             {loading ? <Spinner className="h-4 w-4 mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Refresh
@@ -375,7 +377,7 @@ export function StockPredictionDashboard() {
                           {pred.drugName}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {pred.daysUntilStockout && `Stockout in ${pred.daysUntilStockout} days | `}
+                          {pred.daysUntilStockout && `Stockout in ${plural(pred.daysUntilStockout, 'day')} | `}
                           Current: {pred.currentStock} | Order: {pred.predictedQuantity}
                         </div>
                       </div>
@@ -464,7 +466,7 @@ export function StockPredictionDashboard() {
                     <p className="text-lg font-semibold">
                       Total Estimated Cost: ₹{bulkOrder.totalEstimatedCost.toFixed(2)}
                     </p>
-                    <p className="text-sm text-muted-foreground">{bulkOrder.items.length} items to order</p>
+                    <p className="text-sm text-muted-foreground">{plural(bulkOrder.items.length, 'item')} to order</p>
                   </div>
 
                   <div className="space-y-2 max-h-96 overflow-y-auto">

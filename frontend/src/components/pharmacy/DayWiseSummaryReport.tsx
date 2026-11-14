@@ -10,7 +10,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSkeleton } from "@/components/ui/skeleton";
-import { inputClass } from "@/components/inventory/workspace-model";
 import { reportById } from "./reports/report-catalog";
 import { ExportMenu } from "./reports/ReportToolbar";
 import { GstSlabGroupTable, type SlabGroupRow } from "./GstSlabGroupTable";
@@ -25,6 +24,8 @@ import {
   reportErrorHint,
   useReport,
 } from "./pharmacy-report-model";
+import { NativeSelect } from '@/components/ui/native-select';
+import { plural } from '@/lib/labels';
 
 const BILL_NO_HELP: Record<DayWiseType, string> = {
   SALES:
@@ -117,9 +118,9 @@ export function DayWiseSummaryReport() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="day-wise-type">Type</Label>
-            <select
+            <NativeSelect
               id="day-wise-type"
-              className={inputClass}
+              className="h-10 w-full min-w-0"
               value={type}
               onChange={(event) => {
                 const next = event.target.value as DayWiseType;
@@ -129,7 +130,7 @@ export function DayWiseSummaryReport() {
             >
               <option value="SALES">Sales</option>
               <option value="PURCHASE">Purchase</option>
-            </select>
+            </NativeSelect>
           </div>
           <Button type="submit" disabled={state.status === "loading"}>Go</Button>
           <ExportMenu
@@ -181,7 +182,7 @@ export function DayWiseSummaryReport() {
               rows={rows}
               totals={{
                 key: "totals",
-                frozen: ["Total", `${state.data.totals.billCount} bills`],
+                frozen: ["Total", plural(state.data.totals.billCount, 'bill')],
                 slabs: state.data.totals.slabs,
                 total: state.data.totals.total,
                 amount: state.data.totals.amount,

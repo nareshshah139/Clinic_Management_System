@@ -11,6 +11,7 @@ import { requestKey } from '@/components/inventory/workspace-model';
 import { ActionDialog, DialogClose } from '@/components/inventory/purchase/ActionDialog';
 import { BatchLine } from './count-parts';
 import { RECONCILIATION, batchCount, failureMessage } from './count-model';
+import { NativeSelect } from '@/components/ui/native-select';
 
 type OpenCount = { id: string; day: string | null; person: string | null; signed: boolean };
 type Batch = { id: string; name: string; batchNumber: string; expiryDate: string | null; storageLocation: string | null; currentStock: number; unit: string; openCount: OpenCount | null };
@@ -188,12 +189,11 @@ export function StartCountDialog({ anchor, onClose, onStarted }: { anchor: HTMLE
           <label htmlFor={`${id}-shelf`} className="text-sm font-medium">
             Shelf
           </label>
-          <select
+          <NativeSelect className="h-10"
             id={`${id}-shelf`}
             ref={shelfRef}
             value={shelf}
             onChange={(event) => pickShelf(event.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-2 text-base md:text-sm"
           >
             <option value="">{shelves ? 'Choose a shelf' : 'Loading shelves…'}</option>
             {(shelves ?? []).map((place) => (
@@ -202,7 +202,7 @@ export function StartCountDialog({ anchor, onClose, onStarted }: { anchor: HTMLE
               </option>
             ))}
             {shelf && shelves && !shelves.some((place) => place.name === shelf) && <option value={shelf}>{shelf}</option>}
-          </select>
+          </NativeSelect>
         </div>
       )}
       {places.length > 0 && (

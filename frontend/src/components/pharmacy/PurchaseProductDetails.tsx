@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 
 export type PurchaseProductCatalog = {
   productKind: 'MEDICINE' | 'COSMETIC' | 'CONSUMABLE';
@@ -66,7 +67,7 @@ export function PurchaseProductDetails({ id, product, disabled, onSave, createLa
     <fieldset disabled={disabled || saving} className="space-y-3">
       <div>
         <Label htmlFor={`${id}-kind`}>Product kind</Label>
-        <select id={`${id}-kind`} value={kind} className="mt-1 block w-full rounded-md border bg-background p-2" onChange={event => {
+        <NativeSelect id={`${id}-kind`} value={kind} className="mt-1 block w-full" onChange={event => {
           const next = event.target.value as typeof kind; setKind(next); onKindChange?.(next); setSaved(false); setError('');
           // Changing kind discards inherited clinical defaults, including legacy
           // Tablet / Review strength values from cosmetic invoice records.
@@ -77,7 +78,7 @@ export function PurchaseProductDetails({ id, product, disabled, onSave, createLa
           <option value="MEDICINE">Medicine</option>
           <option value="COSMETIC">Cosmetic / skin care</option>
           <option value="CONSUMABLE">Other consumable</option>
-        </select>
+        </NativeSelect>
       </div>
       {!!kind && <>
         {medicine && <p className="max-w-prose text-muted-foreground">This product is classified as a medicine, so composition, dosage form and strength are required. Check the packaging first. If it is a cosmetic or consumable, correct the product kind instead of inventing clinical details.</p>}
@@ -89,9 +90,9 @@ export function PurchaseProductDetails({ id, product, disabled, onSave, createLa
           </div>)}
         </div>
         {medicine && <div><Label htmlFor={`${id}-prescription`}>Prescription required</Label>
-          <select id={`${id}-prescription`} className="mt-1 block w-full rounded-md border bg-background p-2" value={prescription} onChange={event => { setPrescription(event.target.value); setSaved(false); }}>
+          <NativeSelect id={`${id}-prescription`} className="mt-1 block w-full" value={prescription} onChange={event => { setPrescription(event.target.value); setSaved(false); }}>
             <option value="">Choose after checking the product</option><option value="true">Yes</option><option value="false">No</option>
-          </select>
+          </NativeSelect>
         </div>}
       </>}
       {!ready && <p className="text-muted-foreground">{!kind ? 'Choose a product kind to continue.' : 'Enter the required medicine details and prescription requirement. Placeholder values cannot be used.'}</p>}

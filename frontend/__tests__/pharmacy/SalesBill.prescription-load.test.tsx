@@ -135,7 +135,7 @@ it('fills the stock check billing quantity when an older prescription omitted ex
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
   expect(screen.getAllByLabelText('Quantity').map(input => (input as HTMLInputElement).value)).toEqual(['2', '2', '2', '1']);
-  expect(within(screen.getByRole('heading', { name: names[3], level: 4 }).closest('[data-invoice-item]') as HTMLElement).getByRole('status')).toHaveTextContent(review.message);
+  expect(within(screen.getByRole('heading', { name: names[3], level: 4 }).closest('[data-invoice-item]') as HTMLElement).getByText(review.message).closest('[role="status"]')).not.toBeNull();
   expect(within(screen.getByRole('heading', { name: names[0], level: 4 }).closest('[data-invoice-item]') as HTMLElement).queryByText(review.message)).not.toBeInTheDocument();
 });
 
@@ -387,4 +387,27 @@ it('lists and adds a searched product under its stock name', async () => {
   const row = await screen.findByRole('button', { name: /Tab\. Flutas 150 mg/ });
   fireEvent.click(row);
   expect(await screen.findByRole('heading', { name: 'Tab. Flutas 150 mg', level: 4 })).toBeInTheDocument();
+});
+
+it('reads prescribed directions in words and still submits the frequency code', async () => {
+  const original = api.getPrescription.getMockImplementation()!;
+  api.getPrescription.mockImplementation(async id => ({ ...await original(id) as any, items: names.map((drugName, i) => ({
+    drugName, quantity: quantities[i], dosage: 1, dosageUnit: 'CAPSULE', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS',
+  })) }));
+  render(<SalesBillPage />);
+  await loadPatient();
+  const line = (await screen.findByRole('heading', { name: names[1], level: 4 })).closest('[data-invoice-item]') as HTMLElement;
+  expect(within(line).getByText('Medicine')).toBeInTheDocument();
+  expect(within(line).getByLabelText(`Dosage for ${names[1]}`)).toHaveValue('1 capsule');
+  expect(within(line).getByRole('combobox', { name: `Frequency for ${names[1]}` })).toHaveDisplayValue('Once daily');
+  expect(within(line).getByLabelText(`Duration for ${names[1]}`)).toHaveValue('30 days');
+  expect(within(line).getByLabelText(`Total for ${names[1]}`)).toHaveTextContent('₹525.00');
+  expect(line.textContent).not.toMatch(/ONCE_DAILY|CAPSULE|DAYS|DRUG/);
+  fireEvent.change(within(line).getByRole('combobox', { name: `Frequency for ${names[1]}` }), { target: { value: 'TWICE_DAILY' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({ items: expect.arrayContaining([
+    expect.objectContaining({ drugId: 'drug-1', dosage: '1 capsule', frequency: 'TWICE_DAILY', duration: '30 days' }),
+    expect.objectContaining({ drugId: 'drug-2', frequency: 'ONCE_DAILY' }),
+  ]) })));
 });

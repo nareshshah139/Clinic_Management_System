@@ -55,6 +55,9 @@ import { apiClient } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { billLineName, prescribedNameShown } from '@/lib/bill-line-name';
+import { enumLabel, plural } from '@/lib/labels';
+import { FREQUENCY_CODES, prescriptionAmount, prescriptionLabel } from '@/lib/prescription-labels';
+import { NativeSelect } from '@/components/ui/native-select';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import { BillPricingError, priceBill, type BillDiscount } from '@/lib/bill-pricing';
 import { BillDiscountInput } from './sales/BillDiscountInput';
@@ -650,11 +653,11 @@ export function PharmacyInvoiceBuilderFixed({
                 taxAmount: existingItem?.taxAmount ?? 0,
                 totalAmount: existingItem?.totalAmount ?? 0,
                 dosage: item.dosage
-                  ? `${item.dosage} ${item.dosageUnit || ''}`.trim()
+                  ? prescriptionAmount('dosageUnit', item.dosage, item.dosageUnit)
                   : existingItem?.dosage,
                 frequency: item.frequency || existingItem?.frequency,
                 duration: item.duration
-                  ? `${item.duration} ${item.durationUnit || ''}`.trim()
+                  ? prescriptionAmount('durationUnit', item.duration, item.durationUnit)
                   : existingItem?.duration,
                 instructions: item.instructions || existingItem?.instructions,
                 prescribedDrugName: item.drugName || item.brandName || 'Unknown Drug',
@@ -2512,7 +2515,7 @@ export function PharmacyInvoiceBuilderFixed({
                                     {pkg.subcategory}
                                   </Badge>
                                   <span className="text-xs text-muted-foreground">
-                                    {pkg.items.length} items
+                                    {plural(pkg.items.length, 'item')}
                                   </span>
                                   {pkg.duration && (
                                     <span className="text-xs text-muted-foreground">
@@ -2591,21 +2594,12 @@ export function PharmacyInvoiceBuilderFixed({
                                     : 'default'
                                 }
                               >
-                                {item.itemType}
+                                {enumLabel('itemType', item.itemType)}
                               </Badge>
-                              {isPrescriptionItem(item.id) && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs bg-info-soft text-info-text border-info-border"
-                                >
-                                  Prescription
-                                </Badge>
-                              )}
                             </div>
-                            {item.itemType === 'DRUG' && item.drug && (
+                            {item.itemType === 'DRUG' && (item.drug?.manufacturerName || item.drug?.packSizeLabel) && (
                               <p className="text-sm text-muted-foreground">
-                                {item.drug.manufacturerName} •{' '}
-                                {item.drug.packSizeLabel}
+                                {[item.drug?.manufacturerName, item.drug?.packSizeLabel].filter(Boolean).join(' • ')}
                               </p>
                             )}
                             {item.quantityReview && (
@@ -2631,36 +2625,10 @@ export function PharmacyInvoiceBuilderFixed({
                             {item.itemType === 'PACKAGE' && item.package && (
                               <p className="text-sm text-muted-foreground">
                                 {item.package.description} •{' '}
-                                {item.package.items.length} items
+                                {plural(item.package.items.length, 'item')}
                               </p>
                             )}
 
-                            {/* Prescription-specific information */}
-                            {isPrescriptionItem(item.id) && (
-                              <div className="mt-2 p-2 bg-info-soft rounded-md text-xs text-info-text">
-                                {item.dosage && (
-                                  <div>
-                                    <strong>Dosage:</strong> {item.dosage}
-                                  </div>
-                                )}
-                                {item.frequency && (
-                                  <div>
-                                    <strong>Frequency:</strong> {item.frequency}
-                                  </div>
-                                )}
-                                {item.duration && (
-                                  <div>
-                                    <strong>Duration:</strong> {item.duration}
-                                  </div>
-                                )}
-                                {item.instructions && (
-                                  <div>
-                                    <strong>Instructions:</strong>{' '}
-                                    {item.instructions}
-                                  </div>
-                                )}
-                              </div>
-                            )}
                           </div>
                           <div className="flex shrink-0 flex-wrap justify-end gap-1 self-end sm:self-auto">
                             {item.itemType === 'DRUG' && (
@@ -2689,7 +2657,7 @@ export function PharmacyInvoiceBuilderFixed({
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(4,minmax(4.5rem,1fr))_minmax(max-content,1fr)]">
                           <div>
                             <Label htmlFor={`quantity-${item.id}`} className="text-xs">Quantity</Label>
                             <Input
@@ -2755,7 +2723,6 @@ export function PharmacyInvoiceBuilderFixed({
                               max="100"
                               step="0.1"
                               value={item.taxPercent ?? ''}
-                              placeholder="Enter GST"
                               aria-invalid={item.taxPercent === null}
                               aria-describedby={item.taxPercent === null ? `gst-review-${item.id}` : undefined}
                               onChange={(e) =>
@@ -2769,13 +2736,14 @@ export function PharmacyInvoiceBuilderFixed({
                           </div>
                           <div>
                             <Label htmlFor={`total-${item.id}`} className="text-xs">Total</Label>
-                            <Input
+                            <output
                               id={`total-${item.id}`}
+                              aria-live="off"
                               aria-label={`Total for ${billLineName(item)}`}
-                              value={item.taxPercent === null ? 'GST pending' : `₹${item.totalAmount.toFixed(2)}`}
-                              readOnly
-                              className="h-8 bg-muted font-medium"
-                            />
+                              className={`flex h-8 items-center whitespace-nowrap rounded-md bg-muted px-3 text-sm font-medium tabular-nums ${item.taxPercent === null ? 'text-destructive-text' : ''}`}
+                            >
+                              {item.taxPercent === null ? 'GST pending' : `₹${item.totalAmount.toFixed(2)}`}
+                            </output>
                           </div>
                         </div>
 
@@ -2834,15 +2802,16 @@ export function PharmacyInvoiceBuilderFixed({
                                       event.target.value
                                     )
                                   }
-                                  placeholder="e.g. 1 tablet / thin layer"
-                                  className="h-8"
+                                  placeholder="e.g. 1 tablet"
+                                  className="h-9"
                                 />
                               </div>
                               <div>
                                 <Label htmlFor={`frequency-${item.id}`} className="text-xs">Frequency</Label>
-                                <Input
+                                <NativeSelect
                                   id={`frequency-${item.id}`}
                                   aria-label={`Frequency for ${billLineName(item)}`}
+                                  className="w-full"
                                   value={item.frequency || ''}
                                   onChange={(event) =>
                                     updateItemPrescriptionField(
@@ -2851,9 +2820,12 @@ export function PharmacyInvoiceBuilderFixed({
                                       event.target.value
                                     )
                                   }
-                                  placeholder="e.g. twice daily"
-                                  className="h-8"
-                                />
+                                >
+                                  <option value="">Not set</option>
+                                  {(item.frequency && !FREQUENCY_CODES.includes(item.frequency) ? [item.frequency, ...FREQUENCY_CODES] : FREQUENCY_CODES).map((code) => (
+                                    <option key={code} value={code}>{/^[A-Z0-9_]+$/.test(code) ? prescriptionLabel('frequency', code) : code}</option>
+                                  ))}
+                                </NativeSelect>
                               </div>
                               <div>
                                 <Label htmlFor={`duration-${item.id}`} className="text-xs">Duration</Label>
@@ -2869,7 +2841,7 @@ export function PharmacyInvoiceBuilderFixed({
                                     )
                                   }
                                   placeholder="e.g. 7 days"
-                                  className="h-8"
+                                  className="h-9"
                                 />
                               </div>
                             </div>
@@ -3045,7 +3017,7 @@ export function PharmacyInvoiceBuilderFixed({
                 )}
               </Button>
               <p className="text-xs text-muted-foreground text-center">
-                {items.length} items • {hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)} total`}
+                {plural(items.length, 'item')} • {hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)} total`}
               </p>
               {!checkoutAttempt && (
                 <div className="space-y-2 border-t pt-3">
@@ -3122,7 +3094,7 @@ export function PharmacyInvoiceBuilderFixed({
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{previewLineCount} items</Badge>
+                <Badge variant="secondary">{plural(previewLineCount, 'item')}</Badge>
                 <Badge variant="secondary">₹{previewTotalLabel}</Badge>
                 <Badge variant="outline">{printPreviewCopyType}</Badge>
               </div>

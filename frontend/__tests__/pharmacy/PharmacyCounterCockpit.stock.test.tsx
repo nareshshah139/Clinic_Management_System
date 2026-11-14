@@ -262,3 +262,17 @@ describe('inventory linking follows Bill', () => {
     expect(screen.queryByText('Change link')).not.toBeInTheDocument();
   });
 });
+
+it('reads each medicine regimen in words and counts medicines with the right noun', async () => {
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(quantity) : { data: [{ ...entry(), medications: [{
+    drugName: 'Medicine A', dosage: 1, dosageUnit: 'CAPSULE', frequency: 'TWICE_DAILY', duration: 14, durationUnit: 'DAYS',
+    prescribedQuantity: 2, dispensedQuantity: 0, coverageStatus: 'not_started',
+  }] }], pagination: { total: 1 } });
+  render(<PharmacyCounterCockpit {...props} />);
+  const line = await screen.findByRole('group', { name: 'Medicine A' });
+  expect(line).toHaveTextContent('1 capsule · Twice daily');
+  expect(line).toHaveTextContent('14 days');
+  expect(line.textContent).not.toMatch(/TWICE_DAILY|CAPSULE|DAYS/);
+  expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('1 medicine');
+  expect(screen.getByRole('button', { name: /Patient rx-1/ })).not.toHaveTextContent('1 medicines');
+});

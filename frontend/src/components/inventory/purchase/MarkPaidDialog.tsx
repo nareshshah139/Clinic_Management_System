@@ -8,7 +8,7 @@ import { cn, getISTDateString } from '@/lib/utils';
 import { requestKey } from '@/components/inventory/workspace-model';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { filterControlClass, filterLabelClass } from '@/components/register/RegisterFilters';
+import { filterLabelClass } from '@/components/register/RegisterFilters';
 import { ActionDialog, DialogClose, type DialogOutcome, type HandOff } from './ActionDialog';
 import { setOffFailure } from './purchase-returns-model';
 import type { SetOffResult } from './set-off-model';
@@ -24,6 +24,7 @@ import {
   type SettleFailure,
   type SettleMode,
 } from './purchase-register-model';
+import { NativeSelect } from '@/components/ui/native-select';
 
 export function MarkPaidDialog({
   row,
@@ -189,11 +190,11 @@ export function MarkPaidDialog({
           <div className="grid grid-cols-2 gap-3">
             <label className={cn('flex flex-col gap-1', filterLabelClass)}>
               Mode
-              <select ref={modeRef} className={filterControlClass} value={mode} onChange={(event) => setMode(event.target.value as SettleMode)} disabled={saving}>
+              <NativeSelect className="h-10" ref={modeRef} value={mode} onChange={(event) => setMode(event.target.value as SettleMode)} disabled={saving}>
                 {SETTLE_MODES.map((value) => (
                   <option key={value} value={value}>{SETTLE_MODE_LABELS[value]}</option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
             <label className={cn('flex flex-col gap-1', filterLabelClass)}>
               Date

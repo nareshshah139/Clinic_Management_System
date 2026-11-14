@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSkeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { inputClass } from "@/components/inventory/workspace-model";
 import { reportById } from "./reports/report-catalog";
 import { ExportMenu } from "./reports/ReportToolbar";
 import { cn } from "@/lib/utils";
@@ -50,6 +49,7 @@ import {
   sortMarginRows,
   useReport,
 } from "./pharmacy-report-model";
+import { NativeSelect } from '@/components/ui/native-select';
 
 const UNKNOWN_COST_RULE =
   "A sale whose stock movement has no recorded cost, or a cost of ₹0 (an item with no purchase price), is left out of Purchase, Net GST, Profit and the %, and is flagged instead of being counted as free stock.";
@@ -168,9 +168,9 @@ function FilterSelect({ id, label, value, onChange, children }: { id: string; la
   return (
     <div className="min-w-0 space-y-1">
       <Label htmlFor={id}>{label}</Label>
-      <select id={id} className={inputClass} value={value} onChange={(event) => onChange(event.target.value)}>
+      <NativeSelect id={id} className="h-10 w-full min-w-0" value={value} onChange={(event) => onChange(event.target.value)}>
         {children}
-      </select>
+      </NativeSelect>
     </div>
   );
 }

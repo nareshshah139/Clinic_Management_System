@@ -28,6 +28,9 @@ jobs:
       - name: Check code contract syntax and attachment
         run: npm run contracts:check
 
+      - name: Check that selects use NativeSelect and are named
+        run: npm run design:check-selects
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30

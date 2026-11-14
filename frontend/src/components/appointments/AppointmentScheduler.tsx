@@ -18,7 +18,7 @@ import { useRouter } from 'next/navigation';
 import type { User, Patient, AppointmentInSlot, AppointmentCalendar, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType, Appointment } from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
-import { AlertCircle, Info } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Info, Mail, Phone } from 'lucide-react';
 import DoctorDayCalendar, { type ScopedAppointment } from './DoctorDayCalendar';
 import { useOverbookConfirm } from './useOverbookConfirm';
 import { overbookFlag } from '@/lib/overbooking';
@@ -676,12 +676,12 @@ export default function AppointmentScheduler({
               <div className="mt-2 rounded-md border border-success-border bg-success-soft p-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-medium text-success-text">✓ Selected Patient</div>
+                    <div className="flex items-center gap-1.5 font-medium text-success-text"><CheckCircle2 aria-hidden="true" className="size-4" />Selected patient</div>
                     <div className="text-success-text font-medium">{formatPatientName(selectedPatient)}</div>
                     <div className="mt-1 flex items-center gap-3 text-xs text-success-text">
                       {selectedPatient.patientCode && <span className="font-mono">{selectedPatient.patientCode}</span>}
-                      {selectedPatient.phone && <span>📞 {selectedPatient.phone}</span>}
-                      {selectedPatient.email && <span>✉️ {selectedPatient.email}</span>}
+                      {selectedPatient.phone && <span className="inline-flex items-center gap-1"><Phone aria-hidden="true" className="size-3" />{selectedPatient.phone}</span>}
+                      {selectedPatient.email && <span className="inline-flex items-center gap-1"><Mail aria-hidden="true" className="size-3" />{selectedPatient.email}</span>}
                     </div>
                   </div>
                   <Button
@@ -726,8 +726,8 @@ export default function AppointmentScheduler({
                     <div className="font-medium">{formatPatientName(p)}</div>
                     <div className="text-xs text-muted-foreground flex items-center gap-3">
                       {p.patientCode && <span className="font-mono">{p.patientCode}</span>}
-                      {p.phone && <span>📞 {p.phone}</span>}
-                      {p.email && <span>✉️ {p.email}</span>}
+                      {p.phone && <span className="inline-flex items-center gap-1"><Phone aria-hidden="true" className="size-3" />{p.phone}</span>}
+                      {p.email && <span className="inline-flex items-center gap-1"><Mail aria-hidden="true" className="size-3" />{p.email}</span>}
                     </div>
                   </div>
                 ))}

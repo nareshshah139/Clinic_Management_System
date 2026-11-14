@@ -25,6 +25,7 @@ import {
   todayIst,
   MAX_BOOKINGS_PER_SLOT,
 } from '@/lib/doctor-availability';
+import { NativeSelect } from '@/components/ui/native-select';
 
 type Shift = { start: string; end: string };
 type Week = Shift[][];
@@ -34,8 +35,6 @@ const SOURCE_NOTES: Record<HoursSource, string> = {
   legacy: 'These hours come from the old working-hours setting. Save to keep them as the weekly schedule.',
   default: 'No hours set yet; the clinic default 09:00-18:00 applies every day. Save to set a schedule.',
 };
-
-const selectClass = 'h-9 rounded-md border border-border bg-white px-2 text-sm text-foreground';
 
 function toWeek(hours: WeeklyShift[]): Week {
   const week: Week = WEEKDAYS.map(() => []);
@@ -284,9 +283,9 @@ function TimeOffForm({ kinds, doctorId, onSaved }: { kinds: TimeOffKind[]; docto
         {kinds.length > 1 && (
           <label className="text-sm text-foreground space-y-1">
             <span className="block">Type</span>
-            <select className={selectClass} value={kind} onChange={(e) => setKind(e.target.value as TimeOffKind)}>
+            <NativeSelect value={kind} onChange={(e) => setKind(e.target.value as TimeOffKind)}>
               {kinds.map((k) => <option key={k} value={k}>{TIME_OFF_LABELS[k]}</option>)}
-            </select>
+            </NativeSelect>
           </label>
         )}
         <label className="text-sm text-foreground space-y-1">

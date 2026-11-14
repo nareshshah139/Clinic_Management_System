@@ -38,6 +38,7 @@ import {
   validateWhatsAppTemplateChoice,
   type WhatsAppTemplateOption,
 } from '@/lib/whatsapp-settings';
+import { plural } from '@/lib/labels';
 
 const ReceptionistTour = dynamic(() => import('@/components/tours/ReceptionistTour').then((m) => m.ReceptionistTour), { ssr: false });
 const DoctorSignatureSettings = dynamic(() => import('@/components/users/DoctorSignatureSettings').then((m) => m.DoctorSignatureSettings), { ssr: false });
@@ -199,7 +200,7 @@ export function Header() {
         const expItems: NotificationItem[] = (expiry || []).map((i: any) => ({
           id: `exp-${i.itemId}`,
           title: `Expiring soon: ${i.itemName}`,
-          description: `${i.daysUntilExpiry} days left • Qty ${i.currentStock}`,
+          description: `${plural(i.daysUntilExpiry, 'day')} left • Qty ${i.currentStock}`,
           href: `/dashboard/inventory?tab=expiry`,
           variant: 'warning',
         }));

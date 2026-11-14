@@ -7,6 +7,7 @@ import { inputClass } from "./workspace-model";
 import { MedicineNameFields } from "./MedicineNameFields";
 import { MEDICINE_FORMS, medicineNameProblems, standardMedicineName, type MedicineFormKey } from "@/lib/medicine-names";
 import { useState } from "react";
+import { NativeSelect } from '@/components/ui/native-select';
 
 const basicFields = [
   ["name", "Product name"],
@@ -191,8 +192,8 @@ export function StockDetailsEditor({
             {fields(extraFields)}
             <label className="text-sm">
               Availability
-              <select
-                className={inputClass}
+              <NativeSelect
+                className="h-10 w-full min-w-0"
                 value={value.status}
                 onChange={(event) =>
                   onChange({ ...value, status: event.target.value })
@@ -201,7 +202,7 @@ export function StockDetailsEditor({
                 <option value="ACTIVE">Active</option>
                 <option value="INACTIVE">Inactive</option>
                 <option value="DISCONTINUED">Discontinued</option>
-              </select>
+              </NativeSelect>
             </label>
           </div>
           {(item.type === "MEDICINE" || item.drugs?.length > 0) && (
