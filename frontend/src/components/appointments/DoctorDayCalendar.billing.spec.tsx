@@ -188,7 +188,68 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(stableToast).toHaveBeenCalledWith({ variant: 'success', title: 'Bill INV-9 created and ₹2,500 Net banking / NEFT recorded' });
   });
 
-  it('starts the fee from the fee list, says when it was changed, and bills the amount the desk changed it to', async () => {
+  it('shows the created bill with its balance and the payment controls when the payment fails on a first bill, and never offers a second bill', async () => {
+    renderDay([row('a3', '09:30-09:45', 'Lakshmi Devi', { billType: 'PROCEDURE', visitType: 'PROCEDURE', fee: 2500, billing: bill('NOT_BILLED', 0, 0, true) })]);
+    api.createInvoice.mockImplementation(async () => {
+      api.getDoctorSchedule.mockResolvedValue({
+        appointments: [row('a3', '09:30-09:45', 'Lakshmi Devi', { billType: 'PROCEDURE', visitType: 'PROCEDURE', fee: 2500, billing: bill('DUE', 2500, 0, true, [{ id: 'cinv9', invoiceNo: 'INV-9', total: 2500, received: 0, due: 2500 }]) })],
+        billingAccess: ALL,
+      });
+      return { id: 'cinv9', invoiceNo: 'INV-9' };
+    });
+    api.processPayment.mockRejectedValue({ status: 500, body: { message: 'Payment service is down.' } });
+    api.getInvoiceById.mockResolvedValue({ id: 'cinv9', invoiceNo: 'INV-9', total: 2500, received: 0, balance: 2500, items: [{ id: 'i1', name: 'Procedure', qty: 1, total: 2500 }], payments: [] });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Procedure bill: not billed yet, visit finished' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill for Lakshmi Devi' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create bill and record ₹2,500' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Bill INV-9 was created, but the payment was not recorded');
+    expect(await within(dialog).findByRole('region', { name: 'Bill INV-9' })).toHaveTextContent('Due ₹2,500');
+    expect(within(dialog).getByRole('textbox', { name: 'Amount received' })).toHaveValue('2500');
+    expect(within(dialog).getByRole('button', { name: 'Record ₹2,500 payment' })).toBeEnabled();
+    expect(within(dialog).queryByRole('button', { name: /^Create bill/ })).toBeNull();
+    expect(api.createInvoice).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the created bill beside the earlier one, with the payment controls and no way to save a second invoice, when the payment fails on "Add another bill"', async () => {
+    renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', fee: 400, billing: bill('PAID', 500, 500, false) })]);
+    const first = { id: 'cinv1', invoiceNo: 'INV-1', total: 500, received: 500, balance: 0, items: [{ id: 'i0', name: 'Review consultation', qty: 1, total: 500 }], payments: [] };
+    api.getInvoiceById.mockImplementation(async (id: string) => (id === 'cinv1'
+      ? first
+      : { id: 'cinv2', invoiceNo: 'INV-2', total: 400, received: 0, balance: 400, items: [{ id: 'i1', name: 'Review consultation', qty: 1, total: 400 }], payments: [] }));
+    api.createInvoice.mockImplementation(async () => {
+      api.getDoctorSchedule.mockResolvedValue({
+        appointments: [row('a2', '09:15-09:30', 'Ravi Kumar', {
+          billType: 'REVIEW',
+          fee: 400,
+          billing: bill('DUE', 900, 500, true, [
+            { id: 'cinv1', invoiceNo: 'INV-1', total: 500, received: 500, due: 0 },
+            { id: 'cinv2', invoiceNo: 'INV-2', total: 400, received: 0, due: 400 },
+          ]),
+        })],
+        billingAccess: ALL,
+      });
+      return { id: 'cinv2', invoiceNo: 'INV-2' };
+    });
+    api.processPayment.mockRejectedValue({ status: 500, body: { message: 'Payment service is down.' } });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Review bill: ₹500, paid' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill for Ravi Kumar' });
+    await within(dialog).findByRole('region', { name: 'Bill INV-1' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add another bill' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create bill and record ₹400' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Bill INV-2 was created, but the payment was not recorded');
+    expect(await within(dialog).findByRole('region', { name: 'Bill INV-2' })).toHaveTextContent('Due ₹400');
+    expect(within(dialog).getByRole('region', { name: 'Bill INV-1' })).toHaveTextContent('Paid');
+    expect(within(dialog).getByRole('button', { name: 'Record ₹400 payment' })).toBeEnabled();
+    expect(within(dialog).queryByRole('button', { name: /^Create bill/ })).toBeNull();
+    expect(within(dialog).queryByRole('heading', { name: 'Add another bill' })).toBeNull();
+    expect(api.createInvoice).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts the fee from the fee list, names where it came from, and bills the amount the desk changed it to', async () => {
     renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', fee: 390, billing: bill('NOT_BILLED', 0, 0, false) })]);
     api.createInvoice.mockResolvedValue({ id: 'cinv7', invoiceNo: 'INV-7' });
 
@@ -196,14 +257,14 @@ describe('DoctorDayCalendar billing on each row', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Bill for Ravi Kumar' });
     const fee = within(dialog).getByRole('textbox', { name: 'Fee' });
     expect([(fee as HTMLInputElement).value, within(dialog).getByRole('textbox', { name: 'Paid now' }).getAttribute('value')]).toEqual(['390', '390']);
-    expect(within(dialog).queryByTestId('fee-source')).toBeNull();
-    expect(dialog).not.toHaveTextContent('From fee list');
+    expect(within(dialog).getByTestId('fee-source')).toHaveTextContent('From fee list: Review ₹390');
+    expect(fee).toHaveAccessibleDescription('From fee list: Review ₹390');
 
     fireEvent.change(fee, { target: { value: '450' } });
     expect(within(dialog).getByTestId('fee-source')).toHaveTextContent('Fee list: Review ₹390, changed for this bill. Use ₹390');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Use ₹390' }));
     expect(fee).toHaveValue('390');
-    expect(within(dialog).queryByTestId('fee-source')).toBeNull();
+    expect(within(dialog).getByTestId('fee-source')).toHaveTextContent('From fee list: Review ₹390');
 
     fireEvent.change(fee, { target: { value: '450' } });
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Paid now' }), { target: { value: '0' } });

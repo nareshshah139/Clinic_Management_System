@@ -96,6 +96,7 @@ export function AppointmentBillDialog({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [madeBill, setMadeBill] = useState(false);
   const [line, setLine] = useState('');
   const [fee, setFee] = useState('');
   const [paidNow, setPaidNow] = useState<string | null>(null);
@@ -121,6 +122,7 @@ export function AppointmentBillDialog({
   const resetForm = useCallback(() => {
     if (!appointment) return;
     setAdding(false);
+    setMadeBill(false);
     setLine(defaultBillLine(appointment.billType, appointment.visitType === 'PROCEDURE' ? appointment.notes : undefined));
     setFee(appointment.fee != null ? String(appointment.fee) : '');
     setPaidNow(null);
@@ -152,7 +154,7 @@ export function AppointmentBillDialog({
   const paidText = paidNow ?? fee;
   const paidValue = parseRupees(paidText);
   const paymentValue = parseRupees(payment);
-  const creating = access.createBill && invoices !== null && (invoices.length === 0 || adding);
+  const creating = access.createBill && invoices !== null && (adding || (invoices.length === 0 && !madeBill));
   const feeInvalid = feeValue !== null && (Number.isNaN(feeValue) || feeValue <= 0);
   const paidInvalid = paidValue !== null && (Number.isNaN(paidValue) || (feeValue !== null && paidValue > feeValue));
   const paymentInvalid = paymentValue !== null && (Number.isNaN(paymentValue) || paymentValue <= 0 || (payInvoice !== null && paymentValue > payInvoice.balance));
@@ -186,6 +188,15 @@ export function AppointmentBillDialog({
           await apiClient.processPayment(paymentOf(created.id, paid));
         } catch (e) {
           setError(`Bill ${created.invoiceNo} was created, but the payment was not recorded: ${getErrorMessage(e)}`);
+          setMadeBill(true);
+          setAdding(false);
+          setPayFor(created.id);
+          try {
+            const made = (await apiClient.getInvoiceById(created.id)) as InvoiceDetail;
+            setInvoices((current) => [...(current ?? []).filter((i) => i.id !== made.id), made]);
+          } catch {
+            // the row reload below brings the bill in
+          }
           await onChanged();
           return;
         }
@@ -316,27 +327,31 @@ export function AppointmentBillDialog({
             <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1 text-sm font-medium">
                 Fee
-                <Input inputMode="decimal" placeholder="Type the fee" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={feeInvalid || undefined} aria-describedby={listFee === null || feeValue !== listFee ? `${ids}-fee-source` : undefined} className="h-10 text-base" />
+                <Input inputMode="decimal" placeholder="Type the fee" value={fee} onChange={(e) => setFee(e.target.value)} aria-invalid={feeInvalid || undefined} aria-describedby={`${ids}-fee-source`} className="h-10 text-base" />
               </label>
               <label className="flex flex-col gap-1 text-sm font-medium">
                 Paid now
                 <Input inputMode="decimal" placeholder="0" value={paidText} onChange={(e) => setPaidNow(e.target.value)} aria-invalid={paidInvalid || undefined} className="h-10 text-base" />
               </label>
             </div>
-            {listFee === null ? (
-              <p id={`${ids}-fee-source`} data-testid="fee-source" className="flex flex-wrap items-center gap-x-2 text-sm text-gray-700">
-                <span>No fee set for {kind}.</span>
-                {access.editFees && ' '}
-                {access.editFees && <Link href={FEE_LIST_PATH} className="font-medium text-blue-700 underline underline-offset-2">Set fees</Link>}
-              </p>
-            ) : feeValue !== listFee && (
-              <p id={`${ids}-fee-source`} data-testid="fee-source" className="flex flex-wrap items-center gap-x-2 text-sm text-gray-700">
-                <span>Fee list: {kind} {rupee(listFee)}, changed for this bill.</span>{' '}
-                <button type="button" className="font-medium text-blue-700 underline underline-offset-2" onClick={() => setFee(String(listFee))}>
-                  Use {rupee(listFee)}
-                </button>
-              </p>
-            )}
+            <p id={`${ids}-fee-source`} data-testid="fee-source" className="flex flex-wrap items-center gap-x-2 text-sm text-gray-700">
+              {listFee === null ? (
+                <>
+                  <span>No fee set for {kind}.</span>
+                  {access.editFees && ' '}
+                  {access.editFees && <Link href={FEE_LIST_PATH} className="font-medium text-blue-700 underline underline-offset-2">Set fees</Link>}
+                </>
+              ) : feeValue === listFee ? (
+                <span>From fee list: {kind} {rupee(listFee)}</span>
+              ) : (
+                <>
+                  <span>Fee list: {kind} {rupee(listFee)}, changed for this bill.</span>{' '}
+                  <button type="button" className="font-medium text-blue-700 underline underline-offset-2" onClick={() => setFee(String(listFee))}>
+                    Use {rupee(listFee)}
+                  </button>
+                </>
+              )}
+            </p>
             {feeInvalid && <p className="text-sm text-red-700">Enter the fee as an amount above 0, for example 500.</p>}
             {paidInvalid && <p className="text-sm text-red-700">Paid now can be from 0 up to the fee.</p>}
             {(paidValue ?? 0) > 0 && <ModePicker value={mode} onChange={setMode} label="Payment mode" reference={reference} onReference={setReference} />}
