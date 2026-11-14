@@ -5,6 +5,7 @@ import {
   NotFoundException,
   ConflictException,
   Optional,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
@@ -62,6 +63,9 @@ type WhatsAppTemplateComponent = {
   parameters: { type: 'text'; text: string }[];
 };
 
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+
 /**
  * @cc [owner:nareshshah139,label:product] appointment-active-visit-link
  * Appointment detail and schedule reads MUST expose only undeleted visit links.
@@ -69,6 +73,8 @@ type WhatsAppTemplateComponent = {
  */
 @Injectable()
 export class AppointmentsService {
+  private readonly logger = new Logger(AppointmentsService.name);
+
   constructor(
     private prisma: PrismaService,
     @Optional()
@@ -210,16 +216,24 @@ export class AppointmentsService {
         time: humanTime,
         tokenNumber: appointment.tokenNumber ?? undefined,
       });
-      // Email
-      if (appointment.patient?.email) {
+      // Email (on unless the doctor explicitly opted out)
+      if (
+        appointment.patient?.email &&
+        meta.emailAutoConfirmAppointments !== false &&
+        this.notifications?.emailStatus().configured
+      ) {
         this.notifications
           .sendEmail({
             to: appointment.patient.email,
             subject: 'Appointment Confirmation',
             text: summary,
-            html: `<p>${summary}</p>`,
+            html: `<p>${escapeHtml(summary)}</p>`,
           })
-          .catch(() => void 0);
+          .catch((err: unknown) =>
+            this.logger.warn(
+              `Appointment confirmation email failed: ${err instanceof Error ? err.message : String(err)}`,
+            ),
+          );
       }
       // WhatsApp (only if doctor opted in)
       if (allowWhatsApp && appointment.patient?.phone) {

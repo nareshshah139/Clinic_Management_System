@@ -170,3 +170,92 @@ describe('AppointmentsService WhatsApp flow', () => {
     expect(payload.text).toContain('Appointment confirmed with Dr. John Doe');
   });
 });
+
+describe('AppointmentsService confirmation email', () => {
+  const patientWithEmail = { id: 'patient-1', name: 'Alice Patient', phone: '9999999999', email: 'alice@example.com' };
+  const doctorRecord = { id: 'doctor-1', firstName: 'John', lastName: 'Doe', email: 'doc@example.com' };
+  const dto = {
+    patientId: patientWithEmail.id,
+    doctorId: doctorRecord.id,
+    date: '2099-01-01',
+    slot: '10:00-10:30',
+    visitType: VisitType.OPD,
+  };
+
+  const setup = (metadata: unknown, configured = true) => {
+    const txAppointment = {
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue({ tokenNumber: 0 }),
+      create: jest.fn().mockImplementation(async ({ data }) => ({
+        ...data,
+        id: 'appt-1',
+        patient: patientWithEmail,
+        doctor: doctorRecord,
+        room: null,
+      })),
+    };
+    const prisma: any = {
+      branch: { findUnique: jest.fn().mockResolvedValue({ name: 'Downtown Clinic', phone: '9988776655' }) },
+      patient: { findFirst: jest.fn().mockResolvedValue(patientWithEmail) },
+      user: {
+        findFirst: jest.fn().mockResolvedValue(doctorRecord),
+        findUnique: jest.fn().mockResolvedValue({ metadata }),
+      },
+      room: { findFirst: jest.fn() },
+      doctorWorkingHours: { findMany: jest.fn().mockResolvedValue([]) },
+      doctorTimeOff: { findMany: jest.fn().mockResolvedValue([]) },
+      appointment: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn().mockImplementation(async (cb: any) => cb({ $executeRaw: jest.fn(), appointment: txAppointment })),
+    };
+    const notifications = {
+      sendEmail: jest.fn().mockResolvedValue(undefined),
+      sendWhatsApp: jest.fn().mockResolvedValue(undefined),
+      emailStatus: jest.fn().mockReturnValue({ configured, from: configured ? 'clinic@example.com' : null }),
+    };
+    return { svc: new AppointmentsService(prisma, notifications as any, undefined), notifications };
+  };
+
+  it('emails the patient when the doctor has not set the preference', async () => {
+    const { svc, notifications } = setup(JSON.stringify({}));
+    await svc.create(dto as any, 'branch-1');
+    expect(notifications.sendEmail).toHaveBeenCalledTimes(1);
+    const mail = notifications.sendEmail.mock.calls[0][0];
+    expect(mail.to).toBe('alice@example.com');
+    expect(mail.subject).toBe('Appointment Confirmation');
+    expect(mail.text).toContain('Appointment confirmed with Dr. John Doe');
+  });
+
+  it('emails the patient when the doctor has no metadata at all', async () => {
+    const { svc, notifications } = setup(null);
+    await svc.create(dto as any, 'branch-1');
+    expect(notifications.sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the email when the doctor opted out', async () => {
+    const { svc, notifications } = setup(JSON.stringify({ emailAutoConfirmAppointments: false }));
+    await svc.create(dto as any, 'branch-1');
+    expect(notifications.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('skips the email when SMTP is not configured', async () => {
+    const { svc, notifications } = setup({}, false);
+    await svc.create(dto as any, 'branch-1');
+    expect(notifications.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('escapes HTML in the email body', async () => {
+    const { svc, notifications } = setup({});
+    const original = (svc as any).buildAppointmentSummary;
+    (svc as any).buildAppointmentSummary = (...args: unknown[]) => `${original.apply(svc, args)} <b>&"x"</b>`;
+    await svc.create(dto as any, 'branch-1');
+    const mail = notifications.sendEmail.mock.calls[0][0];
+    expect(mail.html).toContain('&#60;b&#62;&#38;&#34;x&#34;&#60;/b&#62;');
+  });
+
+  it('still creates the appointment when the email send fails', async () => {
+    const { svc, notifications } = setup({});
+    notifications.sendEmail.mockRejectedValue(new Error('smtp down'));
+    const created = await svc.create(dto as any, 'branch-1');
+    expect(created.id).toBe('appt-1');
+  });
+});

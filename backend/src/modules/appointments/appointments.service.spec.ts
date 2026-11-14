@@ -39,6 +39,7 @@ describe('AppointmentsService.create', () => {
 
   const notificationsMock: any = {
     sendEmail: jest.fn().mockResolvedValue(undefined),
+    emailStatus: jest.fn().mockReturnValue({ configured: true, from: 'clinic@example.com' }),
     sendWhatsApp: jest.fn().mockResolvedValue(undefined),
   };
 
