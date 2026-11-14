@@ -259,6 +259,7 @@ import { User, Users, Stethoscope, FileText, Calendar, Activity, ArrowLeft } fro
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { formatPatientName } from '@/lib/utils';
+import { UserRole } from '@cms/shared-types';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
 import { useRecordById } from '@/components/visits/useRecordById';
@@ -480,6 +481,8 @@ function VisitsPageInner() {
   const [showPatientMenu, setShowPatientMenu] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
+  const [appointmentFailed, setAppointmentFailed] = useState(false);
+  const [startedVisitId, setStartedVisitId] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get('patientId');
@@ -488,14 +491,16 @@ function VisitsPageInner() {
   const urlVisitId = searchParams.get('visitId');
 
   const appointmentDoctorId = appointmentData?.doctorId;
-  const selectedDoctorId = currentUser
-    ? resolveDefaultDoctorId({
-        role: currentUser.role,
-        userId: currentUser.id,
-        current: chosenDoctorId,
-        appointmentDoctorId,
-      })
-    : chosenDoctorId;
+  const appointmentPending = Boolean(
+    urlPatientId && appointmentIdParam && !appointmentData && !appointmentFailed,
+  );
+  const selectedDoctorId = resolveDefaultDoctorId({
+    role: currentUser?.role,
+    userId: currentUser?.id,
+    current: chosenDoctorId,
+    appointmentDoctorId,
+    appointmentPending,
+  });
 
   const extractPatients = useCallback((payload: unknown): PatientMatch[] => {
     if (!payload) return [];
@@ -545,6 +550,7 @@ function VisitsPageInner() {
       setAppointmentData(appointment);
     } catch (error) {
       console.error('Failed to fetch appointment data:', error);
+      setAppointmentFailed(true);
     }
   }, []);
 
@@ -709,13 +715,22 @@ function VisitsPageInner() {
       ? `Dr. ${selectedDoctor.record.firstName} ${selectedDoctor.record.lastName}`.trim()
       : undefined);
   const bookedWithName =
-    appointmentDoctorId && selectedDoctorId && appointmentDoctorId !== selectedDoctorId
+    appointmentDoctorId &&
+    currentUser?.role === UserRole.DOCTOR &&
+    currentUser.id &&
+    currentUser.id !== appointmentDoctorId
       ? doctorNameById(appointmentDoctorId)
       : undefined;
 
   const visitAlreadyStarted = Boolean(
-    urlVisitId || (appointmentData?.visit && 'id' in appointmentData.visit),
+    urlVisitId || startedVisitId || (appointmentData?.visit && 'id' in appointmentData.visit),
   );
+  const doctorLocked = Boolean(appointmentDoctorId) || visitAlreadyStarted;
+
+  const pickPatient = (id: string) => {
+    setSelectedPatientId(id);
+    if (appointmentData && appointmentData.patientId !== id) setAppointmentData(null);
+  };
 
   const startNewVisit = () => {
     if (selectedPatientId && selectedDoctorId) {
@@ -885,7 +900,7 @@ function VisitsPageInner() {
                         e.preventDefault();
                         const sel = patientOptions[highlightedIndex];
                         if (sel) {
-                          setSelectedPatientId(sel.id);
+                          pickPatient(sel.id);
                           setPatientQuery(sel.name || sel.phone || sel.email || sel.id);
                           setShowPatientMenu(false);
                         }
@@ -907,7 +922,7 @@ function VisitsPageInner() {
                           type="button"
                           onMouseEnter={() => setHighlightedIndex(idx)}
                           onClick={() => {
-                            setSelectedPatientId(p.id);
+                            pickPatient(p.id);
                             setPatientQuery(p.name || p.phone || p.email || p.id);
                             setShowPatientMenu(false);
                           }}
@@ -935,7 +950,7 @@ function VisitsPageInner() {
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
                   Select Doctor
                 </label>
-                <Select value={selectedDoctorId} onValueChange={setChosenDoctorId}>
+                <Select value={selectedDoctorId} onValueChange={setChosenDoctorId} disabled={doctorLocked}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose a doctor..." />
                   </SelectTrigger>
@@ -1174,7 +1189,7 @@ function VisitsPageInner() {
           <label htmlFor="visit-doctor" className="text-sm font-medium text-foreground">
             Attending doctor
           </label>
-          <Select value={selectedDoctorId} onValueChange={setChosenDoctorId} disabled={visitAlreadyStarted}>
+          <Select value={selectedDoctorId} onValueChange={setChosenDoctorId} disabled={doctorLocked}>
             <SelectTrigger id="visit-doctor" className="h-9 w-64" aria-label="Attending doctor">
               <SelectValue placeholder="Choose a doctor..." />
             </SelectTrigger>
@@ -1187,7 +1202,9 @@ function VisitsPageInner() {
             </SelectContent>
           </Select>
           {bookedWithName && (
-            <span className="text-sm text-muted-foreground">Booked with {bookedWithName}</span>
+            <span className="text-sm text-muted-foreground">
+              Booked with {bookedWithName}. Change the appointment&apos;s doctor to see this patient yourself.
+            </span>
           )}
         </div>
       </div>
@@ -1202,6 +1219,7 @@ function VisitsPageInner() {
         visitDate={new Date().toISOString()}
         appointmentId={appointmentData?.id}
         appointmentData={appointmentData}
+        onVisitIdChange={setStartedVisitId}
         initialVisitId={urlVisitId || (appointmentData?.visit && 'id' in (appointmentData as any).visit ? (appointmentData as any).visit.id : undefined)}
       />
       

@@ -28,6 +28,21 @@ describe('ProceduresPage defaults', () => {
   });
 });
 
+describe('ProceduresPage doctor default', () => {
+  it('selects the signed-in doctor, since procedures have no appointment to defer to', async () => {
+    jest.mocked(apiClient.getPatients).mockResolvedValue({ data: [{ id: 'p1', name: 'First Patient' }] } as any);
+    jest.mocked(apiClient.getUsers).mockImplementation(async (query: any) => ({
+      users: query.role === 'DOCTOR'
+        ? [{ id: 'd1', firstName: 'First', lastName: 'Doctor' }, { id: 'd2', firstName: 'Second', lastName: 'Doctor' }]
+        : [{ id: 'u1', firstName: 'Ann', lastName: 'Nurse' }],
+    }) as any);
+    jest.mocked(apiClient.get).mockResolvedValue({ id: 'd2', role: 'DOCTOR' } as any);
+    render(<ProceduresPage />);
+    await waitFor(() => expect(screen.getAllByRole('combobox')[1]).toHaveTextContent('Second Doctor'));
+    expect(screen.getAllByRole('combobox')[1]).not.toHaveTextContent('First Doctor');
+  });
+});
+
 describe('resolveDefaultDoctorId', () => {
   it('uses the signed-in user when they are a doctor', () => {
     expect(resolveDefaultDoctorId({ role: 'DOCTOR', userId: 'me', current: '' })).toBe('me');

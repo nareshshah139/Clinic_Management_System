@@ -106,18 +106,43 @@ describe('VisitsPage', () => {
     };
 
     it.each(['me-first', 'appointment-first'] as const)(
-      'selects the signed-in doctor and shows who it was booked with (%s)',
+      'gives a doctor on a colleague\'s appointment the booked doctor, locked, with a note (%s)',
       async (order) => {
         const spy = open({ id: 'doctor-1', role: 'DOCTOR' }, order);
         render(<VisitsPage />);
         await waitFor(() => expect(apiClient.getAppointment).toHaveBeenCalled());
         const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
-        await waitFor(() => expect(picker).toHaveTextContent('Dr. Shravya Rao'));
-        expect(await screen.findByText('Booked with Dr. Praneeta Jain')).toBeInTheDocument();
-        expect(screen.getByTestId('medical-visit-form')).toHaveTextContent('Doctor: doctor-1');
+        await waitFor(() => expect(picker).toHaveTextContent('Dr. Praneeta Jain'));
+        expect(picker).toBeDisabled();
+        expect(
+          await screen.findByText(
+            "Booked with Dr. Praneeta Jain. Change the appointment's doctor to see this patient yourself.",
+          ),
+        ).toBeInTheDocument();
+        expect(screen.getByTestId('medical-visit-form')).toHaveTextContent('Doctor: doctor-2');
         spy.mockRestore();
       },
     );
+
+    it('never shows the signed-in doctor while the appointment is still loading', async () => {
+      const spy = open({ id: 'doctor-1', role: 'DOCTOR' }, 'me-first');
+      render(<VisitsPage />);
+      await waitFor(() => expect(apiClient.getAppointment).toHaveBeenCalled());
+      expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
+      await screen.findByTestId('medical-visit-form');
+      expect(screen.getByTestId('medical-visit-form')).not.toHaveTextContent('Doctor: doctor-1');
+      spy.mockRestore();
+    });
+
+    it('locks the doctor and shows no note when the doctor opens their own appointment', async () => {
+      const spy = open({ id: 'doctor-2', role: 'DOCTOR' }, 'me-first');
+      render(<VisitsPage />);
+      const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
+      await waitFor(() => expect(picker).toHaveTextContent('Dr. Praneeta Jain'));
+      expect(picker).toBeDisabled();
+      expect(screen.queryByText(/Booked with/)).not.toBeInTheDocument();
+      spy.mockRestore();
+    });
 
     it('selects the appointment doctor for a receptionist without a note', async () => {
       const spy = open({ id: 'rec-1', role: 'RECEPTIONIST' }, 'me-first');

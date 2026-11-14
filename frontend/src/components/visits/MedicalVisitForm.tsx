@@ -78,6 +78,7 @@ interface Props {
   appointmentId?: string;
   appointmentData?: { patient?: VisitPatientSummary } | null;
   initialVisitId?: string;
+  onVisitIdChange?: (visitId: string | null) => void;
 }
 
 interface PatientHistory {
@@ -212,7 +213,7 @@ const ROLE_PERMISSIONS = {
  * @cc [owner:nareshshah139,label:product] completion-progress-explanation
  * When completion is unavailable because progress is below 80%, the form identifies unfinished tracked sections and states that progress is not a clinical validation.
  */
-function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
+function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, onVisitIdChange, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
   const automaticSaveBlocked = useRef(false);
@@ -245,6 +246,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
   // Core visit data
   const [visitId, setVisitId] = useState<string | null>(initialVisitSnapshot?.id || initialVisitId || null);
+  useEffect(() => {
+    onVisitIdChange?.(visitId);
+  }, [visitId, onVisitIdChange]);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
   const [visitStatus, setVisitStatus] = useState<VisitStatus | 'draft'>('draft');
   
