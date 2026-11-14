@@ -870,8 +870,8 @@ function getTourStepsForPage(pathname: string): TourStep[] {
       {
         intro: `
           <div class="space-y-2">
-            <h3 class="text-lg font-semibold">Patient Management 👥</h3>
-            <p>Register new patients, search existing records, and manage patient information efficiently.</p>
+            <h3 class="text-lg font-semibold">Patients 👥</h3>
+            <p>Register new patients, find existing ones, and update their details.</p>
           </div>
         `,
       },
@@ -879,14 +879,14 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         element: '[data-tour="add-patient-btn"]',
         intro: `
           <div class="space-y-2">
-            <h4 class="font-semibold">Add New Patient</h4>
-            <p>Click here to register a new patient. You'll need to collect:</p>
+            <h4 class="font-semibold">New patient</h4>
+            <p>Click here to register a patient. You'll need:</p>
             <ul class="list-disc pl-5 space-y-1 text-sm">
-              <li>Full name and contact information</li>
-              <li>Date of birth</li>
-              <li>Address (optional but recommended)</li>
-              <li>Medical history and allergies (if known)</li>
+              <li>Name and phone number</li>
+              <li>Age and gender</li>
+              <li>Address and other details are under "More details"</li>
             </ul>
+            <p>"Book for today" puts the patient on today's list. Choose "Register only" to just save them.</p>
           </div>
         `,
         position: 'left',
@@ -896,7 +896,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-2">
             <h4 class="font-semibold">Search Patients</h4>
-            <p>Quickly find patients by typing their name, phone number, or email. The search updates in real-time!</p>
+            <p>Type a name or phone number to find a patient. The list updates as you type.</p>
           </div>
         `,
         position: 'bottom',
@@ -906,12 +906,12 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         intro: `
           <div class="space-y-2">
             <h4 class="font-semibold">Patient List</h4>
-            <p>View all registered patients. Click on any patient row to:</p>
+            <p>Click a patient to open their page. There you can:</p>
             <ul class="list-disc pl-5 space-y-1 text-sm">
-              <li>View complete patient profile</li>
-              <li>Update patient information</li>
-              <li>See visit history and medical records</li>
-              <li>Book a new appointment</li>
+              <li>See the last visit</li>
+              <li>Edit the patient's details</li>
+              <li>See earlier visits and photos</li>
+              <li>Book an appointment</li>
             </ul>
           </div>
         `,

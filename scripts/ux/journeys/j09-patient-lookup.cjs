@@ -13,49 +13,30 @@ module.exports = journey(
 
     ui.decide("Which way to the patient: header search, My Patients card, Patients page", false);
     await ui.click(page.getByLabel("My patients").getByRole("link", { name: new RegExp(patient.name) }), "My Patients card: Rohan Kulkarni");
-    await page.getByRole("button", { name: "Start new visit" }).waitFor();
-    await ui.screen("patient-detail-info");
+    await page.getByRole("heading", { name: "Last visit" }).waitFor();
+    await page.getByText("Cetirizine").first().waitFor();
+    await ui.screen("patient-page-last-visit");
 
-    await ui.click(page.getByRole("tab", { name: "History" }), "Patient page: History tab");
-    await page.getByText("Post-inflammatory hyperpigmentation").first().waitFor();
-    await ui.screen("patient-detail-history");
-
-    await ui.click(page.getByRole("button", { name: "Show details" }).first(), "Latest visit card: Show details");
-    await page.getByText("Review in 3 weeks").first().waitFor();
-    await ui.screen("latest-visit-expanded");
-
-    const history = await page.locator("main").innerText();
+    const text = await page.locator("main").innerText();
     const visitDate = new Date(`${ui.info.seeded.today}T12:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
-    const seenOnScreen = history.includes("Follow-up for chemical peel") && history.includes("Post-inflammatory hyperpigmentation") && history.includes(visitDate) && history.includes("Review in 3 weeks");
+    const seenOnScreen = ["Follow-up for chemical peel", "Post-inflammatory hyperpigmentation", visitDate, "Review in 3 weeks", "Adapalene", "Cetirizine"].every((part) => text.includes(part));
 
-    await ui.click(page.getByRole("link", { name: "Patients", exact: true }), "Menu: Patients");
-    await page.getByPlaceholder(/Search by name/).waitFor();
-    await ui.screen("patients-list");
-
-    ui.reenter("Patient name typed into the Patients page search (already open on the previous page)");
-    await ui.click(page.getByPlaceholder(/Search by name/), "Patients page: search box");
-    await ui.type(page.getByPlaceholder(/Search by name/), "Rohan", "Patients page: search for Rohan");
-    await page.waitForFunction(() => document.querySelectorAll('button[aria-label^="More actions for"]').length === 1);
-    await ui.screen("patients-list-filtered");
-
-    await ui.click(page.getByRole("button", { name: /More actions for Rohan/ }), "Rohan's row: More");
-    await ui.screen("row-menu");
-    await ui.click(page.getByRole("menuitem", { name: "Edit" }), "Row menu: Edit");
+    await ui.click(page.getByRole("button", { name: "Edit", exact: true }), "Patient page: Edit");
     const dialog = page.getByRole("dialog");
-    await dialog.getByText("Edit Patient").waitFor();
+    await dialog.getByText("Edit patient").waitFor();
     await page.waitForFunction(() => document.querySelector("#phone")?.value.length > 0);
     await ui.screen("edit-patient-dialog");
 
-    await ui.fill(dialog.locator("#phone"), NEW_PHONE, "Edit Patient: Phone");
-    await ui.click(dialog.getByRole("button", { name: "Save Changes" }), "Edit Patient: Save Changes");
+    await ui.fill(dialog.locator("#phone"), NEW_PHONE, "Edit patient: Phone");
+    await ui.click(dialog.getByRole("button", { name: "Save changes" }), "Edit patient: Save changes");
     await dialog.waitFor({ state: "hidden" });
     await page.getByText(NEW_PHONE).first().waitFor();
-    await ui.screen("list-after-save");
+    await ui.screen("patient-page-after-save");
 
     const saved = await ui.api("GET", `/patients/${patient.id}`);
     ui.goal(
-      seenOnScreen && saved.phone === NEW_PHONE,
-      "the last visit (date, complaint, diagnosis, review advice) was on screen and the patient's phone is now 9822099102",
+      seenOnScreen && saved.phone === NEW_PHONE && String(saved.dob).slice(0, 10) === "1988-07-19",
+      "the last visit (date, complaint, diagnosis, review advice) and the last prescription (Adapalene, Cetirizine) were on screen, the phone is now 9822099102 and the date of birth is still 1988-07-19",
     );
   },
 );
