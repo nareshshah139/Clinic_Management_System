@@ -59,6 +59,7 @@ async function openFixture(browser, instant, role = 'DOCTOR', fallbackNames = fa
       else if (endpoint === '/users') body = { users: [doctor], total: 1 };
       else if (endpoint === '/auth/statistics') body = { users: { total: 1 }, patients: { total: 6 }, appointments: { total: 6 }, system: { status: 'healthy', version: 'test', uptime: 1 } };
       else if (endpoint === '/reports/alerts') body = { lowStockAlerts: [], expiryAlerts: [], pendingPayments: [] };
+      else if (endpoint === '/pharmacy/reports/daily-collection') body = { wholeDay: null, collection: { expectedTotal: 0, modes: [] } };
       else if (endpoint === '/appointments') body = { appointments: selected.slice(0, Number(url.searchParams.get('limit') || 6)), total: selected.length };
       else if (endpoint === `/appointments/doctor/${doctor.id}/schedule`) body = { doctorId: doctor.id, doctorName: 'Test Doctor', date: clinicDay, appointments: selected };
       else if (endpoint === '/appointments/rooms' || endpoint === '/appointments/rooms/all') body = { rooms: [] };
