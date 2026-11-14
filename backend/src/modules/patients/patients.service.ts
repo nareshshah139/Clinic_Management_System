@@ -64,6 +64,14 @@ export class PatientsService {
     throw new ConflictException('Could not generate unique patient code after retries');
   }
 
+  private ageFromDob(dob: Date): number {
+    const now = new Date();
+    let years = now.getFullYear() - dob.getFullYear();
+    const months = now.getMonth() - dob.getMonth();
+    if (months < 0 || (months === 0 && now.getDate() < dob.getDate())) years--;
+    return years;
+  }
+
   private ageToApproximateDob(age: number): Date {
     const now = new Date();
     return new Date(now.getFullYear() - age, 0, 1);
@@ -346,7 +354,7 @@ export class PatientsService {
   }
 
   async update(id: string, updatePatientDto: UpdatePatientDto, branchId: string) {
-    await this.findOne(id, branchId);
+    const existing = await this.findOne(id, branchId);
 
     const { dob, age, phone, primaryDoctorId, ...rest } = updatePatientDto as any;
     const updateData: any = { ...rest };
@@ -354,7 +362,8 @@ export class PatientsService {
       updateData.primaryDoctorId = await this.resolvePrimaryDoctor(primaryDoctorId, branchId);
     }
 
-    if (age != null) {
+    const currentAge = existing.dob ? this.ageFromDob(existing.dob) : existing.age;
+    if (age != null && (dob || age !== currentAge)) {
       updateData.age = age;
       if (!dob) {
         updateData.dob = this.ageToApproximateDob(age);
@@ -364,11 +373,7 @@ export class PatientsService {
     if (dob) {
       updateData.dob = new Date(dob as any);
       if (age == null) {
-        const now = new Date();
-        const d = new Date(dob);
-        let computed = now.getFullYear() - d.getFullYear();
-        const m = now.getMonth() - d.getMonth();
-        if (m < 0 || (m === 0 && now.getDate() < d.getDate())) computed--;
+        const computed = this.ageFromDob(new Date(dob));
         if (computed >= 0) updateData.age = computed;
       }
     }
