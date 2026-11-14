@@ -148,7 +148,7 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
 
   return (
     <section aria-label="Stock ledger" className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card p-4 md:grid-cols-[auto_auto_minmax(14rem,1fr)_minmax(12rem,15rem)_auto] md:items-end">
+      <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card p-4 md:grid-cols-[auto_auto_minmax(14rem,1fr)_minmax(12rem,15rem)] md:items-end">
         <label className="grid gap-1 text-sm font-medium">From
           <input type="date" className={inputClass} value={from} max={to} onChange={e => e.target.value && navigate({ ledgerFrom: e.target.value, ledgerPage: "" })} />
         </label>
@@ -164,14 +164,7 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
             {(Object.keys(CHANNEL) as Channel[]).map(c => <option key={c} value={c}>{CHANNEL[c].label}</option>)}
           </NativeSelect>
         </label>
-        <div role="group" aria-label="Direction" className="col-span-2 flex rounded-md border p-0.5 md:col-span-1">
-          {([["", "All"], ["IN", "Stock in"], ["OUT", "Stock out"]] as const).map(([value, label]) => (
-            <button key={label} type="button" aria-pressed={direction === value}
-              className={`rounded px-3 py-1.5 text-sm ${direction === value ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-              onClick={() => navigate({ ledgerDirection: value, ledgerPage: "" })}>{label}</button>
-          ))}
-        </div>
-        <div className="col-span-2 flex flex-wrap gap-2 md:col-span-5">
+        <div className="col-span-2 flex flex-wrap items-center gap-2 md:col-span-4">
           {PRESETS.map(([label, n]) => {
             const active = to === today && from === daysBefore(today, n);
             return (
@@ -180,7 +173,14 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
                 onClick={() => navigate({ ledgerFrom: daysBefore(today, n), ledgerTo: today, ledgerPage: "" })}>{label}</button>
             );
           })}
-          <Button size="sm" variant="outline" className="ml-auto" disabled={!data?.rows.length} onClick={exportRows}>
+          <div role="group" aria-label="Direction" className="ml-auto flex rounded-md border p-0.5">
+            {([["", "All"], ["IN", "Stock in"], ["OUT", "Stock out"]] as const).map(([value, label]) => (
+              <button key={label} type="button" aria-pressed={direction === value}
+                className={`whitespace-nowrap rounded px-3 py-1.5 text-sm ${direction === value ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                onClick={() => navigate({ ledgerDirection: value, ledgerPage: "" })}>{label}</button>
+            ))}
+          </div>
+          <Button size="sm" variant="outline" disabled={!data?.rows.length} onClick={exportRows}>
             <FileDown className="h-4 w-4" /> Export CSV
           </Button>
         </div>
