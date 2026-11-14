@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useId, useMemo, useState } from 'react';
-import { Badge, badgeVariants } from '@/components/ui/badge';
-import type { VariantProps } from 'class-variance-authority';
+import { Badge } from '@/components/ui/badge';
+import { statusLabel, statusVariant, type StatusVariant } from '@/lib/status-variants';
 import { useToast } from '@/hooks/use-toast';
 import {
   isSlotInPast,
@@ -19,29 +19,22 @@ import { layoutDay } from './day-layout';
 import { CALENDARS, canMove } from './appointment-calendars';
 import { BILL_TYPE_LABEL, BILL_TYPE_SHORT, billingChip, type BillingTone, type ChipWidth } from './appointment-billing-view';
 
-type StatusStyle = {
-  label: string;
-  badgeVariant: NonNullable<VariantProps<typeof badgeVariants>['variant']>;
-  accentClassName: string;
-  dotClassName: string;
-  muted: boolean;
-  strikeName: boolean;
+const STATUS_MARK: Record<StatusVariant, { accent: string; dot: string }> = {
+  neutral: { accent: 'border-l-muted-foreground', dot: 'bg-muted-foreground' },
+  info: { accent: 'border-l-info', dot: 'bg-info' },
+  warning: { accent: 'border-l-warning', dot: 'bg-warning' },
+  highlight: { accent: 'border-l-highlight', dot: 'bg-highlight' },
+  success: { accent: 'border-l-success', dot: 'bg-success' },
+  danger: { accent: 'border-l-destructive', dot: 'bg-destructive' },
 };
 
-const APPOINTMENT_STATUS_STYLE: Record<AppointmentStatus, StatusStyle> = {
-  [AppointmentStatus.SCHEDULED]: { label: 'Scheduled', badgeVariant: 'neutral', accentClassName: 'border-l-slate-400', dotClassName: 'bg-slate-400', muted: false, strikeName: false },
-  [AppointmentStatus.CONFIRMED]: { label: 'Confirmed', badgeVariant: 'info', accentClassName: 'border-l-sky-500', dotClassName: 'bg-sky-500', muted: false, strikeName: false },
-  [AppointmentStatus.CHECKED_IN]: { label: 'Checked in', badgeVariant: 'warning', accentClassName: 'border-l-amber-500', dotClassName: 'bg-amber-500', muted: false, strikeName: false },
-  [AppointmentStatus.IN_PROGRESS]: { label: 'In progress', badgeVariant: 'success', accentClassName: 'border-l-emerald-500', dotClassName: 'bg-emerald-500', muted: false, strikeName: false },
-  [AppointmentStatus.COMPLETED]: { label: 'Completed', badgeVariant: 'neutral', accentClassName: 'border-l-slate-300', dotClassName: 'bg-slate-400', muted: true, strikeName: false },
-  [AppointmentStatus.NO_SHOW]: { label: 'No-show', badgeVariant: 'danger', accentClassName: 'border-l-red-500', dotClassName: 'bg-red-500', muted: true, strikeName: true },
-  [AppointmentStatus.CANCELLED]: { label: 'Cancelled', badgeVariant: 'danger', accentClassName: 'border-l-red-300', dotClassName: 'bg-red-400', muted: true, strikeName: true },
-};
+const STRUCK_THROUGH = new Set<AppointmentStatus>([AppointmentStatus.NO_SHOW, AppointmentStatus.CANCELLED]);
+const CLOSED = new Set<AppointmentStatus>([AppointmentStatus.COMPLETED, ...STRUCK_THROUGH]);
 
 const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> = {
-  OPD: { current: 'rgba(219, 234, 254, 0.95)', past: 'rgba(239, 246, 255, 0.95)' },
-  PROCEDURE: { current: 'rgba(237, 233, 254, 0.95)', past: 'rgba(245, 237, 254, 0.95)' },
-  TELEMED: { current: 'rgba(243, 244, 246, 0.95)', past: 'rgba(249, 250, 251, 0.95)' },
+  OPD: { current: 'var(--calendar-consultation)', past: 'var(--calendar-consultation-past)' },
+  PROCEDURE: { current: 'var(--calendar-procedure)', past: 'var(--calendar-procedure-past)' },
+  TELEMED: { current: 'var(--calendar-telemedicine)', past: 'var(--calendar-telemedicine-past)' },
 };
 
 const FLEX_STEP_MIN = 15;
@@ -76,10 +69,10 @@ const STATUS_IN_WORDS = {
 };
 
 const BILLING_TONE: Record<BillingTone, string> = {
-  paid: 'flex bg-emerald-50 text-emerald-800 ring-emerald-300',
-  due: 'flex bg-amber-100 text-amber-900 ring-amber-400',
-  unbilled: 'flex bg-amber-100 text-amber-900 ring-amber-400',
-  quiet: 'hidden bg-white/70 text-gray-600 ring-gray-300 @min-[14rem]:flex',
+  paid: 'flex bg-success-soft text-success-text ring-success-border',
+  due: 'flex bg-warning-soft text-warning-text ring-warning',
+  unbilled: 'flex bg-warning-soft text-warning-text ring-warning',
+  quiet: 'hidden bg-white/70 text-muted-foreground ring-border @min-[14rem]:flex',
 };
 
 export type SlotAction =
@@ -177,7 +170,7 @@ export default function CalendarColumn({
   }, [appointments, timeline.start, timeline.end]);
 
   const blockBackground = (apt: AppointmentInSlot) => {
-    if (apt.status === AppointmentStatus.COMPLETED) return 'rgba(226, 232, 240, 0.95)';
+    if (apt.status === AppointmentStatus.COMPLETED) return 'var(--calendar-completed)';
     const tone = VISIT_TYPE_BACKGROUND[apt.visitType] ?? VISIT_TYPE_BACKGROUND.OPD;
     return isSlotInPast(apt.slot, date) ? tone.past : tone.current;
   };
@@ -216,16 +209,17 @@ export default function CalendarColumn({
       style={{ gridColumnStart: column }}
     >
       <header className="min-w-0 border-b-2 pb-1.5" style={{ borderBottomColor: spec.accentColor }}>
-        <h2 id={titleId} className="font-semibold leading-tight text-gray-900">{spec.title}</h2>
-        <p className="text-xs font-medium leading-tight text-gray-800">{appointments.length ? spec.count(appointments.length) : spec.empty}</p>
-        <p className="text-xs leading-tight text-gray-600">{spec.description}</p>
+        <h2 id={titleId} className="font-semibold leading-tight text-foreground">{spec.title}</h2>
+        <p className="text-xs font-medium leading-tight text-foreground">{appointments.length ? spec.count(appointments.length) : spec.empty}</p>
+        <p className="text-xs leading-tight text-muted-foreground">{spec.description}</p>
       </header>
       <div
         className="grid grid-cols-1 gap-0"
         style={{ position: 'relative', paddingTop: timeline.topPadding, paddingBottom: timeline.bottomPadding, gridAutoRows: tileHeight, ...(busy ? { pointerEvents: 'none', opacity: 0.6 } : {}) }}
       >
         {blocks.map(({ apt, key, start, end, topPct, heightPct, lane, laneCount }) => {
-          const status = APPOINTMENT_STATUS_STYLE[apt.status] ?? APPOINTMENT_STATUS_STYLE[AppointmentStatus.SCHEDULED];
+          const tone = statusVariant('appointment', apt.status);
+          const status = { label: statusLabel('appointment', apt.status), tone, ...STATUS_MARK[tone] };
           const patientName = formatPatientName(apt.patient ?? { name: 'Unknown' });
           const isOptimistic = apt.id?.startsWith('optimistic-');
           const accessibleName = [
@@ -251,7 +245,7 @@ export default function CalendarColumn({
               }}
             >
               <div
-                className={`flex h-full w-full overflow-hidden rounded-md border-l-[3px] shadow-sm ${status.accentClassName} ${apt.slot === recentBookedSlot ? 'ring-2 ring-green-500/60' : ''}`}
+                className={`flex h-full w-full overflow-hidden rounded-md border-l-[3px] shadow-sm ${status.accent} ${apt.slot === recentBookedSlot ? 'ring-2 ring-success/60' : ''}`}
                 style={{ backgroundColor: blockBackground(apt) }}
               >
                 <div className="relative h-full min-w-0 flex-1">
@@ -261,17 +255,17 @@ export default function CalendarColumn({
                     title={accessibleName}
                     onClick={() => onOpen(apt)}
                     disabled={isOptimistic}
-                    className="@container flex h-full w-full items-start overflow-hidden px-1.5 py-0 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                    className="@container flex h-full w-full items-start overflow-hidden px-1.5 py-0 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     style={{ fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))' }}
                   >
-                    <span className={`flex w-full min-w-0 items-center gap-1 whitespace-nowrap ${status.muted ? 'text-foreground/70' : 'text-gray-900'}`}>
+                    <span className={`flex w-full min-w-0 items-center gap-1 whitespace-nowrap ${CLOSED.has(apt.status) ? 'text-foreground/70' : 'text-foreground'}`}>
                       {apt.tokenNumber != null && (
                         <span className="shrink-0 font-semibold">#{apt.tokenNumber}</span>
                       )}
-                      <span data-appointment-time className="hidden shrink-0 font-bold tabular-nums text-blue-700 @min-[15em]:inline">{`${start}-${end}`}</span>
+                      <span data-appointment-time className="hidden shrink-0 font-bold tabular-nums text-info-text @min-[15em]:inline">{`${start}-${end}`}</span>
                       <span
                         data-patient-name
-                        className={`min-w-0 flex-auto truncate font-semibold ${status.strikeName ? 'line-through' : ''}`}
+                        className={`min-w-0 flex-auto truncate font-semibold ${STRUCK_THROUGH.has(apt.status) ? 'line-through' : ''}`}
                       >
                         {patientName}
                       </span>
@@ -282,18 +276,18 @@ export default function CalendarColumn({
                         </span>
                       )}
                       <span data-appointment-status title={status.label} className="hidden shrink-0 items-center @min-[10em]:inline-flex">
-                        <span className={`size-2 rounded-full ${status.dotClassName} ${statusFit.dot}`} aria-hidden="true" />
-                        <Badge variant={status.badgeVariant} className={`whitespace-nowrap px-1.5 py-0 text-[10px] leading-3.5 ${statusFit.words}`}>
+                        <span className={`size-2 rounded-full ${status.dot} ${statusFit.dot}`} aria-hidden="true" />
+                        <Badge variant={status.tone} className={`whitespace-nowrap px-1.5 py-0 text-[10px] leading-3.5 ${statusFit.words}`}>
                           {status.label}
                         </Badge>
                       </span>
                       <span className="hidden min-w-0 shrink-[100] items-center gap-1.5 overflow-hidden @min-[36em]:flex">
                         {apt.visitType === 'PROCEDURE' && apt.notes && (
-                          <span className="truncate font-medium text-purple-700">({apt.notes})</span>
+                          <span className="truncate font-medium text-highlight-text">({apt.notes})</span>
                         )}
                         {(!apt.billType || apt.visitType === 'TELEMED') && <span className="font-medium text-highlight-text">{apt.visitType || 'OPD'}</span>}
-                        {apt.patient?.age !== undefined && <span className="text-gray-600">{apt.patient.age}y</span>}
-                        {apt.patient?.gender && <span className="rounded bg-gray-100 px-1 text-gray-600">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
+                        {apt.patient?.age !== undefined && <span className="text-muted-foreground">{apt.patient.age}y</span>}
+                        {apt.patient?.gender && <span className="rounded bg-muted px-1 text-muted-foreground">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
                         {apt.room?.name && <span className="truncate font-medium text-success-text">{apt.room.name}</span>}
                       </span>
                     </span>
@@ -306,7 +300,7 @@ export default function CalendarColumn({
                         e.stopPropagation();
                         onOpen(apt);
                       }}
-                      className="bg-gray-500 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                      className="bg-muted-foreground hover:bg-muted-foreground text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
                       title="View Appointment Details"
                       disabled={isOptimistic}
                     >
@@ -319,7 +313,7 @@ export default function CalendarColumn({
                           e.stopPropagation();
                           onReschedule(apt);
                         }}
-                        className="bg-amber-700 hover:bg-amber-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                        className="bg-warning hover:bg-warning text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
                         title="Reschedule Appointment"
                         disabled={isOptimistic}
                       >
@@ -332,7 +326,7 @@ export default function CalendarColumn({
                         e.stopPropagation();
                         onStartVisit(apt);
                       }}
-                      className="bg-blue-700 hover:bg-blue-800 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
+                      className="bg-info hover:bg-info text-white text-xs px-2 py-1 rounded shadow-sm transition-colors font-medium"
                       title={apt.visit?.id ? 'Continue Visit' : 'Start Visit'}
                       disabled={isOptimistic}
                     >
@@ -349,7 +343,7 @@ export default function CalendarColumn({
                     title={chip.label}
                     onClick={() => onOpenBill?.(apt)}
                     disabled={isOptimistic || !onOpenBill}
-                    className={`my-0.5 mr-0.5 shrink-0 items-center gap-1 self-start whitespace-nowrap rounded px-1.5 text-[11px] font-semibold leading-4 ring-1 ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${BILLING_TONE[chip.tone]}`}
+                    className={`my-0.5 mr-0.5 shrink-0 items-center gap-1 self-start whitespace-nowrap rounded px-1.5 text-[11px] font-semibold leading-4 ring-1 ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${BILLING_TONE[chip.tone]}`}
                   >
                     {(chip.tone === 'due' || chip.tone === 'unbilled') && <CircleAlert className="hidden size-3 shrink-0 @min-[12rem]:block" aria-hidden="true" />}
                     {chip.steps.map((step, i) => (
@@ -393,7 +387,7 @@ export default function CalendarColumn({
             const [as, ae] = apt.slot.split('-');
             return hhmmToMinutes(as) < tileEndMin && hhmmToMinutes(ae) > tileEndMin;
           });
-          const baseBorderColor = isBookingInProgress ? '#f59e0b' : (past ? '#d1d5db' : '#e5e7eb');
+          const baseBorderColor = isBookingInProgress ? 'var(--warning)' : 'var(--border)';
 
           const findFirstFreeStart = (minutes: number): number | null => {
             for (let s = tileStartMin; s <= tileEndMin - minutes; s += FLEX_STEP_MIN) {
@@ -411,7 +405,7 @@ export default function CalendarColumn({
               key={slot}
               className={`border rounded-none ${hasAny ? 'p-0' : 'p-1'} flex flex-col gap-1 transition-all duration-200 relative`}
               style={{
-                backgroundColor: isBookingInProgress ? '#fbbf24' : past ? '#f3f4f6' : (inSelectionPreview ? '#fef3c7' : 'white'),
+                backgroundColor: isBookingInProgress ? 'var(--warning-border)' : past ? 'var(--muted)' : (inSelectionPreview ? 'var(--warning-soft)' : 'var(--card)'),
                 borderTopColor: hasAny && crossesTop ? 'transparent' : baseBorderColor,
                 borderBottomColor: hasAny && crossesBottom ? 'transparent' : baseBorderColor,
                 borderLeftColor: baseBorderColor,
@@ -421,8 +415,8 @@ export default function CalendarColumn({
                   const parts: string[] = [];
                   if (isNewlyBooked) parts.push('0 0 0 2px rgba(34, 197, 94, 0.3)');
                   else if (isBookingInProgress) parts.push('0 0 0 2px rgba(251, 191, 36, 0.3)');
-                  if (showNowLine) parts.push('inset 0 2px 0 #ef4444');
-                  else if (isHourStart && !(hasAny && crossesTop)) parts.push('inset 0 1px 0 #e5e7eb');
+                  if (showNowLine) parts.push('inset 0 2px 0 var(--destructive)');
+                  else if (isHourStart && !(hasAny && crossesTop)) parts.push('inset 0 1px 0 var(--border)');
                   return parts.length ? parts.join(', ') : 'none';
                 })(),
                 height: tileHeight,
@@ -502,12 +496,12 @@ export default function CalendarColumn({
                   title={slotAction.kind === 'move' ? `Move to ${moveSpan}` : freeSpan ? `Book ${freeSpan}` : 'Book'}
                   style={{
                     height: '1.75rem',
-                    backgroundColor: isBookingInProgress ? '#fbbf24' : '#ffffff',
+                    backgroundColor: isBookingInProgress ? 'var(--warning-border)' : 'var(--card)',
                     cursor: (past || (slotAction.kind === 'book' && slotAction.patientMissing) || freeStartMin === null) ? 'not-allowed' : 'pointer'
                   }}
                 >
                   {hasAny && (
-                    <span data-overbook-capacity className="pointer-events-none absolute right-1 top-0.5 rounded bg-amber-100 px-1 text-[10px] font-medium leading-4 text-amber-800">
+                    <span data-overbook-capacity className="pointer-events-none absolute right-1 top-0.5 rounded bg-warning-soft px-1 text-[10px] font-medium leading-4 text-warning-text">
                       Overbook {overlappingAppointments.length}/{maxBookingsPerSlot}
                     </span>
                   )}

@@ -8,14 +8,14 @@ import { CALENDARS, CALENDAR_ORDER } from './appointment-calendars';
 const PANEL_WIDTH_PX = 544;
 
 const SWATCHES: Array<[label: string, color: string]> = [
-  ['OPD', 'rgba(219, 234, 254, 0.95)'],
-  ['Procedure', 'rgba(237, 233, 254, 0.95)'],
-  ['Telemedicine', 'rgba(243, 244, 246, 0.95)'],
-  ['Completed', 'rgba(226, 232, 240, 0.95)'],
-  ['Past (OPD)', 'rgba(239, 246, 255, 0.95)'],
-  ['Past (Procedure)', 'rgba(245, 237, 254, 0.95)'],
-  ['Newly Booked', '#22c55e'],
-  ['Booking In Progress', '#fbbf24'],
+  ['OPD', 'var(--calendar-consultation)'],
+  ['Procedure', 'var(--calendar-procedure)'],
+  ['Telemedicine', 'var(--calendar-telemedicine)'],
+  ['Completed', 'var(--calendar-completed)'],
+  ['Past (OPD)', 'var(--calendar-consultation-past)'],
+  ['Past (Procedure)', 'var(--calendar-procedure-past)'],
+  ['Newly Booked', 'var(--success)'],
+  ['Booking In Progress', 'var(--warning-border)'],
 ];
 
 /**
@@ -81,7 +81,7 @@ export function CalendarLegend() {
                 <span><strong>{CALENDARS[calendar].title}:</strong> {CALENDARS[calendar].description}</span>
               </li>
             ))}
-            <li className="text-gray-700">Open a scheduled patient and press <strong>Confirm</strong> to move them to Confirmed at the same time.</li>
+            <li className="text-foreground">Open a scheduled patient and press <strong>Confirm</strong> to move them to Confirmed at the same time.</li>
           </ul>
           <ul className="flex flex-wrap gap-4 items-center">
             {SWATCHES.map(([label, color]) => (

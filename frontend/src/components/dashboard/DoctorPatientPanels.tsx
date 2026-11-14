@@ -69,25 +69,25 @@ export function DoctorPatientPanels({ doctorId }: { doctorId: string }) {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center"><ClipboardList className="h-5 w-5 text-blue-500 mr-2" />Recent Visits</CardTitle>
+          <CardTitle className="flex items-center"><ClipboardList className="h-5 w-5 text-info mr-2" />Recent Visits</CardTitle>
           <CardDescription>Your latest consultations</CardDescription>
         </CardHeader>
         <CardContent>
-          {visits.status === 'loading' && <p role="status" className="text-sm text-gray-500">Loading recent visits…</p>}
-          {visits.status === 'error' && <p role="alert" className="text-sm text-red-700">Could not load your recent visits. Refresh to try again.</p>}
+          {visits.status === 'loading' && <p role="status" className="text-sm text-muted-foreground">Loading recent visits…</p>}
+          {visits.status === 'error' && <p role="alert" className="text-sm text-destructive-text">Could not load your recent visits. Refresh to try again.</p>}
           {visits.status === 'ready' && (visits.value.length === 0
-            ? <p className="text-gray-500 text-center py-4">No visits yet</p>
+            ? <p className="text-muted-foreground text-center py-4">No visits yet</p>
             : (
               <ul className="space-y-2" aria-label="Recent visits">
                 {visits.value.map(visit => (
                   <li key={visit.id}>
                     <Link href={`/dashboard/visits?patientId=${encodeURIComponent(visit.patient.id)}&visitId=${encodeURIComponent(visit.id)}`}
-                      className="flex items-center justify-between gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2">
+                      className="flex items-center justify-between gap-3 p-3 rounded-lg bg-muted hover:bg-accent focus-visible:outline focus-visible:outline-2">
                       <span className="min-w-0">
-                        <span className="block text-sm font-medium text-gray-900 truncate">{visit.patient.name}</span>
-                        <span className="block text-xs text-gray-600 truncate">{diagnosisSummary(visit)}</span>
+                        <span className="block text-sm font-medium text-foreground truncate">{visit.patient.name}</span>
+                        <span className="block text-xs text-muted-foreground truncate">{diagnosisSummary(visit)}</span>
                       </span>
-                      <span className="shrink-0 text-xs text-gray-600 tabular-nums">{displayClinicDateTime(visit.createdAt)}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{displayClinicDateTime(visit.createdAt)}</span>
                     </Link>
                   </li>
                 ))}
@@ -98,27 +98,27 @@ export function DoctorPatientPanels({ doctorId }: { doctorId: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center"><UserRound className="h-5 w-5 text-blue-500 mr-2" />My Patients</CardTitle>
+          <CardTitle className="flex items-center"><UserRound className="h-5 w-5 text-info mr-2" />My Patients</CardTitle>
           <CardDescription>Patients with you as their primary doctor{patients.status === 'ready' ? ` (${patients.value.total})` : ''}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Input aria-label="Search my patients" placeholder="Search by name, phone or code" value={search}
             onChange={event => { setSearch(event.target.value); setPage(1); }} />
-          {patients.status === 'loading' && <p role="status" className="text-sm text-gray-500">Loading your patients…</p>}
-          {patients.status === 'error' && <p role="alert" className="text-sm text-red-700">Could not load your patients. Refresh to try again.</p>}
+          {patients.status === 'loading' && <p role="status" className="text-sm text-muted-foreground">Loading your patients…</p>}
+          {patients.status === 'error' && <p role="alert" className="text-sm text-destructive-text">Could not load your patients. Refresh to try again.</p>}
           {patients.status === 'ready' && (patients.value.rows.length === 0
-            ? <p className="text-gray-500 text-center py-4">{search.trim() ? 'No matching patients' : 'No patients assigned to you yet'}</p>
+            ? <p className="text-muted-foreground text-center py-4">{search.trim() ? 'No matching patients' : 'No patients assigned to you yet'}</p>
             : (
               <ul className="space-y-2" aria-label="My patients">
                 {patients.value.rows.map(patient => (
                   <li key={patient.id}>
                     <Link href={`/dashboard/patients/${encodeURIComponent(patient.id)}`}
-                      className="flex items-center justify-between gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2">
+                      className="flex items-center justify-between gap-3 p-3 rounded-lg bg-muted hover:bg-accent focus-visible:outline focus-visible:outline-2">
                       <span className="min-w-0">
-                        <span className="block text-sm font-medium text-gray-900 truncate">{patient.name}</span>
-                        <span className="block text-xs text-gray-600">{[patient.patientCode, patient.phone].filter(Boolean).join(' · ')}</span>
+                        <span className="block text-sm font-medium text-foreground truncate">{patient.name}</span>
+                        <span className="block text-xs text-muted-foreground">{[patient.patientCode, patient.phone].filter(Boolean).join(' · ')}</span>
                       </span>
-                      <span className="shrink-0 text-xs text-gray-600">{patient.lastVisitAt ? `Last visit ${displayClinicDate(patient.lastVisitAt)}` : 'No visits yet'}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{patient.lastVisitAt ? `Last visit ${displayClinicDate(patient.lastVisitAt)}` : 'No visits yet'}</span>
                     </Link>
                   </li>
                 ))}
@@ -127,7 +127,7 @@ export function DoctorPatientPanels({ doctorId }: { doctorId: string }) {
           {patients.status === 'ready' && totalPages > 1 && (
             <div className="flex items-center justify-between">
               <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-              <span className="text-xs text-gray-600">Page {page} of {totalPages}</span>
+              <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
               <Button type="button" variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
             </div>
           )}

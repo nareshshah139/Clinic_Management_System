@@ -36,7 +36,7 @@ export function useAgreedTerms(gstin: string, products: InvoiceProduct[]) {
 export function AgreedTermsPanel({ supplierName, terms }: { supplierName: string; terms: TradeTerm[] }) {
   if (!terms.length) return null;
   return (
-    <section aria-label="Agreed terms" className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm dark:border-sky-800 dark:bg-sky-950/40">
+    <section aria-label="Agreed terms" className="rounded-lg border border-info-border bg-info-soft p-3 text-sm">
       <h4 className="font-semibold">Agreed terms with {supplierName}</h4>
       <p className="text-muted-foreground">Recorded under Purchases, Terms of Trade. Compare each line with what was promised.</p>
       <ul className="mt-2 space-y-1">
@@ -66,7 +66,7 @@ export function invoiceLineSummary(line: InvoiceLineTerms) {
 export function AgreedTermHint({ term, line }: { term: TradeTerm | null; line: InvoiceLineTerms }) {
   if (!term) return null;
   return (
-    <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/40" data-testid="agreed-term-hint">
+    <div className="rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm" data-testid="agreed-term-hint">
       <p><strong>Agreed:</strong> {agreedSummary(term) || term.note || '—'}</p>
       <p className="text-muted-foreground"><strong>Invoice:</strong> {invoiceLineSummary(line)}</p>
     </div>

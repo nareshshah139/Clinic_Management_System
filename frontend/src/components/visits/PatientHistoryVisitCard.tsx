@@ -4,6 +4,7 @@ import { displayUtcDate, displayCalendarDate } from '@/lib/date-display';
 
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ClinicalHistoryDetails, hasClinicalValue } from './ClinicalHistoryDetails';
@@ -66,13 +67,6 @@ const parseJsonObject = <T extends Record<string, unknown>>(value: unknown): T |
   }
   return undefined;
 };
-
-const humanizeKey = (value: string) =>
-  value
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[_-]+/g, ' ')
-    .trim()
-    .replace(/^./, (char) => char.toUpperCase());
 
 const extractTextFromUnknown = (value: unknown, keys: string[]): string | undefined => {
   const normalized = normalizeStructuredValue(value);
@@ -137,15 +131,13 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
   const issued = [raw.prescriptionItems, raw.prescription?.items].map(asRecordList).find((items) => items.length > 0) || [];
   const planItems = asRecordList(planDermatology(raw.plan)?.medicationPlan);
   const rxItems = (issued.length > 0 ? issued : planItems).map(cleanMedicine);
-  const status = String(visit.status || '').toLowerCase().replaceAll('_', '-');
   return {
     dateLabel: displayCalendarDate(day, 'Unknown date'),
     doctorName: visit.doctor ? `${visit.doctor.firstName || ''} ${visit.doctor.lastName || ''}`.trim() : undefined,
     chiefComplaint: extractTextList(visit.complaints, ['complaint', 'text', 'name']).join('; '),
     primaryDiagnosis: extractTextList(visit.diagnosis, ['diagnosis', 'condition', 'name']).join('; '),
     visitTypeLabel,
-    statusLabel: status ? humanizeKey(status) : undefined,
-    statusVariant: status === 'completed' ? 'default' as const : status === 'in-progress' ? 'secondary' as const : 'outline' as const,
+    status: visit.status || undefined,
     photoCount: Number(raw.photos || 0) || photoPreviews.length,
     photoPreviews: photoPreviews as string[],
     rxItems,
@@ -276,7 +268,7 @@ export default function PatientHistoryVisitCard({
     <Card
       className={cn(
         'gap-0 overflow-hidden border-border py-0 shadow-none',
-        highlight && 'border-blue-300 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/20',
+        highlight && 'border-info-border bg-info-soft/30',
         className
       )}
     >
@@ -292,7 +284,7 @@ export default function PatientHistoryVisitCard({
               <span className="break-words text-xs text-muted-foreground"><span className="sr-only">Doctor: </span>{data.doctorName || 'Not recorded'}</span>
               {data.visitTypeLabel && <span className="break-words text-xs text-muted-foreground">{data.visitTypeLabel}</span>}
             </div>
-            {data.statusLabel && <Badge variant={data.statusVariant} className="max-w-full whitespace-normal break-words">{data.statusLabel}</Badge>}
+            {data.status && <StatusBadge domain="visit" status={data.status} className="max-w-full" />}
           </div>
 
           {appointmentOnly && <p className="text-xs leading-relaxed text-muted-foreground">Appointment only — no visit documentation recorded.</p>}

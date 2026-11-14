@@ -1039,7 +1039,7 @@ export function PharmacyInvoiceBuilderFixed({
     const parts = text.split(regex);
     return parts.map((part, index) =>
       regex.test(part) ? (
-        <span key={index} className="bg-yellow-200 font-semibold">
+        <span key={index} className="bg-warning-soft font-semibold">
           {part}
         </span>
       ) : (
@@ -1054,7 +1054,7 @@ export function PharmacyInvoiceBuilderFixed({
       return (
         <Badge
           variant="default"
-          className="text-xs ml-2 whitespace-nowrap bg-green-100 text-green-800"
+          className="text-xs ml-2 whitespace-nowrap bg-success-soft text-success-text"
         >
           Best Match
         </Badge>
@@ -1063,7 +1063,7 @@ export function PharmacyInvoiceBuilderFixed({
       return (
         <Badge
           variant="secondary"
-          className="text-xs ml-2 whitespace-nowrap bg-blue-100 text-blue-800"
+          className="text-xs ml-2 whitespace-nowrap bg-info-soft text-info-text"
         >
           High Match
         </Badge>
@@ -1648,16 +1648,16 @@ export function PharmacyInvoiceBuilderFixed({
               : '';
             return `
         <tr>
-          <td style="padding:6px;border:1px solid #ddd;">
+          <td style="padding:6px;border:1px solid var(--print-rule);">
             ${escapeHtml(line.name)}
             ${line.hsnCode ? `<div class="muted">HSN: ${escapeHtml(line.hsnCode)}</div>` : ''}
             ${batches ? `<div class="muted">Batch: ${escapeHtml(batches)}</div>` : ''}
           </td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:center;">${line.quantity}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(line.unitPrice)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(line.discountPercent)}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(line.taxPercent)}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(line.totalAmount)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:center;">${line.quantity}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(line.unitPrice)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(line.discountPercent)}%</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(line.taxPercent)}%</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(line.totalAmount)}</td>
         </tr>
       `;
           })
@@ -1668,14 +1668,14 @@ export function PharmacyInvoiceBuilderFixed({
 
             return `
         <tr>
-          <td style="padding:6px;border:1px solid #ddd;">
+          <td style="padding:6px;border:1px solid var(--print-rule);">
             ${escapeHtml(itemName)}
           </td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(item.unitPrice)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(item.discountPercent || 0)}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(item.taxPercent || 0)}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(item.totalAmount)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:center;">${item.quantity}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(item.unitPrice)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(item.discountPercent || 0)}%</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(item.taxPercent || 0)}%</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(item.totalAmount)}</td>
         </tr>
       `;
           })
@@ -1697,12 +1697,12 @@ export function PharmacyInvoiceBuilderFixed({
             .map(
               (slab: any) => `
         <tr>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(slab.taxPercent)}%</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(slab.taxableAmount)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(slab.cgst)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(slab.sgst)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(slab.igst)}</td>
-          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(slab.totalTax)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(slab.taxPercent)}%</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.taxableAmount)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.cgst)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.sgst)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.igst)}</td>
+          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.totalTax)}</td>
         </tr>
       `
             )
@@ -1725,7 +1725,7 @@ export function PharmacyInvoiceBuilderFixed({
               .no-print { display: none; }
             }
             body { 
-              font-family: Arial, sans-serif; 
+              font-family: var(--print-font); 
               padding: 20px;
               max-width: 800px;
               margin: 0 auto;
@@ -1733,21 +1733,21 @@ export function PharmacyInvoiceBuilderFixed({
             }
             h1 { 
               margin-bottom: 8px;
-              color: #1a1a1a;
+              color: var(--print-ink);
             }
             .invoice-header {
-              border-bottom: 2px solid #333;
+              border-bottom: 2px solid var(--print-ink);
               padding-bottom: 12px;
               margin-bottom: 20px;
             }
             .muted { 
-              color: #666;
+              color: var(--print-muted);
               font-size: 14px;
             }
             .billing-section {
               margin: 20px 0;
               padding: 15px;
-              background: #f9f9f9;
+              background: var(--print-surface);
               border-radius: 4px;
             }
             table { 
@@ -1756,18 +1756,18 @@ export function PharmacyInvoiceBuilderFixed({
               margin-top: 20px;
             }
             th { 
-              background: #f5f5f5;
+              background: var(--print-surface);
               font-weight: bold;
               padding: 10px 6px !important;
             }
             th, td {
-              border: 1px solid #ddd;
+              border: 1px solid var(--print-rule);
             }
             .totals-section {
               margin-top: 20px;
               text-align: right;
               padding: 15px;
-              background: #f9f9f9;
+              background: var(--print-surface);
               border-radius: 4px;
             }
             .totals-section div {
@@ -1776,15 +1776,15 @@ export function PharmacyInvoiceBuilderFixed({
             .grand-total {
               font-size: 20px;
               font-weight: bold;
-              color: #1a1a1a;
-              border-top: 2px solid #333;
+              color: var(--print-ink);
+              border-top: 2px solid var(--print-ink);
               padding-top: 12px;
               margin-top: 12px;
             }
             .print-button {
               margin: 20px 0;
               padding: 12px 24px;
-              background: #2563eb;
+              background: var(--print-accent);
               color: white;
               border: none;
               border-radius: 6px;
@@ -1792,7 +1792,7 @@ export function PharmacyInvoiceBuilderFixed({
               font-size: 16px;
             }
             .print-button:hover {
-              background: #1d4ed8;
+              background: var(--print-ink);
             }
           </style>
         </head>
@@ -1877,7 +1877,7 @@ export function PharmacyInvoiceBuilderFixed({
           ${
             invoiceCore?.notes || fallback?.notes || invoiceData.notes
               ? `
-            <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
+            <div style="margin-top: 20px; padding: 15px; background: var(--print-surface); border-radius: 4px;">
               <strong>Notes:</strong><br/>
               ${escapeHtml(invoiceCore?.notes || fallback?.notes || invoiceData.notes)}
             </div>
@@ -2150,10 +2150,10 @@ export function PharmacyInvoiceBuilderFixed({
 
     const unlinkedItems = prescriptionItems.filter(item => !item.drugId);
     return (
-      <details className="group mx-6 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-700">
+      <details className="group mx-6 rounded-lg border border-info-border bg-info-soft text-sm text-info-text">
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 [&::-webkit-details-marker]:hidden">
-          <FileText className="h-4 w-4 text-blue-600" />
-          <h3 className="font-semibold text-blue-800">Linked Prescription</h3>
+          <FileText className="h-4 w-4 text-info-text" />
+          <h3 className="font-semibold text-info-text">Linked Prescription</h3>
           <span>· {prescriptionItems.length} {prescriptionItems.length === 1 ? 'item' : 'items'}</span>
           {unlinkedItems.length > 0 && <span className="font-medium">· {unlinkedItems.length} to link to inventory</span>}
           <ChevronDown className="ml-auto h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
@@ -2165,7 +2165,7 @@ export function PharmacyInvoiceBuilderFixed({
           {unlinkedItems.map(item => <div key={item.id} className="mt-2">
             {item.prescribedDrugName}: link inventory before billing. {canLinkInventory && <PrescriptionInventoryLink prescriptionId={prescriptionData.id} lineIndex={item.prescriptionLineIndex!} prescriptionVersion={item.prescriptionVersion} name={item.prescribedDrugName || ''} onLinked={() => loadPrescriptionData(prescriptionData.id)} />}
           </div>)}
-          <p className="mt-2 text-xs text-blue-600">
+          <p className="mt-2 text-xs text-info-text">
             Review stock warnings, substitute medicines, adjust quantities or remove items before billing.
             Changes here do not alter the doctor's prescription.
           </p>
@@ -2184,7 +2184,7 @@ export function PharmacyInvoiceBuilderFixed({
         </div>
       )}
       {checkoutAttempt && (
-        <div role="status" className="m-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm">
+        <div role="status" className="m-4 rounded-md border border-warning-border bg-warning-soft p-3 text-sm">
           <p>{checkoutAttempt.confirmed ? 'This checkout is confirmed. Reopen it for another copy.' : `A checkout for ${checkoutAttempt.payload.billingName} needs confirmation. Retry it before starting another sale.`}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <Button variant="outline" disabled={loading} onClick={() => void createAndConfirmInvoice(checkoutAttempt.previewItems, 'ORIGINAL', checkoutAttempt)}>
@@ -2196,10 +2196,10 @@ export function PharmacyInvoiceBuilderFixed({
         </div>
       )}
       {loadingPrescription && (
-        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <div className="p-4 bg-warning-soft border border-warning-border rounded-lg">
           <div className="flex items-center gap-2">
             <Spinner className="  h-4 w-4  " />
-            <span className="text-yellow-800">
+            <span className="text-warning-text">
               Loading prescription data...
             </span>
           </div>
@@ -2221,7 +2221,7 @@ export function PharmacyInvoiceBuilderFixed({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {prefillError && (
             <div className="lg:col-span-3">
-              <div role="alert" className="p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-900">
+              <div role="alert" className="p-3 bg-warning-soft border border-warning-border rounded-md text-sm text-warning-text">
                 {prefillError}
                 {invoiceData.prescriptionId && (
                   <Button className="ml-3" variant="outline" size="sm" disabled={loadingPrescription}
@@ -2275,7 +2275,7 @@ export function PharmacyInvoiceBuilderFixed({
                             .map((p) => (
                               <div
                                 key={p.id}
-                                className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
                                 onMouseDown={() => {
                                   setSelectedPatient(p);
                                   setInvoiceData((prev) => ({
@@ -2365,7 +2365,7 @@ export function PharmacyInvoiceBuilderFixed({
                   <TabsContent value="drugs" className="space-y-4">
                     <div ref={drugSearchRef} className="space-y-2">
                       {substitutingItemId && (
-                        <div role="status" className="flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                        <div role="status" className="flex items-center justify-between rounded-md border border-info-border bg-info-soft p-3 text-sm text-info-text">
                           <span>Choose a replacement for {billLineName(items.find(item => item.id === substitutingItemId) ?? {})}. The prescribed quantity will be kept.</span>
                           <Button variant="ghost" size="sm" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
                         </div>
@@ -2390,11 +2390,11 @@ export function PharmacyInvoiceBuilderFixed({
                               key={drug.id}
                               role="button"
                               tabIndex={0}
-                              className={`p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${
+                              className={`p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 ${
                                 index === 0
-                                  ? 'bg-green-50 border-l-4 border-l-green-500'
+                                  ? 'bg-success-soft border-l-4 border-l-success'
                                   : index < 3
-                                    ? 'bg-blue-50 border-l-4 border-l-blue-500'
+                                    ? 'bg-info-soft border-l-4 border-l-info'
                                     : ''
                               }`}
                               onClick={() => addDrugToInvoice(drug)}
@@ -2423,7 +2423,7 @@ export function PharmacyInvoiceBuilderFixed({
                                       index
                                     )}
                                   </div>
-                                  <p className="text-sm text-gray-600">
+                                  <p className="text-sm text-muted-foreground">
                                     {highlightMatch(
                                       drug.manufacturerName || '',
                                       drugSearchQuery
@@ -2431,7 +2431,7 @@ export function PharmacyInvoiceBuilderFixed({
                                     • {drug.packSizeLabel}
                                   </p>
                                   {drug.composition1 && (
-                                    <p className="text-xs text-gray-500">
+                                    <p className="text-xs text-muted-foreground">
                                       {highlightMatch(
                                         drug.composition1,
                                         drugSearchQuery
@@ -2495,13 +2495,13 @@ export function PharmacyInvoiceBuilderFixed({
                         packages.map((pkg) => (
                           <div
                             key={pkg.id}
-                            className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
+                            className="border rounded-lg p-4 hover:bg-accent cursor-pointer"
                             onClick={() => addPackageToInvoice(pkg)}
                           >
                             <div className="flex justify-between items-start mb-2">
                               <div className="flex-1">
                                 <h4 className="font-medium">{pkg.name}</h4>
-                                <p className="text-sm text-gray-600">
+                                <p className="text-sm text-muted-foreground">
                                   {pkg.description}
                                 </p>
                                 <div className="flex items-center gap-2 mt-1">
@@ -2511,18 +2511,18 @@ export function PharmacyInvoiceBuilderFixed({
                                   >
                                     {pkg.subcategory}
                                   </Badge>
-                                  <span className="text-xs text-gray-500">
+                                  <span className="text-xs text-muted-foreground">
                                     {pkg.items.length} items
                                   </span>
                                   {pkg.duration && (
-                                    <span className="text-xs text-gray-500">
+                                    <span className="text-xs text-muted-foreground">
                                       • {pkg.duration}
                                     </span>
                                   )}
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="text-sm text-gray-500 line-through">
+                                <div className="text-sm text-muted-foreground line-through">
                                   ₹{pkg.originalPrice.toFixed(2)}
                                 </div>
                                 <div className="font-semibold">
@@ -2538,7 +2538,7 @@ export function PharmacyInvoiceBuilderFixed({
                             </div>
 
                             {pkg.indications && (
-                              <p className="text-xs text-gray-500 mt-2">
+                              <p className="text-xs text-muted-foreground mt-2">
                                 <strong>For:</strong> {pkg.indications}
                               </p>
                             )}
@@ -2566,16 +2566,16 @@ export function PharmacyInvoiceBuilderFixed({
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               {isPrescriptionItem(item.id) && (
                                 <span
-                                  className="text-blue-600 text-lg"
+                                  className="text-info-text text-lg"
                                   title="From Prescription"
                                 >
                                   📋
                                 </span>
                               )}
                               {item.itemType === 'DRUG' ? (
-                                <Pill className="h-4 w-4 text-blue-500" />
+                                <Pill className="h-4 w-4 text-info" />
                               ) : (
-                                <PackageIcon className="h-4 w-4 text-green-500" />
+                                <PackageIcon className="h-4 w-4 text-success" />
                               )}
                               <h4 className="font-medium">{billLineName(item)}</h4>
                               {item.stockStatus === 'CHECK_FAILED' ? (
@@ -2601,14 +2601,14 @@ export function PharmacyInvoiceBuilderFixed({
                               {isPrescriptionItem(item.id) && (
                                 <Badge
                                   variant="outline"
-                                  className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                                  className="text-xs bg-info-soft text-info-text border-info-border"
                                 >
                                   Prescription
                                 </Badge>
                               )}
                             </div>
                             {item.itemType === 'DRUG' && item.drug && (
-                              <p className="text-sm text-gray-600">
+                              <p className="text-sm text-muted-foreground">
                                 {item.drug.manufacturerName} •{' '}
                                 {item.drug.packSizeLabel}
                               </p>
@@ -2616,14 +2616,14 @@ export function PharmacyInvoiceBuilderFixed({
                             {item.quantityReview && (
                               <div
                                 role="status"
-                                className="mt-2 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
+                                className="mt-2 flex items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-2 py-1 text-xs text-warning-text"
                               >
                                 <span className="flex-1">{item.quantityReview}</span>
                                 <Button
                                   type="button"
                                   size="sm"
                                   variant="outline"
-                                  className="h-6 border-amber-300 px-2 text-xs"
+                                  className="h-6 border-warning-border px-2 text-xs"
                                   onClick={() => clearQuantityReview(item.id)}
                                 >
                                   Confirm
@@ -2631,10 +2631,10 @@ export function PharmacyInvoiceBuilderFixed({
                               </div>
                             )}
                             {prescribedNameShown(item) && (
-                              <p className="text-sm text-blue-700">Prescribed: {prescribedNameShown(item)}</p>
+                              <p className="text-sm text-info-text">Prescribed: {prescribedNameShown(item)}</p>
                             )}
                             {item.itemType === 'PACKAGE' && item.package && (
-                              <p className="text-sm text-gray-600">
+                              <p className="text-sm text-muted-foreground">
                                 {item.package.description} •{' '}
                                 {item.package.items.length} items
                               </p>
@@ -2642,7 +2642,7 @@ export function PharmacyInvoiceBuilderFixed({
 
                             {/* Prescription-specific information */}
                             {isPrescriptionItem(item.id) && (
-                              <div className="mt-2 p-2 bg-blue-50 rounded-md text-xs text-blue-700">
+                              <div className="mt-2 p-2 bg-info-soft rounded-md text-xs text-info-text">
                                 {item.dosage && (
                                   <div>
                                     <strong>Dosage:</strong> {item.dosage}
@@ -2687,7 +2687,7 @@ export function PharmacyInvoiceBuilderFixed({
                               size="sm"
                               aria-label={`Remove ${billLineName(item)}`}
                               onClick={() => removeItem(item.id)}
-                              className="text-red-600 hover:text-red-700"
+                              className="text-destructive-text hover:text-destructive-text"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -2771,7 +2771,7 @@ export function PharmacyInvoiceBuilderFixed({
                             <Input
                               value={item.taxPercent === null ? 'GST pending' : `₹${item.totalAmount.toFixed(2)}`}
                               readOnly
-                              className="h-8 bg-gray-50 font-medium"
+                              className="h-8 bg-muted font-medium"
                             />
                           </div>
                         </div>
@@ -2783,7 +2783,7 @@ export function PharmacyInvoiceBuilderFixed({
                         )}
 
                         {item.itemType === 'PACKAGE' && item.package && (
-                          <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                          <div className="mt-3 p-3 bg-muted rounded-md">
                             <h5 className="text-sm font-medium mb-2">
                               Package Contents:
                             </h5>
@@ -2801,7 +2801,7 @@ export function PharmacyInvoiceBuilderFixed({
                                 ))}
                             </div>
                             {item.package.instructions && (
-                              <p className="text-xs text-gray-600 mt-2">
+                              <p className="text-xs text-muted-foreground mt-2">
                                 <strong>Instructions:</strong>{' '}
                                 {item.package.instructions}
                               </p>
@@ -2810,9 +2810,9 @@ export function PharmacyInvoiceBuilderFixed({
                         )}
 
                         {item.itemType === 'DRUG' && (
-                          <div className="mt-3 rounded-md border bg-slate-50 p-3">
+                          <div className="mt-3 rounded-md border bg-muted p-3">
                             <div className="mb-2 flex items-center gap-2">
-                              <FileText className="h-4 w-4 text-slate-600" />
+                              <FileText className="h-4 w-4 text-muted-foreground" />
                               <h5 className="text-sm font-medium">
                                 Prescription directions
                               </h5>
@@ -3033,7 +3033,7 @@ export function PharmacyInvoiceBuilderFixed({
                   </>
                 )}
               </Button>
-              <p className="text-xs text-gray-500 text-center">
+              <p className="text-xs text-muted-foreground text-center">
                 {items.length} items • {hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)} total`}
               </p>
               {!checkoutAttempt && (
@@ -3096,14 +3096,14 @@ export function PharmacyInvoiceBuilderFixed({
         <DialogHeader className="sr-only">
           <DialogTitle>Pharmacy Invoice Preview</DialogTitle>
         </DialogHeader>
-        <div className="flex h-full min-h-0 bg-slate-100">
+        <div className="flex h-full min-h-0 bg-muted">
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 px-4 py-3 text-sm backdrop-blur">
               <div>
-                <div className="font-semibold text-slate-900">
+                <div className="font-semibold text-foreground">
                   Pharmacy Invoice Preview
                 </div>
-                <div className="text-xs text-slate-600">
+                <div className="text-xs text-muted-foreground">
                   {previewInvoiceCore?.invoiceNumber || 'Invoice'} •{' '}
                   {previewPatient?.name ||
                     printPreviewData?.billingFallback.billingName ||
@@ -3139,17 +3139,17 @@ export function PharmacyInvoiceBuilderFixed({
           <aside className="h-full w-80 shrink-0 overflow-auto border-l bg-white p-4 sm:w-96">
             <div className="space-y-5">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">
+                <h3 className="text-sm font-semibold text-foreground">
                   Invoice Controls
                 </h3>
-                <p className="mt-1 text-xs text-slate-600">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Draft previews are confirmed before printing or PDF export.
                 </p>
               </div>
 
               <Button
                 type="button"
-                className="w-full bg-green-600 text-white hover:bg-green-700"
+                className="w-full bg-success text-white hover:bg-success"
                 onClick={handleConfirmInvoiceFromPreview}
                 disabled={
                   isPrintPreviewSaved || loading || savingInvoiceFromPreview
@@ -3220,22 +3220,22 @@ export function PharmacyInvoiceBuilderFixed({
                 </div>
               </div>
 
-              <div className="rounded-md border bg-slate-50 p-3 text-xs text-slate-700">
-                <div className="font-medium text-slate-900">Invoice</div>
+              <div className="rounded-md border bg-muted p-3 text-xs text-foreground">
+                <div className="font-medium text-foreground">Invoice</div>
                 <div className="mt-1">
                   {previewInvoiceCore?.invoiceNumber || 'Not available'}
                 </div>
-                <div className="mt-2 font-medium text-slate-900">Status</div>
+                <div className="mt-2 font-medium text-foreground">Status</div>
                 <div className="mt-1">
                   {isPrintPreviewSaved ? 'Confirmed' : 'Draft preview'}
                 </div>
-                <div className="mt-2 font-medium text-slate-900">Patient</div>
+                <div className="mt-2 font-medium text-foreground">Patient</div>
                 <div className="mt-1">
                   {previewPatient?.name ||
                     printPreviewData?.billingFallback.billingName ||
                     'Not selected'}
                 </div>
-                <div className="mt-2 font-medium text-slate-900">Total</div>
+                <div className="mt-2 font-medium text-foreground">Total</div>
                 <div className="mt-1">₹{previewTotalLabel}</div>
               </div>
 

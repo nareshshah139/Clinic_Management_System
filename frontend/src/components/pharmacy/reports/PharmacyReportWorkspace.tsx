@@ -70,7 +70,7 @@ function Landing() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Pharmacy Report</h1>
-      <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-base text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+      <p className="flex items-start gap-2 rounded-lg border border-warning-border bg-warning-soft p-3 text-base text-warning-text">
         <Info className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
         Every figure comes from the stock and purchase records behind it. Until the stock take and medicine-name clean-up are done, check margins and GST totals against the bills before filing.
       </p>

@@ -572,7 +572,7 @@ export function PartnerDailySync() {
           <CardContent>
             {missing.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <CheckCircle2 className="h-4 w-4 text-success-text" />
                 No missing entries for the selected date.
               </div>
             ) : (
@@ -641,9 +641,7 @@ export function PartnerDailySync() {
                       </TableCell>
                       <TableCell>{displayUtcDate(sale.date)}</TableCell>
                       <TableCell>
-                        <StatusBadge domain="workflow" status={sale.status}>
-                          {sale.status.replace(/_/g, ' ')}
-                        </StatusBadge>
+                        <StatusBadge domain="workflow" status={sale.status} />
                       </TableCell>
                       <TableCell>{sale.totalQuantity}</TableCell>
                       <TableCell className="text-right tabular-nums">{money(sale.netAmount)}</TableCell>
@@ -1005,7 +1003,7 @@ function PartnerLineRecovery({
         <p className="text-sm">{item.discrepancyReason}</p>
       )}
       {item.recoveryInventoryItemId && (
-        <p className="text-sm text-emerald-700">
+        <p className="text-sm text-success-text">
           A batch is selected for the outstanding quantity. Retry outstanding
           when stock is available.
         </p>
@@ -1085,7 +1083,7 @@ function PartnerLineRecovery({
         </>
       )}
       {saved && (
-        <p role="status" className="text-sm text-emerald-700">
+        <p role="status" className="text-sm text-success-text">
           Match saved. Use Retry outstanding to deduct only the remaining
           quantities.
         </p>

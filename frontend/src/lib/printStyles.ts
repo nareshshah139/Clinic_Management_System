@@ -2,6 +2,15 @@
 // Consumers should inject the returned string inside a <style> tag in the print HTML.
 
 export const GLOBAL_PRINT_CSS = `
+:root {
+  --print-ink: #262A27;
+  --print-muted: #596057;
+  --print-rule: #C6CEC3;
+  --print-surface: #F1F3EF;
+  --print-accent: #616B60;
+  --print-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
 @page {
   size: A4 portrait;
   margin: 0; /* content manages its own margins/padding */

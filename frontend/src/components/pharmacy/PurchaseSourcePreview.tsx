@@ -357,7 +357,7 @@ export function PurchaseSourcePreview({
                 <strong>{selected.label}</strong> · captured: {region.value}
               </p>
               {sourceValueChanged(region.value, selected.value) && (
-                <p className="text-amber-800 dark:text-amber-300">
+                <p className="text-warning-text">
                   Edited value: {selected.value || "Blank"}. The highlight still
                   refers to the original reading.
                 </p>
@@ -438,7 +438,7 @@ export function PurchaseSourcePreview({
                       ? "rgba(250,204,21,.28)"
                       : "rgba(59,130,246,.08)"
                   }
-                  stroke={target.id === selectedId ? "#a16207" : "#2563eb"}
+                  stroke={target.id === selectedId ? "var(--warning)" : "var(--info)"}
                   strokeWidth={target.id === selectedId ? 3 : 1}
                   vectorEffect="non-scaling-stroke"
                   role="button"

@@ -104,7 +104,7 @@ export function ManageClinicInvestigations({ saved, onRename, onRemove }: Manage
       </Button>
       {open && (
         saved.length === 0 ? (
-          <p className="text-xs text-gray-600">No investigations saved to the clinic list yet.</p>
+          <p className="text-xs text-muted-foreground">No investigations saved to the clinic list yet.</p>
         ) : (
           <ul className="space-y-1" aria-label="Saved investigations">
             {saved.map((entry) => (

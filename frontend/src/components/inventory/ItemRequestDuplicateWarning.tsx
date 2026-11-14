@@ -4,7 +4,7 @@ import { describePossibleDuplicates, hasPossibleDuplicates, type PossibleDuplica
 export function ItemRequestDuplicateWarning({ duplicates, intro }: { duplicates?: PossibleDuplicates | null; intro?: string }) {
   if (!hasPossibleDuplicates(duplicates)) return null;
   const lines = describePossibleDuplicates(duplicates, displayClinicDateTime);
-  return <div role="note" data-testid="duplicate-warning" className="rounded-md border border-amber-500 bg-amber-50 p-3 text-sm text-amber-950">
+  return <div role="note" data-testid="duplicate-warning" className="rounded-md border border-warning bg-warning-soft p-3 text-sm text-warning-text">
     <p className="font-semibold">Possible duplicate{intro ? `. ${intro}` : ''}</p>
     {lines.inventory.length > 0 && <>
       <p className="mt-1 font-medium">{lines.inventoryHeading}</p>

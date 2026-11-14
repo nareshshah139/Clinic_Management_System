@@ -35,7 +35,7 @@ const SOURCE_NOTES: Record<HoursSource, string> = {
   default: 'No hours set yet; the clinic default 09:00-18:00 applies every day. Save to set a schedule.',
 };
 
-const selectClass = 'h-9 rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-900';
+const selectClass = 'h-9 rounded-md border border-border bg-white px-2 text-sm text-foreground';
 
 function toWeek(hours: WeeklyShift[]): Week {
   const week: Week = WEEKDAYS.map(() => []);
@@ -115,27 +115,27 @@ export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false
     }
   };
 
-  if (loading && !data) return <p role="status" className="text-sm text-gray-600">Loading availability…</p>;
+  if (loading && !data) return <p role="status" className="text-sm text-muted-foreground">Loading availability…</p>;
 
   return (
     <div className="space-y-4">
       <section aria-labelledby={`hours-${doctorId}`} className="border rounded-md p-3 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 id={`hours-${doctorId}`} className="font-medium text-gray-900">Weekly working hours (IST)</h3>
+          <h3 id={`hours-${doctorId}`} className="font-medium text-foreground">Weekly working hours (IST)</h3>
           <Button type="button" variant="outline" size="sm" onClick={copyMondayToWeekdays}>Copy Monday to Tue–Fri</Button>
         </div>
-        {data && SOURCE_NOTES[data.source] && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">{SOURCE_NOTES[data.source]}</p>}
+        {data && SOURCE_NOTES[data.source] && <p className="text-xs text-warning-text bg-warning-soft border border-warning-border rounded p-2">{SOURCE_NOTES[data.source]}</p>}
         <div className="divide-y">
           {WEEKDAYS.map((name, day) => (
             <div key={name} className="flex flex-wrap items-start gap-3 py-2">
-              <div className="w-24 pt-2 text-sm font-medium text-gray-700">{name}</div>
+              <div className="w-24 pt-2 text-sm font-medium text-foreground">{name}</div>
               <div className="flex-1 space-y-2">
-                {week[day].length === 0 && <p className="pt-2 text-sm text-gray-500">Day off</p>}
+                {week[day].length === 0 && <p className="pt-2 text-sm text-muted-foreground">Day off</p>}
                 {week[day].map((shift, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <Input type="time" aria-label={`${name} shift ${i + 1} start`} className="w-32" value={shift.start}
                       onChange={(e) => updateDay(day, week[day].map((s, j) => (j === i ? { ...s, start: e.target.value } : s)))} />
-                    <span className="text-gray-500">to</span>
+                    <span className="text-muted-foreground">to</span>
                     <Input type="time" aria-label={`${name} shift ${i + 1} end`} className="w-32" value={shift.end}
                       onChange={(e) => updateDay(day, week[day].map((s, j) => (j === i ? { ...s, end: e.target.value } : s)))} />
                     <Button type="button" variant="ghost" size="sm" aria-label={`Remove ${name} shift ${i + 1}`}
@@ -152,23 +152,23 @@ export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false
         </div>
         <div className="flex items-center gap-3">
           <Button type="button" disabled={saving} onClick={() => void saveHours()}>{saving ? 'Saving…' : 'Save hours'}</Button>
-          <p role="status" className="text-sm text-gray-600">{status}</p>
+          <p role="status" className="text-sm text-muted-foreground">{status}</p>
         </div>
       </section>
 
       {data && <OverbookingSettings doctorId={doctorId} saved={slotLimit(data.maxBookingsPerSlot)} onSaved={setData} />}
 
       <section aria-labelledby={`timeoff-${doctorId}`} className="border rounded-md p-3 space-y-3">
-        <h3 id={`timeoff-${doctorId}`} className="font-medium text-gray-900">Leave and blocked time</h3>
-        <p className="text-xs text-gray-500">Appointments cannot be booked during leave, blocked time, or clinic holidays.</p>
-        {data && data.timeOff.length === 0 && <p className="text-sm text-gray-500">No upcoming time off.</p>}
+        <h3 id={`timeoff-${doctorId}`} className="font-medium text-foreground">Leave and blocked time</h3>
+        <p className="text-xs text-muted-foreground">Appointments cannot be booked during leave, blocked time, or clinic holidays.</p>
+        {data && data.timeOff.length === 0 && <p className="text-sm text-muted-foreground">No upcoming time off.</p>}
         <ul className="space-y-2">
           {data?.timeOff.map((t) => (
-            <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+            <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border bg-muted px-3 py-2 text-sm">
               <div>
-                <span className="font-medium text-gray-900">{TIME_OFF_LABELS[t.kind]}</span>
-                <span className="text-gray-700"> · {timeOffSpan(t.startsAt, t.endsAt)}</span>
-                {t.reason && <span className="text-gray-500"> · {t.reason}</span>}
+                <span className="font-medium text-foreground">{TIME_OFF_LABELS[t.kind]}</span>
+                <span className="text-foreground"> · {timeOffSpan(t.startsAt, t.endsAt)}</span>
+                {t.reason && <span className="text-muted-foreground"> · {t.reason}</span>}
               </div>
               {(t.doctorId || canManageHolidays) && (
                 <Button type="button" variant="ghost" size="sm" aria-label={`Remove ${TIME_OFF_LABELS[t.kind]} ${timeOffSpan(t.startsAt, t.endsAt)}`} onClick={() => void removeTimeOff(t.id)}>
@@ -181,7 +181,7 @@ export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false
         <TimeOffForm kinds={['LEAVE', 'BLOCKED']} doctorId={doctorId} onSaved={load} />
       </section>
 
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
     </div>
   );
 }
@@ -218,8 +218,8 @@ function OverbookingSettings({ doctorId, saved, onSaved }: { doctorId: string; s
 
   return (
     <section aria-labelledby={`overbook-${doctorId}`} className="border rounded-md p-3 space-y-3">
-      <h3 id={`overbook-${doctorId}`} className="font-medium text-gray-900">Overbooking</h3>
-      <p className="text-xs text-gray-500">
+      <h3 id={`overbook-${doctorId}`} className="font-medium text-foreground">Overbooking</h3>
+      <p className="text-xs text-muted-foreground">
         Off keeps one patient per time slot. When on, reception must confirm each extra patient in an occupied slot.
       </p>
       <div className="flex flex-wrap items-center gap-4">
@@ -228,7 +228,7 @@ function OverbookingSettings({ doctorId, saved, onSaved }: { doctorId: string; s
           <Label htmlFor={`overbook-switch-${doctorId}`}>Allow overbooking</Label>
         </div>
         {allow && (
-          <div className="flex items-center gap-2 text-sm text-gray-700">
+          <div className="flex items-center gap-2 text-sm text-foreground">
             <span>Up to</span>
             <Select value={String(limit)} onValueChange={(v: string) => setLimit(Number(v))}>
               <SelectTrigger aria-label="Patients per slot" className="w-20"><SelectValue /></SelectTrigger>
@@ -242,9 +242,9 @@ function OverbookingSettings({ doctorId, saved, onSaved }: { doctorId: string; s
       </div>
       <div className="flex items-center gap-3">
         <Button type="button" disabled={saving || next === saved} onClick={() => void save()}>{saving ? 'Saving…' : 'Save overbooking'}</Button>
-        <p role="status" className="text-sm text-gray-600">{status}</p>
+        <p role="status" className="text-sm text-muted-foreground">{status}</p>
       </div>
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
     </section>
   );
 }
@@ -279,34 +279,34 @@ function TimeOffForm({ kinds, doctorId, onSaved }: { kinds: TimeOffKind[]; docto
   };
 
   return (
-    <div className="space-y-2 rounded border border-dashed border-gray-300 p-3">
+    <div className="space-y-2 rounded border border-dashed border-border p-3">
       <div className="flex flex-wrap items-end gap-3">
         {kinds.length > 1 && (
-          <label className="text-sm text-gray-700 space-y-1">
+          <label className="text-sm text-foreground space-y-1">
             <span className="block">Type</span>
             <select className={selectClass} value={kind} onChange={(e) => setKind(e.target.value as TimeOffKind)}>
               {kinds.map((k) => <option key={k} value={k}>{TIME_OFF_LABELS[k]}</option>)}
             </select>
           </label>
         )}
-        <label className="text-sm text-gray-700 space-y-1">
+        <label className="text-sm text-foreground space-y-1">
           <span className="block">From</span>
           <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); if (e.target.value > to) setTo(e.target.value); }} />
         </label>
-        <label className="text-sm text-gray-700 space-y-1">
+        <label className="text-sm text-foreground space-y-1">
           <span className="block">To</span>
           <Input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
         </label>
-        <label className="flex items-center gap-2 pb-2 text-sm text-gray-700">
+        <label className="flex items-center gap-2 pb-2 text-sm text-foreground">
           <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} /> All day
         </label>
         {!allDay && (
           <>
-            <label className="text-sm text-gray-700 space-y-1">
+            <label className="text-sm text-foreground space-y-1">
               <span className="block">Start time</span>
               <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             </label>
-            <label className="text-sm text-gray-700 space-y-1">
+            <label className="text-sm text-foreground space-y-1">
               <span className="block">End time</span>
               <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             </label>
@@ -314,13 +314,13 @@ function TimeOffForm({ kinds, doctorId, onSaved }: { kinds: TimeOffKind[]; docto
         )}
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex-1 text-sm text-gray-700 space-y-1">
+        <label className="flex-1 text-sm text-foreground space-y-1">
           <span className="block">Reason (optional)</span>
           <Input value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} />
         </label>
         <Button type="button" disabled={saving} onClick={() => void submit()}>{saving ? 'Adding…' : `Add ${TIME_OFF_LABELS[kind].toLowerCase()}`}</Button>
       </div>
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
     </div>
   );
 }
@@ -352,14 +352,14 @@ export function BranchHolidaySettings() {
 
   return (
     <section className="space-y-3">
-      <p className="text-sm text-gray-600">Holidays close the clinic for all doctors. Appointments cannot be booked on them.</p>
-      {holidays.length === 0 && <p className="text-sm text-gray-500">No upcoming holidays.</p>}
+      <p className="text-sm text-muted-foreground">Holidays close the clinic for all doctors. Appointments cannot be booked on them.</p>
+      {holidays.length === 0 && <p className="text-sm text-muted-foreground">No upcoming holidays.</p>}
       <ul className="space-y-2">
         {holidays.map((t) => (
-          <li key={t.id} className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+          <li key={t.id} className="flex items-center justify-between gap-2 rounded border border-border bg-muted px-3 py-2 text-sm">
             <div>
-              <span className="text-gray-900">{timeOffSpan(t.startsAt, t.endsAt)}</span>
-              {t.reason && <span className="text-gray-500"> · {t.reason}</span>}
+              <span className="text-foreground">{timeOffSpan(t.startsAt, t.endsAt)}</span>
+              {t.reason && <span className="text-muted-foreground"> · {t.reason}</span>}
             </div>
             <Button type="button" variant="ghost" size="sm" aria-label={`Remove holiday ${timeOffSpan(t.startsAt, t.endsAt)}`} onClick={() => void remove(t.id)}>
               <Trash2 className="h-4 w-4" />
@@ -368,7 +368,7 @@ export function BranchHolidaySettings() {
         ))}
       </ul>
       <TimeOffForm kinds={['HOLIDAY']} onSaved={load} />
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
     </section>
   );
 }

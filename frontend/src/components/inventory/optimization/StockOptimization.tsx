@@ -235,7 +235,7 @@ export function StockOptimization({ canWrite, ran, onRan, onDocument, onReturns 
   };
   const draftAction = (group: DistributorGroup) => {
     if (group.belowMinimum)
-      return <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">{group.blocker}</p>;
+      return <p className="rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-sm font-medium text-warning-text">{group.blocker}</p>;
     const open = group.openReturns ?? [];
     return (
       <div className="flex flex-col items-stretch gap-2 max-sm:w-full sm:items-end">
@@ -271,7 +271,7 @@ export function StockOptimization({ canWrite, ran, onRan, onDocument, onReturns 
       <RulesPanel canWrite={canWrite} onSaved={() => { if (run) void execute(); }} />
       {error && <p role="alert" className="rounded-md border border-destructive p-3 text-destructive">{error}</p>}
       {created && (
-        <p role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/40">
+        <p role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-success-border bg-success-soft p-3 text-sm">
           Return draft {created.reference} created with batch, PTR and GST filled in.
           <Button type="button" size="sm" variant="outline" onClick={() => onDocument("SUPPLIER_RETURN", created.id)}>Open draft</Button>
           <Button type="button" size="sm" variant="link" onClick={onReturns}>See it in Purchase bills › Returns</Button>

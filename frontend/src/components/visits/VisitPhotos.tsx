@@ -656,10 +656,10 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         {photoLoading ? <p role="status">Loading visit photos…</p> : photoLoadError ? <div role="alert" className="space-y-2 text-sm">
           <p>{photoLoadError}</p><Button type="button" variant="outline" onClick={() => void load()}>Retry visit photos</Button>
         </div> : items.length === 0 ? (
-          <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-            <ImageIcon className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No photos attached to this visit</h3>
-            <p className="text-sm text-gray-500 mb-6">Photos from other visits and unattached uploads are listed below when available.</p>
+          <div className="text-center py-12 border-2 border-dashed border-border rounded-lg bg-muted">
+            <ImageIcon className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-medium text-foreground mb-2">No photos attached to this visit</h3>
+            <p className="text-sm text-muted-foreground mb-6">Photos from other visits and unattached uploads are listed below when available.</p>
             <div className="flex justify-center space-x-3">
               <Button onClick={() => inputRef.current?.click()} disabled={uploading}>
                 <Upload className="h-4 w-4 mr-2" />
@@ -675,7 +675,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           <div className="space-y-3">
             {/* Main viewer */}
             {!compareMode ? (
-              <div className="w-full aspect-video bg-gray-100 rounded-md border flex items-center justify-center overflow-hidden">
+              <div className="w-full aspect-video bg-muted rounded-md border flex items-center justify-center overflow-hidden">
                 {active ? (
                   <img src={toAbsolute(active.url)} alt="visit" className="max-h-full max-w-full object-contain" />
                 ) : null}
@@ -684,7 +684,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
               <div className="space-y-2">
                 {/* Compare visit selector */}
                 <div className="flex items-center gap-2">
-                  <div className="text-xs text-gray-600">Compare against:</div>
+                  <div className="text-xs text-muted-foreground">Compare against:</div>
                   <Select
                     value={selectedCompareVisitId || ''}
                     onValueChange={(val: string) => { setSelectedCompareVisitId(val || null); setPairIndex(0); }}
@@ -704,7 +704,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
 
                 {/* Paired compare viewer */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="w-full aspect-video bg-gray-100 rounded-md border flex items-center justify-center overflow-hidden relative">
+                  <div className="w-full aspect-video bg-muted rounded-md border flex items-center justify-center overflow-hidden relative">
                     {leftItem ? (
                       <>
                         <img src={toAbsolute(leftItem.url)} alt="before" className="max-h-full max-w-full object-contain" />
@@ -713,10 +713,10 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                         </div>
                       </>
                     ) : (
-                      <div className="text-xs text-gray-500">No photo</div>
+                      <div className="text-xs text-muted-foreground">No photo</div>
                     )}
                   </div>
-                  <div className="w-full aspect-video bg-gray-100 rounded-md border flex items-center justify-center overflow-hidden relative">
+                  <div className="w-full aspect-video bg-muted rounded-md border flex items-center justify-center overflow-hidden relative">
                     {rightItem ? (
                       <>
                         <img src={toAbsolute(rightItem.url)} alt="after" className="max-h-full max-w-full object-contain" />
@@ -725,13 +725,13 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                         </div>
                       </>
                     ) : (
-                      <div className="text-xs text-gray-500">No photo</div>
+                      <div className="text-xs text-muted-foreground">No photo</div>
                     )}
                   </div>
                 </div>
 
                 {/* Pair navigation */}
-                <div className="flex items-center justify-between text-xs text-gray-600">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <div>
                     {currentPairPosition ? `Position: ${POSITION_LABEL[currentPairPosition]}` : 'No positions to compare'}
                     {positionPairs.available.length > 0 ? ` • ${pairIndex + 1} / ${positionPairs.available.length}` : ''}
@@ -745,7 +745,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             )}
 
             {/* Meta */}
-            <div className="text-xs text-gray-500 flex items-center justify-between">
+            <div className="text-xs text-muted-foreground flex items-center justify-between">
               <div>
                 {active?.uploadedAt ? `Uploaded: ${displayClinicDateTime(active.uploadedAt)}` : ''}
                 {active?.position ? ` • ${POSITION_LABEL[active.position]}` : ''}
@@ -765,7 +765,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             <div className="w-full overflow-x-auto">
               <div className="flex gap-2 py-2">
                 {items.map((it, idx) => (
-                  <div key={it.url} className={`relative h-20 w-28 flex-shrink-0 rounded-md border overflow-hidden ${idx === activeIndex ? 'ring-2 ring-blue-500' : ''}`}>
+                  <div key={it.url} className={`relative h-20 w-28 flex-shrink-0 rounded-md border overflow-hidden ${idx === activeIndex ? 'ring-2 ring-info' : ''}`}>
                     <button
                       type="button"
                       onClick={() => setActiveIndex(idx)}
@@ -786,7 +786,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                           setActiveIndex(idx);
                           await deletePhoto(it);
                         }}
-                        className="absolute top-1 right-1 bg-red-600/90 hover:bg-red-700 text-white rounded-md p-1"
+                        className="absolute top-1 right-1 bg-destructive/90 hover:bg-destructive text-white rounded-md p-1"
                         title="Delete"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -811,7 +811,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-600">Mode</span>
+              <span className="text-xs text-muted-foreground">Mode</span>
               <Button size="sm" variant={taggingMode === 'GRID' ? 'default' : 'outline'} aria-pressed={taggingMode === 'GRID'} onClick={() => setTaggingMode('GRID')}>
                 <LayoutGrid className="h-3 w-3 mr-1" /> Grid
               </Button>
@@ -824,11 +824,11 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
 
           {taggingMode === 'SINGLE' ? (
             <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm text-gray-700">
+              <div className="flex items-center justify-between text-sm text-foreground">
                 <div className="truncate" title={pendingFiles?.[taggingIndex]?.name || ''}>{pendingFiles?.[taggingIndex]?.name}</div>
                 <div className="text-xs">{(taggingIndex + 1)} / {pendingFiles?.length || 0}</div>
               </div>
-              <div className="relative w-full bg-gray-100 rounded-md border aspect-video flex items-center justify-center overflow-hidden">
+              <div className="relative w-full bg-muted rounded-md border aspect-video flex items-center justify-center overflow-hidden">
                 {previewUrls[taggingIndex] ? (
                   <img src={previewUrls[taggingIndex]} alt="preview" className="max-h-full max-w-full object-contain" />
                 ) : null}
@@ -875,7 +875,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
               <div className="w-full overflow-x-auto">
                 <div className="flex gap-2 py-2">
                   {pendingFiles?.map((f, i) => (
-                    <button key={`${f.name}-${i}`} type="button" onClick={() => setTaggingIndex(i)} className={`relative h-20 w-20 flex-shrink-0 rounded-md border overflow-hidden ${i === taggingIndex ? 'ring-2 ring-blue-500' : ''}`} title={f.name}>
+                    <button key={`${f.name}-${i}`} type="button" onClick={() => setTaggingIndex(i)} className={`relative h-20 w-20 flex-shrink-0 rounded-md border overflow-hidden ${i === taggingIndex ? 'ring-2 ring-info' : ''}`} title={f.name}>
                       {previewUrls[i] ? (
                         <img src={previewUrls[i]} alt="thumb" className="h-full w-full object-cover" />
                       ) : null}
@@ -891,7 +891,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {pendingFiles?.map((file, idx) => (
                 <div key={`${file.name}-${idx}`} className="rounded-md border p-2">
-                  <div className="aspect-square w-full rounded-md bg-gray-100 overflow-hidden">
+                  <div className="aspect-square w-full rounded-md bg-muted overflow-hidden">
                     {previewUrls[idx] ? (
                       <img src={previewUrls[idx]} alt="preview" className="h-full w-full object-cover" />
                     ) : null}
@@ -915,7 +915,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="mt-1 text-xs text-gray-500 truncate" title={file.name}>{file.name}</div>
+                  <div className="mt-1 text-xs text-muted-foreground truncate" title={file.name}>{file.name}</div>
                 </div>
               ))}
             </div>

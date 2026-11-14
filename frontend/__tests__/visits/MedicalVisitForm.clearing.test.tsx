@@ -110,7 +110,7 @@ it('loads completed walk-in status from the server even when an old local draft 
   saved.status = 'COMPLETED'; saved.completedAt = '2026-10-05T10:00:00Z';
   localStorage.setItem('clinic:visit-draft:d:p:visit-v', JSON.stringify({ version: 1, data: { visitStatus: 'in-progress' } }));
   await openForm();
-  expect(screen.getAllByText('COMPLETED').length).toBeGreaterThan(0);
+  expect(screen.getAllByText('Completed').length).toBeGreaterThan(0);
 });
 
 it('recovers a rejected clear after immediate unmount without resurrecting the server value', async () => {

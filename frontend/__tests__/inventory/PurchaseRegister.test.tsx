@@ -406,7 +406,7 @@ it.each([
   fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-101 paid' }));
   fireEvent.click(screen.getByRole('button', { name: 'Record payment ₹1,000.00' }));
   const toast = (await screen.findByText(title)).closest('li')!;
-  expect(toast).toHaveClass('bg-yellow-50');
+  expect(toast).toHaveClass('bg-warning-soft');
   expect(toast).not.toHaveClass('bg-destructive');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   await waitFor(() => expect(paymentCell('LIN-101')).toHaveTextContent('₹400.00 due₹600.00 paidMark paid'));

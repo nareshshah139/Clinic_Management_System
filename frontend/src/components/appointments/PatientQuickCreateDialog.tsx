@@ -176,7 +176,7 @@ export default function PatientQuickCreateDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {errors.length > 0 && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-md border border-destructive-border bg-destructive-soft px-4 py-3 text-sm text-destructive-text">
               {errors[0]}
             </div>
           )}

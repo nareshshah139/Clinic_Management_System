@@ -219,7 +219,7 @@ export function StockPredictionDashboard() {
               <CardTitle className="text-sm font-medium">Critical Items</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{predictions.summary?.criticalItems || 0}</div>
+              <div className="text-2xl font-bold text-destructive-text">{predictions.summary?.criticalItems || 0}</div>
               <p className="text-xs text-muted-foreground mt-1">Need immediate attention</p>
             </CardContent>
           </Card>
@@ -271,7 +271,7 @@ export function StockPredictionDashboard() {
                 {predictions?.predictions.slice(0, 50).map((pred) => (
                   <div
                     key={pred.drugId}
-                    className="flex items-center justify-between p-3 border rounded-md hover:bg-gray-50 cursor-pointer"
+                    className="flex items-center justify-between p-3 border rounded-md hover:bg-accent cursor-pointer"
                     onClick={() => setSelectedDrug(pred)}
                   >
                     <div className="flex-1">
@@ -282,10 +282,10 @@ export function StockPredictionDashboard() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {pred.trend > 0.1 && <TrendingUp className="h-4 w-4 text-green-600" />}
-                      {pred.trend < -0.1 && <TrendingDown className="h-4 w-4 text-red-600" />}
+                      {pred.trend > 0.1 && <TrendingUp className="h-4 w-4 text-success-text" />}
+                      {pred.trend < -0.1 && <TrendingDown className="h-4 w-4 text-destructive-text" />}
                       {pred.daysUntilStockout && pred.daysUntilStockout < 15 && (
-                        <AlertTriangle className="h-4 w-4 text-orange-500" />
+                        <AlertTriangle className="h-4 w-4 text-warning" />
                       )}
                       {getConfidenceBadge(pred.confidence)}
                     </div>
@@ -325,7 +325,7 @@ export function StockPredictionDashboard() {
                 </div>
 
                 {selectedDrug.reasoning && (
-                  <div className="p-3 bg-blue-50 rounded-md">
+                  <div className="p-3 bg-info-soft rounded-md">
                     <p className="text-sm font-medium">Reasoning:</p>
                     <p className="text-sm text-muted-foreground">{selectedDrug.reasoning}</p>
                   </div>
@@ -342,7 +342,7 @@ export function StockPredictionDashboard() {
                         <Tooltip />
                         {/* @ts-expect-error - recharts v3 Legend type compatibility with React 19 */}
                         <Legend />
-                        <Line type="monotone" dataKey="quantity" stroke="#8884d8" name="Quantity Sold" />
+                        <Line type="monotone" dataKey="quantity" stroke="var(--chart-1)" name="Quantity Sold" />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -368,10 +368,10 @@ export function StockPredictionDashboard() {
                       (pred.reorderLevel && pred.currentStock <= pred.reorderLevel),
                   )
                   .map((pred) => (
-                    <div key={pred.drugId} className="flex items-center justify-between p-3 border rounded-md bg-red-50">
+                    <div key={pred.drugId} className="flex items-center justify-between p-3 border rounded-md bg-destructive-soft">
                       <div className="flex-1">
                         <div className="font-medium flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4 text-red-600" />
+                          <AlertTriangle className="h-4 w-4 text-destructive-text" />
                           {pred.drugName}
                         </div>
                         <div className="text-sm text-muted-foreground">
@@ -393,7 +393,7 @@ export function StockPredictionDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
+                  <TrendingUp className="h-5 w-5 text-success-text" />
                   Increasing Usage
                 </CardTitle>
               </CardHeader>
@@ -405,7 +405,7 @@ export function StockPredictionDashboard() {
                     .map((pred) => (
                       <div key={pred.drugId} className="flex justify-between p-2 border rounded-md">
                         <span className="text-sm">{pred.drugName}</span>
-                        <span className="text-sm font-medium text-green-600">+{(pred.trend * 100).toFixed(1)}%</span>
+                        <span className="text-sm font-medium text-success-text">+{(pred.trend * 100).toFixed(1)}%</span>
                       </div>
                     ))}
                 </div>
@@ -415,7 +415,7 @@ export function StockPredictionDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingDown className="h-5 w-5 text-red-600" />
+                  <TrendingDown className="h-5 w-5 text-destructive-text" />
                   Decreasing Usage
                 </CardTitle>
               </CardHeader>
@@ -427,7 +427,7 @@ export function StockPredictionDashboard() {
                     .map((pred) => (
                       <div key={pred.drugId} className="flex justify-between p-2 border rounded-md">
                         <span className="text-sm">{pred.drugName}</span>
-                        <span className="text-sm font-medium text-red-600">{(pred.trend * 100).toFixed(1)}%</span>
+                        <span className="text-sm font-medium text-destructive-text">{(pred.trend * 100).toFixed(1)}%</span>
                       </div>
                     ))}
                 </div>
@@ -460,7 +460,7 @@ export function StockPredictionDashboard() {
               {!loading && !bulkOrder && <EmptyState title="No bulk order generated" description="Generate an order to review suggested quantities and estimated costs." />}
               {bulkOrder && (
                 <>
-                  <div className="mb-4 p-4 bg-blue-50 rounded-md">
+                  <div className="mb-4 p-4 bg-info-soft rounded-md">
                     <p className="text-lg font-semibold">
                       Total Estimated Cost: ₹{bulkOrder.totalEstimatedCost.toFixed(2)}
                     </p>

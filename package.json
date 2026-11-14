@@ -23,7 +23,10 @@
     "test:recovery:e2e": "node e2e/recovery/run.cjs",
     "contracts:format": "cc-check format",
     "contracts:list": "cc-check list",
-    "contracts:check": "node scripts/contracts/check-attachment.cjs"
+    "contracts:check": "node scripts/contracts/check-attachment.cjs",
+    "design:check-colors": "node scripts/design/check-raw-colors.mjs",
+    "design:tokenize-colors": "node scripts/design/tokenize-colors.mjs",
+    "design:check-contrast": "node scripts/design/check-token-contrast.mjs"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

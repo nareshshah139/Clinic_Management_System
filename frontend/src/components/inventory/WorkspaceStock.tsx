@@ -657,8 +657,8 @@ export function WorkspaceStock({
                       </button>
                       {i.packLabel && <p className="text-sm">{i.packLabel}</p>}
                       {i.recordedName && <p className="text-xs text-muted-foreground">Recorded as {i.recordedName}</p>}
-                      {i.strengthMissing && <p className="text-xs text-amber-800 dark:text-amber-200">Strength missing</p>}
-                      {i.searchMatch?.kind === "fuzzy" && <p className="text-xs text-amber-800 dark:text-amber-200">Similar spelling: {i.searchMatch.corrections.join(", ")}</p>}
+                      {i.strengthMissing && <p className="text-xs text-warning-text">Strength missing</p>}
+                      {i.searchMatch?.kind === "fuzzy" && <p className="text-xs text-warning-text">Similar spelling: {i.searchMatch.corrections.join(", ")}</p>}
                       {i.searchMatch?.kind === "alias" && <p className="text-xs text-muted-foreground">Matched earlier name: {i.searchMatch.matchedText}</p>}
                       <p className="text-xs text-muted-foreground">
                         {i.batchNumber || "Batch missing"}

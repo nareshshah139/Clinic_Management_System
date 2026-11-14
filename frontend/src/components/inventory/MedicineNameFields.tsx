@@ -127,7 +127,7 @@ export function MedicineNameFields({
         <span className="text-muted-foreground">Prints as </span>
         <strong data-testid="medicine-name-preview">{preview || '—'}</strong>
         {value.form && (bare || strengthMissing(value)) && (
-          <span className="block text-xs text-amber-800 dark:text-amber-200">{bare ? `Unit missing: ${bare} could be mg or mcg` : 'Strength missing'}</span>
+          <span className="block text-xs text-warning-text">{bare ? `Unit missing: ${bare} could be mg or mcg` : 'Strength missing'}</span>
         )}
       </p>
     </fieldset>

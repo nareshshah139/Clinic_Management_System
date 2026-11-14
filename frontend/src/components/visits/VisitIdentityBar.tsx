@@ -17,7 +17,7 @@ interface VisitIdentityBarProps {
 const SEPARATOR = ' · ';
 
 export function VisitIdentityBar({ patient, doctor, appointment, className = '', hideDoctor = false }: VisitIdentityBarProps) {
-  const frame = `text-sm text-gray-700 ${className}`;
+  const frame = `text-sm text-foreground ${className}`;
 
   if (patient.status === 'loading' || patient.status === 'idle') {
     return (
@@ -52,7 +52,7 @@ export function VisitIdentityBar({ patient, doctor, appointment, className = '',
 
   return (
     <p className={frame} data-testid="visit-identity">
-      <span className="font-medium text-gray-900">{segments[0]}</span>
+      <span className="font-medium text-foreground">{segments[0]}</span>
       {segments.slice(1).map((segment) => (
         <span key={segment}>
           {SEPARATOR}

@@ -20,11 +20,6 @@ export type DayAppointment = Pick<Appointment, 'id' | 'slot' | 'status' | 'docto
   patient?: { id: string; name?: string; firstName?: string; lastName?: string };
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  SCHEDULED: 'Scheduled', CONFIRMED: 'Confirmed', CHECKED_IN: 'Checked in', IN_PROGRESS: 'In progress',
-  COMPLETED: 'Completed', NO_SHOW: 'No-show', CANCELLED: 'Cancelled',
-};
-
 export function useLoad<T>(load: () => Promise<T>) {
   const [state, setState] = useState<Loadable<T>>({ status: 'loading' });
   const run = useCallback(() => {
@@ -99,7 +94,7 @@ function AppointmentRow({ appointment, href, action }: { appointment: DayAppoint
         <span className="tabular-nums text-sm text-muted-foreground">{appointment.slot}</span>
         <span className="truncate font-medium text-foreground">{formatPatientName(appointment.patient)}</span>
         <span className="flex items-center gap-3">
-          <StatusBadge domain="appointment" status={appointment.status}>{STATUS_LABEL[appointment.status] ?? appointment.status}</StatusBadge>
+          <StatusBadge domain="appointment" status={appointment.status} />
           {action && <span className="flex w-24 items-center justify-end gap-1 text-sm font-medium text-foreground">{action}<ArrowRight className="h-4 w-4" aria-hidden="true" /></span>}
         </span>
       </Link>

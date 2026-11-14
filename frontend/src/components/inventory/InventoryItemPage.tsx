@@ -248,7 +248,7 @@ export function InventoryItemPage({ itemId, query, navigate, capabilities, onTas
             {([
               ...(item.form ? [
                 ["Form", MEDICINE_FORMS[item.form as MedicineFormKey]?.label ?? item.form],
-                ["Strength", item.isCombination ? "Combination" : item.strength || <span className="text-amber-800 dark:text-amber-200">Strength missing</span>],
+                ["Strength", item.isCombination ? "Combination" : item.strength || <span className="text-warning-text">Strength missing</span>],
               ] : []),
               ["Item code", known(item.itemCode)],
               ["Std. MRP", known(item.mrp, fmtMoney)],
@@ -620,7 +620,7 @@ function LedgerReconciliation({ ledger, unit, batchNumbers }: { ledger: ItemLedg
         {breaks > 0 && <span>{breaks} {breaks === 1 ? "entry shows" : "entries show"} stock that changed without a ledger entry; marked below.</span>}
       </p>
       {off.length > 0 && (
-        <ul role="alert" className="list-disc rounded-md border border-amber-600 bg-amber-50 p-3 pl-8 text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+        <ul role="alert" className="list-disc rounded-md border border-warning bg-warning-soft p-3 pl-8 text-warning-text">
           {off.map((b) => (
             <li key={b.batchId}>
               Batch {batchNumbers.get(b.batchId) ?? b.batchId}:{" "}
@@ -699,7 +699,7 @@ function LedgerTable({ rows, approve, onDocument, onInvoice, onCorrect }: {
         </thead>
         <tbody className="divide-y">
           {rows.map((row) => {
-            const warn = row.chainBreak ? "bg-amber-50 dark:bg-amber-950/30" : undefined;
+            const warn = row.chainBreak ? "bg-warning-soft" : undefined;
             return [
               <tr key={row.id} data-ledger-row={row.id} className={warn}>
                 <td className="p-3"><DocumentCell row={row} onDocument={onDocument} onInvoice={onInvoice} /></td>

@@ -1,0 +1,7 @@
+{
+  "entries": [
+    { "file": "frontend/src/app/globals.css", "kind": "hex", "reason": "The token definitions themselves." },
+    { "file": "frontend/src/components/appointments/AppointmentsCalendar.tsx", "kind": "hex", "values": ["#4285f4", "#34a853", "#fbbc05", "#ea4335"], "reason": "Google's logo colors in the Google Calendar sign-in mark." },
+    { "file": "frontend/src/components/visits/PrescriptionBuilder.tsx", "kind": "hex", "values": ["#111827", "#0a0a0a", "#d1d5db", "#f9fafb", "#e5e7eb"], "reason": "Prescription print and PDF layout, paginated by Paged.js in its own document, so it carries literal ink colors." }
+  ]
+}

@@ -382,7 +382,7 @@ export default function ProceduresPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <User className="h-4 w-4" />
                 <span>{formatDoctorName(doctor)}</span>
               </div>
@@ -391,24 +391,24 @@ export default function ProceduresPage() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {procedure.fluence && (
                     <div>
-                      <span className="text-gray-500">Fluence:</span> {procedure.fluence} J/cm²
+                      <span className="text-muted-foreground">Fluence:</span> {procedure.fluence} J/cm²
                     </div>
                   )}
                   {procedure.spotSize && (
                     <div>
-                      <span className="text-gray-500">Spot Size:</span> {procedure.spotSize} mm
+                      <span className="text-muted-foreground">Spot Size:</span> {procedure.spotSize} mm
                     </div>
                   )}
                   {procedure.passes && (
                     <div>
-                      <span className="text-gray-500">Passes:</span> {procedure.passes}
+                      <span className="text-muted-foreground">Passes:</span> {procedure.passes}
                     </div>
                   )}
                 </div>
               )}
               
               {plan?.dermatology?.notes && (
-                <p className="text-sm text-gray-600 line-clamp-2">{plan.dermatology.notes}</p>
+                <p className="text-sm text-muted-foreground line-clamp-2">{plan.dermatology.notes}</p>
               )}
             </div>
             
@@ -453,12 +453,12 @@ export default function ProceduresPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-gray-300">
+            <table className="w-full border-collapse border border-border">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="border border-gray-300 p-2 text-left font-medium">Parameter</th>
+                <tr className="bg-muted">
+                  <th className="border border-border p-2 text-left font-medium">Parameter</th>
                   {Array.from({ length: machine.maxPasses }, (_, i) => (
-                    <th key={i} className="border border-gray-300 p-2 text-center font-medium">
+                    <th key={i} className="border border-border p-2 text-center font-medium">
                       Pass {i + 1}
                     </th>
                   ))}
@@ -467,11 +467,11 @@ export default function ProceduresPage() {
               <tbody>
                 {machine.parameters.map((param, paramIndex) => (
                   <tr key={paramIndex} className={paramIndex % 2 === 0 ? 'bg-white' : 'bg-muted/40'}>
-                    <td className="border border-gray-300 p-2 font-medium text-gray-700">
+                    <td className="border border-border p-2 font-medium text-foreground">
                       {param}
                     </td>
                     {Array.from({ length: machine.maxPasses }, (_, passIndex) => (
-                      <td key={passIndex} className="border border-gray-300 p-1">
+                      <td key={passIndex} className="border border-border p-1">
                         <Input
                           placeholder={`${param.toLowerCase()}`}
                           value={procedureData.machineParameters[param]?.[passIndex + 1] || ''}
@@ -542,7 +542,7 @@ export default function ProceduresPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label htmlFor="procedure-patient" className="text-sm font-medium text-gray-700">Patient *</label>
+                <label htmlFor="procedure-patient" className="text-sm font-medium text-foreground">Patient *</label>
                 <Select value={procedureData.patientId} onValueChange={(value: string) => updateProcedureData('patientId', value)}>
                   <SelectTrigger id="procedure-patient">
                     <SelectValue placeholder="Select patient" />
@@ -558,7 +558,7 @@ export default function ProceduresPage() {
               </div>
 
               <div>
-                <label htmlFor="procedure-doctor" className="text-sm font-medium text-gray-700">Doctor *</label>
+                <label htmlFor="procedure-doctor" className="text-sm font-medium text-foreground">Doctor *</label>
                 <Select value={procedureData.doctorId} onValueChange={(value: string) => updateProcedureData('doctorId', value)}>
                   <SelectTrigger id="procedure-doctor">
                     <SelectValue placeholder="Select doctor" />
@@ -574,7 +574,7 @@ export default function ProceduresPage() {
               </div>
 
               <div>
-                <label htmlFor="procedure-therapist" className="text-sm font-medium text-gray-700">Nurse/Therapist</label>
+                <label htmlFor="procedure-therapist" className="text-sm font-medium text-foreground">Nurse/Therapist</label>
                 <Select value={procedureData.therapistId} onValueChange={(value: string) => updateProcedureData('therapistId', value)}>
                   <SelectTrigger id="procedure-therapist">
                     <SelectValue placeholder="Select nurse" />
@@ -602,33 +602,33 @@ export default function ProceduresPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label htmlFor="procedure-session" className="text-sm font-medium text-gray-700">Session No.</label>
+                  <label htmlFor="procedure-session" className="text-sm font-medium text-foreground">Session No.</label>
                   <Input id="procedure-session" placeholder="Session number" value={procedureData.sessionNo} onChange={(e) => updateProcedureData('sessionNo', parseInt(e.target.value) || 1)} />
                 </div>
 
                 <div>
-                  <label htmlFor="procedure-shots-begin" className="text-sm font-medium text-gray-700">Shot Count (Begin)</label>
+                  <label htmlFor="procedure-shots-begin" className="text-sm font-medium text-foreground">Shot Count (Begin)</label>
                   <Input id="procedure-shots-begin" placeholder="e.g. 50" value={procedureData.shotCountBegin} onChange={(e) => updateProcedureData('shotCountBegin', parseInt(e.target.value) || 0)} />
                 </div>
 
                 <div>
-                  <label htmlFor="procedure-shots-end" className="text-sm font-medium text-gray-700">Shot Count (End)</label>
+                  <label htmlFor="procedure-shots-end" className="text-sm font-medium text-foreground">Shot Count (End)</label>
                   <Input id="procedure-shots-end" placeholder="e.g. 50" value={procedureData.shotCountEnd} onChange={(e) => updateProcedureData('shotCountEnd', parseInt(e.target.value) || 0)} />
                 </div>
 
                 <div>
-                  <label htmlFor="procedure-shots-total" className="text-sm font-medium text-gray-700">Total Shots</label>
+                  <label htmlFor="procedure-shots-total" className="text-sm font-medium text-foreground">Total Shots</label>
                   <Input id="procedure-shots-total"
                     value={procedureData.shotCountEnd - procedureData.shotCountBegin}
                     disabled
-                    className="bg-gray-50"
+                    className="bg-muted"
                   />
                 </div>
               </div>
 
               {/* Body Parts */}
               <div>
-                <p id="procedure-body-parts" className="text-sm font-medium text-gray-700 mb-2 block">Body Parts</p>
+                <p id="procedure-body-parts" className="text-sm font-medium text-foreground mb-2 block">Body Parts</p>
                 <div role="group" aria-labelledby="procedure-body-parts" className="flex flex-wrap gap-2">
                   {BODY_PARTS.map((part) => (
                     <Button
@@ -647,7 +647,7 @@ export default function ProceduresPage() {
 
               {/* Indications */}
               <div>
-                <label htmlFor="procedure-indications" className="text-sm font-medium text-gray-700">Indications</label>
+                <label htmlFor="procedure-indications" className="text-sm font-medium text-foreground">Indications</label>
                 <Textarea id="procedure-indications"
                   placeholder="Enter procedure indications..."
                   value={procedureData.indications}
@@ -665,7 +665,7 @@ export default function ProceduresPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label htmlFor="procedure-fitzpatrick" className="text-sm font-medium text-gray-700">Fitzpatrick Type</label>
+                <label htmlFor="procedure-fitzpatrick" className="text-sm font-medium text-foreground">Fitzpatrick Type</label>
                 <Select value={procedureData.fitzpatrickType} onValueChange={(value: string) => updateProcedureData('fitzpatrickType', value)}>
                   <SelectTrigger id="procedure-fitzpatrick">
                     <SelectValue placeholder="Select type" />
@@ -681,7 +681,7 @@ export default function ProceduresPage() {
               </div>
 
               <div>
-                <label htmlFor="procedure-robert" className="text-sm font-medium text-gray-700">Robert Type</label>
+                <label htmlFor="procedure-robert" className="text-sm font-medium text-foreground">Robert Type</label>
                 <Select value={procedureData.robertType} onValueChange={(value: string) => updateProcedureData('robertType', value)}>
                   <SelectTrigger id="procedure-robert">
                     <SelectValue placeholder="Select type" />
@@ -697,7 +697,7 @@ export default function ProceduresPage() {
               </div>
 
               <div>
-                <label htmlFor="procedure-scar" className="text-sm font-medium text-gray-700">Scar Type</label>
+                <label htmlFor="procedure-scar" className="text-sm font-medium text-foreground">Scar Type</label>
                 <Select value={procedureData.scarType} onValueChange={(value: string) => updateProcedureData('scarType', value)}>
                   <SelectTrigger id="procedure-scar">
                     <SelectValue placeholder="Select type" />
@@ -713,7 +713,7 @@ export default function ProceduresPage() {
               </div>
 
               <div>
-                <label htmlFor="procedure-herpes" className="text-sm font-medium text-gray-700">Herpes Status</label>
+                <label htmlFor="procedure-herpes" className="text-sm font-medium text-foreground">Herpes Status</label>
                 <Select value={procedureData.herpesStatus} onValueChange={(value: string) => updateProcedureData('herpesStatus', value)}>
                   <SelectTrigger id="procedure-herpes">
                     <SelectValue placeholder="Select status" />
@@ -792,7 +792,7 @@ export default function ProceduresPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold">Procedure History</h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Procedures captured from visits ({visits.length} found)
               </p>
             </div>
@@ -814,8 +814,8 @@ export default function ProceduresPage() {
           ) : (
             <Card>
               <CardContent>
-                <div className="text-center py-8 text-gray-500">
-                  <Activity className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <div className="text-center py-8 text-muted-foreground">
+                  <Activity className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
                   <p>No procedure history found for this patient</p>
                   <p className="text-sm">Procedures from visits will appear here</p>
                 </div>

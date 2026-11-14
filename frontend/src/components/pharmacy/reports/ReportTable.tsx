@@ -118,7 +118,7 @@ export function ReportTable({ section, label }: { section: ReportSection; label?
               className={cn(
                 "[&>td]:border-b [&>td]:bg-background hover:[&>td]:bg-accent-soft",
                 row.tone === "muted" && "text-muted-foreground",
-                row.tone === "warning" && "[&>td]:bg-amber-50 dark:[&>td]:bg-amber-950/40",
+                row.tone === "warning" && "[&>td]:bg-warning-soft",
               )}
             >
               {section.columns.map((column) => {

@@ -787,7 +787,7 @@ export default function PatientsManagement() {
               <DialogTitle>{form.id ? 'Edit Patient' : 'Create Patient'}</DialogTitle>
             </DialogHeader>
             {error && (
-              <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+              <div role="alert" className="bg-destructive-soft border border-destructive-border text-destructive-text px-4 py-3 rounded-md">
                 {error}
               </div>
             )}
@@ -833,7 +833,7 @@ export default function PatientsManagement() {
                   onChange={(e) => setForm({ ...form, abhaId: e.target.value })}
                   placeholder="Optional - Enter 14-digit ABHA number"
                 />
-                <div className="text-xs text-gray-500 mt-1">Enter the patient's ABHA ID for national health record integration</div>
+                <div className="text-xs text-muted-foreground mt-1">Enter the patient's ABHA ID for national health record integration</div>
               </div>
               <div className="md:col-span-2">
                 <Label htmlFor="email">Email</Label>
@@ -875,7 +875,7 @@ export default function PatientsManagement() {
                     ))}
                   </SelectContent>
                 </Select>
-                {form.primaryDoctorId === undefined && !form.id && <p className="mt-1 text-xs text-gray-500">A doctor registering the patient becomes the primary doctor; otherwise the first visiting doctor does.</p>}
+                {form.primaryDoctorId === undefined && !form.id && <p className="mt-1 text-xs text-muted-foreground">A doctor registering the patient becomes the primary doctor; otherwise the first visiting doctor does.</p>}
               </div>
               <div className="md:col-span-2">
                 <Label id="referralSource-label" htmlFor="referralSource">How did the patient hear about us?</Label>
@@ -920,7 +920,7 @@ export default function PatientsManagement() {
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="text-xs text-gray-500 mt-1">If Patient Type is Walk-in and a doctor is selected, the next available slot will be automatically booked after saving.</div>
+                <div className="text-xs text-muted-foreground mt-1">If Patient Type is Walk-in and a doctor is selected, the next available slot will be automatically booked after saving.</div>
               </div>
               {form.patientType === 'WALKIN' && (
                 <>
@@ -952,7 +952,7 @@ export default function PatientsManagement() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-xs text-muted-foreground mt-1">
                         {form.walkinVisitType === 'PROCEDURE' ? 'Selecting an available procedure room is recommended.' : 'Optional: choose a consultation room if needed.'}
                       </div>
                     </div>
@@ -973,7 +973,7 @@ export default function PatientsManagement() {
           <div className="flex flex-col sm:flex-row gap-4 items-start">
             <div className="relative w-full sm:flex-1" data-tour="search-patients">
               <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 id="patients-search"
                 aria-label="Search patients"
@@ -986,7 +986,7 @@ export default function PatientsManagement() {
               </div>
               <div id="patients-search-hint" className="mt-1 min-h-8 text-xs text-muted-foreground">
               {search.length > 0 && search.length < 2 && (
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-muted-foreground">
                   Enter at least 2 characters to search
                 </div>
               )}
@@ -997,14 +997,14 @@ export default function PatientsManagement() {
               )}
               </div>
               {search.length > 0 && search.length < 2 && suggestions.length > 0 && (
-                <div className="relative z-10 mt-2 w-full bg-white border border-gray-200 rounded-md shadow-sm p-2">
-                  <div className="text-xs text-gray-600 mb-1">Did you mean</div>
+                <div className="relative z-10 mt-2 w-full bg-white border border-border rounded-md shadow-sm p-2">
+                  <div className="text-xs text-muted-foreground mb-1">Did you mean</div>
                   <div className="flex flex-wrap gap-2">
                     {suggestions.map((s) => (
                       <button
                         key={s}
                         type="button"
-                        className="text-sm px-2 py-1 rounded-md border border-gray-200 hover:bg-gray-50"
+                        className="text-sm px-2 py-1 rounded-md border border-border hover:bg-accent"
                         onClick={() => setSearch(s)}
                         aria-label={`Search for ${s}`}
                       >
@@ -1059,7 +1059,7 @@ export default function PatientsManagement() {
             <DialogTitle>Link Portal Access</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="text-sm text-gray-600">{linkPortalTarget ? `Patient: ${formatPatientName(linkPortalTarget)}` : ''}</div>
+            <div className="text-sm text-muted-foreground">{linkPortalTarget ? `Patient: ${formatPatientName(linkPortalTarget)}` : ''}</div>
             <div>
               <Label htmlFor="linkPortalEmail">Email</Label>
               <Input id="linkPortalEmail" value={linkPortalEmail} onChange={(e) => setLinkPortalEmail(e.target.value)} placeholder="Existing portal account email" />
@@ -1076,7 +1076,7 @@ export default function PatientsManagement() {
         <CardContent>
           {error ? (
             <div className="text-center py-10">
-              <div className="text-red-600 mb-2">{error}</div>
+              <div className="text-destructive-text mb-2">{error}</div>
               <Button variant="outline" onClick={() => fetchPatients(currentPage)}>
                 Try Again
               </Button>
@@ -1161,7 +1161,7 @@ export default function PatientsManagement() {
           {/* Pagination Controls */}
           {!listLoading && patients.length > 0 && totalPages > 1 && (
             <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t">
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-muted-foreground">
                 Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalPatients)} of {totalPatients} patients
               </div>
               <div className="flex flex-wrap items-center gap-2">

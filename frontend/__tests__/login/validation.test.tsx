@@ -6,9 +6,6 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ replace: jest.fn() }),
   useSearchParams: () => ({ get: () => null }),
 }));
-jest.mock('@/components/layout/branded-mode-context', () => ({
-  useBrandedMode: () => ({ brandedEnabled: false, toggleBranded: jest.fn(), loading: false }),
-}));
 jest.mock('@/lib/api', () => ({ apiClient: { login: jest.fn() } }));
 
 describe('login form', () => {

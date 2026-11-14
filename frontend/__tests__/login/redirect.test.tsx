@@ -10,9 +10,6 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: () => next }),
 }));
 jest.mock('next/image', () => ({ __esModule: true, default: () => null }));
-jest.mock('@/components/layout/branded-mode-context', () => ({
-  useBrandedMode: () => ({ brandedEnabled: false, toggleBranded: jest.fn(), loading: false }),
-}));
 jest.mock('@/lib/api', () => ({ apiClient: { login: jest.fn() } }));
 
 describe('login return destination', () => {

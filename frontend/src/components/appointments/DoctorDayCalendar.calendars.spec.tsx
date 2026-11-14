@@ -56,7 +56,7 @@ describe('DoctorDayCalendar Scheduled and Confirmed calendars', () => {
     expect(column('Scheduled').queryByText('Priya Nair')).toBeNull();
     expect(column('Scheduled').queryByText('Suresh Babu')).toBeNull();
     expect(column('Confirmed').getByRole('button', { name: 'Priya Nair, 11:00-11:30, Confirmed' })).toBeInTheDocument();
-    expect(column('Confirmed').getByRole('button', { name: 'Suresh Babu, 12:00-12:30, In progress' })).toBeInTheDocument();
+    expect(column('Confirmed').getByRole('button', { name: 'Suresh Babu, 12:00-12:30, In consultation' })).toBeInTheDocument();
     expect(column('Confirmed').queryByText('Ravi Kumar')).toBeNull();
 
     expect(column('Scheduled').getByText('1 patient to confirm')).toBeInTheDocument();

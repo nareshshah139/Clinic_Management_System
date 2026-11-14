@@ -52,7 +52,7 @@ import {
 
 const MODE_BADGE: Partial<Record<PaymentMode, string>> = {
   CASH: 'border-success-border bg-success-soft text-success-text',
-  UPI: 'border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-100',
+  UPI: 'border-highlight-border bg-highlight-soft text-highlight-text',
   CARD: 'border-info-border bg-info-soft text-info-text',
   CREDIT: 'border-destructive-border bg-destructive-soft text-destructive-text',
 };
@@ -76,7 +76,7 @@ function PaymentCell({ row, register }: { row: SalesRegisterRow; register: Regis
   return (
     <div className="flex flex-wrap items-center gap-1">
       {row.due > 0 && (
-        <Badge variant="destructive" className={cn(badgeText, 'bg-destructive-text text-white dark:bg-destructive')}>
+        <Badge variant="destructive" className={cn(badgeText, 'bg-destructive-text text-white')}>
           Due {formatRupees(row.due)}
         </Badge>
       )}

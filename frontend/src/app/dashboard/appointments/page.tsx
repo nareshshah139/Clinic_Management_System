@@ -119,12 +119,12 @@ function AppointmentsPageInner() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5 text-blue-600" />
+              <Info className="h-5 w-5 text-info-text" />
               Quick Guide
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <ul className="text-sm text-gray-700 space-y-2">
+            <ul className="text-sm text-foreground space-y-2">
               <li>• <strong>Scheduled</strong> (left) holds patients booked ahead who still need a confirmation call. <strong>Confirmed</strong> (right) is the doctor&apos;s real day, with walk-ins.</li>
               <li>• When a patient confirms on the call, click them and press <strong>Confirm</strong>. They move to Confirmed at the same time.</li>
               <li>• <strong>Search patient</strong> by name or phone, then <strong>click a free time</strong> in either column to book into that calendar</li>

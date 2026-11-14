@@ -6,11 +6,11 @@ import { apiClient } from "@/lib/api";
 import { GAPS, type GapCounts, type GapKey } from "./stock-optimization-model";
 
 const TONE = {
-  red: "border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100",
-  amber: "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100",
+  red: "border-destructive-border bg-destructive-soft text-destructive-text",
+  amber: "border-warning-border bg-warning-soft text-warning-text",
   calm: "border-border bg-background text-muted-foreground",
 };
-const DOT = { red: "bg-red-600", amber: "bg-amber-500", calm: "bg-emerald-600" };
+const DOT = { red: "bg-destructive", amber: "bg-warning", calm: "bg-success" };
 
 /**
  * @cc [owner:nareshshah139,label:product] data-quality-strip

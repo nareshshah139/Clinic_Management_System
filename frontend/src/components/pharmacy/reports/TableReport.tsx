@@ -23,9 +23,9 @@ export function ReportTiles({ tiles }: { tiles: ReportTile[] }) {
           key={tile.label}
           className={cn(
             "rounded-lg border p-4",
-            tile.tone === "good" && "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40",
-            tile.tone === "bad" && "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40",
-            tile.tone === "warning" && "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40",
+            tile.tone === "good" && "border-success-border bg-success-soft",
+            tile.tone === "bad" && "border-destructive-border bg-destructive-soft",
+            tile.tone === "warning" && "border-warning-border bg-warning-soft",
           )}
         >
           <dt className="text-base font-medium">{tile.label}</dt>

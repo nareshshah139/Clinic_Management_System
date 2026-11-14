@@ -739,7 +739,7 @@ export function WorkflowDocumentEditor({
         {notice && (
           <div
             role="status"
-            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-green-600 bg-green-50 p-3 text-green-900"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-success bg-success-soft p-3 text-success-text"
           >
             <p>{notice}</p>
             {undoableSetOff?.notice === notice && (

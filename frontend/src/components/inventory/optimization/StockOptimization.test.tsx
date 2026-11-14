@@ -55,8 +55,8 @@ it('shows the five counts, zero calm, and opens the stock list filtered to the p
     'Unmapped: 3 batches, not linked to a product. Show them',
   ]);
   expect(within(strip).getByRole('button', { name: /Missing category/ }).className).toContain('text-muted-foreground');
-  expect(within(strip).getByRole('button', { name: /Unmapped/ }).className).toContain('bg-red-50');
-  expect(within(strip).getByRole('button', { name: /Missing location/ }).className).toContain('bg-amber-50');
+  expect(within(strip).getByRole('button', { name: /Unmapped/ }).className).toContain('bg-destructive-soft');
+  expect(within(strip).getByRole('button', { name: /Missing location/ }).className).toContain('bg-warning-soft');
   fireEvent.click(within(strip).getByRole('button', { name: /Unmapped/ }));
   fireEvent.click(within(strip).getByRole('button', { name: /Missing HSN code/ }));
   expect(onOpen.mock.calls).toEqual([['UNMAPPED'], ['']]);

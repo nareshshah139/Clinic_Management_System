@@ -85,7 +85,7 @@ function Tile({ label, value, help, tone }: { label: string; value: string; help
       <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
         {label} <ReportInfoTip label={label}>{help}</ReportInfoTip>
       </p>
-      <p className={cn("mt-1 break-words text-lg font-semibold tabular-nums", tone === "good" && "text-emerald-700 dark:text-emerald-400", tone === "bad" && "text-destructive")}>
+      <p className={cn("mt-1 break-words text-lg font-semibold tabular-nums", tone === "good" && "text-success-text", tone === "bad" && "text-destructive")}>
         {value}
       </p>
     </div>
@@ -97,7 +97,7 @@ const unknownCostText = (lineCount: number) => `${lineCount} ${lineCount === 1 ?
 function UnknownCostChip({ lineCount, salesAmount }: { lineCount: number; salesAmount: number }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-100"
+      className="inline-flex items-center gap-1 rounded bg-warning-soft px-1.5 py-0.5 text-xs font-medium text-warning-text"
       title={`${formatRupees(salesAmount)} of sales is not in Purchase, Net GST or Profit`}
     >
       <TriangleAlert className="size-3" aria-hidden="true" />
@@ -325,7 +325,7 @@ export function ItemMarginReport() {
           />
         </div>
         {totals && totals.unknownCost.lineCount > 0 && (
-          <p role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+          <p role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-warning-border bg-warning-soft p-3 text-sm text-warning-text">
             <UnknownCostChip lineCount={totals.unknownCost.lineCount} salesAmount={totals.unknownCost.salesAmount} />
             {formatRupees(totals.unknownCost.salesAmount)} of sales on {totals.unknownCost.itemCount} {totals.unknownCost.itemCount === 1 ? "item" : "items"} is in Total Sale Amount but not in Purchase, Net GST or Profit. Add the purchase price on the item to include future sales.
           </p>

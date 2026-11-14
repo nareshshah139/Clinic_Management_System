@@ -315,7 +315,7 @@ export function DistributorAnalytics() {
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <div className="rounded-md border border-destructive-border bg-destructive-soft px-3 py-2 text-sm text-destructive-text">
           {error}
         </div>
       )}
@@ -325,19 +325,19 @@ export function DistributorAnalytics() {
           title="Purchase Value"
           value={currency.format(analytics.totals.lineTotal || 0)}
           detail={`${analytics.totals.invoiceCount || 0} invoices`}
-          icon={<Truck className="h-5 w-5 text-blue-600" />}
+          icon={<Truck className="h-5 w-5 text-info-text" />}
         />
         <MetricCard
           title="Taxable"
           value={currency.format(analytics.totals.taxableAmount || 0)}
           detail={`GST ${currency.format(analytics.totals.gstAmount || 0)}`}
-          icon={<BarChart3 className="h-5 w-5 text-green-600" />}
+          icon={<BarChart3 className="h-5 w-5 text-success-text" />}
         />
         <MetricCard
           title="Free Stock"
           value={number.format(analytics.totals.freeQuantity || 0)}
           detail={`${number.format(analytics.totals.freeQuantityRatioPercent || 0)}% of stock`}
-          icon={<PackageSearch className="h-5 w-5 text-purple-600" />}
+          icon={<PackageSearch className="h-5 w-5 text-highlight-text" />}
         />
         <MetricCard
           title="Effective Cost"
@@ -347,7 +347,7 @@ export function DistributorAnalytics() {
               : currency.format(analytics.totals.effectiveUnitCost)
           }
           detail={`Avg discount ${number.format(analytics.totals.averageDiscountPercent || 0)}%`}
-          icon={<Search className="h-5 w-5 text-slate-600" />}
+          icon={<Search className="h-5 w-5 text-muted-foreground" />}
         />
       </div>
 
@@ -485,7 +485,7 @@ export function DistributorAnalytics() {
                 >
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                      <AlertTriangle className="h-4 w-4 text-destructive-text" />
                       <span className="font-medium">{alert.productName}</span>
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -501,7 +501,7 @@ export function DistributorAnalytics() {
                   <TableCell className="text-right">
                     {number.format(alert.latestDiscountPercent || 0)}%
                   </TableCell>
-                  <TableCell className="text-right text-red-700 font-medium">
+                  <TableCell className="text-right text-destructive-text font-medium">
                     {number.format(alert.dropPercent || 0)}%
                   </TableCell>
                   <TableCell>

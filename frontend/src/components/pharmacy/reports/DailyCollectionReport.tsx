@@ -164,9 +164,9 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
             data-status={collection.status}
             className={cn(
               "flex items-start gap-2 rounded-lg border p-3 text-base font-medium",
-              status.tone === "good" && "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100",
-              status.tone === "bad" && "border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100",
-              status.tone === "warning" && "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100",
+              status.tone === "good" && "border-success-border bg-success-soft text-success-text",
+              status.tone === "bad" && "border-destructive-border bg-destructive-soft text-destructive-text",
+              status.tone === "warning" && "border-warning-border bg-warning-soft text-warning-text",
             )}
           >
             <StatusIcon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
@@ -209,7 +209,7 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
                       ) : (
                         <span className="text-base">Counted {formatCell(line.counted, "money") || "—"}</span>
                       )}
-                      <span className={cn("pb-2 text-lg font-semibold tabular-nums", p.difference !== null && Math.abs(p.difference) >= 0.005 && (p.difference < 0 ? "text-destructive" : "text-amber-700 dark:text-amber-300"))}>
+                      <span className={cn("pb-2 text-lg font-semibold tabular-nums", p.difference !== null && Math.abs(p.difference) >= 0.005 && (p.difference < 0 ? "text-destructive" : "text-warning-text"))}>
                         {p.difference === null ? "—" : `${p.difference > 0 ? "+" : ""}${formatCell(p.difference, "money")}`}
                       </span>
                     </div>
@@ -265,7 +265,7 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
                           )}
                         </td>
                         <td
-                          className={cn("text-right font-semibold", p.difference !== null && Math.abs(p.difference) >= 0.005 && (p.difference < 0 ? "text-destructive" : "text-amber-700 dark:text-amber-300"))}
+                          className={cn("text-right font-semibold", p.difference !== null && Math.abs(p.difference) >= 0.005 && (p.difference < 0 ? "text-destructive" : "text-warning-text"))}
                           data-testid={`difference-${line.mode}`}
                         >
                           {p.difference === null ? "—" : `${p.difference > 0 ? "+" : ""}${formatCell(p.difference, "money")}`}
@@ -309,7 +309,7 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
               </p>
             )}
             {message && (
-              <p role={message.tone === "bad" ? "alert" : "status"} className={cn("text-base", message.tone === "bad" ? "text-destructive" : "text-emerald-800 dark:text-emerald-200")}>
+              <p role={message.tone === "bad" ? "alert" : "status"} className={cn("text-base", message.tone === "bad" ? "text-destructive" : "text-success-text")}>
                 {message.text}
               </p>
             )}
