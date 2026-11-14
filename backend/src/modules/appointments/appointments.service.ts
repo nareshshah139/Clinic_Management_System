@@ -512,7 +512,7 @@ export class AppointmentsService {
           });
           if (changed.count !== 1) throw new ConflictException('Appointment changed; refresh and try again');
           return tx.appointment.findUniqueOrThrow({ where: { id }, include });
-        })
+        }).catch(rejectSecondOpenReview)
       : await this.prisma.appointment.update({ where: { id }, data: changes, include });
 
     void this.googleCalendar
@@ -586,7 +586,7 @@ export class AppointmentsService {
       });
       if (moved.count !== 1) throw new ConflictException('Appointment changed; refresh and try again');
       return tx.appointment.findUniqueOrThrow({ where: { id }, include });
-    }));
+    })).catch(rejectSecondOpenReview);
 
     // Update linked Google Calendar event (non-blocking)
     void this.googleCalendar
@@ -1377,6 +1377,14 @@ export class AppointmentsService {
     }
   }
 
+}
+
+function rejectSecondOpenReview(error: unknown): never {
+  const target = (error as Prisma.PrismaClientKnownRequestError)?.meta?.target;
+  if ((error as { code?: string })?.code === 'P2002' && Array.isArray(target) && target.includes('reviewOfVisitId')) {
+    throw new ConflictException('This visit already has an open review appointment. Cancel it before reopening this one.');
+  }
+  throw error;
 }
 
 /** Accepts(r, count) in Overbooking.tla. */

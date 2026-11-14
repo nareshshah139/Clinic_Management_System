@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { AppointmentStatus, PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
@@ -17,6 +18,7 @@ databaseTests('Review booking on PostgreSQL', () => {
   let admin: PrismaClient;
   let db: PrismaClient;
   let controller: VisitsController;
+  let appointments: AppointmentsService;
   let created = false;
   const request = { user: { id: 'doctor', branchId: 'branch' } } as any;
 
@@ -37,7 +39,7 @@ databaseTests('Review booking on PostgreSQL', () => {
     await db.branch.create({ data: { id: 'branch', name: 'Branch', address: 'Synthetic' } });
     await db.user.create({ data: { id: 'doctor', firstName: 'Synthetic', lastName: 'Doctor', email: 'doctor@example.test', password: 'x', role: 'DOCTOR', branchId: 'branch' } });
     await db.patient.create({ data: { id: 'patient', name: 'Synthetic Patient', gender: 'F', phone: '9000000000', branchId: 'branch' } });
-    const appointments = new AppointmentsService(db as PrismaService);
+    appointments = new AppointmentsService(db as PrismaService);
     controller = new VisitsController(new VisitsService(db as PrismaService), new ReviewBookingService(db as PrismaService, appointments));
   }, 120000);
 
@@ -98,4 +100,13 @@ databaseTests('Review booking on PostgreSQL', () => {
     const open = await db.appointment.findFirstOrThrow({ where: { reviewOfVisitId: visit.id, status: 'SCHEDULED' } });
     expect(open.reviewRequestedFor?.toISOString().slice(0, 10)).toBe('2099-03-08');
   }, 60000);
+
+  it('answers 409 when the desk reopens a review while another is open', async () => {
+    const visit = await visitFor('2099-03-09');
+    const superseded = await reviewRow(visit.id, '09:00-09:30', 'CANCELLED');
+    await reviewRow(visit.id, '09:30-10:00');
+    await expect(appointments.update(superseded.id, { status: 'SCHEDULED' } as any, 'branch')).rejects.toThrow(
+      new ConflictException('This visit already has an open review appointment. Cancel it before reopening this one.'),
+    );
+  });
 });
