@@ -1,7 +1,5 @@
 const { journey } = require("./lib.cjs");
 
-const DRUG_SEARCH = "Search by drug name, manufacturer, or ingredient...";
-
 module.exports = journey(
   { id: "j06", title: "Walk-in counter sale for cash", story: "PHARMACY-COUNTER-02", persona: "pharmacist" },
   async (ui) => {
@@ -28,43 +26,43 @@ module.exports = journey(
     ui.reenter("Phone required again for a customer who gave none");
     await ui.fill(page.locator("#billingPhone"), "0000000000", "Bill: Phone");
 
-    await ui.type(page.locator("#drugSearch"), "Cetirizine", "Bill: Search Drugs, type Cetirizine");
-    const cetirizine = page.locator('[role="button"]').filter({ hasText: "Cetirizine 10mg Tablet" }).first();
-    await cetirizine.waitFor();
-    await ui.screen("drug-results-cetirizine");
-    await ui.click(cetirizine.getByRole("button", { name: /Add/ }), "Bill: Add Cetirizine 10mg Tablet");
-    await page.locator('input[id^="quantity-"]').first().waitFor();
-    await ui.fill(page.locator('input[id^="quantity-"]').first(), "10", "Bill: Cetirizine Quantity 10");
-
-    await ui.type(page.locator("#drugSearch"), "Sunscreen", "Bill: Search Drugs, type Sunscreen");
-    const sunscreen = page.locator('[role="button"]').filter({ hasText: "Sunscreen SPF 50 Gel 50g" }).first();
-    await sunscreen.waitFor();
-    await ui.click(sunscreen.getByRole("button", { name: /Add/ }), "Bill: Add Sunscreen SPF 50 Gel 50g");
-    await page.locator('input[id^="quantity-"]').nth(1).waitFor();
+    const addMedicine = async (query, name, label) => {
+      await ui.type(page.locator("#drugSearch"), query, `Bill: Medicine, type ${query}`);
+      await page.locator('[role="button"]').filter({ hasText: name }).filter({ hasText: "Best match" }).waitFor();
+      await ui.press("Enter", `Bill: Enter adds ${label}`);
+      await page.getByRole("heading", { name, level: 4 }).waitFor();
+    };
+    await addMedicine("Cetirizine", "Cetirizine 10mg Tablet", "Cetirizine 10mg Tablet");
+    await ui.screen("drug-added-cetirizine");
+    await ui.type(page.locator(":focus"), "10", "Bill: Cetirizine Quantity 10 (cursor already there)");
+    await addMedicine("Sunscreen", "Sunscreen SPF 50 Gel 50g", "Sunscreen SPF 50 Gel 50g");
     await ui.screen("bill-two-items");
 
     ui.decide("Payment method", true);
-    await ui.click(page.getByRole("button", { name: /Print Preview/ }), "Bill: Print Preview");
-    await page.getByRole("button", { name: "Confirm & Print" }).waitFor();
-    await ui.screen("print-preview");
-    ui.decide("Which confirm button: Confirm Invoice or Confirm & Print", false);
-    await ui.click(page.getByRole("button", { name: "Confirm & Print" }), "Preview: Confirm & Print");
-    await page.getByRole("button", { name: "Invoice Confirmed" }).waitFor();
-    await ui.screen("confirmed-preview");
-    await ui.click(page.getByRole("button", { name: "Close", exact: true }).first(), "Preview: Close");
-    await ui.screen("bill-confirmed");
+    await ui.click(page.getByRole("button", { name: "Confirm and print" }), "Bill: Confirm and print");
+    await page.waitForURL(/[?&]bill=/);
+    await page.getByRole("link", { name: "New sale" }).waitFor();
+    await ui.screen("bill-finished");
 
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const found = await ui.api("GET", `/pharmacy/sales-register?register=sales&from=${today}&to=${today}&limit=50`);
     const ids = (found.rows || []).filter((r) => String(r.id).startsWith("PHARMACY_BILL:")).map((r) => String(r.id).split(":")[1]);
+    const seedGst = {};
+    for (const name of ["Cetirizine 10mg Tablet", "Sunscreen SPF 50 Gel 50g"]) {
+      const drug = (await ui.api("GET", `/drugs/autocomplete?q=${encodeURIComponent(name)}&limit=5`)).find((d) => (d.stockName || d.name) === name || d.name === name);
+      seedGst[name] = Number(drug.gstRate);
+    }
+    if (seedGst["Cetirizine 10mg Tablet"] !== 12 || seedGst["Sunscreen SPF 50 Gel 50g"] !== 18) throw Error(`seed GST rates changed: ${JSON.stringify(seedGst)}`);
     let ok = false;
     for (const id of ids) {
       const inv = await ui.api("GET", `/pharmacy/invoices/${id}`);
       const items = inv.items || [];
       const qty = (re) => items.filter((i) => re.test(JSON.stringify(i))).reduce((s, i) => s + Number(i.quantity), 0);
-      if (inv.status === "CONFIRMED" && inv.paymentStatus === "COMPLETED" && inv.paymentMethod === "CASH" && qty(/Cetirizine/i) === 10 && qty(/Sunscreen/i) === 1) ok = true;
+      const gst = (re) => items.filter((i) => re.test(JSON.stringify(i))).map((i) => Number(i.taxPercent));
+      const taxRight = gst(/Cetirizine/i).every((t) => t === seedGst["Cetirizine 10mg Tablet"]) && gst(/Sunscreen/i).every((t) => t === seedGst["Sunscreen SPF 50 Gel 50g"]);
+      if (inv.status === "CONFIRMED" && inv.paymentStatus === "COMPLETED" && inv.paymentMethod === "CASH" && qty(/Cetirizine/i) === 10 && qty(/Sunscreen/i) === 1 && taxRight) ok = true;
     }
-    ui.goal(ok, "a confirmed, paid pharmacy invoice today holds 10 Cetirizine 10mg Tablets and 1 Sunscreen SPF 50 Gel 50g");
+    ui.goal(ok, "a confirmed, paid cash pharmacy invoice today holds 10 Cetirizine 10mg Tablets and 1 Sunscreen SPF 50 Gel 50g, each taxed at its own GST rate");
   },
 );
 if (require.main === module) module.exports.cli();

@@ -399,7 +399,7 @@ function PharmacyGuide() {
         {
           title: 'Prescription & Auto-Fill',
           items: [
-            'Open prescriptions from Visits or the Rx queue',
+            'Open a prescription with Bill on the Pharmacy Counter',
             'Review auto-loaded medicines before billing',
             'Check stock warnings, alternatives, quantity, discount, and payment',
             'Finalize only after pharmacist confirmation',
@@ -408,7 +408,7 @@ function PharmacyGuide() {
         {
           title: 'Billing',
           items: [
-            'Create GST pharmacy bills from Sales > New sale, or save one as a draft to finish later',
+            'Start a bill from Sales > New sale; Confirm and print takes the payment, or save a draft to finish later',
             'Use payment modes such as cash, UPI, card, or insurance',
             'Confirmed invoices deduct stock and keep patient records linked',
           ],

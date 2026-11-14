@@ -9,28 +9,21 @@ module.exports = journey(
     await page.getByRole("link", { name: "Pharmacy Counter", exact: true }).waitFor();
     await ui.screen("dashboard");
     await ui.click(page.getByRole("link", { name: "Pharmacy Counter", exact: true }), "Menu: Pharmacy Counter");
-    await page.getByRole("button", { name: "Open bill" }).waitFor();
+    await page.getByRole("button", { name: "Bill", exact: true }).waitFor();
     await page.getByText(rx.patient).first().waitFor();
     await ui.screen("counter-cockpit");
-    ui.decide("Which of three Bill buttons (header Bill, Open bill, Collect payment) to press", false);
-    await ui.click(page.getByRole("button", { name: "Open bill" }), "Counter: Open bill");
+    await ui.click(page.getByRole("button", { name: "Bill", exact: true }), "Counter: Bill");
     await page.waitForURL(/\/sales\/bill/);
     await page.locator("#billingName").waitFor();
     await page.locator('input[id^="quantity-"]').nth(2).waitFor();
     await ui.screen("bill-prefilled");
 
     ui.decide("Payment method", true);
-    const method = page.locator("label", { hasText: "Payment Method" }).locator("xpath=..").getByRole("combobox");
-    await ui.click(method, "Bill: Payment Method");
-    await ui.click(page.locator("[role=option]", { hasText: /^UPI$/ }), "Bill: Payment Method, choose UPI");
-    await ui.click(page.getByRole("button", { name: /Print Preview/ }), "Bill: Print Preview");
-    await page.getByRole("button", { name: "Confirm & Print" }).waitFor();
-    await ui.screen("print-preview");
-    await ui.click(page.getByRole("button", { name: "Confirm & Print" }), "Preview: Confirm & Print");
-    await page.getByRole("button", { name: "Invoice Confirmed" }).waitFor();
-    await ui.screen("confirmed-preview");
-    await ui.click(page.getByRole("button", { name: "Print", exact: true }).locator("xpath=preceding-sibling::button"), "Preview: Close");
-    await ui.screen("bill-confirmed");
+    await ui.click(page.getByRole("button", { name: "UPI", exact: true }), "Bill: Payment UPI");
+    await ui.click(page.getByRole("button", { name: "Confirm and print" }), "Bill: Confirm and print");
+    await page.waitForURL(/[?&]bill=/);
+    await page.getByRole("link", { name: "Prescriptions waiting" }).waitFor();
+    await ui.screen("bill-finished");
 
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const found = await ui.api("GET", `/pharmacy/sales-register?register=sales&from=${today}&to=${today}&q=${encodeURIComponent(rx.patient)}&field=patient&limit=50`);
