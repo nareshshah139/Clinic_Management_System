@@ -32,6 +32,10 @@ const EMPTY_FORM: UserForm = { firstName: '', lastName: '', email: '', phone: ''
 // The API serves at most 100 permissions per page.
 const PERMISSIONS_PAGE_SIZE = 100;
 
+// Ticking inventory:* also ticks the listed permissions under it; the server refuses any left unticked.
+const coveredBy = (permission: string, listed: string[]) =>
+  permission.endsWith(':*') ? listed.filter((name) => name.startsWith(permission.slice(0, -1))) : [];
+
 export default function UsersManagement() {
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
@@ -44,6 +48,8 @@ export default function UsersManagement() {
   const [alwaysPerms, setAlwaysPerms] = useState<string[]>([]);
   // Permissions can be saved only once the lists have loaded; saving an unloaded list would erase them.
   const [permLoad, setPermLoad] = useState<'loading' | 'ready' | 'failed'>('loading');
+  // Counts dialog loads, so a slow answer for one user is dropped once another user's dialog has opened.
+  const permRequest = useRef(0);
   const [roleSelect, setRoleSelect] = useState<string>('ADMIN');
   const [waOpen, setWaOpen] = useState(false);
   const [waAutoConfirm, setWaAutoConfirm] = useState(false);
@@ -375,7 +381,7 @@ export default function UsersManagement() {
       const res: any = await apiClient.getPermissions({ page, limit: PERMISSIONS_PAGE_SIZE });
       const rows: any[] = res?.data || res?.permissions || [];
       names.push(...rows.map((p) => p.name || p));
-      if (rows.length === 0 || page >= (res?.pagination?.totalPages ?? 1)) return names;
+      if (rows.length === 0 || page >= (res?.pagination?.totalPages ?? 1)) return [...new Set(names)];
     }
   };
 
@@ -387,13 +393,16 @@ export default function UsersManagement() {
     setAllPermissions([]);
     setRolePerms([]);
     setAlwaysPerms([]);
+    const request = ++permRequest.current;
     try {
       const [perms, held] = await Promise.all([loadAllPermissionNames(), apiClient.getUserPermissions(u.id)]);
+      if (request !== permRequest.current) return;
       setAllPermissions(perms);
       setRolePerms(held.permissions);
       setAlwaysPerms(held.always);
       setPermLoad('ready');
     } catch (e) {
+      if (request !== permRequest.current) return;
       setAllPermissions([]);
       setRolePerms([]);
       setPermLoad('failed');
@@ -402,6 +411,7 @@ export default function UsersManagement() {
 
   const applyRole = async (role: string) => {
     if (!selectedUser) return;
+    const request = ++permRequest.current;
     try {
       await apiClient.assignRole(selectedUser.id, { role });
       await fetchUsers();
@@ -410,19 +420,22 @@ export default function UsersManagement() {
       alert('Failed to update role. Please try again.');
       return;
     }
+    alert(`Role updated to ${role} successfully!`);
+    if (request !== permRequest.current) return;
     setSelectedUser({ ...selectedUser, role: role as any });
     setPermLoad('loading');
     try {
       const held = await apiClient.getUserPermissions(selectedUser.id);
+      if (request !== permRequest.current) return;
       setRolePerms(held.permissions);
       setAlwaysPerms(held.always);
       setPermLoad('ready');
     } catch {
+      if (request !== permRequest.current) return;
       setRolePerms([]);
       setAlwaysPerms([]);
       setPermLoad('failed');
     }
-    alert(`Role updated to ${role} successfully!`);
   };
 
   const applyPermissions = async (perms: string[]) => {
@@ -634,7 +647,8 @@ export default function UsersManagement() {
                                                   checked={checked}
                                                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                                                     const next = new Set(rolePerms);
-                                                    if (e.target.checked) next.add(p); else next.delete(p);
+                                                    if (!e.target.checked) next.delete(p);
+                                                    else [p, ...coveredBy(p, allPermissions)].forEach((name) => next.add(name));
                                                     setRolePerms(Array.from(next));
                                                   }}
                                                 />

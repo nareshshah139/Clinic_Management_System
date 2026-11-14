@@ -110,6 +110,46 @@ describe('UsersManagement', () => {
     expect(await within(screen.getByRole('dialog')).findByText(line)).toBeInTheDocument();
   });
 
+  it('ignores a slow answer for one user once another user\'s dialog is open', async () => {
+    let answerAsha: (held: { permissions: string[]; always: string[] }) => void = () => {};
+    api.getPermissions.mockResolvedValue({ permissions: [{ name: 'appointments:read' }, { name: 'billing:read' }], pagination: { totalPages: 1 } });
+    api.getUserPermissions.mockImplementation((id: string) =>
+      id === 'u-asha' ? new Promise((resolve) => { answerAsha = resolve; }) : Promise.resolve({ permissions: ['billing:read'], always: [] }));
+    render(<UsersManagement />);
+    await screen.findByText('Asha Rao');
+
+    press(rowOf('Asha Rao'), /Role & Permissions/);
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    press(rowOf('Vikram Iyer'), /Role & Permissions/);
+    const dialog = screen.getByRole('dialog');
+    await within(dialog).findByRole('checkbox', { name: 'billing:read' });
+    await React.act(async () => { answerAsha({ permissions: ['appointments:read'], always: ['*'] }); });
+
+    const ticked = within(dialog).getAllByRole('checkbox').filter((box) => (box as HTMLInputElement).checked).map((box) => box.getAttribute('aria-label'));
+    expect(ticked).toEqual(['billing:read']);
+    expect(within(dialog).queryByText(/This role always has/)).not.toBeInTheDocument();
+    press(dialog, 'Save Permissions');
+    await waitFor(() => expect(api.updateUserPermissions).toHaveBeenCalledWith('u-vikram', ['billing:read']));
+    expect(api.updateUserPermissions).toHaveBeenCalledTimes(1);
+  });
+
+  it('ticks the listed permissions under a wildcard when the wildcard is ticked', async () => {
+    api.getPermissions.mockResolvedValue({
+      permissions: ['inventory:*', 'inventory:item:read', 'inventory:item:delete', 'inventoryx:read', 'billing:read'].map((name) => ({ name })),
+      pagination: { totalPages: 1 },
+    });
+    render(<UsersManagement />);
+    await screen.findByText('Asha Rao');
+
+    press(rowOf('Asha Rao'), /Role & Permissions/);
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('checkbox', { name: 'inventory:*' }));
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'inventory:item:delete' }));
+    press(dialog, 'Save Permissions');
+    await waitFor(() => expect(api.updateUserPermissions).toHaveBeenCalledWith('u-asha', ['inventory:*', 'inventory:item:read']));
+  });
+
   it('ticks the held set the server returns after Apply Role', async () => {
     api.getPermissions.mockResolvedValue({
       permissions: [{ name: 'appointments:read' }, { name: 'billing:read' }],
