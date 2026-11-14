@@ -1,5 +1,6 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import { visitIdentity } from '@/lib/visit-identity';
+import { visitTypeLabel } from '@/components/appointments/appointment-calendars';
 import type { RecordState } from './useRecordById';
 
 type IdentityPatient = Parameters<typeof visitIdentity>[0];
@@ -8,7 +9,8 @@ type IdentityAppointment = Parameters<typeof visitIdentity>[2];
 
 interface VisitIdentityBarProps {
   patient: RecordState<IdentityPatient>;
-  doctor: RecordState<NonNullable<IdentityDoctor>>;
+  /** Omitted when the viewer is the visit's doctor. */
+  doctor?: RecordState<NonNullable<IdentityDoctor>>;
   appointment?: IdentityAppointment;
   className?: string;
 }
@@ -36,17 +38,17 @@ export function VisitIdentityBar({ patient, doctor, appointment, className = '' 
 
   const identity = visitIdentity(
     patient.record,
-    doctor.status === 'ready' ? doctor.record : null,
+    doctor?.status === 'ready' ? doctor.record : null,
     appointment,
   );
   const patientPart = [identity.name, identity.age !== null ? String(identity.age) : null, identity.sex]
     .filter(Boolean)
     .join(SEPARATOR);
   const segments = [
-    `Patient: ${patientPart}`,
+    patientPart,
     identity.doctorName ? `Doctor: ${identity.doctorName}` : null,
     identity.slot,
-    identity.visitType,
+    identity.visitType && visitTypeLabel(identity.visitType),
   ].filter(Boolean);
 
   return (

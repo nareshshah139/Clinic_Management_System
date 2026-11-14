@@ -583,6 +583,7 @@ export type PatientVisitHistoryResponse = VisitTimelineEntry[] | PatientVisitHis
 
 export interface VisitPatientSummary {
   id: string;
+  patientCode?: string | null;
   firstName?: string;
   lastName?: string;
   name?: string;

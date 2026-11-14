@@ -16,6 +16,8 @@ interface QuickGuideProps {
   triggerText?: string;
   triggerVariant?: 'default' | 'outline' | 'ghost';
   triggerClassName?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -42,20 +44,25 @@ export function QuickGuide({
   sections,
   triggerText = 'Quick Guide',
   triggerVariant = 'outline',
-  triggerClassName = ''
+  triggerClassName = '',
+  open: controlledOpen,
+  onOpenChange,
 }: QuickGuideProps) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const open = controlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
 
   return (
     <>
-      <Button
+      {!controlled && <Button
         variant={triggerVariant}
         className={`flex items-center gap-2 ${triggerClassName}`}
         onClick={() => setOpen(true)}
       >
         <Info className="h-4 w-4" />
         {triggerText}
-      </Button>
+      </Button>}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">

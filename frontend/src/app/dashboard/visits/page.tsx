@@ -246,7 +246,6 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
-import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import { usePatientHistory } from '@/components/visits/usePatientHistory';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import { apiClient } from '@/lib/api';
@@ -255,7 +254,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { User, Users, Stethoscope, FileText, Calendar, Activity, ArrowLeft } from 'lucide-react';
+import { User, Users, Stethoscope, FileText, Activity } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { formatPatientName } from '@/lib/utils';
@@ -467,6 +466,7 @@ function VisitsPageInner() {
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [currentUserRole, setCurrentUserRole] = useState<string>('DOCTOR');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [recentVisitId, setRecentVisitId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -574,8 +574,9 @@ function VisitsPageInner() {
       }
 
       try {
-        const currentUser = await apiClient.get<{ role?: string }>('/auth/me');
+        const currentUser = await apiClient.get<{ id?: string; role?: string }>('/auth/me');
         setCurrentUserRole(currentUser?.role ?? 'DOCTOR');
+        setCurrentUserId(currentUser?.id ?? null);
       } catch (error) {
         console.error('Failed to get current user:', error);
         setCurrentUserRole('DOCTOR');
@@ -928,78 +929,19 @@ function VisitsPageInner() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0 max-w-full">
-          <div className="flex flex-wrap items-center gap-2">
-            <PageHeader title={<>Visit</>} />
-            {appointmentData && (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-                <Calendar className="h-3 w-3 mr-1" />
-                From Appointment
-              </Badge>
-            )}
-          </div>
-          {/* Minimal inline tracker for current patient */}
-          {selectedPatientId && (
-            <div className="mt-2">
-              <PatientProgressTracker patientId={selectedPatientId} compact />
-            </div>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <QuickGuide
-            title="Visit guide"
-            triggerVariant="ghost"
-            sections={[
-              {
-                title: "The visit",
-                items: [
-                  "The visit opens on the Prescription tab",
-                  "Type the chief complaint or the diagnosis",
-                  "Add medicines; a new empty row appears after each one",
-                  "Press Complete visit; it saves the prescription and returns you to the dashboard"
-                ]
-              },
-              {
-                title: "Prescriptions",
-                items: [
-                  "Pick medicines from the list as you type",
-                  "Set frequency and duration with the presets, or type them",
-                  "Create Prescription saves without completing the visit",
-                  "Go to pharmacy appears once the prescription is saved"
-                ]
-              },
-              {
-                title: "Vitals, photos and lab tests",
-                items: [
-                  "Fill them only when there is something to record",
-                  "A single photo uploads straight away",
-                  "Change a photo's position on its card"
-                ]
-              }
-            ]}
-          />
-          {appointmentData && (
-            <Button variant="outline" onClick={() => window.history.back()}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Calendar
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => setShowForm(false)}>
-            Back to Setup
-          </Button>
-        </div>
-      </div>
-
-      <div className="sticky -top-4 z-30 -mx-4 md:-top-6 border-b bg-background px-4 py-2 md:-mx-6 md:px-6">
-        <VisitIdentityBar
-          patient={selectedPatient}
-          doctor={selectedDoctor}
-          appointment={appointmentData}
-        />
-      </div>
-
       <MedicalVisitForm
+        identity={
+          <VisitIdentityBar
+            patient={selectedPatient}
+            doctor={currentUserId && currentUserId === selectedDoctorId ? undefined : selectedDoctor}
+            appointment={appointmentData}
+          />
+        }
+        headerActions={
+          <Button variant="ghost" size="sm" onClick={() => (appointmentData ? window.history.back() : setShowForm(false))}>
+            Back
+          </Button>
+        }
         key={`${selectedPatientId}:${urlVisitId || appointmentData?.id || "new"}`}
         patientId={selectedPatientId} 
         doctorId={selectedDoctorId}
