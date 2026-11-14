@@ -784,4 +784,53 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
     const refund = await invoices.recordRefund(sold.id, { requestKey: 'walk-in-refund', amount: 10, method: 'CASH' }, 'branch');
     expect([revised.patientId, refund.status, refund.amount]).toEqual([null, 'REFUNDED', -10]);
   });
+
+  it('keeps prescription-only medicines off walk-in bills, and lets the same medicines go to a registered patient', async () => {
+    for (const [id, name, drugFlag, itemFlag] of [
+      ['rx-drug', 'Synthetic Antibiotic', true, false],
+      ['rx-stock', 'Synthetic Retinoid', null, true],
+      ['rx-cleared', 'Synthetic Cleared Gel', false, true],
+    ] as const) {
+      await db.drug.create({
+        data: { id, name, price: 40, manufacturerName: 'Synthetic', packSizeLabel: '1', branchId: 'branch', requiresPrescription: drugFlag },
+      });
+      await db.inventoryItem.create({
+        data: {
+          id: `${id}-batch`, branchId: 'branch', name, type: 'MEDICINE', costPrice: 20, sellingPrice: 40, unit: 'PIECES', currentStock: 10,
+          stockStatus: 'IN_STOCK', expiryDate: new Date('2099-01-01'), requiresPrescription: itemFlag, drugs: { connect: { id } },
+        },
+      });
+    }
+    const walkIn = (drugId: string) => ({
+      ...cream(), patientId: '', billingName: 'Ramesh Kale', billingPhone: '9000011111',
+      items: [{ drugId, quantity: 1, unitPrice: 40, discountPercent: 0, taxPercent: 12 }],
+    });
+    const refusal = (name: string) => `400: ${name} needs a prescription. Choose the patient instead of Walk-in customer.`;
+
+    expect([
+      await failure(invoices.create(walkIn('rx-drug'), 'branch', 'asha')),
+      await failure(invoices.checkout({ ...walkIn('rx-stock'), requestKey: 'rx-walk-in' }, 'branch', 'asha')),
+      await db.pharmacyInvoice.count({ where: { billingName: 'Ramesh Kale', items: { some: { drugId: { in: ['rx-drug', 'rx-stock'] } } } } }),
+    ]).toEqual([refusal('Synthetic Antibiotic'), refusal('Synthetic Retinoid'), 0]);
+
+    const draft = await invoices.create({ ...walkIn('rx-drug'), patientId: 'patient' }, 'branch', 'asha');
+    const toWalkIn = { ...walkIn('rx-drug'), expectedVersion: draft.mutationVersion };
+    expect(await failure(invoices.update(draft.id, toWalkIn as any, 'branch'))).toBe(refusal('Synthetic Antibiotic'));
+    const patientOnly = await invoices.update(
+      draft.id,
+      { patientId: '', billingName: 'Ramesh Kale', billingPhone: '9000011111', expectedVersion: draft.mutationVersion } as any,
+      'branch',
+    );
+    expect(await failure(invoices.updateStatus(patientOnly.id, 'CONFIRMED', 'branch', 'asha'))).toBe(refusal('Synthetic Antibiotic'));
+    expect((await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe('DRAFT');
+
+    const forPatient = await invoices.checkout(
+      { ...walkIn('rx-drug'), patientId: 'patient', requestKey: 'rx-patient' }, 'branch', 'asha',
+    );
+    const ordinary = await invoices.checkout({ ...walkIn('rx-cleared'), requestKey: 'rx-cleared-walk-in' }, 'branch', 'asha');
+    const noRule = await invoices.checkout({ ...walkIn('cream'), requestKey: 'cream-walk-in' }, 'branch', 'asha');
+    expect([forPatient, ordinary, noRule].map((sold) => [sold.status, sold.patientId])).toEqual([
+      ['CONFIRMED', 'patient'], ['CONFIRMED', null], ['CONFIRMED', null],
+    ]);
+  }, 60000);
 });

@@ -449,6 +449,10 @@ export class PharmacyInvoiceService {
       createInvoiceDto.items as unknown as PharmacyInvoiceItemDto[],
       packages,
     );
+    await this.requirePatientForPrescriptionOnly(tx, patientId, [
+      ...drugIds,
+      ...packages.flatMap((pkg) => pkg.items.map((item) => item.drugId)),
+    ]);
 
     const priced = this.priceItems(
       createInvoiceDto.items,
@@ -1236,6 +1240,12 @@ export class PharmacyInvoiceService {
         updateInvoiceDto.items as unknown as PharmacyInvoiceItemDto[],
         packages,
       );
+      await this.requirePatientForPrescriptionOnly(prisma, targetPatientId, [
+        ...drugIds,
+        ...packages.flatMap((pkg: any) =>
+          pkg.items.map((item: any) => item.drugId),
+        ),
+      ]);
 
       const priced = this.priceItems(
         updateInvoiceDto.items as unknown as PharmacyInvoiceItemDto[],
@@ -1422,6 +1432,16 @@ export class PharmacyInvoiceService {
       );
     }
 
+    if (shouldApplyStock)
+      await this.requirePatientForPrescriptionOnly(
+        tx,
+        existingInvoice.patientId,
+        existingInvoice.items.flatMap((item) => [
+          ...(item.drugId ? [item.drugId] : []),
+          ...(item.package?.items.map((line) => line.drugId) ?? []),
+        ]),
+      );
+
     const stockOps = shouldApplyStock
       ? await this.planConfirmedStockDeductions(
           tx,
@@ -1512,6 +1532,33 @@ export class PharmacyInvoiceService {
     if (!input.billingName?.trim() || !input.billingPhone?.trim())
       throw new BadRequestException(
         'A walk-in sale needs the customer\'s name and phone',
+      );
+  }
+
+  private async requirePatientForPrescriptionOnly(
+    tx: Prisma.TransactionClient,
+    patientId: string | null,
+    drugIds: string[],
+  ) {
+    if (patientId || !drugIds.length) return;
+    const drugs = await tx.drug.findMany({
+      where: { id: { in: [...new Set(drugIds)] } },
+      select: {
+        name: true,
+        requiresPrescription: true,
+        inventoryItems: {
+          where: { status: 'ACTIVE' },
+          select: { requiresPrescription: true },
+        },
+      },
+    });
+    const restricted = drugs.find((drug) =>
+      drug.requiresPrescription ??
+      drug.inventoryItems.some((item) => item.requiresPrescription),
+    );
+    if (restricted)
+      throw new BadRequestException(
+        `${restricted.name} needs a prescription. Choose the patient instead of Walk-in customer.`,
       );
   }
 

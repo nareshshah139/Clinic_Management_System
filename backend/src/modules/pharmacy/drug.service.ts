@@ -756,7 +756,7 @@ export class DrugService {
       drugStockNames(this.prisma, branchId, ids),
       this.prisma.inventoryItem.findMany({
         where: { branchId, status: InventoryStatus.ACTIVE, drugs: { some: { id: { in: ids } } } },
-        select: { status: true, currentStock: true, heldStock: true, expiryDate: true, drugs: { select: { id: true } } },
+        select: { status: true, currentStock: true, heldStock: true, expiryDate: true, requiresPrescription: true, drugs: { select: { id: true } } },
       }),
     ]);
     const available = new Map<string, number>();
@@ -764,6 +764,8 @@ export class DrugService {
       if (batch.drugs.length === 1) available.set(batch.drugs[0].id, (available.get(batch.drugs[0].id) ?? 0) + availableStock(batch));
     return drugs.map(drug => ({
       ...drug,
+      requiresPrescription: drug.requiresPrescription
+        ?? batches.some(batch => batch.requiresPrescription && batch.drugs.some(linked => linked.id === drug.id)),
       gstRate: gstRates.get(drug.id) ?? null,
       stockName: stockNames.get(drug.id) ?? null,
       totalStock: available.get(drug.id) ?? 0,
