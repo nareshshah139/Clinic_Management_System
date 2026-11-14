@@ -397,12 +397,12 @@ export interface PharmacyInvoiceItem {
 export interface PharmacyInvoiceSummary {
   id: string;
   invoiceNumber: string;
-  patientId: string;
+  patientId: string | null;
   patient: {
     id: string;
     name: string;
     phone?: string;
-  };
+  } | null;
   doctor?: {
     id: string;
     firstName?: string;

@@ -7,6 +7,7 @@ import { PharmacyInvoiceService } from '../pharmacy-invoice.service';
 import { PharmacySalesRegisterService } from '../pharmacy-sales-register.service';
 import { InventoryWorkflowService } from '../../inventory/inventory-workflow.service';
 import { PharmacyComplianceService } from '../pharmacy-compliance.service';
+import { PharmacyReportsService } from '../pharmacy-reports.service';
 import { clinicDay } from '../clinic-day';
 
 const databaseTests = process.env.SALES_REGISTER_TEST_DATABASE_URL
@@ -730,4 +731,57 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
     // Revised to 20%: taxable 160, GST 19.20, total 179.20; profit is the taxable value less cost, 80.
     expect(await margin()).toEqual([['Synthetic Serum', 2, 179.2, 89.6, 9.6, 80, 50]]);
   }, 60000);
+
+  it('sells to a walk-in customer with no patient record: saves, finishes, lists, reprints and refunds by the name on the bill', async () => {
+    const walkIn = { ...cream(), patientId: '', billingName: 'Ramesh Kale', billingPhone: '9000011111', notes: undefined };
+    expect([
+      await failure(invoices.checkout({ ...walkIn, billingPhone: ' ', requestKey: 'walk-in-no-phone' }, 'branch', 'asha')),
+      await failure(invoices.create({ ...walkIn, billingName: '' }, 'branch', 'asha')),
+      await failure(invoices.create({ ...walkIn, prescriptionId: 'any-prescription' }, 'branch', 'asha')),
+    ]).toEqual([
+      "400: A walk-in sale needs the customer's name and phone",
+      "400: A walk-in sale needs the customer's name and phone",
+      "400: A prescription bill needs the prescription's patient",
+    ]);
+
+    const draft = await invoices.create({ ...cream(), billingName: 'Meera Shah' }, 'branch', 'asha');
+    const asWalkIn = await invoices.update(draft.id, { ...walkIn, expectedVersion: draft.mutationVersion } as any, 'branch');
+    expect([asWalkIn.patientId, asWalkIn.billingName]).toEqual([null, 'Ramesh Kale']);
+    const sold = await invoices.checkout(
+      { ...walkIn, requestKey: 'walk-in-bill', draftId: draft.id, draftVersion: asWalkIn.mutationVersion },
+      'branch',
+      'asha',
+    );
+    const reopened = await invoices.findOne(sold.id, 'branch');
+    expect([reopened.status, reopened.paymentStatus, reopened.patientId, reopened.patient, reopened.billingName, reopened.billingPhone]).toEqual([
+      'CONFIRMED', 'COMPLETED', null, null, 'Ramesh Kale', '9000011111',
+    ]);
+
+    const print = await invoices.getPrintData(sold.id, 'branch');
+    expect(print.patient).toEqual({ id: null, name: 'Ramesh Kale', phone: '9000011111', address: undefined });
+
+    const listed = (await invoices.findAll({ search: 'Ramesh', limit: 100 } as any, 'branch')).data.map((bill: { id: string }) => bill.id);
+    const registerRow = (
+      await register.list(
+        { register: 'sales', from: '2000-01-01', to: '2099-12-31', sortBy: 'billNo', sortDir: 'asc', page: 1, limit: 100 },
+        'branch',
+      )
+    ).rows.find((r) => r.recordId === sold.id);
+    expect([listed.includes(sold.id), registerRow?.patientName, registerRow?.mobile]).toEqual([true, 'Ramesh Kale', '9000011111']);
+
+    const collection = await new PharmacyReportsService(db as any, new PharmacyComplianceService(db as any)).dailyCollection(
+      clinicDay(sold.invoiceDate),
+      { branchId: 'branch', id: 'asha', role: 'PHARMACIST' },
+    );
+    expect(JSON.stringify(collection)).toContain('Ramesh Kale');
+
+    const revised = await invoices.reviseDiscount(
+      sold.id,
+      { expectedVersion: reopened.mutationVersion, billDiscount: { kind: 'AMOUNT', value: 10 }, lines: [], reason: 'Regular customer' },
+      'branch',
+      'asha',
+    );
+    const refund = await invoices.recordRefund(sold.id, { requestKey: 'walk-in-refund', amount: 10, method: 'CASH' }, 'branch');
+    expect([revised.patientId, refund.status, refund.amount]).toEqual([null, 'REFUNDED', -10]);
+  });
 });

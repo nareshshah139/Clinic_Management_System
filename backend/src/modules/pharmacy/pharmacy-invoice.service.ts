@@ -338,21 +338,16 @@ export class PharmacyInvoiceService {
     } = {},
   ) {
     this.validateInvoiceItemsInput(createInvoiceDto.items);
-    // Validate patient exists
-    const patient = await tx.patient.findFirst({
-      where: { id: createInvoiceDto.patientId, branchId },
-    });
-
-    if (!patient) {
-      console.error(
-        '❌ Patient not found:',
-        createInvoiceDto.patientId,
-        'in branch:',
-        branchId,
-      );
-      throw new NotFoundException(
-        `Patient not found: ${createInvoiceDto.patientId}`,
-      );
+    const patientId = createInvoiceDto.patientId?.trim() || null;
+    if (patientId) {
+      const patient = await tx.patient.findFirst({
+        where: { id: patientId, branchId },
+      });
+      if (!patient) {
+        throw new NotFoundException(`Patient not found: ${patientId}`);
+      }
+    } else {
+      this.requireWalkInCustomer(createInvoiceDto);
     }
 
     // Validate doctor if provided
@@ -379,7 +374,7 @@ export class PharmacyInvoiceService {
         tx,
         {
           prescriptionId: createInvoiceDto.prescriptionId,
-          patientId: createInvoiceDto.patientId,
+          patientId,
           doctorId: createInvoiceDto.doctorId,
         },
         branchId,
@@ -464,7 +459,7 @@ export class PharmacyInvoiceService {
       data: {
         invoiceNumber: draftBillNumber(),
         ...operation,
-        patientId: createInvoiceDto.patientId,
+        patientId,
         doctorId: createInvoiceDto.doctorId || undefined,
         prescriptionId: createInvoiceDto.prescriptionId || undefined,
         branchId,
@@ -972,15 +967,15 @@ export class PharmacyInvoiceService {
           drugLicenseNumber: invoice.branch.licenseNumber,
         },
         patient: {
-          id: invoice.patient.id,
-          name: invoice.billingName || invoice.patient.name,
-          phone: invoice.billingPhone || invoice.patient.phone,
+          id: invoice.patient?.id ?? null,
+          name: invoice.billingName || invoice.patient?.name,
+          phone: invoice.billingPhone || invoice.patient?.phone,
           address:
             this.compactAddress({
-              address: invoice.billingAddress || invoice.patient.address,
-              city: invoice.billingCity || invoice.patient.city,
-              state: invoice.billingState || invoice.patient.state,
-              pincode: invoice.billingPincode || invoice.patient.pincode,
+              address: invoice.billingAddress || invoice.patient?.address,
+              city: invoice.billingCity || invoice.patient?.city,
+              state: invoice.billingState || invoice.patient?.state,
+              pincode: invoice.billingPincode || invoice.patient?.pincode,
             }) || undefined,
         },
         doctor: invoice.doctor
@@ -1105,7 +1100,19 @@ export class PharmacyInvoiceService {
       );
     }
     const targetPatientId =
-      updateInvoiceDto.patientId || existingInvoice.patientId;
+      updateInvoiceDto.patientId === undefined
+        ? existingInvoice.patientId
+        : updateInvoiceDto.patientId.trim() || null;
+    if (!targetPatientId) {
+      this.requireWalkInCustomer({
+        billingName: updateInvoiceDto.billingName ?? existingInvoice.billingName,
+        billingPhone: updateInvoiceDto.billingPhone ?? existingInvoice.billingPhone,
+        prescriptionId:
+          updateInvoiceDto.prescriptionId === undefined
+            ? existingInvoice.prescriptionId
+            : updateInvoiceDto.prescriptionId,
+      });
+    }
 
     if (updateInvoiceDto.patientId) {
       const patient = await prisma.patient.findFirst({
@@ -1152,6 +1159,9 @@ export class PharmacyInvoiceService {
 
     let updateData: any = {
       ...updateInvoiceDto,
+      ...(updateInvoiceDto.patientId === undefined
+        ? {}
+        : { patientId: targetPatientId }),
       ...(updateInvoiceDto.doctorId === undefined
         ? {}
         : { doctorId: updateInvoiceDto.doctorId || null }),
@@ -1493,11 +1503,30 @@ export class PharmacyInvoiceService {
    * Eligibility MUST be re-read under prescription then visit row locks retained through commit,
    * so a cancellation that wins the prescription lock prevents stock posting.
    */
+  /**
+   * A walk-in sale has no patient record, so the bill itself carries who bought it.
+   * Prescription bills always belong to the prescription's patient.
+   */
+  private requireWalkInCustomer(input: {
+    billingName?: string | null;
+    billingPhone?: string | null;
+    prescriptionId?: string | null;
+  }) {
+    if (input.prescriptionId)
+      throw new BadRequestException(
+        'A prescription bill needs the prescription\'s patient',
+      );
+    if (!input.billingName?.trim() || !input.billingPhone?.trim())
+      throw new BadRequestException(
+        'A walk-in sale needs the customer\'s name and phone',
+      );
+  }
+
   private async requireEligiblePrescription(
     tx: Prisma.TransactionClient,
     input: {
       prescriptionId: string;
-      patientId: string;
+      patientId: string | null;
       doctorId?: string | null;
     },
     branchId: string,

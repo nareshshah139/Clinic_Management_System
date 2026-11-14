@@ -490,7 +490,7 @@ export function PharmacyInvoiceList() {
                       
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
                         <div>
-                          <p><strong>Patient:</strong> {invoice.patient.name}</p>
+                          <p><strong>Patient:</strong> {invoice.patient?.name ?? `${invoice.billingName} (walk-in)`}</p>
                           <p><strong>Phone:</strong> {invoice.billingPhone}</p>
                         </div>
                         <div>
@@ -561,7 +561,7 @@ export function PharmacyInvoiceList() {
                       )}
                       {invoice.status === 'DRAFT' && (
                         <Button asChild variant="ghost" size="sm" title="Continue in Sales">
-                          <Link href={billHref({ draft: invoice.id })} aria-label={`Continue the draft for ${invoice.patient.name} in Sales`}>
+                          <Link href={billHref({ draft: invoice.id })} aria-label={`Continue the draft for ${invoice.patient?.name ?? invoice.billingName} in Sales`}>
                             <Pencil className="h-4 w-4" />
                           </Link>
                         </Button>

@@ -358,6 +358,7 @@ export function PharmacyInvoiceBuilderFixed({
   const [showDrugSearchResults, setShowDrugSearchResults] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'drugs' | 'packages'>('drugs');
   const [doctorOpen, setDoctorOpen] = useState(false);
+  const [walkIn, setWalkIn] = useState(() => Boolean(draft && !draft.fields.patientId));
   const [packagesOpen, setPackagesOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
   const [directionsOpen, setDirectionsOpen] = useState<Set<string>>(() => new Set());
@@ -1317,20 +1318,20 @@ export function PharmacyInvoiceBuilderFixed({
       return null;
     }
     if (
-      !invoiceData.patientId ||
+      (!invoiceData.patientId && !walkIn) ||
       items.length === 0 ||
-      !invoiceData.billingName ||
-      !invoiceData.billingPhone
+      !invoiceData.billingName.trim() ||
+      !invoiceData.billingPhone.trim()
     ) {
       toast({
         title: 'Validation Error',
-        description: !invoiceData.patientId
-          ? 'Patient is required'
+        description: !invoiceData.patientId && !walkIn
+          ? 'Choose a patient, or Walk-in customer'
           : items.length === 0
             ? 'At least one item is required'
-            : !invoiceData.billingName
-              ? 'Billing name is required'
-              : 'Billing phone is required',
+            : !invoiceData.billingName.trim()
+              ? walkIn ? "Enter the customer's name" : 'Billing name is required'
+              : walkIn ? "Enter the customer's phone" : 'Billing phone is required',
         variant: 'destructive',
       });
       return null;
@@ -1510,7 +1511,7 @@ export function PharmacyInvoiceBuilderFixed({
    * a refusal MUST be shown with a way to reload, never retried over the other change.
    */
   const saveDraft = async () => {
-    const problem = draftProblem(invoiceData, items) ?? discountProblem;
+    const problem = draftProblem(invoiceData, items, walkIn) ?? discountProblem;
     if (problem) {
       toast({ title: 'Draft not saved', description: problem, variant: 'destructive' });
       return;
@@ -2010,6 +2011,14 @@ export function PharmacyInvoiceBuilderFixed({
   const prescriptionItems = items.filter(item => item.id.startsWith('prescription_'));
   const isPrescriptionItem = (itemId: string) => itemId.startsWith('prescription_');
 
+  const chooseWalkIn = (next: boolean) => {
+    setWalkIn(next);
+    setSelectedPatient(null);
+    setPatientSearchQuery('');
+    setShowPatientSearchResults(false);
+    setInvoiceData((prev) => ({ ...prev, patientId: '', billingName: '', billingPhone: '', billingAddress: '', billingCity: '', billingState: '', billingPincode: '' }));
+  };
+
   /**
    * @cc [owner:nareshshah139,label:product] fresh-invoice-context
    * Starting a new invoice MUST clear patient, doctor, prescription, billing, print and item state.
@@ -2038,6 +2047,7 @@ export function PharmacyInvoiceBuilderFixed({
     setShowDrugSearchResults(false);
     setSelectedTab('drugs');
     setDoctorOpen(false);
+    setWalkIn(false);
     setPackagesOpen(false);
     setDiscountOpen(false);
     setDirectionsOpen(new Set());
@@ -2149,14 +2159,33 @@ export function PharmacyInvoiceBuilderFixed({
           <div className="lg:col-span-2 space-y-6">
             {/* Patient & Doctor Selection */}
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-4 w-4" />
-                  Patient
+                  {walkIn ? 'Walk-in customer' : 'Patient'}
                 </CardTitle>
+                {!fromPrescription && (
+                  <Button type="button" variant="outline" size="sm" aria-pressed={walkIn} onClick={() => chooseWalkIn(!walkIn)}>
+                    {walkIn ? 'Choose a patient' : 'Walk-in customer'}
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {walkIn ? (
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="billingName">Customer name *</Label>
+                        <Input id="billingName" value={invoiceData.billingName} autoFocus
+                          onChange={(e) => setInvoiceData((prev) => ({ ...prev, billingName: e.target.value }))} />
+                      </div>
+                      <div>
+                        <Label htmlFor="billingPhone">Phone *</Label>
+                        <Input id="billingPhone" type="tel" inputMode="tel" value={invoiceData.billingPhone}
+                          onChange={(e) => setInvoiceData((prev) => ({ ...prev, billingPhone: e.target.value }))} />
+                      </div>
+                    </div>
+                  ) : (
                   <div>
                     <Label htmlFor="patient">Patient *</Label>
                     <div className="relative" ref={patientSearchRef}>
@@ -2218,6 +2247,7 @@ export function PharmacyInvoiceBuilderFixed({
                       )}
                     </div>
                   </div>
+                  )}
                   {showDoctor ? (
                   <div>
                     <Label htmlFor="doctor">Doctor</Label>
@@ -2836,6 +2866,8 @@ export function PharmacyInvoiceBuilderFixed({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {!walkIn && (
+                <>
                 <div>
                   <Label htmlFor="billingName">Billing Name *</Label>
                   <Input
@@ -2862,6 +2894,8 @@ export function PharmacyInvoiceBuilderFixed({
                     }
                   />
                 </div>
+                </>
+                )}
                 <div>
                   <Label htmlFor="notes">Notes</Label>
                   <Textarea
@@ -2946,7 +2980,7 @@ export function PharmacyInvoiceBuilderFixed({
               </div>
               <Button
                 onClick={() => confirmAndPrint()}
-                disabled={loading || savingInvoiceFromPreview || !invoiceData.patientId || items.length === 0}
+                disabled={loading || savingInvoiceFromPreview || (!invoiceData.patientId && !walkIn) || items.length === 0}
                 className="w-full"
                 size="lg"
               >
@@ -2957,7 +2991,7 @@ export function PharmacyInvoiceBuilderFixed({
                 <Button
                   variant="outline"
                   onClick={handleOpenPrintPreview}
-                  disabled={loading || !invoiceData.patientId || items.length === 0}
+                  disabled={loading || (!invoiceData.patientId && !walkIn) || items.length === 0}
                 >
                   <FileText className="mr-2 h-4 w-4" />
                   Preview

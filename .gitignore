@@ -60,6 +60,7 @@ prod-backup*.list
 !backend/prisma/migrations/20260927170000_prescription_inventory_identity/migration.sql
 !backend/prisma/migrations/20260927200000_pharmacy_inventory_approval_snapshot/migration.sql
 !backend/prisma/migrations/20260928100000_inventory_batch_edits/migration.sql
+!backend/prisma/migrations/20261114090000_pharmacy_walk_in_bill_without_patient/migration.sql
 
 /output/diagnostics/partner-recovery/
 

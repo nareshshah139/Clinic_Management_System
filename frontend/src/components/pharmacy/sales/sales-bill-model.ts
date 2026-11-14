@@ -73,7 +73,7 @@ export type SavedInvoice = {
   mutationVersion: number;
   billDiscountKind?: BillDiscount['kind'] | null;
   billDiscountValue?: number;
-  patientId: string;
+  patientId: string | null;
   doctorId: string | null;
   prescriptionId: string | null;
   paymentMethod: string;
@@ -153,8 +153,9 @@ export function billPayload(fields: BillFields, lines: BillLineInput[], billDisc
 
 type DraftLine = BillLineInput & { name?: string | null; drug?: { name?: string }; package?: { name?: string } };
 
-export function draftProblem(fields: BillFields, lines: DraftLine[]): string | null {
-  if (!fields.patientId) return 'Select a patient before saving the draft.';
+export function draftProblem(fields: BillFields, lines: DraftLine[], walkIn = false): string | null {
+  if (walkIn && (!fields.billingName.trim() || !fields.billingPhone.trim())) return "Enter the customer's name and phone before saving the draft.";
+  if (!walkIn && !fields.patientId) return 'Select a patient before saving the draft.';
   if (!lines.length) return 'Add at least one medicine before saving the draft.';
   const unmatched = lines.find((line) => line.itemType === 'DRUG' && (!line.drugId || line.drugId.startsWith('temp_')));
   if (unmatched) return `Choose a stocked product for ${unmatched.name || unmatched.drug?.name || 'the unmatched medicine'} or remove it before saving the draft.`;
@@ -173,7 +174,7 @@ export function draftFromInvoice(invoice: SavedInvoice): SavedDraft {
       number: isIssuedBillNumber(invoice.invoiceNumber) ? invoice.invoiceNumber : null,
     },
     fields: {
-      patientId: invoice.patientId,
+      patientId: text(invoice.patientId),
       doctorId: text(invoice.doctorId),
       prescriptionId: text(invoice.prescriptionId),
       paymentMethod: invoice.paymentMethod,

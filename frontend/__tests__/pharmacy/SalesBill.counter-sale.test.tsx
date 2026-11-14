@@ -132,3 +132,30 @@ it('shows payment as buttons with Cash chosen, and confirms, prints and opens th
   expect(screen.getByRole('link', { name: 'New sale' })).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill');
   expect(api.post).toHaveBeenCalledTimes(1);
 });
+
+it('sells to a walk-in customer by name and phone with no patient, and never carries a patient over', async () => {
+  render(<SalesBillPage />);
+  await pickPatient();
+  expect(screen.getByLabelText('Billing Name *')).toHaveValue('Meera Shah');
+  fireEvent.click(screen.getByRole('button', { name: 'Walk-in customer' }));
+  expect(screen.queryByLabelText('Patient *')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Customer name *')).toHaveValue('');
+  expect(screen.getByLabelText('Phone *')).toHaveValue('');
+
+  const search = screen.getByLabelText('Medicine');
+  fireEvent.change(search, { target: { value: 'Sunscreen' } });
+  fireEvent.keyDown(search, { key: 'Enter' });
+  await line(sunscreen.name);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
+  expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ description: "Enter the customer's name" }));
+  expect(api.post).not.toHaveBeenCalled();
+
+  fireEvent.change(screen.getByLabelText('Customer name *'), { target: { value: 'Ramesh Kale' } });
+  fireEvent.change(screen.getByLabelText('Phone *'), { target: { value: '9000011111' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({
+    patientId: '', billingName: 'Ramesh Kale', billingPhone: '9000011111', billingAddress: '', paymentMethod: 'CASH',
+    items: [expect.objectContaining({ drugId: sunscreen.id, quantity: 1, taxPercent: 18 })],
+  })));
+  await waitFor(() => expect(mockGo).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales/bill?bill=inv-9&next=sale'));
+});
