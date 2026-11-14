@@ -1,6 +1,9 @@
 'use client';
 
 import { displayUtcDate } from '@/lib/date-display';
+import { enumLabel } from '@/lib/labels';
+import { statusLabel } from '@/lib/status-variants';
+import { appointmentsHref } from '@/lib/appointments-link';
 import { Spinner } from '@/components/ui/spinner';
 import { Bell, Settings, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -159,7 +162,7 @@ export function Header() {
         const list: NotificationItem[] = (upcoming || []).map((a: any) => ({
           id: `appt-${a.id}`,
           title: `${a.patientName || 'Patient'} on ${displayUtcDate(a.time)}`,
-          description: `${a.visitType || 'Visit'} • ${a.status}`,
+          description: `${a.visitType ? enumLabel('visitType', a.visitType) : 'Visit'} • ${statusLabel('appointment', a.status)}`,
           href: `/dashboard/visits?appointmentId=${encodeURIComponent(a.id)}`,
           variant: 'default',
         }));
@@ -170,8 +173,8 @@ export function Header() {
         const apptItems: NotificationItem[] = (upcoming || []).map((a: any) => ({
           id: `appt-${a.id}`,
           title: `Upcoming: ${a.patientName || 'Patient'} on ${displayUtcDate(a.time)}`,
-          description: `${a.visitType || 'Visit'} • Dr. ${a.doctorName || ''}`.trim(),
-          href: `/dashboard/appointments`,
+          description: `${a.visitType ? enumLabel('visitType', a.visitType) : 'Visit'} • Dr. ${a.doctorName || ''}`.trim(),
+          href: appointmentsHref(String(a.time ?? '').slice(0, 10)),
         }));
         const invItems: NotificationItem[] = (overdue || []).map((inv: any) => ({
           id: `inv-${inv.id}`,

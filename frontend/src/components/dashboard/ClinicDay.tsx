@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { formatPatientName } from '@/lib/utils';
+import { formatPatientName, getISTDateString } from '@/lib/utils';
+import { appointmentsHref } from '@/lib/appointments-link';
 
 type LoadFailure = 'forbidden' | 'unavailable';
 type Loadable<T> = { status: 'loading' } | { status: 'failed'; failure: LoadFailure } | { status: 'ready'; value: T };
@@ -130,16 +131,19 @@ export function TodayByDoctor({ appointments, total }: { appointments: DayAppoin
       <div className="grid gap-6 lg:grid-cols-2">
         {[...groups.values()].map((list) => (
           <div key={list[0].doctorId}>
-            <h3 className="pb-1 text-sm font-semibold text-foreground">{doctorName(list[0])} <span className="font-normal text-muted-foreground">· {list.length} booked</span></h3>
+            <h3 className="pb-1 text-sm font-semibold text-foreground">
+              <Link href={appointmentsHref(getISTDateString(), list[0].doctorId)} className="hover:underline">{doctorName(list[0])}</Link>{' '}
+              <span className="font-normal text-muted-foreground">· {list.length} booked</span>
+            </h3>
             <ul className="divide-y border-y" aria-label={`${doctorName(list[0])} today`}>
-              {list.map((a) => <AppointmentRow key={a.id} appointment={a} href={a.patient ? `/dashboard/patients/${encodeURIComponent(a.patient.id)}` : '/dashboard/appointments'} />)}
+              {list.map((a) => <AppointmentRow key={a.id} appointment={a} href={a.patient ? `/dashboard/patients/${encodeURIComponent(a.patient.id)}` : appointmentsHref(getISTDateString(), a.doctorId)} />)}
             </ul>
           </div>
         ))}
       </div>
       {total > appointments.length && (
         <p className="text-sm text-muted-foreground">
-          Showing {appointments.length} of {total}. <Link className="font-medium text-foreground underline" href="/dashboard/appointments">Open the full calendar</Link>
+          Showing {appointments.length} of {total}. <Link className="font-medium text-foreground underline" href={appointmentsHref(getISTDateString())}>Open the full calendar</Link>
         </p>
       )}
     </div>

@@ -18,14 +18,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { ROOM_READ_ROLES } from '@/lib/appointment-access';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
+import { readAppointmentsLink } from '@/lib/appointments-link';
 
 function AppointmentsPageInner() {
   const search = useSearchParams();
   const prefillPatientId = search.get('patientId') || undefined;
+  const link = readAppointmentsLink(search);
   const { user, loading: userLoading } = useDashboardUser();
   const [doctors, setDoctors] = useState<User[]>([]);
   const [doctorId, setDoctorId] = useState<string>('');
   const [date, setDate] = useState<string>(() => {
+    if (link.date) return link.date;
     // Default to today (IST). Only restore the stored date if it equals today.
     const today = getISTDateString();
     if (typeof window === 'undefined') return today;
@@ -55,8 +58,8 @@ function AppointmentsPageInner() {
     try { persistedId = localStorage.getItem('appointments.doctorId'); } catch {}
     const listed = (id: string | null) => (id && doctors.some((d) => d.id === id) ? id : '');
     const signedInDoctor = resolveDefaultDoctorId({ role: user?.role, userId: user?.id, current: '' });
-    setDoctorId(listed(signedInDoctor) || listed(persistedId) || doctors[0].id);
-  }, [doctors, doctorId, user, userLoading]);
+    setDoctorId(listed(link.doctorId ?? null) || listed(signedInDoctor) || listed(persistedId) || doctors[0].id);
+  }, [doctors, doctorId, user, userLoading, link.doctorId]);
 
   // Persist selections
   useEffect(() => {

@@ -40,9 +40,9 @@ describe('GlobalSearch keyboard', () => {
     expect(box).toHaveAttribute('aria-expanded', 'true');
     expect(box).toHaveAttribute('aria-controls', list.id);
     expect(within(list).getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'Rahul Kumar9848010411Patient • MALE • 19 yrsPatient',
-      'Lakshmi Iyer9848010274Patient • FEMALE • 63 yrsPatient',
-      'Praneeta JainDOCTOR • GeneralStaff',
+      'Rahul Kumar9848010411Patient • Male • 19 yrsPatient',
+      'Lakshmi Iyer9848010274Patient • Female • 63 yrsPatient',
+      'Praneeta JainDoctor • GeneralStaff',
     ]);
     expect(box).not.toHaveAttribute('aria-activedescendant');
   });

@@ -10,6 +10,8 @@ import { Spinner } from '@/components/ui/spinner';
 import { apiClient } from '@/lib/api';
 import { displayUtcDate } from '@/lib/date-display';
 import { formatAge } from '@/lib/utils';
+import { enumLabel } from '@/lib/labels';
+import { appointmentsHref } from '@/lib/appointments-link';
 
 interface SearchResult {
   id: string;
@@ -38,7 +40,7 @@ async function searchEverything(query: string): Promise<SearchResult[]> {
         type: 'patient',
         title: `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || patient.name || 'Unknown Patient',
         subtitle: patient.phone || patient.email,
-        description: `Patient • ${patient.gender || 'Unknown'} • ${formatAge(patient)}`,
+        description: `Patient • ${patient.gender ? enumLabel('gender', patient.gender) : 'Sex not recorded'} • ${formatAge(patient)}`,
         icon: Users,
         href: `/dashboard/patients?search=${encodeURIComponent(patient.id)}`,
       });
@@ -56,9 +58,9 @@ async function searchEverything(query: string): Promise<SearchResult[]> {
         type: 'appointment',
         title: `${patientName} - ${appointment.slot}`,
         subtitle: `Dr. ${doctorName}`,
-        description: `Appointment • ${displayUtcDate(appointment.date)} • ${appointment.visitType || 'OPD'}`,
+        description: `Appointment • ${displayUtcDate(appointment.date)} • ${enumLabel('visitType', appointment.visitType || 'OPD')}`,
         icon: Calendar,
-        href: `/dashboard/appointments`,
+        href: appointmentsHref(String(appointment.date || '').slice(0, 10), appointment.doctorId),
       });
     }
   } catch (e) {
@@ -72,7 +74,7 @@ async function searchEverything(query: string): Promise<SearchResult[]> {
         type: 'user',
         title: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || 'Unknown User',
         subtitle: user.email,
-        description: `${user.role || 'User'} • ${user.specialization || 'General'}`,
+        description: `${user.role ? enumLabel('role', user.role) : 'User'} • ${user.specialization || 'General'}`,
         icon: User,
         href: `/dashboard/users?search=${encodeURIComponent(user.id)}`,
       });
