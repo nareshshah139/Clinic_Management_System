@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { AppointmentStatus, PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
 import { readFileSync } from 'fs';
@@ -70,11 +70,32 @@ databaseTests('Review booking on PostgreSQL', () => {
     expect(await reviews(visit.id)).toEqual(['2099-03-05 09:00-09:30 CANCELLED', '2099-03-06 09:00-09:30 SCHEDULED']);
   }, 60000);
 
-  it('rejects a second live review for one visit at the database', async () => {
+  const reviewRow = async (visitId: string, slot: string, status: AppointmentStatus = 'SCHEDULED') => {
+    const { followUp } = await db.visit.findUniqueOrThrow({ where: { id: visitId } });
+    return db.appointment.create({ data: { patientId: 'patient', doctorId: 'doctor', date: followUp!, branchId: 'branch', reviewOfVisitId: visitId, slot, status } });
+  };
+
+  it('rejects a second open review for one visit at the database', async () => {
     const visit = await visitFor('2099-03-07');
-    const row = { patientId: 'patient', doctorId: 'doctor', date: new Date('2099-03-07'), branchId: 'branch', reviewOfVisitId: visit.id };
-    await db.appointment.create({ data: { ...row, slot: '09:00-09:30' } });
-    await expect(db.appointment.create({ data: { ...row, slot: '10:00-10:30' } })).rejects.toMatchObject({ code: 'P2002' });
-    await expect(db.appointment.create({ data: { ...row, slot: '11:00-11:30', status: 'CANCELLED' } })).resolves.toMatchObject({ status: 'CANCELLED' });
+    await reviewRow(visit.id, '09:00-09:30');
+    for (const status of ['SCHEDULED', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS'] as const) {
+      await expect(reviewRow(visit.id, '10:00-10:30', status)).rejects.toMatchObject({ code: 'P2002' });
+    }
   });
+
+  it('allows a new open review beside cancelled, missed and completed ones', async () => {
+    const visit = await visitFor('2099-03-10');
+    await reviewRow(visit.id, '09:00-09:30', 'CANCELLED');
+    await reviewRow(visit.id, '09:30-10:00', 'NO_SHOW');
+    await reviewRow(visit.id, '10:00-10:30', 'COMPLETED');
+    await expect(reviewRow(visit.id, '10:30-11:00')).resolves.toMatchObject({ status: 'SCHEDULED' });
+  });
+
+  it('books the new review date after a missed review and records the date it was booked for', async () => {
+    const visit = await visitFor('2099-03-08');
+    await db.appointment.create({ data: { patientId: 'patient', doctorId: 'doctor', date: new Date('2099-03-01'), branchId: 'branch', reviewOfVisitId: visit.id, slot: '09:00-09:30', status: 'NO_SHOW', reviewRequestedFor: new Date('2099-03-01') } });
+    expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+    const open = await db.appointment.findFirstOrThrow({ where: { reviewOfVisitId: visit.id, status: 'SCHEDULED' } });
+    expect(open.reviewRequestedFor?.toISOString().slice(0, 10)).toBe('2099-03-08');
+  }, 60000);
 });

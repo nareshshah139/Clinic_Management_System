@@ -369,8 +369,9 @@ model Appointment {
   visit         Visit?
   reviewOfVisitId String?
   reviewOfVisit   Visit?          @relation("VisitReviewAppointments", fields: [reviewOfVisitId], references: [id], onDelete: SetNull)
+  reviewRequestedFor DateTime?    @db.Date
 
-  // At most one non-cancelled review per visit: a partial unique index Prisma cannot express, made in migration 20261114100000_appointment_review_of_visit.
+  // At most one open review per visit: a partial unique index Prisma cannot express, made in migration 20261114100000_appointment_review_of_visit.
   @@unique([branchId, doctorId, date, tokenNumber], map: "appointments_doctor_day_token_key")
   @@index([reviewOfVisitId])
   @@map("appointments")

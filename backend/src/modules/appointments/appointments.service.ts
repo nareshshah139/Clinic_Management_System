@@ -138,10 +138,10 @@ export class AppointmentsService {
    */
   async bookInTransaction(
     tx: Prisma.TransactionClient,
-    dto: CreateAppointmentDto & { reviewOfVisitId?: string },
+    dto: CreateAppointmentDto & { reviewOfVisitId?: string; reviewRequestedFor?: string },
     branchId: string,
   ) {
-    const { patientId, doctorId, roomId, date, slot, visitType, notes, source, reviewOfVisitId, calendar = 'SCHEDULED', allowOverbook = false } = dto;
+    const { patientId, doctorId, roomId, date, slot, visitType, notes, source, reviewOfVisitId, reviewRequestedFor, calendar = 'SCHEDULED', allowOverbook = false } = dto;
     await this.lockSchedule(tx, branchId, doctorId, roomId ?? null, date);
     await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId, { allowOverbook, calendar });
     const tokenNumber = await this.nextDoctorToken(tx, branchId, doctorId, date);
@@ -157,6 +157,7 @@ export class AppointmentsService {
         notes,
         source,
         reviewOfVisitId,
+        reviewRequestedFor: reviewRequestedFor ? new Date(reviewRequestedFor) : undefined,
         branchId,
         tokenNumber,
         status: statusEnteringCalendar(calendar),
