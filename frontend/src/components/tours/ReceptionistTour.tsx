@@ -889,7 +889,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <p>"Book for today" puts the patient on today's list. Choose "Register only" to just save them.</p>
           </div>
         `,
-        position: 'left',
+        position: 'bottom',
       },
       {
         element: '[data-tour="search-patients"]',
@@ -924,7 +924,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <ul class="list-disc pl-5 space-y-1 text-sm">
               <li>Always verify patient contact information during check-in</li>
               <li>Keep emergency contact details updated</li>
-              <li>Note any changes in allergies or medical conditions</li>
+              <li>Check the phone number and age when the patient comes back</li>
               <li>Use the search feature to avoid creating duplicate records</li>
             </ul>
           </div>
