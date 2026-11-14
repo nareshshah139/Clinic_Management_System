@@ -367,8 +367,13 @@ model Appointment {
   room          Room?             @relation(fields: [roomId], references: [id])
   newInvoices   NewInvoice[]
   visit         Visit?
+  reviewOfVisitId String?
+  reviewOfVisit   Visit?          @relation("VisitReviewAppointments", fields: [reviewOfVisitId], references: [id], onDelete: SetNull)
+  reviewRequestedFor DateTime?    @db.Date
 
+  // At most one pending (Scheduled or Confirmed) review per visit: a partial unique index Prisma cannot express, made in migration 20261114100000_appointment_review_of_visit.
   @@unique([branchId, doctorId, date, tokenNumber], map: "appointments_doctor_day_token_key")
+  @@index([reviewOfVisitId])
   @@map("appointments")
 }
 
@@ -415,6 +420,7 @@ model Visit {
   doctor           User              @relation(fields: [doctorId], references: [id])
   patient          Patient           @relation(fields: [patientId], references: [id])
   visitAttachments VisitAttachment[]
+  reviewAppointments Appointment[] @relation("VisitReviewAppointments")
 
   @@index([patientId])
   @@index([doctorId])

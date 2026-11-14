@@ -158,13 +158,13 @@ describe('AppointmentsService.create', () => {
 
     // Transaction mocks
     txMock.appointment.findFirst.mockResolvedValue({ tokenNumber: 5 });
-    txMock.appointment.create.mockResolvedValue({
+    txMock.appointment.create.mockImplementation(async ({ data }: any) => ({
+      ...data,
       id: 'apt-1',
-      tokenNumber: 6,
       patient: { id: 'patient-1', name: 'Pat', phone: '9999999999', email: 'p@example.com' },
       doctor: { id: 'doctor-1', firstName: 'Do', lastName: 'Ctor', email: 'd@example.com' },
       room: { id: 'room-1', name: 'Room A', type: 'OPD' },
-    });
+    }));
     prismaMock.user.findUnique.mockResolvedValue({ id: 'doctor-1', metadata: '{}' });
     prismaMock.branch.findUnique.mockResolvedValue({ name: 'Main Branch', phone: '9999999999' });
 
@@ -177,6 +177,8 @@ describe('AppointmentsService.create', () => {
     expect(result).toBeTruthy();
     expect(txMock.appointment.create).toHaveBeenCalled();
     expect(notificationsMock.sendEmail).toHaveBeenCalledTimes(1);
+    expect(notificationsMock.sendEmail.mock.calls[0][0]).toMatchObject({ to: 'p@example.com', subject: 'Appointment Confirmation' });
+    expect(notificationsMock.sendEmail.mock.calls[0][0].text).toMatch(/^Appointment confirmed with Dr\. Do Ctor on \d{1,2} \w{3} \d{4} at 10:00-10:30\. Token #6\.$/);
   });
 });
 

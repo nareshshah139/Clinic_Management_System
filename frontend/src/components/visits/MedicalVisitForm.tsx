@@ -64,6 +64,10 @@ import type VisitPhotosPanel from '@/components/visits/VisitPhotos';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
+import { ToastAction } from '@/components/ui/toast';
+import { appointmentsHref } from '@/lib/appointments-link';
+import { reviewBookingMessage, type ReviewBooking } from '@/lib/review-booking';
 import { isUuid } from '@/lib/id';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
@@ -1515,6 +1519,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       acknowledgeMutationVersion((visit as VisitDetails).version);
       editBaselineRef.current = savedSignature;
       if ((complete || requireLatest) && newerChanges) throw new Error('New changes were entered while saving. Please save again before completing or exporting.');
+      let reviewOutcome: ReviewBooking | undefined;
       if (complete) {
         const completePayload: Record<string, unknown> = { version: visitVersionRef.current };
         if (reviewDate) completePayload.followUpDate = reviewDate;
@@ -1522,6 +1527,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         const idemKey = buildIdempotencyKey('POST', completeId, completePayload as any);
         const completedVisit = await apiClient.completeVisit(completeId, completePayload, { idempotencyKey: idemKey });
         if (completedVisit.status !== 'COMPLETED') throw new Error('The server did not confirm visit completion. Please retry.');
+        reviewOutcome = (completedVisit as { reviewAppointment?: ReviewBooking }).reviewAppointment;
         track('visit_completed', { follow_up_set: Boolean(reviewDate) });
         setVisitStatus(completedVisit.status);
         acknowledgeMutationVersion(completedVisit.version);
@@ -1540,12 +1546,25 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         latestDraftWriter.current(!newerChanges);
       }
       
+      const review = complete ? reviewBookingMessage(reviewOutcome, reviewDate) : null;
       toast({
-        variant: 'success',
+        variant: review?.tone ?? 'success',
         title: complete ? 'Visit completed' : newerChanges ? 'Earlier changes saved' : 'Visit saved',
-        description: complete
-          ? 'All documentation has been marked complete.'
-          : newerChanges ? 'New edits are still waiting to save.' : 'Your draft was saved safely.',
+        description: review
+          ? review.text
+          : complete
+            ? 'All documentation has been marked complete.'
+            : newerChanges ? 'New edits are still waiting to save.' : 'Your draft was saved safely.',
+        ...(review?.linkDate
+          ? {
+              className: 'flex-col items-start gap-3 space-x-0',
+              action: (
+                <ToastAction altText="Open Appointments" asChild>
+                  <Link href={appointmentsHref(review.linkDate, doctorId, patientId)}>Open Appointments</Link>
+                </ToastAction>
+              ),
+            }
+          : {}),
       });
       setSaveStatus(newerChanges ? 'unsaved' : 'saved');
       setLastSavedAt(Date.now());

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { VisitsController } from '../visits.controller';
 import { VisitsService } from '../visits.service';
+import { ReviewBookingService } from '../review-booking';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { Language } from '@prisma/client';
 import { BadRequestException } from '@nestjs/common';
@@ -46,6 +47,8 @@ describe('VisitsController', () => {
     remove: jest.fn(),
   } as Record<string, jest.Mock>;
 
+  const mockReviewBooking = { book: jest.fn() };
+
   const mockRequest = {
     user: {
       id: 'user-123',
@@ -62,6 +65,7 @@ describe('VisitsController', () => {
           provide: VisitsService,
           useValue: mockVisitsService,
         },
+        { provide: ReviewBookingService, useValue: mockReviewBooking },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -326,15 +330,17 @@ describe('VisitsController', () => {
       };
 
       mockVisitsService.complete.mockResolvedValue(mockCompletedVisit);
+      mockReviewBooking.book.mockResolvedValue({ status: 'full', date: '2024-12-30' });
 
       const result = await controller.complete(visitId, completeDto, mockRequest as any);
 
-      expect(result).toEqual(mockCompletedVisit);
+      expect(result).toEqual({ ...mockCompletedVisit, reviewAppointment: { status: 'full', date: '2024-12-30' } });
       expect(service.complete).toHaveBeenCalledWith(
         visitId,
         completeDto,
         mockRequest.user.branchId,
       );
+      expect(mockReviewBooking.book).toHaveBeenCalledWith(visitId, mockRequest.user.branchId, mockRequest.user.id);
     });
   });
 

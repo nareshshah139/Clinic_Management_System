@@ -57,6 +57,15 @@ describe('AppointmentsCalendar booking flow', () => {
   });
 });
 
+describe('AppointmentsCalendar prefilled patient', () => {
+  it('names a patient who only has a full name in the Selected chip', async () => {
+    const { apiClient } = jest.requireMock('@/lib/api');
+    apiClient.getPatient.mockResolvedValueOnce({ id: 'p1', name: 'Zz Review Round2', phone: '919000099127' });
+    render(<AppointmentsCalendar prefillPatientId="p1" controlledDoctorId="d1" controlledDate="2099-01-01" hideHeaderControls />);
+    expect(await screen.findByText('Selected: Zz Review Round2 — 919000099127')).toBeInTheDocument();
+  });
+});
+
 describe('AppointmentsCalendar room filter', () => {
   const roomFilterShown = async (readsRooms: boolean) => {
     const { unmount } = render(<AppointmentsCalendar controlledDoctorId="d1" controlledDate="2099-01-01" hideHeaderControls readsRooms={readsRooms} />);

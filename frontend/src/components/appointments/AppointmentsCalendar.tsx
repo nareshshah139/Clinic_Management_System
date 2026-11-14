@@ -32,6 +32,9 @@ interface AppointmentsCalendarProps {
   readsRooms?: boolean;
 }
 
+const patientName = (patient: Pick<Patient, 'name' | 'firstName' | 'lastName'>) =>
+  patient.name?.trim() || `${patient.firstName ?? ''} ${patient.lastName ?? ''}`.trim();
+
 /**
  * @cc [owner:nareshshah139,label:accessibility] appointment-booking-success-feedback
  * A successful booking MUST display its patient and slot details using the success palette
@@ -560,7 +563,7 @@ export default function AppointmentsCalendar({
           {selectedPatient && (
             <div className="flex items-center gap-2">
               <Badge variant="secondary">
-                Selected: {selectedPatient.firstName} {selectedPatient.lastName} — {selectedPatient.phone}
+                Selected: {patientName(selectedPatient)} — {selectedPatient.phone}
               </Badge>
               <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); setQuickCreateOpen(false); }}>Clear</Button>
             </div>
@@ -691,7 +694,7 @@ export default function AppointmentsCalendar({
         onPatientCreated={(patient) => {
           setSelectedPatientId(patient.id);
           setSelectedPatient(patient);
-          setPatientSearch(`${patient.firstName ?? ''} ${patient.lastName ?? ''} — ${patient.phone ?? ''}`.trim());
+          setPatientSearch(`${patientName(patient)} — ${patient.phone ?? ''}`.trim());
           setPatients([]);
           setQuickCreateOpen(false);
           setAutoPromptedForSearch(false);
