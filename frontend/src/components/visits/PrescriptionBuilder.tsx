@@ -27,7 +27,7 @@ import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
-import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
+import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, frequencyLabel, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
 import { printedMedicineName } from '@/lib/medicine-names';
 import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
@@ -2535,7 +2535,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     { label: '1-0-1', pattern: '1-0-1' },
     { label: '0-1-0', pattern: '0-1-0' },
     { label: '1-1-1', pattern: '1-1-1' },
-    { label: 'Night', frequency: 'ONCE_DAILY' },
+    { label: 'Night', pattern: '0-0-1' },
   ];
   const durationPresets: Array<{ label: string; duration: number; unit: DurationUnit }> = [
     { label: '5d', duration: 5, unit: 'DAYS' },
@@ -5281,7 +5281,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 <SelectTrigger className={rxSelect} aria-label={`Frequency for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="Frequency" /></SelectTrigger>
                                 <SelectContent>
                                   {Array.from(new Set([...dosePatternOptions, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
-                                    <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                                    <SelectItem key={p} value={p}>{frequencyLabel(p)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
@@ -6677,7 +6677,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 <SelectTrigger className={rxSelect} aria-label={`Dose pattern for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="Pattern" /></SelectTrigger>
                                 <SelectContent>
                                   {dosePatternOptions.map(p => (
-                                    <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                                    <SelectItem key={p} value={p}>{frequencyLabel(p)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
@@ -6692,7 +6692,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 <SelectTrigger className={rxSelect} aria-label={`Frequency for ${rowDescription(it.drugName, idx)}`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {frequencyOptions.map(f => (
-                                    <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
+                                    <SelectItem key={f} value={f}>{frequencyLabel(f)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
