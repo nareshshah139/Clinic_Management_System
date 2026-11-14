@@ -354,7 +354,7 @@ export function InventoryWorkspace() {
               Supplier returns are now in Purchase bills › Returns
             </button>
           )}
-          {moreTasks.length > 0 && <NativeSelect aria-label="More inventory tasks" className="max-w-72"
+          {moreTasks.length > 0 && <NativeSelect aria-label="More inventory tasks" className="h-10 max-w-72"
             value={moreTasks.some(([id]) => id === view) ? view : ""} onChange={event => switchTask(event.target.value)}>
             <option value="" disabled>More tasks…</option>
             {moreTasks.map(([id, label]) => <option key={id} value={id}>{taskLabel(id, label)}</option>)}

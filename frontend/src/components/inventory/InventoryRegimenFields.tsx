@@ -9,7 +9,7 @@ type Values = {
   defaultInstructions?: string | null;
 };
 export function InventoryRegimenFields({ value, onChange }: { value: Values; onChange: (patch: Values) => void }) {
-  const inputClass = 'mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+  const inputClass = 'mt-1 h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
   return <fieldset className="space-y-3 rounded-md border p-4">
     <legend className="px-1 text-sm font-semibold">Prescription defaults (optional)</legend>
     <p className="text-sm text-muted-foreground">Suggested only when this medicine has no prescriptions in the last 12 months. Leave blank for no default.</p>
@@ -19,7 +19,7 @@ export function InventoryRegimenFields({ value, onChange }: { value: Values; onC
           onChange={event => onChange({ defaultDuration: event.target.value, defaultDurationUnit: value.defaultDurationUnit || 'DAYS' })} />
       </label>
       <label className="text-sm">Default duration unit
-        <NativeSelect className="mt-1 w-full" value={value.defaultDurationUnit || 'DAYS'} onChange={event => onChange({ defaultDurationUnit: event.target.value })}>
+        <NativeSelect className="mt-1 h-10 w-full" value={value.defaultDurationUnit || 'DAYS'} onChange={event => onChange({ defaultDurationUnit: event.target.value })}>
           <option value="DAYS">Days</option><option value="WEEKS">Weeks</option><option value="MONTHS">Months</option><option value="YEARS">Years</option>
         </NativeSelect>
       </label>

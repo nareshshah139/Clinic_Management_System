@@ -114,7 +114,7 @@ export function FilterSelect({
   return (
     <label className={cn('flex flex-col gap-1', filterLabelClass)}>
       {label}
-      <NativeSelect className="h-10 max-w-[8.5rem]" value={value} onChange={(event) => onChange(event.target.value)}>
+      <NativeSelect className="h-10 max-w-40" value={value} onChange={(event) => onChange(event.target.value)}>
         {allLabel !== undefined && <option value="">{allLabel}</option>}
         {options.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>

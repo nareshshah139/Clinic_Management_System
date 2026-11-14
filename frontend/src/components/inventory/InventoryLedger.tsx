@@ -148,7 +148,7 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
 
   return (
     <section aria-label="Stock ledger" className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card p-4 md:grid-cols-[auto_auto_minmax(14rem,1fr)_minmax(10rem,13rem)_auto] md:items-end">
+      <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card p-4 md:grid-cols-[auto_auto_minmax(14rem,1fr)_minmax(12rem,15rem)_auto] md:items-end">
         <label className="grid gap-1 text-sm font-medium">From
           <input type="date" className={inputClass} value={from} max={to} onChange={e => e.target.value && navigate({ ledgerFrom: e.target.value, ledgerPage: "" })} />
         </label>
