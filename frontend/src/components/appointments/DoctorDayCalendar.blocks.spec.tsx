@@ -108,10 +108,12 @@ describe('DoctorDayCalendar appointment blocks', () => {
     expect(await screen.findByRole('button', { name: /^Ravi Kumar, / })).toBeDisabled();
   });
 
-  it('still opens details through the INFO control', async () => {
+  it('still opens details through the Details control', async () => {
     renderDay([appointment('a1', '10:00-10:30', 'Ravi Kumar', AppointmentStatus.CONFIRMED)]);
     await screen.findByText('Ravi Kumar', calendarName);
-    fireEvent.click(screen.getByTitle('View Appointment Details'));
+    expect(screen.getByRole('button', { name: 'Start visit for Ravi Kumar' })).toHaveTextContent(/^Start visit$/);
+    expect(screen.getByRole('button', { name: 'Reschedule Ravi Kumar' })).toHaveTextContent(/^Reschedule$/);
+    fireEvent.click(screen.getByRole('button', { name: 'Details for Ravi Kumar' }));
     expect(await screen.findByRole('dialog')).toHaveTextContent('Ravi Kumar');
   });
 

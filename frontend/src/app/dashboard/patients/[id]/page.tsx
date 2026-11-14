@@ -18,6 +18,7 @@ import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { Calendar, Users, ArrowLeft } from 'lucide-react';
+import { enumLabel } from '@/lib/labels';
 
 type NextAppointment = { date: string; slot: string; doctor?: { firstName?: string; lastName?: string } | null };
 
@@ -206,10 +207,9 @@ export default function PatientDetailsPage() {
             <div>
               <PageHeader title={<>{patientName || 'Patient'}</>} />
               <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
-                <Badge variant="secondary">ID: {patient.id}</Badge>
                 {patient.patientCode && <Badge variant="secondary">Code: {patient.patientCode}</Badge>}
                 {patient.abhaId && <Badge variant="outline">ABHA: {patient.abhaId}</Badge>}
-                {patient.gender && <Badge variant="outline">{patient.gender}</Badge>}
+                {patient.gender && <Badge variant="outline">{enumLabel('gender', patient.gender)}</Badge>}
                 {calculateAge(patient) !== null && <Badge variant="outline">{calculateAge(patient)} yrs</Badge>}
               </div>
             </div>
@@ -274,7 +274,7 @@ export default function PatientDetailsPage() {
               <CardTitle>Patient Information</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div><span className="text-muted-foreground">Gender:</span> <span className="text-foreground">{patient.gender || '—'}</span></div>
+              <div><span className="text-muted-foreground">Gender:</span> <span className="text-foreground">{patient.gender ? enumLabel('gender', patient.gender) : '—'}</span></div>
               <div><span className="text-muted-foreground">Age:</span> <span className="text-foreground">{formatAge(patient)}</span></div>
               <div><span className="text-muted-foreground">Phone:</span> <span className="text-foreground">{patient.phone || '—'}</span></div>
               <div><span className="text-muted-foreground">Email:</span> <span className="text-foreground">{patient.email || '—'}</span></div>

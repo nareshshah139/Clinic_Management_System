@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ClinicalHistoryDetails, hasClinicalValue } from './ClinicalHistoryDetails';
 import { encounterDay } from '@/lib/patient-history';
 import { cn } from '@/lib/utils';
+import { enumLabel } from '@/lib/labels';
 import {
   Calendar,
   Camera,
@@ -126,7 +127,7 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
   const raw = visit as Record<string, any>;
   const scribe = parseJsonObject<Record<string, unknown>>(visit.scribeJson) || {};
   const day = encounterDay(raw);
-  const visitTypeLabel = extractTextFromUnknown(scribe.visitType, []) || visit.visitType || undefined;
+  const visitTypeLabel = extractTextFromUnknown(scribe.visitType, []) || (visit.visitType ? enumLabel('visitType', visit.visitType) : undefined);
   const photoPreviews = Array.isArray(raw.photoPreviewUrls) ? raw.photoPreviewUrls.map(normalizeAssetUrl) : [];
   const issued = [raw.prescriptionItems, raw.prescription?.items].map(asRecordList).find((items) => items.length > 0) || [];
   const planItems = asRecordList(planDermatology(raw.plan)?.medicationPlan);

@@ -25,6 +25,7 @@ import { overbookFlag } from '@/lib/overbooking';
 import { AppointmentStatus } from '@cms/shared-types';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import { CALENDARS, type SlotChoice } from './appointment-calendars';
+import { enumLabel } from '@/lib/labels';
 
 // Stable fallback to avoid recreating default objects each render
 const DEFAULT_TIME_SLOT_CONFIG: TimeSlotConfig = {
@@ -678,7 +679,7 @@ export default function AppointmentScheduler({
                     <div className="font-medium text-success-text">✓ Selected Patient</div>
                     <div className="text-success-text font-medium">{formatPatientName(selectedPatient)}</div>
                     <div className="mt-1 flex items-center gap-3 text-xs text-success-text">
-                      <span>ID: {selectedPatient.id}</span>
+                      {selectedPatient.patientCode && <span className="font-mono">{selectedPatient.patientCode}</span>}
                       {selectedPatient.phone && <span>📞 {selectedPatient.phone}</span>}
                       {selectedPatient.email && <span>✉️ {selectedPatient.email}</span>}
                     </div>
@@ -724,7 +725,7 @@ export default function AppointmentScheduler({
                   >
                     <div className="font-medium">{formatPatientName(p)}</div>
                     <div className="text-xs text-muted-foreground flex items-center gap-3">
-                      <span>ID: {p.id}</span>
+                      {p.patientCode && <span className="font-mono">{p.patientCode}</span>}
                       {p.phone && <span>📞 {p.phone}</span>}
                       {p.email && <span>✉️ {p.email}</span>}
                     </div>
@@ -768,7 +769,7 @@ export default function AppointmentScheduler({
                     {bookingDetails.patient?.name || selectedPatient?.name || 'Unknown Patient'} 
                     {' '} scheduled for {bookingDetails.slot}
                     {bookingDetails.room && ` in ${bookingDetails.room.name}`}
-                    {bookingDetails.visitType && ` (${bookingDetails.visitType})`}
+                    {bookingDetails.visitType && ` (${enumLabel('visitType', bookingDetails.visitType)})`}
                   </p>
                 </div>
               </div>

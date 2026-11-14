@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Fragment, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { enumLabel } from "@/lib/labels";
 import { useDashboardUser } from "./dashboard-user-context";
 import { usePendingItemRequestCount } from "@/components/inventory/use-pending-item-requests";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
@@ -301,7 +302,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                   "Unknown User"}
             </p>
             <p className="text-xs text-[var(--muted-foreground)]">
-              {role ?? "Unknown Role"}
+              {role ? enumLabel("role", role) : "Unknown Role"}
             </p>
           </div>
           <button

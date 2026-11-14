@@ -72,7 +72,7 @@ describe('DoctorDayCalendar with a per-doctor overbooking limit', () => {
     async function startMove(limit: number) {
       renderDay([appointment('a1', '11:00-11:30', 'Ravi Kumar'), appointment('a2', '15:00-15:30', 'Priya Nair')], limit);
       await screen.findByText('Priya Nair', { selector: '[data-appointment-block] [data-patient-name]' });
-      fireEvent.click(screen.getAllByTitle('Reschedule Appointment')[1]);
+      fireEvent.click(screen.getByRole('button', { name: 'Reschedule Priya Nair' }));
       fireEvent.click(await scheduled().findByRole('button', { name: /^Move to 11:00-11:30/ }));
     }
 

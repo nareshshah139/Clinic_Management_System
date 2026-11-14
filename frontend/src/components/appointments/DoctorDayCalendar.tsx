@@ -33,6 +33,8 @@ import { CALENDARS, CALENDAR_ORDER, canMove, type SlotChoice } from './appointme
 import CalendarColumn, { type SlotAction } from './CalendarColumn';
 import { AppointmentBillDialog } from './AppointmentBillDialog';
 import { BILL_TYPE_LABEL, billingChip } from './appointment-billing-view';
+import { enumLabel } from '@/lib/labels';
+import { statusLabel } from '@/lib/status-variants';
 
 const NO_BILL_ACCESS: ClinicBillAccess = { read: false, createBill: false, takePayment: false, editFees: false };
 
@@ -559,7 +561,7 @@ function DoctorDayCalendarForSelection({
                 <div><span className="text-muted-foreground">Age:</span> {selectedAppointment.patient.age} years</div>
               )}
               {selectedAppointment.patient?.gender && (
-                <div><span className="text-muted-foreground">Sex:</span> {selectedAppointment.patient.gender}</div>
+                <div><span className="text-muted-foreground">Sex:</span> {enumLabel('gender', selectedAppointment.patient.gender)}</div>
               )}
               {selectedAppointment.billType && (
                 <div><span className="text-muted-foreground">Bill type:</span> {BILL_TYPE_LABEL[selectedAppointment.billType]}</div>
@@ -585,7 +587,7 @@ function DoctorDayCalendarForSelection({
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">Type:</span>
                 <Badge variant={selectedAppointment.visitType === 'PROCEDURE' ? 'destructive' : selectedAppointment.visitType === 'TELEMED' ? 'secondary' : 'default'}>
-                  {selectedAppointment.visitType || 'OPD'}
+                  {enumLabel('visitType', selectedAppointment.visitType || 'OPD')}
                 </Badge>
               </div>
               {selectedAppointment.visitType === 'PROCEDURE' && selectedAppointment.notes && (
@@ -595,7 +597,7 @@ function DoctorDayCalendarForSelection({
                 <div><span className="text-muted-foreground">Room:</span> {selectedAppointment.room.name} ({selectedAppointment.room.type})</div>
               )}
               {selectedAppointment.status && (
-                <div><span className="text-muted-foreground">Status:</span> {selectedAppointment.status}</div>
+                <div><span className="text-muted-foreground">Status:</span> {statusLabel('appointment', selectedAppointment.status)}</div>
               )}
             </div>
           )}
@@ -662,7 +664,7 @@ function DoctorDayCalendarForSelection({
                 <div><span className="font-medium">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
                 <div><span className="font-medium">Date:</span> {date}</div>
                 <div><span className="font-medium">Time:</span> {selectedAppointment.slot}</div>
-                <div><span className="font-medium">Type:</span> {selectedAppointment.visitType}</div>
+                <div><span className="font-medium">Type:</span> {enumLabel('visitType', selectedAppointment.visitType || 'OPD')}</div>
               </div>
             </div>
           )}
