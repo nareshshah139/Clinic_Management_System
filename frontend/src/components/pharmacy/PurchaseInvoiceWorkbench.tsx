@@ -3627,7 +3627,7 @@ function PurchaseInvoiceEditor({
         : !access.review || !access.create
           ? "Confirming this invoice requires create and review permissions."
           : !catalogueReady
-            ? `${checksRemaining} ${checksRemaining === 1 ? "check" : "checks"} left.`
+            ? "Resolve the product checks before adding stock."
             : invalidReviewValues.length > 0
               ? invalidReviewValues[0]
               : hardOcrFlags.length > 0
@@ -3685,9 +3685,10 @@ function PurchaseInvoiceEditor({
       {batchState.kind === 'applied' && <Button type="button" variant="outline" disabled={batchDisabled || batchState.invoiceId !== editingId} onClick={undoShared}>Undo shared terms</Button>}
     </div>
   </details>;
+  const showPostingGuidance = !stockAdded && !stockStatusUnknown && activeInvoice?.status !== 'CANCELLED' && hasDraftContent;
   const invoiceActions = (
     <section aria-label="Invoice actions" className="sticky bottom-0 z-20 space-y-2 border-t bg-background py-3">
-      {!stockAdded && !stockStatusUnknown && activeInvoice?.status !== 'CANCELLED' && hasDraftContent && <p id="purchase-posting-guidance" className="text-sm">{editingChecks && postingBlocker ? <>{postingBlocker}{!checkStops.length && <> <a className="underline underline-offset-4" href="#purchase-review-checklist" onClick={event => { event.preventDefault(); focusPurchaseField('purchase-review-checklist'); }}>Review checks</a></>}</> : <>Confirm values against the original. {!access.commit ? 'Saves review; stock stays unchanged.' : linkedReceipt ? 'Posts bill; no stock added again.' : 'Adds the received quantities to stock.'}</>}</p>}
+      {showPostingGuidance && <p id="purchase-posting-guidance" className="text-sm">{editingChecks && postingBlocker ? <>{postingBlocker}{!checkStops.length && <> <a className="underline underline-offset-4" href="#purchase-review-checklist" onClick={event => { event.preventDefault(); focusPurchaseField('purchase-review-checklist'); }}>Review checks</a></>}</> : <>Confirm values against the original. {!access.commit ? 'Saves review; stock stays unchanged.' : linkedReceipt ? 'Posts bill; no stock added again.' : 'Adds the received quantities to stock.'}</>}</p>}
       <div className="flex flex-wrap items-center gap-2">
         {stockStatusUnknown ? (
           <Button variant="outline" onClick={() => unknownStockInvoiceId && refreshStockStatus(unknownStockInvoiceId)} disabled={busy}>Refresh stock status</Button>
@@ -3702,7 +3703,7 @@ function PurchaseInvoiceEditor({
         ) : canReview && !access.commit && !access.create ? (
           <Button onClick={reviewInvoice} disabled={busy}>Mark Reviewed</Button>
         ) : !activeInvoice || editingSelectedInvoice ? (
-          <Button className="h-auto min-h-10 max-w-full whitespace-normal text-left" onClick={() => saveAndPostInvoice(access.commit)} disabled={busy || !!postingBlocker} aria-busy={busy} aria-label={access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"} aria-describedby="purchase-posting-guidance">
+          <Button className="h-auto min-h-10 max-w-full whitespace-normal text-left" onClick={() => saveAndPostInvoice(access.commit)} disabled={busy || !!postingBlocker} aria-busy={busy} aria-label={access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"} aria-describedby={showPostingGuidance ? "purchase-posting-guidance" : undefined}>
             {busy && <Spinner className="h-4 w-4 " />}
             {access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"}
           </Button>

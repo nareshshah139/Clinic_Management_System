@@ -2704,6 +2704,10 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.change(screen.getByLabelText('Product'), { target: { value: drug.name } });
     fireEvent.change(screen.getByLabelText('Rate'), { target: { value: '92' } });
     expect(screen.getByLabelText('CGST %')).toHaveValue(6);
+    const commit = screen.getByRole('button', { name: 'Confirm reviewed values & add stock' });
+    await waitFor(() => expect(document.getElementById('purchase-posting-guidance')).toHaveTextContent('Resolve the product checks before adding stock.'));
+    expect(document.getElementById('purchase-posting-guidance')).not.toHaveTextContent('checks left');
+    expect(commit).toHaveAttribute('aria-describedby', 'purchase-posting-guidance');
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm Match' }));
     await waitFor(() => expect(screen.getByLabelText('Stock unit')).toHaveValue('Tube'));
     expect(api.confirmPharmacyPurchaseMaster).toHaveBeenCalledWith(expect.objectContaining({ action: 'MATCH_EXISTING', drugId: 'drug-tr', item: expect.objectContaining({ packSize: '', packUnitType: '' }) }));
@@ -2731,6 +2735,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.queryByText(/is missing\./)).not.toBeInTheDocument();
     expect(screen.queryByText('No saved supplier matches these details.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).not.toHaveAttribute('aria-describedby');
     fireEvent.change(screen.getByLabelText('Supplier name'), { target: { value: 'Apex Medico Agencies' } });
     expect(await screen.findByText(/checks to finish/)).toBeInTheDocument();
     expect(screen.getByLabelText('DL No.')).toHaveAttribute('aria-invalid', 'true');
