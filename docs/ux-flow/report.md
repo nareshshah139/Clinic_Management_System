@@ -67,7 +67,7 @@ Three journeys are still above their ideal:
 
 **Doctor.**
 - The landing page lists today's patients, next first, each with "Start visit" or "Continue visit".
-- The visit form opens on the Prescription tab with one blank medicine row ready.
+- The visit form opens on the Prescription tab with one blank medicine row ready. The complaint field is visible on arrival: its top sits at y=384 of an 850px window, where it was at y=1051. One header row replaced the page title, two badges, the identity bar, a stepper and a card, and the patient's details are stated once.
 - A visit completes with a complaint or a diagnosis. Photos, vitals and labs are optional. "Complete visit" saves the prescription itself; the "Go to Pharmacy?" dialog is gone.
 - The patient page opens on a "Last visit" panel: date, complaint, diagnosis, medicines, advice, and the last prescription. It has an "Edit" button.
 
