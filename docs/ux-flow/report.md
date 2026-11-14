@@ -36,7 +36,14 @@ One action is one click, one typed field, one selection or one key press. "Ideal
 
 Both columns come from `scripts/ux/journeys/run-all.cjs`, which replays every journey from a fresh seed and records each interaction through one counter. The files are `docs/ux-flow/scorecards/baseline.json` and `after.json`.
 
-Two caveats on the baseline. The demo data gave clinic bills statuses that the app never sets, which made the old dashboard show an overdue amount it would not show in real use. So j07's baseline of 3 is kinder to the old app than it deserves. And j10's critic reported a typed pack size being overwritten; that was the demo item's placeholder pack, not a defect.
+Read the numbers with four things in mind.
+
+- **The demo data changed once during the run.** Seeded clinic bills first carried statuses the app never sets. After that was corrected, I replayed the original journey scripts on the original code with the corrected data (`baseline-reseeded.json`). Nine journeys reproduce their original counts exactly. The tenth, j07, fails on the old code: with bills made the way the app makes them, the old dashboard cannot show who owes money. So j07's baseline of 3 is kinder to the old app than it deserves.
+- **Part of j03's saving is steps that are no longer required.** Seven of its 12 saved actions were the vitals, labs and photo steps. The owner decided those are optional, so the new script does not perform them.
+- **j06 is a slightly different task now.** The old script had to borrow a registered patient. The new one bills a walk-in by name and phone, as the owner decided.
+- **The "ideal" is a critic's estimate.** Three journeys now come in under it.
+
+Starting on the landing page costs no action in either column, which is why j07 can reach zero. j10's critic reported a typed pack size being overwritten; that was the demo item's placeholder pack, not a defect.
 
 Three journeys are still above their ideal:
 
@@ -55,7 +62,8 @@ Three journeys are still above their ideal:
 - "New patient" asks for name, phone, age and gender. It books today by default with the doctor preselected, and says the time and token. If today is full it saves the patient and offers "Book another day". It never books another day by itself.
 - The bill dialog closes after a successful save.
 - Scheduled rows have a one-click "Confirm".
-- The Slots tab is gone. It showed the same calendar and dialogs as Calendar.
+- The Slots tab is gone. It showed the same calendar and dialogs as Calendar. Its component and two test files went with it; the conflict, overbooking and late-response cases they covered are tested on the Calendar.
+- The header search finds patients, and appointments by patient name. It no longer lists staff or doctors.
 
 **Doctor.**
 - The landing page lists today's patients, next first, each with "Start visit" or "Continue visit".
@@ -100,7 +108,7 @@ Subtext was cut on the screens the ten journeys pass through. Inventory, Reports
 
 ## What the independent reviews caught
 
-Each unit was reviewed by a second agent on a stronger tier before it merged. Every finding below was reproduced on a running stack and fixed with a test that fails on the earlier code.
+Each unit was reviewed by a second agent on a stronger tier before it merged. Every finding below was reproduced on a running stack, and each fix came with tests. Five of the six fix rounds reported watching a new test fail on the earlier code; the patients round was asked to and did not say so. The reviewers' probe scripts and logs are in `docs/ux-flow/evidence/`; their screenshots were not committed.
 
 | Unit | Finding |
 |---|---|
@@ -141,6 +149,7 @@ A new check, `scripts/contracts/compare-attachment.cjs`, compares every product 
 - **A visit completes with a complaint or a diagnosis alone.** The option I offered said "and a prescription". That made advice-only, procedure and referral visits impossible to complete, which they were not before.
 - **A walk-in bill refuses a medicine marked prescription-only.** Nothing checked that flag at sale before. Until now such a medicine at least needed a registered patient.
 - **When a doctor removes every medicine from a saved prescription and completes, the prescription is cancelled.** The API refuses an empty prescription, and cancelling is its audited path.
+- **A clinic bill is due when its balance is above zero**, whatever its status. This is the rule the billing module's own outstanding list uses. A refund adds its amount back to the balance, so a refunded bill shows as due again for that amount.
 
 ## Rejected proposals
 

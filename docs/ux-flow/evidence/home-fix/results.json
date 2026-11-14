@@ -1,0 +1,110 @@
+{
+  "diagnostics": {
+    "status": 1,
+    "stdout": "{\"label\":\"daytime-doctor\",\"pass\":true,\"hasName\":true,\"hasSlot\":true,\"falseClock\":false,\"correctDay\":true}\n{\"label\":\"early-IST-doctor\",\"pass\":true,\"hasName\":true,\"hasSlot\":true,\"falseClock\":false,\"correctDay\":true}\n",
+    "stderr": "idn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:\n\n- A server/client branch `if (typeof window !== 'undefined')`.\n- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.\n- Date formatting in a user's locale which doesn't match the server.\n- External changing data without sending a snapshot of it along with the HTML.\n- Invalid HTML tag nesting.\n\nIt can also happen if the client has a browser extension installed which messes with the HTML before React loaded.\n\nhttps://react.dev/link/hydration-mismatch\n\n  ...\n    <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>\n      <LoadingBoundary loading={null}>\n        <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>\n          <RedirectBoundary>\n            <RedirectErrorBoundary router={{...}}>\n              <InnerLayoutRouter url=\"/dashboard\" tree={[...]} cacheNode={{lazyData:null, ...}} segmentPath={[...]}>\n                <SegmentViewNode type=\"page\" pagePath=\"dashboard/...\">\n                  <SegmentTrieNode>\n                  <ClientPageRoot Component={function DashboardPage} searchParams={{}} params={{}}>\n                    <DashboardPage params={Promise} searchParams={Promise}>\n                      <div className=\"space-y-6\">\n                        <PageHeader title=\"Good after...\" actions={false}>\n                          <header className=\"flex min-w...\">\n                            <div className=\"min-w-0 sp...\">\n                              <h1 className=\"text-2xl font-semibold tracking-tight text-foreground sm:text-3xl\">\n+                               Good afternoon\n-                               Good morning\n                        ...\n                ...\n              ...\n\nBrowser error: Cannot read properties of undefined (reading 'expectedTotal')\nCannot read properties of null (reading 'innerText')\n"
+  },
+  "blocker1:before": {
+    "landingCard": "Bills due |  | ₹3,810.00 |  | Aditya Bhosale | ₹2,360.00 | Rohan Kulkarni | ₹1,450.00",
+    "alertsTotal": 3810,
+    "alertsRows": [
+      "Aditya Bhosale 2360",
+      "Rohan Kulkarni 1450"
+    ]
+  },
+  "blocker1:target": {
+    "patient": "Ananya Joshi",
+    "slot": "10:30-10:45",
+    "appointmentId": "cuxappttoday0000000000003"
+  },
+  "blocker1:bill": {
+    "create": 201,
+    "total": 700,
+    "statusField": "DRAFT",
+    "pay": 201
+  },
+  "blocker1:after": {
+    "landingCard": "Bills due |  | ₹4,210.00 |  | Aditya Bhosale | ₹2,360.00 | Ananya Joshi | ₹400.00 | Rohan Kulkarni | ₹1,450.00",
+    "alertsTotal": 4210,
+    "alertsRows": [
+      "Aditya Bhosale 2360",
+      "Ananya Joshi 400",
+      "Rohan Kulkarni 1450"
+    ]
+  },
+  "fix3:collect": {
+    "rowsBefore": [
+      "Aditya Bhosale\n₹2,360.00",
+      "Ananya Joshi\n₹400.00",
+      "Rohan Kulkarni\n₹1,450.00"
+    ],
+    "dialogText": "Bill for Ananya Joshi |  | Review · 14 Nov 2026 · 10:30-10:45 |  | INV-20261114-003 | Due ₹400 | Dermatology Consultation | ₹700 | Total | ₹700 | Received | ₹300 | Due | ₹400 | ₹300 UPI · 14 Nov 2026, 09:45 am | Record payment | Amount received | Cash | UPI | Card | Net banking / NEFT | Cheque | Record ₹400 payment | Add another bill | Close",
+    "rowsAfter": [],
+    "bad": [],
+    "consoleErrors": []
+  },
+  "blocker1:after-collect": {
+    "landingCard": "Bills due |  | ₹3,810.00 |  | Aditya Bhosale | ₹2,360.00 | Rohan Kulkarni | ₹1,450.00",
+    "alertsTotal": 3810,
+    "alertsRows": [
+      "Aditya Bhosale 2360",
+      "Rohan Kulkarni 1450"
+    ]
+  },
+  "landing:reception": {
+    "text": "Good morning, Sunita\nQuick Guide\nBook appointment\nNew patient\nToday's appointments\n10:30-10:45\nAnanya Joshi\nIn progress\n₹700.00 · Paid\n11:30-11:45\nVikram Patil\nConfirmed\nNot billed\n12:15-12:30\nSneha Deshpande\nConfirmed\nNot billed\n14:00-14:15\nAditya Bhosale\nScheduled\nNot billed\n15:15-15:30\nPooja Gokhale\nScheduled\nNot billed\n16:00-16:15\nSanjay Pawar\nConfirmed\nNot billed\n09:00-09:15\nMeera Shah\nCompleted\n₹500.00 · Paid\n09:30-10:00\nRohan Kulkarni\nCompleted\n₹2,950.00 · ₹1,450.00 due\nView All Appointments\nBills to collect\n\n₹3,810.00\n\nAditya Bhosale\n₹2,360.00\nRohan Kulkarni\n₹1,450.00",
+    "bad": [],
+    "consoleErrors": [],
+    "searched": null,
+    "phoneOverflowPx": 0
+  },
+  "landing:doctor": {
+    "text": "Good morning, Priya\nQuick Guide\nToday's patients\n10:30-10:45\nAnanya Joshi\nIn progress\nContinue visit\n11:30-11:45\nVikram Patil\nConfirmed\nStart visit\n12:15-12:30\nSneha Deshpande\nConfirmed\nStart visit\n14:00-14:15\nAditya Bhosale\nScheduled\nStart visit\n15:15-15:30\nPooja Gokhale\nScheduled\nStart visit\n16:00-16:15\nSanjay Pawar\nConfirmed\nStart visit\n09:00-09:15\nMeera Shah\nCompleted\nOpen visit\n09:30-10:00\nRohan Kulkarni\nCompleted\nOpen visit\nView All Appointments\nMy patients (10)\nImran Sheikh\nUX010 · 9822011110\nLast visit 02 Nov 2026\nKavita Naik\nUX009 · 9822011109\nLast visit 27 Oct 2026\nSanjay Pawar\nUX008 · 9822011108\nLast visit 23 Sep 2026\nPooja Gokhale\nUX007 · 9822011107\nNo visits yet\nAditya Bhosale\nUX006 · 9822011106\nLast visit 05 Nov 2026\nSneha Deshpande\nUX005 · 9822011105\nLast visit 12 Oct 2026\nVikram Patil\nUX004 · 9822011104\nLast visit 24 Oct 2026\nAnanya Joshi\nUX003 · 9822011103\nLast visit 14 Nov 2026\nRohan Kulkarni\nUX002 · 9822011102\nLast visit 14 Nov 2026\nMeera Shah\nUX001 · 9822011101\nLast visit 14 Nov 2026\nRecent visits\nAnanya Joshi\nNo diagnosis recorded\n14 Nov 2026, 09:45 am\nRohan Kulkarni\nPost-inflammatory hyperpigmentation\n14 Nov 2026, 09:30 am\nMeera Shah\nAcne vulgaris\n14 Nov 2026, 09:00 am\nAditya Bhosale\nAcne vulgaris\n05 Nov 2026, 10:05 am\nImran Sheikh\nTinea pedis\n02 Nov 2026, 10:05 am\nAnanya Joshi\nAtopic dermatitis\n31 Oct 2026, 10:05 am\nKavita Naik\nVerruca vulgaris\n27 Oct 2026, 10:05 am\nVikram Patil\nTinea cruris\n24 Oct 2026, 10:05 am",
+    "bad": [],
+    "consoleErrors": [],
+    "searched": null,
+    "phoneOverflowPx": 0
+  },
+  "landing:pharmacist": {
+    "text": "Good morning, Anil\nQuick Guide\nPrescriptions waiting (1)\nNew sale\nMeera Shah\n3 medicines · Dr. Priya Menon · 1 min\nBill\nLow stock (4)\nExpiring in 3 months (1)",
+    "bad": [],
+    "consoleErrors": [],
+    "searched": "done",
+    "phoneOverflowPx": 0
+  },
+  "landing:owner": {
+    "text": "Good morning, Rajesh\nQuick Guide\nToday's collection\n\n₹2,899.00\n\nClinic ₹2,700.00 · Pharmacy ₹199.00\n\nCash ₹900.00 · UPI ₹1,999.00 · Card ₹0.00\n\nBills due\n\n₹3,810.00\n\nAditya Bhosale\n₹2,360.00\nRohan Kulkarni\n₹1,450.00\nWaiting for approval\n\n0\n\nNeeds attention\nLow stock (4)\nClobetasol Cream 0.05% 20g\n0 left\nTretinoin Cream 0.025% 20g\n3 left\nKetoconazole Shampoo 2% 100ml\n4 left\nAdapalene Gel 0.1% 15g\n13 in one batch (34 in all)\nExpiring in 3 months (1)\nFluconazole 150mg Tablet\n21 days\nToday's appointments\n10:30-10:45\nAnanya Joshi\nIn progress\n11:30-11:45\nVikram Patil\nConfirmed\n12:15-12:30\nSneha Deshpande\nConfirmed\n14:00-14:15\nAditya Bhosale\nScheduled\n15:15-15:30\nPooja Gokhale\nScheduled\nView All Appointments\nDatabase backup\n\n⚠️ Backups are stored locally on the server and contain sensitive data.\n\nCreate Backup",
+    "bad": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+    ],
+    "searched": null,
+    "phoneOverflowPx": 0
+  },
+  "landing:manager": {
+    "text": "Good morning, TestManager\nQuick Guide\nPharmacy collection today\n\n₹199.00\n\nCash ₹0.00 · UPI ₹199.00 · Card ₹0.00\n\nBills due\n\n₹3,810.00\n\nAditya Bhosale\n₹2,360.00\nRohan Kulkarni\n₹1,450.00\nNeeds attention\nLow stock (4)\nClobetasol Cream 0.05% 20g\n0 left\nTretinoin Cream 0.025% 20g\n3 left\nKetoconazole Shampoo 2% 100ml\n4 left\nAdapalene Gel 0.1% 15g\n13 in one batch (34 in all)\nExpiring in 3 months (1)\nFluconazole 150mg Tablet\n21 days\nToday's appointments\n10:30-10:45\nAnanya Joshi\nIn progress\n11:30-11:45\nVikram Patil\nConfirmed\n12:15-12:30\nSneha Deshpande\nConfirmed\n14:00-14:15\nAditya Bhosale\nScheduled\n15:15-15:30\nPooja Gokhale\nScheduled\nView All Appointments",
+    "bad": [],
+    "consoleErrors": [],
+    "searched": null,
+    "phoneOverflowPx": 0
+  },
+  "landing:accountant": {
+    "text": "Good morning, TestAccountant\nQuick Guide\nPharmacy collection today\n\n₹199.00\n\nCash ₹0.00 · UPI ₹199.00 · Card ₹0.00",
+    "bad": [],
+    "consoleErrors": [],
+    "searched": null,
+    "phoneOverflowPx": 0
+  },
+  "landing:lab_tech": {
+    "text": "Good morning\n\nNothing is assigned to your role on this page.",
+    "bad": [],
+    "consoleErrors": [],
+    "searched": null,
+    "phoneOverflowPx": 0
+  }
+}

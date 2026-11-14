@@ -1,0 +1,120 @@
+{
+  "editAfterCreate": {
+    "afterCreate": {
+      "visitPlan": {
+        "dermatology": {
+          "medicationPlan": [
+            {
+              "drugName": "Mometasone Cream 0.1% 15g",
+              "dosage": "",
+              "dosageUnit": "TABLET",
+              "frequency": "TWICE_DAILY",
+              "dosePattern": "1-0-1",
+              "duration": 14,
+              "durationUnit": "DAYS",
+              "instructions": "Apply twice daily",
+              "quantity": "",
+              "drugId": "cuxdrug000000000000000011",
+              "inventoryItemId": "cuxinv00000000000000011x1",
+              "genericName": "Mometasone"
+            }
+          ]
+        }
+      },
+      "visitStatus": "IN_PROGRESS",
+      "visitId": "cmwfvx2zg00057dvkru96ea2x",
+      "rxCount": 1,
+      "rx": [
+        {
+          "id": "cmwfvx3i1000a7dvkl8d4zypf",
+          "diagnosis": "[{\"diagnosis\":\"Psoriasis vulgaris\"}]",
+          "instructions": null,
+          "followUpInstructions": null,
+          "items": [
+            "Mometasone Cream 0.1% 15g|TWICE_DAILY|1-0-1|14DAYS|Apply twice daily"
+          ]
+        }
+      ]
+    },
+    "url": "http://127.0.0.1:33739/dashboard",
+    "final": {
+      "visitPlan": {
+        "dermatology": {
+          "medicationPlan": [
+            {
+              "drugName": "Mometasone Cream 0.1% 15g",
+              "dosage": "",
+              "dosageUnit": "TABLET",
+              "frequency": "TWICE_DAILY",
+              "dosePattern": "1-0-1",
+              "duration": 14,
+              "durationUnit": "DAYS",
+              "instructions": "Apply twice daily",
+              "quantity": "",
+              "drugId": "cuxdrug000000000000000011",
+              "inventoryItemId": "cuxinv00000000000000011x1",
+              "genericName": "Mometasone"
+            }
+          ]
+        },
+        "followUpInstructions": "Review in 2 weeks"
+      },
+      "visitStatus": "COMPLETED",
+      "visitId": "cmwfvx2zg00057dvkru96ea2x",
+      "rxCount": 1,
+      "rx": [
+        {
+          "id": "cmwfvx3i1000a7dvkl8d4zypf",
+          "diagnosis": "[{\"diagnosis\":\"Plaque psoriasis\"}]",
+          "instructions": null,
+          "followUpInstructions": null,
+          "items": [
+            "Mometasone Cream 0.1% 15g|TWICE_DAILY|1-0-1|14DAYS|Apply twice daily"
+          ]
+        }
+      ]
+    }
+  },
+  "editMedAfterCreate": {
+    "url": "http://127.0.0.1:33739/dashboard",
+    "final": {
+      "visitPlan": {
+        "dermatology": {
+          "medicationPlan": [
+            {
+              "drugName": "Mometasone Cream 0.1% 15g",
+              "dosage": "",
+              "dosageUnit": "TABLET",
+              "frequency": "TWICE_DAILY",
+              "dosePattern": "1-0-1",
+              "duration": 7,
+              "durationUnit": "DAYS",
+              "instructions": "Apply twice daily",
+              "quantity": "",
+              "drugId": "cuxdrug000000000000000011",
+              "inventoryItemId": "cuxinv00000000000000011x1",
+              "genericName": "Mometasone"
+            }
+          ]
+        }
+      },
+      "visitStatus": "COMPLETED",
+      "visitId": "cmwfvxmvj000s7dvko46ppl89",
+      "rxCount": 1,
+      "rx": [
+        {
+          "id": "cmwfvxmxp000x7dvku5zakpy7",
+          "diagnosis": "",
+          "instructions": null,
+          "followUpInstructions": null,
+          "items": [
+            "Mometasone Cream 0.1% 15g|TWICE_DAILY|1-0-1|7DAYS|Apply twice daily"
+          ]
+        }
+      ]
+    }
+  },
+  "footer": {
+    "ok": true
+  }
+}

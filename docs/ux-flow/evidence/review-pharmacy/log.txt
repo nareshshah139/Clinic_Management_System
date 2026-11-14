@@ -1,0 +1,37 @@
+drugs [{"id":"cuxdrug000000000000000007","name":"Cetirizine 10mg Tablet","gstRate":12,"price":32},{"id":"cuxdrug000000000000000014","name":"Sunscreen SPF 50 Gel 50g","gstRate":18,"price":520}]
+checkout 201 CONFIRMED COMPLETED 454 null PHI-2026-007
+[daily-collection] mentionsWalkIn=true changedNumbers=23 changedByExactlyTotal(454)=18 ["headline.value","tiles[0].value","tiles[1].value","sections[0].rows[0].cells.onTodaysBills","sections[0].rows[0].cells.expected","sections[0].totals.onTodaysBills"]
+[purchase-register] mentionsWalkIn=false changedNumbers=0 changedByExactlyTotal(454)=0 []
+[purchase-bills] mentionsWalkIn=false changedNumbers=0 changedByExactlyTotal(454)=0 []
+[sales-register] mentionsWalkIn=true changedNumbers=16 changedByExactlyTotal(454)=2 ["headline.value","sections[0].totals.total"]
+[sales-bills] mentionsWalkIn=true changedNumbers=29 changedByExactlyTotal(454)=2 ["headline.value","sections[0].totals.total.amount"]
+[day-wise-summary] mentionsWalkIn=false changedNumbers=23 changedByExactlyTotal(454)=3 ["headline.value","sections[0].rows[0].cells.total.amount","sections[0].totals.total.amount"]
+[gstr-1] mentionsWalkIn=false changedNumbers=36 changedByExactlyTotal(454)=2 ["headline.value","sections[1].totals.value"]
+[gstr-3b] mentionsWalkIn=false changedNumbers=9 changedByExactlyTotal(454)=0 []
+[gstr-2a] mentionsWalkIn=false changedNumbers=0 changedByExactlyTotal(454)=0 []
+[gstr-2b] mentionsWalkIn=false changedNumbers=0 changedByExactlyTotal(454)=0 []
+[hsn-wise] mentionsWalkIn=false changedNumbers=18 changedByExactlyTotal(454)=2 ["headline.value","sections[0].totals.value"]
+[composition] mentionsWalkIn=false changedNumbers=9 changedByExactlyTotal(454)=0 []
+[item-margin] mentionsWalkIn=false changedNumbers=28 changedByExactlyTotal(454)=2 ["tiles[0].value","sections[0].totals.sales"]
+[expiring-stock] mentionsWalkIn=false changedNumbers=0 changedByExactlyTotal(454)=0 []
+[doctor-wise-sales] mentionsWalkIn=false changedNumbers=13 changedByExactlyTotal(454)=3 ["headline.value","sections[0].rows[1].cells.total","sections[0].totals.total"]
+[register] mentionsWalkIn=true changedNumbers=4 changedByExactlyTotal(454)=2 ["rows[1].amount","totals.amount"]
+[dashboard] mentionsWalkIn=true changedNumbers=16 changedByExactlyTotal(454)=3 ["todaySales","todaySalesCompleted","monthSales"]
+[dashSales] mentionsWalkIn=false changedNumbers=6 changedByExactlyTotal(454)=3 ["today.amount","week.amount","month.amount"]
+[recent] mentionsWalkIn=true changedNumbers=6 changedByExactlyTotal(454)=0 []
+[list] mentionsWalkIn=true changedNumbers=87 changedByExactlyTotal(454)=0 []
+print 200 {"id":null,"name":"Walkin Reviewer","phone":"9000099999"}
+search 200 [true]
+discount 200 442.65 null 
+refund 201 REFUNDED -10 
+daily-collection after refund mentions true
+page finished: shows walk-in=true crashed=false
+page invoices: shows walk-in=true crashed=false
+page sales: shows walk-in=true crashed=false
+page daily: shows walk-in=true crashed=false
+page salesbills: shows walk-in=false crashed=false
+page desk: shows walk-in=n/a crashed=false
+page counter: shows walk-in=n/a crashed=false
+reception sees Daily close: 1
+reception Daily close url: http://127.0.0.1:44971/dashboard/pharmacy/reports?report=daily-collection text: Pharmacy Report / Accounting Reports Daily Collection Day Print Download Forbidden resource (Reference: 8d71efa0-fb93-434d-962d-293518a36339) Your role cannot open pharmacy reports. Ask the clinic owner or an admin for pharmacy compliance access.
+page errors []

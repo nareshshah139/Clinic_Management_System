@@ -1,0 +1,727 @@
+{
+  "today": "2026-11-14",
+  "landing:reception": {
+    "text": "Good morning, Sunita\nQuick Guide\nBook appointment\nNew patient\nToday's appointments\n10:30-10:45\nAnanya Joshi · Dr. Priya Menon\nIn progress\nNot billed\n11:30-11:45\nVikram Patil · Dr. Priya Menon\nConfirmed\nNot billed\n12:15-12:30\nSneha Deshpande · Dr. Priya Menon\nConfirmed\nNot billed\n13:00-13:15\nImran Sheikh · Dr. Kunal Rao\nConfirmed\nNot billed\n14:00-14:15\nAditya Bhosale · Dr. Priya Menon\nScheduled\nNot billed\n15:15-15:30\nPooja Gokhale · Dr. Priya Menon\nScheduled\nNot billed\n16:00-16:15\nSanjay Pawar · Dr. Priya Menon\nConfirmed\nNot billed\n09:00-09:15\nMeera Shah · Dr. Priya Menon\nCompleted\n₹500 · Paid\n09:30-10:00\nRohan Kulkarni · Dr. Priya Menon\nCompleted\n₹2,950 · ₹1,450 due\nView All Appointments\nBills to collect\n\n₹3,810.00\n\nAditya Bhosale\n₹2,360.00\nRohan Kulkarni\n₹1,450.00",
+    "bad": [],
+    "consoleErrors": [],
+    "bell": [
+      "Kavita Naik on 15 Nov 2026 | OPD • Dr. Priya Menon",
+      "Imran Sheikh on 15 Nov 2026 | OPD • Dr. Priya Menon",
+      "Aditya Bhosale owes ₹2,360.00 | Bill INV-20261109-001",
+      "Rohan Kulkarni owes ₹1,450.00 | Bill INV-20261114-002"
+    ],
+    "gear": 0,
+    "nav": [
+      "Dashboard",
+      "Patients",
+      "Appointments",
+      "Rooms",
+      "Pharmacy Desk",
+      "Pharmacy Counter",
+      "Inventory"
+    ],
+    "phoneOverflowPx": 0
+  },
+  "landing:doctor": {
+    "text": "Good morning, Priya\nQuick Guide\nToday's patients\n10:30-10:45\nAnanya Joshi\nIn progress\nContinue visit\n11:30-11:45\nVikram Patil\nConfirmed\nStart visit\n12:15-12:30\nSneha Deshpande\nConfirmed\nStart visit\n14:00-14:15\nAditya Bhosale\nScheduled\nStart visit\n15:15-15:30\nPooja Gokhale\nScheduled\nStart visit\n16:00-16:15\nSanjay Pawar\nConfirmed\nStart visit\n09:00-09:15\nMeera Shah\nCompleted\nOpen visit\n09:30-10:00\nRohan Kulkarni\nCompleted\nOpen visit\nView All Appointments\nMy patients (10)\nImran Sheikh\nUX010 · 9822011110\nLast visit 02 Nov 2026\nKavita Naik\nUX009 · 9822011109\nLast visit 27 Oct 2026\nSanjay Pawar\nUX008 · 9822011108\nLast visit 23 Sep 2026\nPooja Gokhale\nUX007 · 9822011107\nNo visits yet\nAditya Bhosale\nUX006 · 9822011106\nLast visit 05 Nov 2026\nSneha Deshpande\nUX005 · 9822011105\nLast visit 12 Oct 2026\nVikram Patil\nUX004 · 9822011104\nLast visit 24 Oct 2026\nAnanya Joshi\nUX003 · 9822011103\nLast visit 14 Nov 2026\nRohan Kulkarni\nUX002 · 9822011102\nLast visit 14 Nov 2026\nMeera Shah\nUX001 · 9822011101\nLast visit 14 Nov 2026\nRecent visits\nRohan Kulkarni\nPost-inflammatory hyperpigmentation\n14 Nov 2026, 09:30 am\nAnanya Joshi\nNo diagnosis recorded\n14 Nov 2026, 09:06 am\nMeera Shah\nAcne vulgaris\n14 Nov 2026, 09:00 am\nAditya Bhosale\nAcne vulgaris\n05 Nov 2026, 10:05 am\nImran Sheikh\nTinea pedis\n02 Nov 2026, 10:05 am\nAnanya Joshi\nAtopic dermatitis\n31 Oct 2026, 10:05 am\nKavita Naik\nVerruca vulgaris\n27 Oct 2026, 10:05 am\nVikram Patil\nTinea cruris\n24 Oct 2026, 10:05 am",
+    "bad": [],
+    "consoleErrors": [],
+    "bell": [
+      "Kavita Naik on 15 Nov 2026 | OPD • CONFIRMED",
+      "Imran Sheikh on 15 Nov 2026 | OPD • SCHEDULED"
+    ],
+    "gear": 0,
+    "nav": [
+      "Dashboard",
+      "Daily Collection",
+      "Patients",
+      "Appointments",
+      "Visits",
+      "Procedures",
+      "Rooms",
+      "Pharmacy Desk",
+      "Pharmacy Counter",
+      "Sales",
+      "Inventory",
+      "Pharmacy Report"
+    ],
+    "phoneOverflowPx": 0
+  },
+  "landing:pharmacist": {
+    "text": "Good morning, Anil\nQuick Guide\nPrescriptions waiting (1)\nNew sale\nMeera Shah\n3 medicines · Dr. Priya Menon · 1 min\nBill\nLow stock (4)\nExpiring in 3 months (1)",
+    "bad": [],
+    "consoleErrors": [],
+    "bell": [
+      "Low stock: Clobetasol Cream 0.05% 20g | Stock 0 • Minimum 8",
+      "Low stock: Tretinoin Cream 0.025% 20g | Stock 3 • Minimum 8",
+      "Low stock: Ketoconazole Shampoo 2% 100ml | Stock 4 • Minimum 8",
+      "Low stock: Adapalene Gel 0.1% 15g | Stock 13 • Minimum 14",
+      "Expiring in 3 months: Fluconazole 150mg Tablet | 21 days left • Qty 25"
+    ],
+    "gear": 0,
+    "nav": [
+      "Dashboard",
+      "Daily Collection",
+      "Pharmacy Desk",
+      "Pharmacy Counter",
+      "Sales",
+      "Inventory",
+      "Pharmacy Report"
+    ],
+    "phoneOverflowPx": 0
+  },
+  "landing:owner": {
+    "text": "Good morning, Rajesh\nQuick Guide\nToday's collection\n\n₹2,199.00\n\nClinic ₹2,000.00 · Pharmacy ₹199.00\n\nCash ₹500.00 · UPI ₹1,699.00 · Card ₹0.00\n\nBills due\n\n₹3,810.00\n\nAditya Bhosale\n₹2,360.00\nRohan Kulkarni\n₹1,450.00\nWaiting for approval\n\n0\n\nNeeds attention\nLow stock (4)\nClobetasol Cream 0.05% 20g\n0 left\nTretinoin Cream 0.025% 20g\n3 left\nKetoconazole Shampoo 2% 100ml\n4 left\nAdapalene Gel 0.1% 15g\n13 left\nExpiring in 3 months (1)\nFluconazole 150mg Tablet\n21 days\nToday's appointments\n09:00-09:15\nMeera Shah\nCompleted\n09:30-10:00\nRohan Kulkarni\nCompleted\n10:30-10:45\nAnanya Joshi\nIn progress\n11:30-11:45\nVikram Patil\nConfirmed\n12:15-12:30\nSneha Deshpande\nConfirmed\nView All Appointments\nDatabase backup\n\n⚠️ Backups are stored locally on the server and contain sensitive data.\n\nCreate Backup",
+    "bad": [],
+    "consoleErrors": [],
+    "bell": [
+      "Aditya Bhosale owes ₹2,360.00 | Bill INV-20261109-001",
+      "Rohan Kulkarni owes ₹1,450.00 | Bill INV-20261114-002",
+      "Low stock (4)",
+      "Expiring in 3 months (1)",
+      "2 upcoming appointments",
+      "View reports & alerts"
+    ],
+    "gear": 0,
+    "nav": [
+      "Dashboard",
+      "Daily Collection",
+      "Patients",
+      "Appointments",
+      "Visits",
+      "Procedures",
+      "Rooms",
+      "Sales",
+      "Inventory",
+      "Pharmacy Report",
+      "Reports",
+      "Users",
+      "Fee list"
+    ],
+    "phoneOverflowPx": 0
+  },
+  "landing:admin": {
+    "text": "Good morning, TestAdmin\nQuick Guide\nToday's collection\n\n₹2,199.00\n\nClinic ₹2,000.00 · Pharmacy ₹199.00\n\nCash ₹500.00 · UPI ₹1,699.00 · Card ₹0.00\n\nBills due\n\n₹3,810.00\n\nAditya Bhosale\n₹2,360.00\nRohan Kulkarni\n₹1,450.00\nWaiting for approval\n\n0\n\nNeeds attention\nLow stock (4)\nClobetasol Cream 0.05% 20g\n0 left\nTretinoin Cream 0.025% 20g\n3 left\nKetoconazole Shampoo 2% 100ml\n4 left\nAdapalene Gel 0.1% 15g\n13 left\nExpiring in 3 months (1)\nFluconazole 150mg Tablet\n21 days\nToday's appointments\n09:00-09:15\nMeera Shah\nCompleted\n09:30-10:00\nRohan Kulkarni\nCompleted\n10:30-10:45\nAnanya Joshi\nIn progress\n11:30-11:45\nVikram Patil\nConfirmed\n12:15-12:30\nSneha Deshpande\nConfirmed\nView All Appointments\nDatabase backup\n\n⚠️ Backups are stored locally on the server and contain sensitive data.\n\nCreate Backup",
+    "bad": [],
+    "consoleErrors": [],
+    "bell": [
+      "Aditya Bhosale owes ₹2,360.00 | Bill INV-20261109-001",
+      "Rohan Kulkarni owes ₹1,450.00 | Bill INV-20261114-002",
+      "Low stock (4)",
+      "Expiring in 3 months (1)",
+      "2 upcoming appointments",
+      "View reports & alerts"
+    ],
+    "gear": 0,
+    "nav": [
+      "Dashboard",
+      "Daily Collection",
+      "Patients",
+      "Appointments",
+      "Visits",
+      "Procedures",
+      "Rooms",
+      "Pharmacy Desk",
+      "Pharmacy Counter",
+      "Sales",
+      "Inventory",
+      "Pharmacy Report",
+      "Reports",
+      "Users",
+      "Fee list"
+    ],
+    "phoneOverflowPx": 0
+  },
+  "landing:manager": {
+    "text": "Good morning, TestManager\nQuick Guide\nToday's collection\n\n₹199.00\n\nCash ₹0.00 · UPI ₹199.00 · Card ₹0.00\n\nBills due\n\n₹3,810.00\n\nAditya Bhosale\n₹2,360.00\nRohan Kulkarni\n₹1,450.00\nNeeds attention\nLow stock (4)\nClobetasol Cream 0.05% 20g\n0 left\nTretinoin Cream 0.025% 20g\n3 left\nKetoconazole Shampoo 2% 100ml\n4 left\nAdapalene Gel 0.1% 15g\n13 left\nExpiring in 3 months (1)\nFluconazole 150mg Tablet\n21 days\nToday's appointments\n09:00-09:15\nMeera Shah\nCompleted\n09:30-10:00\nRohan Kulkarni\nCompleted\n10:30-10:45\nAnanya Joshi\nIn progress\n11:30-11:45\nVikram Patil\nConfirmed\n12:15-12:30\nSneha Deshpande\nConfirmed\nView All Appointments",
+    "bad": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+    ],
+    "bell": [
+      "Aditya Bhosale owes ₹2,360.00 | Bill INV-20261109-001",
+      "Rohan Kulkarni owes ₹1,450.00 | Bill INV-20261114-002",
+      "Low stock (4)",
+      "Expiring in 3 months (1)",
+      "2 upcoming appointments",
+      "View reports & alerts"
+    ],
+    "gear": 0,
+    "nav": [
+      "Dashboard",
+      "Daily Collection",
+      "Patients",
+      "Appointments",
+      "Visits",
+      "Procedures",
+      "Inventory",
+      "Pharmacy Report",
+      "Reports",
+      "Users"
+    ],
+    "phoneOverflowPx": 0
+  },
+  "landing:nurse": {
+    "text": "Good morning, TestNurse\nQuick Guide\nToday's appointments\n09:00-09:15\nMeera Shah\nCompleted\n09:30-10:00\nRohan Kulkarni\nCompleted\n10:30-10:45\nAnanya Joshi\nIn progress\n11:30-11:45\nVikram Patil\nConfirmed\n12:15-12:30\nSneha Deshpande\nConfirmed\nView All Appointments",
+    "bad": [],
+    "consoleErrors": [],
+    "bell": [
+      "2 upcoming appointments"
+    ],
+    "gear": 0,
+    "nav": [
+      "Dashboard",
+      "Patients",
+      "Appointments",
+      "Visits",
+      "Rooms"
+    ],
+    "phoneOverflowPx": 0
+  },
+  "landing:accountant": {
+    "text": "Good morning, TestAccountant\nQuick Guide\nToday's collection\n\n₹199.00\n\nCash ₹0.00 · UPI ₹199.00 · Card ₹0.00",
+    "bad": [],
+    "consoleErrors": [],
+    "bell": [
+      "Aditya Bhosale owes ₹2,360.00 | Bill INV-20261109-001",
+      "Rohan Kulkarni owes ₹1,450.00 | Bill INV-20261114-002"
+    ],
+    "gear": 0,
+    "nav": [
+      "Dashboard",
+      "Daily Collection",
+      "Pharmacy Report"
+    ],
+    "phoneOverflowPx": 0
+  },
+  "landing:lab_tech": {
+    "text": "Good morning",
+    "bad": [
+      "403 GET /api/users/cmwfusrq2002x7dt6idqr9c82",
+      "403 GET /api/users/cmwfusrq2002x7dt6idqr9c82"
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load full user profile; using minimal identity Error: Forbidden resource (Reference: 8e9313a1-882d-4518-a192-7743b5fcfeaf)\n    at ApiClient.request (webpack-internal:///(app-pages-browser)/./src/lib/api.ts:104:44)\n    at async DashboardLayout.useCallback[fetchCurrentUser] (webpack-internal",
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load full user profile; using minimal identity Error: Forbidden resource (Reference: bd070400-f6a8-4e5b-91f1-1aca9d6dcff0)\n    at ApiClient.request (webpack-internal:///(app-pages-browser)/./src/lib/api.ts:104:44)\n    at async DashboardLayout.useCallback[fetchCurrentUser] (webpack-internal"
+    ],
+    "bell": [],
+    "gear": 0,
+    "nav": [],
+    "phoneOverflowPx": 0
+  },
+  "money:before": {
+    "alertsCounts": {
+      "billsDue": 2,
+      "lowStockAlerts": 4,
+      "expiryAlerts": 1,
+      "pendingPayments": 0,
+      "upcomingAppointments": 2
+    },
+    "billsDueBalance": 3810,
+    "billsDue": [
+      "Aditya Bhosale 2360 OVERDUE 2026-11-09",
+      "Rohan Kulkarni 1450 PARTIALLY_PAID 2026-11-14"
+    ],
+    "alertsLow": [
+      "Clobetasol Cream 0.05% 20g:0",
+      "Tretinoin Cream 0.025% 20g:3",
+      "Ketoconazole Shampoo 2% 100ml:4",
+      "Adapalene Gel 0.1% 15g:13"
+    ],
+    "alertsExp": [
+      "Fluconazole 150mg Tablet:21"
+    ],
+    "dcWhole": {
+      "modes": [
+        {
+          "mode": "CASH",
+          "label": "Cash",
+          "clinic": 500,
+          "pharmacy": 0,
+          "total": 500
+        },
+        {
+          "mode": "UPI",
+          "label": "UPI",
+          "clinic": 1500,
+          "pharmacy": 199,
+          "total": 1699
+        },
+        {
+          "mode": "CARD",
+          "label": "Card",
+          "clinic": 0,
+          "pharmacy": 0,
+          "total": 0
+        }
+      ],
+      "clinic": 2000,
+      "pharmacy": 199,
+      "total": 2199
+    },
+    "dcStatus": 200,
+    "invLowTotal": 4,
+    "invLowNames": [
+      "Adapalene Gel 0.1% 15g",
+      "Clobetasol Cream 0.05% 20g",
+      "Ketoconazole Shampoo 2% 100ml",
+      "Tretinoin Cream 0.025% 20g"
+    ],
+    "invExpTotal": 1,
+    "overviewLow": 4,
+    "overviewExp": 1,
+    "outstanding": [
+      "Aditya Bhosale bal=2360 status=OVERDUE",
+      "Rohan Kulkarni bal=1450 status=PARTIALLY_PAID"
+    ],
+    "landing": "Good morning, Rajesh\nQuick Guide\nToday's collection\n\n₹2,199.00\n\nClinic ₹2,000.00 · Pharmacy ₹199.00\n\nCash ₹500.00 · UPI ₹1,699.00 · Card ₹0.00\n\nBills due\n\n₹3,810.00\n\nAditya Bhosale\n₹2,360.00\nRohan Kulkarni\n₹1,450.00\nWaiting for approval\n\n0\n\nNeeds attention\nLow stock (4)\nClobetasol Cream 0.05% 20g\n0 left\nTretinoin Cream 0.025% 20g\n3 left\nKetoconazole Shampoo 2% 100ml\n4 left\nAdapalene Gel 0.1% 15g\n13 left\nExpiring in 3 months (1)\nFluconazole 150mg Tablet\n21 days\nToday's appointments\n09:00-09:15\nMeera Shah\nCompleted\n09:30-10:00\nRohan Kulkarni\nCompleted\n10:30-10:45\nAnanya Joshi\nIn progress\n11:30-11:45\nVikram Patil\nConfirmed\n12:15-12:30\nSneha Deshpande\nConfirmed\nView All Appointments\nDatabase backup\n\n⚠️ Backups are stored locally on the server and contain sensitive data.\n\nCreate Backup",
+    "bellItems": [
+      "Aditya Bhosale owes ₹2,360.00 | Bill INV-20261109-001",
+      "Rohan Kulkarni owes ₹1,450.00 | Bill INV-20261114-002",
+      "Low stock (4)",
+      "Expiring in 3 months (1)",
+      "2 upcoming appointments",
+      "View reports & alerts"
+    ]
+  },
+  "dc-page:before": "Pharmacy Report / Accounting Reports\nDaily Collection\nDay\nPrint\nDownload\nWhole day\nWhole day\n₹2,199.00\nClinic\n₹2,000.00\nPharmacy\n₹199.00\nWhole day by payment mode\nPayment mode\n\t\nClinic\n\t\nPharmacy\n\t\nTotal\n\nTotal\t2,000.00\t199.00\t2,199.00\nCash\t500.00\t0.00\t500.00\nUPI\t1,500.00\t199.00\t1,699.00\nCard\t0.00\t0.00\t0.00\nClinic: consultations and procedures\nClinic received\n₹2,000.00\nClinic billed today\n₹3,450.00\nClinic still due\n₹1,450.00\nClinic: consultations and procedures by payment mode\nPayment mode\n\t\nReceived\n\t\nRefunds\n\t\nNet\n\nTotal\t2,000.00\t0.00\t2,000.00\nCash\t500.00\t0.00\t500.00\nUPI\t1,500.00\t0.00\t1,500.00\nCard\t0.00\t0.00\t0.00\nClinic bills\nBill No.\n\t\nType\n\t\nEntry\n\t\nPatient\n\t\nAmount\n\t\nReceived today\n\t\nPaid by\n\t\nDue\n\nTotal\t\t\t\t3,450.00\t2,000.00\t\t1,450.00\nINV-20261114-001\tBill\t14/11/2026 09:20\tMeera Shah\t500.00\t500.00\tCash\t0.00\nINV-20261114-002\tBill\t14/11/2026 10:05\tRohan Kulkarni\t2,950.00\t1,500.00\tUPI\t1,450.00\nPharmacy\n\nPharmacy not counted yet. Count the pharmacy cash drawer and check its UPI and card settlements, then enter them below.\n\nPharmacy billed today\n₹199.00\nPharmacy expected in hand\n₹199.00\nPharmacy still due\n₹0.00\nPharmacy count difference\nNot counted\nPharmacy reconciliation by payment mode\nMode\tToday's bills\n\tEarlier bills\n\tCounter\n\tRefunds\n\tExpected\n\tCounted\tDifference\nCash\t0.00\t0.00\t0.00\t0.00\t0.00\t\t—\nUPI\t199.00\t0.00\t0.00\t0.00\t199.00\t\t—\nCard\t0.00\t0.00\t0.00\t0.00\t0.00\t\t—\nTotal\t199.00\t0.00\t0.00\t-0.00\t199.00\t—\t—\nNote (optional)\nSave count\nPharmacy bills raised today\nBills raised t",
+  "create-clinic-bill": {
+    "status": 201,
+    "id": "cmwfux0ev00097d0ftj984y7e",
+    "total": 700,
+    "statusField": "DRAFT"
+  },
+  "part-payment": {
+    "status": 201
+  },
+  "clinic-bill-row-after-payment": {
+    "status": "DRAFT",
+    "balance": 400,
+    "received": 300
+  },
+  "sunscreen-before": {
+    "defaultDuration": null,
+    "defaultDurationUnit": null,
+    "defaultFrequency": null,
+    "defaultTiming": null,
+    "defaultInstructions": null,
+    "id": "cuxinv00000000000000014x1",
+    "branchId": "cmwfush6u00007dt62rm1jifv",
+    "name": "Sunscreen SPF 50 Gel 50g",
+    "description": null,
+    "genericName": "Zinc Oxide",
+    "brandName": "Sunscreen",
+    "form": "SUNSCREEN",
+    "strength": "SPF 50",
+    "isCombination": false,
+    "itemCode": null,
+    "type": "MEDICINE",
+    "category": "Dermatology",
+    "subCategory": null,
+    "manufacturer": "Sebamed",
+    "supplier": null,
+    "barcode": null,
+    "sku": null,
+    "costPrice": 353.6,
+    "sellingPrice": 520,
+    "mrp": 520,
+    "unit": "TUBES",
+    "packSize": 1,
+    "packUnit": null,
+    "currentStock": 26,
+    "heldStock": 0,
+    "minStockLevel": 10,
+    "maxStockLevel": 60,
+    "reorderLevel": 10,
+    "reorderQuantity": 30,
+    "expiryDate": "2028-07-28T00:00:00.000Z",
+    "batchNumber": "DM14125",
+    "hsnCode": "30049099",
+    "gstRate": 18,
+    "requiresPrescription": false,
+    "isControlled": false,
+    "storageLocation": "Rack B-4",
+    "storageConditions": null,
+    "tags": null,
+    "status": "ACTIVE",
+    "stockStatus": "IN_STOCK",
+    "metadata": null,
+    "createdAt": "2026-11-14T03:36:08.087Z",
+    "updatedAt": "2026-11-14T03:36:08.087Z"
+  },
+  "pharmacy-sale": {
+    "status": 400,
+    "qty": 17,
+    "err": {
+      "message": "Invoice item 1: drugId is required for DRUG items",
+      "error": "Bad Request",
+      "statusCode": 400,
+      "requestId": "2e9e4938-7d1c-426a-8208-082dcc011bf7",
+      "errorCode": "invalid_request"
+    }
+  },
+  "sunscreen-after": [
+    {
+      "currentStock": 26,
+      "minStockLevel": 10,
+      "heldStock": 0
+    }
+  ],
+  "money:after": {
+    "alertsCounts": {
+      "billsDue": 2,
+      "lowStockAlerts": 4,
+      "expiryAlerts": 1,
+      "pendingPayments": 0,
+      "upcomingAppointments": 2
+    },
+    "billsDueBalance": 3810,
+    "billsDue": [
+      "Aditya Bhosale 2360 OVERDUE 2026-11-09",
+      "Rohan Kulkarni 1450 PARTIALLY_PAID 2026-11-14"
+    ],
+    "alertsLow": [
+      "Clobetasol Cream 0.05% 20g:0",
+      "Tretinoin Cream 0.025% 20g:3",
+      "Ketoconazole Shampoo 2% 100ml:4",
+      "Adapalene Gel 0.1% 15g:13"
+    ],
+    "alertsExp": [
+      "Fluconazole 150mg Tablet:21"
+    ],
+    "dcWhole": {
+      "modes": [
+        {
+          "mode": "CASH",
+          "label": "Cash",
+          "clinic": 500,
+          "pharmacy": 0,
+          "total": 500
+        },
+        {
+          "mode": "UPI",
+          "label": "UPI",
+          "clinic": 1800,
+          "pharmacy": 199,
+          "total": 1999
+        },
+        {
+          "mode": "CARD",
+          "label": "Card",
+          "clinic": 0,
+          "pharmacy": 0,
+          "total": 0
+        }
+      ],
+      "clinic": 2300,
+      "pharmacy": 199,
+      "total": 2499
+    },
+    "dcStatus": 200,
+    "invLowTotal": 4,
+    "invLowNames": [
+      "Adapalene Gel 0.1% 15g",
+      "Clobetasol Cream 0.05% 20g",
+      "Ketoconazole Shampoo 2% 100ml",
+      "Tretinoin Cream 0.025% 20g"
+    ],
+    "invExpTotal": 1,
+    "overviewLow": 4,
+    "overviewExp": 1,
+    "outstanding": [
+      "Aditya Bhosale bal=2360 status=OVERDUE",
+      "Sanjay Pawar bal=400 status=DRAFT",
+      "Rohan Kulkarni bal=1450 status=PARTIALLY_PAID"
+    ],
+    "landing": "Good morning, Rajesh\nQuick Guide\nToday's collection\n\n₹2,499.00\n\nClinic ₹2,300.00 · Pharmacy ₹199.00\n\nCash ₹500.00 · UPI ₹1,999.00 · Card ₹0.00\n\nBills due\n\n₹3,810.00\n\nAditya Bhosale\n₹2,360.00\nRohan Kulkarni\n₹1,450.00\nWaiting for approval\n\n0\n\nNeeds attention\nLow stock (4)\nClobetasol Cream 0.05% 20g\n0 left\nTretinoin Cream 0.025% 20g\n3 left\nKetoconazole Shampoo 2% 100ml\n4 left\nAdapalene Gel 0.1% 15g\n13 left\nExpiring in 3 months (1)\nFluconazole 150mg Tablet\n21 days\nToday's appointments\n09:00-09:15\nMeera Shah\nCompleted\n09:30-10:00\nRohan Kulkarni\nCompleted\n10:30-10:45\nAnanya Joshi\nIn progress\n11:30-11:45\nVikram Patil\nConfirmed\n12:15-12:30\nSneha Deshpande\nConfirmed\nView All Appointments\nDatabase backup\n\n⚠️ Backups are stored locally on the server and contain sensitive data.\n\nCreate Backup",
+    "bellItems": [
+      "Aditya Bhosale owes ₹2,360.00 | Bill INV-20261109-001",
+      "Rohan Kulkarni owes ₹1,450.00 | Bill INV-20261114-002",
+      "Low stock (4)",
+      "Expiring in 3 months (1)",
+      "2 upcoming appointments",
+      "View reports & alerts"
+    ]
+  },
+  "dc-page:after": "Pharmacy Report / Accounting Reports\nDaily Collection\nDay\nPrint\nDownload\nWhole day\nWhole day\n₹2,499.00\nClinic\n₹2,300.00\nPharmacy\n₹199.00\nWhole day by payment mode\nPayment mode\n\t\nClinic\n\t\nPharmacy\n\t\nTotal\n\nTotal\t2,300.00\t199.00\t2,499.00\nCash\t500.00\t0.00\t500.00\nUPI\t1,800.00\t199.00\t1,999.00\nCard\t0.00\t0.00\t0.00\nClinic: consultations and procedures\nClinic received\n₹2,300.00\nClinic billed today\n₹4,150.00\nClinic still due\n₹1,850.00\nClinic: consultations and procedures by payment mode\nPayment mode\n\t\nReceived\n\t\nRefunds\n\t\nNet\n\nTotal\t2,300.00\t0.00\t2,300.00\nCash\t500.00\t0.00\t500.00\nUPI\t1,800.00\t0.00\t1,800.00\nCard\t0.00\t0.00\t0.00\nClinic bills\nBill No.\n\t\nType\n\t\nEntry\n\t\nPatient\n\t\nAmount\n\t\nReceived today\n\t\nPaid by\n\t\nDue\n\nTotal\t\t\t\t4,150.00\t2,300.00\t\t1,850.00\nINV-20261114-003\tBill\t14/11/2026 09:09\tSanjay Pawar\t700.00\t300.00\tUPI\t400.00\nINV-20261114-001\tBill\t14/11/2026 09:20\tMeera Shah\t500.00\t500.00\tCash\t0.00\nINV-20261114-002\tBill\t14/11/2026 10:05\tRohan Kulkarni\t2,950.00\t1,500.00\tUPI\t1,450.00\nPharmacy\n\nPharmacy not counted yet. Count the pharmacy cash drawer and check its UPI and card settlements, then enter them below.\n\nPharmacy billed today\n₹199.00\nPharmacy expected in hand\n₹199.00\nPharmacy still due\n₹0.00\nPharmacy count difference\nNot counted\nPharmacy reconciliation by payment mode\nMode\tToday's bills\n\tEarlier bills\n\tCounter\n\tRefunds\n\tExpected\n\tCounted\tDifference\nCash\t0.00\t0.00\t0.00\t0.00\t0.00\t\t—\nUPI\t199.00\t0.00\t0.00\t0.00\t199.00\t\t—\nCard\t0.00\t0.00\t0.00\t0.00\t0.00\t\t—\nTotal\t199.00\t0.00\t0.00\t-0.00\t199",
+  "inventory-low-page": "ClinicMS\n\nOverview\n\nDashboard\nDaily Collection\n\nClinical\n\nPatients\nAppointments\nVisits\nProcedures\nRooms\n\nPharmacy\n\nSales\nInventory\nPharmacy Report\n\nAdmin\n\nReports\nUsers\nFee list\nRI\n\nRajesh Iyer\n\nOWNER\n\n5\n\nRajesh Iyer\n\nInventory\n\nReceive, review and manage pharmacy stock.\n\nToday\nPurchases\nStock\nSales\nReorder\nStock list\nStock optimization\nStock ledger\nApprove corrections\nStock counts\nSupplier returns are now in Purchase bills › Returns\nMore tasks…\nLoss & breakage\nBlocked stock\nCorrections\nManual opening stock\nOpening stock import\nData quality · press a count to list those batches\nMissing location\n0\nMissing category\n0\nMissing HSN code\n0\nMissing min/max\n0\nUnmapped\n0\nStock\nAdd batch\nSearch stock\nSearch\nFilters\nReset\nAll batches\nCurrent / on hand\nPrevious / depleted\n\nOne row per batch. Open a product to check its history or correct details.\n\nStock level\nAny stock level\nLow stock\nAbove maximum\nStock on shelf\nOut of stock\nNegative — count needed\nSet aside / held\nExpired\nExpiry\nAny expiry date\nWithin 1 month\nWithin 2 months\nWithin 3 months\nWithin 6 months\nShow cost & stock details\nstock: LOW ×\nSort\nBest match\nProduct name\nExpiry date\nAvailable stock\nPurchase price\nValue of matching batches · each batch's declared stock unit\nScope\tPTR\tMRP\tMRP excluding GST\tKnown landing value\nCurrent\t₹2,624.80\t₹3,860.00\t₹3,446.43\t₹0.00\nCost basis unknown on 3 batches\n\nExpired\t₹0.00\t₹0.00\t₹0.00\t₹0.00\n\n4 matching batches\n\nCount matching batches\nSelect\n\tProduct / batch\tBatch state\tExpiry\tAvailable\tSelling",
+  "reception:after": {
+    "text": "Good morning, Sunita\nQuick Guide\nBook appointment\nNew patient\nToday's appointments\n10:30-10:45\nAnanya Joshi · Dr. Priya Menon\nIn progress\nNot billed\n11:30-11:45\nVikram Patil · Dr. Priya Menon\nConfirmed\nNot billed\n12:15-12:30\nSneha Deshpande · Dr. Priya Menon\nConfirmed\nNot billed\n13:00-13:15\nImran Sheikh · Dr. Kunal Rao\nConfirmed\nNot billed\n14:00-14:15\nAditya Bhosale · Dr. Priya Menon\nScheduled\nNot billed\n15:15-15:30\nPooja Gokhale · Dr. Priya Menon\nScheduled\nNot billed\n16:00-16:15\nSanjay Pawar · Dr. Priya Menon\nConfirmed\n₹700 · ₹400 due\n09:00-09:15\nMeera Shah · Dr. Priya Menon\nCompleted\n₹500 · Paid\n09:30-10:00\nRohan Kulkarni · Dr. Priya Menon\nCompleted\n₹2,950 · ₹1,450 due\nView All Appointments\nBills to collect\n\n₹3,810.00\n\nAditya Bhosale\n₹2,360.00\nRohan Kulkarni\n₹1,450.00",
+    "bell": [
+      "Kavita Naik on 15 Nov 2026 | OPD • Dr. Priya Menon",
+      "Imran Sheikh on 15 Nov 2026 | OPD • Dr. Priya Menon",
+      "Aditya Bhosale owes ₹2,360.00 | Bill INV-20261109-001",
+      "Rohan Kulkarni owes ₹1,450.00 | Bill INV-20261114-002"
+    ]
+  },
+  "pharmacist:after": {
+    "text": "Good morning, Anil\nQuick Guide\nPrescriptions waiting (1)\nNew sale\nMeera Shah\n3 medicines · Dr. Priya Menon · 4 min\nBill\nLow stock (4)\nExpiring in 3 months (1)",
+    "bell": [
+      "Low stock: Clobetasol Cream 0.05% 20g | Stock 0 • Minimum 8",
+      "Low stock: Tretinoin Cream 0.025% 20g | Stock 3 • Minimum 8",
+      "Low stock: Ketoconazole Shampoo 2% 100ml | Stock 4 • Minimum 8",
+      "Low stock: Adapalene Gel 0.1% 15g | Stock 13 • Minimum 14",
+      "Expiring in 3 months: Fluconazole 150mg Tablet | 21 days left • Qty 25"
+    ]
+  },
+  "links": {
+    "ownerCollection": {
+      "url": "/dashboard/pharmacy/reports?report=daily-collection",
+      "file": "link-owner_collection.png",
+      "text": "Pharmacy Report / Accounting Reports | Daily Collection | Day | Print | Download | Whole day | Whole day | ₹2,499.00 | Clinic | ₹2,300.00 | Pharmacy | ₹199.00 | Whole day by payment mode | Payment mode | \t | Clinic | \t | Pharmacy | \t | Total | Total\t2,300.00\t199.00\t2,499.00 | Cash\t500.00\t0.00\t500.00 | UPI\t1,800.00\t199.00\t1,999.00 | Card\t0.00\t0.00\t0.00 | Clinic: consultations and procedures | Clinic received | ₹2,300.00 | Clinic billed today | ₹4,150.0"
+    },
+    "ownerBillRowEarlier": {
+      "url": "/dashboard/appointments?date=2026-11-09",
+      "file": "link-owner_bill_aditya.png",
+      "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | Patient | Grid | 30 minutes | Legend | Scheduled: Booked ahead. Call to confirm. | Confirmed: Confirmed, walk-ins and visits. | Open a scheduled patient and press Confirm to move them to Confirmed at the same time"
+    },
+    "ownerApprovals": {
+      "url": "/dashboard/inventory?area=stock&view=approvals",
+      "file": "link-owner_approvals.png",
+      "text": "ClinicMS | Overview | Dashboard | Daily Collection | Clinical | Patients | Appointments | Visits | Procedures | Rooms | Pharmacy | Sales | Inventory | Pharmacy Report | Admin | Reports | Users | Fee list | RI | Rajesh Iyer | OWNER | 5 | Rajesh Iyer | Inventory | Receive, review and manage pharmacy stock. | Today | Purchases | Stock | Sales | Reorder | Stock list | Stock optimization | Stock ledger | Approve corrections | Stock counts | Supplier return"
+    },
+    "ownerLow": {
+      "url": "/dashboard/inventory?area=stock&view=list&stock=LOW",
+      "file": "link-owner_low.png",
+      "text": "ClinicMS | Overview | Dashboard | Daily Collection | Clinical | Patients | Appointments | Visits | Procedures | Rooms | Pharmacy | Sales | Inventory | Pharmacy Report | Admin | Reports | Users | Fee list | RI | Rajesh Iyer | OWNER | 5 | Rajesh Iyer | Inventory | Receive, review and manage pharmacy stock. | Today | Purchases | Stock | Sales | Reorder | Stock list | Stock optimization | Stock ledger | Approve corrections | Stock counts | Supplier return"
+    },
+    "ownerExp": {
+      "url": "/dashboard/inventory?area=stock&view=list&expiryMonths=3",
+      "file": "link-owner_exp.png",
+      "text": "ClinicMS | Overview | Dashboard | Daily Collection | Clinical | Patients | Appointments | Visits | Procedures | Rooms | Pharmacy | Sales | Inventory | Pharmacy Report | Admin | Reports | Users | Fee list | RI | Rajesh Iyer | OWNER | 5 | Rajesh Iyer | Inventory | Receive, review and manage pharmacy stock. | Today | Purchases | Stock | Sales | Reorder | Stock list | Stock optimization | Stock ledger | Approve corrections | Stock counts | Supplier return"
+    },
+    "ownerViewAll": {
+      "url": "/dashboard/appointments",
+      "file": "link-owner_viewall.png",
+      "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | Patient | Grid | 30 minutes | Legend | Scheduled: Booked ahead. Call to confirm. | Confirmed: Confirmed, walk-ins and visits. | Open a scheduled patient and press Confirm to move them to Confirmed at the same time"
+    },
+    "recBook": {
+      "url": "/dashboard/appointments",
+      "file": "link-rec_book.png",
+      "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | Patient | Grid | 30 minutes | Legend | Scheduled: Booked ahead. Call to confirm. | Confirmed: Confirmed, walk-ins and visits. | Open a scheduled patient and press Confirm to move them to Confirmed at the same time"
+    },
+    "recNew": {
+      "url": "/dashboard/patients?new=walkin",
+      "file": "link-rec_new.png",
+      "text": "Patients Management | Manage patient records and information | Quick Guide | Patients | Search, add, and manage patient records | New Patient | Clear Filters | Export CSV | Try: 9xxx… (phone), abha…, @email | All Genders | All Consultations | All Time | 20 / page | Patient Records | Manage and view all patient information | Patient ▲\tPatient Code\tAge\tGender\tContact\tABHA ID\tReferral\tConsultation\tActions | AB | Aditya Bhosale | I"
+    },
+    "recBillRowEarlier": {
+      "url": "/dashboard/appointments?date=2026-11-09",
+      "file": "link-rec_bill_aditya.png",
+      "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | Patient | Grid | 30 minutes | Legend | Scheduled: Booked ahead. Call to confirm. | Confirmed: Confirmed, walk-ins and visits. | Open a scheduled patient and press Confirm to move them to Confirmed at the same time"
+    },
+    "recViewAll": {
+      "url": "/dashboard/appointments",
+      "file": "link-rec_viewall.png",
+      "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | Patient | Grid | 30 minutes | Legend | Scheduled: Booked ahead. Call to confirm. | Confirmed: Confirmed, walk-ins and visits. | Open a scheduled patient and press Confirm to move them to Confirmed at the same time"
+    },
+    "phBill": {
+      "url": "/dashboard/pharmacy/sales/bill?patientId=cuxpatient000000000000001&prescriptionId=cuxrxwaiting0000000000000&doctorId=cmwfush7j00047dt6rratvndb",
+      "file": "link-ph_bill.png",
+      "text": "Sales | Sales | Returns | Back to Sales | Prescription dispensing queue | 1-1 of 1 prescriptions | Pending | Patient\tDoctor\tMedication\tStatus\tStock\tActions | Meera Shah | UX001 | 5m pending | \t | Priya Menon | 14 Nov 2026, 09:06 am | \t | Doxycycline 100mg Capsule0/2 | Adapalene Gel 0.1% 15g0/1 | Sunscreen SPF 50 Gel 50g0/1 | \t | Pending | \t | In stock | Doxycycline 100mg Capsule (60 strips) | Change link | In stock | Adapalene Gel 0.1% 15g (34"
+    },
+    "phNewSale": {
+      "url": "/dashboard/pharmacy/sales/bill",
+      "file": "link-ph_newsale.png",
+      "text": "Sales | Sales | Returns | Back to Sales | Prescription dispensing queue | 1-1 of 1 prescriptions | Pending | Patient\tDoctor\tMedication\tStatus\tStock\tActions | Meera Shah | UX001 | 5m pending | \t | Priya Menon | 14 Nov 2026, 09:06 am | \t | Doxycycline 100mg Capsule0/2 | Adapalene Gel 0.1% 15g0/1 | Sunscreen SPF 50 Gel 50g0/1 | \t | Pending | \t | In stock | Doxycycline 100mg Capsule (60 strips) | Change link | In stock | Adapalene Gel 0.1% 15g (34"
+    },
+    "phLow": {
+      "url": "/dashboard/inventory?area=stock&view=list&stock=LOW",
+      "file": "link-ph_low.png",
+      "text": "ClinicMS | Overview | Dashboard | Daily Collection | Pharmacy | Pharmacy Desk | Pharmacy Counter | Sales | Inventory | Pharmacy Report | AD | Anil Deshmukh | PHARMACIST | 5 | Anil Deshmukh | Inventory | Receive, review and manage pharmacy stock. | Today | Purchases | Stock | Sales | Reorder | Stock list | Stock optimization | Stock ledger | Approve corrections | Stock counts | Supplier returns are now in Purchase bills › Returns | More tasks"
+    },
+    "phExp": {
+      "url": "/dashboard/inventory?area=stock&view=list&expiryMonths=3",
+      "file": "link-ph_exp.png",
+      "text": "ClinicMS | Overview | Dashboard | Daily Collection | Pharmacy | Pharmacy Desk | Pharmacy Counter | Sales | Inventory | Pharmacy Report | AD | Anil Deshmukh | PHARMACIST | 5 | Anil Deshmukh | Inventory | Receive, review and manage pharmacy stock. | Today | Purchases | Stock | Sales | Reorder | Stock list | Stock optimization | Stock ledger | Approve corrections | Stock counts | Supplier returns are now in Purchase bills › Returns | More tasks"
+    },
+    "recChips": [
+      "Not billed",
+      "Not billed",
+      "Not billed",
+      "Not billed",
+      "Not billed",
+      "Not billed",
+      "₹700 · ₹400 due",
+      "₹500 · Paid",
+      "₹2,950 · ₹1,450 due"
+    ],
+    "bell": {
+      "owner0": {
+        "label": "Aditya Bhosale owes ₹2,360.00 | Bill INV-20261109-001",
+        "url": "/dashboard/appointments?date=2026-11-09",
+        "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | P"
+      },
+      "owner1": {
+        "label": "Rohan Kulkarni owes ₹1,450.00 | Bill INV-20261114-002",
+        "url": "/dashboard/appointments?date=2026-11-14",
+        "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | P"
+      },
+      "owner2": {
+        "label": "Low stock (4)",
+        "url": "/dashboard/inventory?area=stock&view=list&stock=LOW",
+        "text": "ClinicMS | Overview | Dashboard | Daily Collection | Clinical | Patients | Appointments | Visits | Procedures | Rooms | Pharmacy | Sales | Inventory | Pharmacy Report | Admin | Reports | Users | Fee list | RI | Rajesh Iyer | OWNER"
+      },
+      "owner3": {
+        "label": "Expiring in 3 months (1)",
+        "url": "/dashboard/inventory?area=stock&view=list&expiryMonths=3",
+        "text": "ClinicMS | Overview | Dashboard | Daily Collection | Clinical | Patients | Appointments | Visits | Procedures | Rooms | Pharmacy | Sales | Inventory | Pharmacy Report | Admin | Reports | Users | Fee list | RI | Rajesh Iyer | OWNER"
+      },
+      "owner4": {
+        "label": "2 upcoming appointments",
+        "url": "/dashboard/appointments",
+        "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | P"
+      },
+      "owner5": {
+        "label": "View reports & alerts",
+        "url": "/dashboard/reports",
+        "text": "Reports & Analytics | Generate comprehensive reports and analyze your clinic's performance | Quick Guide | System Alerts | Bills due | 2 | Low Stock | 4 | Expiry Alerts | 1 | Pending Payments | 0 | Upcoming Appoin"
+      },
+      "owner6": {
+        "none": true,
+        "n": 6
+      },
+      "owner7": {
+        "none": true,
+        "n": 6
+      },
+      "reception0": {
+        "label": "Kavita Naik on 15 Nov 2026 | OPD • Dr. Priya Menon",
+        "url": "/dashboard/appointments?date=2026-11-15",
+        "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | P"
+      },
+      "reception1": {
+        "label": "Imran Sheikh on 15 Nov 2026 | OPD • Dr. Priya Menon",
+        "url": "/dashboard/appointments?date=2026-11-15",
+        "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | P"
+      },
+      "reception2": {
+        "label": "Aditya Bhosale owes ₹2,360.00 | Bill INV-20261109-001",
+        "url": "/dashboard/appointments?date=2026-11-09",
+        "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | P"
+      },
+      "reception3": {
+        "label": "Rohan Kulkarni owes ₹1,450.00 | Bill INV-20261114-002",
+        "url": "/dashboard/appointments?date=2026-11-14",
+        "text": "Appointments | Doctor | Kunal Rao | Date |   | Quick Guide | Calendar | Slots | Doctor Calendar | Click a free time in the Scheduled or Confirmed column to book into that calendar. | Visit Type | All Types | Room | All Rooms | P"
+      },
+      "reception4": {
+        "none": true,
+        "n": 4
+      },
+      "reception5": {
+        "none": true,
+        "n": 4
+      },
+      "reception6": {
+        "none": true,
+        "n": 4
+      },
+      "reception7": {
+        "none": true,
+        "n": 4
+      },
+      "pharmacist0": {
+        "label": "Low stock: Clobetasol Cream 0.05% 20g | Stock 0 • Minimum 8",
+        "url": "/dashboard/inventory?area=stock&view=list&stock=LOW",
+        "text": "ClinicMS | Overview | Dashboard | Daily Collection | Pharmacy | Pharmacy Desk | Pharmacy Counter | Sales | Inventory | Pharmacy Report | AD | Anil Deshmukh | PHARMACIST | 5 | Anil Deshmukh | Inventory | Receive, review and"
+      }
+    },
+    "searchResults": "Meera Shah | 9822011101 | Patient • F • 34 yrs | Patient | Meera Shah - 09:00-09:15 | Dr. Priya Menon | Appointment • 14 Nov 2026 • OPD | Appointment | Meera Shah - 10:00-10:15 | Dr. Priya Menon | Appointment • 17 Oct 2026 • OPD | Appointment | Meera Shah - 10:00-10:15 | Dr. Priya Menon | Appointment • 05 Sep 2026 • OPD | Appointment",
+    "searchPatient": {
+      "url": "/dashboard/patients/cuxpatient000000000000001",
+      "text": "Meera Shah | ID: cuxpatient000000000000001 | Code: UX001 | F | 34 yrs | Resume last visit | Start new visit | Book appointment | Back | Primary contact | 9822011101 | — | Primary doctor: Dr. Priya Menon | Last visit | 14 Nov 202"
+    },
+    "searchDoctorName": "No results found for \"Priya\"",
+    "pharmacistSearch": {
+      "results": "Meera Shah | 9822011101 | Patient • F • 34 yrs | Patient",
+      "bad": [
+        "403 GET /api/appointments?search=Meera&limit=5&sortBy=date&sortOrder=desc"
+      ],
+      "console": [
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+        "Failed to search appointments Error: Forbidden resource (Reference: cb2f32ba-95d8-42c5-ba8f-5ec0fd8ca705)\n    at ApiClient.request (webpack-internal:///(app-pages-browser)/./src/lib/api.ts:104:44)\n    at async performSearch (webpack-internal:///(app-pages-browser)/./src/components/layout/header.tsx:"
+      ]
+    },
+    "bellDoctor": {
+      "label": "Kavita Naik on 15 Nov 2026 | OPD • CONFIRMED",
+      "url": "/dashboard/visits?patientId=cuxpatient000000000000009&appointmentId=cuxappttomorrow0000000001",
+      "text": "Visit Documentation | From Appointment | Continue | Prescribe | Bill | Quick Guide | Back to Calendar | Back to Setup | Patient: Kavita Naik · 36 · Female · Doctor: Dr. Priya Menon · 10:00–10:15 · OPD | Patient Conte"
+    }
+  },
+  "doctor-start": {
+    "docTextHead": "Good morning, Priya\nQuick Guide\nToday's patients\n10:30-10:45\nAnanya Joshi\nIn progress\nContinue visit\n11:30-11:45\nVikram Patil\nConfirmed\nStart visit\n12:15-12:30\nSneha Deshpande\nConfirmed\nStart visit\n14:00-14:15\nAditya Bhosale\nScheduled\nStart visit\n15:15-15:30\nPooja Gokhale\nScheduled\nStart visit\n16:00-16:15\nSanjay Pawar\nConfirmed\nStart visit\n09:00-09:15\nMeera Shah\nCompleted\nOpen visit\n09:30-10:00\nRohan Kulkarni\nCompleted\nOpen visit\nView All Appointments\nMy patients (10)\nImran Sheikh\nUX010 · 9822011110\nLast visit 02 Nov 2026\nKavita Naik\nUX009 · 9822011109\nLast visit 27 Oct 2026\nSanjay Pawar\nUX008 · 9822011108\nLast visit 23 Sep 2026\nPooja Gokhale\nUX007 · 9822011107\nNo visits yet\nAditya Bhosale\nUX006 · 9822011106\nLast visit 05 Nov 2026\nSneha Deshpande\nUX005 · 9822011105\nLast visit 12 Oct 2026\nVikram Patil\nUX004 · 9822011104\nLast visit 24 Oct 2026\nAnanya Joshi\nUX003 · 9822011103\nLast visit 14 Nov 2026\nRohan Kulkarni\nUX002 · 9822011102\nLast visit 14 Nov 2026\nMeera Shah\nUX001 · 9822011101\nLast visit 14 Nov 2026\nRecent visits\nRohan Kulkarni\nPost-inflammatory hyperpigmentation\n14 Nov 2026, 09:30 am\nAnanya Joshi\nNo diagnosis recorded\n14 Nov 2026, 09:06 am\nMeera Shah\nAcne vulgaris\n14 Nov 2026,",
+    "rowsBefore": [
+      "10:30-10:45\nAnanya Joshi\nIn progress\nContinue visit",
+      "11:30-11:45\nVikram Patil\nConfirmed\nStart visit",
+      "12:15-12:30\nSneha Deshpande\nConfirmed\nStart visit",
+      "14:00-14:15\nAditya Bhosale\nScheduled\nStart visit",
+      "15:15-15:30\nPooja Gokhale\nScheduled\nStart visit",
+      "16:00-16:15\nSanjay Pawar\nConfirmed\nStart visit",
+      "09:00-09:15\nMeera Shah\nCompleted\nOpen visit",
+      "09:30-10:00\nRohan Kulkarni\nCompleted\nOpen visit"
+    ],
+    "hrefs": [
+      "Continue visit: /dashboard/visits?patientId=cuxpatient000000000000003&appointmentId=cuxappttoday0000000000003&visitId=cuxvisittoday000000000003",
+      "Start visit: /dashboard/visits?patientId=cuxpatient000000000000004&appointmentId=cuxappttoday0000000000004&autoStart=true",
+      "Start visit: /dashboard/visits?patientId=cuxpatient000000000000005&appointmentId=cuxappttoday0000000000005&autoStart=true",
+      "Start visit: /dashboard/visits?patientId=cuxpatient000000000000006&appointmentId=cuxappttoday0000000000006&autoStart=true",
+      "Start visit: /dashboard/visits?patientId=cuxpatient000000000000007&appointmentId=cuxappttoday0000000000007&autoStart=true",
+      "Start visit: /dashboard/visits?patientId=cuxpatient000000000000008&appointmentId=cuxappttoday0000000000008&autoStart=true",
+      "Open visit: /dashboard/visits?patientId=cuxpatient000000000000001&appointmentId=cuxappttoday0000000000001&visitId=cuxvisittoday000000000001",
+      "Open visit: /dashboard/visits?patientId=cuxpatient000000000000002&appointmentId=cuxappttoday0000000000002&visitId=cuxvisittoday000000000002"
+    ],
+    "startLabel": "Start visit",
+    "startHref": "/dashboard/visits?patientId=cuxpatient000000000000004&appointmentId=cuxappttoday0000000000004&autoStart=true",
+    "v0": 0,
+    "v1": 0,
+    "v2": 0,
+    "afterStartUrl": "/dashboard/visits?patientId=cuxpatient000000000000004&appointmentId=cuxappttoday0000000000004&autoStart=true",
+    "labelAfter": "Start visit",
+    "visitsAll": [],
+    "bad": [],
+    "consoleErrors": [],
+    "bad2": [],
+    "console2": [],
+    "kunalShown": true
+  },
+  "bellDoctor": {
+    "label": "Kavita Naik on 15 Nov 2026 | OPD • CONFIRMED",
+    "url": "/dashboard/visits?patientId=cuxpatient000000000000009&appointmentId=cuxappttomorrow0000000001",
+    "text": "Visit Documentation | From Appointment | Continue | Prescribe | Bill | Quick Guide | Back to Calendar | Back to Setup | Patient: Kavita Naik · 36 · Female · Doctor: Dr. Priya Menon · 10:00–10:15 · OPD | Patient Conte"
+  },
+  "empty:reception": {
+    "text": "Good morning, Sunita\nQuick Guide\nBook appointment\nNew patient\nToday's appointments\n\nNo appointments scheduled for today\n\nBills to collect\n\nNone.",
+    "bad": [],
+    "consoleErrors": []
+  },
+  "empty:doctor": {
+    "text": "Good morning, Priya\nQuick Guide\nToday's patients\n\nNo appointments scheduled for today\n\nMy patients (10)\nImran Sheikh\nUX010 · 9822011110\nLast visit 02 Nov 2026\nKavita Naik\nUX009 · 9822011109\nLast visit 27 Oct 2026\nSanjay Pawar\nUX008 · 9822011108\nLast visit 23 Sep 2026\nPooja Gokhale\nUX007 · 9822011107\nNo visits yet\nAditya Bhosale\nUX006 · 9822011106\nLast visit 05 Nov 2026\nSneha Deshpande\nUX005 · 9822011105\nLast visit 12 Oct 2026\nVikram Patil\nUX004 · 9822011104\nLast visit 24 Oct 2026\nAnanya Joshi\nUX003 · 9822011103\nLast visit 14 Nov 2026\nRohan Kulkarni\nUX002 · 9822011102\nLast visit 14 Nov 2026\nMeera Shah\nUX001 · 9822011101\nLast visit 14 Nov 2026\nRecent visits\nRohan Kulkarni\nPost-inflammatory hyperpigmentation\n14 Nov 2026, 09:30 am\nAnanya Joshi\nNo diagnosis recorded\n14 Nov 2026, 09:06 am\nMeera Shah\nAcne vulgaris\n14 Nov 2026, 09:00 am\nAditya Bhosale\nAcne vulgaris\n05 Nov 2026, 10:05 am\nImran Sheikh\nTinea pedis\n02 Nov 2026, 10:05 am\nAnanya Joshi\nAtopic dermatitis\n31 Oct 2026, 10:05 am\nKavita Naik\nVerruca vulgaris\n27 Oct 2026, 10:05 am\nVikram Patil\nTinea cruris\n24 Oct 2026, 10:05 am",
+    "bad": [],
+    "consoleErrors": []
+  },
+  "empty:owner": {
+    "text": "Good morning, Rajesh\nQuick Guide\nToday's collection\n\n₹2,499.00\n\nClinic ₹2,300.00 · Pharmacy ₹199.00\n\nCash ₹500.00 · UPI ₹1,999.00 · Card ₹0.00\n\nBills due\n\nNone.\n\nWaiting for approval\n\n0\n\nNeeds attention\nLow stock (4)\nClobetasol Cream 0.05% 20g\n0 left\nTretinoin Cream 0.025% 20g\n3 left\nKetoconazole Shampoo 2% 100ml\n4 left\nAdapalene Gel 0.1% 15g\n13 left\nExpiring in 3 months (1)\nFluconazole 150mg Tablet\n21 days\nToday's appointments\n\nNo appointments scheduled for today\n\nDatabase backup\n\n⚠️ Backups are stored locally on the server and contain sensitive data.\n\nCreate Backup",
+    "bad": [],
+    "consoleErrors": []
+  },
+  "empty:pharmacist": {
+    "text": "Good morning, Anil\nQuick Guide\nPrescriptions waiting (0)\nNew sale\n\nNone.\n\nLow stock (4)\nExpiring in 3 months (1)",
+    "bad": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+    ]
+  }
+}

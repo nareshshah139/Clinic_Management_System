@@ -1,0 +1,79 @@
+{
+  "removeAllAfterCreate": {
+    "url": "http://127.0.0.1:36775/dashboard",
+    "stored": {
+      "visitStatus": "COMPLETED",
+      "visitFollowUp": null,
+      "prescriptions": [
+        {
+          "status": "CANCELLED",
+          "instructions": null,
+          "cancellationReason": "All medicines removed before the visit was completed",
+          "inPharmacyQueue": false,
+          "items": [
+            "Mometasone Cream 0.1% 15g|TWICE_DAILY|1-0-1|14DAYS",
+            "Cetirizine 10mg Tablet|ONCE_DAILY|0-0-1|10DAYS"
+          ]
+        }
+      ]
+    }
+  },
+  "editInstructionsAfterCreate": {
+    "url": "http://127.0.0.1:36775/dashboard",
+    "stored": {
+      "visitStatus": "COMPLETED",
+      "visitFollowUp": "Review in 2 weeks",
+      "prescriptions": [
+        {
+          "status": "ACTIVE",
+          "instructions": "Review in 2 weeks",
+          "cancellationReason": null,
+          "inPharmacyQueue": true,
+          "items": [
+            "Mometasone Cream 0.1% 15g|TWICE_DAILY|1-0-1|14DAYS"
+          ]
+        }
+      ]
+    }
+  },
+  "adviceOnly": {
+    "completeEnabled": true,
+    "url": "http://127.0.0.1:36775/dashboard",
+    "stored": {
+      "visitStatus": "COMPLETED",
+      "visitFollowUp": "Diet advice; review in 6 weeks",
+      "prescriptions": []
+    }
+  },
+  "hungLoad": {
+    "afterWait": {
+      "held": 2,
+      "button": "Complete visit",
+      "enabled": true,
+      "notCompletedShown": true
+    },
+    "writes": [
+      "POST /api/visits",
+      "POST /api/prescriptions",
+      "PATCH /api/visits/:id",
+      "PATCH /api/visits/:id",
+      "POST /api/visits/:id/complete"
+    ],
+    "url": "http://127.0.0.1:36775/dashboard",
+    "stored": {
+      "visitStatus": "COMPLETED",
+      "visitFollowUp": null,
+      "prescriptions": [
+        {
+          "status": "ACTIVE",
+          "instructions": null,
+          "cancellationReason": null,
+          "inPharmacyQueue": true,
+          "items": [
+            "Mometasone Cream 0.1% 15g|TWICE_DAILY|1-0-1|14DAYS"
+          ]
+        }
+      ]
+    }
+  }
+}
