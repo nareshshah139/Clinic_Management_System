@@ -13,7 +13,7 @@ beforeEach(() => {
 afterEach(() => { global.fetch = originalFetch; });
 it('shows previous visit and older unattached photos even when the current visit is empty', async () => {
   render(<VisitPhotos patientId="p" visitId="current" />);
-  expect(await screen.findByText('No photos')).toBeInTheDocument();
+  expect(await screen.findByText('No photos attached to this visit')).toBeInTheDocument();
   expect(await screen.findByRole('link', { name: 'Open visit photo 1 from 01 Jan 2025' })).toHaveAttribute('href', '/api/visits/old/photos/image');
   expect(await screen.findByRole('link', { name: 'Open unattached photo 1 from 02 Jan 2025' })).toHaveAttribute('href', '/api/visits/photos/draft/p/20250102/draft');
   expect(apiClient.getAllPatientVisitHistory).toHaveBeenCalledWith('p', false);
@@ -23,7 +23,7 @@ it('shows a loading failure instead of falsely claiming no photos and supports r
   (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 500 });
   render(<VisitPhotos patientId="p" visitId="current" />);
   expect(await screen.findByText('Unable to load this visit’s photos. Please retry.')).toBeInTheDocument();
-  expect(screen.queryByText('No photos')).not.toBeInTheDocument();
+  expect(screen.queryByText('No photos attached to this visit')).not.toBeInTheDocument();
   (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({ items: [{ url: '/visits/current/photos/photo' }] }) });
   fireEvent.click(screen.getByRole('button', { name: 'Retry visit photos' }));
   await waitFor(() => expect(screen.getByAltText('visit')).toHaveAttribute('src', '/api/visits/current/photos/photo'));
@@ -46,7 +46,7 @@ it('advances the editor version only from a successful photo mutation', async ()
     await screen.findByAltText('visit');
     expect(onVisitVersion).not.toHaveBeenCalled();
     fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
-    await screen.findByText('No photos');
+    await screen.findByText('No photos attached to this visit');
     expect(onVisitVersion).toHaveBeenCalledWith(8);
   } finally { confirm.mockRestore(); }
 });
@@ -95,7 +95,7 @@ it('reports an upload conflict before another batch acknowledges success', async
   URL.revokeObjectURL = jest.fn();
   try {
     const view = render(<VisitPhotos patientId="p" visitId="current" onClinicalConflict={() => events.push('conflict')} onVisitVersion={version => events.push(`version:${version}`)} />);
-    await screen.findByText('No photos');
+    await screen.findByText('No photos attached to this visit');
     fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: Array.from({ length: 7 }, (_, i) => new File(['synthetic'], `${i}.gif`, { type: 'image/gif' })) } });
     fireEvent.click(screen.getByRole('button', { name: 'Upload', exact: true }));
     await waitFor(() => expect(events).toEqual(['conflict', 'version:5']));

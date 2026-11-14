@@ -237,14 +237,13 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const onUpload = (evt: React.ChangeEvent<HTMLInputElement>) => {
     const f = evt.target.files;
     if (!f || f.length === 0) return;
-    const files = Array.from(f);
-    if (files.length === 1) void uploadWithPositions(files, inferPositions(1));
-    else openTaggingForFiles(files);
+    openTaggingForFiles(Array.from(f));
   };
 
-  const uploadWithPositions = async (files: File[] | null = pendingFiles, positions: PhotoPosition[] = pendingPositions) => {
-    if (!files || files.length === 0) return;
-    if (positions.length !== files.length || positions.some(p => !p)) {
+  const uploadWithPositions = async () => {
+    if (!pendingFiles || pendingFiles.length === 0) return;
+    const positions = pendingPositions;
+    if (positions.length !== pendingFiles.length || positions.some(p => !p)) {
       toast({ variant: 'warning', title: 'Tag positions', description: 'Please select a position for each photo.' });
       return;
     }
@@ -258,8 +257,8 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       const invalids: string[] = [];
       const validFiles: File[] = [];
       const validPositions: typeof positions = [] as any;
-      for (let i = 0; i < files.length; i += 1) {
-        const f = files[i];
+      for (let i = 0; i < pendingFiles.length; i += 1) {
+        const f = pendingFiles[i];
         const p = positions[i];
         if (!f || f.size <= 0) {
           invalids.push(`${f?.name || 'unnamed'}: empty file`);
@@ -564,29 +563,6 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
    * @cc [owner:nareshshah139,label:product] delete-selected-photo
    * Deleting a photo MUST target the selected item using a single API prefix.
    */
-  const canRetag = (photo: PhotoItem | null) => Boolean(photo && /\/visits\/[^/]+\/photos\/[^/]+$/.test(photo.url) && !/\/visits\/photos\/draft\//.test(photo.url));
-  const retagPhoto = async (photo: PhotoItem, position: PhotoPosition) => {
-    try {
-      const resp = await fetch(toAbsolute(photo.url), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ position }),
-        credentials: 'include',
-      });
-      if (resp.status === 401) handleUnauthorizedRedirect(resp);
-      if (!resp.ok) {
-        if (resp.status === 409) onClinicalConflict?.();
-        throw new Error(`Retag failed: ${resp.status}`);
-      }
-      const data = await resp.json();
-      acknowledgeVersion(data);
-      applyResponseList(data);
-    } catch (e) {
-      console.error('Retag error:', e);
-      toast({ variant: 'destructive', title: 'Position not changed', description: 'Please try again.' });
-    }
-  };
-
   const deletePhoto = async (photo: PhotoItem) => {
     const confirmed = window.confirm('Delete this photo? This cannot be undone.');
     if (!confirmed) return;
@@ -680,7 +656,8 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         </div> : items.length === 0 ? (
           <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
             <ImageIcon className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-medium text-gray-900 mb-6">No photos</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No photos attached to this visit</h3>
+            <p className="text-sm text-gray-500 mb-6">Photos from other visits and unattached uploads are listed below when available.</p>
             <div className="flex justify-center space-x-3">
               <Button onClick={() => inputRef.current?.click()} disabled={uploading}>
                 <Upload className="h-4 w-4 mr-2" />
@@ -767,16 +744,9 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
 
             {/* Meta */}
             <div className="text-xs text-gray-500 flex items-center justify-between">
-              <div className="flex flex-wrap items-center gap-2">
+              <div>
                 {active?.uploadedAt ? `Uploaded: ${displayClinicDateTime(active.uploadedAt)}` : ''}
-                {active && canRetag(active) ? (
-                  <select aria-label="Photo position" className="h-8 rounded-md border border-input bg-background px-2 text-xs text-gray-700"
-                    value={active.position || 'OTHER'} onChange={(e) => void retagPhoto(active, e.target.value as PhotoPosition)}>
-                    {(Object.keys(POSITION_LABEL) as PhotoPosition[]).map(position => (
-                      <option key={position} value={position}>{POSITION_LABEL[position]}</option>
-                    ))}
-                  </select>
-                ) : active?.position ? ` • ${POSITION_LABEL[active.position]}` : ''}
+                {active?.position ? ` • ${POSITION_LABEL[active.position]}` : ''}
               </div>
               <div className="space-x-2">
                 <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.max(0, i - 1))} disabled={items.length <= 1}>Prev</Button>
@@ -953,7 +923,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             <div />
             <div className="space-x-2">
               <Button variant="outline" size="sm" onClick={() => { setTagDialogOpen(false); setPendingFiles(null); setPendingPositions([]); }}>Cancel</Button>
-              <Button size="sm" onClick={() => void uploadWithPositions()} disabled={uploading}>
+              <Button size="sm" onClick={uploadWithPositions} disabled={uploading}>
                 {uploading ? (
                   batchState.total > 0
                     ? `Uploading (${Math.min(batchState.current + (batchState.percent ? 1 : 0), batchState.total)}/${batchState.total})${batchState.percent ? ` - ${batchState.percent}%` : ''}`
