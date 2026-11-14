@@ -407,6 +407,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [saving, setSaving] = useState(false);
+  const [loadedVisitId, setLoadedVisitId] = useState<string | null>(null);
   const completeVisitRef = useRef<() => Promise<void>>(async () => {});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error'>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -1195,6 +1196,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         } catch {}
       } catch {
         // ignore
+      } finally {
+        setLoadedVisitId(visitId);
       }
     };
     void load();
@@ -1589,28 +1592,50 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const router = useRouter();
   const completingRef = useRef(false);
   const [completing, setCompleting] = useState(false);
+  const [completeOnceLoaded, setCompleteOnceLoaded] = useState(false);
+  const endCompletion = () => {
+    completingRef.current = false;
+    setCompleting(false);
+  };
+  const finishCompletion = async () => {
+    try {
+      if (await save(true)) router.push('/dashboard');
+    } finally {
+      endCompletion();
+    }
+  };
   const completeVisit = async () => {
     if (completingRef.current || manualSaveInFlight.current) return;
     completingRef.current = true;
     setCompleting(true);
-    try {
-      if (rxCompletion.unsavedMedicines) {
-        manualSaveInFlight.current = true;
-        clearAutoSaveTimer();
-        try {
-          await autoSavePromiseRef.current;
-          if (!await savePrescriptionRef.current?.()) return;
-        } finally {
-          manualSaveInFlight.current = false;
-        }
+    const visitExisted = Boolean(visitIdRef.current);
+    if (rxCompletion.unsavedMedicines) {
+      manualSaveInFlight.current = true;
+      clearAutoSaveTimer();
+      let prescriptionId: string | undefined;
+      try {
+        await autoSavePromiseRef.current;
+        prescriptionId = await savePrescriptionRef.current?.();
+      } catch {
+        prescriptionId = undefined;
+      } finally {
+        manualSaveInFlight.current = false;
       }
-      if (await save(true)) router.push('/dashboard');
-    } finally {
-      completingRef.current = false;
-      setCompleting(false);
+      if (!prescriptionId) return endCompletion();
     }
+    // A visit the prescription save just created must be loaded back before completing,
+    // or its server defaults would count as edits made while saving.
+    if (visitExisted) await finishCompletion();
+    else setCompleteOnceLoaded(true);
   };
   completeVisitRef.current = completeVisit;
+  const finishCompletionRef = useRef(finishCompletion);
+  finishCompletionRef.current = finishCompletion;
+  useEffect(() => {
+    if (!completeOnceLoaded || !visitId || loadedVisitId !== visitId) return;
+    setCompleteOnceLoaded(false);
+    void finishCompletionRef.current();
+  }, [completeOnceLoaded, visitId, loadedVisitId]);
 
   /**
    * @cc [owner:nareshshah139,label:product] discard-conflicting-draft

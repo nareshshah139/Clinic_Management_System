@@ -41,7 +41,7 @@ it('opens a doctor on the Prescription tab and other roles on Overview', async (
 });
 
 it('names what is missing until there is a complaint and a medicine, then saves the prescription, completes and returns to the dashboard', async () => {
-  render(<MedicalVisitForm patientId="p" doctorId="d" userRole="DOCTOR" />); await flush();
+  render(<MedicalVisitForm patientId="p" doctorId="d" appointmentId="appt-1" userRole="DOCTOR" />); await flush();
   expect(completeButton()).toBeDisabled();
   expect(screen.getByText('Still needed: complaint or diagnosis, prescription. Progress does not verify clinical completeness.')).toBeInTheDocument();
 
@@ -53,7 +53,7 @@ it('names what is missing until there is a complaint and a medicine, then saves 
   await flush();
   expect(mockRxSave).toHaveBeenCalledTimes(1);
   expect(apiClient.createVisit).toHaveBeenCalledTimes(1);
-  expect(apiClient.updateVisit).toHaveBeenCalledWith('new-visit', expect.objectContaining({ version: 1 }), expect.anything());
+  expect(apiClient.updateVisit).toHaveBeenCalledWith('new-visit', expect.objectContaining({ version: 1, consultationType: 'IN_PERSON' }), expect.anything());
   expect(apiClient.completeVisit).toHaveBeenCalledWith('new-visit', { version: 2 }, expect.anything());
   expect(mockToast).toHaveBeenCalledWith({ variant: 'success', title: 'Visit completed', description: undefined });
   expect(mockPush).toHaveBeenCalledWith('/dashboard');
