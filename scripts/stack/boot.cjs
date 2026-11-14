@@ -183,6 +183,7 @@ async function bootStack(opts = {}) {
     JWT_SECRET: crypto.randomUUID(),
     JWT_EXPIRES_IN: "1d",
     DATABASE_URL: url.toString(),
+    ...opts.env,
   };
 
   const owned = { children: [], admin: null, db: null, schemaCreated: false, stopped: null };
