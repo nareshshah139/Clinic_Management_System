@@ -3,7 +3,7 @@ import { permissionGrants, PermissionGrants, userGrants } from './permission-gra
 
 const NO_GRANTS = permissionGrants([]);
 
-/** The grants the permission guard would apply to this user: stored role, user and role-record grants. */
+/** The grants the permission guard would apply to this user: role record and saved grants minus revoked, plus role-fixed grants. */
 export async function viewerGrants(prisma: PrismaService, viewer: { id?: string }): Promise<PermissionGrants> {
   if (!viewer.id) return NO_GRANTS;
   const user = await prisma.user.findUnique({ where: { id: viewer.id }, select: { role: true, permissions: true, revokedPermissions: true } });
