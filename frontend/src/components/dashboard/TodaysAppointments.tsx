@@ -173,7 +173,6 @@ export function TodaysAppointments({ mode, doctorId, refresh, onBillChanged }: {
       {mode === 'desk' && (
         <AppointmentBillDialog
           appointment={billFor}
-          date={today}
           access={state.status === 'ready' ? state.access : NO_BILL_ACCESS}
           onClose={() => setBillForId(null)}
           onChanged={onBillChanged ?? load}

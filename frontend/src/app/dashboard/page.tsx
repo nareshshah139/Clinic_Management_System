@@ -18,22 +18,6 @@ import { ApprovalsFigure, BillsDue, CollectionFigure, NeedsAttention, PharmacyWo
 import { loadFailure } from '@/components/dashboard/load-failure';
 import { ITEM_REQUEST_APPROVER_ROLES } from '@/lib/inventory-item-requests';
 
-/**
- * @cc [owner:nareshshah139,label:product] dashboard-clinic-day
- * Today's appointments MUST be requested for the current Asia/Kolkata calendar day
- * for both doctor schedules and the general appointment summary.
- */
-/**
- * @cc [owner:nareshshah139,label:product] dashboard-patient-label
- * Appointment rows MUST prefer the canonical patient name, falling back to legacy
- * name parts or a nonempty patient label when those names are unavailable.
- */
-/**
- * @cc [owner:nareshshah139,label:product] dashboard-booked-slot
- * Appointment rows MUST display the booked slot unchanged, without a clock time
- * derived from the appointment's calendar date.
- */
-
 type Section = 'deskActions' | 'deskDay' | 'billsToCollect' | 'doctorDay' | 'doctorPatients' | 'pharmacy' | 'figures' | 'attention' | 'summaryDay' | 'collection' | 'backup';
 
 /** Each role's landing page, top to bottom: its own work first, rare admin controls last. */
@@ -77,6 +61,21 @@ function greeting(firstName?: string) {
   return firstName ? `${part}, ${firstName}` : part;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] dashboard-clinic-day
+ * Today's appointments MUST be requested for the current Asia/Kolkata calendar day
+ * for both doctor schedules and the general appointment summary.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] dashboard-patient-label
+ * Appointment rows MUST prefer the canonical patient name, falling back to legacy
+ * name parts or a nonempty patient label when those names are unavailable.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] dashboard-booked-slot
+ * Appointment rows MUST display the booked slot unchanged, without a clock time
+ * derived from the appointment's calendar date.
+ */
 export default function DashboardPage() {
   const { user, loading } = useDashboardUser();
   const role = user?.role ?? '';

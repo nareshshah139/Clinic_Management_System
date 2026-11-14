@@ -155,7 +155,7 @@ export function BillsDue({ alerts, onRetry, onBillChanged = onRetry, title = 'Bi
         </Loaded>
       </CardContent>
       {open && (
-        <AppointmentBillDialog appointment={open.appointment} date={open.booked.day} access={open.access} onClose={() => setOpen(null)} onChanged={onPaid} />
+        <AppointmentBillDialog appointment={open.appointment} access={open.access} onClose={() => setOpen(null)} onChanged={onPaid} />
       )}
     </Card>
   );
