@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VisitsPage from '@/app/dashboard/visits/page';
 import { apiClient } from '@/lib/api';
+const navigation = jest.requireMock('next/navigation');
 
 // Mock the API client
 jest.mock('@/lib/api', () => ({
@@ -46,6 +47,53 @@ describe('VisitsPage', () => {
     fireEvent.click(await screen.findByRole('combobox'));
     expect(await screen.findByText('Dr. Second Doctor')).toBeInTheDocument();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  });
+
+  describe('attributed doctor', () => {
+    const doctors = [
+      { id: 'doctor-1', firstName: 'First', lastName: 'Doctor' },
+      { id: 'doctor-2', firstName: 'Second', lastName: 'Doctor' },
+    ];
+    const signInAs = (me: { id: string; role: string }) => {
+      jest.mocked(apiClient.getPatients).mockResolvedValue({ data: [{ id: 'patient-123', name: 'Patient' }] } as any);
+      jest.mocked(apiClient.get).mockImplementation(async (path: string) => {
+        if (path === '/auth/me') return me as any;
+        return { users: doctors, pagination: { totalPages: 1 } } as any;
+      });
+    };
+
+    it('defaults to the signed-in doctor, not the first doctor in the list', async () => {
+      signInAs({ id: 'doctor-2', role: 'DOCTOR' });
+      render(<VisitsPage />);
+      const picker = await screen.findByRole('combobox');
+      await waitFor(() => expect(picker).toHaveTextContent('Dr. Second Doctor'));
+      expect(picker).not.toHaveTextContent('Dr. First Doctor');
+    });
+
+    it('leaves the doctor unset for an admin and asks for a choice', async () => {
+      signInAs({ id: 'admin-1', role: 'ADMIN' });
+      render(<VisitsPage />);
+      const picker = await screen.findByRole('combobox');
+      await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/auth/me'));
+      expect(picker).toHaveTextContent('Choose a doctor...');
+    });
+  });
+
+  it('does not open a visit for an admin who arrives without a doctor', async () => {
+    jest.mocked(apiClient.getPatients).mockResolvedValue({ data: [{ id: 'patient-123', name: 'Patient' }] } as any);
+    jest.mocked(apiClient.get).mockImplementation(async (path: string) => {
+      if (path === '/auth/me') return { id: 'admin-1', role: 'ADMIN' } as any;
+      return { users: [{ id: 'doctor-1', firstName: 'First', lastName: 'Doctor' }], pagination: { totalPages: 1 } } as any;
+    });
+    const spy = jest.spyOn(navigation, 'useSearchParams').mockReturnValue(
+      new URLSearchParams('patientId=patient-123&autoStart=true') as any,
+    );
+    render(<VisitsPage />);
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/auth/me'));
+    expect(await screen.findByText('Ready to Start')).toBeInTheDocument();
+    expect(screen.getByText('Please select a doctor to start the visit.')).toBeInTheDocument();
+    expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
+    spy.mockRestore();
   });
 
   it('renders loading state initially', () => {

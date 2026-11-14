@@ -259,6 +259,7 @@ import { User, Users, Stethoscope, FileText, Calendar, Activity, ArrowLeft } fro
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { formatPatientName } from '@/lib/utils';
+import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
 import { useRecordById } from '@/components/visits/useRecordById';
 import type {
@@ -484,7 +485,6 @@ function VisitsPageInner() {
   const appointmentIdParam = searchParams.get('appointmentId');
   const urlDoctorId = searchParams.get('doctorId');
   const urlVisitId = searchParams.get('visitId');
-  const autoStartParam = searchParams.get('autoStart') === 'true';
 
   const extractPatients = useCallback((payload: unknown): PatientMatch[] => {
     if (!payload) return [];
@@ -564,18 +564,14 @@ function VisitsPageInner() {
       if (usersRes.status === 'fulfilled') {
         const doctorsData = usersRes.value;
         setDoctors(doctorsData);
-        if (doctorsData.length > 0) {
-          const candidate = doctorsData[0]?.id;
-          if (!candidate) {
-            console.warn('[VisitsPage] First doctor missing id, requiring manual selection');
-          }
-          setSelectedDoctorId((prev) => prev || (candidate || ''));
-        }
       }
 
       try {
-        const currentUser = await apiClient.get<{ role?: string }>('/auth/me');
+        const currentUser = await apiClient.get<{ id?: string; role?: string }>('/auth/me');
         setCurrentUserRole(currentUser?.role ?? 'DOCTOR');
+        setSelectedDoctorId((prev) =>
+          resolveDefaultDoctorId({ role: currentUser?.role, userId: currentUser?.id, current: prev }),
+        );
       } catch (error) {
         console.error('Failed to get current user:', error);
         setCurrentUserRole('DOCTOR');
@@ -608,11 +604,8 @@ function VisitsPageInner() {
       if (appointmentIdParam) {
         void fetchAppointmentData(appointmentIdParam);
       }
-      if (autoStartParam) {
-        setShowForm(true);
-      }
     }
-  }, [appointmentIdParam, autoStartParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
+  }, [appointmentIdParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
 
   // Handle direct visit resume via visitId in URL
   useEffect(() => {
@@ -699,6 +692,10 @@ function VisitsPageInner() {
 
   const selectedPatient = useRecordById<PatientMatch>(selectedPatientId, fetchPatientById);
   const selectedDoctor = useRecordById<DoctorSummary>(selectedDoctorId, fetchDoctorById);
+
+  const visitAlreadyStarted = Boolean(
+    urlVisitId || (appointmentData?.visit && 'id' in appointmentData.visit),
+  );
 
   const startNewVisit = () => {
     if (selectedPatientId && selectedDoctorId) {
@@ -1146,12 +1143,30 @@ function VisitsPageInner() {
         </div>
       </div>
 
-      <div className="sticky -top-4 z-30 -mx-4 md:-top-6 border-b bg-background px-4 py-2 md:-mx-6 md:px-6">
+      <div className="sticky -top-4 z-30 -mx-4 md:-top-6 flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-2 md:-mx-6 md:px-6">
         <VisitIdentityBar
           patient={selectedPatient}
           doctor={selectedDoctor}
           appointment={appointmentData}
+          hideDoctor
         />
+        <div className="flex items-center gap-2">
+          <label htmlFor="visit-doctor" className="text-sm font-medium text-foreground">
+            Attending doctor
+          </label>
+          <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId} disabled={visitAlreadyStarted}>
+            <SelectTrigger id="visit-doctor" className="h-9 w-64" aria-label="Attending doctor">
+              <SelectValue placeholder="Choose a doctor..." />
+            </SelectTrigger>
+            <SelectContent>
+              {doctors.map((doctor) => (
+                <SelectItem key={doctor.id} value={doctor.id}>
+                  Dr. {doctor.firstName} {doctor.lastName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <MedicalVisitForm

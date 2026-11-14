@@ -11,11 +11,12 @@ interface VisitIdentityBarProps {
   doctor: RecordState<NonNullable<IdentityDoctor>>;
   appointment?: IdentityAppointment;
   className?: string;
+  hideDoctor?: boolean;
 }
 
 const SEPARATOR = ' · ';
 
-export function VisitIdentityBar({ patient, doctor, appointment, className = '' }: VisitIdentityBarProps) {
+export function VisitIdentityBar({ patient, doctor, appointment, className = '', hideDoctor = false }: VisitIdentityBarProps) {
   const frame = `text-sm text-gray-700 ${className}`;
 
   if (patient.status === 'loading' || patient.status === 'idle') {
@@ -44,7 +45,7 @@ export function VisitIdentityBar({ patient, doctor, appointment, className = '' 
     .join(SEPARATOR);
   const segments = [
     `Patient: ${patientPart}`,
-    identity.doctorName ? `Doctor: ${identity.doctorName}` : null,
+    identity.doctorName && !hideDoctor ? `Doctor: ${identity.doctorName}` : null,
     identity.slot,
     identity.visitType,
   ].filter(Boolean);

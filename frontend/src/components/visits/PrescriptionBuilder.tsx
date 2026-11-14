@@ -2457,11 +2457,22 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return (visitData as any)?.patient?.name || (patientData as any)?.name || patientId || '—';
   }, [visitData, patientData, patientId]);
 
+  const [fetchedDoctor, setFetchedDoctor] = useState<{ firstName?: string; lastName?: string } | null>(null);
+  useEffect(() => {
+    if (!doctorId || (visitData as any)?.doctor) return;
+    let cancelled = false;
+    Promise.resolve(apiClient.get<{ firstName?: string; lastName?: string }>(`/users/${doctorId}`))
+      .then((u) => { if (!cancelled) setFetchedDoctor(u ?? null); })
+      .catch(() => { if (!cancelled) setFetchedDoctor(null); });
+    return () => { cancelled = true; };
+  }, [doctorId, visitData]);
+
   const previewDoctorName = useMemo(() => {
     const doc = (visitData as any)?.doctor;
-    if (doc) return `Dr. ${(doc.firstName ?? '')} ${(doc.lastName ?? '')}`.trim();
-    return doctorId ? `Doctor ${String(doctorId).slice(0, 6)}` : 'Doctor';
-  }, [visitData, doctorId]);
+    const person = doc || fetchedDoctor;
+    if (person) return `Dr. ${(person.firstName ?? '')} ${(person.lastName ?? '')}`.trim();
+    return 'Doctor';
+  }, [visitData, fetchedDoctor]);
 
   const summaryChips = useMemo(() => {
     return [
@@ -5571,8 +5582,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   variant="outline"
                   onClick={async () => {
                     if (language === 'EN') {
-                      console.debug('[PrescriptionBuilder] Print Preview: language EN, skipping translation');
-                      toast({ title: 'Print Preview', description: 'Language is English. Skipping translation.' });
                       setTranslationsMap({});
                       setPreviewOpen(true);
                       return;
@@ -6437,7 +6446,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </Tooltip>
                   </TooltipProvider>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
-                  <Button className="col-span-1" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={printPreviewInPlace}>Print</Button>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="col-span-1 inline-flex">
+                          <Button className="w-full" disabled={validItems.length === 0 || savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={printPreviewInPlace}>Print</Button>
+                        </span>
+                      </TooltipTrigger>
+                      {validItems.length === 0 && <TooltipContent><p>Add at least one medicine to print</p></TooltipContent>}
+                    </Tooltip>
+                  </TooltipProvider>
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
