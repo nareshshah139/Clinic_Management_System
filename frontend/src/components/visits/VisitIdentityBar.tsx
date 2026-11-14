@@ -45,7 +45,7 @@ export function VisitIdentityBar({ patient, doctor, appointment, className = '' 
     .filter(Boolean)
     .join(SEPARATOR);
   const segments = [
-    `Patient: ${patientPart}`,
+    patientPart,
     identity.doctorName ? `Doctor: ${identity.doctorName}` : null,
     identity.slot,
     identity.visitType && visitTypeLabel(identity.visitType),

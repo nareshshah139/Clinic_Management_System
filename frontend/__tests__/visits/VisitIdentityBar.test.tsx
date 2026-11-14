@@ -12,7 +12,7 @@ it('renders the full identity line', () => {
     />,
   );
   expect(screen.getByTestId('visit-identity')).toHaveTextContent(
-    'Patient: ABHILASH · 33 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · Consultation',
+    'ABHILASH · 33 · Female · Doctor: Dr. Praneeta Jain · 16:00–16:30 · Consultation',
   );
 });
 
@@ -23,7 +23,7 @@ it('leaves the doctor out when none is given', () => {
       appointment={{ slot: '16:00-16:30', visitType: 'PROCEDURE' }}
     />,
   );
-  expect(screen.getByTestId('visit-identity').textContent).toBe('Patient: ABHILASH · 33 · Female · 16:00–16:30 · Procedure');
+  expect(screen.getByTestId('visit-identity').textContent).toBe('ABHILASH · 33 · Female · 16:00–16:30 · Procedure');
 });
 
 it('omits missing parts instead of printing Unknown or undefined', () => {
@@ -34,7 +34,7 @@ it('omits missing parts instead of printing Unknown or undefined', () => {
     />,
   );
   const text = screen.getByTestId('visit-identity').textContent;
-  expect(text).toBe('Patient: ABHILASH');
+  expect(text).toBe('ABHILASH');
 });
 
 it('shows a skeleton while loading', () => {

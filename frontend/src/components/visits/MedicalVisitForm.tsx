@@ -51,7 +51,6 @@ import {
   History,
   Image,
   Keyboard,
-  HelpCircle,
   ChevronDown
 } from 'lucide-react';
 import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
@@ -1785,7 +1784,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" data-tour="help-button">
-                <HelpCircle className="h-4 w-4 mr-2" />
                 Help
                 <ChevronDown className="ml-1 h-4 w-4 opacity-50" />
               </Button>
