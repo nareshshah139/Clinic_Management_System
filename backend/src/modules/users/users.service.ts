@@ -241,6 +241,9 @@ export class UsersService {
     
     if (updateUserDto.permissions) {
       Object.assign(updateData, await this.permissionColumns(updateUserDto.role ?? existingUser.role, updateUserDto.permissions));
+    } else if (updateUserDto.role && updateUserDto.role !== existingUser.role) {
+      // Saved and revoked permissions are relative to the old role; the user starts on the new role's own.
+      Object.assign(updateData, { permissions: null, revokedPermissions: null });
     }
     
     return this.formatUser(await this.saveUser(id, updateData));
@@ -421,7 +424,7 @@ export class UsersService {
   /** The two stored columns under which a user of this role may use exactly the ticked permissions. */
   private async permissionColumns(role: string, ticked: readonly string[]) {
     const roleRecord = await this.prisma.role.findFirst({ where: { name: role }, select: { permissions: true } });
-    const deltas = permissionDeltas(roleRecord?.permissions, ticked, await this.listedPermissions());
+    const deltas = permissionDeltas(role, roleRecord?.permissions, ticked, await this.listedPermissions());
     return { permissions: JSON.stringify(deltas.permissions), revokedPermissions: JSON.stringify(deltas.revokedPermissions) };
   }
 
@@ -600,7 +603,7 @@ export class UsersService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       }),
       this.prisma.permission.count({ where }),
     ]);
@@ -938,15 +941,11 @@ export class UsersService {
    * Formatted user responses MUST omit whatsappAccessToken from metadata while retaining
    * other settings; malformed stored metadata MUST NOT expose its raw value.
    */
-  private formatUser({ password: _password, resetToken: _resetToken, resetTokenExpiry: _resetTokenExpiry, googleRefreshToken: _googleRefreshToken, ...user }: any) {
+  private formatUser({ password: _password, resetToken: _resetToken, resetTokenExpiry: _resetTokenExpiry, googleRefreshToken: _googleRefreshToken, revokedPermissions: _revokedPermissions, ...user }: any) {
     let permissionsParsed: string[] | null = null;
-    let revokedPermissionsParsed: string[] | null = null;
     let metadataParsed: any = null;
     try {
       permissionsParsed = user.permissions ? JSON.parse(user.permissions) : null;
-    } catch {}
-    try {
-      revokedPermissionsParsed = user.revokedPermissions ? JSON.parse(user.revokedPermissions) : null;
     } catch {}
     try {
       metadataParsed = user.metadata ? JSON.parse(user.metadata) : null;
@@ -960,7 +959,6 @@ export class UsersService {
     return {
       ...user,
       permissions: permissionsParsed,
-      revokedPermissions: revokedPermissionsParsed,
       metadata: metadataParsed,
     };
   }

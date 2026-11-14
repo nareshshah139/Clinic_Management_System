@@ -52,21 +52,30 @@ export function tickedPermissions(user: UserWithRole, rolePermissions: unknown, 
 }
 
 /**
- * The stored deltas under which the user may use exactly the ticked permissions out of those listed.
- * An unticked listed permission that a ticked wildcard would still cover is stored as revoked.
+ * The stored deltas under which a user of this role may use exactly the ticked permissions out of
+ * those listed. Only what the role does not already give is saved, so the user keeps following
+ * the role. An unticked listed permission that a ticked wildcard would still cover is revoked.
  */
 export function permissionDeltas(
+  role: string | null | undefined,
   rolePermissions: unknown,
   ticked: readonly string[],
   listed: readonly string[],
 ): { permissions: string[]; revokedPermissions: string[] } {
-  const role = new Set(parsePermissionList(rolePermissions));
+  const fixed = fixedGrants(role);
+  const roleGrants = [...new Set(parsePermissionList(rolePermissions))];
   const target = new Set(ticked);
-  const grants = ticked.filter((grant) => grant !== '*');
-  const stillCovered = listed.filter((permission) => !target.has(permission) && permissionGranted(grants, permission));
+  const covers = (grants: readonly string[], permission: string) =>
+    permissionGranted(grants.filter((grant) => grant !== '*'), permission);
+
+  const kept = roleGrants.filter((grant) => target.has(grant));
+  const extras = [...target].filter((grant) => !roleGrants.includes(grant) && !permissionGranted(fixed, grant) && !covers(kept, grant));
+  const saved = extras.filter((grant) => !covers(extras.filter((other) => other !== grant), grant));
+  const held = [...kept, ...saved];
+  const revocable = (permission: string) => !target.has(permission) && !permissionGranted(fixed, permission);
   return {
-    permissions: [...target].filter((grant) => !role.has(grant)),
-    revokedPermissions: [...new Set([...[...role].filter((grant) => !target.has(grant)), ...stillCovered])],
+    permissions: saved,
+    revokedPermissions: [...new Set([...roleGrants.filter(revocable), ...listed.filter((permission) => revocable(permission) && covers(held, permission))])],
   };
 }
 

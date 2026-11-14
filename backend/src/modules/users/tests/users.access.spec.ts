@@ -252,8 +252,17 @@ describe('/users access control', () => {
     });
 
     it('stores deltas against the new role when an edit changes role and permissions together', async () => {
-      await send('patch', '/users/target', 'admin', { role: 'ADMIN', permissions: ['appointments:read'] }).expect(200);
-      expect(written()).toEqual([{ role: 'ADMIN', permissions: '["appointments:read"]', revokedPermissions: '[]' }]);
+      await send('patch', '/users/reception', 'admin', { role: 'NURSE', permissions: ['appointments:read', 'billing:invoice:read'] }).expect(200);
+      expect(written()).toEqual([{ role: 'NURSE', permissions: '["billing:invoice:read"]', revokedPermissions: '["visits:read","patients:read"]' }]);
+    });
+
+    it('drops saved and revoked permissions when an edit changes the role, and keeps them when it does not', async () => {
+      await send('patch', '/users/target', 'admin', { role: 'RECEPTION', firstName: 'Tara' }).expect(200);
+      await send('patch', '/users/target', 'admin', { role: 'NURSE', firstName: 'Tara' }).expect(200);
+      expect(written()).toEqual([
+        { role: 'RECEPTION', firstName: 'Tara', permissions: null, revokedPermissions: null },
+        { role: 'NURSE', firstName: 'Tara' },
+      ]);
     });
 
     it('clears both columns when a role is assigned without permissions', async () => {
@@ -271,9 +280,9 @@ describe('/users access control', () => {
       try {
         const res = await send('get', '/users/target/permissions', 'admin').expect(200);
         expect(res.body).toEqual({ permissions: ['appointments:read', 'patients:read', 'billing:invoice:read'], always: [] });
-        expect((await send('get', '/users/target', 'admin').expect(200)).body).toMatchObject({
-          permissions: ['billing:invoice:read'], revokedPermissions: ['visits:read'],
-        });
+        const user = (await send('get', '/users/target', 'admin').expect(200)).body;
+        expect(user.permissions).toEqual(['billing:invoice:read']);
+        expect(user).not.toHaveProperty('revokedPermissions');
       } finally {
         Object.assign(users.target, { permissions: null, revokedPermissions: null });
       }
@@ -290,11 +299,20 @@ describe('/users access control', () => {
         const held = await send('get', '/users/target/permissions', 'admin').expect(200);
         expect(held.body.permissions).toEqual(['inventory:*', 'appointments:read', 'inventory:item:read', 'inventory:item:delete']);
         await send('patch', '/users/target/permissions', 'admin', { permissions: ['inventory:*', 'appointments:read', 'inventory:item:read'] }).expect(200);
-        expect(written()).toEqual([{ permissions: '["inventory:item:read"]', revokedPermissions: '["inventory:item:delete"]' }]);
+        expect(written()).toEqual([{ permissions: '[]', revokedPermissions: '["inventory:item:delete"]' }]);
       } finally {
         roleRecords.NURSE = nurse;
         db.permission.findMany.mockImplementation(async () => [permissionRecord]);
       }
+    });
+
+    it.each([
+      ['patch', '/users/target/permissions', { permissions: ['appointments:read', 5] }],
+      ['patch', '/users/target/role', { role: 'NURSE', permissions: [{ name: 'appointments:read' }] }],
+      ['patch', '/users/target', { permissions: [null] }],
+    ] as const)('rejects a permission that is not a string on %s %s without a write', async (method, path, body) => {
+      await send(method, path, 'admin', body).expect(400);
+      expect(writes()).toEqual([]);
     });
 
     it('answers 404 for an unknown user', async () => {

@@ -98,6 +98,7 @@ export class CreateUserDto {
   emergencyPhone?: string;
 
   @IsArray()
+  @IsString({ each: true })
   @IsOptional()
   permissions?: string[];
 
@@ -175,6 +176,7 @@ export class UpdateUserDto {
   emergencyPhone?: string;
 
   @IsArray()
+  @IsString({ each: true })
   @IsOptional()
   permissions?: string[];
 
@@ -250,12 +252,14 @@ export class AssignRoleDto {
   role: UserRole;
 
   @IsArray()
+  @IsString({ each: true })
   @IsOptional()
   permissions?: string[];
 }
 
 export class UpdatePermissionsDto {
   @IsArray()
+  @IsString({ each: true })
   permissions: string[];
 }
 
