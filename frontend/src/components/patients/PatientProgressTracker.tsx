@@ -4,11 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { encounterTime, PATIENT_HISTORY_CHANGED } from '@/lib/patient-history';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Calendar, Stethoscope, FileText, Pill, Receipt } from 'lucide-react';
-import Link from 'next/link';
-import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
 
 type StepStatus = 'done' | 'active' | 'pending';
 
@@ -172,49 +168,6 @@ export default function PatientProgressTracker({ patientId, compact = false, var
     return anyDone ? 'bg-emerald-300' : anyActive ? 'bg-blue-300' : 'bg-gray-200';
   };
 
-  const StartAction = () => {
-    if (variant === 'mini') return null;
-    if (latestVisit?.id) {
-      return (
-        <Link href={`/dashboard/visits?patientId=${encodeURIComponent(patientId)}&visitId=${encodeURIComponent(latestVisit.id)}`}>
-          <Button variant="outline" size={compact ? 'sm' : 'default'}>Continue</Button>
-        </Link>
-      );
-    }
-    if (hasUpcomingAppointment) {
-      return (
-        <Link href={`/dashboard/visits?patientId=${encodeURIComponent(patientId)}&autoStart=true`}>
-          <Button size={compact ? 'sm' : 'default'}>Start Visit</Button>
-        </Link>
-      );
-    }
-    return (
-      <Link href={`/dashboard/appointments?patientId=${encodeURIComponent(patientId)}`}>
-        <Button variant="outline" size={compact ? 'sm' : 'default'}>Book</Button>
-      </Link>
-    );
-  };
-
-  const PrescribeAction = () => {
-    if (variant === 'mini') return null;
-    if (!latestVisit?.id) return null;
-    return (
-      <Link href={`/dashboard/visits?patientId=${encodeURIComponent(patientId)}&visitId=${encodeURIComponent(latestVisit.id)}`}>
-        <Button variant="outline" size={compact ? 'sm' : 'default'}>{hasPrescription ? 'View' : 'Prescribe'}</Button>
-      </Link>
-    );
-  };
-
-  const BillingAction = () => {
-    if (variant === 'mini') return null;
-    if (!latestVisit?.id) return null;
-    return (
-      <Link href={billHref({ prefill: { patientId, visitId: latestVisit.id } })}>
-        <Button variant="outline" size={compact ? 'sm' : 'default'}>{hasRecentInvoice ? 'Invoices' : 'Bill'}</Button>
-      </Link>
-    );
-  };
-
   if (loading) {
     return (
       <div role="status" aria-label="Loading patient progress" className={`w-full ${compact ? 'py-2' : 'py-3'}`}>
@@ -270,16 +223,6 @@ export default function PatientProgressTracker({ patientId, compact = false, var
             )}
           </div>
         ))}
-      </div>
-
-      {/* Minimal inline actions */}
-      <div className={`mt-2 flex flex-wrap items-center gap-2 ${(compact || variant === 'compact') ? 'text-xs' : 'text-sm'}`}>
-        {hasUpcomingAppointment && !latestVisit?.id && (
-          <Badge variant="secondary">Upcoming appt</Badge>
-        )}
-        <StartAction />
-        <PrescribeAction />
-        <BillingAction />
       </div>
     </div>
   );

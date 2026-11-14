@@ -1,9 +1,10 @@
 'use client';
 
-import { displayCalendarDate, displayUtcDate, displayLocalDate } from '@/lib/date-display';
+import { displayCalendarDate, displayUtcDate } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { UserRole } from '@cms/shared-types';
 import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,13 +12,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { calculateAge, formatAge } from '@/lib/utils';
+import { calculateAge } from '@/lib/utils';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
+import PatientFormDialog from '@/components/patients/PatientFormDialog';
+import LastVisitPanel from '@/components/patients/LastVisitPanel';
 import { usePatientHistory } from '@/components/visits/usePatientHistory';
 import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { Calendar, Users, ArrowLeft } from 'lucide-react';
+
+/** The roles the sidebar admits to Visits. */
+const VISIT_ROLES: string[] = [UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER, UserRole.DOCTOR, UserRole.NURSE];
 
 type VisitEntry = Record<string, unknown> & {
   id?: string;
@@ -40,22 +47,25 @@ export default function PatientDetailsPage() {
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
   const [collapsedDates, setCollapsedDates] = useState<Record<string, boolean>>({});
+  const [editOpen, setEditOpen] = useState(false);
+  const { user } = useDashboardUser();
+
+  const loadPatient = useCallback(async () => {
+    try {
+      setError(null);
+      const p = await apiClient.getPatient(id);
+      setPatient(p as any);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load patient');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
-    const run = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const p = await apiClient.getPatient(id);
-        setPatient(p as any);
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load patient');
-      } finally {
-        setLoading(false);
-      }
-    };
-    void run();
-  }, [id]);
+    setLoading(true);
+    void loadPatient();
+  }, [loadPatient]);
 
   const patientName = useMemo(() => {
     if (!patient) return '';
@@ -112,9 +122,6 @@ export default function PatientDetailsPage() {
     }
     return groups;
   }, [filteredVisits]);
-
-  const lastVisit = sortedVisits.find(v => v.entryType !== 'appointment');
-  const lastVisitDate = lastVisit ? new Date(`${encounterDay(lastVisit)}T12:00:00`) : null;
 
   const nextAppointmentLabel = (() => {
     const upcoming = patient?.nextAppointment as any;
@@ -201,7 +208,6 @@ export default function PatientDetailsPage() {
             <div>
               <PageHeader title={<>{patientName || 'Patient'}</>} />
               <div className="flex flex-wrap gap-2 mt-1 text-xs text-gray-600">
-                <Badge variant="secondary">ID: {patient.id}</Badge>
                 {patient.patientCode && <Badge variant="secondary">Code: {patient.patientCode}</Badge>}
                 {patient.abhaId && <Badge variant="outline">ABHA: {patient.abhaId}</Badge>}
                 {patient.gender && <Badge variant="outline">{patient.gender}</Badge>}
@@ -210,15 +216,13 @@ export default function PatientDetailsPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {lastVisit?.id && (
-              <Button variant="outline" onClick={() => router.push(`/dashboard/visits?visitId=${encodeURIComponent(String(lastVisit.id))}&patientId=${encodeURIComponent(id)}`)}>
-                Resume last visit
+            <Button variant="outline" onClick={() => setEditOpen(true)}>Edit</Button>
+            <Button variant="outline" onClick={() => router.push(`/dashboard/appointments?patientId=${encodeURIComponent(id)}`)}>Book appointment</Button>
+            {user && VISIT_ROLES.includes(user.role) && (
+              <Button onClick={() => router.push(`/dashboard/visits?patientId=${encodeURIComponent(id)}&autoStart=true`)}>
+                Start visit
               </Button>
             )}
-            <Button onClick={() => router.push(`/dashboard/visits?patientId=${encodeURIComponent(id)}&autoStart=true`)}>
-              Start new visit
-            </Button>
-            <Button variant="outline" onClick={() => router.push(`/dashboard/appointments?patientId=${encodeURIComponent(id)}`)}>Book appointment</Button>
             <Button variant="outline" onClick={() => router.push('/dashboard/patients')}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
@@ -226,23 +230,14 @@ export default function PatientDetailsPage() {
         </div>
 
         <Card>
-          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="space-y-1">
-              <div className="text-gray-500">Primary contact</div>
               <div className="font-medium text-gray-900">{patient.phone || '—'}</div>
-              <div className="text-gray-600">{patient.email || '—'}</div>
+              {patient.email && <div className="text-gray-600">{patient.email}</div>}
+              {patient.address && <div className="text-gray-600">{patient.address}</div>}
               <div className="text-gray-600">
                 Primary doctor: {patient.primaryDoctor ? `Dr. ${`${patient.primaryDoctor.firstName ?? ''} ${patient.primaryDoctor.lastName ?? ''}`.trim().replace(/^dr\.?\s+/i, '')}` : 'Not assigned'}
               </div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-gray-500">Last visit</div>
-              <div className="font-medium text-gray-900">
-                {lastVisitDate ? displayLocalDate(lastVisitDate) : 'No visits yet'}
-              </div>
-              {lastVisit?.doctor && (
-                <div className="text-gray-600">Dr. {(lastVisit.doctor.firstName ?? '')} {(lastVisit.doctor.lastName ?? '')}</div>
-              )}
             </div>
             <div className="space-y-1">
               <div className="text-gray-500">Next appointment</div>
@@ -253,31 +248,15 @@ export default function PatientDetailsPage() {
         </Card>
       </div>
 
-      {/* Minimal Patient Progress Tracker */}
+      <LastVisitPanel entries={sortedVisits} loading={historyLoading} error={historyError} />
+
       <PatientProgressTracker patientId={id} />
 
-      <Tabs defaultValue="info" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="info">Info</TabsTrigger>
+      <Tabs defaultValue="history" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="uploads">Uploads</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="info" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Patient Information</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div><span className="text-gray-600">Gender:</span> <span className="text-gray-900">{patient.gender || '—'}</span></div>
-              <div><span className="text-gray-600">Age:</span> <span className="text-gray-900">{formatAge(patient)}</span></div>
-              <div><span className="text-gray-600">Phone:</span> <span className="text-gray-900">{patient.phone || '—'}</span></div>
-              <div><span className="text-gray-600">Email:</span> <span className="text-gray-900">{patient.email || '—'}</span></div>
-              <div><span className="text-gray-600">ABHA ID:</span> <span className="text-gray-900">{patient.abhaId || '—'}</span></div>
-              <div><span className="text-gray-600">Address:</span> <span className="text-gray-900">{patient.address || '—'}</span></div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="history" className="mt-4">
           <Card>
@@ -293,7 +272,6 @@ export default function PatientDetailsPage() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
                     <div className="flex flex-wrap gap-2 items-center text-sm">
-                      <span className="text-gray-600">Filter:</span>
                       <select
                         className="border border-gray-200 rounded-md px-3 py-2 text-sm"
                         value={doctorFilter}
@@ -357,6 +335,7 @@ export default function PatientDetailsPage() {
           <VisitPhotos visitId="temp" patientId={id} />
         </TabsContent>
       </Tabs>
+      <PatientFormDialog open={editOpen} onOpenChange={setEditOpen} patientId={id} onSaved={() => { void loadPatient(); }} />
     </div>
   );
 }

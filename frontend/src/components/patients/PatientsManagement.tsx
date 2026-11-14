@@ -1,52 +1,27 @@
 'use client';
 
-import { displayCalendarDate, displayClinicDate } from '@/lib/date-display';
+import { displayClinicDate } from '@/lib/date-display';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { track } from '@/lib/analytics';
-import { formatPatientName, filterRoomsByVisitType, calculateAge, formatAge } from '@/lib/utils';
+import { formatPatientName, calculateAge } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { useOverbookConfirm } from '@/components/appointments/useOverbookConfirm';
-import { overbookFlag } from '@/lib/overbooking';
+import PatientFormDialog, { normalizeGender, type Gender } from './PatientFormDialog';
 import { ToastAction } from '@/components/ui/toast';
-import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta, VisitType, Room } from '@/lib/types';
-
-type Gender = 'MALE' | 'FEMALE' | 'OTHER';
-
-interface PatientFormState {
-  id?: string;
-  abhaId?: string;
-  firstName: string;
-  lastName: string;
-  age: string;
-  gender: Gender;
-  phone: string;
-  email?: string;
-  address?: string;
-  emergencyContact?: string;
-  referralSource?: string;
-  consultationType?: 'ONLINE' | 'OFFLINE';
-  patientType?: 'WALKIN' | 'NON_WALKIN';
-  walkinDoctorId?: string;
-  walkinVisitType?: VisitType;
-  walkinRoomId?: string;
-  /** Undefined until loaded or chosen, so an unloaded value is never saved; '' means no primary doctor. */
-  primaryDoctorId?: string;
-}
+import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta } from '@/lib/types';
 
 /**
  * @cc [owner:nareshshah139,label:accessibility] patient-search-hint-layout
@@ -59,9 +34,8 @@ interface PatientFormState {
 export default function PatientsManagement() {
   const router = useRouter();
   const { toast } = useToast();
-  const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [listLoading, setListLoading] = useState<boolean>(false);
+  const [listLoading, setListLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [search, setSearch] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
@@ -69,7 +43,10 @@ export default function PatientsManagement() {
   const [consultationTypeFilter, setConsultationTypeFilter] = useState<'ALL' | 'ONLINE' | 'OFFLINE'>('ALL');
   const [dateRangeFilter, setDateRangeFilter] = useState<'ALL' | 'LAST_1_WEEK' | 'LAST_1_MONTH'>('ALL');
   const [abhaFilter, setAbhaFilter] = useState<'ALL' | 'HAS' | 'NONE'>('ALL');
-  const [open, setOpen] = useState<boolean>(false);
+  const searchParams = useSearchParams();
+  const [formOpen, setFormOpen] = useState<boolean>(() => searchParams?.get('new') === 'walkin');
+  const [editId, setEditId] = useState<string | undefined>(undefined);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalPatients, setTotalPatients] = useState<number>(0);
@@ -82,40 +59,12 @@ export default function PatientsManagement() {
     return 20;
   });
   const [error, setError] = useState<string | null>(null);
-  const [doctors, setDoctors] = useState<Array<{ id: string; firstName?: string; lastName?: string }>>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [linkPortalOpen, setLinkPortalOpen] = useState<boolean>(false);
   const [linkPortalEmail, setLinkPortalEmail] = useState<string>('');
   const [linkPortalTarget, setLinkPortalTarget] = useState<Patient | null>(null);
   const fetchIdRef = useRef(0);
   const [sortBy, setSortBy] = useState<'NAME' | 'AGE' | 'GENDER' | 'LAST_VISIT' | 'CREATED_AT' | 'REFERRAL'>('NAME');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [form, setForm] = useState<PatientFormState>({
-    abhaId: '',
-    firstName: '',
-    lastName: '',
-    age: '',
-    gender: 'OTHER',
-    phone: '',
-    email: '',
-    address: '',
-    emergencyContact: '',
-    referralSource: '',
-    consultationType: 'OFFLINE',
-    patientType: 'NON_WALKIN',
-    walkinDoctorId: '',
-    walkinVisitType: 'OPD',
-    walkinRoomId: '',
-  });
-
-  const normalizeGender = (g: any): 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN' => {
-    const s = String(g || '').trim().toUpperCase();
-    if (s === 'M' || s === 'MALE') return 'MALE';
-    if (s === 'F' || s === 'FEMALE') return 'FEMALE';
-    if (s === 'O' || s === 'OTHER') return 'OTHER';
-    return 'UNKNOWN';
-  };
-
   // Client-side fuzzy suggestions for pre-min-2 search
   const suggestions = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -148,7 +97,6 @@ export default function PatientsManagement() {
   }, [search, patients]);
 
   // Seed search from URL param once on mount
-  const searchParams = useSearchParams();
   useEffect(() => {
     const q = (searchParams?.get('search') || '').trim();
     if (q) {
@@ -156,6 +104,10 @@ export default function PatientsManagement() {
       setDebouncedSearch(q);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    searchRef.current?.focus();
   }, []);
 
   // Debounce search input and reset to page 1 on search/gender change
@@ -408,220 +360,6 @@ export default function PatientsManagement() {
     }
   };
 
-  useEffect(() => {
-    // Load doctors when the form dialog is opened
-    if (!open) return;
-    (async () => {
-      try {
-        const res = await apiClient.getUsers({ role: 'DOCTOR', limit: 100 });
-        const data = (res as any)?.data || (res as any)?.users || [];
-        const mapped = data.map((u: any) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName }));
-        setDoctors(mapped);
-      } catch {
-        setDoctors([]);
-      }
-      try {
-        const r = await apiClient.getRooms();
-        setRooms((r as any)?.rooms || []);
-      } catch {
-        setRooms([]);
-      }
-    })();
-  }, [open]);
-
-  const resetForm = () => {
-    setForm({
-      abhaId: '',
-      firstName: '',
-      lastName: '',
-      age: '',
-      gender: 'OTHER',
-      phone: '',
-      email: '',
-      address: '',
-      emergencyContact: '',
-      referralSource: '',
-      consultationType: 'OFFLINE',
-      patientType: 'NON_WALKIN',
-      walkinDoctorId: '',
-      walkinVisitType: 'OPD',
-      walkinRoomId: '',
-    });
-    setError(null);
-  };
-
-  const submitPatient = async () => {
-    try {
-      setActionLoading(true);
-      setError(null);
-      
-      // Basic validation
-      if (!form.firstName.trim() || !form.phone.trim()) {
-        setError('Please fill in all required fields (Name, Phone)');
-        return;
-      }
-      if (form.abhaId && form.abhaId.trim().length > 0) {
-        const abha = form.abhaId.trim();
-        const isDigits = /^\d{14}$/.test(abha);
-        if (!isDigits) {
-          setError('ABHA ID must be a 14-digit number');
-          return;
-        }
-      }
-      
-      const name = `${form.firstName} ${form.lastName}`.trim();
-      const parsedAge = form.age ? parseInt(form.age, 10) : undefined;
-      const payload = {
-        abhaId: form.abhaId || undefined,
-        name: name || form.firstName || form.lastName,
-        firstName: form.firstName || undefined,
-        lastName: form.lastName || undefined,
-        gender: form.gender,
-        age: parsedAge != null && !isNaN(parsedAge) ? parsedAge : undefined,
-        phone: form.phone,
-        email: form.email || undefined,
-        address: form.address || undefined,
-        emergencyContact: form.emergencyContact || undefined,
-        referralSource: form.referralSource || undefined,
-        consultationType: form.consultationType || undefined,
-        ...(form.primaryDoctorId !== undefined ? { primaryDoctorId: form.primaryDoctorId || null } : {}),
-      };
-      
-      let savedPatientId = form.id;
-      if (form.id) {
-        await apiClient.updatePatient(form.id, payload);
-      } else {
-        const created = (await apiClient.createPatient(payload)) as any;
-        savedPatientId = created?.id || created?.data?.id || savedPatientId;
-        track('patient_registered', { source: 'patients_page' });
-      }
-      
-      // Optional: auto-book next available slot for walk-in patients when doctor is selected
-      if (savedPatientId && form.patientType === 'WALKIN' && form.walkinDoctorId) {
-        await bookNextAvailableConsultation(
-          savedPatientId,
-          form.walkinDoctorId,
-          form.walkinVisitType || 'OPD',
-          form.walkinRoomId || undefined,
-        );
-      }
-      
-      await fetchPatients(currentPage);
-      setOpen(false);
-      resetForm();
-    } catch (err: any) {
-      console.error('Failed to save patient', err);
-      setError(err?.message || 'Failed to save patient. Please check your input and try again.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const formatDate = (d: Date): string => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const da = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${da}`;
-  };
-
-  const bookNextAvailableConsultation = async (
-    patientId: string,
-    doctorId: string,
-    visitType: VisitType = 'OPD',
-    roomId?: string,
-  ) => {
-    // Try today and the next 7 days
-    const maxDaysAhead = 7;
-    for (let i = 0; i <= maxDaysAhead; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() + i);
-      const dateStr = formatDate(date);
-      try {
-        const slotsRes = (await apiClient.getAvailableSlots({ doctorId, date: dateStr, durationMinutes: 30, calendar: 'CONFIRMED' })) as any;
-        let availableSlots: string[] = slotsRes?.availableSlots || [];
-
-        // If a room is specified, filter to slots where the room is also available
-        if (roomId) {
-          try {
-            const roomSchedule = await apiClient.getRoomSchedule(roomId, dateStr);
-            const occupied = new Set((roomSchedule as any)?.appointments?.map((a: any) => a.slot) || []);
-            availableSlots = availableSlots.filter((s) => !occupied.has(s));
-          } catch {
-            // If room schedule fails, proceed with doctor availability only
-          }
-        }
-        if (availableSlots.length > 0) {
-          const slot = availableSlots[0];
-          const booked = await sendWithOverbookConfirm((allowOverbook) => apiClient.createAppointment({
-            patientId,
-            doctorId,
-            date: dateStr,
-            slot,
-            visitType,
-            source: 'WALK_IN',
-            calendar: 'CONFIRMED',
-            notes: 'Auto-booked next available slot for walk-in',
-            ...(roomId ? { roomId } : {}),
-            ...overbookFlag(allowOverbook),
-          }));
-          if (!booked) {
-            toast({ title: 'Walk-in not booked', description: `${slot} on ${displayCalendarDate(dateStr)} was taken and you chose not to overbook it.` });
-            return;
-          }
-          track('appointment_booked', { source: 'walk_in' });
-          toast({
-            title: 'Walk-in appointment booked',
-            description: `Booked into the Confirmed calendar for ${displayCalendarDate(dateStr)} at ${slot}`,
-            variant: 'default',
-          });
-          return;
-        }
-      } catch (e) {
-        // Ignore and try next day
-      }
-    }
-    toast({
-      title: 'No slots available',
-      description: 'No available consultation slots found in the next 7 days for the selected doctor.',
-      variant: 'destructive',
-    });
-  };
-
-  const onEdit = (p: Patient) => {
-    const resolvedAge = calculateAge(p);
-    setForm({
-      id: p.id,
-      abhaId: p.abhaId || '',
-      firstName: p.firstName,
-      lastName: p.lastName,
-      age: resolvedAge != null ? String(resolvedAge) : '',
-      gender: (p.gender as Gender) || 'OTHER',
-      phone: p.phone,
-      email: p.email || '',
-      address: p.address || '',
-      emergencyContact: p.emergencyContact || '',
-      referralSource: p.referralSource || '',
-      consultationType: (p as any).consultationType === 'ONLINE' ? 'ONLINE' : 'OFFLINE',
-      patientType: 'NON_WALKIN',
-      walkinDoctorId: '',
-    });
-    setOpen(true);
-    // Fetch full patient to preserve fields that might not be included in list response
-    (async () => {
-      try {
-        const full: any = await apiClient.getPatient(p.id);
-        if (full) {
-          setForm(prev => ({
-            ...prev,
-            emergencyContact: (full.emergencyContact ?? prev.emergencyContact) || '',
-            primaryDoctorId: prev.primaryDoctorId ?? (full.primaryDoctorId || ''),
-          }));
-        }
-      } catch {}
-    })();
-  };
-
-
   const handleArchive = async (patient: Patient) => {
     const patientName = formatPatientName(patient);
     try {
@@ -754,199 +492,12 @@ export default function PatientsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Patients</h2>
-          <p className="text-gray-600">Search, add, and manage patient records</p>
-        </div>
-        <Dialog open={open} onOpenChange={(v: boolean) => { if (!v) resetForm(); setOpen(v); }}>
-          <DialogTrigger asChild>
-            <Button data-tour="add-patient-btn">
-              <Plus className="h-4 w-4 mr-2" /> New Patient
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>{form.id ? 'Edit Patient' : 'Create Patient'}</DialogTitle>
-            </DialogHeader>
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-                {error}
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
-              </div>
-              <div>
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input id="lastName" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
-              </div>
-              <div>
-                <Label htmlFor="age">Age (years)</Label>
-                <Input id="age" type="number" min="0" max="150" placeholder="e.g. 35" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
-              </div>
-              <div>
-                <Label id="gender-label" htmlFor="gender">Gender</Label>
-                <Select value={form.gender} onValueChange={(v: Gender) => setForm({ ...form, gender: v })}>
-                  <SelectTrigger id="gender" aria-labelledby="gender-label">
-                    <SelectValue placeholder="Select gender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MALE">Male</SelectItem>
-                    <SelectItem value="FEMALE">Female</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="md:col-span-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              </div>
-              <div className="md:col-span-2">
-                <Label htmlFor="abhaId">ABHA ID (Ayushman Bharat Health Account)</Label>
-                <Input 
-                  id="abhaId"
-                  value={form.abhaId || ''} 
-                  onChange={(e) => setForm({ ...form, abhaId: e.target.value })}
-                  placeholder="Optional - Enter 14-digit ABHA number"
-                />
-                <div className="text-xs text-gray-500 mt-1">Enter the patient's ABHA ID for national health record integration</div>
-              </div>
-              <div className="md:col-span-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div className="md:col-span-2">
-                <Label htmlFor="address">Address</Label>
-                <Input id="address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-              </div>
-              <div className="md:col-span-2">
-                <Label htmlFor="emergencyContact">Emergency Contact</Label>
-                <Input id="emergencyContact" value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
-              </div>
-              <div>
-                <Label id="consultationType-label" htmlFor="consultationType">Consultation Type</Label>
-                <Select value={form.consultationType || 'OFFLINE'} onValueChange={(v: 'ONLINE' | 'OFFLINE') => setForm({ ...form, consultationType: v })}>
-                  <SelectTrigger id="consultationType" aria-labelledby="consultationType-label">
-                    <SelectValue placeholder="Select consultation type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ONLINE">Online</SelectItem>
-                    <SelectItem value="OFFLINE">Offline (In-Clinic Visit)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label id="primaryDoctor-label" htmlFor="primaryDoctor">Primary Doctor</Label>
-                <Select value={form.primaryDoctorId === undefined ? (form.id ? 'LOADING' : 'DEFAULT') : form.primaryDoctorId || 'NONE'}
-                  onValueChange={(v: string) => setForm({ ...form, primaryDoctorId: v === 'NONE' ? '' : v })}>
-                  <SelectTrigger id="primaryDoctor" aria-labelledby="primaryDoctor-label">
-                    <SelectValue placeholder="Select primary doctor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {form.primaryDoctorId === undefined && !form.id && <SelectItem value="DEFAULT">Automatic</SelectItem>}
-                    {form.primaryDoctorId === undefined && form.id && <SelectItem value="LOADING" disabled>Loading…</SelectItem>}
-                    <SelectItem value="NONE">Not assigned</SelectItem>
-                    {doctors.map(d => (
-                      <SelectItem key={d.id} value={d.id}>Dr. {`${d.firstName || ''} ${d.lastName || ''}`.trim().replace(/^dr\.?\s+/i, '')}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {form.primaryDoctorId === undefined && !form.id && <p className="mt-1 text-xs text-gray-500">A doctor registering the patient becomes the primary doctor; otherwise the first visiting doctor does.</p>}
-              </div>
-              <div className="md:col-span-2">
-                <Label id="referralSource-label" htmlFor="referralSource">How did the patient hear about us?</Label>
-                <Select value={form.referralSource || ''} onValueChange={(v: string) => setForm({ ...form, referralSource: v })}>
-                  <SelectTrigger id="referralSource" aria-labelledby="referralSource-label">
-                    <SelectValue placeholder="Select source" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="INSTAGRAM">Instagram</SelectItem>
-                    <SelectItem value="TWITTER">Twitter</SelectItem>
-                    <SelectItem value="GOOGLE">Google</SelectItem>
-                    <SelectItem value="DOCTOR">Doctor</SelectItem>
-                    <SelectItem value="FRIENDS_FAMILY">Friends & Family</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {/* Optional Walk-in booking */}
-              <div>
-                <Label id="patientType-label" htmlFor="patientType">Patient Type</Label>
-                <Select value={form.patientType || 'NON_WALKIN'} onValueChange={(v: 'WALKIN' | 'NON_WALKIN') => setForm({ ...form, patientType: v })}>
-                  <SelectTrigger id="patientType" aria-labelledby="patientType-label">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NON_WALKIN">Non walk-in</SelectItem>
-                    <SelectItem value="WALKIN">Walk-in</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label id="walkinDoctorId-label" htmlFor="walkinDoctorId">Doctor (for walk-in)</Label>
-                <Select value={form.walkinDoctorId || ''} onValueChange={(v: string) => setForm({ ...form, walkinDoctorId: v })}>
-                  <SelectTrigger id="walkinDoctorId" aria-labelledby="walkinDoctorId-label">
-                    <SelectValue placeholder="Select doctor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {doctors.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>
-                        {`Dr. ${(d.firstName || '').trim()} ${(d.lastName || '').trim()}`.trim() || 'Doctor'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="text-xs text-gray-500 mt-1">If Patient Type is Walk-in and a doctor is selected, the next available slot will be automatically booked after saving.</div>
-              </div>
-              {form.patientType === 'WALKIN' && (
-                <>
-                  <div>
-                    <Label id="walkinVisitType-label" htmlFor="walkinVisitType">Appointment Type (walk-in)</Label>
-                    <Select value={form.walkinVisitType || 'OPD'} onValueChange={(v: VisitType) => setForm({ ...form, walkinVisitType: v, walkinRoomId: '' })}>
-                      <SelectTrigger id="walkinVisitType" aria-labelledby="walkinVisitType-label">
-                        <SelectValue placeholder="Select appointment type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="OPD">OPD Consultation</SelectItem>
-                        <SelectItem value="PROCEDURE">Procedure</SelectItem>
-                        <SelectItem value="TELEMED">Telemedicine</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {form.walkinVisitType !== 'TELEMED' && (
-                    <div>
-                      <Label id="walkinRoomId-label" htmlFor="walkinRoomId">Room (optional for OPD)</Label>
-                      <Select value={form.walkinRoomId || ''} onValueChange={(v: string) => setForm({ ...form, walkinRoomId: v })}>
-                        <SelectTrigger id="walkinRoomId" aria-labelledby="walkinRoomId-label">
-                          <SelectValue placeholder="Select room" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {filterRoomsByVisitType(rooms.filter(r => r.isActive), form.walkinVisitType || 'OPD').map((r) => (
-                            <SelectItem key={r.id} value={r.id}>
-                              {r.name} — {r.type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {form.walkinVisitType === 'PROCEDURE' ? 'Selecting an available procedure room is recommended.' : 'Optional: choose a consultation room if needed.'}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => { setOpen(false); resetForm(); }}>Cancel</Button>
-              <Button onClick={submitPatient} disabled={actionLoading}>{form.id ? 'Save Changes' : 'Create'}</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <Button data-tour="add-patient-btn" onClick={() => { setEditId(undefined); setFormOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" /> New patient
+        </Button>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
+          <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
           <Button variant="outline" onClick={exportCsv} disabled={exporting}><Download className="h-4 w-4 mr-2" /> {exporting ? 'Exporting...' : 'Export CSV'}</Button>
         </div>
       </div>
@@ -959,9 +510,10 @@ export default function PatientsManagement() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
                 id="patients-search"
+                ref={searchRef}
                 aria-label="Search patients"
                 className="pl-10" 
-                placeholder="Search by name, phone, ABHA, or email (min 2 chars)" 
+                placeholder="Search name or phone" 
                 value={search} 
                 onChange={(e) => setSearch(e.target.value)}
                 aria-describedby="patients-search-hint"
@@ -971,11 +523,6 @@ export default function PatientsManagement() {
               {search.length > 0 && search.length < 2 && (
                 <div className="text-xs text-gray-500">
                   Enter at least 2 characters to search
-                </div>
-              )}
-              {search.length === 0 && (
-                <div className="text-xs text-gray-400">
-                  Try: 9xxx… (phone), abha…, @email
                 </div>
               )}
               </div>
@@ -1056,10 +603,6 @@ export default function PatientsManagement() {
       </Dialog>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Patient Records</CardTitle>
-          <CardDescription>Manage and view all patient information</CardDescription>
-        </CardHeader>
         <CardContent>
           {error ? (
             <div className="text-center py-10">
@@ -1071,7 +614,7 @@ export default function PatientsManagement() {
           ) : listLoading ? (
             <LoadingSkeleton label="Loading patients…" />
           ) : patients.length === 0 ? (
-            <EmptyState title="No patients found" description={search.length >= 2 || genderFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? 'Adjust your search or filters to find a patient.' : 'Add a patient to start their clinic record.'} />
+            <EmptyState title="No patients found" description={search.length >= 2 || genderFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? 'Adjust your search or filters to find a patient.' : undefined} />
           ) : (
             <div className="min-w-0 max-w-full overflow-x-auto" data-tour="patients-table">
               <Table>
@@ -1192,7 +735,7 @@ export default function PatientsManagement() {
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild><Button variant="outline" size="sm" aria-label={`More actions for ${formatPatientName(p)}`} onClick={e => e.stopPropagation()}>More</Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end" onClick={(e: import('react').MouseEvent) => e.stopPropagation()}>
-                              <DropdownMenuItem onSelect={() => onEdit(p)}>Edit</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => { setEditId(p.id); setFormOpen(true); }}>Edit</DropdownMenuItem>
                               <DropdownMenuItem onSelect={() => handleArchive(p)}>Archive</DropdownMenuItem>
                               {p.portalUserId ? <DropdownMenuItem onSelect={() => handleUnlinkPortalUser(p)}>Unlink portal</DropdownMenuItem> : <DropdownMenuItem onSelect={() => handleLinkPortalUser(p)}>Link portal</DropdownMenuItem>}
                               <DropdownMenuItem onSelect={() => handleSendWhatsApp(p)}>WhatsApp</DropdownMenuItem>
@@ -1261,7 +804,12 @@ export default function PatientsManagement() {
           )}
         </CardContent>
       </Card>
-      {overbookDialog}
+      <PatientFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        patientId={editId}
+        onSaved={() => { void fetchPatients(currentPage); }}
+      />
     </div>
   );
 } 
