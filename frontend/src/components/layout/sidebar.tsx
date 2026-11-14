@@ -9,6 +9,7 @@ import { useDashboardUser } from "./dashboard-user-context";
 import { usePendingItemRequestCount } from "@/components/inventory/use-pending-item-requests";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import { APPOINTMENT_READ_ROLES, ROOM_READ_ROLES } from "@/lib/appointment-access";
+import { PHARMACY_REPORT_ROLES } from "@/lib/pharmacy-access";
 import type { LucideIcon } from "lucide-react";
 import {
   Calendar,
@@ -41,9 +42,6 @@ type NavigationItem = {
   allowedRoles: string[];
   pharmacySection?: PharmacySidebarSection;
 };
-
-/** The roles GET /pharmacy/reports/:reportId admits, so neither report link leads to a refusal. */
-const PHARMACY_REPORT_ROLES = ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "ACCOUNTANT"];
 
 /**
  * @cc [owner:nareshshah139,label:product] single-inventory-entry

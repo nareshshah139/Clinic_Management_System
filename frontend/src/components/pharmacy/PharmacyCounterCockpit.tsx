@@ -203,7 +203,7 @@ export function PharmacyCounterCockpit({
 }: {
   prefill?: PharmacyBillingPrefill | null;
   onOpenBilling: (prefill?: PharmacyBillingPrefill) => void;
-  onOpenDailyCollection: () => void;
+  onOpenDailyCollection?: () => void;
   onOpenInventoryControl: () => void;
 }) {
   const [queue, setQueue] = useState<QueueEntry[]>([]);
@@ -1069,7 +1069,7 @@ function FulfillmentColumn({
   activeLifecycle: DispenseLifecycle;
   exceptionCount: number;
   allLinesReviewed: boolean;
-  onOpenDailyCollection: () => void;
+  onOpenDailyCollection?: () => void;
   onOpenInventoryControl: () => void;
 }) {
   const nextPick = pickLines.find((line) => line.recommendedBatch) || pickLines[0] || null;
@@ -1192,10 +1192,12 @@ function FulfillmentColumn({
       </div>
 
       <div className="mt-2 grid shrink-0 gap-1.5">
-        <Button size="sm" variant="outline" onClick={onOpenDailyCollection}>
-          <ShoppingCart className="mr-2 h-4 w-4" />
-          Daily close
-        </Button>
+        {onOpenDailyCollection && (
+          <Button size="sm" variant="outline" onClick={onOpenDailyCollection}>
+            <ShoppingCart className="mr-2 h-4 w-4" />
+            Daily close
+          </Button>
+        )}
         <Button size="sm" variant="outline" onClick={onOpenInventoryControl}>
           <MapPin className="mr-2 h-4 w-4" />
           Shelf locations

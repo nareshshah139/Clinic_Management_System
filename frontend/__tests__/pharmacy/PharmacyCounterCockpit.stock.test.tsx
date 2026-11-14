@@ -218,3 +218,10 @@ it('offers one Bill button for the selected prescription and sends Daily close t
   fireEvent.click(screen.getByRole('button', { name: 'Daily close' }));
   expect(props.onOpenDailyCollection).toHaveBeenCalledTimes(1);
 });
+
+it('shows no Daily close button when the user cannot open that report', async () => {
+  render(<PharmacyCounterCockpit {...props} onOpenDailyCollection={undefined} />);
+  await screen.findByText(/10 available/);
+  expect(screen.queryByRole('button', { name: 'Daily close' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Shelf locations' })).toBeInTheDocument();
+});

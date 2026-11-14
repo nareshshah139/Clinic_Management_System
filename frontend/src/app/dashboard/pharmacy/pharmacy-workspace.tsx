@@ -12,6 +12,7 @@ import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCre
 import { PartnerDailySync } from '@/components/pharmacy/PartnerDailySync';
 import { PharmacyCounterCockpit } from '@/components/pharmacy/PharmacyCounterCockpit';
 import { apiClient } from '@/lib/api';
+import { PHARMACY_REPORT_ROLES } from '@/lib/pharmacy-access';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import {
@@ -82,6 +83,7 @@ function PharmacyPageContent() {
   const pharmacyTab: PharmacySideTab = requestedTab === 'counter' ? 'counter' : 'desk';
   const { user } = useDashboardUser();
   const sells = PHARMACY_SALES_ROLES.includes(user?.role ?? '');
+  const readsReports = PHARMACY_REPORT_ROLES.includes(user?.role ?? '');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -186,7 +188,7 @@ function PharmacyPageContent() {
           {pharmacyTab === 'counter' ? (
             <PharmacyCounterCockpit
               onOpenBilling={openBill}
-              onOpenDailyCollection={() => router.push('/dashboard/pharmacy/reports?report=daily-collection')}
+              onOpenDailyCollection={readsReports ? () => router.push('/dashboard/pharmacy/reports?report=daily-collection') : undefined}
               onOpenInventoryControl={() => router.push(SHELF_PATH)}
             />
           ) : null}

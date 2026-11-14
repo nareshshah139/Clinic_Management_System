@@ -85,3 +85,16 @@ it('sends the counter to Daily Collection and to the stock list the Inventory pa
     ['/dashboard/inventory?area=stock&view=list'],
   ]);
 });
+
+it('offers Daily close only to roles that can open the Daily Collection report', async () => {
+  section = 'counter';
+  const handlers: Record<string, boolean> = {};
+  for (const next of ['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR', 'PHARMACIST', 'ACCOUNTANT', 'RECEPTION', 'NURSE']) {
+    role = next;
+    const { unmount } = render(<PharmacyWorkspace />);
+    await screen.findByText('Counter');
+    handlers[next] = typeof mockCounter.onOpenDailyCollection === 'function';
+    unmount();
+  }
+  expect(handlers).toEqual({ OWNER: true, ADMIN: true, MANAGER: true, DOCTOR: true, PHARMACIST: true, ACCOUNTANT: true, RECEPTION: false, NURSE: false });
+});
