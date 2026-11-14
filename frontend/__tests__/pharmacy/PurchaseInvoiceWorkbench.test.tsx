@@ -91,13 +91,13 @@ function saveCurrentInvoice() {
 }
 
 function processCurrentInvoice() {
-  const summary = screen.queryByText('More options') || screen.getByText('Automatic processing');
+  const summary = screen.getByText('Automatic processing');
   if (!(summary.parentElement as HTMLDetailsElement).open) fireEvent.click(summary);
   fireEvent.click(screen.getByRole('button', { name: 'Save & Process' }));
 }
 
 function importAutomatically() {
-  fireEvent.click(screen.getByText('More'));
+  fireEvent.click(screen.getByText('Recent invoices and import'));
   fireEvent.click(screen.getByText('Automatic import'));
   fireEvent.click(screen.getByRole('button', { name: 'Import & Add Stock' }));
 }
@@ -646,7 +646,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     render(<PurchaseInvoiceWorkbench />);
     expect(screen.queryByLabelText('Supplier name')).not.toBeInTheDocument();
     expect(screen.getByText('Automatic import')).not.toBeVisible();
-    fireEvent.click(screen.getByText('More'));
+    fireEvent.click(screen.getByText('Recent invoices and import'));
     expect(screen.getByText('Automatic import')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Import & Add Stock' })).not.toBeVisible();
     fireEvent.change(screen.getByLabelText('Received on'), { target: { value: '2026-10-02' } });
@@ -1395,7 +1395,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice(draftInvoice);
     await screen.findByRole('heading', { name: 'Finish invoice review' });
     fireEvent.click(screen.getByRole('button', { name: 'Back to Invoice OCR' }));
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'New invoice' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Enter another bill' })); });
     expect(screen.queryByRole('heading', { name: 'Finish invoice review' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Scan bill' })).toBeDisabled();
     expect(screen.getByLabelText('Invoice No.')).toHaveValue('');
@@ -1611,7 +1611,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.getPharmacyPurchaseInvoiceById.mockResolvedValue({ ...draftInvoice, status: 'STOCK_COMMITTED', stockCommittedAt: '2026-10-19T00:00:00Z' });
     renderSavedInvoice(draftInvoice);
     await editSelectedInvoice();
-    fireEvent.click(screen.queryByText('More options') || screen.getByText('Automatic processing'));
+    fireEvent.click(screen.getByText('Automatic processing'));
     const save = screen.getByRole('button', { name: 'Save & Process' });
     fireEvent.click(save);
     fireEvent.click(save);
@@ -2250,12 +2250,12 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 
-  it('keeps New invoice visible on a posted receipt and starts clean intake without changing posted stock', async () => {
+  it('keeps Enter another bill visible on a posted receipt and starts clean intake without changing posted stock', async () => {
     const posted = { ...draftInvoice, status: 'STOCK_COMMITTED', stockCommittedAt: '2026-10-19T00:00:00Z', stockCommitReference: 'POSTED-UNCHANGED' }, onNew = jest.fn();
     api.getPharmacyPurchaseInvoiceById.mockResolvedValue(posted);
     render(<PurchaseInvoiceWorkbench invoiceId={posted.id} onNew={onNew} />);
     await waitFor(() => expect(screen.getByRole('status', { name: 'Stock status' })).toHaveTextContent('POSTED-UNCHANGED'));
-    const start = screen.getByRole('button', { name: 'New invoice' });
+    const start = screen.getByRole('button', { name: 'Enter another bill' });
     expect(start).toBeVisible();
     await act(async () => { fireEvent.click(start); });
     expect(onNew).toHaveBeenCalledTimes(1);

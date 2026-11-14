@@ -3718,7 +3718,7 @@ function PurchaseInvoiceEditor({
               return errors.length ? saveIncompleteDraft() : saveDraft();
             }}>Save draft</Button>
             {access.automate && <details className="relative text-sm">
-              <summary className="cursor-pointer py-2">More options</summary>
+              <summary className="cursor-pointer py-2">Automatic processing</summary>
               <div className="absolute bottom-full left-0 w-64 space-y-2 rounded-md border bg-background p-3">
                 <p className="text-muted-foreground">Automatic processing saves corrections and adds stock if every check passes.</p>
                 <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={processSavedInvoice}>{saving ? "Saving…" : processing ? "Checking invoice…" : "Save & Process"}</Button>
@@ -3961,7 +3961,7 @@ function PurchaseInvoiceEditor({
               }}
               disabled={busy || !!unknownStockInvoiceId}
             >
-              New invoice
+              Enter another bill
             </Button>
           </nav>
         )}
@@ -4033,7 +4033,7 @@ function PurchaseInvoiceEditor({
               }}
               disabled={busy || !!unknownStockInvoiceId}
             >
-              New invoice
+              Enter another bill
             </Button>
 
           </div>
@@ -4060,7 +4060,7 @@ function PurchaseInvoiceEditor({
         )}
 
         {(!showIntakeHome || automaticImport) && <details className="text-sm">
-          <summary className="cursor-pointer py-1 font-medium">More</summary>
+          <summary className="cursor-pointer py-1 font-medium">Recent invoices and import</summary>
           <div className="mt-2 space-y-3">
             {!showIntakeHome && !activeInvoice && recentInvoices}
             {!showIntakeHome && <details><summary className="cursor-pointer">Review status guide</summary><ReviewLegend /></details>}
@@ -4117,9 +4117,6 @@ function PurchaseInvoiceEditor({
               )}
               {notice}
             </p>
-          )}
-          {notice && stockAdded && !stockReceivedEarlier && !notice.startsWith("Restored") && (
-            <Button onClick={() => { resetDraft(); onNew?.(); }} disabled={busy}>Enter another bill</Button>
           )}
           {error && (error.startsWith("Could not copy.") || !recovery || !error.includes(recovery.message)) && (
             <Alert variant="destructive">

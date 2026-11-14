@@ -88,7 +88,7 @@ fs.writeFileSync(
         !!document.querySelector("#distributor-name")?.getClientRects().length,
     );
     checks.push("Type instead exposes supplier entry");
-    await button("New invoice");
+    await button("Enter another bill");
     await p.waitForFunction(() =>
       new URL(location.href).searchParams.has("new"),
     );
