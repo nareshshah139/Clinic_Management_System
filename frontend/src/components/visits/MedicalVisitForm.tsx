@@ -2696,7 +2696,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                 </p>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="ml-auto flex gap-2">
               <Button variant="outline" onClick={() => void save(false)} disabled={saving}>
                 {saving ? 'Saving...' : 'Save Draft'}
               </Button>

@@ -5119,9 +5119,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                   </div>
                 )}
-                <div className="flex justify-between items-center">
+                <div className="flex flex-wrap justify-between items-center gap-2">
                   <div className="text-sm text-gray-600">Total items: {items.length}</div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2 [&>button]:whitespace-nowrap">
                     {canAddDrugToDB && (
                       <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
                     )}
@@ -5547,9 +5547,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               </div>
             </div>
 
-                          <div className="flex items-center justify-between pt-2 opacity-100">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
               <div className="text-sm text-gray-600">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 [&>button]:whitespace-nowrap [&>a]:whitespace-nowrap">
                 <div className="hidden sm:flex items-center gap-2">
                   <span className="text-sm text-gray-700">Print</span>
                   <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={printCompact}>
@@ -5583,11 +5583,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 >
                   {translatingPreview ? 'Preparing…' : 'Print Preview'}
                 </Button>
-                <Button onClick={() => void create()} disabled={!canCreate || savingFromPreview || savingForExport}>
+                <Button variant={standalone ? 'default' : 'outline'} onClick={() => void create()} disabled={!canCreate || savingFromPreview || savingForExport}>
                   {(visitId || standalone || ensureVisitId) ? 'Create Prescription' : 'Save visit first'}
                 </Button>
                 {!standalone && savedPrescriptionIdForBill && (
-                  <Button variant="link" asChild>
+                  <Button variant="link" className="whitespace-nowrap" asChild>
                     <a href={billHref({ prefill: { patientId, prescriptionId: savedPrescriptionIdForBill, doctorId } })}>Go to pharmacy</a>
                   </Button>
                 )}
