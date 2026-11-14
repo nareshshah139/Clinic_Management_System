@@ -221,6 +221,12 @@ export class UsersController {
     return this.usersService.assignRole(id, assignRoleDto, req.user.branchId);
   }
 
+  @Get(':id/permissions')
+  @Roles(...MANAGE)
+  getUserPermissions(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.usersService.getUserPermissions(id, req.user.branchId);
+  }
+
   @Patch(':id/permissions')
   @Roles(...MANAGE)
   updatePermissions(@Param('id') id: string, @Body() updatePermissionsDto: UpdatePermissionsDto, @Request() req: AuthenticatedRequest) {

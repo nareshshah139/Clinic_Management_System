@@ -12,7 +12,7 @@ import { diagnosticValidationPipe } from '../../../shared/logging/http-observabi
 const row = (id: string, role: string) => ({
   id, role, branchId: 'branch', isActive: true, firstName: id, lastName: 'Synthetic', email: `${id}@example.test`,
   password: '$2b$10$synthetic-hash', resetToken: 'synthetic-reset', resetTokenExpiry: new Date(), googleRefreshToken: 'synthetic-refresh',
-  permissions: null, metadata: role === 'DOCTOR' ? JSON.stringify({ whatsappAccessToken: 'synthetic-whatsapp-token', textSize: 'LARGE' }) : null, branch: { id: 'branch' },
+  permissions: null, revokedPermissions: null, metadata: role === 'DOCTOR' ? JSON.stringify({ whatsappAccessToken: 'synthetic-whatsapp-token', textSize: 'LARGE' }) : null, branch: { id: 'branch' },
 });
 
 const matches = (record: Record<string, unknown>, where: Record<string, unknown> = {}) =>
@@ -48,6 +48,10 @@ describe('/users access control', () => {
     target: row('target', 'NURSE'), lab: row('lab', 'LAB_TECH'),
   };
   const roleRecord = { id: 'role-admin', name: 'ADMIN', permissions: null };
+  const roleRecords: Record<string, { permissions: string | null }> = {
+    ADMIN: roleRecord,
+    NURSE: { permissions: JSON.stringify(['appointments:read', 'visits:read', 'patients:read']) },
+  };
   const branchRecord = { id: 'empty-branch', name: 'Empty' };
   const permissionRecord = { id: 'perm', name: 'appointments:read' };
   const byWhere = (where: any) => Object.values(users).find(user => matches(user, where)) ?? null;
@@ -64,7 +68,7 @@ describe('/users access control', () => {
       delete: jest.fn(async ({ where }) => users[where.id]),
     },
     role: {
-      findFirst: jest.fn(async ({ where }) => where.name === roleRecord.name ? roleRecord : null),
+      findFirst: jest.fn(async ({ where }) => roleRecords[where.name] ?? null),
       findMany: jest.fn(async () => [roleRecord]),
       count: jest.fn(async () => 1),
       findUnique: jest.fn(async ({ where }) => where.id === roleRecord.id ? roleRecord : null),
@@ -236,6 +240,53 @@ describe('/users access control', () => {
     ] as const)('rejects an unknown status on %s %s without a write', async (method, path, body) => {
       await send(method, path, 'admin', body).expect(400);
       expect(writes()).toEqual([]);
+    });
+  });
+
+  describe('the permissions a user holds', () => {
+    const written = () => db.user.update.mock.calls.map(([{ data }]: any) => data);
+
+    it('stores a ticked subset of the role as revocations plus extras', async () => {
+      await send('patch', '/users/target/permissions', 'admin', { permissions: ['appointments:read', 'billing:invoice:read'] }).expect(200);
+      expect(written()).toEqual([{ permissions: '["billing:invoice:read"]', revokedPermissions: '["visits:read","patients:read"]' }]);
+    });
+
+    it('stores deltas against the new role when an edit changes role and permissions together', async () => {
+      await send('patch', '/users/target', 'admin', { role: 'ADMIN', permissions: ['appointments:read'] }).expect(200);
+      expect(written()).toEqual([{ role: 'ADMIN', permissions: '["appointments:read"]', revokedPermissions: '[]' }]);
+    });
+
+    it('clears both columns when a role is assigned without permissions', async () => {
+      await send('patch', '/users/target/role', 'admin', { role: 'ADMIN' }).expect(200);
+      expect(written()).toEqual([{ role: 'ADMIN', permissions: null, revokedPermissions: null }]);
+    });
+
+    it('stores deltas against the assigned role when permissions are sent with it', async () => {
+      await send('patch', '/users/target/role', 'admin', { role: 'NURSE', permissions: ['visits:read'] }).expect(200);
+      expect(written()).toEqual([{ role: 'NURSE', permissions: '[]', revokedPermissions: '["appointments:read","patients:read"]' }]);
+    });
+
+    it('returns the held set and what the role always has', async () => {
+      Object.assign(users.target, { permissions: '["billing:invoice:read"]', revokedPermissions: '["visits:read"]' });
+      try {
+        const res = await send('get', '/users/target/permissions', 'admin').expect(200);
+        expect(res.body).toEqual({ permissions: ['appointments:read', 'patients:read', 'billing:invoice:read'], always: [] });
+        expect((await send('get', '/users/target', 'admin').expect(200)).body).toMatchObject({
+          permissions: ['billing:invoice:read'], revokedPermissions: ['visits:read'],
+        });
+      } finally {
+        Object.assign(users.target, { permissions: null, revokedPermissions: null });
+      }
+      expect((await send('get', '/users/doctor/permissions', 'owner').expect(200)).body).toEqual({ permissions: [], always: ['*'] });
+      expect((await send('get', '/users/pharmacist/permissions', 'owner').expect(200)).body).toEqual({ permissions: [], always: ['pharmacy:*', 'inventory:*'] });
+    });
+
+    it('answers 404 for an unknown user', async () => {
+      await send('get', '/users/nobody/permissions', 'admin').expect(404);
+    });
+
+    it.each(NON_MANAGERS)('forbids %s from reading a user\'s permissions', async (staff) => {
+      await send('get', '/users/target/permissions', staff).expect(403);
     });
   });
 
