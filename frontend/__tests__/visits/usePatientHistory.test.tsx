@@ -40,3 +40,11 @@ it('filters past empty visits without changing the fetched records', async () =>
   await expect(load.mock.results[0].value).resolves.toEqual([empty, saved]);
   expect(load).toHaveBeenCalledTimes(1);
 });
+it('shares one request between readers that open the same patient together', async () => {
+  load.mockResolvedValue([{ id: 'shared', entryType: 'visit', history: { pastHistory: 'Seen before' } }]);
+  const first = renderHook(() => usePatientHistory('together'));
+  const second = renderHook(() => usePatientHistory('together', false));
+  await waitFor(() => expect(second.result.current.entries).toHaveLength(1));
+  expect(first.result.current.entries).toHaveLength(1);
+  expect(load).toHaveBeenCalledTimes(1);
+});

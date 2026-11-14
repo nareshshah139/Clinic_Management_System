@@ -71,10 +71,6 @@ export function getAllFrequencyOptions(): string[] {
   return [...DEFAULT_FREQUENCY_OPTIONS, ...getCustomFrequencies()];
 }
 
-export function formatFrequency(f: string): string {
-  return f.replaceAll('_', ' ');
-}
-
 // ---------------------------------------------------------------------------
 // Timing / When
 // ---------------------------------------------------------------------------

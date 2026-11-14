@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { isPrescriptionField, prescriptionLabel } from '@/lib/prescription-labels';
 
 const labels: Record<string, string> = {
   dm: 'Diabetes', htn: 'Hypertension', thyroid: 'Thyroid disease', others: 'Other history',
@@ -29,7 +30,7 @@ export function hasClinicalValue(value: unknown): boolean {
 }
 
 /** Render every nonempty clinical leaf, including unfamiliar legacy/custom fields. */
-export function ClinicalHistoryDetails({ value }: { value: unknown }): ReactNode {
+export function ClinicalHistoryDetails({ value, field }: { value: unknown; field?: string }): ReactNode {
   const normalized = normalizeClinicalValue(value);
   if (!hasClinicalValue(normalized)) return null;
   if (Array.isArray(normalized)) {
@@ -48,9 +49,10 @@ export function ClinicalHistoryDetails({ value }: { value: unknown }): ReactNode
       const structured = typeof normalizeClinicalValue(item) === 'object';
       return <div key={key} className={structured ? 'min-w-0 space-y-1' : 'min-w-0 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-0.5'}>
         <dt className="break-words text-xs font-medium leading-5 text-muted-foreground">{clinicalLabel(key)}</dt>
-        <dd className="min-w-0 whitespace-pre-wrap break-words text-foreground"><ClinicalHistoryDetails value={item} /></dd>
+        <dd className="min-w-0 whitespace-pre-wrap break-words text-foreground"><ClinicalHistoryDetails value={item} field={key} /></dd>
       </div>;
     })}</dl>;
   }
-  return typeof normalized === 'boolean' ? (normalized ? 'Yes' : 'No') : String(normalized);
+  if (typeof normalized === 'boolean') return normalized ? 'Yes' : 'No';
+  return field && isPrescriptionField(field) ? prescriptionLabel(field, normalized) : String(normalized);
 }

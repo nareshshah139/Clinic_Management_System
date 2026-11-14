@@ -1,5 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VisitsPage from '@/app/dashboard/visits/page';
+import { useEffect, useState, type ReactNode } from 'react';
+import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
+import type { User } from '@/lib/types';
 import { apiClient } from '@/lib/api';
 const navigation = jest.requireMock('next/navigation');
 
@@ -18,14 +21,25 @@ jest.mock('@/lib/api', () => ({
 
 // Mock the MedicalVisitForm component to avoid complex rendering
 jest.mock('@/components/visits/MedicalVisitForm', () => {
-  return function MockMedicalVisitForm({ patientId, doctorId }: { patientId: string; doctorId: string }) {
+  return function MockMedicalVisitForm({ patientId, doctorId, identity, doctorControl }: { patientId: string; doctorId: string; identity?: React.ReactNode; doctorControl?: React.ReactNode }) {
     return (
-      <div data-testid="medical-visit-form">
-        Medical Visit Form - Patient: {patientId}, Doctor: {doctorId}
+      <div>
+        <div data-testid="medical-visit-form">
+          Medical Visit Form - Patient: {patientId}, Doctor: {doctorId}
+        </div>
+        {identity}
+        {doctorControl}
       </div>
     );
   };
 });
+function LayoutSession({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<{ user: User | null; loading: boolean }>({ user: null, loading: true });
+  useEffect(() => {
+    apiClient.get<User>('/auth/me').then((user) => setSession({ user, loading: false }), () => setSession({ user: null, loading: false }));
+  }, []);
+  return <DashboardUserProvider value={{ ...session, refresh: async () => {}, logout: async () => {} }}>{children}</DashboardUserProvider>;
+}
 
 describe('VisitsPage', () => {
   beforeEach(() => {
@@ -42,7 +56,7 @@ describe('VisitsPage', () => {
       return { users: [{ id: 'doctor-1', firstName: 'First', lastName: 'Doctor' }], pagination: { totalPages: 2 } } as any;
     });
 
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/users', { role: 'DOCTOR', page: 2, limit: 100 }));
     fireEvent.click(await screen.findByRole('combobox', { name: 'Select Doctor' }));
     expect(await screen.findByText('Dr. Second Doctor')).toBeInTheDocument();
@@ -64,7 +78,7 @@ describe('VisitsPage', () => {
 
     it('defaults to the signed-in doctor, not the first doctor in the list', async () => {
       signInAs({ id: 'doctor-2', role: 'DOCTOR' });
-      render(<VisitsPage />);
+      render(<VisitsPage />, { wrapper: LayoutSession });
       const picker = await screen.findByRole('combobox', { name: 'Select Doctor' });
       await waitFor(() => expect(picker).toHaveTextContent('Dr. Second Doctor'));
       expect(picker).not.toHaveTextContent('Dr. First Doctor');
@@ -72,7 +86,7 @@ describe('VisitsPage', () => {
 
     it('leaves the doctor unset for an admin and asks for a choice', async () => {
       signInAs({ id: 'admin-1', role: 'ADMIN' });
-      render(<VisitsPage />);
+      render(<VisitsPage />, { wrapper: LayoutSession });
       const picker = await screen.findByRole('combobox', { name: 'Select Doctor' });
       await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/auth/me'));
       expect(picker).toHaveTextContent('Choose a doctor...');
@@ -109,7 +123,7 @@ describe('VisitsPage', () => {
       'gives a doctor on a colleague\'s appointment the booked doctor, locked, with a note (%s)',
       async (order) => {
         const spy = open({ id: 'doctor-1', role: 'DOCTOR' }, order);
-        render(<VisitsPage />);
+        render(<VisitsPage />, { wrapper: LayoutSession });
         await waitFor(() => expect(apiClient.getAppointment).toHaveBeenCalled());
         const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
         await waitFor(() => expect(picker).toHaveTextContent('Dr. Praneeta Jain'));
@@ -126,7 +140,7 @@ describe('VisitsPage', () => {
 
     it('never shows the signed-in doctor while the appointment is still loading', async () => {
       const spy = open({ id: 'doctor-1', role: 'DOCTOR' }, 'me-first');
-      render(<VisitsPage />);
+      render(<VisitsPage />, { wrapper: LayoutSession });
       await waitFor(() => expect(apiClient.getAppointment).toHaveBeenCalled());
       expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
       await screen.findByTestId('medical-visit-form');
@@ -136,7 +150,7 @@ describe('VisitsPage', () => {
 
     it('locks the doctor and shows no note when the doctor opens their own appointment', async () => {
       const spy = open({ id: 'doctor-2', role: 'DOCTOR' }, 'me-first');
-      render(<VisitsPage />);
+      render(<VisitsPage />, { wrapper: LayoutSession });
       const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
       await waitFor(() => expect(picker).toHaveTextContent('Dr. Praneeta Jain'));
       expect(picker).toBeDisabled();
@@ -146,7 +160,7 @@ describe('VisitsPage', () => {
 
     it('drops the appointment when a different patient is chosen, so the doctor defaults again', async () => {
       const spy = open({ id: 'doctor-1', role: 'DOCTOR' }, 'me-first');
-      render(<VisitsPage />);
+      render(<VisitsPage />, { wrapper: LayoutSession });
       await screen.findByTestId('medical-visit-form');
       jest.mocked(apiClient.getPatients).mockResolvedValue({
         data: [
@@ -172,7 +186,7 @@ describe('VisitsPage', () => {
 
     it('selects the appointment doctor for a receptionist without a note', async () => {
       const spy = open({ id: 'rec-1', role: 'RECEPTIONIST' }, 'me-first');
-      render(<VisitsPage />);
+      render(<VisitsPage />, { wrapper: LayoutSession });
       const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
       await waitFor(() => expect(picker).toHaveTextContent('Dr. Praneeta Jain'));
       expect(screen.queryByText(/Booked with/)).not.toBeInTheDocument();
@@ -189,7 +203,7 @@ describe('VisitsPage', () => {
     const spy = jest.spyOn(navigation, 'useSearchParams').mockReturnValue(
       new URLSearchParams('patientId=patient-123&autoStart=true') as any,
     );
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/auth/me'));
     expect(await screen.findByText('Ready to Start')).toBeInTheDocument();
     expect(screen.getByText('Please select a doctor to start the visit.')).toBeInTheDocument();
@@ -205,7 +219,7 @@ describe('VisitsPage', () => {
     mockGetPatients.mockImplementation(() => new Promise(() => {}));
     mockGet.mockImplementation(() => new Promise(() => {}));
 
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     
     expect(screen.getByText('Loading visit form…')).toBeInTheDocument();
   });
@@ -223,7 +237,7 @@ describe('VisitsPage', () => {
       users: [{ id: 'doctor-123', name: 'Dr. Smith', role: 'DOCTOR' }],
     });
 
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     
     await waitFor(() => {
       expect(screen.getByPlaceholderText('Search name, phone, or email')).toBeInTheDocument();
@@ -241,7 +255,7 @@ describe('VisitsPage', () => {
     mockGetPatients.mockResolvedValue({ data: [] });
     mockGet.mockResolvedValue({ users: [] });
 
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     
     await waitFor(() => {
       expect(screen.getByText('No patients or doctors found. Please add at least one to create a visit.')).toBeInTheDocument();
@@ -260,7 +274,7 @@ describe('VisitsPage', () => {
     });
     mockGet.mockResolvedValue({ users: [] });
 
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     
     await waitFor(() => {
       expect(screen.getByText('No patients or doctors found. Please add at least one to create a visit.')).toBeInTheDocument();
@@ -277,7 +291,7 @@ describe('VisitsPage', () => {
     mockGetPatients.mockRejectedValue(new Error('Failed to fetch patients'));
     mockGet.mockRejectedValue(new Error('Failed to fetch users'));
 
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     
     await waitFor(() => {
       expect(screen.getByText('No patients or doctors found. Please add at least one to create a visit.')).toBeInTheDocument();
@@ -298,7 +312,7 @@ describe('VisitsPage', () => {
       users: [{ id: 'doctor-123', name: 'Dr. Smith', role: 'DOCTOR' }],
     });
 
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     
     await waitFor(() => {
       expect(mockGetPatients).toHaveBeenCalledWith({ page: 1, limit: 1 });
@@ -325,7 +339,7 @@ describe('VisitsPage', () => {
       ],
     });
 
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     
     await waitFor(() => {
       expect(screen.getByPlaceholderText('Search name, phone, or email')).toBeInTheDocument();
@@ -346,7 +360,7 @@ describe('VisitsPage', () => {
       users: [{ id: 'doctor-123', name: 'Dr. Smith', role: 'DOCTOR' }],
     });
 
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     
     await waitFor(() => {
       expect(screen.getByText('No patients or doctors found. Please add at least one to create a visit.')).toBeInTheDocument();
@@ -368,7 +382,7 @@ describe('VisitsPage', () => {
       users: [{ name: 'Dr. Smith', role: 'DOCTOR' }], // Missing id
     });
 
-    render(<VisitsPage />);
+    render(<VisitsPage />, { wrapper: LayoutSession });
     
     await waitFor(() => {
       expect(screen.getByText('No patients or doctors found. Please add at least one to create a visit.')).toBeInTheDocument();

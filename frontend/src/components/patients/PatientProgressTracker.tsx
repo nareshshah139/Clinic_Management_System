@@ -14,7 +14,6 @@ type StepStatus = 'done' | 'active' | 'pending';
 
 interface Props {
   patientId: string;
-  compact?: boolean;
   variant?: 'full' | 'compact' | 'mini';
 }
 
@@ -40,7 +39,8 @@ interface VisitEntryMinimal {
  * Progress steps wider than their container MUST scroll within the tracker.
  * Patient actions MUST remain reachable without scrolling the page horizontally.
  */
-export default function PatientProgressTracker({ patientId, compact = false, variant = 'full' }: Props) {
+export default function PatientProgressTracker({ patientId, variant = 'full' }: Props) {
+  const compact = variant === 'compact';
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [nextAppointment, setNextAppointment] = useState<NextAppointmentResponse | null>(null);
@@ -251,29 +251,29 @@ export default function PatientProgressTracker({ patientId, compact = false, var
   }
 
   return (
-    <div className={`w-full ${compact || variant === 'compact' ? 'py-2' : 'py-3'}`}>
-      <div className={`flex items-center overflow-x-auto ${compact || variant === 'compact' ? 'gap-2' : 'gap-3'}`}>
+    <div className={`w-full ${compact ? 'py-2' : 'py-3'}`}>
+      <div className={`flex items-center overflow-x-auto ${compact ? 'gap-2' : 'gap-3'}`}>
         {steps.map((step, idx) => (
           <div key={step.key} className="flex shrink-0 items-center">
             <div className="flex flex-col items-center">
               <div className={`h-7 w-7 rounded-full border flex items-center justify-center ${circleClass(step.status)}`}>
                 {step.icon}
               </div>
-              {!(compact || variant === 'compact') && (
+              {!compact && (
                 <div className="mt-1 text-xs text-foreground">
                   {step.label}
                 </div>
               )}
             </div>
             {idx < steps.length - 1 && (
-              <div className={`mx-2 h-0.5 ${(compact || variant === 'compact') ? 'w-8' : 'w-12'} ${lineClass(step.status, steps[idx + 1].status)}`} />
+              <div className={`mx-2 h-0.5 ${compact ? 'w-8' : 'w-12'} ${lineClass(step.status, steps[idx + 1].status)}`} />
             )}
           </div>
         ))}
       </div>
 
       {/* Minimal inline actions */}
-      <div className={`mt-2 flex flex-wrap items-center gap-2 ${(compact || variant === 'compact') ? 'text-xs' : 'text-sm'}`}>
+      <div className={`mt-2 flex flex-wrap items-center gap-2 ${compact ? 'text-xs' : 'text-sm'}`}>
         {hasUpcomingAppointment && !latestVisit?.id && (
           <Badge variant="secondary">Upcoming appt</Badge>
         )}

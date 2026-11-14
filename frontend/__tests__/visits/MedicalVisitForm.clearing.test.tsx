@@ -45,7 +45,7 @@ beforeEach(() => {
 
 async function openForm() {
   const view = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
-  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Diagnosis' })).toHaveValue('Saved diagnosis'));
   return view;
 }
@@ -80,7 +80,7 @@ it('clears populated clinical fields and keeps them clear after saving and reope
   });
   view.unmount(); localStorage.clear();
   render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
-  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
   await waitFor(() => expect(screen.getByLabelText('Personal history')).toHaveValue('Keep personal history'));
   expect(screen.getByRole('textbox', { name: 'Diagnosis' })).toHaveValue('');
   expect(screen.getByLabelText('Past history')).toHaveValue('');
@@ -96,7 +96,7 @@ it('keeps an intentional clear while delayed hydration fills untouched siblings'
   const pending = new Promise(resolve => { resolveVisit = resolve; });
   (apiClient.get as jest.Mock).mockImplementation(url => url === '/visits/v' ? pending : Promise.resolve({}));
   render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
-  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
   fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'New draft' } });
   fireEvent.change(screen.getByLabelText('Past history'), { target: { value: '' } });
   await act(async () => resolveVisit(saved));
@@ -121,7 +121,7 @@ it('recovers a rejected clear after immediate unmount without resurrecting the s
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
   view.unmount();
   render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
-  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
   await waitFor(() => expect(screen.getByLabelText('Personal history')).toHaveValue('Keep personal history'));
   expect(screen.getByRole('textbox', { name: 'Diagnosis' })).toHaveValue('');
   expect(screen.getByRole('textbox', { name: 'Past history' })).toHaveValue('');
@@ -157,14 +157,14 @@ it('keeps a conflicting draft across reopening and explicitly replaces it with t
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
   view.unmount();
   render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
-  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
   await waitFor(() => expect(screen.getByLabelText('Past history')).toHaveValue('Conflicting local history'));
   expect(screen.getByRole('alert')).toHaveTextContent('Autosave is paused');
   expect(JSON.parse(localStorage.getItem('clinic:visit-draft:d:p:visit-v')!).data).toMatchObject({ visitVersion: 3, saveConflict: true });
 
   (apiClient.get as jest.Mock).mockResolvedValueOnce(JSON.parse(JSON.stringify(saved))).mockRejectedValue(new Error('No second fetch needed for recovery'));
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Discard draft and reload saved visit' })));
-  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
   await waitFor(() => expect(screen.getByLabelText('Past history')).toHaveValue('History saved elsewhere'));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(localStorage.getItem('rxDraft:p:v') || '').not.toContain('Conflicting local history');
@@ -208,13 +208,14 @@ it.each(['create', 'update'])('blocks autosave after an Rx %s conflict despite l
     expect(localStorage.getItem('rxDraft:p:v')).toContain('Stale Rx edit');
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Photos' }), { button: 0, ctrlKey: false });
     saved.version = 5;
+    await waitFor(() => expect(mockPhotoVersion).toBeDefined());
     await act(async () => mockPhotoVersion!(5));
     await act(async () => jest.advanceTimersByTime(40000));
     expect(apiClient.updateVisit).not.toHaveBeenCalled();
     expect(JSON.parse(localStorage.getItem('clinic:visit-draft:d:p:visit-v')!).data).toMatchObject({ visitVersion: 3, saveConflict: true });
     expect(localStorage.getItem('rxDraft:p:v')).toContain('Stale Rx edit');
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Discard draft and reload saved visit' })));
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
     await waitFor(() => expect(screen.getByLabelText('Past history')).toHaveValue('Saved externally'));
     fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Reviewed edit' } });
     await act(async () => jest.advanceTimersByTime(8100));
@@ -250,14 +251,14 @@ it.each(['manual', 'Rx'])('requires explicit recovery when an appointment visit 
     localStorage.setItem('rxDraft:p:standalone', JSON.stringify({ items: [{ drugName: 'Synthetic medicine', frequency: 'ONCE_DAILY', dosageUnit: 'MG', duration: 7, durationUnit: 'DAYS' }] }));
     render(<MedicalVisitForm patientId="p" doctorId="d" appointmentId="appointment" userRole="ADMIN" />);
     await act(async () => {});
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
     fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Unsaved new-visit history' } });
     await act(async () => fireEvent.click(screen.getByRole('button', { name: mode === 'manual' ? 'Save Draft' : 'Create Prescription' })));
     expect(apiClient.createVisit).toHaveBeenCalled();
     expect(apiClient.updateVisit).not.toHaveBeenCalled();
     expect(apiClient.createPrescription).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('Autosave is paused');
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
     expect(screen.getByLabelText('Past history')).toHaveValue('Unsaved new-visit history');
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create Prescription' })));
@@ -265,7 +266,7 @@ it.each(['manual', 'Rx'])('requires explicit recovery when an appointment visit 
     expect(apiClient.updateVisit).not.toHaveBeenCalled();
     expect(apiClient.createPrescription).not.toHaveBeenCalled();
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Discard draft and reload saved visit' })));
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
     await waitFor(() => expect(screen.getByLabelText('Past history')).toHaveValue('Concurrent saved history'));
     fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Reviewed appointment edit' } });
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));

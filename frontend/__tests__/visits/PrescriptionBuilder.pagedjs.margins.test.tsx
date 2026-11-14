@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { jest } from '@jest/globals';
 
 import * as toastHook from '@/hooks/use-toast';
@@ -284,7 +284,7 @@ it('keeps tele-video metadata in preview, print, PDF, WhatsApp and Email, and re
 
 it.each([false, true])('prints Diagnosis only once one is entered (space-optimized: %j)', async (spaceOptimized) => {
   paginateSourceContent = true;
-  render(<PrescriptionBuilder patientId={`diagnosis-${spaceOptimized}`} visitId={null} doctorId="d1" />);
+  render(<PrescriptionBuilder patientId={`diagnosis-${spaceOptimized}`} visitId={null} doctorId="d-diagnosis" />);
   await openPreview();
   if (spaceOptimized) fireEvent.click(screen.getByRole('checkbox', { name: 'Space-optimized layout' }));
   await settlePreviewPagination();
@@ -372,6 +372,19 @@ describe('PrescriptionBuilder - Paged.js margin wiring', () => {
     expect(lastPagedCssText).toContain(`margin-top: ${pxToMm(170)}mm`);
     expect(lastPagedCssText).toContain(`margin-bottom: ${pxToMm(45)}mm`);
     expect(Array.from(document.querySelectorAll('style')).some(style => style.textContent?.includes("url('/custom-clinic.jpg')"))).toBe(true);
+  });
+
+  it('opens the preview with Print, Download PDF and Close first, and page setup folded away', async () => {
+    render(<PrescriptionBuilder patientId="preview-layout" doctorId="d1" visitId={null} />);
+    await openPreview();
+    const actions = document.querySelector('[data-prescription-preview-actions]') as HTMLElement;
+    expect(within(actions).getAllByRole('button').map((button) => button.textContent)).toEqual(['Print', 'Download PDF', 'Close']);
+    expect(within(actions).getByRole('button', { name: 'Print' })).toBeDisabled();
+    expect(screen.getByText('Page setup').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getAllByRole('slider').map((slider) => slider.getAttribute('id') && document.querySelector(`label[for="${slider.getAttribute('id')}"]`)?.textContent)).toEqual(['Zoom', 'Top margin', 'Bottom margin']);
+    const pages = screen.getByRole('region', { name: 'Prescription pages' });
+    expect(pages).toHaveAttribute('id', 'print-preview-scroll');
+    expect(pages).toHaveAttribute('tabindex', '0');
   });
 
   it('applies @page margin-top from the Top margin slider (UI -> Paged.js)', async () => {

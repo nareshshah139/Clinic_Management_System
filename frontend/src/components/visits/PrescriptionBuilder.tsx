@@ -3,6 +3,7 @@ import { displayUtcDate, displayClinicDate, displayClinicDateTime } from '@/lib/
 import { Spinner } from "@/components/ui/spinner";
 import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { VisitDetails } from '@/lib/types';
 import { encounterTime } from '@/lib/patient-history';
 import { PRESCRIPTION_LETTERHEAD_URL, prescriptionLetterheadUrl, prescriptionPageMargin } from '@/lib/prescription-letterhead';
@@ -18,7 +19,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ToastAction } from '@/components/ui/toast';
 import { useOnExaminationPanel } from '@/components/visits/on-examination-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, CalendarDays, ChevronDown, ChevronRight, ChevronUp, FlaskConical, Languages, Mic, MicOff, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { AlertCircle, CalendarDays, ChevronDown, ChevronRight, ChevronUp, FlaskConical, Languages, Mic, MicOff, MoreHorizontal, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
 import { track } from '@/lib/analytics';
@@ -27,7 +28,7 @@ import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
-import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
+import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
 import { printedMedicineName } from '@/lib/medicine-names';
 import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
@@ -38,6 +39,9 @@ import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
 import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
 import { AddRowBelowButton, RemoveRowButton, WrappingTextField, insertBlankBelow, rowDescription, rxLayout, rxSelect, rxStock } from './rx-table';
+import { loadPatientHistory, visitEntries } from './usePatientHistory';
+import { prescriptionLabel } from '@/lib/prescription-labels';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 const rx = rxLayout.prescription;
@@ -160,7 +164,14 @@ interface Props {
   bleedSafe?: { enabled: boolean; safeMarginMm: number };
   frames?: { enabled: boolean; headerHeightMm: number; footerHeightMm: number };
   onChangeFrames?: (next: Partial<{ enabled: boolean; headerHeightMm: number; footerHeightMm: number }>) => void;
+  patient?: { id: string } | null;
+  onSummaryChange?: (summary: ConsultationSummary) => void;
+  vitalsExtra?: React.ReactNode;
+  investigationResults?: (ordered: string[]) => React.ReactNode;
+  toolbarTarget?: HTMLElement | null;
 }
+
+export type ConsultationSummary = { complaint: boolean; diagnosis: boolean; plan: boolean; medicines: number; vitals: boolean };
 
 // Hoisted, memoized collapsible section to prevent remounting on parent re-render
 const CollapsibleSection = React.memo(function CollapsibleSection({
@@ -185,8 +196,8 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   const collapsible = open !== undefined;
   const expanded = open ?? true;
   return (
-    <Card className={`overflow-visible ${highlight ? 'bg-success-soft border-success-border' : ''}`}>
-      <CardHeader className="pb-2">
+    <Card id={`consult-${section}`} className={`scroll-mt-40 gap-3 py-4 overflow-visible ${highlight ? 'bg-success-soft border-success-border' : ''}`}>
+      <CardHeader className="px-5">
         <div
           className="flex items-center justify-between w-full"
           aria-controls={collapsible ? undefined : contentId}
@@ -214,7 +225,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
           </div>
         </div>
       </CardHeader>
-      <CardContent id={contentId} className="pt-0 overflow-visible" hidden={!expanded}>
+      <CardContent id={contentId} className="px-5 overflow-visible" hidden={!expanded}>
         {children}
       </CardContent>
     </Card>
@@ -269,12 +280,13 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
 const inventoryNamesOf = (drug: any): string[] =>
   [drug?.name, ...(Array.isArray(drug?.knownNames) ? drug.knownNames : [])].map((name) => String(name || '').trim().toLowerCase()).filter(Boolean);
 
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
   const clinicalField = <T,>(field: string, value: T): T | undefined => Array.from(dirtyClinicalFields.current).some(path => path === field || path.startsWith(`${field}.`)) ? value : undefined;
   const { toast } = useToast();
+  const [confirm, confirmDialog] = useConfirm();
   useEffect(() => { ensureGlobalPrintStyles(); }, []);
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis, hydrateDiagnosis] = useClinicalState('', 'diagnosis', dirtyClinicalFields);
@@ -726,6 +738,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [diagOptions, setDiagOptions] = useState<string[]>([]);
   const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
   const [complaintFieldFocused, setComplaintFieldFocused] = useState(false);
+  const [diagnosisFieldFocused, setDiagnosisFieldFocused] = useState(false);
   const [loadingVisit, setLoadingVisit] = useState(false);
   const [visitData, setVisitData] = useState<any>(null);
   const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
@@ -1169,7 +1182,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (!reviewDate) return '';
     return displayUtcDate(reviewDate, reviewDate);
   }, [reviewDate]);
-  const patientGender = useMemo(() => visitData?.patient?.gender || patientData?.gender || '', [visitData, patientData]);
+  const patientGender = useMemo(() => {
+    const gender = String(visitData?.patient?.gender || patientData?.gender || '');
+    return gender ? gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase() : '';
+  }, [visitData, patientData]);
   const patientAgeYears = useMemo(() => {
     const p = visitData?.patient || patientData;
     if (!p) return '';
@@ -1469,6 +1485,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       if (!patientId) return;
       // Only fetch if we don't already have patient info from visit
       if (visitData?.patient?.id === patientId && visitData?.patient?.name) return;
+      if (patient?.id === patientId) { setPatientData(patient); return; }
       try {
         const p = await apiClient.get(`/patients/${patientId}`);
         setPatientData(p || null);
@@ -1477,7 +1494,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       }
     };
     void loadPatient();
-  }, [patientId, visitData?.patient?.id, visitData?.patient?.name]);
+  }, [patientId, patient, visitData?.patient?.id, visitData?.patient?.name]);
 
   // Compute BMI when height/weight update
   useEffect(() => {
@@ -1496,7 +1513,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        if (!patientId) return;
+        if (!patientId || !diagnosisFieldFocused) return;
         const res = await apiClient.autocompletePrescriptionField({ field: 'diagnosis', patientId, visitId: visitId || undefined, q: diagnosis, limit: 8 });
         const server = Array.isArray(res) ? (res as string[]) : [];
         const local = getLocalSuggestions('diagnosis', diagnosis, 8);
@@ -1512,12 +1529,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [diagnosis, patientId, visitId]);
+  }, [diagnosis, diagnosisFieldFocused, patientId, visitId]);
 
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        if (!patientId) return;
+        if (!patientId || !complaintFieldFocused) return;
         const res = await apiClient.autocompletePrescriptionField({ field: 'chiefComplaints', patientId, visitId: visitId || undefined, q: chiefComplaints, limit: 8 });
         const server = Array.isArray(res) ? (res as string[]) : [];
         const local = getLocalSuggestions('chiefComplaints', chiefComplaints, 8);
@@ -1533,7 +1550,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [chiefComplaints, patientId, visitId]);
+  }, [chiefComplaints, complaintFieldFocused, patientId, visitId]);
 
   // removed doctor's personal notes composition and autocomplete logic
 
@@ -1962,7 +1979,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       setLearningSourcesError('');
 
       const [patientResult, doctorResult] = await Promise.allSettled([
-        patientId ? apiClient.getPatientVisitHistory<any>(patientId, { limit: 12 }) : Promise.resolve([]),
+        patientId ? Promise.resolve(patientId).then(loadPatientHistory).then((entries) => visitEntries(entries).slice(0, 12)) : Promise.resolve([]),
         doctorId ? apiClient.get<any>(`/prescriptions/doctor/${doctorId}`, { limit: 60, page: 1 }) : Promise.resolve([]),
       ]);
 
@@ -2616,6 +2633,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     }) || {};
   }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
+  const hasText = (value: unknown) => typeof value === 'string' && value.trim().length > 0;
+  const complaintRecorded = hasText(chiefComplaints);
+  const diagnosisRecorded = hasText(diagnosis) || exDermDx.size > 0;
+  const planRecorded = hasText(procedurePlanned) || hasText(procedures) || hasText(followUpInstructions);
+  const vitalsRecorded = [vitalsHeightCm, vitalsWeightKg, vitalsBpSys, vitalsBpDia, vitalsPulse].some((value) => value !== '' && value != null);
+  useEffect(() => {
+    onSummaryChange?.({ complaint: complaintRecorded, diagnosis: diagnosisRecorded, plan: planRecorded, medicines: validItems.length, vitals: vitalsRecorded });
+  }, [onSummaryChange, complaintRecorded, diagnosisRecorded, planRecorded, validItems.length, vitalsRecorded]);
 
   /**
    * @cc [owner:nareshshah139,label:product] prescription-conflict-propagation
@@ -4515,16 +4540,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   return (
     <div className="space-y-6 overflow-visible">
+      {confirmDialog}
       <div className="space-y-6">
         <div className="space-y-4">
-          {/* Templates quick bar */}
-            {hydrated && showTemplatesBar && templatesReady && allTemplates.length > 0 ? (
-              <div className="flex flex-wrap gap-2 items-end">
-                <div className="min-w-[240px]">
-                  <label className="text-xs text-muted-foreground">Templates</label>
+          {(() => {
+            const templatesBar = hydrated && showTemplatesBar && templatesReady && allTemplates.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="w-56">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild disabled={!templatesReady || loadingTemplates}>
-                      <Button variant="outline" className="w-full justify-between font-normal">
+                      <Button variant="outline" size="sm" className="w-full justify-between font-normal" aria-label={`Prescription template: ${loadingTemplates ? 'loading' : selectedTemplateName}`}>
                         <span className="truncate">{loadingTemplates ? 'Loading templates…' : selectedTemplateName}</span>
                         <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -4565,27 +4590,52 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>Refresh</Button>
                 <Button variant="ghost" size="sm" onClick={undo}>Undo</Button>
                 <Button variant="ghost" size="sm" onClick={redo}>Redo</Button>
-                <Button variant="destructive" size="sm" onClick={() => { try { localStorage.removeItem(`rxDraft:${patientId}:${visitId || 'standalone'}`); } catch {}; setItems([]); setFollowUpInstructions(''); pushHistory(); }}>Reset to default</Button>
-                <div className="ml-auto flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setTemplatePromptOpen(true)}>Save current</Button>
-                  <Button variant="outline" size="sm" onClick={() => setFieldTemplatePromptOpen(true)}>Save fields</Button>
-                  <Button size="sm" onClick={() => setNewTemplateOpen(true)}>New template</Button>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" aria-label="More prescription actions"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onSelect={() => void loadTemplates()} disabled={loadingTemplates}>Reload templates</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setTemplatePromptOpen(true)}>Save as template</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setFieldTemplatePromptOpen(true)}>Save fields as template</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive-text"
+                      onSelect={async () => {
+                        const ok = await confirm({
+                          title: 'Clear this prescription?',
+                          description: 'Every medicine and the follow-up instructions are removed from this prescription.',
+                          confirmLabel: 'Clear prescription',
+                          destructive: true,
+                        });
+                        if (!ok) return;
+                        try { localStorage.removeItem(`rxDraft:${patientId}:${visitId || 'standalone'}`); } catch {}
+                        setItems([]);
+                        setFollowUpInstructions('');
+                        pushHistory();
+                      }}
+                    >
+                      Clear prescription…
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button variant="outline" size="sm" onClick={() => setNewTemplateOpen(true)}>New template</Button>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {loadingTemplates ? 'Loading templates…' : 'Templates will appear once loaded.'}
               </div>
-            )}
+            );
+            return toolbarTarget ? createPortal(templatesBar, toolbarTarget) : templatesBar;
+          })()}
 
             {/* Basic Information */}
             {/* Moved to bottom of builder; removed Doctor's Personal Notes field */}
 
             {/* Clinical Details */}
-            <CollapsibleSection title="Clinical Details & Vitals" section="clinical">
+            <CollapsibleSection title="Vitals" section="clinical">
               <div className="space-y-3">
                 {/* Vitals */}
                 <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
@@ -4613,8 +4663,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <label className="text-xs text-muted-foreground">Pulse (bpm)</label>
                     <Input key="vitals-pulse" aria-label="Pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
-                  <div></div>
-                  <div></div>
+                  {vitalsExtra}
                 </div>
 
                 
@@ -4744,8 +4793,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="opacity-100">
                 <label className="text-xs text-muted-foreground flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                 <div className="relative diag-autocomplete">
-                  <Input key="diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
-                  {diagOptions.length > 0 && (
+                  <Input key="diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} onFocus={() => setDiagnosisFieldFocused(true)} onBlur={() => setDiagnosisFieldFocused(false)} />
+                  {diagnosisFieldFocused && diagOptions.length > 0 && (
                     <ul aria-label="Diagnosis suggestions" className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {diagOptions.map((opt) => (
                         <li key={opt}>
@@ -5289,7 +5338,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 <SelectTrigger className={rxSelect} aria-label={`Frequency for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="Frequency" /></SelectTrigger>
                                 <SelectContent>
                                   {Array.from(new Set([...dosePatternOptions, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
-                                    <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                                    <SelectItem key={p} value={p}>{prescriptionLabel('frequency', p)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
@@ -5322,7 +5371,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 <SelectTrigger className={`${rxSelect} min-w-0 flex-1`} aria-label={`Duration unit for ${rowDescription(it.drugName, idx)}`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {Array.from(new Set([...durationUnitOptions, it.durationUnit].filter(Boolean))).map(u => (
-                                    <SelectItem key={u} value={u}>{u}</SelectItem>
+                                    <SelectItem key={u} value={u}>{prescriptionLabel('durationUnit', u)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
@@ -5447,6 +5496,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </Button>
                 </div>
                 <ManageClinicInvestigations saved={clinicInvestigations.saved} onRename={renameClinicInvestigation} onRemove={removeClinicInvestigation} />
+                {investigationResults?.(investigations)}
               </div>
             </CollapsibleSection>
 
@@ -5480,7 +5530,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             
 
             {/* Basic Information */}
-            <CollapsibleSection title="Basic Information" section="basic">
+            <CollapsibleSection title="Follow-up and language" section="basic">
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
@@ -5753,7 +5803,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 }
                 `
               }} />
-            <div id="print-preview-scroll" data-prescription-preview-scroll className="flex-1 min-h-0 min-w-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
+            <div id="print-preview-scroll" data-prescription-preview-scroll tabIndex={0} role="region" aria-label="Prescription pages" className="flex-1 min-h-0 min-w-0 overflow-auto overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" style={{ position: 'relative' }}>
               <div data-prescription-preview-toolbar className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-white/90 backdrop-blur border-b text-sm">
                 <div className="space-y-0.5">
                   <div className="flex flex-wrap gap-2 items-center text-foreground">
@@ -6148,14 +6198,53 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             </div>
             {/* Right Sidebar Controls */}
             <div data-prescription-preview-sidebar className="print:hidden w-full sm:w-96 shrink-0 border-t sm:border-t-0 sm:border-l h-1/2 sm:h-full min-h-0 overflow-auto">
+              <div data-prescription-preview-actions className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background px-4 py-3">
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <Button size="sm" disabled={validItems.length === 0 || savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={printPreviewInPlace}>Print</Button>
+                      </span>
+                    </TooltipTrigger>
+                    {validItems.length === 0 && <TooltipContent><p>Add at least one medicine to print</p></TooltipContent>}
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <Button size="sm" variant="outline" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={async () => {
+                          try {
+                            const saved = await saveBeforeExport();
+                            if (!saved) return;
+                            const prescId = saved.prescriptionId;
+                            toast({ title: 'Generating PDF…', description: 'Capturing prescription preview.' });
+                            const pdfBlob = await renderPreviewPdf();
+
+                            const blobUrl = URL.createObjectURL(pdfBlob);
+                            const a = document.createElement('a');
+                            a.href = blobUrl;
+                            a.download = `prescription-${saved.documentId}.pdf`;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            URL.revokeObjectURL(blobUrl);
+
+                            try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
+                            toast({ title: 'PDF ready', description: 'Prescription PDF downloaded.' });
+                          } catch (e) {
+                            console.error('PDF generation failed', e);
+                            toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Your saved details are retained; please retry.' });
+                          }
+                        }}>Download PDF</Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Saves the latest visit details before exporting</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setPreviewOpen(false)}>Close</Button>
+              </div>
               <div className="p-4 space-y-4">
-                <div className="p-3 bg-info-soft border border-info-border rounded-lg">
-                  <div className="text-sm font-medium text-info-text mb-1">Print settings tip</div>
-                  <div className="text-xs text-info-text">
-                    To remove browser headers/footers: In your browser's print dialog, go to <strong>More settings</strong> → 
-                    turn OFF <strong>"Headers and footers"</strong> for a clean prescription print.
-                  </div>
-                </div>
                 <div className="space-y-3">
                   <Button variant="ghost" size="sm" onClick={() => setAutoPreview(v => !v)} className="w-full justify-between">
                     <span>{autoPreview ? 'Live Preview: On' : 'Live Preview: Off'}</span>
@@ -6218,16 +6307,23 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   )}
                   
                   <div className="flex items-center gap-2 text-sm text-foreground">
-                    <span>Zoom</span>
-                    <input className="flex-1" type="range" min={0.6} max={1.4} step={0.05} value={previewZoom} onChange={(e) => setPreviewZoom(Number(e.target.value))} />
+                    <label htmlFor="rx-preview-zoom">Zoom</label>
+                    <input id="rx-preview-zoom" className="flex-1" type="range" min={0.6} max={1.4} step={0.05} value={previewZoom} onChange={(e) => setPreviewZoom(Number(e.target.value))} aria-valuetext={`${Math.round(previewZoom * 100)}%`} />
                     <span className="w-10 text-right">{Math.round(previewZoom * 100)}%</span>
                   </div>
-                  <div className="space-y-2 text-sm text-foreground">
+                  <details className="rounded-md border border-border text-sm text-foreground">
+                    <summary className="cursor-pointer px-3 py-2 font-medium">Page setup</summary>
+                    <div className="space-y-2 border-t px-3 py-3">
+                    <p className="text-xs text-muted-foreground">
+                      For a clean print, turn off <strong>Headers and footers</strong> under <strong>More settings</strong> in the browser&apos;s print dialog.
+                    </p>
                     <div className="flex items-center justify-between">
-                      <label className="block">Top margin</label>
+                      <label htmlFor="rx-preview-top-margin" className="block">Top margin</label>
                       <span className="tabular-nums">{effectiveTopMarginMm} mm</span>
                     </div>
                     <input
+                      id="rx-preview-top-margin"
+                      aria-valuetext={`${effectiveTopMarginMm} mm`}
                       type="range"
                       min={0}
                       max={300}
@@ -6236,10 +6332,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       onChange={(e) => setOverrideTopMarginPx(Number(e.target.value))}
                     />
                     <div className="flex items-center justify-between">
-                      <label className="block">Bottom margin</label>
+                      <label htmlFor="rx-preview-bottom-margin" className="block">Bottom margin</label>
                       <span className="tabular-nums">{effectiveBottomMarginMm} mm</span>
                     </div>
                     <input
+                      id="rx-preview-bottom-margin"
+                      aria-valuetext={`${effectiveBottomMarginMm} mm`}
                       type="range"
                       min={0}
                       max={200}
@@ -6250,7 +6348,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <div className="flex gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => { setOverrideTopMarginPx(null); setOverrideBottomMarginPx(null); }}>Reset margins</Button>
                     </div>
-                  </div>
+                    </div>
+                  </details>
                   <div className="space-y-1">
                     <label className="flex items-center gap-2 text-sm text-foreground">
                       <input type="checkbox" checked={printCompact} disabled={fitToPage} onChange={(e) => setSpaceOptimized(e.target.checked)} />
@@ -6358,7 +6457,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       {savingFromPreview ? 'Saving…' : canCreate ? 'Save Prescription' : 'Add medications to save'}
                     </Button>
                   )}
-                  <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
                   <Button variant="outline" onClick={() => void openInteractions()}>Interactions</Button>
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
@@ -6440,49 +6538,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </Tooltip>
                   </TooltipProvider>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="col-span-1 inline-flex">
-                          <Button className="w-full" disabled={validItems.length === 0 || savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={printPreviewInPlace}>Print</Button>
-                        </span>
-                      </TooltipTrigger>
-                      {validItems.length === 0 && <TooltipContent><p>Add at least one medicine to print</p></TooltipContent>}
-                    </Tooltip>
-                  </TooltipProvider>
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="col-span-1">
-                          <Button className="w-full" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={async () => {
-                            try {
-                              const saved = await saveBeforeExport();
-                              if (!saved) return;
-                              const prescId = saved.prescriptionId;
-                              toast({ title: 'Generating PDF…', description: 'Capturing prescription preview.' });
-                              const pdfBlob = await renderPreviewPdf();
-
-                              const blobUrl = URL.createObjectURL(pdfBlob);
-                              const a = document.createElement('a');
-                              a.href = blobUrl;
-                              a.download = `prescription-${saved.documentId}.pdf`;
-                              document.body.appendChild(a);
-                              a.click();
-                              a.remove();
-                              URL.revokeObjectURL(blobUrl);
-
-                              try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
-                              toast({ title: 'PDF ready', description: 'Prescription PDF downloaded.' });
-                            } catch (e) {
-                              console.error('PDF generation failed', e);
-                              toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Your saved details are retained; please retry.' });
-                            }
-                          }}>Download PDF</Button>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent><p>Saves the latest visit details before exporting</p></TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
             </div>
             </div>
             </div>
@@ -6700,7 +6755,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 <SelectTrigger className={rxSelect} aria-label={`Dose pattern for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="Pattern" /></SelectTrigger>
                                 <SelectContent>
                                   {dosePatternOptions.map(p => (
-                                    <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                                    <SelectItem key={p} value={p}>{prescriptionLabel('frequency', p)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
@@ -6715,7 +6770,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 <SelectTrigger className={rxSelect} aria-label={`Frequency for ${rowDescription(it.drugName, idx)}`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {frequencyOptions.map(f => (
-                                    <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
+                                    <SelectItem key={f} value={f}>{prescriptionLabel('frequency', f)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
@@ -6746,7 +6801,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 <SelectTrigger className={`${rxSelect} min-w-0 flex-1`} aria-label={`Duration unit for ${rowDescription(it.drugName, idx)}`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {durationUnitOptions.map(u => (
-                                    <SelectItem key={u} value={u}>{u}</SelectItem>
+                                    <SelectItem key={u} value={u}>{prescriptionLabel('durationUnit', u)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>

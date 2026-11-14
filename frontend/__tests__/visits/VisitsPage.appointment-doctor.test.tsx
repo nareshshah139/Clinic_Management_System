@@ -1,5 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VisitsPage from '@/app/dashboard/visits/page';
+import { useEffect, useState, type ReactNode } from 'react';
+import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
+import type { User } from '@/lib/types';
 import { apiClient } from '@/lib/api';
 const navigation = jest.requireMock('next/navigation');
 
@@ -14,6 +17,13 @@ jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }), 
 jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor() { return null; });
 jest.mock('@/components/visits/VisitPhotos', () => function Photos() { return null; });
 jest.mock('@/components/tours/DoctorTour', () => ({ DoctorTour: () => null }));
+function LayoutSession({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<{ user: User | null; loading: boolean }>({ user: null, loading: true });
+  useEffect(() => {
+    apiClient.get<User>('/auth/me').then((user) => setSession({ user, loading: false }), () => setSession({ user: null, loading: false }));
+  }, []);
+  return <DashboardUserProvider value={{ ...session, refresh: async () => {}, logout: async () => {} }}>{children}</DashboardUserProvider>;
+}
 
 const doctors = [
   { id: 'doctor-1', firstName: 'Shravya', lastName: 'Rao' },
@@ -43,7 +53,7 @@ beforeEach(() => {
 });
 
 it("saves a colleague's appointment visit under the appointment's doctor", async () => {
-  render(<VisitsPage />);
+  render(<VisitsPage />, { wrapper: LayoutSession });
   const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
   await waitFor(() => expect(picker).toHaveTextContent('Dr. Praneeta Jain'));
   expect(picker).toBeDisabled();
@@ -64,7 +74,7 @@ it('disables the picker once a visit is created in this session', async () => {
     if (path === '/users') return { users: doctors, pagination: { totalPages: 1 } } as any;
     return {} as any;
   });
-  render(<VisitsPage />);
+  render(<VisitsPage />, { wrapper: LayoutSession });
   fireEvent.click(await screen.findByRole('combobox', { name: 'Select Doctor' }));
   fireEvent.click(await screen.findByRole('option', { name: /Dr\. Shravya Rao/ }));
   const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
@@ -74,4 +84,31 @@ it('disables the picker once a visit is created in this session', async () => {
 
   await waitFor(() => expect(picker).toBeDisabled());
   expect(apiClient.createVisit).toHaveBeenCalledWith(expect.objectContaining({ doctorId: 'doctor-1' }), expect.anything());
+});
+
+it('keeps the appointment link when the doctor picks another patient and then returns to the booked one', async () => {
+  jest.mocked(apiClient.getPatients).mockResolvedValue({
+    data: [{ id: 'patient-123', name: 'Ananya Reddy' }, { id: 'patient-456', name: 'Rahul Kumar' }],
+  } as any);
+  jest.mocked(apiClient.getAppointment).mockResolvedValue({ id: 'appt-1', patientId: 'patient-123', doctorId: 'doctor-2' } as any);
+  render(<VisitsPage />, { wrapper: LayoutSession });
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Attending doctor' })).toHaveTextContent('Dr. Praneeta Jain'));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Setup' }));
+  fireEvent.focus(await screen.findByPlaceholderText('Search name, phone, or email'));
+  fireEvent.click(await screen.findByRole('option', { name: /Rahul Kumar/ }));
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Select Doctor' })).toHaveTextContent('Dr. Shravya Rao'));
+
+  fireEvent.focus(screen.getByPlaceholderText('Search name, phone, or email'));
+  fireEvent.click(await screen.findByRole('option', { name: /Ananya Reddy/ }));
+  const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
+  await waitFor(() => expect(picker).toHaveTextContent('Dr. Praneeta Jain'));
+  expect(picker).toBeDisabled();
+
+  await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Save Draft' })); });
+  await waitFor(() => expect(apiClient.createVisit).toHaveBeenCalled());
+  expect(apiClient.createVisit).toHaveBeenCalledWith(
+    expect.objectContaining({ patientId: 'patient-123', doctorId: 'doctor-2', appointmentId: 'appt-1' }),
+    expect.anything(),
+  );
 });

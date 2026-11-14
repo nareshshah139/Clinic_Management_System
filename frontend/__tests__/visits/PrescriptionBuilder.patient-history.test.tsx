@@ -54,7 +54,8 @@ it('does not copy triggers or prior treatments into a saved fields template', as
   (apiClient as any).createPrescriptionTemplate = createPrescriptionTemplate;
   jest.mocked(apiClient.getPrescriptionTemplates).mockResolvedValue({ templates: [] } as any);
   render(<PrescriptionBuilder patientId="patient" visitId={null} doctorId="doctor" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Save fields' }));
+  fireEvent.keyDown(await screen.findByRole('button', { name: 'More prescription actions' }), { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Save fields as template' }));
   fireEvent.change(screen.getByPlaceholderText('E.g., Derm Fields: Acne follow-up'), { target: { value: 'Acne fields' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save Fields Template' }));
   await waitFor(() => expect(createPrescriptionTemplate).toHaveBeenCalledTimes(1));

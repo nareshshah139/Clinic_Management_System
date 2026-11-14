@@ -10,6 +10,7 @@ export const signaturePreferenceKey = (doctorId: string) => `cms:prescription:sh
  * @cc [owner:nareshshah139,label:product] signature-preference-scope
  * The Show signature choice MUST survive reloads per doctor in this browser.
  * Changing doctor MUST NOT display the previous doctor's image or preference.
+ * The image loads when the preview opens, not with the consultation.
  */
 export function usePrescriptionSignature(doctorId: string, previewOpen: boolean) {
   const [selection, setSelection] = useState({ doctorId: '', show: false });
@@ -24,6 +25,7 @@ export function usePrescriptionSignature(doctorId: string, previewOpen: boolean)
   }, [doctorId]);
 
   useEffect(() => {
+    if (!previewOpen) return;
     let cancelled = false;
     setAsset({ doctorId, url: null, ratio: 160 / 72, loading: true, error: '' });
     (async () => {
