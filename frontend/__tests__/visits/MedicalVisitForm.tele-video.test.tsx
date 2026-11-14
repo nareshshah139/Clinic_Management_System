@@ -8,7 +8,7 @@ const mockToast = jest.fn();
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }));
 jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ consultationType, teleVideoConsent }: any) { return <output data-testid="editor-consultation">{consultationType}:{String(teleVideoConsent)}</output>; });
 jest.mock('@/components/visits/VisitPhotos', () => function Photos() { return null; });
-jest.mock('@/components/tours', () => ({ DoctorTour: () => null }));
+jest.mock('@/components/tours/DoctorTour', () => ({ DoctorTour: () => null }));
 const flush = async () => { await act(async () => { await Promise.resolve(); }); };
 const selectTele = () => fireEvent.change(screen.getByLabelText('Consultation type'), { target: { value: 'TELE_VIDEO' } });
 const consent = () => screen.getByRole('checkbox', { name: 'Patient consented to tele-video consultation' });

@@ -23,7 +23,7 @@ const mockToast = jest.fn();
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }));
 let mockPhotoVersion: ((version: number) => void) | undefined;
 jest.mock('@/components/visits/VisitPhotos', () => function Photos({ onVisitVersion }: any) { mockPhotoVersion = onVisitVersion; return null; });
-jest.mock('@/components/tours', () => ({ DoctorTour: () => null }));
+jest.mock('@/components/tours/DoctorTour', () => ({ DoctorTour: () => null }));
 
 let saved: Record<string, any>;
 beforeEach(() => {

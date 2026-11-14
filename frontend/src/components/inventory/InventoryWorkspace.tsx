@@ -5,7 +5,8 @@ import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import "./inventory-readability.css";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, RefreshCw, Plus } from "lucide-react";
 import { InventoryAction } from "./InventoryPresentation";
@@ -13,26 +14,10 @@ import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import { useInventoryResource } from "./useInventoryResource";
-import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
-import { PurchaseLedger } from "@/components/pharmacy/PurchaseLedger";
-import { DistributorAnalytics } from "@/components/pharmacy/DistributorAnalytics";
-import { PharmacyInventoryStarterImport } from "@/components/pharmacy/PharmacyInventoryStarterImport";
-import { PharmacyInvoiceList } from "@/components/pharmacy/PharmacyInvoiceList";
-import { TradeTermsWorkspace } from "@/components/pharmacy/TradeTermsWorkspace";
-import { SupplierCreditPanel } from "./SupplierCreditPanel";
-import { ReplenishmentCenter } from "./ReplenishmentCenter";
-import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
-import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
-import { WorkspaceStock } from "./WorkspaceStock";
 import { DataQualityStrip } from "./optimization/DataQualityStrip";
-import { StockOptimization } from "./optimization/StockOptimization";
-import { PurchaseBills } from "./purchase/PurchaseBills";
 import { canRecordSupplierPayments } from "./purchase/purchase-register-model";
-import { StockCounts } from "./counts/StockCounts";
 import { splitText, type ReconciliationCards } from "./counts/count-model";
 import { Split } from "./counts/count-parts";
-import { InventoryApprovals } from "./InventoryApprovals";
-import { InventoryLedger } from "./InventoryLedger";
 import { usePendingItemRequestCount } from "./use-pending-item-requests";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
@@ -45,6 +30,25 @@ import {
   downloadCsv,
   returnDestination,
 } from "./workspace-model";
+
+const lazyView = <P,>(load: () => Promise<ComponentType<P>>) =>
+  dynamic(load, { loading: () => <LoadingSkeleton label="Loading…" /> }) as ComponentType<P>;
+const PurchaseInvoiceWorkbench = lazyView(() => import("@/components/pharmacy/PurchaseInvoiceWorkbench").then((m) => m.PurchaseInvoiceWorkbench));
+const PurchaseLedger = lazyView(() => import("@/components/pharmacy/PurchaseLedger").then((m) => m.PurchaseLedger));
+const DistributorAnalytics = lazyView(() => import("@/components/pharmacy/DistributorAnalytics").then((m) => m.DistributorAnalytics));
+const PharmacyInventoryStarterImport = lazyView(() => import("@/components/pharmacy/PharmacyInventoryStarterImport").then((m) => m.PharmacyInventoryStarterImport));
+const PharmacyInvoiceList = lazyView(() => import("@/components/pharmacy/PharmacyInvoiceList").then((m) => m.PharmacyInvoiceList));
+const TradeTermsWorkspace = lazyView(() => import("@/components/pharmacy/TradeTermsWorkspace").then((m) => m.TradeTermsWorkspace));
+const SupplierCreditPanel = lazyView(() => import("./SupplierCreditPanel").then((m) => m.SupplierCreditPanel));
+const ReplenishmentCenter = lazyView(() => import("./ReplenishmentCenter").then((m) => m.ReplenishmentCenter));
+const AlternateInvoiceIntake = lazyView(() => import("./AlternateInvoiceIntake").then((m) => m.AlternateInvoiceIntake));
+const WorkflowDocumentEditor = lazyView(() => import("./WorkflowDocumentEditor").then((m) => m.WorkflowDocumentEditor));
+const WorkspaceStock = lazyView(() => import("./WorkspaceStock").then((m) => m.WorkspaceStock));
+const StockOptimization = lazyView(() => import("./optimization/StockOptimization").then((m) => m.StockOptimization));
+const PurchaseBills = lazyView(() => import("./purchase/PurchaseBills").then((m) => m.PurchaseBills));
+const StockCounts = lazyView(() => import("./counts/StockCounts").then((m) => m.StockCounts));
+const InventoryApprovals = lazyView(() => import("./InventoryApprovals").then((m) => m.InventoryApprovals));
+const InventoryLedger = lazyView(() => import("./InventoryLedger").then((m) => m.InventoryLedger));
 
 const areas = [
   ["today", "Today"],
