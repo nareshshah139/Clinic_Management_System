@@ -11,6 +11,8 @@ jest.mock('@/lib/api', () => ({ apiClient: {
   getPrescriptionPrintEvents: jest.fn().mockResolvedValue({ totals: {} }),
   autocompletePrescriptionField: jest.fn().mockResolvedValue([]),
   createQuickPrescription: jest.fn().mockResolvedValue({ id: 'rx-1' }),
+  createPrescription: jest.fn().mockResolvedValue({ id: 'rx-9' }),
+  updatePrescription: jest.fn().mockResolvedValue({ id: 'rx-9' }),
   post: jest.fn().mockResolvedValue({ id: 'tpl-1' }),
 } }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
@@ -119,10 +121,47 @@ it('moves the duration controls and instructions together when a row is inserted
   expect(within(rows[2]).getByDisplayValue('Second')).toBeInTheDocument();
 });
 
+it('opens an empty prescription on one focused blank medicine row and never sends it', async () => {
+  const onClinicalDataChange = jest.fn();
+  render(<PrescriptionBuilder patientId="patient" visitId={null} doctorId="doctor" standalone onClinicalDataChange={onClinicalDataChange} />);
+  await waitFor(() => expect(names()).toEqual(['']));
+  await waitFor(() => expect(screen.getByPlaceholderText('Search medicine name...')).toHaveFocus());
+  expect(onClinicalDataChange.mock.calls.at(-1)![0].treatmentPlan).toBeUndefined();
+});
+
+it('applies the 10 day and night presets to the medicine being edited', async () => {
+  const onClinicalDataChange = await mount([medicine('Cetirizine', { frequency: 'TWICE_DAILY', dosePattern: '1-0-1', duration: 5 })]);
+  fireEvent.focus(named('Cetirizine'));
+  fireEvent.click(screen.getByRole('button', { name: '10d' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Night' }));
+  expect(screen.getByLabelText('Duration for Cetirizine')).toHaveValue(10);
+  await waitFor(() => expect(onClinicalDataChange.mock.calls.at(-1)![0].treatmentPlan.dermatology.medicationPlan[0]).toMatchObject({
+    drugName: 'Cetirizine', frequency: 'ONCE_DAILY', duration: 10, durationUnit: 'DAYS',
+  }));
+});
+
+it('saves once for the visit, reports the medicines as saved, and offers the pharmacy as a link instead of a dialog', async () => {
+  localStorage.setItem('rxDraft:patient:visit-1', JSON.stringify({ items: [medicine('Cetirizine')] }));
+  const states: { unsavedMedicines: boolean; saved: boolean; medicines: number; hasComplaintOrDiagnosis: boolean }[] = [];
+  const saveRef: { current: (() => Promise<string | undefined>) | null } = { current: null };
+  render(<PrescriptionBuilder patientId="patient" visitId="visit-1" doctorId="doctor" onCompletionStateChange={state => states.push(state)} savePrescriptionRef={saveRef} />);
+  await screen.findByDisplayValue('Cetirizine');
+  await waitFor(() => expect(states.at(-1)).toEqual({ hasComplaintOrDiagnosis: false, medicines: 1, unsavedMedicines: true, saved: false }));
+  expect(screen.queryByRole('link', { name: 'Go to pharmacy' })).not.toBeInTheDocument();
+  let ids: (string | undefined)[] = [];
+  await act(async () => { ids = await Promise.all([saveRef.current!(), saveRef.current!()]); });
+  expect(ids).toEqual(['rx-9', undefined]);
+  expect(apiClient.createPrescription).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(states.at(-1)).toEqual({ hasComplaintOrDiagnosis: false, medicines: 1, unsavedMedicines: false, saved: true }));
+  expect(screen.getByRole('link', { name: 'Go to pharmacy' })).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill?patientId=patient&prescriptionId=rx-9&doctorId=doctor');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
 describe('template editor', () => {
   async function openEditor() {
     jest.mocked(apiClient.getPrescriptionTemplates).mockResolvedValue({ templates: [] } as any);
     render(<PrescriptionBuilder patientId="patient" visitId={null} doctorId="doctor" standalone />);
+    fireEvent.click(screen.getByRole('button', { name: 'Templates' }));
     fireEvent.click(await screen.findByRole('button', { name: 'New template' }));
     return within(await screen.findByRole('dialog'));
   }

@@ -112,6 +112,13 @@ interface PrescriptionItemForm extends RegimenRow {
   pulseRegimen?: string;
 }
 
+export interface PrescriptionCompletionState {
+  hasComplaintOrDiagnosis: boolean;
+  medicines: number;
+  unsavedMedicines: boolean;
+  saved: boolean;
+}
+
 interface Props {
   consultationType?: ConsultationType;
   teleVideoConsent?: boolean;
@@ -128,6 +135,8 @@ interface Props {
   initialVisitSnapshot?: VisitDetails;
   onBeforeExport?: () => Promise<string>;
   onPreview?: () => void;
+  onCompletionStateChange?: (state: PrescriptionCompletionState) => void;
+  savePrescriptionRef?: React.MutableRefObject<(() => Promise<string | undefined>) | null>;
   reviewDate?: string;
   printBgUrl?: string;
   printTopMarginPx?: number;
@@ -208,7 +217,6 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
               )}
             </CardTitle>
             {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
-            {highlight && <div className="text-xs text-green-700">Auto-included in preview</div>}
           </div>
         </div>
       </CardHeader>
@@ -267,7 +275,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
 const inventoryNamesOf = (drug: any): string[] =>
   [drug?.name, ...(Array.isArray(drug?.knownNames) ? drug.knownNames : [])].map((name) => String(name || '').trim().toLowerCase()).filter(Boolean);
 
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, onCompletionStateChange, savePrescriptionRef, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
@@ -612,7 +620,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   };
   const [patientHistoryForLearning, setPatientHistoryForLearning] = useState<any[]>([]);
   const [doctorPrescriptionsForLearning, setDoctorPrescriptionsForLearning] = useState<any[]>([]);
-  const [learningSourcesStatus, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [learningSourcesError, setLearningSourcesError] = useState('');
   const [lastAutofillPlanSignature, setLastAutofillPlanSignature] = useState<string | null>(null);
   const [lastAutofillStateSignature, setLastAutofillStateSignature] = useState<string | null>(null);
@@ -729,9 +737,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
   const createdPrescriptionIdRef = useRef<string | null>(null);
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
+  const [savedItemsKey, setSavedItemsKey] = useState<string | null>(null);
+  const itemsMatchSavedPrescription = useRef(false);
   const [savingFromPreview, setSavingFromPreview] = useState(false);
   const prescriptionSaveInFlight = useRef(false);
-  const skipPostSaveCleanupRef = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [autoPreview, setAutoPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -813,11 +822,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [breakBeforeSignature, setBreakBeforeSignature] = useState(false);
   const [avoidBreakInsideTables, setAvoidBreakInsideTables] = useState(true);
   const [interactions, setInteractions] = useState<any[]>([]);
-  const [confirmPharmacy, setConfirmPharmacy] = useState<{
-    open: boolean;
-    prescriptionId: string;
-    summary: { medicationsCount: number } | null;
-  }>({ open: false, prescriptionId: '', summary: null });
 
   // Warm up Paged.js chunk during idle time to avoid first-use delay
   useEffect(() => {
@@ -1188,7 +1192,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return parts.join(' / ');
   }, [patientAgeYears, patientGender]);
   const todayStr = useMemo(() => displayClinicDate(new Date()), []);
-  const hasSavedPrescription = !!(visitData?.prescription?.id || visitData?.prescriptionId || savedPrescriptionId);
+  const savedPrescriptionIdForBill: string | null = savedPrescriptionId || visitData?.prescription?.id || visitData?.prescriptionId || null;
+  const hasSavedPrescription = !!savedPrescriptionIdForBill;
 
   const historyLine = useMemo(() => {
     const parts: string[] = [];
@@ -1304,11 +1309,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   }, []);
 
   useEffect(() => {
-    // Defer templates bar mount to avoid initial render churn
-    setShowTemplatesBar(true);
-  }, []);
-
-  useEffect(() => {
     // Defer initial client-only render to avoid SSR/client mismatches and select ref thrash
     setHydrated(true);
   }, []);
@@ -1335,6 +1335,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           setSavedPrescriptionId(res.prescription.id);
           const savedItems = typeof res.prescription.items === 'string' ? JSON.parse(res.prescription.items) : res.prescription.items;
           if (Array.isArray(savedItems) && !items.some(item => item.drugName.trim())) {
+            itemsMatchSavedPrescription.current = true;
             hydrateItems(savedItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
           }
           if (!followUpInstructions && res.prescription.instructions) hydrateFollowUpInstructions(res.prescription.instructions);
@@ -1742,6 +1743,17 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       }, 10);
     }
   }, [items.length]);
+
+  const blankRowOffered = useRef(false);
+  useEffect(() => {
+    if (blankRowOffered.current || !hydrated || loadingVisit || items.length > 0) return;
+    blankRowOffered.current = true;
+    hydrateItems([createBlankItem()]);
+    setTimeout(() => {
+      const input = inputRefs.current[0];
+      if (input && !input.value) input.focus({ preventScroll: true });
+    }, 10);
+  }, [hydrated, loadingVisit, items.length, hydrateItems]);
 
   const hasTrailingBlank = (list: PrescriptionItemForm[]): boolean => {
     if (!list || list.length === 0) return false;
@@ -2523,11 +2535,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     { label: '1-0-1', pattern: '1-0-1' },
     { label: '0-1-0', pattern: '0-1-0' },
     { label: '1-1-1', pattern: '1-1-1' },
-    { label: 'HS', frequency: 'ONCE_DAILY' },
+    { label: 'Night', frequency: 'ONCE_DAILY' },
   ];
   const durationPresets: Array<{ label: string; duration: number; unit: DurationUnit }> = [
     { label: '5d', duration: 5, unit: 'DAYS' },
     { label: '7d', duration: 7, unit: 'DAYS' },
+    { label: '10d', duration: 10, unit: 'DAYS' },
     { label: '14d', duration: 14, unit: 'DAYS' },
     { label: '4w', duration: 4, unit: 'WEEKS' },
   ];
@@ -2628,7 +2641,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return true;
   }, [onClinicalConflict]);
 
-  const create = useCallback(async (fromPreview = false, exportVisitId?: string) => {
+  const create = useCallback(async (exportVisitId?: string) => {
     if (prescriptionSaveInFlight.current) return;
     if (consultationType === 'TELE_VIDEO' && !teleVideoConsent) {
       toast({ variant: 'destructive', title: 'Patient consent required', description: TELE_VIDEO_CONSENT_REQUIRED });
@@ -2719,24 +2732,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       if (!existingId) track('prescription_created', { mode: standalone ? 'quick' : 'visit' });
       createdPrescriptionIdRef.current = res.id;
       setSavedPrescriptionId(res?.id || null);
+      setSavedItemsKey(JSON.stringify(payload.items));
       if (res.visit) {
         visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, res.visit.version);
         onVisitSaved?.(res.visit);
       }
       onCreated?.(res?.id);
-
-      const skipCleanup = skipPostSaveCleanupRef.current;
-      skipPostSaveCleanupRef.current = false;
-
-      if (!skipCleanup && !standalone && !fromPreview) {
-        setConfirmPharmacy({
-          open: true,
-          prescriptionId: res?.id || '',
-          summary: {
-            medicationsCount: validItems.length,
-          },
-        });
-      }
 
       toast({
         variant: 'success',
@@ -2760,6 +2761,21 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     }
   }, [reportClinicalConflict, getClinicalSavePatch, onVisitSaved, consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
 
+  const itemsKey = useMemo(() => JSON.stringify(prescriptionItemsPayload), [prescriptionItemsPayload]);
+  useEffect(() => {
+    if (!itemsMatchSavedPrescription.current || validItems.length === 0) return;
+    itemsMatchSavedPrescription.current = false;
+    setSavedItemsKey(itemsKey);
+  }, [itemsKey, validItems.length]);
+  const unsavedMedicines = validItems.length > 0 && itemsKey !== savedItemsKey;
+  const hasComplaintOrDiagnosis = Boolean(chiefComplaints.trim() || diagnosis.trim());
+  useEffect(() => {
+    onCompletionStateChange?.({ hasComplaintOrDiagnosis, medicines: validItems.length, unsavedMedicines, saved: hasSavedPrescription });
+  }, [onCompletionStateChange, hasComplaintOrDiagnosis, validItems.length, unsavedMedicines, hasSavedPrescription]);
+  useEffect(() => {
+    if (savePrescriptionRef) savePrescriptionRef.current = () => create();
+  });
+
   const exportSaveInFlight = useRef(false);
   const [savingForExport, setSavingForExport] = useState(false);
   const saveBeforeExport = useCallback(async () => {
@@ -2779,7 +2795,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           onVisitSaved?.(saved);
         }
       }
-      const prescriptionId = validItems.length > 0 ? await create(true, savedVisitId || undefined) : undefined;
+      const prescriptionId = validItems.length > 0 ? await create(savedVisitId || undefined) : undefined;
       // create() already displays the specific save error; keep it visible.
       if (validItems.length > 0 && !prescriptionId) return null;
       if (standalone && !prescriptionId) {
@@ -4392,7 +4408,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     setFollowUpInstructions(next.followUpInstructions || '');
   }, []);
 
-  const shouldShowLearnedPlanPanel = true;
+  const shouldShowLearnedPlanPanel = Boolean(learnedPlan);
   const learnedPlanConfidenceLabel = useMemo(() => {
     if (!learnedPlan) return '';
     if (learnedPlan.confidence >= 0.84) return 'High confidence';
@@ -4400,24 +4416,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return 'Emerging pattern';
   }, [learnedPlan]);
   const learnedPlanTitle = useMemo(() => {
-    if (!diagnosis.trim()) return 'Enter a diagnosis to see treatment suggestions.';
-    if (learningSourcesStatus === 'loading' && !learnedPlan) return 'Reading recent plans, patterns, and saved order sets…';
     if (learnedPlanSuppressed) return 'Autofill paused for this diagnosis.';
     if (learnedPlanMerged) return 'Missing treatment details filled from a saved plan';
     if (learnedPlanApplied) return 'Treatment prefilled from previous plans';
     if (learnedPlanCustomized) return 'Customized after autofill.';
     if (learnedPlanBlocked) return 'Learned plan ready. Your manual edits were preserved.';
-    if (learnedPlan) return 'A learned plan is ready to prefill.';
-    if (learningSourcesError) return 'Pattern learning is partially offline right now.';
-    return 'No strong pattern yet for this diagnosis.';
-  }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
+    return 'A learned plan is ready to prefill.';
+  }, [learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked]);
   const learnedPlanDescription = useMemo(() => {
-    if (!diagnosis.trim()) {
-      return 'Suggestions use similar patient visits, previous prescriptions, and saved treatment plans.';
-    }
-    if (learningSourcesStatus === 'loading' && !learnedPlan) {
-      return 'Scanning live prescription history. The full row editor remains editable underneath.';
-    }
     if (learnedPlanSuppressed) {
       return 'You cleared the suggested draft. Autofill is paused for this diagnosis. Reapply the suggestion or change the diagnosis to resume.';
     }
@@ -4433,14 +4439,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (learnedPlanBlocked) {
       return 'A stronger pattern exists for this diagnosis, but the builder already contains doctor-entered treatment so nothing was overwritten.';
     }
-    if (learnedPlan) {
-      return learnedPlan.sourceLabel;
-    }
-    if (learningSourcesError) {
-      return learningSourcesError;
-    }
-    return 'Keep building manually once. As more prescriptions land in the database, this section becomes a faster diagnosis-to-treatment shortcut.';
-  }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
+    return learnedPlan?.sourceLabel || '';
+  }, [learnedPlan, learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked]);
   const learnedPlanVisibleComboNames = learnedPlan?.comboDrugNames.slice(0, 4) || [];
   const learnedPlanHiddenComboCount = Math.max(0, (learnedPlan?.comboDrugNames.length || 0) - learnedPlanVisibleComboNames.length);
   const followUpPresetTexts = useMemo(() => [
@@ -4515,11 +4515,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     <div className="space-y-6 overflow-visible">
       <div className="space-y-6">
         <div className="space-y-4">
-          {/* Templates quick bar */}
-            {hydrated && showTemplatesBar && templatesReady && allTemplates.length > 0 ? (
+          <div className="space-y-2">
+            <Button variant="outline" size="sm" aria-expanded={showTemplatesBar} onClick={() => setShowTemplatesBar(open => !open)}>
+              Templates
+              <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+            </Button>
+            {showTemplatesBar && (hydrated && templatesReady && allTemplates.length > 0 ? (
               <div className="flex flex-wrap gap-2 items-end">
                 <div className="min-w-[240px]">
-                  <label className="text-xs text-gray-600">Templates</label>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild disabled={!templatesReady || loadingTemplates}>
                       <Button variant="outline" className="w-full justify-between font-normal">
@@ -4566,7 +4569,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>Refresh</Button>
                 <Button variant="ghost" size="sm" onClick={undo}>Undo</Button>
                 <Button variant="ghost" size="sm" onClick={redo}>Redo</Button>
-                <Button variant="destructive" size="sm" onClick={() => { try { localStorage.removeItem(`rxDraft:${patientId}:${visitId || 'standalone'}`); } catch {}; setItems([]); setFollowUpInstructions(''); pushHistory(); }}>Reset to default</Button>
+                <Button variant="ghost" size="sm" onClick={() => { try { localStorage.removeItem(`rxDraft:${patientId}:${visitId || 'standalone'}`); } catch {}; setItems([]); setFollowUpInstructions(''); pushHistory(); }}>Reset to default</Button>
                 <div className="ml-auto flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={() => setTemplatePromptOpen(true)}>Save current</Button>
                   <Button variant="outline" size="sm" onClick={() => setFieldTemplatePromptOpen(true)}>Save fields</Button>
@@ -4577,7 +4580,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 {loadingTemplates ? 'Loading templates…' : 'Templates will appear once loaded.'}
               </div>
-            )}
+            ))}
+          </div>
 
             {/* Basic Information */}
             {/* Moved to bottom of builder; removed Doctor's Personal Notes field */}
@@ -4689,7 +4693,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               title="Chief Complaints" 
               section="chief-complaints" 
               highlight={hasChiefComplaints}
-              badge={hasChiefComplaints ? 'Has Data' : ''}
             >
               <div className="opacity-100">
                 <label className="text-xs text-gray-600 flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
@@ -4730,7 +4733,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               title="Diagnosis" 
               section="diagnosis" 
               highlight={hasDiagnosis}
-              badge={hasDiagnosis ? 'Has Data' : ''}
             >
               <div className="opacity-100">
                 <label className="text-xs text-gray-600 flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
@@ -4754,7 +4756,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               title="Patient History" 
               section="histories" 
               highlight={hasHistories}
-              badge={hasHistories ? "Has Data" : ""}
             >
               <div className="opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -4990,7 +4991,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           </div>
                           <div>
                             <div className="text-xl font-semibold tracking-tight">{learnedPlanTitle}</div>
-                            <div className={`mt-1 max-w-3xl text-sm leading-6 ${learningSourcesStatus === 'loading' && !learnedPlan ? 'text-white/80 animate-pulse' : 'text-white/74'}`}>
+                            <div className="mt-1 max-w-3xl text-sm leading-6 text-white/74">
                               {learnedPlanDescription}
                             </div>
                           </div>
@@ -5044,8 +5045,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 <Pill className="h-3.5 w-3.5" />
                                 Combo
                               </div>
-                              <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.comboDrugNames.length : '—'}</div>
-                              <div className="text-xs text-white/60">meds prefilled</div>
+                              <div className="mt-2 text-lg font-semibold">{learnedPlan?.comboDrugNames.length}</div>
                             </div>
                             <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
                               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/50">
@@ -5053,23 +5053,20 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 Review
                               </div>
                               <div className="mt-2 text-lg font-semibold">{learnedPlan?.reviewDays ? `${learnedPlan.reviewDays}d` : '—'}</div>
-                              <div className="text-xs text-white/60">suggested window</div>
                             </div>
                             <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
                               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/50">
                                 <FlaskConical className="h-3.5 w-3.5" />
                                 Labs
                               </div>
-                              <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.investigations.length : '—'}</div>
-                              <div className="text-xs text-white/60">auto-suggested</div>
+                              <div className="mt-2 text-lg font-semibold">{learnedPlan?.investigations.length}</div>
                             </div>
                             <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
                               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-white/50">
                                 <Wand2 className="h-3.5 w-3.5" />
                                 Evidence
                               </div>
-                              <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.evidenceCount : '—'}</div>
-                              <div className="text-xs text-white/60">matching plans</div>
+                              <div className="mt-2 text-lg font-semibold">{learnedPlan?.evidenceCount}</div>
                             </div>
                           </div>
 
@@ -5383,7 +5380,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               title="Procedures" 
               section="procedures" 
               highlight={hasProcedures || hasProcedurePlanned}
-              badge={(hasProcedures || hasProcedurePlanned) ? "Has Data" : ""}
             >
               <div className="space-y-3 opacity-100">
                 <div>
@@ -5402,7 +5398,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               title={`Investigations${language !== 'EN' ? ' (translates)' : ''}`} 
               section="investigations" 
               highlight={hasInvestigations}
-              badge={hasInvestigations ? "Has Data" : ""}
             >
               <div className="opacity-100 space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -5591,15 +5586,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <Button onClick={() => void create()} disabled={!canCreate || savingFromPreview || savingForExport}>
                   {(visitId || standalone || ensureVisitId) ? 'Create Prescription' : 'Save visit first'}
                 </Button>
-                {!standalone && validItems.length > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      const url = billHref({ prefill: { patientId, doctorId, visitId: visitId || undefined } });
-                      window.location.href = url;
-                    }}
-                  >
-                    Go to Pharmacy
+                {!standalone && savedPrescriptionIdForBill && (
+                  <Button variant="link" asChild>
+                    <a href={billHref({ prefill: { patientId, prescriptionId: savedPrescriptionIdForBill, doctorId } })}>Go to pharmacy</a>
                   </Button>
                 )}
               </div>
@@ -6350,7 +6339,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <Button
                       className="col-span-2 bg-green-600 hover:bg-green-700 text-white"
                       disabled={!canCreate || savingFromPreview || savingForExport}
-                      onClick={() => void create(true)}
+                      onClick={() => void create()}
                     >
                       {savingFromPreview ? 'Saving…' : canCreate ? 'Save Prescription' : 'Add medications to save'}
                     </Button>
@@ -6888,38 +6877,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 }}
               >
                 Save Fields Template
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={confirmPharmacy.open} onOpenChange={(open: boolean) => setConfirmPharmacy((prev) => ({ ...prev, open }))}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Go to Pharmacy?</DialogTitle>
-              <DialogDescription>
-                {confirmPharmacy.summary?.medicationsCount || 0} medications were added to this prescription. Continue to
-                the pharmacy module to bill them now?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setConfirmPharmacy({ open: false, prescriptionId: '', summary: null })}
-              >
-                Stay Here
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!confirmPharmacy.prescriptionId) {
-                    setConfirmPharmacy({ open: false, prescriptionId: '', summary: null });
-                    return;
-                  }
-                  const url = billHref({ prefill: { patientId, prescriptionId: confirmPharmacy.prescriptionId, doctorId } });
-                  window.location.href = url;
-                }}
-              >
-                Yes, go to Pharmacy
               </Button>
             </DialogFooter>
           </DialogContent>
