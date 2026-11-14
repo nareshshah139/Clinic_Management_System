@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { PackageBrowser } from '@/components/pharmacy/PackageBrowser';
 import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCreator';
-import { PrescriptionDispensingQueue } from '@/components/pharmacy/PrescriptionDispensingQueue';
 import { PartnerDailySync } from '@/components/pharmacy/PartnerDailySync';
 import { PharmacyCounterCockpit } from '@/components/pharmacy/PharmacyCounterCockpit';
 import { apiClient } from '@/lib/api';
@@ -18,7 +17,6 @@ import { QuickGuide } from '@/components/common/QuickGuide';
 import {
   ArrowRight,
   Bot,
-  CheckCircle2,
   ClipboardCheck,
   DollarSign,
   MessageSquare,
@@ -162,7 +160,6 @@ function PharmacyPageContent() {
     <main className="flex-1 bg-[#eef4f8] p-2 md:p-3">
       <div ref={pharmacyWorkspaceRef} className="mx-auto max-w-[1560px] scroll-mt-3">
         <div className="space-y-3">
-          {pharmacyTab === 'counter' && <PageHeader title="Pharmacy Counter" />}
           {pharmacyTab === 'desk' ? (
             <PharmacyDeskPanel
               sells={sells}
@@ -176,7 +173,6 @@ function PharmacyPageContent() {
               isAgentDockOpen={isAgentDockOpen}
               onOpenAgent={() => setIsAgentDockOpen(true)}
               onOpenCounter={() => openPharmacyTab('counter')}
-              onOpenSale={() => openBill()}
               onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control')}
               onOpenInvoices={() => router.push('/dashboard/pharmacy/invoices')}
               onOpenDrugs={() => router.push('/dashboard/pharmacy/drugs')}
@@ -184,8 +180,9 @@ function PharmacyPageContent() {
           ) : null}
 
           {pharmacyTab === 'counter' ? (
-            <PharmacyCounterPanel
+            <PharmacyCounterCockpit
               onOpenBilling={openBill}
+              onNewBill={sells ? () => openBill() : undefined}
               onOpenPartnerSync={() => openPharmacyTab('desk')}
               onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control&section=shelf')}
             />
@@ -215,7 +212,6 @@ function PharmacyDeskPanel({
   isAgentDockOpen,
   onOpenAgent,
   onOpenCounter,
-  onOpenSale,
   onOpenInventoryControl,
   onOpenInvoices,
   onOpenDrugs,
@@ -231,7 +227,6 @@ function PharmacyDeskPanel({
   isAgentDockOpen: boolean;
   onOpenAgent: () => void;
   onOpenCounter: () => void;
-  onOpenSale: () => void;
   onOpenInventoryControl: () => void;
   onOpenInvoices: () => void;
   onOpenDrugs: () => void;
@@ -325,21 +320,13 @@ function PharmacyDeskPanel({
           </div>
         </div>
 
-        <div className={`mt-2 grid gap-1.5 ${sells ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
+        <div className="mt-2 grid gap-1.5 lg:grid-cols-2">
           <QuickAction
             icon={<ClipboardCheck className="h-4 w-4" />}
             title="Pharmacy Counter"
-            detail="Review and pick"
+            detail="Prescription queue and new bills"
             onClick={onOpenCounter}
           />
-          {sells && (
-            <QuickAction
-              icon={<Receipt className="h-4 w-4" />}
-              title="New sale"
-              detail="Bill a prescription or walk-in"
-              onClick={onOpenSale}
-            />
-          )}
           <QuickAction
             icon={<Package className="h-4 w-4" />}
             title="Inventory Control"
@@ -357,38 +344,6 @@ function PharmacyDeskPanel({
 
       <PartnerDailySync />
       <PackagesPanel />
-    </div>
-  );
-}
-
-function PharmacyCounterPanel({
-  onOpenBilling,
-  onOpenPartnerSync,
-  onOpenInventoryControl,
-}: {
-  onOpenBilling: (prefill?: BillPrefill) => void;
-  onOpenPartnerSync: () => void;
-  onOpenInventoryControl: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <PharmacyCounterCockpit
-        onOpenBilling={onOpenBilling}
-        onOpenQueue={() => undefined}
-        onOpenPartnerSync={onOpenPartnerSync}
-        onOpenInventoryControl={onOpenInventoryControl}
-      />
-
-      <section className="space-y-3">
-        <WorkbenchHeader
-          title="Prescription Queue"
-          detail="Review visit prescriptions and send approved medicines into a Sales bill."
-        />
-        <PrescriptionDispensingQueue
-          onOpenBilling={onOpenBilling}
-          openActionLabel="Bill"
-        />
-      </section>
     </div>
   );
 }
@@ -449,7 +404,7 @@ function PharmacyGuide() {
         {
           title: 'Billing',
           items: [
-            'Create GST pharmacy bills from Sales > New sale, or save one as a draft to finish later',
+            'Create GST pharmacy bills from Pharmacy Counter > New bill, or save one as a draft to finish later',
             'Use payment modes such as cash, UPI, card, or insurance',
             'Confirmed invoices deduct stock and keep patient records linked',
           ],
@@ -532,27 +487,6 @@ function QuickAction({
       </div>
       <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-1" />
     </button>
-  );
-}
-
-function WorkbenchHeader({
-  title,
-  detail,
-}: {
-  title: string;
-  detail: string;
-}) {
-  return (
-    <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <p className="text-lg font-semibold text-slate-950">{title}</p>
-        <p className="text-sm text-slate-600">{detail}</p>
-      </div>
-      <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        Validate before adding stock
-      </div>
-    </div>
   );
 }
 

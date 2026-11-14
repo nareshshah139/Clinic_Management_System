@@ -67,12 +67,6 @@ const navigation: NavigationItem[] = [
     ],
   },
   {
-    name: "Daily Collection", section: "Overview",
-    href: "/dashboard/pharmacy/reports?report=daily-collection",
-    icon: Wallet,
-    allowedRoles: PHARMACY_REPORT_ROLES,
-  },
-  {
     name: "Patients", section: "Clinical",
     href: "/dashboard/patients",
     icon: Users,
@@ -127,6 +121,12 @@ const navigation: NavigationItem[] = [
     href: "/dashboard/inventory",
     icon: Package,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "RECEPTION"],
+  },
+  {
+    name: "Daily Collection", section: "Pharmacy",
+    href: "/dashboard/pharmacy/reports?report=daily-collection",
+    icon: Wallet,
+    allowedRoles: PHARMACY_REPORT_ROLES,
   },
   {
     name: "Pharmacy Report", section: "Pharmacy",

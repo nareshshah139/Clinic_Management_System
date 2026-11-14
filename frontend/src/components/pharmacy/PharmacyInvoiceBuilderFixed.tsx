@@ -2189,7 +2189,7 @@ export function PharmacyInvoiceBuilderFixed({
               {checkoutAttempt.confirmed ? 'Reopen confirmed invoice' : 'Retry pending checkout'}
             </Button>
             {checkoutAttempt.confirmed && <Button variant="ghost" disabled={loading} onClick={startNewInvoice}>Start a new invoice</Button>}
-            {checkoutAttempt.confirmed && onDone && <Button variant="ghost" disabled={loading} onClick={leaveFinishedBill}>Back to Sales</Button>}
+            {checkoutAttempt.confirmed && onDone && <Button variant="ghost" disabled={loading} onClick={leaveFinishedBill}>Done</Button>}
           </div>
         </div>
       )}
@@ -2206,19 +2206,15 @@ export function PharmacyInvoiceBuilderFixed({
 
       {renderPrescriptionHeader()}
 
-      <CardHeader>
-        <CardTitle className="flex flex-wrap items-center gap-2">
-          <Pill className="h-5 w-5" />
-          {session.kind === 'draft' ? (
-            <>
-              <Badge variant="warning">Draft</Badge>
-              {session.number ? <span>{session.number} not final</span> : <span className="text-base font-normal text-muted-foreground">Gets its bill number when finished</span>}
-            </>
-          ) : (
-            'New bill'
-          )}
-        </CardTitle>
-      </CardHeader>
+      {session.kind === 'draft' && (
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center gap-2">
+            <Pill className="h-5 w-5" />
+            <Badge variant="warning">Draft</Badge>
+            {session.number ? <span>{session.number} not final</span> : <span className="text-base font-normal text-muted-foreground">Gets its bill number when finished</span>}
+          </CardTitle>
+        </CardHeader>
+      )}
       <CardContent>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {prefillError && (

@@ -104,8 +104,8 @@ export const SEARCH_FIELD_OPTIONS = [
 export const STATE_LABELS: Record<SaleState, string> = { FINAL: 'Final', DRAFT: 'Draft', CANCELLED: 'Cancelled' };
 export const SOURCE_FILTER_LABELS = { PHARMACY_BILL: 'Pharmacy bills', COUNTER_SALE: 'Counter sales' } as const;
 
-export const REGISTER_COPY: Record<Register, { name: string; one: string; many: string; amount: string; payment: string; newLabel: string; table: string; settled: string }> = {
-  sales: { name: 'sales', one: 'bill', many: 'bills', amount: 'Bill Amount', payment: 'Payment', newLabel: 'New sale', table: 'Sales', settled: 'Collected' },
+export const REGISTER_COPY: Record<Register, { name: string; one: string; many: string; amount: string; payment: string; newLabel: string | null; table: string; settled: string }> = {
+  sales: { name: 'sales', one: 'bill', many: 'bills', amount: 'Bill Amount', payment: 'Payment', newLabel: null, table: 'Sales', settled: 'Collected' },
   returns: { name: 'returns', one: 'return', many: 'returns', amount: 'Amount', payment: 'Refund', newLabel: 'New return', table: 'Sales returns', settled: 'Refunded' },
 };
 
@@ -212,7 +212,6 @@ export function editDiscountAction(row: SalesRegisterRow): { href: string } | { 
   return { href: billHref({ bill: row.recordId, edit: 'discount' }) };
 }
 
-export function newEntryHref(register: Register, returnTo: string, key: string) {
-  if (register === 'sales') return billHref();
+export function newReturnHref(returnTo: string, key: string) {
   return `/dashboard/inventory?area=sales&view=SALES_RETURN&new=${key}&return=${encodeURIComponent(returnTo)}`;
 }

@@ -15,9 +15,12 @@ jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn() } }));
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
 jest.mock('@/components/pharmacy/PackageBrowser', () => ({ PackageBrowser: () => null }));
 jest.mock('@/components/pharmacy/PharmacyPackageCreator', () => ({ PharmacyPackageCreator: () => null }));
-jest.mock('@/components/pharmacy/PrescriptionDispensingQueue', () => ({ PrescriptionDispensingQueue: () => <p>Queue</p> }));
 jest.mock('@/components/pharmacy/PartnerDailySync', () => ({ PartnerDailySync: () => null }));
-jest.mock('@/components/pharmacy/PharmacyCounterCockpit', () => ({ PharmacyCounterCockpit: () => null }));
+jest.mock('@/components/pharmacy/PharmacyCounterCockpit', () => ({
+  PharmacyCounterCockpit: ({ onNewBill }: { onNewBill?: () => void }) => (
+    <section aria-label="Counter cockpit">{onNewBill && <button onClick={onNewBill}>New bill</button>}</section>
+  ),
+}));
 
 const get = apiClient.get as jest.Mock;
 const asked = () => get.mock.calls.map(([url]) => url);
@@ -36,7 +39,7 @@ it("shows a pharmacist today's sales on the desk", async () => {
   expect(figuresAsked()).toBe(1);
 });
 
-const offered = () => ['New sale', 'Invoices', 'Drugs', 'Refresh', 'Pharmacy Counter', 'Inventory Control']
+const offered = () => ['New sale', 'New bill', 'Invoices', 'Drugs', 'Refresh', 'Pharmacy Counter', 'Inventory Control']
   .filter((name) => screen.queryByRole('button', { name: new RegExp(`^${name}`) }));
 
 it("offers a pharmacist the desk's sale actions", async () => {
@@ -44,7 +47,7 @@ it("offers a pharmacist the desk's sale actions", async () => {
   role = 'PHARMACIST';
   render(<PharmacyWorkspace />);
   await screen.findByText('₹1240.00');
-  expect(offered()).toEqual(['New sale', 'Invoices', 'Drugs', 'Refresh', 'Pharmacy Counter', 'Inventory Control']);
+  expect(offered()).toEqual(['Invoices', 'Drugs', 'Refresh', 'Pharmacy Counter', 'Inventory Control']);
 });
 
 it("never asks for the pharmacy's figures for reception, and offers no sale it would be refused", async () => {
@@ -62,6 +65,17 @@ it('loads no desk figures on the counter, for any role', async () => {
   section = 'counter';
   role = 'PHARMACIST';
   render(<PharmacyWorkspace />);
-  expect(await screen.findByText('Queue')).toBeInTheDocument();
+  expect(await screen.findByRole('region', { name: 'Counter cockpit' })).toBeInTheDocument();
   expect([asked().includes('/auth/me'), figuresAsked()]).toEqual([true, 0]);
+});
+
+it.each([
+  ['PHARMACIST', ['New bill']],
+  ['RECEPTION', []],
+])('offers %s a walk-in New bill on the counter only when it can sell', async (who, expected) => {
+  section = 'counter';
+  role = who;
+  render(<PharmacyWorkspace />);
+  await screen.findByRole('region', { name: 'Counter cockpit' });
+  expect(offered()).toEqual(expected);
 });

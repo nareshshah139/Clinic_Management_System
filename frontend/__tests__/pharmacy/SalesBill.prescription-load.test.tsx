@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SalesBillPage from '@/app/dashboard/pharmacy/sales/bill/page';
+import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
 import { apiClient } from '@/lib/api';
 
 const mockToast = jest.fn();
@@ -41,11 +42,10 @@ const entries = [patient, secondPatient].map((p, index) => ({
   medications: (index === 0 ? names : ['Unmatched cream']).map((drugName, i) => ({ drugName, prescribedQuantity: quantities[i], dispensedQuantity: 0, coverageStatus: 'not_started' })),
 }));
 let saved = false;
-const scrollIntoView = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks(); sessionStorage.clear(); saved = false; mockNav.query = new URLSearchParams();
-  Element.prototype.scrollIntoView = scrollIntoView;
+  Element.prototype.scrollIntoView = jest.fn();
   api.getPatients.mockResolvedValue({ data: [patient, secondPatient] } as any);
   api.getPatient.mockImplementation(async id => id === patient.id ? patient : secondPatient as any);
   api.getUsers.mockResolvedValue({ users: [doctor] } as any);
@@ -70,19 +70,23 @@ beforeEach(() => {
   api.getPharmacyInvoicePrintData.mockResolvedValue({ id: 'invoice-1', invoiceNumber: 'PH-1' } as any);
 });
 
+const openBillFor = (name = patient.name) => {
+  const entry = entries.find((candidate) => candidate.patient.name === name)!;
+  act(() => mockGo(billHref({ prefill: { patientId: entry.patient.id, prescriptionId: entry.prescriptionId, doctorId: entry.doctor.id, visitId: entry.visitId } })));
+};
+
 async function loadPatient(name = patient.name) {
-  const row = (await screen.findByText(name)).closest('tr')!;
-  fireEvent.click(within(row).getByRole('button', { name: 'Load' }));
+  openBillFor(name);
   await screen.findByRole('heading', { name: 'Linked Prescription' });
 }
 
-it('Load opens a visible bill with all four prescribed quantities and flags unavailable stock', async () => {
+it('Bill from the Counter opens a focused bill with all four prescribed quantities and flags unavailable stock', async () => {
   render(<SalesBillPage />);
   await loadPatient();
   for (const name of names) expect(await screen.findByRole('heading', { name, level: 4 })).toBeInTheDocument();
   expect(screen.getByText('Out of stock')).toBeInTheDocument();
   const bill = screen.getByRole('region', { name: 'Prescription bill' });
-  expect(scrollIntoView.mock.instances).toContain(bill);
+  await waitFor(() => expect(bill).toHaveFocus());
   expect(api.get).not.toHaveBeenCalledWith('/visits/visit-0');
   for (const [i, name] of names.entries()) expect(within(screen.getByRole('heading', { name, level: 4 }).closest('[data-invoice-item]') as HTMLElement).getByLabelText('Quantity')).toHaveValue(quantities[i]);
 });
@@ -198,8 +202,7 @@ it('ignores a late prescription response after switching patients', async () => 
   const original = api.getPrescription.getMockImplementation()!;
   api.getPrescription.mockImplementation(id => id === 'rx-0' ? new Promise(resolve => { resolveFirst = resolve; }) : original(id));
   render(<SalesBillPage />);
-  const row = (await screen.findByText(patient.name)).closest('tr')!;
-  fireEvent.click(within(row).getByRole('button', { name: 'Load' }));
+  openBillFor(patient.name);
   await waitFor(() => expect(api.getPrescription).toHaveBeenCalledWith('rx-0'));
   await loadPatient(secondPatient.name);
   await screen.findByRole('heading', { name: 'Unmatched cream', level: 4 });
@@ -208,7 +211,7 @@ it('ignores a late prescription response after switching patients', async () => 
   expect(screen.getByDisplayValue(secondPatient.name)).toBeInTheDocument();
 });
 
-it('keeps a pending prescription visible and reports a failed confirmation', async () => {
+it('keeps the prescription on the bill and reports a failed confirmation', async () => {
   api.post.mockRejectedValue(new Error('Insufficient inventory stock'));
   render(<SalesBillPage />);
   await loadPatient();
@@ -216,27 +219,30 @@ it('keeps a pending prescription visible and reports a failed confirmation', asy
   fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
   await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Error Confirming Invoice', description: 'Insufficient inventory stock' })));
-  expect(screen.getByText(patient.name, { selector: 'td *' }).closest('tr')).not.toBeNull();
+  expect(screen.getByText('Linked Prescription')).toBeInTheDocument();
+  expect(screen.getByText(names[0], { selector: 'h4' })).toBeInTheDocument();
 });
 
 it('shows a visible load error and retries the same prescription', async () => {
   api.getPrescription.mockRejectedValueOnce(new Error('Prescription service unavailable'));
   render(<SalesBillPage />);
-  const row = (await screen.findByText(patient.name)).closest('tr')!;
-  fireEvent.click(within(row).getByRole('button', { name: 'Load' }));
+  openBillFor(patient.name);
   expect(await screen.findByRole('alert')).toHaveTextContent('Prescription service unavailable');
   fireEvent.click(screen.getByRole('button', { name: 'Retry loading prescription' }));
   expect(await screen.findByRole('heading', { name: names[0], level: 4 })).toBeInTheDocument();
 });
 
-it('refreshes Pending after confirmation while preserving the prescription link in the saved bill', async () => {
+it('tells the Counter queue to refresh after confirmation while preserving the prescription link in the saved bill', async () => {
+  const refreshed = jest.fn();
+  window.addEventListener('pharmacy-invoices-refresh', refreshed);
   render(<SalesBillPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
   fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({ requestKey: expect.any(String), prescriptionId: 'rx-0', patientId: patient.id, items: drugs.map((d, i) => expect.objectContaining({ drugId: d.id, quantity: quantities[i] })) })));
-  await waitFor(() => expect(screen.queryByText(patient.name, { selector: 'td *' })).not.toBeInTheDocument());
+  await waitFor(() => expect(refreshed).toHaveBeenCalledTimes(1));
+  window.removeEventListener('pharmacy-invoices-refresh', refreshed);
 });
 
 it('starts a new patient bill after prescription checkout without the previous context', async () => {

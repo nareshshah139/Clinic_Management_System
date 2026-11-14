@@ -14,7 +14,7 @@ const stock = (quantity: number) => ({ items: [{
   totalNonExpiredStock: quantity, batches: [], lowStock: false, nearExpiry: false,
 }] });
 let quantity: number;
-const props = { onOpenBilling: jest.fn(), onOpenQueue: jest.fn(), onOpenPartnerSync: jest.fn(), onOpenInventoryControl: jest.fn() };
+const props = { onOpenBilling: jest.fn(), onOpenPartnerSync: jest.fn(), onOpenInventoryControl: jest.fn() };
 beforeEach(() => {
   jest.clearAllMocks(); quantity = 10;
   get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(quantity) : { data: [entry()], pagination: { total: 1 } });
