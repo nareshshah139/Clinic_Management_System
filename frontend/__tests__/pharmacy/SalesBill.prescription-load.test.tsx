@@ -238,12 +238,21 @@ it('refreshes Pending after confirmation while preserving the prescription link 
   render(<SalesBillPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
+  expect(screen.getByText(patient.name, { selector: 'td *' })).toBeInTheDocument();
+  const queueReads = () => api.get.mock.calls.filter(([url]) => url === '/pharmacy/prescription-queue').length;
+  const readsBefore = queueReads();
+  mockGo.mockImplementationOnce(() => undefined);
+
   fireEvent.click(screen.getByRole('button', { name: 'Confirm and print' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({ requestKey: expect.any(String), prescriptionId: 'rx-0', patientId: patient.id, items: drugs.map((d, i) => expect.objectContaining({ drugId: d.id, quantity: quantities[i] })) })));
   await waitFor(() => expect(mockGo).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales/bill?bill=invoice-1&next=prescriptions'));
+  await waitFor(() => expect(queueReads()).toBeGreaterThan(readsBefore));
+  await waitFor(() => expect(screen.queryByText(patient.name, { selector: 'td *' })).not.toBeInTheDocument());
+  expect(screen.getByText(secondPatient.name, { selector: 'td *' })).toBeInTheDocument();
+
+  act(() => mockGo('/dashboard/pharmacy/sales/bill?bill=invoice-1&next=prescriptions'));
   expect(await screen.findByRole('link', { name: 'Prescriptions waiting' })).toHaveAttribute('href', '/dashboard/pharmacy?section=counter');
   expect(screen.getByText('Bill PH-1')).toBeInTheDocument();
-  expect(screen.queryByText(patient.name, { selector: 'td *' })).not.toBeInTheDocument();
 });
 
 it('starts a new patient bill after prescription checkout without the previous context', async () => {
