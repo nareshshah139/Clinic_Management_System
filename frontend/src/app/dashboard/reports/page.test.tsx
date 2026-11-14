@@ -40,3 +40,17 @@ it('names net banking and cheque payments the way the desk does', async () => {
   expect(screen.getAllByText(/^(CASH|NET_BANKING|CHEQUE|Cash|Net banking \/ NEFT|Cheque)$/).map((el) => el.textContent)).toEqual(['Cash', 'Net banking / NEFT', 'Cheque']);
   expect(screen.getAllByText(/^\d+ transactions?$/).map((el) => el.textContent)).toEqual(['4 transactions', '1 transaction', '1 transaction']);
 });
+
+it.each([
+  [{ overdueInvoices: 0, lowStockAlerts: 0, expiryAlerts: 0, pendingPayments: 0, upcomingAppointments: 3 }, [], ['bg-warning-soft', 'bg-destructive-soft']],
+  [{ overdueInvoices: 0, lowStockAlerts: 4, expiryAlerts: 0, pendingPayments: 2, upcomingAppointments: 1 }, ['bg-warning-soft'], ['bg-destructive-soft']],
+  [{ overdueInvoices: 1, lowStockAlerts: 4, expiryAlerts: 0, pendingPayments: 0, upcomingAppointments: 0 }, ['bg-destructive-soft'], ['bg-warning-soft']],
+])('tones the System Alerts band by its worst non-zero count (%j)', async (counts, present, absent) => {
+  api.get.mockResolvedValue({ counts });
+  render(<ReportsPage />);
+
+  const band = (await screen.findByText('System Alerts')).closest('[data-slot=card]') as HTMLElement;
+  present.forEach((cls) => expect(band).toHaveClass(cls));
+  absent.forEach((cls) => expect(band).not.toHaveClass(cls));
+  expect(screen.getByText('Expiry Alerts')).toHaveClass('text-muted-foreground');
+});
