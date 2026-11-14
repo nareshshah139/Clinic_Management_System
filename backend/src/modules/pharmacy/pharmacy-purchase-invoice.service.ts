@@ -138,7 +138,7 @@ export class PharmacyPurchaseInvoiceService {
    */
   async purchaseSuppliers(branchId: string) {
     return this.prisma.supplier.findMany({ where: { branchId, isActive: true },
-      select: { id: true, name: true, gstNumber: true, updatedAt: true }, orderBy: { name: 'asc' } });
+      select: { id: true, name: true, gstNumber: true, drugLicenseNo: true, updatedAt: true }, orderBy: { name: 'asc' } });
   }
 
   /**

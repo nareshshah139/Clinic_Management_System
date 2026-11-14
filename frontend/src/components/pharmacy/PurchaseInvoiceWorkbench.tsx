@@ -624,8 +624,8 @@ function isExpiredLine(line: LineForm) {
 function validateDraft(header: HeaderForm, lines: LineForm[]) {
   const errors: string[] = [];
   const requiredHeader: Array<[keyof HeaderForm, string]> = [
-    ["distributorName", "Distributor name"],
-    ["distributorGstin", "Distributor GSTIN"],
+    ["distributorName", "Supplier name"],
+    ["distributorGstin", "Supplier GSTIN"],
     ["invoiceNumber", "Invoice number"],
     ["invoiceDate", "Invoice date"],
   ];
@@ -638,7 +638,7 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
     errors.push("Select the verified bill type");
   const gstin = header.distributorGstin.trim().toUpperCase();
   if (gstin && !GSTIN_PATTERN.test(gstin)) {
-    errors.push("Distributor GSTIN must be a valid 15-character GSTIN");
+    errors.push("Supplier GSTIN must be a valid 15-character GSTIN");
   }
 
   const invoiceDate = parseDateInput(header.invoiceDate);
@@ -3359,7 +3359,7 @@ function PurchaseInvoiceEditor({
         readOnly={!editingChecks}
         disabled={busy}
         nextAction={postingLabel}
-        onChange={(distributorName, distributorGstin) => {
+        onChange={(distributorName, distributorGstin, licence) => {
           invalidatePending();
 
           setManualReviewCandidateId(null);
@@ -3367,6 +3367,7 @@ function PurchaseInvoiceEditor({
             ...current,
             distributorName,
             distributorGstin,
+            ...(licence && (!current.distributorDlNo.trim() || current.distributorDlNo === licence.previous) ? { distributorDlNo: licence.next } : {}),
           }));
         }}
         onSaved={() => setManualReviewCandidateId(null)}
@@ -4436,12 +4437,8 @@ function PurchaseInvoiceEditor({
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <Truck className="h-5 w-5" />
-                          Distributor Bill
+                          Supplier bill
                         </CardTitle>
-                        <CardDescription>
-                          Review extracted values or enter the distributor bill
-                          manually.
-                        </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-5">
                         {headerFlags && (
@@ -4478,7 +4475,7 @@ function PurchaseInvoiceEditor({
                             <>
                               <Field
                                 id="distributor-name"
-                                label="Distributor"
+                                label="Supplier name"
                                 value={header.distributorName}
                                 onChange={(event) =>
                                   updateHeader(
@@ -4486,7 +4483,7 @@ function PurchaseInvoiceEditor({
                                     event.target.value,
                                   )
                                 }
-                                placeholder="Distributor name"
+                                placeholder="Supplier name"
                               />
                               <Field
                                 id="distributor-gstin"
@@ -4681,10 +4678,10 @@ function PurchaseInvoiceEditor({
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div>
                                 <Label htmlFor="distributor-address">
-                                  Distributor Address
+                                  Supplier address
                                   <SourceFieldLink
                                     id="distributor-address"
-                                    label="Distributor address"
+                                    label="Supplier address"
                                   />
                                 </Label>
                                 <Textarea

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-type Supplier = { id: string; name: string; gstNumber: string | null; updatedAt?: string };
+type Supplier = { id: string; name: string; gstNumber: string | null; drugLicenseNo?: string | null; updatedAt?: string };
 const identity = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 const gstin = (value: string | null) => (value || '').trim().toUpperCase();
 
@@ -36,7 +36,7 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canE
   readOnly: boolean;
   disabled: boolean;
   nextAction?: string;
-  onChange: (name: string, gstNumber: string) => void;
+  onChange: (name: string, gstNumber: string, licence?: { next: string; previous: string }) => void;
   onSaved: () => void;
   onBusy: (busy: boolean) => void;
   onEdit?: () => void;
@@ -122,22 +122,21 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canE
 
   return <section aria-labelledby="purchase-supplier-title" className="space-y-3 border-b pb-4">
     <h5 id="purchase-supplier-title" className="font-semibold">Supplier</h5>
-    <p className="text-sm text-muted-foreground">Match the supplier by name and GSTIN, or save verified details here.</p>
     <div className="grid gap-3 md:grid-cols-2">
-      <div><div className="flex items-center"><Label htmlFor="distributor-name">Distributor</Label><SourceFieldLink id="distributor-name" label="Distributor"/><PurchaseFieldStatus id="distributor-name"/></div><Input id="distributor-name" className={nameTone ? reviewColors[nameTone] : undefined} aria-invalid={nameTone === 'error' || undefined} aria-describedby={nameTone ? 'distributor-name-review-state' : undefined} value={name} disabled={locked} onChange={event => onChange(event.target.value, gstNumber)} /></div>
+      <div><div className="flex items-center"><Label htmlFor="distributor-name">Supplier name</Label><SourceFieldLink id="distributor-name" label="Supplier name"/><PurchaseFieldStatus id="distributor-name"/></div><Input id="distributor-name" className={nameTone ? reviewColors[nameTone] : undefined} aria-invalid={nameTone === 'error' || undefined} aria-describedby={nameTone ? 'distributor-name-review-state' : undefined} value={name} disabled={locked} onChange={event => onChange(event.target.value, gstNumber)} /></div>
       <div><div className="flex items-center"><Label htmlFor="distributor-gstin">GSTIN</Label><SourceFieldLink id="distributor-gstin" label="GSTIN"/><PurchaseFieldStatus id="distributor-gstin"/></div><Input id="distributor-gstin" className={gstinTone ? reviewColors[gstinTone] : undefined} aria-invalid={gstinTone === 'error' || undefined} aria-describedby={gstinTone ? 'distributor-gstin-review-state' : undefined} value={gstNumber} disabled={locked} onChange={event => onChange(name, event.target.value.toUpperCase())} placeholder="36ABCDE1234F1Z5" /></div>
     </div>
     {canLoad && <>
       <div>
         <Label htmlFor="saved-purchase-supplier">Saved supplier</Label>
         <select id="saved-purchase-supplier" className="mt-2 block w-full min-w-0 rounded-md border bg-background p-2 text-sm" value={matches.length === 1 ? matches[0].id : ''} disabled={locked || loading || loadError}
-          onChange={event => { const supplier = suppliers.find(row => row.id === event.target.value); if (supplier) { onChange(supplier.name, supplier.gstNumber || ''); setVerified(false); } }}>
-          <option value="">{loading ? 'Loading saved suppliers…' : loadError ? 'Supplier list unavailable' : suppliers.length ? 'Select after checking the original invoice' : 'No saved suppliers yet'}</option>
+          onChange={event => { const supplier = suppliers.find(row => row.id === event.target.value); if (supplier) { onChange(supplier.name, supplier.gstNumber || '', { next: supplier.drugLicenseNo || '', previous: matches.length === 1 ? matches[0].drugLicenseNo || '' : '' }); setVerified(false); } }}>
+          <option value="">{loading ? 'Loading saved suppliers…' : loadError ? 'Supplier list unavailable' : suppliers.length ? 'Choose supplier' : 'No saved suppliers yet'}</option>
           {suppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name} — {supplier.gstNumber || 'GSTIN missing'}</option>)}
         </select>
       </div>
       {loadError ? <div role="alert" className="space-y-2 text-sm"><p>Could not load saved suppliers. Retry to check for an existing record. Your invoice details are kept.</p><Button type="button" variant="outline" size="sm" disabled={disabled || loading} onClick={load}>Retry supplier list</Button></div>
-        : !loading && differentGstins.length === 0 && <p role="status" className="text-sm"><ReviewStatus tone={matches.length === 1 ? 'success' : 'warning'}>{matches.length === 1 ? 'Matching saved supplier found. Continue with invoice review.' : matches.length > 1 ? 'More than one saved record matches. Ask a supplier administrator to remove the duplicate; manual invoice review remains available.' : related ? 'A saved supplier has this name or GSTIN with different details. Check the original and select the correct record above.' : suppliers.length ? 'No saved supplier matches these details.' : canSave && !readOnly ? 'Your supplier directory is empty. You can add this supplier below.' : 'Your supplier directory is empty.'}</ReviewStatus></p>}
+        : !loading && differentGstins.length === 0 && <p role="status" className="text-sm"><ReviewStatus tone={matches.length === 1 ? 'success' : 'warning'}>{matches.length === 1 ? 'Saved supplier matched' : matches.length > 1 ? 'More than one saved record matches. Ask a supplier administrator to remove the duplicate; manual invoice review remains available.' : related ? 'A saved supplier has this name or GSTIN with different details. Check the original and select the correct record above.' : suppliers.length ? 'No saved supplier matches these details.' : canSave && !readOnly ? 'Your supplier directory is empty. You can add this supplier below.' : 'Your supplier directory is empty.'}</ReviewStatus></p>}
     </>}
     {canLoad && !loading && !loadError && differentGstins.length > 0 && <div className={`space-y-3 rounded-md border p-3 text-sm ${reviewColors.error}`}>
       <h6 className="font-semibold"><ReviewStatus tone="error">Supplier GSTIN differs</ReviewStatus></h6>

@@ -50,7 +50,7 @@ it('selects an existing supplier instead of creating a duplicate identity', asyn
   render(<PurchaseSupplierReview {...callbacks} name="OCR spelling" />);
   await screen.findByText(/A saved supplier has this name or GSTIN/);
   fireEvent.change(screen.getByLabelText('Saved supplier'), { target: { value: supplier.id } });
-  expect(callbacks.onChange).toHaveBeenCalledWith(supplier.name, supplier.gstNumber);
+  expect(callbacks.onChange).toHaveBeenCalledWith(supplier.name, supplier.gstNumber, { next: '', previous: '' });
   expect(screen.queryByRole('button', { name: 'Save verified supplier' })).not.toBeInTheDocument();
   expect(api.post).not.toHaveBeenCalled();
 });
@@ -59,7 +59,7 @@ it('distinguishes list failure from an empty directory and supports retry', asyn
   api.get.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([supplier]);
   render(<PurchaseSupplierReview {...props()} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Retry supplier list' }));
-  await screen.findByText(/Matching saved supplier found/);
+  await screen.findByText(/Saved supplier matched/);
   expect(screen.queryByText(/directory is empty/)).not.toBeInTheDocument();
   expect(api.get).toHaveBeenCalledTimes(2);
 });

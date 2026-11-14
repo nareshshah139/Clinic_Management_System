@@ -643,7 +643,7 @@ describe('PurchaseInvoiceWorkbench', () => {
   it('scans and saves for human checking without invoking automatic processing or changing stock', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({ draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02' } }) });
     render(<PurchaseInvoiceWorkbench />);
-    expect(screen.queryByLabelText('Distributor')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Supplier name')).not.toBeInTheDocument();
     expect(screen.getByText('Automatic import')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Import & Add Stock' })).not.toBeVisible();
     fireEvent.change(screen.getByLabelText('Received on'), { target: { value: '2026-10-02' } });
@@ -919,7 +919,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice(invoice);
     await editSelectedInvoice();
     const checklist = screen.getByRole('region', { name: 'Check before adding stock' });
-    expect(within(checklist).getByLabelText('Distributor')).toHaveValue(invoice.distributorName);
+    expect(within(checklist).getByLabelText('Supplier name')).toHaveValue(invoice.distributorName);
     expect(await reviewConfirmation()).toBeEnabled();
     await waitFor(() => expect(within(checklist).getByRole('checkbox', { name: /I checked the supplier name and GSTIN/ })).toBeEnabled());
     fireEvent.click(within(checklist).getByRole('checkbox', { name: /I checked the supplier name and GSTIN/ }));
@@ -952,7 +952,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     await editSelectedInvoice();
     expect(screen.queryByRole('button', { name:'Save draft' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name:'Import & Add Stock' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Distributor')).toBeDisabled();
+    expect(screen.getByLabelText('Supplier name')).toBeDisabled();
     await act(async () => {});
   });
 
@@ -1419,7 +1419,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     saveCurrentInvoice();
 
     expect(await screen.findByText('Fix Required')).toBeInTheDocument();
-    expect(screen.getByText('Distributor name is required')).toBeInTheDocument();
+    expect(screen.getByText('Supplier name is required')).toBeInTheDocument();
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
   });
 
@@ -1560,7 +1560,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     });
     importAutomatically();
     expect(await screen.findByText(/Invoice was not saved/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Distributor')).toHaveValue('Apex Distributors');
+    expect(screen.getByLabelText('Supplier name')).toHaveValue('Apex Distributors');
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
     expect(screen.queryByText(/saved and stock added/)).not.toBeInTheDocument();
   });
@@ -1712,7 +1712,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     render(<PurchaseInvoiceWorkbench />);
     fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
 
-    fireEvent.change(screen.getByLabelText('Distributor'), {
+    fireEvent.change(screen.getByLabelText('Supplier name'), {
       target: { value: 'Apex Distributors' },
     });
     fireEvent.change(screen.getByLabelText('GSTIN'), {
@@ -1986,7 +1986,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
     const view = render(<PurchaseInvoiceWorkbench />);
     fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
-    fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Unsaved supplier' } });
+    fireEvent.change(screen.getByLabelText('Supplier name'), { target: { value: 'Unsaved supplier' } });
     view.unmount();
     render(<PurchaseInvoiceWorkbench />);
     expect(await screen.findByDisplayValue('Unsaved supplier')).toBeVisible();
@@ -2195,7 +2195,7 @@ describe('PurchaseInvoiceWorkbench', () => {
   it('saves incomplete intake for later without creating or processing an invoice and reuses its request key', async () => {
     render(<PurchaseInvoiceWorkbench />);
     fireEvent.click(screen.getByRole('link', { name: 'Type instead' }));
-    fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Unfinished supplier' } });
+    fireEvent.change(screen.getByLabelText('Supplier name'), { target: { value: 'Unfinished supplier' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await screen.findByText(/Unfinished invoice saved to the server/);
     expect(api.post).toHaveBeenCalledWith('/inventory/workspace/intake', expect.objectContaining({
@@ -2382,7 +2382,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.change(screen.getByLabelText('GSTIN'), { target: { value: '36ABCDE1234F1Z6' } });
     saveCurrentInvoice();
     await reviewConfirmation();
-    fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Corrected supplier' } });
+    fireEvent.change(screen.getByLabelText('Supplier name'), { target: { value: 'Corrected supplier' } });
     expect(screen.getByLabelText('GSTIN')).toHaveClass('border-amber-600');
     expect(await screen.findByText('1 check to finish')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /I verified the invoice against the original/ })).not.toBeInTheDocument();
@@ -2650,6 +2650,27 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.click(within(actions).getByRole('link', { name: 'Review checks' }));
     expect(document.getElementById('purchase-review-checklist')).toHaveFocus();
     expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+  });
+
+
+  it('fills the drug licence from a chosen saved supplier and keeps a typed one when the supplier has none', async () => {
+    const suppliers = [
+      { id: 'supplier-1', name: 'Apex Medico Agencies', gstNumber: '27AAACA5678B1ZQ', drugLicenseNo: 'MH-PUN-3187' },
+      { id: 'supplier-2', name: 'Shree Laxmi Pharma', gstNumber: '27AABCS1234F1Z5', drugLicenseNo: null },
+    ];
+    api.get.mockImplementation(async url => url === '/pharmacy/purchase-invoices/suppliers' ? suppliers : []);
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Type instead' }));
+    const saved = await screen.findByLabelText('Saved supplier');
+    await waitFor(() => expect(within(saved).getByRole('option', { name: /Apex Medico Agencies/ })).toBeInTheDocument());
+    fireEvent.change(saved, { target: { value: 'supplier-1' } });
+    expect(screen.getByLabelText('DL No.')).toHaveValue('MH-PUN-3187');
+    fireEvent.change(saved, { target: { value: 'supplier-2' } });
+    expect(screen.getByLabelText('DL No.')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('DL No.'), { target: { value: 'TYPED-DL' } });
+    fireEvent.change(saved, { target: { value: 'supplier-1' } });
+    expect(saved).toHaveValue('supplier-1');
+    expect(screen.getByLabelText('DL No.')).toHaveValue('TYPED-DL');
   });
 
 });
