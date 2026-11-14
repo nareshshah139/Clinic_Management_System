@@ -35,7 +35,7 @@ import {
   editDiscountAction,
   excludedNote,
   footerSummary,
-  newEntryHref,
+  newReturnHref,
   openHref,
   printBlockedReason,
   requestParams,
@@ -131,7 +131,7 @@ export function SalesRegister({
   const clinic = data?.clinic ?? null;
   const failed = load.status === 'error';
 
-  const startNew = () => router.push(newEntryHref(register, returnTo, requestKey()));
+  const startNew = () => router.push(newReturnHref(returnTo, requestKey()));
   const openRow = (row: SalesRegisterRow) => router.push(openHref(row, returnTo));
 
   const billName = (row: SalesRegisterRow) =>
@@ -289,9 +289,9 @@ export function SalesRegister({
             action={
               view.filtered ? (
                 <Button variant="outline" onClick={clearAll}>Clear filters</Button>
-              ) : (
+              ) : copy.newLabel ? (
                 <Button onClick={startNew}><Plus aria-hidden="true" /> {copy.newLabel}</Button>
-              )
+              ) : undefined
             }
           />
         }

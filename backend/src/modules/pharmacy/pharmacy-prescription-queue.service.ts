@@ -249,7 +249,7 @@ export class PharmacyPrescriptionQueueService {
     const limit = Math.min(this.toPositiveInt(query.limit, 20), 100);
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      const [selection] = await tx.$queryRaw<{ ids: string[]; total: number; lifecycle: Record<string, PrescriptionQueueLifecycle> }[]>(
+      const [selection] = await tx.$queryRaw<{ ids: string[]; total: number; lifecycle: Record<string, PrescriptionQueueLifecycle>; counts: Partial<Record<PrescriptionQueueStatus, number>> }[]>(
         queueStatusPage(branchId, query.status, page, limit, now),
       );
       const prescriptions = await this.withInvoiceInventory(tx, await tx.prescription.findMany({
@@ -267,6 +267,7 @@ export class PharmacyPrescriptionQueueService {
       return {
         data: selection.ids.map(id => entryById.get(id)!),
         pagination: { page, limit, total: selection.total, pages: Math.ceil(selection.total / limit) },
+        counts: Object.fromEntries(Object.values(PrescriptionQueueStatus).map(status => [status, selection.counts?.[status] ?? 0])),
       };
     }, { isolationLevel: 'RepeatableRead' });
   }

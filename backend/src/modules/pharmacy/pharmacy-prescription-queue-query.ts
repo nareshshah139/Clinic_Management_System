@@ -76,6 +76,7 @@ const instructionLookup = (key: Prisma.Sql) => Prisma.sql`
  * Status filtering and total MUST use all branch prescriptions, posted invoice coverage,
  * age and staff task overrides before LIMIT/OFFSET. Cancelled prescriptions and deleted visits MUST be excluded.
  * The selected IDs MUST have deterministic creation-time and ID ordering, including empty pages.
+ * Counts MUST give every status's total across the same unfiltered branch queue, whatever status is selected.
  */
 /**
  * @cc [owner:nareshshah139,label:product] queue-clinical-eligibility-projection
@@ -235,5 +236,7 @@ export function queueStatusPage(
     SELECT (SELECT count(*)::int FROM filtered) AS total,
       ARRAY(SELECT id FROM page_ids ORDER BY "createdAt" DESC, id DESC) AS ids,
       coalesce((SELECT jsonb_object_agg(p.id, jsonb_build_object('id', p.id, 'status', p.prescription_status, 'expired', p.clinically_expired))
-        FROM branch_prescriptions p JOIN page_ids page ON page.id = p.id), '{}'::jsonb) AS lifecycle`;
+        FROM branch_prescriptions p JOIN page_ids page ON page.id = p.id), '{}'::jsonb) AS lifecycle,
+      coalesce((SELECT jsonb_object_agg(visible_status, total) FROM (
+        SELECT visible_status, count(*)::int AS total FROM visible_statuses GROUP BY visible_status) counted), '{}'::jsonb) AS counts`;
 }

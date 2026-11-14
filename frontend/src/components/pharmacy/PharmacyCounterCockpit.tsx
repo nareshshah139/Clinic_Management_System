@@ -3,6 +3,7 @@
 import { displayClinicDateTime, displayUtcDate } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -15,6 +16,7 @@ import {
   Pill,
   Printer,
   Receipt,
+  Plus,
   RefreshCw,
   ShieldCheck,
   ShoppingCart,
@@ -23,6 +25,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { apiClient } from '@/lib/api';
+import { stockCheckLineName } from '@/lib/bill-line-name';
+import { PrescriptionInventoryLink, type InventorySuggestion } from './PrescriptionInventoryLink';
 
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
 type CancelledDispenseTaskStatus = `CANCEL${'LED'}`;
@@ -77,6 +81,7 @@ type QueueEntry = {
   dispenseTaskId?: string;
   dispensingEligible?: boolean;
   prescriptionId: string;
+  visitId?: string | null;
   patient: {
     id: string;
     name: string;
@@ -111,6 +116,7 @@ type QueueResponse = {
   pagination: {
     total: number;
   };
+  counts?: Record<QueueStatus, number>;
 };
 
 type PharmacyBillingPrefill = {
@@ -134,11 +140,11 @@ type StockBatch = {
 type StockCheckItem = {
   sourceLineKey?: string;
   drugName: string;
-  matchedDrug?: {
-    id: string;
-    name: string;
-    manufacturerName?: string | null;
-  } | null;
+  inventoryItemId?: string | null;
+  stockName?: string | null;
+  unit?: string | null;
+  prescriptionVersion?: string;
+  suggestions?: InventorySuggestion[];
   stockStatus: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK';
   totalNonExpiredStock: number;
   batches?: StockBatch[];
@@ -175,6 +181,28 @@ const reasonOptions = [
 
 const DISPENSE_TASK_CANCELLED = `CANCEL${'LED'}` as DispenseTaskStatus;
 
+const QUEUE_PAGE_SIZE = 25;
+const QUEUE_ENDPOINT = '/pharmacy/prescription-queue';
+
+const QUEUE_FILTERS: ReadonlyArray<{ id: string; label: string; status?: QueueStatus }> = [
+  { id: 'all', label: 'All' },
+  { id: 'waiting', label: 'Waiting', status: 'pending' },
+  { id: 'partial', label: 'Partial', status: 'partial' },
+  { id: 'paused', label: 'Paused', status: 'expired' },
+  { id: 'done', label: 'Done', status: 'dispensed' },
+];
+
+type QueueFilter = (typeof QUEUE_FILTERS)[number];
+
+const isBillable = (entry: QueueEntry) => entry.dispensingEligible !== false && entry.status !== 'dispensed';
+
+const billingPrefill = (entry: QueueEntry): PharmacyBillingPrefill => ({
+  patientId: entry.patient.id,
+  doctorId: entry.doctor.id,
+  prescriptionId: entry.prescriptionId,
+  visitId: entry.visitId || undefined,
+});
+
 /**
  * @cc [owner:nareshshah139,label:product] counter-current-stock-refresh
  * Refresh and pharmacy stock-change events MUST recheck the active prescription's stock.
@@ -196,21 +224,33 @@ const DISPENSE_TASK_CANCELLED = `CANCEL${'LED'}` as DispenseTaskStatus;
  * Ready MUST recheck the prepared task and reject empty tasks or pending and unavailable lines
  * before saving status. Unreviewed or unavailable lines MUST keep the Ready button disabled.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] counter-single-queue
+ * The Counter MUST be the only list of waiting prescriptions. Each filter chip MUST filter and count
+ * on the server by its queue status, and Show more MUST page within that filter. Bill MUST appear only
+ * for roles that can create a bill (onOpenBilling given); there each billable row MUST offer Bill with
+ * its patient, doctor, prescription and visit, and ineligible or dispensed rows MUST NOT. A pharmacy
+ * invoice refresh MUST reload the queue so billed prescriptions leave waiting without a page reload.
+ * Link item and Change link MUST follow Bill: roles without onOpenBilling see neither, because the
+ * server refuses inventory linking for them.
+ */
 export function PharmacyCounterCockpit({
   prefill,
   onOpenBilling,
-  onOpenQueue,
   onOpenPartnerSync,
   onOpenInventoryControl,
 }: {
   prefill?: PharmacyBillingPrefill | null;
-  onOpenBilling: (prefill?: PharmacyBillingPrefill) => void;
-  onOpenQueue: () => void;
+  onOpenBilling?: (prefill?: PharmacyBillingPrefill) => void;
   onOpenPartnerSync: () => void;
   onOpenInventoryControl: () => void;
 }) {
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [queueTotal, setQueueTotal] = useState(0);
+  const [queuePages, setQueuePages] = useState(1);
+  const [filter, setFilter] = useState<QueueFilter>(QUEUE_FILTERS[0]);
+  const [statusCounts, setStatusCounts] = useState<Record<QueueStatus, number> | null>(null);
+  const queueRequest = useRef(0);
   const [activeId, setActiveId] = useState<string | null>(
     prefill?.prescriptionId || null,
   );
@@ -239,15 +279,27 @@ export function PharmacyCounterCockpit({
   }, []);
 
   const loadQueue = useCallback(async () => {
+    const request = ++queueRequest.current;
     setStockReloadKey(key => key + 1);
     try {
       setLoadingQueue(true);
       setError(null);
-      const response = await apiClient.get<QueueResponse>(
-        '/pharmacy/prescription-queue',
-        { page: 1, limit: 8 },
+      const responses = await Promise.all(
+        Array.from({ length: queuePages }, (_, index) =>
+          apiClient.get<QueueResponse>(QUEUE_ENDPOINT, {
+            page: index + 1,
+            limit: QUEUE_PAGE_SIZE,
+            status: filter.status,
+          }),
+        ),
       );
-      let entries = response.data || [];
+      if (request !== queueRequest.current) return;
+      const response = responses[responses.length - 1];
+      let entries = [
+        ...new Map(
+          responses.flatMap((page) => page.data || []).map((entry) => [entry.prescriptionId, entry]),
+        ).values(),
+      ];
 
       if (
         prefill?.prescriptionId &&
@@ -261,10 +313,12 @@ export function PharmacyCounterCockpit({
         } catch {
           // The billing form can still use URL prefill even if the queue item is unavailable.
         }
+        if (request !== queueRequest.current) return;
       }
 
       setQueue(entries);
       setQueueTotal(response.pagination?.total ?? entries.length);
+      setStatusCounts(response.counts ?? null);
       setActiveId((current) => {
         if (
           prefill?.prescriptionId &&
@@ -283,14 +337,15 @@ export function PharmacyCounterCockpit({
         );
       });
     } catch (err) {
+      if (request !== queueRequest.current) return;
       console.error('Failed to load pharmacy counter queue:', err);
       setError('Unable to load prescription queue');
       setQueue([]);
       setQueueTotal(0);
     } finally {
-      setLoadingQueue(false);
+      if (request === queueRequest.current) setLoadingQueue(false);
     }
-  }, [prefill?.prescriptionId]);
+  }, [filter, prefill?.prescriptionId, queuePages]);
 
   useEffect(() => {
     void loadQueue();
@@ -394,35 +449,9 @@ export function PharmacyCounterCockpit({
   const activeLifecycle = activeEntry
     ? deriveLifecycle(activeEntry, activeEntry.prescriptionId === activeId, readyForBilling)
     : 'Queued';
-  const activeBillingPrefill = useMemo<PharmacyBillingPrefill | undefined>(() => {
-    if (!activeEntry) return undefined;
-    return {
-      patientId: activeEntry.patient.id,
-      doctorId: activeEntry.doctor.id,
-      prescriptionId: activeEntry.prescriptionId,
-    };
-  }, [activeEntry]);
   const openActiveBilling = useCallback(() => {
-    if (activeEntry?.dispensingEligible === false) {
-      setError('This prescription is not active or has expired.');
-      return;
-    }
-    onOpenBilling(activeBillingPrefill);
-  }, [activeBillingPrefill, activeEntry?.dispensingEligible, onOpenBilling]);
-  const commandStats = useMemo(() => {
-    const inReview = queue.filter((entry) => entry.dispenseStatus === 'IN_REVIEW').length;
-    const ready = queue.filter((entry) => entry.dispenseStatus === 'READY_TO_BILL').length;
-    const paid = queue.filter((entry) => entry.dispenseStatus === 'PAID').length;
-    const exceptions = queue.filter(
-      (entry) =>
-        entry.status === 'partial' ||
-        entry.status === 'expired' ||
-        entry.dispenseStatus === 'PARTIALLY_FILLED' ||
-        entry.dispenseStatus === 'PAUSED' ||
-        entry.dispenseStatus === DISPENSE_TASK_CANCELLED,
-    ).length;
-    return { inReview, ready, paid, exceptions };
-  }, [queue]);
+    if (activeEntry && isBillable(activeEntry)) onOpenBilling?.(billingPrefill(activeEntry));
+  }, [activeEntry, onOpenBilling]);
 
   const ensureDispenseTask = useCallback(async (entry: QueueEntry) => {
     if (entry.dispensingEligible === false) throw new Error('Prescription is not active or has expired');
@@ -545,14 +574,14 @@ export function PharmacyCounterCockpit({
   );
 
   return (
-    <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border border-slate-200/80 bg-white shadow-sm xl:h-[calc(100vh-205px)]">
+    <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border border-slate-200/80 bg-white shadow-sm xl:h-[calc(100vh-130px)]">
       <div className="shrink-0 border-b border-slate-800 bg-slate-950 px-3 py-2 text-white md:px-4">
-        <div className="grid gap-2 xl:grid-cols-[minmax(210px,0.65fr)_minmax(0,1fr)_auto] xl:items-center">
+        <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-lg font-semibold tracking-tight">
+              <h1 className="text-lg font-semibold tracking-tight">
                 Pharmacy Counter
-              </h3>
+              </h1>
               <Badge variant="outline" className="border-emerald-300/30 bg-emerald-300/10 px-2 py-0 text-xs text-emerald-100">
                 Pharmacist review
               </Badge>
@@ -563,13 +592,6 @@ export function PharmacyCounterCockpit({
             <p className="mt-0.5 truncate text-xs text-slate-300">
               Queue to pick to bill in one workstation.
             </p>
-          </div>
-
-          <div className="grid gap-1.5 sm:grid-cols-4">
-            <CommandStat label="Queue" value={queueTotal} />
-            <CommandStat label="Review" value={commandStats.inReview} />
-            <CommandStat label="Exceptions" value={commandStats.exceptions} tone="amber" />
-            <CommandStat label="Ready/Paid" value={commandStats.ready + commandStats.paid} tone="emerald" />
           </div>
 
           <div className="flex flex-wrap justify-start gap-1.5 xl:justify-end">
@@ -583,19 +605,12 @@ export function PharmacyCounterCockpit({
               {loadingQueue ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
               Refresh
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
-              onClick={onOpenQueue}
-            >
-              <ClipboardCheck className="h-4 w-4" />
-              Rx queue
-            </Button>
-            <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={openActiveBilling} disabled={activeEntry?.dispensingEligible === false}>
-              <Receipt className="h-4 w-4" />
-              Bill
-            </Button>
+            {onOpenBilling ? (
+              <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={() => onOpenBilling()}>
+                <Plus className="h-4 w-4" />
+                New bill
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -606,16 +621,21 @@ export function PharmacyCounterCockpit({
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-2 bg-slate-100/70 p-2 xl:grid-cols-[300px_minmax(0,1fr)_330px]">
+      <div className="grid min-h-0 flex-1 gap-2 bg-slate-100/70 p-2 xl:grid-cols-[280px_minmax(0,1fr)_290px] 2xl:grid-cols-[300px_minmax(0,1fr)_330px]">
         <QueueColumn
           queue={queue}
           queueTotal={queueTotal}
+          filter={filter}
+          statusCounts={statusCounts}
+          onFilter={(option) => {
+            setFilter(option);
+            setQueuePages(1);
+          }}
           activeId={activeId}
           loading={loadingQueue}
           onSelect={selectQueueEntry}
-          onRefresh={loadQueue}
-          onOpenBilling={openActiveBilling}
-          onOpenInventoryControl={onOpenInventoryControl}
+          onBill={onOpenBilling ? (entry) => onOpenBilling(billingPrefill(entry)) : undefined}
+          onShowMore={queuePages * QUEUE_PAGE_SIZE < queueTotal ? () => setQueuePages((pages) => pages + 1) : undefined}
         />
 
         <ActiveDispenseColumn
@@ -623,6 +643,7 @@ export function PharmacyCounterCockpit({
           stockByLine={stockByLine}
           loadingStock={loadingStock}
           setLineAction={updateLineAction}
+          onInventoryLinked={onOpenBilling ? async () => setStockReloadKey((key) => key + 1) : undefined}
           activeLifecycle={activeLifecycle}
           reviewedLineCount={reviewedLineCount}
           readyForBilling={readyForBilling}
@@ -630,7 +651,7 @@ export function PharmacyCounterCockpit({
           setReasonType={setReasonType}
           reasonNote={reasonNote}
           setReasonNote={setReasonNote}
-          onOpenBilling={openActiveBilling}
+          onOpenBilling={onOpenBilling ? openActiveBilling : undefined}
           onUpdateStatus={updateTaskStatus}
           savingTask={savingTask}
         />
@@ -641,7 +662,6 @@ export function PharmacyCounterCockpit({
           activeLifecycle={activeLifecycle}
           exceptionCount={exceptionCount}
           allLinesReviewed={allLinesReviewed}
-          onOpenBilling={openActiveBilling}
           onOpenPartnerSync={onOpenPartnerSync}
           onOpenInventoryControl={onOpenInventoryControl}
         />
@@ -653,160 +673,138 @@ export function PharmacyCounterCockpit({
 function QueueColumn({
   queue,
   queueTotal,
+  filter,
+  statusCounts,
+  onFilter,
   activeId,
   loading,
   onSelect,
-  onRefresh,
-  onOpenBilling,
-  onOpenInventoryControl,
+  onBill,
+  onShowMore,
 }: {
   queue: QueueEntry[];
   queueTotal: number;
+  filter: QueueFilter;
+  statusCounts: Record<QueueStatus, number> | null;
+  onFilter: (filter: QueueFilter) => void;
   activeId: string | null;
   loading: boolean;
   onSelect: (entry: QueueEntry) => void;
-  onRefresh: () => void;
-  onOpenBilling: () => void;
-  onOpenInventoryControl: () => void;
+  onBill?: (entry: QueueEntry) => void;
+  onShowMore?: () => void;
 }) {
-  const [filter, setFilter] = useState<'all' | 'queue' | 'review' | 'exceptions' | 'done'>('all');
-  const pendingCount = queue.filter((entry) =>
-    entry.dispenseStatus
-      ? ['QUEUED', 'IN_REVIEW', 'READY_TO_BILL'].includes(entry.dispenseStatus)
-      : entry.status === 'pending',
-  ).length;
-  const exceptionCount = queue.filter(
-    (entry) =>
-      entry.status === 'partial' ||
-      entry.status === 'expired' ||
-      entry.dispenseStatus === 'PARTIALLY_FILLED' ||
-      entry.dispenseStatus === 'PAUSED' ||
-      entry.dispenseStatus === DISPENSE_TASK_CANCELLED,
-  ).length;
-  const filteredQueue = queue.filter((entry) => {
-    if (filter === 'queue') return entry.dispenseStatus === 'QUEUED' || entry.status === 'pending';
-    if (filter === 'review') {
-      return entry.dispenseStatus === 'IN_REVIEW' || entry.dispenseStatus === 'READY_TO_BILL';
-    }
-    if (filter === 'exceptions') {
-      return (
-        entry.status === 'partial' ||
-        entry.status === 'expired' ||
-        entry.dispenseStatus === 'PARTIALLY_FILLED' ||
-        entry.dispenseStatus === 'PAUSED' ||
-        entry.dispenseStatus === DISPENSE_TASK_CANCELLED
-      );
-    }
-    if (filter === 'done') {
-      return entry.dispenseStatus === 'PAID' || entry.dispenseStatus === 'DISPENSED' || entry.status === 'dispensed';
-    }
-    return true;
-  });
-
   return (
     <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
       <PanelHeader
         icon={<ClipboardCheck className="h-4 w-4" />}
-        title="Queue"
-        detail={`${queueTotal} today or open`}
+        title="Prescription queue"
+        detail={queueTotal > queue.length ? `Newest ${queue.length} of ${queueTotal}` : 'Newest first'}
       />
-      <div className="mt-2 grid shrink-0 grid-cols-2 gap-1.5">
-        <QueueMetric label="Queued" value={pendingCount} intent="blue" />
-        <QueueMetric label="Exceptions" value={exceptionCount} intent="amber" />
-      </div>
       <div className="mt-2 flex shrink-0 flex-wrap gap-1">
-        {[
-          ['all', 'All'],
-          ['queue', 'Queue'],
-          ['review', 'Review'],
-          ['exceptions', 'Exceptions'],
-          ['done', 'Done'],
-        ].map(([value, label]) => (
+        {QUEUE_FILTERS.map((option) => (
           <button
-            key={value}
+            key={option.id}
             type="button"
-            onClick={() => setFilter(value as typeof filter)}
+            aria-pressed={filter.id === option.id}
+            onClick={() => onFilter(option)}
             className={`rounded-full border px-2 py-1 text-xs font-semibold transition ${
-              filter === value
+              filter.id === option.id
                 ? 'border-slate-950 bg-slate-950 text-white'
                 : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
             }`}
           >
-            {label}
+            {option.label}
+            {statusCounts ? (
+              <>
+                {' '}
+                <span className="tabular-nums">
+                  {option.status ? statusCounts[option.status] : Object.values(statusCounts).reduce((sum, count) => sum + count, 0)}
+                </span>
+              </>
+            ) : null}
           </button>
         ))}
       </div>
-      <div className="mt-2 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-        {loading ? (
+      <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
+        {loading && queue.length === 0 ? (
           <LoadingSkeleton label="Loading prescription queue…" />
         ) : queue.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-            <p className="font-semibold text-slate-950">No prescriptions waiting</p>
-            <div className="mt-3 grid gap-1.5">
-              <Button size="sm" onClick={onOpenBilling}>
-                Walk-in bill
-              </Button>
-              <Button size="sm" variant="outline" onClick={onRefresh}>
-                Pull visits
-              </Button>
-              <Button size="sm" variant="outline" onClick={onOpenInventoryControl}>
-                Inventory control
-              </Button>
-            </div>
-          </div>
-        ) : filteredQueue.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-            No items match this filter.
+            {filter.status ? (
+              'No items match this filter.'
+            ) : (
+              <>
+                <p className="font-semibold text-slate-950">No prescriptions waiting</p>
+                <p className="mt-1">Prescriptions saved in a visit appear here.</p>
+              </>
+            )}
           </div>
         ) : (
-          filteredQueue.map((entry) => (
-            <button
-              key={entry.prescriptionId}
-              type="button"
-              onClick={() => onSelect(entry)}
-              className={`w-full rounded-lg border px-2.5 py-2 text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm ${
-                activeId === entry.prescriptionId
-                  ? 'border-slate-950 bg-slate-950 text-white shadow-sm hover:bg-slate-950'
-                  : 'border-slate-200 bg-white text-slate-950'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{entry.patient.name}</p>
-                  <p
-                    className={`mt-0.5 truncate text-xs ${
-                      activeId === entry.prescriptionId
-                        ? 'text-slate-300'
-                        : 'text-slate-500'
-                    }`}
-                  >
-                    {entry.patient.patientCode || entry.patient.id}
-                  </p>
-                </div>
-                <StatusChip
-                  status={entry.status}
-                  dispenseStatus={entry.dispenseStatus}
-                  active={activeId === entry.prescriptionId}
-                />
-              </div>
-              <div
-                className={`mt-2 flex flex-wrap items-center gap-2 text-xs ${
-                  activeId === entry.prescriptionId ? 'text-slate-300' : 'text-slate-500'
-                }`}
-              >
-                <span>{entry.medications.length} medicines</span>
-                <span>{formatAge(entry.pendingHours)}</span>
-                {entry.isOverTwoHours && entry.status !== 'dispensed' ? (
-                  <span className={activeId === entry.prescriptionId ? 'text-amber-200' : 'text-amber-700'}>
-                    over 2h
-                  </span>
-                ) : null}
-              </div>
-            </button>
-          ))
+          <ul aria-label="Prescription queue" className="space-y-1.5">
+            {queue.map((entry) => (
+              <QueueRow
+                key={entry.prescriptionId}
+                entry={entry}
+                active={activeId === entry.prescriptionId}
+                onSelect={() => onSelect(entry)}
+                onBill={onBill && isBillable(entry) ? () => onBill(entry) : undefined}
+              />
+            ))}
+          </ul>
         )}
+        {onShowMore ? (
+          <Button size="sm" variant="outline" className="mt-2 w-full" onClick={onShowMore} disabled={loading}>
+            Show more
+          </Button>
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function QueueRow({
+  entry,
+  active,
+  onSelect,
+  onBill,
+}: {
+  entry: QueueEntry;
+  active: boolean;
+  onSelect: () => void;
+  onBill?: () => void;
+}) {
+  const nameId = `queue-patient-${entry.prescriptionId}`;
+  return (
+    <li
+      className={`relative rounded-lg border transition ${
+        active ? 'border-slate-950 bg-slate-950 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-950 hover:border-slate-300 hover:bg-slate-50'
+      }`}
+    >
+      <button type="button" onClick={onSelect} className="w-full px-2.5 py-2 text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p id={nameId} className="truncate text-sm font-semibold">{entry.patient.name}</p>
+            <p className={`mt-0.5 truncate text-xs ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+              {entry.patient.patientCode || entry.patient.id}
+            </p>
+          </div>
+          <StatusChip status={entry.status} dispenseStatus={entry.dispenseStatus} active={active} />
+        </div>
+        <div className={`mt-2 flex flex-wrap items-center gap-2 text-xs ${onBill ? 'pr-20' : ''} ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+          <span>{entry.medications.length} medicines</span>
+          <span>{formatAge(entry.pendingHours)}</span>
+          {entry.isOverTwoHours && entry.status !== 'dispensed' ? (
+            <span className={active ? 'text-amber-200' : 'text-amber-700'}>over 2h</span>
+          ) : null}
+        </div>
+      </button>
+      {onBill ? (
+        <Button size="sm" variant="outline" className="absolute bottom-1.5 right-2 text-foreground" aria-describedby={nameId} onClick={onBill}>
+          <Receipt className="h-4 w-4" />
+          Bill
+        </Button>
+      ) : null}
+    </li>
   );
 }
 
@@ -815,6 +813,7 @@ function ActiveDispenseColumn({
   stockByLine,
   loadingStock,
   setLineAction,
+  onInventoryLinked,
   activeLifecycle,
   reviewedLineCount,
   readyForBilling,
@@ -830,6 +829,7 @@ function ActiveDispenseColumn({
   stockByLine: Record<string, StockCheckItem>;
   loadingStock: boolean;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
+  onInventoryLinked?: () => Promise<void>;
   activeLifecycle: DispenseLifecycle;
   reviewedLineCount: number;
   readyForBilling: boolean;
@@ -837,12 +837,12 @@ function ActiveDispenseColumn({
   setReasonType: (value: string) => void;
   reasonNote: string;
   setReasonNote: (value: string) => void;
-  onOpenBilling: () => void;
+  onOpenBilling?: () => void;
   onUpdateStatus: (status: DispenseTaskStatus) => void;
   savingTask: boolean;
 }) {
   return (
-    <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
+    <div className="@container flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
       <PanelHeader
         icon={<Pill className="h-4 w-4" />}
         title="Active Dispense"
@@ -856,7 +856,7 @@ function ActiveDispenseColumn({
       {activeEntry ? (
         <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <div className="grid gap-2 bg-slate-950 px-3 py-2 text-white lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div className="grid gap-2 bg-slate-950 px-3 py-2 text-white @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-center">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="truncate text-base font-semibold">
@@ -890,12 +890,13 @@ function ActiveDispenseColumn({
                 activeEntry={activeEntry}
                 stockByLine={stockByLine}
                 setLineAction={setLineAction}
+                onInventoryLinked={onInventoryLinked}
               />
             </fieldset>
           )}
 
           <div className="mt-2 shrink-0 rounded-lg border border-slate-200 bg-slate-50/80 p-2">
-            <div className="grid gap-2 lg:grid-cols-[210px_minmax(0,1fr)]">
+            <div className="grid gap-2 @md:grid-cols-[210px_minmax(0,1fr)]">
               <select
                 value={reasonType}
                 onChange={(event) => setReasonType(event.target.value)}
@@ -916,7 +917,7 @@ function ActiveDispenseColumn({
             </div>
           </div>
 
-          <div className="mt-2 shrink-0 flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-2 shrink-0 flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm @md:flex-row @md:items-center @md:justify-between">
             <div className="text-sm">
               <p className="font-semibold text-slate-950">
                 {readyForBilling ? 'Ready for billing review' : 'Review every medicine before billing'}
@@ -947,10 +948,12 @@ function ActiveDispenseColumn({
               >
                 Paid
               </Button>
-              <Button size="sm" onClick={onOpenBilling} disabled={savingTask || activeEntry?.dispensingEligible === false}>
-                <Receipt className="mr-2 h-4 w-4" />
-                Open bill
-              </Button>
+              {onOpenBilling ? (
+                <Button size="sm" onClick={onOpenBilling} disabled={savingTask || !isBillable(activeEntry)}>
+                  <Receipt className="mr-2 h-4 w-4" />
+                  Bill
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -958,9 +961,7 @@ function ActiveDispenseColumn({
         <div className="mt-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center">
           <Pill className="mx-auto h-8 w-8 text-slate-400" />
           <p className="mt-3 font-semibold text-slate-950">No active prescription</p>
-          <Button className="mt-3" size="sm" onClick={onOpenBilling}>
-            Start billing
-          </Button>
+          <p className="mt-1 text-sm text-slate-600">Select a prescription in the queue to review its medicines.</p>
         </div>
       )}
     </div>
@@ -971,14 +972,16 @@ function MedicationReviewTable({
   activeEntry,
   stockByLine,
   setLineAction,
+  onInventoryLinked,
 }: {
   activeEntry: QueueEntry;
   stockByLine: Record<string, StockCheckItem>;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
+  onInventoryLinked?: () => Promise<void>;
 }) {
   return (
     <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200">
-      <div className="hidden shrink-0 grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] gap-2 border-b border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-semibold uppercase tracking-normal text-slate-500 lg:grid">
+      <div className="hidden shrink-0 grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] gap-2 border-b border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-semibold uppercase tracking-normal text-slate-500 @3xl:grid">
         <span>Prescription</span>
         <span>Inventory Match</span>
         <span>Stock</span>
@@ -995,6 +998,19 @@ function MedicationReviewTable({
               stock={stock}
               action={medication.action || 'pending'}
               setAction={(action) => setLineAction(medication, action)}
+              inventoryLink={
+                onInventoryLinked && activeEntry.dispensingEligible !== false && stock ? (
+                  <PrescriptionInventoryLink
+                    prescriptionId={activeEntry.prescriptionId}
+                    lineIndex={index}
+                    linked={Boolean(stock.inventoryItemId)}
+                    prescriptionVersion={stock.prescriptionVersion}
+                    name={medication.drugName}
+                    suggestions={stock.suggestions}
+                    onLinked={onInventoryLinked}
+                  />
+                ) : null
+              }
             />
           );
         })}
@@ -1003,26 +1019,33 @@ function MedicationReviewTable({
   );
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] stock-column-all-prescribed-items
+ * Every checked prescription line MUST show its stock status and available quantity with unit.
+ * Unlinked quantities MUST be unknown, not zero; no prescribed line may be hidden.
+ */
 function MedicationReviewRow({
   medication,
   stock,
   action,
   setAction,
+  inventoryLink,
 }: {
   medication: QueueMedication;
   stock?: StockCheckItem;
   action: LineAction;
   setAction: (action: LineAction) => void;
+  inventoryLink: ReactNode;
 }) {
   const recommendedBatch = stock?.batches?.[0] || null;
   const requiredQuantity =
     medication.prescribedQuantity === null
       ? 'Review qty'
       : Math.max(0, medication.prescribedQuantity - medication.dispensedQuantity);
-  const warnings = stock ? stockWarnings(stock) : ['Stock check pending'];
+  const warnings = stock ? stockWarnings(stock) : [];
 
   return (
-    <div className="grid gap-2 bg-white px-2.5 py-2 transition hover:bg-slate-50 lg:grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] lg:items-center">
+    <div role="group" aria-label={medication.drugName} className="grid gap-2 bg-white px-2.5 py-2 transition hover:bg-slate-50 @3xl:grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] @3xl:items-center">
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-slate-950">{medication.drugName}</p>
         <p className="truncate text-xs text-slate-600">
@@ -1037,11 +1060,9 @@ function MedicationReviewRow({
 
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-slate-950">
-          {stock?.matchedDrug?.name || 'No inventory match'}
+          {stock ? (isLinked(stock) ? stockCheckLineName(stock) : 'Not linked') : 'Checking stock'}
         </p>
-        <p className="truncate text-xs text-slate-600">
-          {stock?.matchedDrug?.manufacturerName || 'Needs pharmacist action'}
-        </p>
+        <p className="truncate text-xs text-slate-600">{availableText(stock)}</p>
         {warnings.length > 0 ? (
           <div className="mt-1 flex flex-wrap gap-1">
             {warnings.slice(0, 2).map((warning) => (
@@ -1052,16 +1073,17 @@ function MedicationReviewRow({
             ))}
           </div>
         ) : null}
+        {inventoryLink}
       </div>
 
-      <div className="flex flex-wrap gap-1 lg:block">
+      <div className="flex flex-wrap gap-1 @3xl:block">
         <StockBadge stock={stock} />
-        <Badge variant="outline" className="mt-0 bg-slate-50 text-xs text-slate-700 lg:mt-1">
+        <Badge variant="outline" className="mt-0 bg-slate-50 text-xs text-slate-700 @3xl:mt-1">
           Qty {requiredQuantity}
         </Badge>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 rounded-md border border-slate-200 bg-slate-50 p-1.5 lg:grid-cols-1">
+      <div className="grid grid-cols-3 gap-1 rounded-md border border-slate-200 bg-slate-50 p-1.5 @3xl:grid-cols-1">
         <CompactFact value={recommendedBatch?.storageLocation || 'Unmapped'} />
         <CompactFact value={recommendedBatch?.batchNumber || 'No batch'} />
         <CompactFact value={recommendedBatch?.expiryDate ? displayUtcDate(recommendedBatch.expiryDate) : 'No expiry'} />
@@ -1083,7 +1105,6 @@ function FulfillmentColumn({
   activeLifecycle,
   exceptionCount,
   allLinesReviewed,
-  onOpenBilling,
   onOpenPartnerSync,
   onOpenInventoryControl,
 }: {
@@ -1098,7 +1119,6 @@ function FulfillmentColumn({
   activeLifecycle: DispenseLifecycle;
   exceptionCount: number;
   allLinesReviewed: boolean;
-  onOpenBilling: () => void;
   onOpenPartnerSync: () => void;
   onOpenInventoryControl: () => void;
 }) {
@@ -1132,7 +1152,7 @@ function FulfillmentColumn({
         <div className="grid grid-cols-3 divide-x divide-white/10 text-center">
           <ScanFact label="Batch" value={nextPick?.recommendedBatch?.batchNumber || '--'} />
           <ScanFact label="Expiry" value={nextPick?.recommendedBatch?.expiryDate ? displayUtcDate(nextPick.recommendedBatch.expiryDate) : '--'} />
-          <ScanFact label="Stock" value={nextPick?.stock?.totalNonExpiredStock ?? '--'} />
+          <ScanFact label="Stock" value={nextPick?.stock ? stockQuantity(nextPick.stock) : '--'} />
         </div>
       </div>
 
@@ -1196,7 +1216,7 @@ function FulfillmentColumn({
                       {line.medication.drugName}
                     </p>
                     <p className="text-xs text-slate-500">
-                      Pick {line.requiredQuantity} · {line.stock?.totalNonExpiredStock ?? '—'} available
+                      Pick {line.requiredQuantity} · {availableText(line.stock)}
                     </p>
                   </div>
                   <Badge variant="outline" className="shrink-0 bg-white text-slate-700">
@@ -1225,10 +1245,14 @@ function FulfillmentColumn({
       </div>
 
       <div className="mt-2 grid shrink-0 gap-1.5">
-        <Button size="sm" onClick={onOpenBilling} disabled={!activeEntry}>
-          <FileText className="mr-2 h-4 w-4" />
-          Collect payment
-        </Button>
+        {activeEntry && activeEntry.linkedInvoiceIds.length > 0 ? (
+          <Button asChild size="sm">
+            <Link href={`/dashboard/pharmacy/invoices?search=${encodeURIComponent(activeEntry.patient.name)}`}>
+              <FileText className="mr-2 h-4 w-4" />
+              Collect payment
+            </Link>
+          </Button>
+        ) : null}
         <Button size="sm" variant="outline" onClick={onOpenPartnerSync}>
           <ShoppingCart className="mr-2 h-4 w-4" />
           Daily close
@@ -1262,51 +1286,6 @@ function PanelHeader({
           <p className="text-xs text-slate-500">{detail}</p>
         </div>
       </div>
-    </div>
-  );
-}
-
-function CommandStat({
-  label,
-  value,
-  tone = 'slate',
-}: {
-  label: string;
-  value: number;
-  tone?: 'slate' | 'amber' | 'emerald';
-}) {
-  const colors = {
-    slate: 'border-white/10 bg-white/10 text-white',
-    amber: 'border-amber-300/30 bg-amber-300/10 text-amber-100',
-    emerald: 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100',
-  };
-
-  return (
-    <div className={`flex items-center justify-between rounded-md border px-2 py-1 ${colors[tone]}`}>
-      <span className="text-xs opacity-75">{label}</span>
-      <span className="text-sm font-semibold">{value}</span>
-    </div>
-  );
-}
-
-function QueueMetric({
-  label,
-  value,
-  intent,
-}: {
-  label: string;
-  value: number;
-  intent: 'blue' | 'amber';
-}) {
-  const colors = {
-    blue: 'border-blue-100 bg-blue-50 text-blue-800',
-    amber: 'border-amber-100 bg-amber-50 text-amber-800',
-  };
-
-  return (
-    <div className={`rounded-md border px-2 py-1.5 ${colors[intent]}`}>
-      <p className="text-xs opacity-75">{label}</p>
-      <p className="text-lg font-semibold leading-5">{value}</p>
     </div>
   );
 }
@@ -1362,7 +1341,7 @@ const dispenseStatusLabels: Record<string, string> = {
 
 function LifecycleRail({ active }: { active: DispenseLifecycle }) {
   return (
-    <div className="flex max-w-full flex-wrap gap-1 lg:justify-end">
+    <div className="flex max-w-full flex-wrap gap-1 @2xl:justify-end">
       {lifecycleSteps.map((step) => {
         const isActive = active === step;
         const isExceptional = step === 'Paused' || step === 'Cancelled';
@@ -1401,10 +1380,25 @@ function StockBadge({ stock }: { stock?: StockCheckItem }) {
   }[stock.stockStatus];
   return (
     <Badge variant="outline" className={config}>
-      {stock.stockStatus.replaceAll('_', ' ')}
+      {stockStatusLabels[stock.stockStatus]}
     </Badge>
   );
 }
+
+const stockStatusLabels: Record<StockCheckItem['stockStatus'], string> = {
+  UNMATCHED: 'Not linked',
+  OUT_OF_STOCK: 'Out of stock',
+  LOW_STOCK: 'Low stock',
+  IN_STOCK: 'In stock',
+};
+
+const isLinked = (stock: StockCheckItem) => stock.stockStatus !== 'UNMATCHED';
+
+const stockQuantity = (stock: StockCheckItem) =>
+  isLinked(stock) ? `${stock.totalNonExpiredStock}${stock.unit ? ` ${stock.unit.toLowerCase()}` : ''}` : '—';
+
+const availableText = (stock?: StockCheckItem) =>
+  !stock ? 'Checking stock' : isLinked(stock) ? `${stockQuantity(stock)} available` : stockQuantity(stock);
 
 function MiniFact({ label, value }: { label: string; value: string | number }) {
   return (
@@ -1488,9 +1482,7 @@ function ChecklistItem({
 
 function stockWarnings(stock: StockCheckItem) {
   const warnings: string[] = [];
-  if (stock.stockStatus === 'UNMATCHED') warnings.push('No match');
-  if (stock.stockStatus === 'OUT_OF_STOCK') warnings.push('Out of stock');
-  if (stock.lowStock) warnings.push('Low stock');
+  if (stock.lowStock && stock.stockStatus === 'IN_STOCK') warnings.push('Low stock');
   if (stock.nearExpiry) warnings.push('Near expiry');
   const expiredBatch = stock.batches?.some(
     (batch) =>

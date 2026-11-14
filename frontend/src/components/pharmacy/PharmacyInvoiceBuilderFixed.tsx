@@ -44,6 +44,7 @@ import {
   Pill,
   Package as PackageIcon,
   FileText,
+  ChevronDown,
   Printer,
   Download,
   ZoomIn,
@@ -265,6 +266,7 @@ export function PharmacyInvoiceBuilderFixed({
   onDiscarded,
   onReloadDraft,
   onDone,
+  canLinkInventory = true,
 }: {
   prefill?: BillPrefill;
   draft?: SavedDraft;
@@ -272,6 +274,7 @@ export function PharmacyInvoiceBuilderFixed({
   onDiscarded?: (session: DraftSession) => void;
   onReloadDraft?: () => void;
   onDone?: () => void;
+  canLinkInventory?: boolean;
 }) {
   const incomingPrefillKey = JSON.stringify([
     suppliedPrefill?.patientId,
@@ -2145,30 +2148,29 @@ export function PharmacyInvoiceBuilderFixed({
   const renderPrescriptionHeader = () => {
     if (!prescriptionData) return null;
 
+    const unlinkedItems = prescriptionItems.filter(item => !item.drugId);
     return (
-      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <FileText className="h-5 w-5 text-blue-600" />
+      <details className="group mx-6 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-700">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 [&::-webkit-details-marker]:hidden">
+          <FileText className="h-4 w-4 text-blue-600" />
           <h3 className="font-semibold text-blue-800">Linked Prescription</h3>
-        </div>
-        <div className="text-sm text-blue-700">
+          <span>· {prescriptionItems.length} {prescriptionItems.length === 1 ? 'item' : 'items'}</span>
+          {unlinkedItems.length > 0 && <span className="font-medium">· {unlinkedItems.length} to link to inventory</span>}
+          <ChevronDown className="ml-auto h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="px-3 pb-2">
           <p>
             <strong>Prescription ID:</strong> {prescriptionData.id}
           </p>
-          {prescriptionItems.length > 0 && (
-            <p>
-              <strong>Items from prescription:</strong> {prescriptionItems.length}
-            </p>
-          )}
-          {prescriptionItems.filter(item => !item.drugId).map(item => <div key={item.id} className="mt-2">
-            {item.prescribedDrugName}: link inventory before billing. <PrescriptionInventoryLink prescriptionId={prescriptionData.id} lineIndex={item.prescriptionLineIndex!} prescriptionVersion={item.prescriptionVersion} name={item.prescribedDrugName || ''} onLinked={() => loadPrescriptionData(prescriptionData.id)} />
+          {unlinkedItems.map(item => <div key={item.id} className="mt-2">
+            {item.prescribedDrugName}: link inventory before billing. {canLinkInventory && <PrescriptionInventoryLink prescriptionId={prescriptionData.id} lineIndex={item.prescriptionLineIndex!} prescriptionVersion={item.prescriptionVersion} name={item.prescribedDrugName || ''} onLinked={() => loadPrescriptionData(prescriptionData.id)} />}
           </div>)}
           <p className="mt-2 text-xs text-blue-600">
             Review stock warnings, substitute medicines, adjust quantities or remove items before billing.
             Changes here do not alter the doctor's prescription.
           </p>
         </div>
-      </div>
+      </details>
     );
   };
 
@@ -2189,7 +2191,7 @@ export function PharmacyInvoiceBuilderFixed({
               {checkoutAttempt.confirmed ? 'Reopen confirmed invoice' : 'Retry pending checkout'}
             </Button>
             {checkoutAttempt.confirmed && <Button variant="ghost" disabled={loading} onClick={startNewInvoice}>Start a new invoice</Button>}
-            {checkoutAttempt.confirmed && onDone && <Button variant="ghost" disabled={loading} onClick={leaveFinishedBill}>Back to Sales</Button>}
+            {checkoutAttempt.confirmed && onDone && <Button variant="ghost" disabled={loading} onClick={leaveFinishedBill}>Done</Button>}
           </div>
         </div>
       )}
@@ -2206,19 +2208,15 @@ export function PharmacyInvoiceBuilderFixed({
 
       {renderPrescriptionHeader()}
 
-      <CardHeader>
-        <CardTitle className="flex flex-wrap items-center gap-2">
-          <Pill className="h-5 w-5" />
-          {session.kind === 'draft' ? (
-            <>
-              <Badge variant="warning">Draft</Badge>
-              {session.number ? <span>{session.number} not final</span> : <span className="text-base font-normal text-muted-foreground">Gets its bill number when finished</span>}
-            </>
-          ) : (
-            'New bill'
-          )}
-        </CardTitle>
-      </CardHeader>
+      {session.kind === 'draft' && (
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center gap-2">
+            <Pill className="h-5 w-5" />
+            <Badge variant="warning">Draft</Badge>
+            {session.number ? <span>{session.number} not final</span> : <span className="text-base font-normal text-muted-foreground">Gets its bill number when finished</span>}
+          </CardTitle>
+        </CardHeader>
+      )}
       <CardContent>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {prefillError && (

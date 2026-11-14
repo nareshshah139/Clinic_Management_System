@@ -12,12 +12,12 @@ jest.mock('@/components/layout/dashboard-user-context', () => ({
 const pharmacyLinks = () => {
   render(<Sidebar />);
   const links = within(screen.getByRole('navigation', { name: 'Main navigation' })).getAllByRole('link');
-  return links.map((link) => link.textContent).filter((name) => ['Pharmacy Desk', 'Pharmacy Counter', 'Pharmacy Billing', 'Sales', 'Inventory', 'Pharmacy Report'].includes(name || ''));
+  return links.map((link) => link.textContent).filter((name) => ['Pharmacy Desk', 'Pharmacy Counter', 'Pharmacy Billing', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report'].includes(name || ''));
 };
 
 it.each(['PHARMACIST', 'DOCTOR', 'ADMIN'])('shows %s every Pharmacy entry, with Sales in place of Pharmacy Billing and Pharmacy Report last', (role) => {
   mockRole = role;
-  expect(pharmacyLinks()).toEqual(['Pharmacy Desk', 'Pharmacy Counter', 'Sales', 'Inventory', 'Pharmacy Report']);
+  expect(pharmacyLinks()).toEqual(['Pharmacy Desk', 'Pharmacy Counter', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report']);
 });
 
 it('puts Pharmacy Report in the Pharmacy group, apart from the clinical Reports under Admin (decided 05/11/2026)', () => {
@@ -33,8 +33,8 @@ it('puts Pharmacy Report in the Pharmacy group, apart from the clinical Reports 
 
 it.each([
   ['RECEPTION', ['Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],
-  ['MANAGER', ['Inventory', 'Pharmacy Report']],
-  ['ACCOUNTANT', ['Pharmacy Report']],
+  ['MANAGER', ['Inventory', 'Daily Collection', 'Pharmacy Report']],
+  ['ACCOUNTANT', ['Daily Collection', 'Pharmacy Report']],
   ['NURSE', []],
 ])('leaves %s with its other Pharmacy entries', (role, expected) => {
   mockRole = role;
@@ -57,11 +57,13 @@ describe('Daily Collection in the main menu', () => {
     expect(link?.getAttribute('href') ?? null).toBe(shown ? '/dashboard/pharmacy/reports?report=daily-collection' : null);
   });
 
-  it('sits under Overview, right after Dashboard', () => {
+  it('sits in the Pharmacy group beside Pharmacy Report, not under Overview', () => {
     mockRole = 'ADMIN';
     render(<Sidebar />);
     const texts = Array.from(screen.getByRole('navigation', { name: 'Main navigation' }).querySelectorAll('p, a')).map((el) => el.textContent);
-    expect(texts.slice(0, 3)).toEqual(['Overview', 'Dashboard', 'Daily Collection']);
+    expect(texts.slice(0, 2)).toEqual(['Overview', 'Dashboard']);
+    expect(texts.indexOf('Daily Collection')).toBeGreaterThan(texts.indexOf('Pharmacy'));
+    expect(texts.indexOf('Daily Collection')).toBe(texts.indexOf('Pharmacy Report') - 1);
   });
 
   it('marks Daily Collection, not Pharmacy Report, as the current page on the daily collection report only', () => {
@@ -79,8 +81,8 @@ describe('Daily Collection in the main menu', () => {
 });
 
 it.each([
-  ['OWNER', ['Dashboard', 'Daily Collection', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Pharmacy Report', 'Reports', 'Users', 'Fee list', 'Test Transcribe']],
-  ['MANAGER', ['Dashboard', 'Daily Collection', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Inventory', 'Pharmacy Report', 'Reports', 'Users']],
+  ['OWNER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users', 'Fee list', 'Test Transcribe']],
+  ['MANAGER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users']],
   ['NURSE', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Rooms']],
   ['RECEPTION', ['Dashboard', 'Patients', 'Appointments', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],
   ['ACCOUNTANT', ['Dashboard', 'Daily Collection', 'Pharmacy Report']],

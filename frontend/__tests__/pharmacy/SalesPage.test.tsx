@@ -246,11 +246,11 @@ it('opens Returns from the URL with an Against bill column and links that come b
   expect(mockPush).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales', { scroll: false });
 });
 
-it('starts a new sale as a bill inside Sales', async () => {
-  get.mockResolvedValue(response());
+it('starts no bill from the Sales register, since new bills start at the Pharmacy Counter', async () => {
+  get.mockResolvedValue(response({ rows: [], total: 0, totals: { amount: 0, count: 0, collected: null, excluded: { drafts: 0, cancelled: 0 } } }));
   render(<SalesPage />);
-  fireEvent.click(await screen.findByRole('button', { name: /New sale/ }));
-  expect(mockPush).toHaveBeenCalledWith('/dashboard/pharmacy/sales/bill');
+  expect(await screen.findByText(/No sales in this period/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /New (sale|bill)/ })).not.toBeInTheDocument();
 });
 
 it('pins the total of every matching final bill and what it leaves out', async () => {

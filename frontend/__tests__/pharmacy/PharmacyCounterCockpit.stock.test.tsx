@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PharmacyCounterCockpit } from '@/components/pharmacy/PharmacyCounterCockpit';
 import { apiClient } from '@/lib/api';
 
@@ -10,11 +10,11 @@ const entry = (id = 'rx-1') => ({
   medications: [{ drugName: 'Medicine A', prescribedQuantity: 2, dispensedQuantity: 0, coverageStatus: 'not_started' }],
 });
 const stock = (quantity: number) => ({ items: [{
-  drugName: 'Medicine A', matchedDrug: { id: 'd', name: 'Medicine A' }, stockStatus: 'IN_STOCK',
+  drugName: 'Medicine A', inventoryItemId: 'inv-a', stockName: 'Medicine A', stockStatus: 'IN_STOCK',
   totalNonExpiredStock: quantity, batches: [], lowStock: false, nearExpiry: false,
 }] });
 let quantity: number;
-const props = { onOpenBilling: jest.fn(), onOpenQueue: jest.fn(), onOpenPartnerSync: jest.fn(), onOpenInventoryControl: jest.fn() };
+const props = { onOpenBilling: jest.fn(), onOpenPartnerSync: jest.fn(), onOpenInventoryControl: jest.fn() };
 beforeEach(() => {
   jest.clearAllMocks(); quantity = 10;
   get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(quantity) : { data: [entry()], pagination: { total: 1 } });
@@ -22,16 +22,16 @@ beforeEach(() => {
 
 it('Refresh rechecks active stock after Inventory changes', async () => {
   render(<PharmacyCounterCockpit {...props} />);
-  await screen.findByText(/10 available/);
+  await screen.findByText('10 available');
   quantity = 3;
   fireEvent.click(screen.getByRole('button', { name: 'Refresh', exact: true }));
-  await screen.findByText(/3 available/);
+  await screen.findByText('3 available');
   expect(screen.queryByText(/10 available/)).not.toBeInTheDocument();
 });
 
 it('shows a retryable error when refreshed stock cannot be read', async () => {
   render(<PharmacyCounterCockpit {...props} />);
-  await screen.findByText(/10 available/);
+  await screen.findByText('10 available');
   get.mockImplementation(async url => {
     if (url.endsWith('/stock-check')) throw new Error('unavailable');
     return { data: [entry()], pagination: { total: 1 } };
@@ -43,10 +43,10 @@ it('shows a retryable error when refreshed stock cannot be read', async () => {
 
 it('refreshes when another pharmacy action announces an inventory change', async () => {
   render(<PharmacyCounterCockpit {...props} />);
-  await screen.findByText(/10 available/);
+  await screen.findByText('10 available');
   quantity = 7;
   act(() => window.dispatchEvent(new CustomEvent('pharmacy-invoices-refresh')));
-  await screen.findByText(/7 available/);
+  await screen.findByText('7 available');
 });
 
 it('ignores a delayed stock response after the selected prescription changes', async () => {
@@ -59,10 +59,10 @@ it('ignores a delayed stock response after the selected prescription changes', a
   const view = render(<PharmacyCounterCockpit {...props} prefill={{ prescriptionId: 'rx-1' }} />);
   await waitFor(() => expect(get).toHaveBeenCalledWith('/pharmacy/prescription-queue/rx-1/stock-check'));
   view.rerender(<PharmacyCounterCockpit {...props} prefill={{ prescriptionId: 'rx-2' }} />);
-  await screen.findByText(/3 available/);
+  await screen.findByText('3 available');
   await act(async () => resolveFirst(stock(99)));
   expect(screen.queryByText(/99 available/)).not.toBeInTheDocument();
-  expect(screen.getByText(/3 available/)).toBeInTheDocument();
+  expect(screen.getByText('3 available')).toBeInTheDocument();
 });
 
 const preparedEntry = () => ({ ...entry(), dispenseTaskId: 'task-1', dispenseStatus: 'QUEUED', medications: [{ ...entry().medications[0], lineId: 'line-1', action: 'pending' }] });
@@ -74,7 +74,7 @@ it('creates a task before saving review on the automatically selected prescripti
     ...preparedEntry(), dispenseStatus: 'READY_TO_BILL', medications: [{ ...preparedEntry().medications[0], action: body.action.toLowerCase() }],
   }));
   render(<PharmacyCounterCockpit {...props} />);
-  await screen.findByText(/10 available/);
+  await screen.findByText('10 available');
   expect(apiClient.post).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Accept', exact: true }));
   await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/pharmacy/prescription-queue/rx-1/pull', {}));
@@ -90,7 +90,7 @@ it('keeps an unsuccessful review pending and exposes a retryable save error', as
   (apiClient.post as jest.Mock).mockResolvedValue({ data: preparedEntry() });
   (apiClient.patch as jest.Mock).mockRejectedValue(new Error('save failed'));
   render(<PharmacyCounterCockpit {...props} />);
-  await screen.findByText(/10 available/);
+  await screen.findByText('10 available');
   fireEvent.click(screen.getByRole('button', { name: 'Accept', exact: true }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save medicine review');
   expect(screen.getByText('0/1 lines reviewed')).toBeInTheDocument();
@@ -101,7 +101,7 @@ it('creates a task before applying an explicit status action', async () => {
   (apiClient.post as jest.Mock).mockResolvedValue({ data: preparedEntry() });
   (apiClient.patch as jest.Mock).mockResolvedValue({ ...preparedEntry(), dispenseStatus: 'PAUSED', status: 'expired' });
   render(<PharmacyCounterCockpit {...props} />);
-  await screen.findByText(/10 available/);
+  await screen.findByText('10 available');
   fireEvent.click(screen.getByRole('button', { name: 'Pause', exact: true }));
   await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/pharmacy/dispense-tasks/task-1/status', expect.objectContaining({ status: 'PAUSED' })));
   expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('Paused');
@@ -111,7 +111,7 @@ it('starts review through explicit pull when staff select a prescription without
   (apiClient.post as jest.Mock).mockResolvedValue({ data: preparedEntry() });
   (apiClient.patch as jest.Mock).mockResolvedValue({ ...preparedEntry(), dispenseStatus: 'IN_REVIEW' });
   render(<PharmacyCounterCockpit {...props} />);
-  await screen.findByText(/10 available/);
+  await screen.findByText('10 available');
   fireEvent.click(screen.getByRole('button', { name: /Patient rx-1/ }));
   await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/pharmacy/dispense-tasks/task-1/status', { status: 'IN_REVIEW' }));
   expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('Review');
@@ -119,10 +119,10 @@ it('starts review through explicit pull when staff select a prescription without
 
 it('refreshes invoice coverage after checkout without creating a task during refresh', async () => {
   render(<PharmacyCounterCockpit {...props} />);
-  await screen.findByText(/10 available/);
+  await screen.findByText('10 available');
   get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(8) : { data: [{ ...entry(), status: 'dispensed', dispenseStatus: 'DISPENSED', linkedInvoiceIds: ['paid-invoice'] }], pagination: { total: 1 } });
   act(() => window.dispatchEvent(new CustomEvent('pharmacy-invoices-refresh')));
-  await screen.findByText(/8 available/);
+  await screen.findByText('8 available');
   expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('Done');
   expect(apiClient.post).not.toHaveBeenCalled();
 });
@@ -130,7 +130,7 @@ it('refreshes invoice coverage after checkout without creating a task during ref
 it('keeps inactive prescriptions viewable without offering dispense mutations', async () => {
   get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [{ ...entry(), dispensingEligible: false, status: 'expired', dispenseStatus: 'PAUSED' }], pagination: { total: 1 } });
   render(<PharmacyCounterCockpit {...props} />);
-  await screen.findByText(/10 available/);
+  await screen.findByText('10 available');
   expect(screen.getByRole('button', { name: 'Accept', exact: true })).toBeDisabled();
   expect(screen.queryByRole('button', { name: 'Dispense', exact: true })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Patient rx-1/ }));
@@ -205,6 +205,60 @@ it('shows separate stock for same-name lines using source identity even when res
     { ...stock(5).items[0], sourceLineKey: 'dose-5' },
   ] } : { data: [saved], pagination: { total: 1 } });
   render(<PharmacyCounterCockpit {...props} />);
-  await screen.findByText(/5 available/);
-  expect(screen.getByText(/10 available/)).toBeInTheDocument();
+  await screen.findByText('5 available');
+  expect(screen.getByText('10 available')).toBeInTheDocument();
+});
+
+it('shows every checked line with its stock status and available quantity in its unit', async () => {
+  const prescribed = (drugName: string, sourceLineKey: string) => ({ ...entry().medications[0], drugName, sourceLineKey, prescribedQuantity: 1 });
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? { items: [
+    { sourceLineKey: 'gel', drugName: 'Adapalene gel', inventoryItemId: 'inv-gel', stockName: 'Adapalene 0.1% Gel 15g', unit: 'TUBES', stockStatus: 'IN_STOCK', totalNonExpiredStock: 60, batches: [], lowStock: false, nearExpiry: false, alternatives: [] },
+    { sourceLineKey: 'caps', drugName: 'Isotretinoin 10 mg', inventoryItemId: 'inv-caps', stockName: 'Isotretinoin 10 mg Capsules (Strip of 10)', unit: 'STRIPS', stockStatus: 'LOW_STOCK', totalNonExpiredStock: 3, batches: [], lowStock: true, nearExpiry: false, alternatives: [] },
+    { sourceLineKey: 'wash', drugName: 'Benzoyl wash', inventoryItemId: 'inv-wash', stockName: 'Benzoyl Peroxide Wash 100ml', unit: 'BOTTLES', stockStatus: 'OUT_OF_STOCK', totalNonExpiredStock: 0, batches: [], lowStock: true, nearExpiry: false, alternatives: [] },
+    { sourceLineKey: 'cream', drugName: 'Clindamycin cream', inventoryItemId: null, stockStatus: 'UNMATCHED', totalNonExpiredStock: 0, batches: [], lowStock: false, nearExpiry: false, alternatives: [] },
+  ] } : { data: [{ ...entry(), medications: [
+    prescribed('Adapalene gel', 'gel'), prescribed('Isotretinoin 10 mg', 'caps'), prescribed('Benzoyl wash', 'wash'), prescribed('Clindamycin cream', 'cream'),
+  ] }], pagination: { total: 1 } });
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findByText('60 tubes available');
+  const line = (name: string) => within(screen.getByRole('group', { name }));
+  const shows = (name: string) => (text: string) => line(name).getByText(text);
+
+  ['Adapalene 0.1% Gel 15g', '60 tubes available', 'In stock'].forEach(shows('Adapalene gel'));
+  ['Isotretinoin 10 mg Capsules (Strip of 10)', '3 strips available', 'Low stock'].forEach(shows('Isotretinoin 10 mg'));
+  ['Benzoyl Peroxide Wash 100ml', '0 bottles available', 'Out of stock'].forEach(shows('Benzoyl wash'));
+  line('Clindamycin cream').getByText('—');
+  expect(line('Clindamycin cream').getAllByText('Not linked')).toHaveLength(2);
+  expect(line('Clindamycin cream').queryByText(/available/)).not.toBeInTheDocument();
+  expect(screen.queryByText('No inventory match')).not.toBeInTheDocument();
+  expect(screen.getByText('Pick 1 · 60 tubes available')).toBeInTheDocument();
+  expect(screen.getByText('Pick 1 · —')).toBeInTheDocument();
+});
+
+describe('inventory linking follows Bill', () => {
+  const link = (inventoryItemId: string | null) => ({ items: [{
+    drugName: 'Medicine A', inventoryItemId, stockName: inventoryItemId ? 'Medicine A' : undefined, stockStatus: inventoryItemId ? 'IN_STOCK' : 'UNMATCHED',
+    totalNonExpiredStock: inventoryItemId ? 4 : 0, batches: [], lowStock: false, nearExpiry: false, suggestions: [],
+  }] });
+  const open = (inventoryItemId: string | null) => get.mockImplementation(async url => url.endsWith('/stock-check') ? link(inventoryItemId) : { data: [entry()], pagination: { total: 1 } });
+
+  it('offers Link item and Change link to roles that can bill', async () => {
+    open(null);
+    const unlinked = render(<PharmacyCounterCockpit {...props} />);
+    expect(await screen.findByText('Link item')).toBeInTheDocument();
+    unlinked.unmount();
+    open('inv-a');
+    render(<PharmacyCounterCockpit {...props} />);
+    expect(await screen.findByText('Change link')).toBeInTheDocument();
+  });
+
+  it.each([[null], ['inv-a']])('shows reception no Link item or Change link (inventory %s)', async inventoryItemId => {
+    open(inventoryItemId);
+    render(<PharmacyCounterCockpit {...props} onOpenBilling={undefined} />);
+    await screen.findAllByText('Medicine A');
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/pharmacy/prescription-queue/rx-1/stock-check'));
+    await waitFor(() => expect(screen.queryByText(/Checking stock/)).not.toBeInTheDocument());
+    expect(screen.queryByText('Link item')).not.toBeInTheDocument();
+    expect(screen.queryByText('Change link')).not.toBeInTheDocument();
+  });
 });

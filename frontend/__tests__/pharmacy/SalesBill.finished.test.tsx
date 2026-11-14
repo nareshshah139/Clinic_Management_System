@@ -7,6 +7,7 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
   useSearchParams: () => mockQuery.current,
 }));
+jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: { id: 'u1', role: 'PHARMACIST' }, loading: false }) }));
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), patch: jest.fn(), post: jest.fn() } }));
 jest.mock('@/hooks/use-toast', () => ({ toast: jest.fn(), useToast: () => ({ toast: jest.fn() }) }));
 

@@ -7,16 +7,16 @@ import { ArrowLeft } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { isIssuedBillNumber } from '@/lib/bill-number';
 import { getErrorMessage } from '@/lib/utils';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
+import { canSellPharmacy } from '@/lib/pharmacy-access';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
-import { Tabs } from '@/components/ui/tabs';
 import { PharmacyInvoiceBuilderFixed } from '@/components/pharmacy/PharmacyInvoiceBuilderFixed';
-import { PrescriptionDispensingQueue } from '@/components/pharmacy/PrescriptionDispensingQueue';
-import { SalesHeader } from '@/components/pharmacy/sales/SalesHeader';
 import { FinishedBillView } from '@/components/pharmacy/sales/FinishedBillView';
-import { SALES_PATH, salesTabHref, type Register } from '@/components/pharmacy/sales/sales-register-model';
+import { SALES_PATH } from '@/components/pharmacy/sales/sales-register-model';
 import {
   PREFILL_KEYS,
   billHref,
@@ -56,10 +56,12 @@ function useSavedDraft(id: string, reloadKey: number): DraftLoad {
   return load;
 }
 
+const COUNTER_PATH = '/dashboard/pharmacy?section=counter';
+
 function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
+  const { user } = useDashboardUser();
   const [reloadKey, setReloadKey] = useState(0);
   const load = useSavedDraft(id, reloadKey);
-  const back = <Button asChild variant="outline"><Link href={SALES_PATH}>Back to Sales</Link></Button>;
 
   if (load.status === 'loading') return <LoadingSkeleton variant="cards" label="Loading draft bill…" />;
   if (load.status === 'missing')
@@ -68,7 +70,6 @@ function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
         <EmptyState
           title="This draft no longer exists"
           description="It was discarded, or the link is out of date. Nothing was sold from it."
-          action={<div className="flex flex-wrap justify-center gap-2">{back}<Button asChild><Link href={billHref()}>New sale</Link></Button></div>}
         />
       </Card>
     );
@@ -89,7 +90,7 @@ function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
         <EmptyState
           title="Could not open the draft"
           description={`${load.message}. Check your connection and try again.`}
-          action={<div className="flex flex-wrap justify-center gap-2">{back}<Button onClick={() => setReloadKey((key) => key + 1)}>Try again</Button></div>}
+          action={<Button onClick={() => setReloadKey((key) => key + 1)}>Try again</Button>}
         />
       </Card>
     );
@@ -100,59 +101,57 @@ function DraftBill({ id, onLeave }: { id: string; onLeave: () => void }) {
       onDiscarded={onLeave}
       onReloadDraft={() => setReloadKey((key) => key + 1)}
       onDone={onLeave}
+      canLinkInventory={canSellPharmacy(user?.role)}
     />
   );
 }
 
 /**
  * @cc [owner:nareshshah139,label:product] prescription-load-visible-draft
- * Loading a prescription MUST bring its bill into view. Switching prescriptions MUST
- * create a separate draft so medicines and billing details from another patient cannot carry over.
+ * Opening the bill for a prescription MUST focus its bill, with nothing above it but the page header.
+ * Opening another prescription MUST create a separate draft so medicines and billing details
+ * from another patient cannot carry over.
  */
 function NewBill({ prefill, onCreated, onLeave }: { prefill: BillPrefill | undefined; onCreated: (id: string) => void; onLeave: () => void }) {
   const router = useRouter();
+  const { user } = useDashboardUser();
   const billRef = useRef<HTMLDivElement>(null);
-  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saved, setSaved] = useState<{ id: string; key: string } | null>(null);
   const prefillKey = PREFILL_KEYS.map((key) => prefill?.[key] ?? '').join('|');
-  const key = saved?.key ?? `${prefillKey}:${loadAttempt}`;
+  const key = saved && (!prefill || saved.key === prefillKey) ? saved.key : prefillKey;
 
   useEffect(() => {
     if (!prefill?.prescriptionId && !prefill?.visitId) return;
-    const frame = requestAnimationFrame(() => {
-      billRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      billRef.current?.focus({ preventScroll: true });
-    });
+    const frame = requestAnimationFrame(() => billRef.current?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
-  }, [prefill?.prescriptionId, prefill?.visitId, loadAttempt]);
+  }, [prefill?.prescriptionId, prefill?.visitId]);
 
   return (
-    <section className="min-w-0 space-y-3">
-      <PrescriptionDispensingQueue
-        onOpenBilling={(selected) => {
-          setSaved(null);
-          setLoadAttempt((attempt) => attempt + 1);
-          router.push(billHref({ prefill: selected }), { scroll: false });
+    <div ref={billRef} role="region" aria-label="Prescription bill" tabIndex={-1} className="min-w-0">
+      <PharmacyInvoiceBuilderFixed
+        key={key}
+        prefill={prefill}
+        onDraftSaved={(session) => {
+          if (saved?.id === session.id) return;
+          setSaved({ id: session.id, key });
+          onCreated(session.id);
+          router.replace(billHref({ draft: session.id }), { scroll: false });
         }}
-        openActionLabel="Load"
+        onDiscarded={onLeave}
+        onDone={onLeave}
+        canLinkInventory={canSellPharmacy(user?.role)}
       />
-      <div ref={billRef} role="region" aria-label="Prescription bill" tabIndex={-1} className="scroll-mt-4">
-        <PharmacyInvoiceBuilderFixed
-          key={key}
-          prefill={prefill}
-          onDraftSaved={(session) => {
-            if (saved?.id === session.id) return;
-            setSaved({ id: session.id, key });
-            onCreated(session.id);
-            router.replace(billHref({ draft: session.id }), { scroll: false });
-          }}
-          onDiscarded={onLeave}
-          onDone={onLeave}
-        />
-      </div>
-    </section>
+    </div>
   );
 }
+
+type BillMode = 'finished' | 'draft' | 'new';
+
+const BILL_PAGE: Record<BillMode, { title: string; back: { href: string; label: string } }> = {
+  new: { title: 'New bill', back: { href: COUNTER_PATH, label: 'Back to Counter' } },
+  draft: { title: 'Draft bill', back: { href: SALES_PATH, label: 'Back to Sales' } },
+  finished: { title: 'Bill', back: { href: SALES_PATH, label: 'Back to Sales' } },
+};
 
 function SalesBillContent() {
   const router = useRouter();
@@ -161,27 +160,29 @@ function SalesBillContent() {
   const billId = searchParams.get('bill');
   const [created, setCreated] = useState<string | null>(null);
   const prefill = prefillFrom(searchParams);
-  const leave = () => router.push(SALES_PATH);
+  const mode: BillMode = billId ? 'finished' : draftId && draftId !== created ? 'draft' : 'new';
+  const { title, back } = BILL_PAGE[mode];
+  const leave = () => router.push(back.href);
 
   return (
-    <Tabs value="sales" onValueChange={(value: string) => router.push(salesTabHref(value as Register))}>
-      <div className="flex min-w-0 flex-col gap-3">
-        <SalesHeader
-          action={
-            <Button asChild variant="outline" className="h-10 text-sm">
-              <Link href={SALES_PATH}><ArrowLeft aria-hidden="true" /> Back to Sales</Link>
-            </Button>
-          }
-        />
-        {billId ? (
-          <FinishedBillView key={billId} id={billId} startEditing={searchParams.get('edit') === 'discount'} />
-        ) : draftId && draftId !== created ? (
-          <DraftBill key={draftId} id={draftId} onLeave={leave} />
-        ) : (
-          <NewBill prefill={draftId ? undefined : prefill} onCreated={setCreated} onLeave={leave} />
-        )}
-      </div>
-    </Tabs>
+    <div className="flex min-w-0 flex-col gap-3">
+      <PageHeader
+        title={title}
+        className="items-center"
+        actions={
+          <Button asChild variant="outline" className="h-10 text-sm">
+            <Link href={back.href}><ArrowLeft aria-hidden="true" /> {back.label}</Link>
+          </Button>
+        }
+      />
+      {mode === 'finished' ? (
+        <FinishedBillView key={billId} id={billId!} startEditing={searchParams.get('edit') === 'discount'} />
+      ) : mode === 'draft' ? (
+        <DraftBill key={draftId} id={draftId!} onLeave={leave} />
+      ) : (
+        <NewBill prefill={draftId ? undefined : prefill} onCreated={setCreated} onLeave={leave} />
+      )}
+    </div>
   );
 }
 

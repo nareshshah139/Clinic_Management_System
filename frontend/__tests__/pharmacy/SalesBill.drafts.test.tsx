@@ -19,6 +19,7 @@ jest.mock('next/navigation', () => {
     useSearchParams: () => useSyncExternalStore(subscribe, () => mockNav.query),
   };
 });
+jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: { id: 'u1', role: 'PHARMACIST' }, loading: false }) }));
 jest.mock('@/lib/api', () => ({
   apiClient: {
     get: jest.fn(), getPatients: jest.fn(), getPatient: jest.fn(), getUsers: jest.fn(), getPrescription: jest.fn(),
