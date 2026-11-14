@@ -203,8 +203,8 @@ async function seed(stack) {
     const received = r2(payments.reduce((s, [, amount]) => s + amount, 0));
     const invoice = await db.newInvoice.create({
       data: {
-        id: cid("invoice", n), invoiceNo: `INV-${day.replaceAll("-", "")}-${String(extra.seq ?? 1).padStart(3, "0")}`, patientId: patients[patientIdx].id, branchId, total, received, balance: r2(total - received), status: received >= total ? "PAID" : received ? "PARTIALLY_PAID" : extra.dueDate ? "OVERDUE" : "PENDING",
-        mode: payments[0]?.[2] ?? null, dueDate: extra.dueDate ? at(extra.dueDate, "12:00") : null, createdAt: at(day, time), appointmentId: extra.appointmentId, visitId: extra.visitId,
+        id: cid("invoice", n), invoiceNo: `INV-${day.replaceAll("-", "")}-${String(extra.seq ?? 1).padStart(3, "0")}`, patientId: patients[patientIdx].id, branchId, total, received, balance: r2(total - received),
+        mode: payments[0]?.[2] ?? null, createdAt: at(day, time), appointmentId: extra.appointmentId, visitId: extra.visitId,
         items: { create: items.map(([name, serviceId, price, gst, qty = 1]) => ({ serviceId, name, description: name, qty, unitPrice: price, gstRate: gst, total: price * qty })) },
         payments: { create: payments.map(([, amount, mode], j) => ({ amount, mode, reconStatus: "COMPLETED", createdAt: at(day, `${time.slice(0, 2)}:${String(Number(time.slice(3)) + 5 + j).padStart(2, "0")}`) })) },
       },
@@ -220,8 +220,11 @@ async function seed(stack) {
   const line = (name, qty = 1) => [name, svc(name).id, svc(name).priceNet, svc(name).gstRate, qty];
   await bill(1, 0, today, "09:20", [line("Dermatology Consultation")], [["x", 500, "CASH"]], { appointmentId: appointments.today[0].id, visitId: todayVisits[0].id });
   await bill(2, 1, today, "10:05", [line("Chemical Peel")], [["x", 1500, "UPI"]], { appointmentId: appointments.today[1].id, visitId: todayVisits[1].id, seq: 2 });
-  await bill(3, 3, addDays(today, -3), "12:10", [line("Review Consultation"), line("Wart Removal (Cautery)")], [["x", 2424, "UPI"]]);
-  await bill(4, 5, addDays(today, -5), "17:40", [line("Skin Glow Facial")], [], { dueDate: addDays(today, -2) });
+  // The app makes a clinic bill only from an appointment and never sets a status, so seeded bills do the same.
+  const billedEarlier = async (n, patientIdx, ago, slot) =>
+    (await db.appointment.create({ data: { id: cid("apptbill", n), branchId, doctorId, patientId: patients[patientIdx].id, date: new Date(addDays(today, -ago)), slot, status: "COMPLETED", tokenNumber: 1, roomId: rooms[0].id } })).id;
+  await bill(3, 3, addDays(today, -3), "12:10", [line("Review Consultation"), line("Wart Removal (Cautery)")], [["x", 2424, "UPI"]], { appointmentId: await billedEarlier(3, 3, 3, "12:00-12:15") });
+  await bill(4, 5, addDays(today, -5), "17:40", [line("Skin Glow Facial")], [], { appointmentId: await billedEarlier(4, 5, 5, "17:30-17:45") });
   for (const [periodKey, lastNumber] of [[today.replaceAll("-", ""), 2], [addDays(today, -3).replaceAll("-", ""), 1], [addDays(today, -5).replaceAll("-", ""), 1]])
     await db.numberSequence.create({ data: { type: "BILLING", branchId, periodKey, lastNumber } });
 
