@@ -737,6 +737,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [diagOptions, setDiagOptions] = useState<string[]>([]);
   const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
   const [complaintFieldFocused, setComplaintFieldFocused] = useState(false);
+  const [diagnosisFieldFocused, setDiagnosisFieldFocused] = useState(false);
   const [loadingVisit, setLoadingVisit] = useState(false);
   const [visitData, setVisitData] = useState<any>(null);
   const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
@@ -4744,8 +4745,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="opacity-100">
                 <label className="text-xs text-gray-600 flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                 <div className="relative diag-autocomplete">
-                  <Input key="diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
-                  {diagOptions.length > 0 && (
+                  <Input key="diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onFocus={() => setDiagnosisFieldFocused(true)} onBlur={() => setDiagnosisFieldFocused(false)} onChange={(e) => setDiagnosis(e.target.value)} />
+                  {diagnosisFieldFocused && diagOptions.length > 0 && (
                     <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {diagOptions.map((opt) => (
                         <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setDiagnosis(opt); setDiagOptions([]); pushRecent('diagnosis', opt); }}>
