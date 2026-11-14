@@ -48,7 +48,7 @@ describe('UsersManagement', () => {
 
     await userEvent.click(within(rowOf('Riya Sharma')).getByRole('button', { name: 'More actions for Riya Sharma' }));
     expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent?.trim()))
-      .toEqual(['Reset password', 'Role & Permissions', 'Working Hours', 'WhatsApp Settings', 'Delete']);
+      .toEqual(['Reset password', 'Role & Permissions', 'Working Hours', 'Messaging Settings', 'Delete']);
     await userEvent.keyboard('{Escape}');
 
     await userEvent.click(within(rowOf('Asha Rao')).getByRole('button', { name: 'More actions for Asha Rao' }));

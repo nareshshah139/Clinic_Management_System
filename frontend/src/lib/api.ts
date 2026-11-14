@@ -1204,6 +1204,14 @@ export class ApiClient {
     return this.post(`/whatsapp/templates/${id}/test`, data);
   }
 
+  async getEmailStatus() {
+    return this.get<{ configured: boolean; from: string | null }>('/notifications/email/status');
+  }
+
+  async sendTestEmail() {
+    return this.post<{ sent: boolean; to: string }>('/notifications/email/test');
+  }
+
   // Google Calendar
   async getGoogleCalendarConfigured() {
     return this.get<{ configured: boolean }>('/google-calendar/configured');

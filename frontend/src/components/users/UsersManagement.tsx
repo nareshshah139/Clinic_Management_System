@@ -32,6 +32,8 @@ import {
   parseWhatsAppSettings,
   validateWhatsAppTemplateChoice,
 } from '@/lib/whatsapp-settings';
+import { parseEmailSettings } from '@/lib/email-settings';
+import { EmailSettingsSection } from '@/components/layout/EmailSettingsSection';
 
 type UserForm = { id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string };
 const EMPTY_FORM: UserForm = { firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE' };
@@ -61,6 +63,7 @@ export default function UsersManagement() {
   const permRequest = useRef(0);
   const [roleSelect, setRoleSelect] = useState<string>('ADMIN');
   const [waOpen, setWaOpen] = useState(false);
+  const [emailAutoConfirm, setEmailAutoConfirm] = useState(true);
   const [waAutoConfirm, setWaAutoConfirm] = useState(false);
   const [waUseTemplate, setWaUseTemplate] = useState(false);
   const [waTemplateName, setWaTemplateName] = useState('');
@@ -193,6 +196,7 @@ export default function UsersManagement() {
     setSelectedUser(u);
     const settings = parseWhatsAppSettings((u as any)?.metadata);
     setWaAutoConfirm(settings.autoConfirm);
+    setEmailAutoConfirm(parseEmailSettings((u as any)?.metadata).autoConfirm);
     setWaUseTemplate(settings.useTemplate);
     setWaTemplateName(settings.templateName);
     setWaTemplateLanguage(settings.templateLanguage);
@@ -384,6 +388,7 @@ export default function UsersManagement() {
       const existing = parseMetadataObject((selectedUser as any)?.metadata);
       const metadata = {
         ...existing,
+        emailAutoConfirmAppointments: emailAutoConfirm,
         whatsappAutoConfirmAppointments: waAutoConfirm,
         whatsappUseTemplate: waUseTemplate,
         whatsappTemplateName: waUseTemplate ? waTemplateName.trim() || undefined : undefined,
@@ -396,7 +401,7 @@ export default function UsersManagement() {
       await apiClient.updateUserProfile(selectedUser.id, { metadata });
       setWaOpen(false);
       await fetchUsers();
-      toast({ title: 'Saved', description: 'WhatsApp settings updated' });
+      toast({ title: 'Saved', description: 'Messaging settings updated' });
     } finally {
       setLoading(false);
     }
@@ -495,7 +500,7 @@ export default function UsersManagement() {
               title: "Managing users",
               items: [
                 "Press Edit in a user's row to change their details or status",
-                "The More actions menu in each row holds Reset password, Role & Permissions, and for doctors Working Hours and WhatsApp Settings",
+                "The More actions menu in each row holds Reset password, Role & Permissions, and for doctors Working Hours and Messaging Settings",
                 "Delete is last in that menu and asks before removing the account",
               ]
             }
@@ -611,7 +616,7 @@ export default function UsersManagement() {
                               <DropdownMenuItem onSelect={() => setResetUser(u)}><KeyRound /> Reset password</DropdownMenuItem>
                               <DropdownMenuItem onSelect={() => void openRolePerms(u)}><Settings /> Role & Permissions</DropdownMenuItem>
                               {u.role === 'DOCTOR' && <DropdownMenuItem onSelect={() => { setSelectedUser(u); setWhOpen(true); }}><Clock /> Working Hours</DropdownMenuItem>}
-                              {u.role === 'DOCTOR' && <DropdownMenuItem onSelect={() => openWhatsAppSettings(u)}><MessageSquare /> WhatsApp Settings</DropdownMenuItem>}
+                              {u.role === 'DOCTOR' && <DropdownMenuItem onSelect={() => openWhatsAppSettings(u)}><MessageSquare /> Messaging Settings</DropdownMenuItem>}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem variant="destructive" onSelect={() => void onDelete(u)}><Trash2 /> Delete</DropdownMenuItem>
                             </DropdownMenuContent>
@@ -726,9 +731,15 @@ export default function UsersManagement() {
       <Dialog open={waOpen && !!selectedUser} onOpenChange={(open: boolean) => { setWaOpen(open); if (!open) setSelectedUser(null); }}>
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>Doctor WhatsApp Settings</DialogTitle>
+            <DialogTitle>Doctor Messaging Settings</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <EmailSettingsSection
+              autoConfirm={emailAutoConfirm}
+              onAutoConfirmChange={setEmailAutoConfirm}
+              description="Automatic confirmation email to patients when this doctor is assigned."
+            />
+
             <div className="border rounded-md p-3 space-y-3">
               <div className="flex items-center justify-between">
                 <div>

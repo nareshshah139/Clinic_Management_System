@@ -13,6 +13,8 @@ import { useState, useEffect } from 'react';
 import { getErrorMessage } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { EmailSettingsSection } from './EmailSettingsSection';
+import { parseEmailSettings } from '@/lib/email-settings';
 import { useDashboardUser } from './dashboard-user-context';
 import { GlobalSearch } from './global-search';
 import { apiClient } from '@/lib/api';
@@ -67,6 +69,7 @@ export function Header() {
   const [notifLoading, setNotifLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [emailAutoConfirm, setEmailAutoConfirm] = useState(true);
   const [whatsappAutoConfirm, setWhatsappAutoConfirm] = useState(false);
   const [whatsappUseTemplate, setWhatsappUseTemplate] = useState(false);
   const [whatsappTemplateName, setWhatsappTemplateName] = useState('');
@@ -109,6 +112,7 @@ export function Header() {
   useEffect(() => {
     const settings = parseWhatsAppSettings((user as any)?.metadata);
     setWhatsappAutoConfirm(settings.autoConfirm);
+    setEmailAutoConfirm(parseEmailSettings((user as any)?.metadata).autoConfirm);
     setWhatsappUseTemplate(settings.useTemplate);
     setWhatsappTemplateName(settings.templateName);
     setWhatsappTemplateLanguage(settings.templateLanguage);
@@ -333,6 +337,7 @@ export function Header() {
       const existingMetadata = parseMetadataObject((user as any)?.metadata);
       const metadata = {
         ...existingMetadata,
+        emailAutoConfirmAppointments: emailAutoConfirm,
         whatsappAutoConfirmAppointments: whatsappAutoConfirm,
         whatsappUseTemplate,
         whatsappTemplateName: whatsappUseTemplate ? whatsappTemplateName.trim() || undefined : undefined,
@@ -345,13 +350,13 @@ export function Header() {
       toast({
         variant: 'success',
         title: 'Settings saved',
-        description: 'WhatsApp preferences updated.',
+        description: 'Messaging preferences updated.',
       });
     } catch (error) {
       toast({
         variant: 'warning',
         title: 'Save failed',
-        description: getErrorMessage(error) || 'Could not save WhatsApp settings.',
+        description: getErrorMessage(error) || 'Could not save settings.',
       });
     } finally {
       setSettingsSaving(false);
@@ -441,6 +446,13 @@ export function Header() {
                   {settingsOpen && user?.id && <DoctorSignatureSettings doctorId={user.id} />}
                   {settingsOpen && user?.id && <DoctorLetterheadSettings doctorId={user.id} />}
                   {settingsOpen && user?.id && <DoctorAvailabilitySettings doctorId={user.id} />}
+                  <EmailSettingsSection
+                    autoConfirm={emailAutoConfirm}
+                    onAutoConfirmChange={setEmailAutoConfirm}
+                    description="Send a confirmation email to patients who have an email address when you are the doctor."
+                    allowTest
+                  />
+
                   <div className="border rounded-md p-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
