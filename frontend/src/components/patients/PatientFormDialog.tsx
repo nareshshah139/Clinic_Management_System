@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -423,6 +424,7 @@ export default function PatientFormDialog({ open, onOpenChange, patientId, onSav
                       <div className="md:col-span-2">
                         <Button type="button" variant="ghost" size="sm" aria-expanded={showMore} onClick={() => setShowMore((v) => !v)}>
                           More details
+          <ChevronDown className={showMore ? 'rotate-180' : ''} aria-hidden="true" />
                         </Button>
                       </div>
                       {showMore && moreFields}
