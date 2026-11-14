@@ -18,6 +18,7 @@ databaseTests('Review booking on PostgreSQL', () => {
   let admin: PrismaClient;
   let db: PrismaClient;
   let controller: VisitsController;
+  let visits: VisitsService;
   let appointments: AppointmentsService;
   let created = false;
   const request = { user: { id: 'doctor', branchId: 'branch' } } as any;
@@ -40,7 +41,8 @@ databaseTests('Review booking on PostgreSQL', () => {
     await db.user.create({ data: { id: 'doctor', firstName: 'Synthetic', lastName: 'Doctor', email: 'doctor@example.test', password: 'x', role: 'DOCTOR', branchId: 'branch' } });
     await db.patient.create({ data: { id: 'patient', name: 'Synthetic Patient', gender: 'F', phone: '9000000000', branchId: 'branch' } });
     appointments = new AppointmentsService(db as PrismaService);
-    controller = new VisitsController(new VisitsService(db as PrismaService), new ReviewBookingService(db as PrismaService, appointments));
+    visits = new VisitsService(db as PrismaService);
+    controller = new VisitsController(visits, new ReviewBookingService(db as PrismaService, appointments));
   }, 120000);
 
   afterAll(async () => {
@@ -77,21 +79,66 @@ databaseTests('Review booking on PostgreSQL', () => {
     return db.appointment.create({ data: { patientId: 'patient', doctorId: 'doctor', date: followUp!, branchId: 'branch', reviewOfVisitId: visitId, slot, status } });
   };
 
-  it('rejects a second open review for one visit at the database', async () => {
+  it('rejects a second pending review for one visit at the database', async () => {
     const visit = await visitFor('2099-03-07');
     await reviewRow(visit.id, '09:00-09:30');
-    for (const status of ['SCHEDULED', 'CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS'] as const) {
+    for (const status of ['SCHEDULED', 'CONFIRMED'] as const) {
       await expect(reviewRow(visit.id, '10:00-10:30', status)).rejects.toMatchObject({ code: 'P2002' });
     }
   });
 
-  it('allows a new open review beside cancelled, missed and completed ones', async () => {
+  it('rejects a second pending review beside a confirmed one', async () => {
+    const visit = await visitFor('2099-03-11');
+    await reviewRow(visit.id, '09:00-09:30', 'CONFIRMED');
+    for (const status of ['SCHEDULED', 'CONFIRMED'] as const) {
+      await expect(reviewRow(visit.id, '10:00-10:30', status)).rejects.toMatchObject({ code: 'P2002' });
+    }
+  });
+
+  it('allows checked-in and in-progress reviews beside a scheduled one', async () => {
+    const visit = await visitFor('2099-03-12');
+    await reviewRow(visit.id, '09:00-09:30');
+    await expect(reviewRow(visit.id, '09:30-10:00', 'CHECKED_IN')).resolves.toMatchObject({ status: 'CHECKED_IN' });
+    await expect(reviewRow(visit.id, '10:00-10:30', 'IN_PROGRESS')).resolves.toMatchObject({ status: 'IN_PROGRESS' });
+  });
+
+  it('allows a new pending review beside cancelled, missed and completed ones', async () => {
     const visit = await visitFor('2099-03-10');
     await reviewRow(visit.id, '09:00-09:30', 'CANCELLED');
     await reviewRow(visit.id, '09:30-10:00', 'NO_SHOW');
     await reviewRow(visit.id, '10:00-10:30', 'COMPLETED');
     await expect(reviewRow(visit.id, '10:30-11:00')).resolves.toMatchObject({ status: 'SCHEDULED' });
   });
+
+  it('lets the desk start a visit from a missed review after a new review was booked', async () => {
+    const visit = await visitFor('2099-04-01');
+    expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+    const missed = await db.appointment.findFirstOrThrow({ where: { reviewOfVisitId: visit.id } });
+    await db.appointment.update({ where: { id: missed.id }, data: { status: 'NO_SHOW' } });
+    await db.visit.update({ where: { id: visit.id }, data: { followUp: new Date('2099-04-05') } });
+    expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+
+    const late = await visits.create({ patientId: 'patient', doctorId: 'doctor', appointmentId: missed.id, complaints: [] } as any, 'branch', 'doctor');
+
+    expect(late.appointmentId).toBe(missed.id);
+    expect(await reviews(visit.id)).toEqual(['2099-04-01 09:00-09:30 IN_PROGRESS', '2099-04-05 09:00-09:30 SCHEDULED']);
+  }, 60000);
+
+  it('lets the desk delete a completed review visit after a new review was booked', async () => {
+    const visit = await visitFor('2099-04-10');
+    expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+    const first = await db.appointment.findFirstOrThrow({ where: { reviewOfVisitId: visit.id } });
+    await db.appointment.update({ where: { id: first.id }, data: { status: 'CHECKED_IN' } });
+    const reviewVisit = await visits.create({ patientId: 'patient', doctorId: 'doctor', appointmentId: first.id, complaints: [] } as any, 'branch', 'doctor');
+    await visits.complete(reviewVisit.id, {} as any, 'branch');
+    await db.visit.update({ where: { id: visit.id }, data: { followUp: new Date('2099-04-15') } });
+    expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+    expect(await reviews(visit.id)).toEqual(['2099-04-10 09:00-09:30 COMPLETED', '2099-04-15 09:00-09:30 SCHEDULED']);
+
+    await expect(visits.remove(reviewVisit.id, 'branch')).resolves.toEqual({ message: 'Visit deleted successfully' });
+
+    expect(await reviews(visit.id)).toEqual(['2099-04-10 09:00-09:30 CHECKED_IN', '2099-04-15 09:00-09:30 SCHEDULED']);
+  }, 60000);
 
   it('books the new review date after a missed review and records the date it was booked for', async () => {
     const visit = await visitFor('2099-03-08');
@@ -101,12 +148,12 @@ databaseTests('Review booking on PostgreSQL', () => {
     expect(open.reviewRequestedFor?.toISOString().slice(0, 10)).toBe('2099-03-08');
   }, 60000);
 
-  it('answers 409 when the desk reopens a review while another is open', async () => {
+  it('answers 409 when the desk reopens a review while another is pending', async () => {
     const visit = await visitFor('2099-03-09');
     const superseded = await reviewRow(visit.id, '09:00-09:30', 'CANCELLED');
     await reviewRow(visit.id, '09:30-10:00');
     await expect(appointments.update(superseded.id, { status: 'SCHEDULED' } as any, 'branch')).rejects.toThrow(
-      new ConflictException('This visit already has an open review appointment. Cancel it before reopening this one.'),
+      new ConflictException('This visit already has a pending review appointment. Cancel it before reopening this one.'),
     );
   });
 });

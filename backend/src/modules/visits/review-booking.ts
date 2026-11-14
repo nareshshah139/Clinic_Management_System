@@ -76,8 +76,9 @@ export class ReviewBookingService {
    * completions of one visit act one at a time. A booking failure MUST NOT fail the completion. A past review date
    * books nothing.
    * Every review appointment MUST record the review date it was booked for (reviewRequestedFor). A visit MUST have at
-   * most one open (SCHEDULED, CONFIRMED, CHECKED_IN or IN_PROGRESS) review; a database index enforces it, so CANCELLED,
-   * NO_SHOW and COMPLETED reviews never block a new one.
+   * most one pending (SCHEDULED or CONFIRMED) review; a database index enforces it, so CHECKED_IN, IN_PROGRESS,
+   * CANCELLED, NO_SHOW and COMPLETED reviews never block a new one, and the desk can still start a visit from a missed
+   * review or delete a review visit.
    * The doctor's request is unchanged when the newest review was booked for the visit's review date (a legacy review
    * without a recorded date counts as booked for its own date). Then nothing is moved or booked, whatever the desk did
    * since: the open review is reported as existing on its actual date and slot, noting a move at the desk when that

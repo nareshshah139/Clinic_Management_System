@@ -8,8 +8,8 @@ CREATE INDEX "appointments_reviewOfVisitId_idx" ON "appointments"("reviewOfVisit
 -- AddForeignKey
 ALTER TABLE "appointments" ADD CONSTRAINT "appointments_reviewOfVisitId_fkey" FOREIGN KEY ("reviewOfVisitId") REFERENCES "visits"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- A visit has at most one open review appointment. Cancelled, missed and completed reviews do not count.
-CREATE UNIQUE INDEX "appointments_one_open_review_per_visit_key"
+-- A visit has at most one pending review booking. Under way, cancelled, missed and completed reviews do not count.
+CREATE UNIQUE INDEX "appointments_one_pending_review_per_visit_key"
   ON "appointments"("reviewOfVisitId")
   WHERE "reviewOfVisitId" IS NOT NULL
-    AND "status" IN ('SCHEDULED'::"AppointmentStatus", 'CONFIRMED'::"AppointmentStatus", 'CHECKED_IN'::"AppointmentStatus", 'IN_PROGRESS'::"AppointmentStatus");
+    AND "status" IN ('SCHEDULED'::"AppointmentStatus", 'CONFIRMED'::"AppointmentStatus");
