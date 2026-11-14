@@ -1,0 +1,74 @@
+[
+  {
+    "screen": "sign-in",
+    "persona": "none",
+    "words": 18,
+    "firstScreen": 19
+  },
+  {
+    "screen": "reception landing",
+    "persona": "reception",
+    "words": 76,
+    "firstScreen": 73
+  },
+  {
+    "screen": "appointments",
+    "persona": "reception",
+    "words": 100,
+    "firstScreen": 107
+  },
+  {
+    "screen": "patients list",
+    "persona": "reception",
+    "words": 206,
+    "firstScreen": 108
+  },
+  {
+    "screen": "patient page",
+    "persona": "doctor",
+    "words": 144,
+    "firstScreen": 81
+  },
+  {
+    "screen": "doctor landing",
+    "persona": "doctor",
+    "words": 235,
+    "firstScreen": 62
+  },
+  {
+    "screen": "visit form",
+    "persona": "doctor",
+    "words": 293,
+    "firstScreen": 98
+  },
+  {
+    "screen": "pharmacist landing",
+    "persona": "pharmacist",
+    "words": 30,
+    "firstScreen": 35
+  },
+  {
+    "screen": "pharmacy counter",
+    "persona": "pharmacist",
+    "words": 326,
+    "firstScreen": 246
+  },
+  {
+    "screen": "new pharmacy bill",
+    "persona": "pharmacist",
+    "words": 120,
+    "firstScreen": 38
+  },
+  {
+    "screen": "inventory",
+    "persona": "pharmacist",
+    "words": 108,
+    "firstScreen": 81
+  },
+  {
+    "screen": "owner landing",
+    "persona": "owner",
+    "words": 120,
+    "firstScreen": 97
+  }
+]
