@@ -19,7 +19,7 @@ module.exports = journey(
     const visible = async (text) => page.getByText(text, { exact: false }).first().waitFor({ state: "visible" });
 
     await ui.start("/dashboard");
-    await page.getByText("Today's collection").waitFor();
+    await page.getByRole("link", { name: "Today's collection" }).waitFor();
     await visible(rupees(clinicReceived + pharmacyToday.total));
     await visible(`Clinic ${rupees(clinicReceived)} · Pharmacy ${rupees(pharmacyToday.total)}`);
     await visible("Cash ₹");
