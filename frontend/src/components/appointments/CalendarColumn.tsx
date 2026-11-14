@@ -47,9 +47,9 @@ const VISIT_TYPE_BACKGROUND: Record<string, { current: string; past: string }> =
 const FLEX_STEP_MIN = 15;
 
 const BILL_TYPE_TONE: Record<BillType, string> = {
-  FIRST_CONSULTATION: 'text-teal-700',
-  REVIEW: 'text-sky-700',
-  PROCEDURE: 'text-purple-700',
+  FIRST_CONSULTATION: 'text-success-text',
+  REVIEW: 'text-info-text',
+  PROCEDURE: 'text-highlight-text',
 };
 
 /** Container widths of the appointment block at which each step of the chip's wording appears, and gives way to the next. */
@@ -216,7 +216,7 @@ export default function CalendarColumn({
       style={{ gridColumnStart: column }}
     >
       <header className="min-w-0 border-b-2 pb-1.5" style={{ borderBottomColor: spec.accentColor }}>
-        <h3 id={titleId} className="font-semibold leading-tight text-gray-900">{spec.title}</h3>
+        <h2 id={titleId} className="font-semibold leading-tight text-gray-900">{spec.title}</h2>
         <p className="text-xs font-medium leading-tight text-gray-800">{appointments.length ? spec.count(appointments.length) : spec.empty}</p>
         <p className="text-xs leading-tight text-gray-600">{spec.description}</p>
       </header>
@@ -264,9 +264,9 @@ export default function CalendarColumn({
                     className="@container flex h-full w-full items-start overflow-hidden px-1.5 py-0 text-left leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                     style={{ fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))' }}
                   >
-                    <span className={`flex w-full min-w-0 items-center gap-1 whitespace-nowrap ${status.muted ? 'text-gray-500' : 'text-gray-900'}`}>
+                    <span className={`flex w-full min-w-0 items-center gap-1 whitespace-nowrap ${status.muted ? 'text-foreground/70' : 'text-gray-900'}`}>
                       {apt.tokenNumber != null && (
-                        <span className="shrink-0 font-semibold text-gray-500">#{apt.tokenNumber}</span>
+                        <span className="shrink-0 font-semibold">#{apt.tokenNumber}</span>
                       )}
                       <span data-appointment-time className="hidden shrink-0 font-bold tabular-nums text-blue-700 @min-[15em]:inline">{`${start}-${end}`}</span>
                       <span
@@ -291,10 +291,10 @@ export default function CalendarColumn({
                         {apt.visitType === 'PROCEDURE' && apt.notes && (
                           <span className="truncate font-medium text-purple-700">({apt.notes})</span>
                         )}
-                        {(!apt.billType || apt.visitType === 'TELEMED') && <span className="font-medium text-purple-600">{apt.visitType || 'OPD'}</span>}
+                        {(!apt.billType || apt.visitType === 'TELEMED') && <span className="font-medium text-highlight-text">{apt.visitType || 'OPD'}</span>}
                         {apt.patient?.age !== undefined && <span className="text-gray-600">{apt.patient.age}y</span>}
                         {apt.patient?.gender && <span className="rounded bg-gray-100 px-1 text-gray-600">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
-                        {apt.room?.name && <span className="truncate font-medium text-green-600">{apt.room.name}</span>}
+                        {apt.room?.name && <span className="truncate font-medium text-success-text">{apt.room.name}</span>}
                       </span>
                     </span>
                   </button>

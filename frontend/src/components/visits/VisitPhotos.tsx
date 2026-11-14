@@ -637,7 +637,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
               Camera
             </Button>
             {items.length > 0 && (
-              <Button variant={compareMode ? 'default' : 'outline'} size="sm" onClick={() => setCompareMode(v => !v)}>
+              <Button variant={compareMode ? 'default' : 'outline'} aria-pressed={compareMode} size="sm" onClick={() => setCompareMode(v => !v)}>
                 {compareMode ? 'Compare: On' : 'Compare: Off'}
               </Button>
             )}
@@ -689,7 +689,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                     value={selectedCompareVisitId || ''}
                     onValueChange={(val: string) => { setSelectedCompareVisitId(val || null); setPairIndex(0); }}
                   >
-                    <SelectTrigger className="w-56">
+                    <SelectTrigger className="w-56" aria-label="Compare against">
                       <SelectValue placeholder="Select visit" />
                     </SelectTrigger>
                     <SelectContent>
@@ -812,10 +812,10 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-600">Mode</span>
-              <Button size="sm" variant={taggingMode === 'GRID' ? 'default' : 'outline'} onClick={() => setTaggingMode('GRID')}>
+              <Button size="sm" variant={taggingMode === 'GRID' ? 'default' : 'outline'} aria-pressed={taggingMode === 'GRID'} onClick={() => setTaggingMode('GRID')}>
                 <LayoutGrid className="h-3 w-3 mr-1" /> Grid
               </Button>
-              <Button size="sm" variant={taggingMode === 'SINGLE' ? 'default' : 'outline'} onClick={() => setTaggingMode('SINGLE')}>
+              <Button size="sm" variant={taggingMode === 'SINGLE' ? 'default' : 'outline'} aria-pressed={taggingMode === 'SINGLE'} onClick={() => setTaggingMode('SINGLE')}>
                 <Rows className="h-3 w-3 mr-1" /> Single
               </Button>
             </div>
@@ -833,12 +833,12 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                   <img src={previewUrls[taggingIndex]} alt="preview" className="max-h-full max-w-full object-contain" />
                 ) : null}
                 <div className="absolute inset-y-0 left-0 flex items-center p-2">
-                  <Button size="sm" variant="outline" onClick={() => setTaggingIndex(i => Math.max(0, i - 1))} disabled={!pendingFiles || taggingIndex <= 0}>
+                  <Button size="sm" variant="outline" aria-label="Previous photo" onClick={() => setTaggingIndex(i => Math.max(0, i - 1))} disabled={!pendingFiles || taggingIndex <= 0}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                 </div>
                 <div className="absolute inset-y-0 right-0 flex items-center p-2">
-                  <Button size="sm" variant="outline" onClick={() => setTaggingIndex(i => Math.min(((pendingFiles?.length || 1) - 1), i + 1))} disabled={!pendingFiles || taggingIndex >= ((pendingFiles?.length || 1) - 1)}>
+                  <Button size="sm" variant="outline" aria-label="Next photo" onClick={() => setTaggingIndex(i => Math.min(((pendingFiles?.length || 1) - 1), i + 1))} disabled={!pendingFiles || taggingIndex >= ((pendingFiles?.length || 1) - 1)}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
@@ -856,7 +856,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                       }
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Photo position">
                       <SelectValue placeholder="Select position" />
                     </SelectTrigger>
                     <SelectContent>
@@ -905,7 +905,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                         setPendingPositions(next);
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={`Position for photo ${idx + 1}`}>
                         <SelectValue placeholder="Select position" />
                       </SelectTrigger>
                       <SelectContent>

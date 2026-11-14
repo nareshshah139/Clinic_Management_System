@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { BookOpen } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -19,7 +17,8 @@ import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle, Info } from 'lucide-react';
 import { useOverbookConfirm } from './useOverbookConfirm';
-import { CALENDARS, CALENDAR_ORDER, type SlotChoice } from './appointment-calendars';
+import { CALENDARS, type SlotChoice } from './appointment-calendars';
+import { CalendarLegend } from './CalendarLegend';
 import { overbookFlag } from '@/lib/overbooking';
 
 interface AppointmentsCalendarProps {
@@ -33,12 +32,6 @@ interface AppointmentsCalendarProps {
   readsRooms?: boolean;
 }
 
-/**
- * @cc [owner:nareshshah139,label:product] appointment-calendar-legend
- * The legend MUST stay closed until a button named Legend opens it, and Escape MUST close it. Calendar legend colors MUST match the doctor timeline for visit types and past or completed
- * appointments in either theme. The legend MUST name the Scheduled and Confirmed calendars and
- * say how Confirm moves a patient between them.
- */
 /**
  * @cc [owner:nareshshah139,label:accessibility] appointment-booking-success-feedback
  * A successful booking MUST display its patient and slot details using the success palette
@@ -187,7 +180,7 @@ export default function AppointmentsCalendar({
       const res: any = await apiClient.getUsers({ limit: 100 });
       const list: User[] = (res.users || res.data || []).filter((u: User) => u.role === 'DOCTOR');
       setDoctors(list);
-      if (list[0]?.id) setDoctorId(list[0].id);
+      if (list[0]?.id) setDoctorId((current) => current || list[0].id);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Failed to fetch doctors', e);
@@ -486,7 +479,7 @@ export default function AppointmentsCalendar({
             <Input
               aria-label="Patient"
               className="h-8 min-w-28 flex-1"
-              placeholder="Search patient by name/phone"
+              placeholder="Find patient"
               value={patientSearch}
               onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }}
             />
@@ -501,62 +494,7 @@ export default function AppointmentsCalendar({
                 <SelectItem value="60">60 min</SelectItem>
               </SelectContent>
             </Select>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <BookOpen className="h-4 w-4" aria-hidden="true" />
-                  Legend
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[34rem] max-w-[90vw] p-3">
-                <div>
-            <h3 className="mb-2 font-semibold">Legend</h3>
-            <ul className="mb-3 space-y-1 text-sm">
-              {CALENDAR_ORDER.map((calendar) => (
-                <li key={calendar} className="flex items-start gap-2">
-                  <span aria-hidden="true" className="mt-1.5 h-1 w-4 shrink-0 rounded" style={{ backgroundColor: CALENDARS[calendar].accentColor }} />
-                  <span><strong>{CALENDARS[calendar].title}:</strong> {CALENDARS[calendar].description}</span>
-                </li>
-              ))}
-              <li className="text-gray-700">Open a scheduled patient and press <strong>Confirm</strong> to move them to Confirmed at the same time.</li>
-            </ul>
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(219, 234, 254, 0.95)' }} />
-                <span className="text-sm">OPD</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(237, 233, 254, 0.95)' }} />
-                <span className="text-sm">Procedure</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(243, 244, 246, 0.95)' }} />
-                <span className="text-sm">Telemedicine</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(226, 232, 240, 0.95)' }} />
-                <span className="text-sm">Completed</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(239, 246, 255, 0.95)' }} />
-                <span className="text-sm">Past (OPD)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(245, 237, 254, 0.95)' }} />
-                <span className="text-sm">Past (Procedure)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#22c55e' }} />
-                <span className="text-sm">Newly Booked</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#fbbf24' }} />
-                <span className="text-sm">Booking In Progress</span>
-              </div>
-            </div>
-          </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <CalendarLegend />
             {googleConfigured !== false && (
               <div className="flex items-center gap-2">
                 {googleStatus.connected ? (
@@ -637,24 +575,26 @@ export default function AppointmentsCalendar({
           )}
 
           {patientSearch && patients.length > 0 && (
-            <div className="max-h-40 overflow-auto border rounded">
+            <ul aria-label="Matching patients" className="max-h-40 overflow-auto border rounded">
               {patients.map((p) => (
-                <div
-                  key={p.id}
-                  className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                  onClick={() => {
-                    setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
-                    setSelectedPatientId(p.id);
-                    setSelectedPatient(p);
-                    setPatients([]);
-                    setQuickCreateOpen(false);
-                    setAutoPromptedForSearch(false);
-                  }}
-                >
-                  {p.firstName} {p.lastName} — {p.phone}
-                </div>
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    onClick={() => {
+                      setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
+                      setSelectedPatientId(p.id);
+                      setSelectedPatient(p);
+                      setPatients([]);
+                      setQuickCreateOpen(false);
+                      setAutoPromptedForSearch(false);
+                    }}
+                  >
+                    {p.firstName} {p.lastName} — {p.phone}
+                  </button>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
 
           {patientSearch && patients.length === 0 && !selectedPatientId && !searchingPatients && (
@@ -691,7 +631,7 @@ export default function AppointmentsCalendar({
                 </div>
                 <div className="ml-3">
                   <p className="font-medium">Appointment Successfully Booked!</p>
-                  <p style={{ color: '#16a34a' }}>
+                  <p>
                     {bookingDetails.patient?.name || `${selectedPatient?.firstName ?? ''} ${selectedPatient?.lastName ?? ''}`.trim()} 
                     {' '} scheduled for {bookingDetails.slot} in the {CALENDARS[bookingDetails.calendar].title} calendar
                     {bookingDetails.room && ` in ${bookingDetails.room.name}`}

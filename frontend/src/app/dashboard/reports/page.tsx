@@ -1173,26 +1173,26 @@ export default function ReportsPage() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
               <div className="text-center">
-                <p className="text-orange-600">Overdue Invoices</p>
+                <p className="text-warning-text">Overdue Invoices</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.overdueInvoices}</p>
               </div>
               <div className="text-center">
-                <p className="text-red-600">Low Stock</p>
+                <p className="text-destructive-text">Low Stock</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.lowStockAlerts}</p>
-                <p className="text-xs text-muted-foreground">{LOW_STOCK_DEFINITION}</p>
+                <p className="text-xs text-warning-text">{LOW_STOCK_DEFINITION}</p>
               </div>
               <div className="text-center">
-                <p className="text-yellow-600">Expiry Alerts</p>
+                <p className="text-warning-text">Expiry Alerts</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.expiryAlerts}</p>
               </div>
               <div className="text-center">
-                <p className="text-blue-600">Pending Payments</p>
+                <p className="text-info-text">Pending Payments</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.pendingPayments}</p>
               </div>
               <div className="text-center">
-                <p className="text-green-600">Upcoming Appointments</p>
+                <p className="text-success-text">Upcoming Appointments</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.upcomingAppointments}</p>
-                <p className="text-xs text-muted-foreground">{UPCOMING_DEFINITION}</p>
+                <p className="text-xs text-warning-text">{UPCOMING_DEFINITION}</p>
               </div>
             </div>
           </CardContent>
@@ -1204,12 +1204,20 @@ export default function ReportsPage() {
         {reportTypes.map((report) => (
           <Card
             key={report.id}
-            className={`cursor-pointer transition-all ${
+            role="button"
+            tabIndex={0}
+            aria-pressed={selectedReport === report.id}
+            className={`cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               selectedReport === report.id
                 ? 'ring-2 ring-blue-500 bg-blue-50'
                 : 'hover:shadow-sm'
             }`}
             onClick={() => setSelectedReport(report.id)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              setSelectedReport(report.id);
+            }}
           >
             <CardContent className="p-4">
               <div className="flex items-center space-x-3">
@@ -1217,8 +1225,8 @@ export default function ReportsPage() {
                   <report.icon className={`h-6 w-6 ${report.color}`} />
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">{report.name}</h3>
-                  <p className="text-sm text-gray-500">{report.description}</p>
+                  <p className="font-medium text-gray-900">{report.name}</p>
+                  <p className="text-sm text-foreground/70">{report.description}</p>
                 </div>
               </div>
             </CardContent>
@@ -1256,7 +1264,7 @@ export default function ReportsPage() {
                 {loading ? 'Generating...' : 'Generate Report'}
               </Button>
               <Select onValueChange={(format: ExportFormat) => exportReport(format)}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-32" aria-label="Export report">
                   <SelectValue placeholder="Export" />
                 </SelectTrigger>
                 <SelectContent>

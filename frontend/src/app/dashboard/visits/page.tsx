@@ -836,11 +836,16 @@ function VisitsPageInner() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="relative">
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                <label htmlFor="visit-landing-patient" className="text-sm font-medium text-gray-700 mb-2 block">
                   Select Patient
                 </label>
                 <div className="relative">
-                  <input
+                  <input id="visit-landing-patient"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={showPatientMenu}
+                    aria-controls="visit-landing-patient-options"
+                    aria-activedescendant={showPatientMenu && patientOptions[highlightedIndex] ? `visit-landing-patient-option-${highlightedIndex}` : undefined}
                     className="w-full border rounded-md px-3 py-2 text-sm"
                     placeholder="Search name, phone, or email"
                     value={patientQuery}
@@ -871,10 +876,15 @@ function VisitsPageInner() {
                       {!searchingPatients && patientOptions.length === 0 && (
                         <div className="px-3 py-2 text-xs text-gray-500">No results</div>
                       )}
+                      <div id="visit-landing-patient-options" role="listbox" aria-label="Patients">
                       {!searchingPatients && patientOptions.map((p, idx) => (
                         <button
                           key={p.id}
+                          id={`visit-landing-patient-option-${idx}`}
                           type="button"
+                          role="option"
+                          aria-selected={idx === highlightedIndex}
+                          tabIndex={-1}
                           onMouseEnter={() => setHighlightedIndex(idx)}
                           onClick={() => {
                             pickPatient(p.id);
@@ -887,7 +897,7 @@ function VisitsPageInner() {
                             <Users className="h-4 w-4" />
                             <div className="flex flex-col">
                               <span className="font-medium">{p.name || `Patient ${p.id?.slice(-4) || ''}`}</span>
-                              <div className="flex items-center gap-3 text-xs text-gray-500">
+                              <div className="flex items-center gap-3 text-xs text-foreground/70">
                                 {p.phone && <span>{p.phone}</span>}
                                 {p.email && <span>{p.email}</span>}
                               </div>
@@ -895,17 +905,18 @@ function VisitsPageInner() {
                           </div>
                         </button>
                       ))}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                <label htmlFor="visit-landing-doctor" className="text-sm font-medium text-gray-700 mb-2 block">
                   Select Doctor
                 </label>
                 <Select value={selectedDoctorId} onValueChange={setChosenDoctorId} disabled={doctorLocked}>
-                  <SelectTrigger>
+                  <SelectTrigger id="visit-landing-doctor">
                     <SelectValue placeholder="Choose a doctor..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -943,7 +954,7 @@ function VisitsPageInner() {
                       <div className="pt-4 border-t">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h4 className="text-sm font-medium text-gray-900">Ready to start visit</h4>
+                            <h3 className="text-sm font-medium text-gray-900">Ready to start visit</h3>
                             <VisitIdentityBar
                               className="mt-1 !text-xs !text-gray-500"
                               patient={selectedPatient}

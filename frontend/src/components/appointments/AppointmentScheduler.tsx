@@ -170,7 +170,7 @@ export default function AppointmentScheduler({
       const res: GetUsersResponse = await apiClient.getUsers({ limit: 100 });
       const list: User[] = (res.users || []).filter((u: User) => u.role === 'DOCTOR');
       setDoctors(list);
-      if (list[0]?.id) setDoctorId(list[0].id);
+      if (list[0]?.id) setDoctorId((current) => current || list[0].id);
     } catch (e) {
       const errorMessage = getErrorMessage(e);
       setError(errorMessage);
@@ -597,24 +597,24 @@ export default function AppointmentScheduler({
             {!hideHeaderControls && (
               <>
                 <div>
-                  <label className="text-sm text-gray-700">Doctor</label>
+                  <label htmlFor="slots-doctor" className="text-sm text-gray-700">Doctor</label>
                   <Select value={doctorId} onValueChange={setDoctorId}>
-                    <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
+                    <SelectTrigger id="slots-doctor"><SelectValue placeholder="Select doctor" /></SelectTrigger>
                     <SelectContent>
                       {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-700">Date</label>
-                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                  <label htmlFor="slots-date" className="text-sm text-gray-700">Date</label>
+                  <Input id="slots-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
               </>
             )}
             <div>
-              <label className="text-sm text-gray-700">Visit Type</label>
+              <label htmlFor="slots-visit-type" className="text-sm text-gray-700">Visit Type</label>
               <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>
-                <SelectTrigger><SelectValue placeholder="All Types" /></SelectTrigger>
+                <SelectTrigger id="slots-visit-type"><SelectValue placeholder="All Types" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All Types</SelectItem>
                   <SelectItem value="OPD">OPD Consultation</SelectItem>
@@ -624,9 +624,9 @@ export default function AppointmentScheduler({
               </Select>
             </div>
             <div>
-              <label className="text-sm text-gray-700">Room</label>
+              <label htmlFor="slots-room" className="text-sm text-gray-700">Room</label>
               <Select value={roomFilter} onValueChange={setRoomFilter}>
-                <SelectTrigger><SelectValue placeholder="All Rooms" /></SelectTrigger>
+                <SelectTrigger id="slots-room"><SelectValue placeholder="All Rooms" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All Rooms</SelectItem>
                   {rooms.map((room) => (
@@ -636,7 +636,7 @@ export default function AppointmentScheduler({
               </Select>
             </div>
             <div>
-              <label className="text-sm text-gray-700">Duration</label>
+              <label htmlFor="slots-duration" className="text-sm text-gray-700">Duration</label>
               <Select
                 value={String(slotConfig.stepMinutes)}
                 onValueChange={(v: string) => {
@@ -646,7 +646,7 @@ export default function AppointmentScheduler({
                   }
                 }}
               >
-                <SelectTrigger><SelectValue placeholder="Select duration" /></SelectTrigger>
+                <SelectTrigger id="slots-duration"><SelectValue placeholder="Select duration" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="10">10 minutes</SelectItem>
                   <SelectItem value="15">15 minutes</SelectItem>
@@ -661,8 +661,8 @@ export default function AppointmentScheduler({
           </div>
 
           <div>
-            <label className="text-sm text-gray-700">Patient</label>
-            <Input 
+            <label htmlFor="slots-patient" className="text-sm text-gray-700">Patient</label>
+            <Input id="slots-patient" 
               placeholder="Search patient by name/phone" 
               value={patientSearch} 
               onChange={(e) => { 

@@ -17,11 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { ROOM_READ_ROLES } from '@/lib/appointment-access';
+import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
 
 function AppointmentsPageInner() {
   const search = useSearchParams();
   const prefillPatientId = search.get('patientId') || undefined;
-  const { user } = useDashboardUser();
+  const { user, loading: userLoading } = useDashboardUser();
   const [doctors, setDoctors] = useState<User[]>([]);
   const [doctorId, setDoctorId] = useState<string>('');
   const [date, setDate] = useState<string>(() => {
@@ -37,25 +38,25 @@ function AppointmentsPageInner() {
   });
   const [guideDialogOpen, setGuideDialogOpen] = useState<boolean>(false);
 
-  // Load doctors + persisted doctorId
   const loadDoctors = useCallback(async () => {
     try {
       const res: any = await apiClient.getUsers({ limit: 100 });
-      const list: User[] = (res.users || res.data || []).filter((u: User) => u.role === 'DOCTOR');
-      setDoctors(list);
-      // Initialize doctorId from localStorage if valid, else first doctor
-      let persistedId: string | null = null;
-      if (typeof window !== 'undefined') {
-        try { persistedId = localStorage.getItem('appointments.doctorId'); } catch {}
-      }
-      const initialId = (persistedId && list.some(d => d.id === persistedId)) ? persistedId : (list[0]?.id || '');
-      setDoctorId(initialId);
+      setDoctors((res.users || res.data || []).filter((u: User) => u.role === 'DOCTOR'));
     } catch {
       // silently ignore for page-level; child components handle errors
     }
   }, []);
 
   useEffect(() => { void loadDoctors(); }, [loadDoctors]);
+
+  useEffect(() => {
+    if (doctorId || userLoading || doctors.length === 0) return;
+    let persistedId: string | null = null;
+    try { persistedId = localStorage.getItem('appointments.doctorId'); } catch {}
+    const listed = (id: string | null) => (id && doctors.some((d) => d.id === id) ? id : '');
+    const signedInDoctor = resolveDefaultDoctorId({ role: user?.role, userId: user?.id, current: '' });
+    setDoctorId(listed(signedInDoctor) || listed(persistedId) || doctors[0].id);
+  }, [doctors, doctorId, user, userLoading]);
 
   // Persist selections
   useEffect(() => {

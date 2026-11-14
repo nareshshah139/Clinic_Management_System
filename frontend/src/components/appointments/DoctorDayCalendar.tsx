@@ -478,7 +478,7 @@ function DoctorDayCalendarForSelection({
                   return (
                     <div key={`gutter-${slot}`} style={{ height: tileHeightCss }} className="flex items-start justify-end pr-1">
                       {slotStart.endsWith(':00') && (
-                        <span className="text-[10px] leading-none text-gray-400">{slotStart}</span>
+                        <span className="text-[10px] leading-none text-muted-foreground">{slotStart}</span>
                       )}
                     </div>
                   );
