@@ -355,10 +355,8 @@ function PharmacyDeskPanel({
         <AgenticPharmacyLauncher onOpen={onOpenAgent} />
       )}
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        <PartnerDailySync />
-        <PackagesPanel />
-      </div>
+      <PartnerDailySync />
+      <PackagesPanel />
     </div>
   );
 }
