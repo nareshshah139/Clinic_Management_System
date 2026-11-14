@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { QuickGuide } from '@/components/common/QuickGuide';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   BarChart3,
   Calendar,
@@ -225,24 +226,20 @@ function SystemAlertsBand({ counts }: { counts: AlertCounts }) {
   const tones = ALERT_ITEMS.map((item) => (counts[item.key] > 0 ? item.tone : 'neutral'));
   const band = tones.reduce((worst, tone) => (TONE_RANK.indexOf(tone) > TONE_RANK.indexOf(worst) ? tone : worst), 'neutral' as StatusVariant);
   return (
-    <Card className={BAND_CLASS[band]}>
-      <CardHeader>
-        <CardTitle className={`flex items-center ${LABEL_CLASS[band] || 'text-foreground'}`}>
-          <AlertCircle className="h-5 w-5 mr-2" aria-hidden="true" />
-          System Alerts
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-          {ALERT_ITEMS.map((item, index) => (
-            <div key={item.key} className="text-center">
-              <p className={LABEL_CLASS[tones[index]]}>{item.label}</p>
-              <p className="text-lg font-bold">{counts[item.key]}</p>
-              {item.note && <p className="text-xs text-muted-foreground">{item.note}</p>}
-            </div>
-          ))}
-        </div>
-      </CardContent>
+    <Card className={`flex-row flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 ${BAND_CLASS[band]}`}>
+      <h2 className={`flex items-center text-sm font-semibold ${LABEL_CLASS[band] || 'text-foreground'}`}>
+        <AlertCircle className="h-4 w-4 mr-2" aria-hidden="true" />
+        System Alerts
+      </h2>
+      <dl className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+        {ALERT_ITEMS.map((item, index) => (
+          <div key={item.key} className="flex items-baseline gap-1.5">
+            <dt className={LABEL_CLASS[tones[index]]}>{item.label}</dt>
+            <dd className="font-semibold tabular-nums">{counts[item.key]}</dd>
+            {item.note && counts[item.key] > 0 && <dd className="text-xs text-muted-foreground">{item.note}</dd>}
+          </div>
+        ))}
+      </dl>
     </Card>
   );
 }
@@ -260,42 +257,42 @@ export default function ReportsPage() {
   const reportTypes = [
     {
       id: 'revenue' as ReportType,
-      name: 'Revenue Report',
+      name: 'Revenue',
       description: 'Financial performance and revenue analysis',
       icon: DollarSign,
       color: 'text-success-text',
     },
     {
       id: 'patients' as ReportType,
-      name: 'Patient Analytics',
+      name: 'Patients',
       description: 'Patient demographics and statistics',
       icon: Users,
       color: 'text-info-text',
     },
     {
       id: 'doctors' as ReportType,
-      name: 'Doctor Performance',
+      name: 'Doctors',
       description: 'Doctor productivity and patient metrics',
       icon: Activity,
       color: 'text-highlight-text',
     },
     {
       id: 'appointments' as ReportType,
-      name: 'Appointment Analytics',
+      name: 'Appointments',
       description: 'Scheduling patterns and appointment data',
       icon: Calendar,
       color: 'text-warning-text',
     },
     {
       id: 'inventory' as ReportType,
-      name: 'Inventory Report',
+      name: 'Inventory',
       description: 'Stock levels and inventory movements',
       icon: BarChart3,
       color: 'text-info-text',
     },
     {
       id: 'payments' as ReportType,
-      name: 'Payment Analytics',
+      name: 'Payments',
       description: 'Payment methods and transaction analysis',
       icon: TrendingUp,
       color: 'text-success-text',
@@ -1189,7 +1186,7 @@ export default function ReportsPage() {
             {
               title: "Generating Reports",
               items: [
-                "Select a report type from the cards",
+                "Select a report type from the tabs",
                 "Set date range using the date picker",
                 "Click 'Generate Report' to create the report",
                 "View detailed metrics and breakdowns"
@@ -1209,101 +1206,63 @@ export default function ReportsPage() {
 
       {systemAlerts?.counts && <SystemAlertsBand counts={systemAlerts.counts} />}
 
-      {/* Report Type Selection */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <Tabs value={selectedReport} onValueChange={(value: string) => setSelectedReport(value as ReportType)} className="gap-4">
+        <TabsList aria-label="Report" className="justify-start">
+          {reportTypes.map((report) => (
+            <TabsTrigger key={report.id} value={report.id} className="flex-none px-3">
+              <report.icon className={report.color} aria-hidden="true" />
+              {report.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
         {reportTypes.map((report) => (
-          <Card
-            key={report.id}
-            role="button"
-            tabIndex={0}
-            aria-pressed={selectedReport === report.id}
-            className={`cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              selectedReport === report.id
-                ? 'ring-2 ring-info bg-info-soft'
-                : 'hover:shadow-sm'
-            }`}
-            onClick={() => setSelectedReport(report.id)}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' && event.key !== ' ') return;
-              event.preventDefault();
-              setSelectedReport(report.id);
-            }}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className={`p-2 rounded-lg bg-muted`}>
-                  <report.icon className={`h-6 w-6 ${report.color}`} />
+          <TabsContent key={report.id} value={report.id}>
+            <Card>
+              <CardHeader className="flex flex-wrap items-end justify-between gap-4">
+                <div className="min-w-0 space-y-1.5">
+                  <p className="font-medium text-foreground">{report.description}</p>
+                  <CardDescription>
+                    Report for {displayCalendarDate(dateRange.startDate)} to {displayCalendarDate(dateRange.endDate)}
+                  </CardDescription>
                 </div>
-                <div>
-                  <p className="font-medium text-foreground">{report.name}</p>
-                  <p className="text-sm text-foreground/70">{report.description}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    type="date"
+                    aria-label="From date"
+                    className="w-40"
+                    value={dateRange.startDate}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+                  />
+                  <Input
+                    type="date"
+                    aria-label="To date"
+                    className="w-40"
+                    value={dateRange.endDate}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+                  />
+                  <Button onClick={generateReport} disabled={loading}>
+                    {loading ? 'Generating...' : 'Generate Report'}
+                  </Button>
+                  <Select onValueChange={(format: ExportFormat) => exportReport(format)}>
+                    <SelectTrigger className="w-32" aria-label="Export report">
+                      <SelectValue placeholder="Export" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="JSON">JSON</SelectItem>
+                      <SelectItem value="CSV">CSV</SelectItem>
+                      <SelectItem value="PDF">PDF</SelectItem>
+                      <SelectItem value="EXCEL">Excel</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent>
+                {renderReportContent()}
+              </CardContent>
+            </Card>
+          </TabsContent>
         ))}
-      </div>
-
-      {/* Controls */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-end">
-            <div className="w-full min-w-0 sm:flex-1">
-              <label className="text-sm font-medium text-foreground mb-2 block">
-                Date Range
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  type="date"
-                  aria-label="From date"
-                  className="min-w-0"
-                  value={dateRange.startDate}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                />
-                <Input
-                  type="date"
-                  aria-label="To date"
-                  className="min-w-0"
-                  value={dateRange.endDate}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={generateReport} disabled={loading}>
-                {loading ? 'Generating...' : 'Generate Report'}
-              </Button>
-              <Select onValueChange={(format: ExportFormat) => exportReport(format)}>
-                <SelectTrigger className="w-32" aria-label="Export report">
-                  <SelectValue placeholder="Export" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="JSON">JSON</SelectItem>
-                  <SelectItem value="CSV">CSV</SelectItem>
-                  <SelectItem value="PDF">PDF</SelectItem>
-                  <SelectItem value="EXCEL">Excel</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Report Content */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            {(() => { const Icon = reportTypes.find(r => r.id === selectedReport)?.icon; return Icon ? <Icon className="h-5 w-5 mr-2" /> : null; })()}
-            {reportTypes.find(r => r.id === selectedReport)?.name}
-          </CardTitle>
-          <CardDescription>
-            Report for {displayCalendarDate(dateRange.startDate)} to {displayCalendarDate(dateRange.endDate)}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {renderReportContent()}
-        </CardContent>
-      </Card>
+      </Tabs>
     </div>
   );
 } 

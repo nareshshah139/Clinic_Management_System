@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ReportsPage from './page';
 import { apiClient } from '@/lib/api';
 
@@ -53,4 +53,28 @@ it.each([
   present.forEach((cls) => expect(band).toHaveClass(cls));
   absent.forEach((cls) => expect(band).not.toHaveClass(cls));
   expect(screen.getByText('Expiry Alerts')).toHaveClass('text-muted-foreground');
+});
+
+it('switches reports from tabs and keeps the date range and actions with the report', async () => {
+  api.getPatientReport.mockResolvedValue({ totalPatients: 9, newPatients: 2, activePatients: 7 });
+  render(<ReportsPage />);
+  await screen.findByText('Total Revenue');
+
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Patients' }));
+
+  expect(screen.getByRole('tab', { name: 'Patients' })).toHaveAttribute('aria-selected', 'true');
+  const panel = screen.getByRole('tabpanel');
+  expect(panel).toHaveTextContent('Patient demographics and statistics');
+  expect(within(panel).getByLabelText('From date')).toHaveValue('2026-10-13');
+  await waitFor(() => expect(api.getPatientReport).toHaveBeenCalled());
+  expect(await within(panel).findByRole('button', { name: 'Generate Report' })).toBeEnabled();
+});
+
+it('explains a count beside it only when there is something to act on', async () => {
+  api.get.mockResolvedValue({ counts: { overdueInvoices: 0, lowStockAlerts: 4, expiryAlerts: 0, pendingPayments: 0, upcomingAppointments: 0 } });
+  render(<ReportsPage />);
+
+  await screen.findByText('System Alerts');
+  expect(screen.getByText('at or below minimum stock')).toBeInTheDocument();
+  expect(screen.queryByText('rest of today and later days')).not.toBeInTheDocument();
 });
