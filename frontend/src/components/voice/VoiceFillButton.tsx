@@ -6,11 +6,11 @@ import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useVoiceFill, type VoiceFillPhase } from '@/hooks/useVoiceFill';
 import { cn } from '@/lib/utils';
-import { fetchVoiceFillStatus, type VoiceFillApplyResult, type VoiceFillFields, type VoiceFillFormId } from '@/lib/voice-fill';
+import { fetchVoiceFillStatus, type VoiceFillApply, type VoiceFillFormId } from '@/lib/voice-fill';
 
 interface VoiceFillButtonProps {
   form: VoiceFillFormId;
-  apply: (fields: VoiceFillFields) => VoiceFillApplyResult;
+  apply: VoiceFillApply;
   hint: string;
   disabled?: boolean;
   /** True from the first click until the fill is applied, so a sibling mic can step aside. */
@@ -38,7 +38,6 @@ function useElapsedSeconds(phase: VoiceFillPhase): number {
 const STATUS_TEXT: Record<VoiceFillPhase['kind'], string> = {
   idle: '',
   listening: 'Listening. Click to stop and fill, or press Escape to cancel.',
-  transcribing: 'Transcribing…',
   filling: 'Filling…',
 };
 
@@ -77,7 +76,7 @@ export function VoiceFillButton({ form, apply, hint, disabled, onBusyChange, cla
 
   if (!available) return null;
 
-  const busy = phase.kind === 'transcribing' || phase.kind === 'filling';
+  const busy = phase.kind === 'filling';
 
   const button = (
     <button

@@ -1,4 +1,4 @@
-import { appendOnNewLine, valueEntry, type VoiceFillRegistry, type VoiceFillValue } from '@/lib/voice-fill';
+import { appendOnNewLine, isStringList, valueEntry, type VoiceFillRegistry, type VoiceFillValue } from '@/lib/voice-fill';
 
 /** A field's current value and its setter, in the order `useClinicalState` returns them. `restore` overrides the setter on undo. */
 type Binding<T> = readonly [T, (next: T) => void, ((next: T) => void)?];
@@ -33,7 +33,6 @@ export interface VisitVoiceBindings {
   procedurePlanned: Binding<string>;
   investigations: Binding<string[]>;
   followUpInstructions: Binding<string>;
-  /** Vitals owned by the parent form; returns the undo. */
   applyExtraVitals?: (patch: ExtraVitalsPatch) => () => void;
 }
 
@@ -74,7 +73,7 @@ export function visitVoiceRegistry(b: VisitVoiceBindings): VoiceFillRegistry {
     painScore: extraVital('Pain score', 'visit-pain-score', 'painScore'),
     chiefComplaints: valueEntry('Chief complaints', 'visit-chief-complaints', b.chiefComplaints, appended),
     skinConcerns: valueEntry('Skin concerns', undefined, b.skinConcerns, (value, previous) => {
-      const union = Array.isArray(value) ? new Set([...previous, ...value]) : null;
+      const union = isStringList(value) ? new Set([...previous, ...value]) : null;
       return union && union.size > previous.size ? union : null;
     }),
     diagnosis: valueEntry('Diagnosis', 'visit-diagnosis', b.diagnosis, text),
@@ -92,7 +91,7 @@ export function visitVoiceRegistry(b: VisitVoiceBindings): VoiceFillRegistry {
     procedures: valueEntry('Procedures', 'visit-procedures', b.procedures, appended),
     procedurePlanned: valueEntry('Procedure planned', 'visit-procedure-planned', b.procedurePlanned, text),
     investigations: valueEntry('Investigations', undefined, b.investigations, (value, previous) => {
-      const merged = Array.isArray(value) ? mergeCaseInsensitive(previous, value) : null;
+      const merged = isStringList(value) ? mergeCaseInsensitive(previous, value) : null;
       return merged && merged.length > previous.length ? merged : null;
     }),
     followUpInstructions: valueEntry('Follow-up', 'visit-followup-instructions', b.followUpInstructions, text),

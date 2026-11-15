@@ -1,7 +1,7 @@
 import { applyPatientVoiceFill, type PatientVoiceState } from '@/lib/voice-fill-patient';
 import { applyInventoryVoiceFill, type InventoryVoiceState } from '@/lib/voice-fill-inventory';
 import { mergeCaseInsensitive, visitVoiceRegistry, type VisitVoiceBindings } from '@/lib/voice-fill-visit';
-import { appendOnNewLine, applyVoiceFillRegistry } from '@/lib/voice-fill';
+import { appendOnNewLine, applyVoiceFillRegistry, formatVoiceFillError, requestVoiceFill } from '@/lib/voice-fill';
 
 jest.mock('@/lib/api', () => ({ apiClient: {} }));
 
@@ -149,5 +149,40 @@ describe('visit voice fill', () => {
   it('does not report investigations that are all duplicates as filled', () => {
     const { registry } = bindings();
     expect(applyVoiceFillRegistry(registry, { investigations: ['cbc'] }).filled).toEqual([]);
+  });
+});
+
+describe('requestVoiceFill', () => {
+  const fetchMock = jest.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  it('uploads the recording as multipart field file and returns the transcript and fields', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ transcript: 'BP 120 by 80', fields: { bpSystolic: 120, bpDiastolic: 80 } }) });
+
+    const response = await requestVoiceFill('visit-consultation', new Blob(['audio'], { type: 'audio/webm' }), 'recording.webm');
+
+    expect(response).toEqual({ transcript: 'BP 120 by 80', fields: { bpSystolic: 120, bpDiastolic: 80 } });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect([url, init.method, init.credentials]).toEqual(['/api/voice-fill/visit-consultation', 'POST', 'include']);
+    const file = (init.body as FormData).get('file') as File;
+    expect([file.name, file.type]).toEqual(['recording.webm', 'audio/webm']);
+  });
+
+  it('turns an error status into a short message', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 403, text: async () => '{"message":"Forbidden resource"}' });
+    await expect(requestVoiceFill('inventory-item', new Blob(['a']), 'recording.webm')).rejects.toThrow('Your role cannot fill this form by voice.');
+  });
+});
+
+describe('formatVoiceFillError', () => {
+  it('uses the server message for 400 and 503 and fixed copy otherwise', () => {
+    expect(formatVoiceFillError(400, '{"statusCode":400,"message":"Unsupported audio type"}')).toBe('Unsupported audio type');
+    expect(formatVoiceFillError(400, '<html>bad gateway</html>')).toBe('The recording could not be processed. Try again.');
+    expect(formatVoiceFillError(413, '')).toBe('The recording is too long. Try a shorter clip.');
+    expect(formatVoiceFillError(503, '{"message":"Voice fill timed out. Try a shorter recording."}')).toBe('Voice fill timed out. Try a shorter recording.');
+    expect(formatVoiceFillError(503, '')).toBe('Voice fill is unavailable right now. Try again shortly.');
   });
 });

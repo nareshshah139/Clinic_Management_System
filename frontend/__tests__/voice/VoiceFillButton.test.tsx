@@ -43,10 +43,10 @@ describe('VoiceFillButton', () => {
     expect(cancel).toHaveBeenCalledTimes(1);
   });
 
-  it('announces transcribing without offering a stop action', async () => {
-    phase = { kind: 'transcribing' };
+  it('announces filling without offering a stop action', async () => {
+    phase = { kind: 'filling' };
     render(<VoiceFillButton {...props} />);
-    expect(await screen.findByRole('button', { name: 'Transcribing…' })).toHaveAttribute('aria-disabled', 'true');
+    expect(await screen.findByRole('button', { name: 'Filling…' })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('formats elapsed seconds as m:ss', () => {

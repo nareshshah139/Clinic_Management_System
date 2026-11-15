@@ -3,7 +3,7 @@ import { displayUtcDate, displayClinicDate, displayClinicDateTime } from '@/lib/
 import { Spinner } from "@/components/ui/spinner";
 import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import type { VisitDetails } from '@/lib/types';
 import { encounterTime } from '@/lib/patient-history';
 import { PRESCRIPTION_LETTERHEAD_URL, prescriptionLetterheadUrl, prescriptionPageMargin } from '@/lib/prescription-letterhead';
@@ -37,6 +37,7 @@ import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 import { VoiceFillButton } from '@/components/voice/VoiceFillButton';
 import { applyVoiceFillRegistry, type VoiceFillFields } from '@/lib/voice-fill';
 import { visitVoiceRegistry, type ExtraVitalsPatch } from '@/lib/voice-fill-visit';
+import { applySpokenPrescriptionItems, inventoryNamesOf } from '@/lib/voice-fill-prescription';
 import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
@@ -281,10 +282,6 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * and the disclaimer above the signature, even when the signature is hidden.
  * Switching to In-person MUST remove both from regenerated preview and exports.
  */
-/** A stocked item answers to its standard name and the names it was recorded under before. */
-const inventoryNamesOf = (drug: any): string[] =>
-  [drug?.name, ...(Array.isArray(drug?.knownNames) ? drug.knownNames : [])].map((name) => String(name || '').trim().toLowerCase()).filter(Boolean);
-
 function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
@@ -2309,6 +2306,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const regimenContext = JSON.stringify([patientId, doctorId, visitId]);
   const regimenContextRef = useRef(regimenContext);
   regimenContextRef.current = regimenContext;
+  const nextRegimenSelection = () => `${Date.now()}:${++regimenRequestSequence.current}`;
+  const selectDrugOnRow = (item: PrescriptionItemForm, drug: any, selection: string): PrescriptionItemForm => ({
+    ...beginRegimenSelection(item, selection), drugId: drug.id, inventoryItemId: drug.inventoryItemId, drugName: String(drug?.name || ''), genericName: drug.genericName,
+    dosageUnit: item.dosage ? item.dosageUnit : inferDosageUnitFromDosageForm(drug.dosageForm),
+  });
   /**
    * @cc [owner:nareshshah139,label:product] prescription-selection-retains-inventory
    * Choosing clinic stock MUST retain its inventory item ID through prescription save and reload.
@@ -2318,16 +2320,21 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     clearSearch?: boolean;
     showToast?: boolean;
   }) => {
-    const selection = `${Date.now()}:${++regimenRequestSequence.current}`;
-    const drugName = String(drug?.name || '');
+    const selection = nextRegimenSelection();
     setItems(prev => {
-      const next = prev.map((item, index) => index === rowIdx ? {
-        ...beginRegimenSelection(item, selection), drugId: drug.id, inventoryItemId: drug.inventoryItemId, drugName, genericName: drug.genericName,
-        dosageUnit: item.dosage ? item.dosageUnit : inferDosageUnitFromDosageForm(drug.dosageForm),
-      } : item);
+      const next = prev.map((item, index) => index === rowIdx ? selectDrugOnRow(item, drug, selection) : item);
       if (!hasTrailingBlank(next)) next.push(createBlankItem());
       return next;
     });
+    followDrugSelection(drug, selection);
+    if (options?.clearSearch) {
+      setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
+      setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
+      setActiveSearchRow(null);
+    }
+  };
+  const followDrugSelection = (drug: any, selection: string) => {
+    const drugName = String(drug?.name || '');
     // Resolve recent-name shortcuts only when the catalog match is unambiguous.
     void (async () => {
       try {
@@ -2362,11 +2369,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       const key = `name:${drugName.trim().toLowerCase()}`;
       drugStockRequests.current.delete(key);
       void loadDrugStock(key, () => prefetchDrugStockById(drug.id, drug.inventoryItemId));
-    }
-    if (options?.clearSearch) {
-      setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
-      setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
-      setActiveSearchRow(null);
     }
     if (drugName) {
       pushRecent('drugNames', drugName);
@@ -4543,10 +4545,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       setFollowUpInstructions(label);
     }
   }, [onChangeReviewDate, formatSuggestedReviewDate, followUpInstructions]);
-  const applyVoiceFill = (fields: VoiceFillFields) => {
+  const applyVoiceFill = async ({ prescriptionItems, ...fields }: VoiceFillFields) => {
     const touchFamilyHistory = (key: string) => setFamilyHistoryTouched((prev) => Array.from(new Set([...prev, key])));
     const previousReviewDate = reviewDate || '';
-    return applyVoiceFillRegistry(visitVoiceRegistry({
+    const filledFields = applyVoiceFillRegistry(visitVoiceRegistry({
       heightCm: [vitalsHeightCm, setVitalsHeightCm],
       weightKg: [vitalsWeightKg, setVitalsWeightKg],
       bpSystolic: [vitalsBpSys, setVitalsBpSys],
@@ -4578,6 +4580,24 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       }],
       applyExtraVitals,
     }), fields);
+    const medicines = await applySpokenPrescriptionItems(prescriptionItems, {
+      lookup: async (q) => {
+        const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q, limit: 30 });
+        return Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+      },
+      select: (row, drug) => {
+        const selection = nextRegimenSelection();
+        followDrugSelection(drug, selection);
+        return selectDrugOnRow(row, drug, selection);
+      },
+      createBlank: createBlankItem,
+      inferFrequency: inferFrequencyFromDosePattern,
+      setItems: (update) => flushSync(() => setItems(update)),
+    });
+    return {
+      filled: [...filledFields.filled, ...medicines.filled],
+      undo: () => { medicines.undo(); filledFields.undo(); },
+    };
   };
 
   return (
@@ -4676,7 +4696,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <VoiceFillButton
                   form="visit-consultation"
                   apply={applyVoiceFill}
-                  hint="Say vitals, complaints, diagnosis, history, examination, follow-up…"
+                  hint="Say vitals, complaints, diagnosis, history, examination, medicines, follow-up…"
                   disabled={isListening || isTranscribing}
                   onBusyChange={setVoiceFillBusy}
                 />
@@ -5327,6 +5347,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             <div className="relative flex items-center gap-2">
                               <Input 
                                 ref={(el) => { inputRefs.current[idx] = el; }}
+                                id={`rx-row-${idx}-drug`}
                                 value={it.drugName} 
                                 onChange={(e) => {
                                   const val = e.target.value;

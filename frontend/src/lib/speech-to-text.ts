@@ -1,3 +1,5 @@
+import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
+
 export interface SpeechToTextResponse {
   text?: string;
   segments?: Array<{
@@ -58,5 +60,34 @@ export function formatSpeechToTextError(status: number, detail?: string): string
       return 'Speech transcription is temporarily unavailable. Try again shortly.';
     default:
       return summary ? `Server returned ${status}. ${summary}` : `Server returned ${status}.`;
+  }
+}
+
+interface PostAudioOptions {
+  timeoutMs?: number;
+  describeError?: (status: number, detail: string) => string;
+}
+
+export async function postAudio<T>(url: string, audio: Blob, filename: string, options: PostAudioOptions = {}): Promise<T> {
+  const body = new FormData();
+  body.append('file', audio, filename);
+  const controller = new AbortController();
+  const timer = options.timeoutMs ? setTimeout(() => controller.abort(), options.timeoutMs) : undefined;
+  try {
+    const response = await fetch(url, { method: 'POST', body, credentials: 'include', signal: controller.signal });
+    if (!response.ok) {
+      handleUnauthorizedRedirect(response);
+      let detail = '';
+      try {
+        detail = await response.text();
+      } catch {}
+      throw new Error((options.describeError ?? formatSpeechToTextError)(response.status, detail));
+    }
+    return (await response.json()) as T;
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error('The server took too long to respond. Try a shorter recording.');
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }

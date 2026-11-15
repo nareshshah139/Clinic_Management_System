@@ -1,7 +1,9 @@
 import { apiClient } from '@/lib/api';
+import { postAudio } from '@/lib/speech-to-text';
 
 export type VoiceFillFormId = 'patient-intake' | 'visit-consultation' | 'inventory-item';
-export type VoiceFillValue = string | number | boolean | string[];
+export type VoiceFillRow = Record<string, string | number>;
+export type VoiceFillValue = string | number | boolean | string[] | VoiceFillRow[];
 export type VoiceFillFields = Record<string, VoiceFillValue>;
 
 export interface VoiceFillApplyResult {
@@ -9,14 +11,18 @@ export interface VoiceFillApplyResult {
   undo: () => void;
 }
 
-/** One entry per field a form accepts. `apply` receives a server-validated value and returns how to put the field back, or null when it did not apply. */
+export type VoiceFillApply = (fields: VoiceFillFields) => VoiceFillApplyResult | Promise<VoiceFillApplyResult>;
+
+export const isStringList = (value: VoiceFillValue): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+
+/** `apply` returns how to put the field back, or null when the value did not apply. */
 export type VoiceFillRegistry = Record<string, {
   label: string;
   elementId?: string;
   apply: (value: VoiceFillValue) => (() => void) | null;
 }>;
 
-/** Applies only the keys the server returned that the form has an entry for. */
 export function applyVoiceFillRegistry(registry: VoiceFillRegistry, fields: VoiceFillFields): VoiceFillApplyResult {
   const filled: VoiceFillApplyResult['filled'] = [];
   const undos: Array<() => void> = [];
@@ -52,13 +58,12 @@ export function valueEntry<T>(
   };
 }
 
-/** Narrative fields keep what the clinician already wrote and add the new text on its own line. */
 export function appendOnNewLine(existing: string, addition: string): string {
   const base = existing.replace(/\s+$/, '');
   return base ? `${base}\n${addition}` : addition;
 }
 
-/** How a server value lands in a state object. Number inputs hold strings, so `number` stringifies. */
+// Number inputs hold strings, so `number` stringifies.
 export type StateFieldKind = 'text' | 'number' | 'boolean';
 export type StateFieldSpec = { label: string; kind: StateFieldKind; elementId?: string };
 
@@ -86,8 +91,8 @@ export function stateRegistry<T extends object>(
   );
 }
 
-// Codex can take well over the default request budget, so the server's own 45 s timeout must win.
-const FILL_TIMEOUT_MS = 60_000;
+// Longer than the server's 60 s Codex timeout, so its 503 message reaches the user instead of a client abort.
+const FILL_TIMEOUT_MS = 90_000;
 
 let statusPromise: Promise<boolean> | null = null;
 
@@ -103,13 +108,43 @@ export function resetVoiceFillStatusForTests() {
   statusPromise = null;
 }
 
-export async function requestVoiceFill(form: VoiceFillFormId, transcript: string): Promise<VoiceFillFields> {
-  const res = await apiClient.post<{ fields?: VoiceFillFields }>(
-    `/voice-fill/${form}`,
-    { transcript },
-    { timeoutMs: FILL_TIMEOUT_MS },
-  );
-  return res?.fields ?? {};
+function serverMessage(detail: string): string {
+  try {
+    const message = JSON.parse(detail)?.message;
+    return typeof message === 'string' ? message.slice(0, 140) : '';
+  } catch {
+    return '';
+  }
+}
+
+export function formatVoiceFillError(status: number, detail: string): string {
+  switch (status) {
+    case 400:
+      return serverMessage(detail) || 'The recording could not be processed. Try again.';
+    case 401:
+      return 'Your session expired. Please sign in again.';
+    case 403:
+      return 'Your role cannot fill this form by voice.';
+    case 413:
+      return 'The recording is too long. Try a shorter clip.';
+    case 503:
+      return serverMessage(detail) || 'Voice fill is unavailable right now. Try again shortly.';
+    default:
+      return `Voice fill failed (server returned ${status}).`;
+  }
+}
+
+export interface VoiceFillResponse {
+  transcript: string;
+  fields: VoiceFillFields;
+}
+
+export async function requestVoiceFill(form: VoiceFillFormId, audio: Blob, filename: string): Promise<VoiceFillResponse> {
+  const res = await postAudio<Partial<VoiceFillResponse> | null>(`/api/voice-fill/${form}`, audio, filename, {
+    timeoutMs: FILL_TIMEOUT_MS,
+    describeError: formatVoiceFillError,
+  });
+  return { transcript: typeof res?.transcript === 'string' ? res.transcript : '', fields: res?.fields ?? {} };
 }
 
 const FLASH_MS = 1200;
