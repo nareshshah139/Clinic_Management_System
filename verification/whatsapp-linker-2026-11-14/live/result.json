@@ -1,0 +1,19 @@
+{
+  "role": "status",
+  "result": "WhatsApp accepted the message. Message ID wamid.HBgMOTE5NzA0ODAyNDQzFQIAERgSRjRDQjVBOTE2QTdBOEM0NTA0AA==.",
+  "messages": [
+    {
+      "id": "cmwhgt3cw00057dl8z596slcn",
+      "branchId": "cmwhgsex200007dichtbzimr4",
+      "wamid": "wamid.HBgMOTE5NzA0ODAyNDQzFQIAERgSRjRDQjVBOTE2QTdBOEM0NTA0AA==",
+      "toPhone": "919704802443",
+      "kind": "TEST_PRESCRIPTION",
+      "prescriptionId": null,
+      "status": "ACCEPTED",
+      "errorCode": null,
+      "errorTitle": null,
+      "createdAt": "2026-11-15T06:40:01.088Z",
+      "updatedAt": "2026-11-15T06:40:01.088Z"
+    }
+  ]
+}
