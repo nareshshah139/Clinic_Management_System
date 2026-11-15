@@ -41,6 +41,10 @@ const set = flag('--set') || 'cases';
 const suffix = flag('--suffix') || '';
 const only = flag('--only')?.split(',');
 if (!audioDir && !textMode) throw new Error('Pass --audio <dir> or --text');
+// Every case calls paid OpenAI transcription and Codex. Run only when the owner asks for a test pass.
+if (process.env.VOICE_FILL_EVAL !== 'paid') {
+  throw new Error('This eval calls paid APIs. Set VOICE_FILL_EVAL=paid to run it.');
+}
 
 const lower = (value: unknown) => String(value ?? '').trim().toLowerCase();
 // Number words are left out because transcripts write them as digits ("nine eight" becomes "98").

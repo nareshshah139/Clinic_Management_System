@@ -19,6 +19,10 @@ const set = flag('--set', 'cases');
 const voiceName = flag('--voice', 'espeak');
 const only = flag('--only', '')?.split(',').filter(Boolean);
 const withNoise = args.includes('--noise');
+if (!voiceName.startsWith('espeak') && process.env.VOICE_FILL_EVAL !== 'paid') {
+  console.error('Accented voices call paid OpenAI speech generation. Set VOICE_FILL_EVAL=paid to run.');
+  process.exit(1);
+}
 const cacheDir = path.join(outDir, '.tts-cache');
 fs.mkdirSync(cacheDir, { recursive: true });
 

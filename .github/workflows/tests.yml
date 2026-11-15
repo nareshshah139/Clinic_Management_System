@@ -62,12 +62,11 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
 
-      - name: Install PDF and audio regression dependencies
+      - name: Install PDF regression dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends poppler-utils ffmpeg
+          sudo apt-get install -y --no-install-recommends poppler-utils
           pdftotext -v
-          ffmpeg -version | head -1
 
       - name: Install root deps
         run: npm ci
