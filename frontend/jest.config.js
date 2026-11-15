@@ -16,6 +16,10 @@ const customJestConfig = {
     // Waived stale visit-form suite. Remove this when the test is updated
     // for the current patient-context loading flow and visit UI controls.
     '<rootDir>/__tests__/visits/MedicalVisitForm.test.tsx',
+    // Dictation suites are opt-in: `npm run test:dictation`.
+    '<rootDir>/__tests__/lib/dictation-session.test.ts',
+    '<rootDir>/__tests__/lib/live-transcript.test.ts',
+    '<rootDir>/__tests__/hooks/useSpeechToTextRecorder.test.tsx',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',

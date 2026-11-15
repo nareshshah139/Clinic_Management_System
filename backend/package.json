@@ -25,6 +25,7 @@
     "lint": "eslint \"{src,apps,libs,test}/*.ts\" --fix",
     "test": "jest",
     "test:appointments": "jest --runInBand src/modules/appointments/appointments.*.spec.ts",
+    "test:transcription": "jest --testPathIgnorePatterns=/node_modules/ -- src/shared/transcription src/modules/visits/tests/transcribe-live",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
@@ -131,7 +132,9 @@
       "<rootDir>/modules/users/tests/users.service.spec.ts",
       "<rootDir>/modules/visits/tests/visits.controller.spec.ts",
       "<rootDir>/modules/visits/tests/visits.e2e.spec.ts",
-      "<rootDir>/modules/visits/tests/visits.integration.spec.ts"
+      "<rootDir>/modules/visits/tests/visits.integration.spec.ts",
+      "<rootDir>/shared/transcription/",
+      "<rootDir>/modules/visits/tests/transcribe-live.controller.spec.ts"
     ],
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"

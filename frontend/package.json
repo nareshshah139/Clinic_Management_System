@@ -10,6 +10,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:dictation": "jest --testPathIgnorePatterns=/node_modules/ /.next/ -- __tests__/lib/dictation-session __tests__/lib/live-transcript __tests__/hooks/useSpeechToTextRecorder",
     "generate:types": "openapi-typescript http://localhost:4000/docs-json -o src/lib/api-types.ts"
   },
   "dependencies": {
