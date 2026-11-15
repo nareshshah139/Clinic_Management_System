@@ -90,10 +90,22 @@ function describeField(key: string, spec: VoiceFillFieldSpec): string[] {
   ];
 }
 
-export function buildVoiceFillPrompt(form: VoiceFillForm, transcript: string, today: string): string {
+const CLINIC_TIME_ZONE = 'Asia/Kolkata';
+const clinicDayParts = new Intl.DateTimeFormat('en-GB', {
+  timeZone: CLINIC_TIME_ZONE, weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
+/** The clinic's calendar day for an instant, e.g. "Sunday 2026-11-15", whatever the server's timezone. */
+export function clinicToday(now: Date): string {
+  const parts = clinicDayParts.formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)!.value;
+  return `${part('weekday')} ${part('year')}-${part('month')}-${part('day')}`;
+}
+
+export function buildVoiceFillPrompt(form: VoiceFillForm, transcript: string, now: Date): string {
   return [
     `You fill in a form from a spoken transcript. Context: ${form.purpose}`,
-    `Today's date is ${today}.`,
+    `Today is ${clinicToday(now)}, ${CLINIC_TIME_ZONE}.`,
     'Speakers often use Indian English and mix Hindi or Telugu with English.',
     'Return a JSON object with every field below. Fields:',
     ...Object.entries(form.fields).flatMap(([key, spec]) => describeField(key, spec)),

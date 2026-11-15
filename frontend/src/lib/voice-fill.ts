@@ -1,7 +1,7 @@
 import { apiClient } from '@/lib/api';
 import { postAudio } from '@/lib/speech-to-text';
 
-export type VoiceFillFormId = 'patient-intake' | 'visit-consultation' | 'inventory-item';
+export type VoiceFillFormId = 'patient-intake' | 'visit-consultation' | 'inventory-item' | 'voice-command';
 export type VoiceFillRow = Record<string, string | number>;
 export type VoiceFillValue = string | number | boolean | string[] | VoiceFillRow[];
 export type VoiceFillFields = Record<string, VoiceFillValue>;

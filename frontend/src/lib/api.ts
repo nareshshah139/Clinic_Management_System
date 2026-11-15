@@ -361,10 +361,13 @@ export class ApiClient {
     });
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
+  async delete<T>(endpoint: string, opts?: { idempotencyKey?: string }): Promise<T> {
+    const headers: Record<string, string> = {};
+    if (opts?.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
     return this.request<T>(endpoint, {
       method: 'DELETE',
-    });
+      headers,
+    }, { retryUnsafe: Boolean(opts?.idempotencyKey) });
   }
 
   // Specific API methods
@@ -418,28 +421,28 @@ export class ApiClient {
     return this.get('/appointments', params);
   }
 
-  async createAppointment(data: Record<string, unknown>) {
-    return this.post<import('./types').Appointment>('/appointments', data);
+  async createAppointment(data: Record<string, unknown>, opts?: { idempotencyKey?: string }) {
+    return this.post<import('./types').Appointment>('/appointments', data, opts);
   }
 
   async getAppointment<T = unknown>(id: string): Promise<T> {
     return this.get<T>(`/appointments/${id}`);
   }
 
-  async updateAppointment(id: string, data: Record<string, unknown>) {
-    return this.patch(`/appointments/${id}`, data);
+  async updateAppointment(id: string, data: Record<string, unknown>, opts?: { idempotencyKey?: string }) {
+    return this.patch(`/appointments/${id}`, data, opts);
   }
 
-  async deleteAppointment(id: string) {
-    return this.delete(`/appointments/${id}`);
+  async deleteAppointment(id: string, opts?: { idempotencyKey?: string }) {
+    return this.delete(`/appointments/${id}`, opts);
   }
 
   async getAvailableSlots(params: Record<string, unknown>) {
     return this.get<import('./types').GetAvailableSlotsResponse>('/appointments/available-slots', params);
   }
 
-  async rescheduleAppointment(id: string, data: RescheduleAppointmentPayload) {
-    return this.post<import('./types').Appointment>(`/appointments/${id}/reschedule`, data);
+  async rescheduleAppointment(id: string, data: RescheduleAppointmentPayload, opts?: { idempotencyKey?: string }) {
+    return this.post<import('./types').Appointment>(`/appointments/${id}/reschedule`, data, opts);
   }
 
   async getDoctorSchedule(doctorId: string, date: string) {

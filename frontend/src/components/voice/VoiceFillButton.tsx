@@ -23,7 +23,7 @@ export function formatElapsed(totalSeconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-function useElapsedSeconds(phase: VoiceFillPhase): number {
+export function useElapsedSeconds(phase: VoiceFillPhase): number {
   const startedAt = phase.kind === 'listening' ? phase.startedAt : null;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -53,10 +53,68 @@ function statusText(phase: VoiceFillPhase): string {
   }
 }
 
+/** Classes for the mic pill in every phase; the global command mic shares them so both read as one control. */
+export function voicePillClass(phase: VoiceFillPhase): string {
+  return cn(
+    'inline-flex h-8 shrink-0 items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-full px-2 text-sm font-medium',
+    'transition-[max-width,background-color,color] duration-200 ease-out motion-reduce:transition-none',
+    'outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
+    phase.kind === 'idle' && 'max-w-8 text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+    phase.kind === 'listening' && 'max-w-40 bg-destructive-soft px-3 text-destructive-text',
+    phase.kind === 'filling' && 'max-w-40 cursor-default bg-muted px-3 text-muted-foreground',
+    phase.kind === 'filled' && 'max-w-40 pl-2.5 pr-1.5 hover:bg-success-border/40',
+  );
+}
+
+export function VoicePillFace({ phase, busyText }: { phase: VoiceFillPhase; busyText: string }) {
+  const elapsed = useElapsedSeconds(phase);
+  switch (phase.kind) {
+    case 'idle':
+      return <Mic className="size-4 shrink-0" aria-hidden="true" />;
+    case 'listening':
+      return (
+        <>
+          <span className="size-2 shrink-0 animate-pulse rounded-full bg-destructive motion-reduce:animate-none" aria-hidden="true" />
+          <span className="tabular-nums">{formatElapsed(elapsed)}</span>
+          <Square className="size-3 shrink-0 fill-current" aria-hidden="true" />
+        </>
+      );
+    case 'filling':
+      return (
+        <>
+          <Spinner className="size-3.5" aria-hidden="true" />
+          <span>{busyText}</span>
+        </>
+      );
+    case 'filled':
+      return (
+        <>
+          <Check className="size-3.5 shrink-0" aria-hidden="true" />
+          <span className="tabular-nums">{phase.labels.length} filled</span>
+        </>
+      );
+  }
+}
+
+/** While listening, Escape cancels the recording without also closing a surrounding dialog. */
+export function useCancelOnEscape(listening: boolean, cancel: () => void) {
+  useEffect(() => {
+    if (!listening) return;
+    // Window capture runs before a surrounding dialog's own Escape handler, so cancelling does not also close it.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      event.preventDefault();
+      cancel();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [listening, cancel]);
+}
+
 export function VoiceFillButton({ form, apply, hint, disabled, onBusyChange, className }: VoiceFillButtonProps) {
   const [available, setAvailable] = useState(false);
   const { phase, toggle, cancel, undo, dismiss } = useVoiceFill({ form, apply });
-  const elapsed = useElapsedSeconds(phase);
   const pillRef = useRef<HTMLSpanElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
@@ -101,18 +159,7 @@ export function VoiceFillButton({ form, apply, hint, disabled, onBusyChange, cla
     };
   }, []);
 
-  useEffect(() => {
-    if (phase.kind !== 'listening') return;
-    // Window capture runs before a surrounding dialog's own Escape handler, so cancelling does not also close it.
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.stopPropagation();
-      event.preventDefault();
-      cancel();
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [phase.kind, cancel]);
+  useCancelOnEscape(phase.kind === 'listening', cancel);
 
   if (!available) return null;
 
@@ -138,36 +185,9 @@ export function VoiceFillButton({ form, apply, hint, disabled, onBusyChange, cla
       disabled={(idle || filled) && disabled}
       aria-disabled={busy || undefined}
       aria-label={ariaLabel}
-      className={cn(
-        'inline-flex h-8 shrink-0 items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-full px-2 text-sm font-medium',
-        'transition-[max-width,background-color,color] duration-200 ease-out motion-reduce:transition-none',
-        'outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
-        idle && 'max-w-8 text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-        phase.kind === 'listening' && 'max-w-40 bg-destructive-soft px-3 text-destructive-text',
-        busy && 'max-w-40 cursor-default bg-muted px-3 text-muted-foreground',
-        filled && 'max-w-40 pl-2.5 pr-1.5 hover:bg-success-border/40',
-      )}
+      className={voicePillClass(phase)}
     >
-      {idle && <Mic className="size-4 shrink-0" aria-hidden="true" />}
-      {phase.kind === 'listening' && (
-        <>
-          <span className="size-2 shrink-0 animate-pulse rounded-full bg-destructive motion-reduce:animate-none" aria-hidden="true" />
-          <span className="tabular-nums">{formatElapsed(elapsed)}</span>
-          <Square className="size-3 shrink-0 fill-current" aria-hidden="true" />
-        </>
-      )}
-      {busy && (
-        <>
-          <Spinner className="size-3.5" aria-hidden="true" />
-          <span>{statusText(phase)}</span>
-        </>
-      )}
-      {filled && (
-        <>
-          <Check className="size-3.5 shrink-0" aria-hidden="true" />
-          <span className="tabular-nums">{phase.labels.length} filled</span>
-        </>
-      )}
+      <VoicePillFace phase={phase} busyText="Filling…" />
     </button>
   );
 

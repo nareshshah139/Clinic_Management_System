@@ -63,7 +63,7 @@ export class VoiceFillService {
         return { transcript: '', fields: {} };
       }
       const raw = await completeJsonWithCodexOAuth({
-        prompt: buildVoiceFillPrompt(form, transcript, new Date().toISOString().slice(0, 10)),
+        prompt: buildVoiceFillPrompt(form, transcript, new Date()),
         schema: buildVoiceFillSchema(form),
         model: process.env.VOICE_FILL_CODEX_MODEL || process.env.PHARMACY_AGENT_CODEX_MODEL || undefined,
         timeoutMs: timeoutMs(),

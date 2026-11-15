@@ -155,6 +155,15 @@ describe('POST /voice-fill/:form with the real service', () => {
     expect(transcribe).not.toHaveBeenCalled();
   });
 
+  it('lets every clinic staff role speak a command, managers included', async () => {
+    transcribesTo('Open Ramesh Kumar');
+    codex.mockResolvedValue('{"action":"open_patient","patientName":"Ramesh Kumar"}');
+    for (const role of ['MANAGER', 'NURSE', 'RECEPTION']) {
+      expect((await upload('voice-command', role).expect(200)).body.fields).toEqual({ action: 'open_patient', patientName: 'Ramesh Kumar' });
+    }
+    await upload('voice-command', 'ACCOUNTANT').expect(403);
+  });
+
   it('403s patients and lab technicians at the route', async () => {
     await upload('patient-intake', 'PATIENT').expect(403);
     await upload('patient-intake', 'LAB_TECH').expect(403);

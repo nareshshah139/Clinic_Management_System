@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Renders eval scripts to webm/opus at 32 kbps, matching what the app's recorder uploads.
-// Usage: node generate-audio.cjs <out-dir> [--set cases|conversations] [--voice <name>] [--noise] [--only id,id]
+// Usage: node generate-audio.cjs <out-dir> [--set cases|commands|conversations] [--voice <name>] [--noise] [--only id,id]
 //   --voice espeak (default) | espeak-hi | telugu | hindi | tamil | mumbai
 //   espeak voices are robotic and vendor-independent. The named Indian accents use OpenAI gpt-4o-mini-tts
 //   (needs an OpenAI key on api.openai.com); the same vendor transcribes, so treat those scores as optimistic.
@@ -70,15 +70,23 @@ async function speak(text, speaker, wav) {
     const persona = PERSONAS[voiceName];
     if (!persona) throw new Error(`Unknown --voice ${voiceName}`);
     const [voice, instructions] = persona[speaker] || persona.doctor;
-    const key = crypto.createHash('sha256').update(JSON.stringify([voice, instructions, text])).digest('hex');
-    const cached = path.join(cacheDir, `${key}.wav`);
-    if (!fs.existsSync(cached)) {
-      const body = JSON.stringify({ model: 'gpt-4o-mini-tts', voice, input: text, instructions, response_format: 'wav' });
-      await run('curl', ['-sS', '--fail', '--retry', '3', 'https://api.openai.com/v1/audio/speech',
-        '-H', 'Authorization: Bearer proxy-injected', '-H', 'Content-Type: application/json', '-d', body, '-o', `${cached}.part`]);
-      fs.renameSync(`${cached}.part`, cached);
+    // gpt-4o-mini-tts sometimes drops the final sentence of a multi-sentence input, so speak one sentence per call.
+    const sentences = text.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g).map((s) => s.trim()).filter(Boolean);
+    const parts = [];
+    for (const sentence of sentences) {
+      const key = crypto.createHash('sha256').update(JSON.stringify([voice, instructions, sentence])).digest('hex');
+      const cached = path.join(cacheDir, `${key}.wav`);
+      if (!fs.existsSync(cached)) {
+        const body = JSON.stringify({ model: 'gpt-4o-mini-tts', voice, input: sentence, instructions, response_format: 'wav' });
+        await run('curl', ['-sS', '--fail', '--retry', '3', 'https://api.openai.com/v1/audio/speech',
+          '-H', 'Authorization: Bearer proxy-injected', '-H', 'Content-Type: application/json', '-d', body, '-o', `${cached}.part`]);
+        fs.renameSync(`${cached}.part`, cached);
+      }
+      parts.push(cached);
     }
-    fs.copyFileSync(cached, `${wav}.raw.wav`);
+    fs.writeFileSync(`${wav}.list`, parts.map((p) => `file '${p}'`).join('\n'));
+    await ffmpeg('-f', 'concat', '-safe', '0', '-i', `${wav}.list`, '-c', 'copy', `${wav}.raw.wav`);
+    fs.rmSync(`${wav}.list`);
   }
   await ffmpeg('-i', `${wav}.raw.wav`, '-ac', '1', '-ar', '48000', wav);
   fs.rmSync(`${wav}.raw.wav`);
@@ -116,7 +124,7 @@ async function render(id, turns) {
   const scripts = set === 'conversations'
     ? fs.readdirSync(path.join(__dirname, 'conversations')).filter((f) => f.endsWith('.json')).sort()
       .map((f) => JSON.parse(fs.readFileSync(path.join(__dirname, 'conversations', f), 'utf8')))
-    : JSON.parse(fs.readFileSync(path.join(__dirname, 'cases.json'), 'utf8'))
-      .map((c, i) => ({ id: c.id, turns: [{ speaker: i % 2 ? 'patient' : 'doctor', text: c.say }] }));
+    : JSON.parse(fs.readFileSync(path.join(__dirname, `${set}.json`), 'utf8'))
+      .map((c, i) => ({ id: c.id, turns: [{ speaker: set === 'commands' ? 'receptionist' : i % 2 ? 'patient' : 'doctor', text: c.say }] }));
   for (const s of scripts.filter((s) => !only?.length || only.includes(s.id))) await render(s.id, s.turns);
 })().catch((error) => { console.error(error.message); process.exit(1); });

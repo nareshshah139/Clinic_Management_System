@@ -2,7 +2,7 @@ import { UserRole } from '@prisma/client';
 import { InventoryItemType, UnitType } from '../inventory/dto/inventory.dto';
 import { MEDICINE_FORM_KEYS } from '../inventory/medicine-names';
 
-export type VoiceFillFormId = 'patient-intake' | 'visit-consultation' | 'inventory-item';
+export type VoiceFillFormId = 'patient-intake' | 'visit-consultation' | 'inventory-item' | 'voice-command';
 export type VoiceFillRow = Record<string, string | number>;
 export type VoiceFillValue = string | number | boolean | string[] | VoiceFillRow[];
 export type VoiceFillFields = Record<string, VoiceFillValue>;
@@ -48,6 +48,7 @@ const num = (label: string, min?: number, max?: number, rest: { integer?: boolea
 const int = (label: string, min?: number, max?: number): VoiceFillRowFieldSpec => num(label, min, max, { integer: true });
 const oneOf = (label: string, values: readonly string[]): VoiceFillRowFieldSpec => ({ type: 'enum', label, values });
 const flag = (label: string): VoiceFillFieldSpec => ({ type: 'boolean', label });
+const day = (label: string, hint: string): VoiceFillFieldSpec => ({ type: 'date', label, hint });
 
 export const VOICE_FILL_FORMS: Record<VoiceFillFormId, VoiceFillForm> = {
   'patient-intake': {
@@ -152,6 +153,26 @@ export const VOICE_FILL_FORMS: Record<VoiceFillFormId, VoiceFillForm> = {
       defaultDuration: int('Default duration', 1),
       defaultDurationUnit: oneOf('Default duration unit', ['DAYS', 'WEEKS', 'MONTHS', 'YEARS']),
       defaultInstructions: longText('Default instructions'),
+    },
+  },
+  'voice-command': {
+    purpose: 'A clinic staff member speaking a command to the clinic app.',
+    roles: [UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION],
+    fields: {
+      action: {
+        ...oneOf('Action', ['schedule_appointment', 'reschedule_appointment', 'cancel_appointment', 'check_in', 'open_patient',
+          'start_visit', 'unknown']),
+        hint: 'book or schedule means schedule_appointment; move or shift means reschedule_appointment; open, show or pull up a chart means open_patient; start or begin a consultation means start_visit; unknown for anything else',
+      },
+      patientName: text('Patient name', { hint: 'as spoken, without Mr, Mrs or Smt' }),
+      patientPhone: text('Patient phone', { normalize: 'phone', pattern: /^\+?\d{4,15}$/ }),
+      doctorName: text('Doctor name', { hint: 'without Dr or Doctor' }),
+      date: day('Date', 'the day to book, or the new day for a reschedule. Resolve today, tomorrow (kal), day after tomorrow (parso) and weekdays against today; a bare weekday or next <weekday> means the first such day after today'),
+      time: text('Time', { pattern: /^([01]\d|2[0-3]):[0-5]\d$/, hint: '24-hour HH:MM. Clinic hours are daytime, so 10 means 10:00 and 4 or 4 pm means 16:00' }),
+      partOfDay: { ...oneOf('Part of day', ['morning', 'afternoon', 'evening']), hint: 'only when no exact time was said' },
+      visitType: { ...oneOf('Visit type', ['OPD', 'TELEMED', 'PROCEDURE']), hint: 'laser, peel or any procedure means PROCEDURE; video or online means TELEMED' },
+      fromDate: day('Existing appointment date', 'the day of an existing appointment being rescheduled, cancelled or checked in, if said'),
+      notes: text('Notes', { hint: 'a reason or note the speaker asked to record' }),
     },
   },
 };
