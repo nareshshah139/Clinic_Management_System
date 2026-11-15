@@ -202,7 +202,7 @@ export function VoiceCommandDialog({ heard, role, onClose, now: fixedNow }: Voic
   const change = <K extends keyof VoiceCommandPicks>(key: K) => (picks[key] !== undefined ? () => pick(key)(undefined) : undefined);
 
   const doneOn = (title: string, date: string, doctorId: string): Done =>
-    ({ title, href: appointmentsHref(date, doctorId), linkText: `Open ${dayLabel(date, today)} in Appointments` });
+    ({ title, href: appointmentsHref(date, doctorId), linkText: 'View in Appointments' });
 
   /** Resolves to the success state, or null when the user declined to overbook or the step navigated away. */
   const run = async (next: VoiceCommandStep): Promise<Done | null> => {
@@ -284,7 +284,7 @@ export function VoiceCommandDialog({ heard, role, onClose, now: fixedNow }: Voic
       <div className="flex flex-col gap-1.5">
         {plan.date.kind === 'resolved' && plan.slot.kind === 'resolved' ? (
           <span className="flex flex-wrap items-baseline gap-x-2">
-            <span className="font-medium">{`${dayWithDate(plan.date.value, today)}, ${slotRange(plan.slot.value)}`}</span>
+            <span className="font-medium">{dayWithDate(plan.date.value, today)}, <span className="whitespace-nowrap">{slotRange(plan.slot.value)}</span></span>
             {!locked && change('date') && <button type="button" onClick={change('date')} className={CHANGE_CLASS}>Change<span className="sr-only"> day</span></button>}
             {!locked && change('slot') && <button type="button" onClick={change('slot')} className={CHANGE_CLASS}>Change<span className="sr-only"> time</span></button>}
           </span>
