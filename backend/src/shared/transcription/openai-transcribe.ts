@@ -26,13 +26,10 @@ export interface SegmentPlanOptions {
 
 const logger = new Logger('OpenAiTranscribe');
 
+// Context only: no example vitals, doses or drug names. The previous prompt's examples ("120/80 mmHg",
+// "heart rate", "azithromycin 500 mg PO OD x3 days") were played back as invented consultation passages.
 const TRANSCRIPTION_PROMPT =
-  'Medical doctor–patient conversation transcription. ' +
-  'Preserve punctuation, numbers, and units exactly (e.g., 120/80 mmHg). ' +
-  'Use medical spellings; prefer Indian English when applicable. ' +
-  'Expand unambiguous abbreviations (BP → blood pressure, HR → heart rate); keep ambiguous ones verbatim. ' +
-  'Normalize medication mentions when clearly stated (e.g., azithromycin 500 mg PO OD x3 days). ' +
-  'Do not add speaker tags or commentary; output only the transcript text.';
+  'Outpatient clinic in India. Speakers use Indian English and sometimes Hindi or Telugu words.';
 
 // gpt-4o-transcribe rejects audio over 1400 s and silently truncates long outputs (a 15-minute clip came back
 // cut off mid-word). Measured on 300 s of speech with the instruction prompt: 2/10 calls returned only the first

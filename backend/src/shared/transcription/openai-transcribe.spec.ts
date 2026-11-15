@@ -155,7 +155,9 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
       expect(upload.authorization).toBe('Bearer sk-test');
       expect(upload.file).toEqual({ name: 'audio.wav', type: 'audio/wav', bytes: fs.readFileSync(path.join(directory, 'audio.wav')).toString('latin1') });
       expect(upload.fields).toMatchObject({ model: 'gpt-4o-transcribe', language: 'en', temperature: '0', response_format: 'json', chunking_strategy: '{"type":"server_vad"}' });
-      expect(upload.fields.prompt).toMatch(/^Medical doctor–patient conversation transcription\./);
+      expect(upload.fields.prompt).toBe('Outpatient clinic in India. Speakers use Indian English and sometimes Hindi or Telugu words.');
+      // Example values in the prompt were transcribed back as invented speech; keep it free of numbers and clinical terms.
+      expect(upload.fields.prompt).not.toMatch(/\d|\bmg\b|mmHg|heart rate|azithromycin|\bdoctor\b|\bpatient\b/i);
     }
   });
 
