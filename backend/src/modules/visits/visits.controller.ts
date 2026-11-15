@@ -1013,134 +1013,73 @@ export class VisitsController {
     },
   ) {
     if (!file) throw new BadRequestException('No file provided');
-    // OpenAI requires minimum 0.1s of audio (~1KB for WebM)
-    // Very small chunks are likely errors or silence
-    if (file.size < 500) {
-      this.logger.warn(
-        `transcribe/chunk: chunk too small (${file.size} bytes), skipping`,
-      );
-      return { text: '', segments: [] }; // Return empty result instead of error
-    }
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey)
-      throw new ServiceUnavailableException('OPENAI_API_KEY not configured');
-    const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : '';
-    if (!sessionId) throw new BadRequestException('Missing sessionId');
-    const sessionDir = await ensureTranscribeSessionDir();
-    const sessionPath = join(sessionDir, `${sessionId}.json`);
-    const current = await readJsonSafe(sessionPath);
-    if (!current || !current.id)
-      throw new BadRequestException('Invalid session');
-
-    const transcribeModel =
-      process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
-    const form = new FormData();
-    const fileBuf = await fsPromises.readFile(
+    const uploadedPath =
       (file as any).path ||
-        join((file as any).destination || '', (file as any).filename),
-    );
-    const uint8 = new Uint8Array(fileBuf);
-    const blob = new Blob([uint8], { type: file.mimetype || 'audio/webm' });
-    form.append('file', blob, file.originalname || 'audio.webm');
-    form.append('model', transcribeModel);
+      join((file as any).destination || '', (file as any).filename);
     try {
-      form.append('language', 'en');
-    } catch {}
-    try {
-      form.append('temperature', '0');
-    } catch {}
-    try {
-      form.append('response_format', 'verbose_json');
-    } catch {}
-
-    this.logger.debug(
-      `transcribe/chunk: uploading ${file.size} bytes, model=${transcribeModel}`,
-    );
-    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` } as any,
-      body: form as any,
-    });
-    if (!resp.ok) {
-      const errText = await resp.text();
-      this.logger.error(
-        `transcribe/chunk OpenAI error: status=${resp.status}, fileSize=${file.size} bytes, ` +
-          `mimeType=${file.mimetype}, model=${transcribeModel}, error=${errText.slice(0, 500)}`,
-      );
-      // Also log to console and file for immediate debugging
-      const errorLog = [
-        '=== TRANSCRIBE CHUNK ERROR ===',
-        `Timestamp: ${new Date().toISOString()}`,
-        `Status: ${resp.status}`,
-        `File size: ${file.size} bytes`,
-        `MIME type: ${file.mimetype}`,
-        `Model: ${transcribeModel}`,
-        `OpenAI Error: ${errText}`,
-        '============================',
-      ].join('\n');
-      // eslint-disable-next-line no-console
-      console.error(errorLog);
-      // Write to file for debugging
-      try {
-        await fsPromises.appendFile(
-          join(process.cwd(), 'transcribe_errors.log'),
-          errorLog + '\n\n',
+      // OpenAI requires minimum 0.1s of audio (~1KB for WebM)
+      // Very small chunks are likely errors or silence
+      if (file.size < 500) {
+        this.logger.warn(
+          `transcribe/chunk: chunk too small (${file.size} bytes), skipping`,
         );
-      } catch (e) {
-        // Ignore file write errors
+        return { text: '', segments: [] }; // Return empty result instead of error
       }
-      // Return a more informative error to the client
-      let errorDetail = 'OpenAI transcription service error';
-      if (errText.includes('duration') || errText.includes('too short')) {
-        errorDetail = 'Audio chunk too short (minimum 0.1 seconds required)';
-      } else if (
-        errText.includes('corrupted') ||
-        errText.includes('unsupported') ||
-        errText.includes('invalid')
-      ) {
-        // MediaRecorder chunks are often corrupted - this is a known limitation
-        errorDetail =
-          'Browser audio format not supported. MediaRecorder chunks require reassembly.';
-      } else if (errText.includes('format')) {
-        errorDetail = 'Invalid audio format';
-      }
-      // Don't throw 503 for client errors (4xx) - these aren't service unavailable
-      if (resp.status >= 400 && resp.status < 500) {
-        throw new BadRequestException(errorDetail);
-      }
-      throw new ServiceUnavailableException(errorDetail);
-    }
-    const data = await resp.json();
-    const text = ((data as any)?.text as string) || '';
-    const rawSegs = Array.isArray((data as any)?.segments)
-      ? ((data as any).segments as Array<any>)
-      : [];
-    const startMs = Number.isFinite(body?.startMs) ? Number(body?.startMs) : 0;
-    const endMs = Number.isFinite(body?.endMs)
-      ? Number(body?.endMs)
-      : startMs || 0;
-    const offsetS = Math.max(0, Math.floor(startMs) / 1000);
+      const sessionId =
+        typeof body?.sessionId === 'string' ? body.sessionId : '';
+      if (!sessionId) throw new BadRequestException('Missing sessionId');
+      const sessionDir = await ensureTranscribeSessionDir();
+      const sessionPath = join(sessionDir, `${sessionId}.json`);
+      const current = await readJsonSafe(sessionPath);
+      if (!current || !current.id)
+        throw new BadRequestException('Invalid session');
 
-    const entry = {
-      index: Number.isFinite(body?.chunkIndex)
-        ? Number(body?.chunkIndex)
-        : current.chunks.length || 0,
-      start_s_offset: offsetS,
-      end_s_offset: Math.max(offsetS, Math.floor(endMs) / 1000),
-      text,
-      segments: rawSegs.map((s) => ({
-        text: typeof s?.text === 'string' ? s.text : '',
-        start_s: typeof s?.start === 'number' ? s.start : null,
-        end_s: typeof s?.end === 'number' ? s.end : null,
-      })),
-    };
-    current.chunks.push(entry);
-    await writeJsonSafe(sessionPath, current);
-    try {
-      if ((file as any)?.path)
-        await fsPromises.unlink((file as any).path).catch(() => {});
-    } catch {}
-    return { ok: true };
+      let transcription: { text: string; segments: unknown[] };
+      try {
+        transcription = await transcribeWithOpenAI({
+          path: uploadedPath,
+          mimetype: file.mimetype,
+          filename: file.originalname || 'audio.webm',
+        });
+      } catch (e: any) {
+        if (e instanceof HttpException) throw e;
+        this.logger.error(
+          `transcribe/chunk failed: ${e?.stack || e?.message || e}`,
+        );
+        throw new ServiceUnavailableException(
+          'Speech transcription failed. Please try again.',
+        );
+      }
+      const { text } = transcription;
+      // Only whisper models return timed segments; gpt-4o-transcribe gives text only.
+      const rawSegs = transcription.segments as Array<any>;
+      const startMs = Number.isFinite(body?.startMs)
+        ? Number(body?.startMs)
+        : 0;
+      const endMs = Number.isFinite(body?.endMs)
+        ? Number(body?.endMs)
+        : startMs || 0;
+      const offsetS = Math.max(0, Math.floor(startMs) / 1000);
+
+      const entry = {
+        index: Number.isFinite(body?.chunkIndex)
+          ? Number(body?.chunkIndex)
+          : current.chunks.length || 0,
+        start_s_offset: offsetS,
+        end_s_offset: Math.max(offsetS, Math.floor(endMs) / 1000),
+        text,
+        segments: rawSegs.map((s) => ({
+          text: typeof s?.text === 'string' ? s.text : '',
+          start_s: typeof s?.start === 'number' ? s.start : null,
+          end_s: typeof s?.end === 'number' ? s.end : null,
+        })),
+      };
+      current.chunks.push(entry);
+      await writeJsonSafe(sessionPath, current);
+      return { ok: true };
+    } finally {
+      await fsPromises.unlink(uploadedPath).catch(() => {});
+    }
   }
 
   // Complete the session: merge chunks and run diarization once on combined segments
