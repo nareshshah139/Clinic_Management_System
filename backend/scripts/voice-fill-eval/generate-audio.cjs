@@ -78,7 +78,7 @@ async function speak(text, speaker, wav) {
       const cached = path.join(cacheDir, `${key}.wav`);
       if (!fs.existsSync(cached)) {
         const body = JSON.stringify({ model: 'gpt-4o-mini-tts', voice, input: sentence, instructions, response_format: 'wav' });
-        await run('curl', ['-sS', '--fail', '--retry', '3', 'https://api.openai.com/v1/audio/speech',
+        await run('curl', ['-sS', '--fail', '--retry', '5', '--retry-all-errors', '--retry-delay', '2', 'https://api.openai.com/v1/audio/speech',
           '-H', 'Authorization: Bearer proxy-injected', '-H', 'Content-Type: application/json', '-d', body, '-o', `${cached}.part`]);
         fs.renameSync(`${cached}.part`, cached);
       }
