@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AppointmentStatus } from '@cms/shared-types';
-import { Check } from 'lucide-react';
+import { ArrowRight, Check } from 'lucide-react';
 import { useOverbookConfirm } from '@/components/appointments/useOverbookConfirm';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import {
   confirmedStep,
   createVoiceCommandSource,
   dayLabel,
+  dayWithDate,
   parseVoiceCommand,
   resolveVoiceCommand,
   withPick,
@@ -66,6 +67,8 @@ export interface HeardCommand {
   command: VoiceCommand;
 }
 
+const CHANGE_CLASS = 'rounded-sm text-xs text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
+
 type Done = { title: string; href: string; linkText: string };
 
 const slotRange = (slot: string) => slot.replace('-', '–');
@@ -87,7 +90,7 @@ function ChoiceView<T>({ label, choice, describe, chip = describe, onPick, onCha
       <span className="flex flex-wrap items-baseline gap-x-2">
         <span className="font-medium">{describe(choice.value)}</span>
         {onChange && (
-          <button type="button" onClick={onChange} className="rounded-sm text-xs text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+          <button type="button" onClick={onChange} className={CHANGE_CLASS}>
             Change<span className="sr-only"> {label.toLowerCase()}</span>
           </button>
         )}
@@ -279,9 +282,19 @@ export function VoiceCommandDialog({ heard, role, onClose, now: fixedNow }: Voic
   const whenRow = plan && (plan.action === 'schedule_appointment' || plan.action === 'reschedule_appointment') && (
     <Row label={plan.action === 'schedule_appointment' ? 'When' : 'New time'}>
       <div className="flex flex-col gap-1.5">
-        <ChoiceView label="Day" choice={plan.date} describe={(d) => dayLabel(d, today)} onPick={pick('date')} onChange={locked ? undefined : change('date')} disabled={locked} />
-        {plan.date.kind === 'resolved' && (
-          <ChoiceView label="Time" choice={plan.slot} describe={slotRange} chip={(s) => s.slice(0, 5)} onPick={pick('slot')} onChange={locked ? undefined : change('slot')} disabled={locked} />
+        {plan.date.kind === 'resolved' && plan.slot.kind === 'resolved' ? (
+          <span className="flex flex-wrap items-baseline gap-x-2">
+            <span className="font-medium">{`${dayWithDate(plan.date.value, today)}, ${slotRange(plan.slot.value)}`}</span>
+            {!locked && change('date') && <button type="button" onClick={change('date')} className={CHANGE_CLASS}>Change<span className="sr-only"> day</span></button>}
+            {!locked && change('slot') && <button type="button" onClick={change('slot')} className={CHANGE_CLASS}>Change<span className="sr-only"> time</span></button>}
+          </span>
+        ) : (
+          <>
+            <ChoiceView label="Day" choice={plan.date} describe={(d) => dayWithDate(d, today)} onPick={pick('date')} onChange={locked ? undefined : change('date')} disabled={locked} />
+            {plan.date.kind === 'resolved' && (
+              <ChoiceView label="Time" choice={plan.slot} describe={slotRange} chip={(s) => s.slice(0, 5)} onPick={pick('slot')} onChange={locked ? undefined : change('slot')} disabled={locked} />
+            )}
+          </>
         )}
       </div>
     </Row>
@@ -328,7 +341,10 @@ export function VoiceCommandDialog({ heard, role, onClose, now: fixedNow }: Voic
             {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
             {done && (
               <p role="status" className="text-sm">
-                <Link href={done.href} onClick={onClose} className="font-medium text-primary underline-offset-2 hover:underline">{done.linkText}</Link>
+                <Link href={done.href} onClick={onClose} className="inline-flex items-center gap-1 rounded-sm font-medium text-primary underline underline-offset-4 hover:decoration-2 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                  {done.linkText}
+                  <ArrowRight className="size-3.5" aria-hidden="true" />
+                </Link>
               </p>
             )}
           </div>

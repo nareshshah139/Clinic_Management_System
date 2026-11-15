@@ -1651,6 +1651,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     });
   }, [loadDrugStock]);
 
+  // A row gains its inventory item through voice, a "Did you mean" Use or a dropdown pick; load its stock
+  // once instead of waiting for a hover. Rows already loaded (even as unknown) are skipped.
+  useEffect(() => {
+    for (const row of items) {
+      const inventoryItemId = row.inventoryItemId;
+      if (inventoryItemId && !(`inventory:${inventoryItemId}` in drugStockByKey)) void prefetchDrugStockById(row.drugId, inventoryItemId);
+    }
+  }, [items, drugStockByKey, prefetchDrugStockById]);
+
   const prefetchDrugStockByName = async (name?: string) => {
     const query = (name || '').trim();
     if (!query) return;
@@ -5402,15 +5411,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               if (!suggested) return null;
                               const suggestedName = String(suggested.name || '');
                               return (
-                                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground" role="status">
-                                  <span>Did you mean <span className="text-foreground">{suggestedName}</span>?</span>
-                                  <button type="button" className="rounded underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Use ${suggestedName}`}
+                                <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground" role="status">
+                                  <span>Did you mean <span className="font-medium text-foreground">{suggestedName}</span>?</span>
+                                  <button type="button" className="rounded-md border border-border bg-background px-2 py-0.5 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Use ${suggestedName}`}
                                     onClick={() => { applyDrugSelectionToRow(idx, suggested, { clearSearch: true }); forgetSpokenSuggestion(it.drugName); }}>
                                     Use
                                   </button>
-                                  <button type="button" className="rounded p-0.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Dismiss suggestion ${suggestedName}`}
+                                  <button type="button" className="rounded p-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Dismiss suggestion ${suggestedName}`}
                                     onClick={() => forgetSpokenSuggestion(it.drugName)}>
-                                    <X className="h-3 w-3" aria-hidden="true" />
+                                    <X className="h-3.5 w-3.5" aria-hidden="true" />
                                   </button>
                                 </p>
                               );

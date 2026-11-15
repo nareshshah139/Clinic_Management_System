@@ -58,23 +58,23 @@ async function fillByVoice() {
 }
 
 describe('VoiceFillButton after a fill', () => {
-  it('confirms on the pill with the count, announces the fields, offers Undo and shows no toast', async () => {
+  it('confirms on the pill with the count, announces the fields, offers Undo fill and shows no toast', async () => {
     const mic = await fillByVoice();
 
     expect(mic).toHaveTextContent('6 filled');
     expect(mic).toHaveAccessibleName('6 filled. Fill by voice again');
     expect(screen.getByRole('status')).toHaveTextContent('Filled 6 fields: First name, Last name, Age, Gender, Phone, Address');
-    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Undo voice fill' })).toHaveTextContent('Undo fill');
     expect(toast.mock.calls).toEqual([]);
   });
 
   it('undoes the fill from the pill, returns to the mic and keeps focus on it', async () => {
     const mic = await fillByVoice();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo voice fill' }));
 
     expect(undo.mock.calls.length).toBe(1);
-    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Undo voice fill' })).toBeNull();
     expect(mic).toHaveAccessibleName('Fill form by voice');
     expect(document.activeElement).toBe(mic);
   });
@@ -83,7 +83,7 @@ describe('VoiceFillButton after a fill', () => {
     jest.useFakeTimers();
     const mic = await fillByVoice();
 
-    act(() => { screen.getByRole('button', { name: 'Undo' }).focus(); });
+    act(() => { screen.getByRole('button', { name: 'Undo voice fill' }).focus(); });
     act(() => { jest.advanceTimersByTime(30_000); });
     expect(mic).toHaveTextContent('6 filled');
 
@@ -102,6 +102,6 @@ describe('VoiceFillButton after a fill', () => {
     fireEvent.input(screen.getByRole('textbox', { name: 'First name' }), { target: { value: 'Rames' } });
 
     expect(mic).toHaveAccessibleName('Fill form by voice');
-    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Undo voice fill' })).toBeNull();
   });
 });

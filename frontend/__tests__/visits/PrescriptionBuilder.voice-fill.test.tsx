@@ -95,3 +95,19 @@ it('links a spoken stocked medicine by its standard name and keeps an unstocked 
   await act(async () => { fireEvent.mouseEnter(doxyCell); });
   expect(doxyCell).toHaveTextContent('Stock: 40');
 });
+
+it('shows stock for a spoken medicine that carries only an inventory item, without hovering the row', async () => {
+  const acnosis = { id: undefined, inventoryItemId: 'inv-acnosis', name: 'Tab. Acnosis', knownNames: ['199 | Acnosis Tab'], dosageForm: 'TABLET', totalStock: 12 };
+  get.mockImplementation((url: string, params?: { q?: string }) => Promise.resolve(
+    url === '/prescriptions/drugs/autocomplete' ? (params?.q?.toLowerCase().startsWith('acnosis') ? [acnosis] : [])
+      : url === '/pharmacy/prescription-queue/inventory-stock/inv-acnosis' ? { stockStatus: 'IN_STOCK', totalNonExpiredStock: 12 } : {},
+  ));
+  render(<PrescriptionBuilder patientId="voice-stock" visitId={null} doctorId="doctor" />);
+  await act(async () => { jest.advanceTimersByTime(1000); });
+  await act(async () => { await applyVoiceFill({ prescriptionItems: [{ drugName: 'acnosis' }] }); });
+  await act(async () => { jest.advanceTimersByTime(0); });
+
+  const cell = (document.getElementById('rx-row-0-drug') as HTMLInputElement).closest('td')!;
+  expect(cell).toHaveTextContent('Stock: 12');
+  expect(get.mock.calls.filter(([url]) => url === '/pharmacy/prescription-queue/inventory-stock/inv-acnosis')).toHaveLength(1);
+});

@@ -200,12 +200,23 @@ export function matchDoctors(spoken: string | undefined, doctors: DoctorOption[]
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/** "Mon 16 Nov" for a YYYY-MM-DD day. */
+function absoluteDay(day: string): string {
+  const [year, month, date] = day.split('-').map(Number);
+  return `${WEEKDAYS[new Date(Date.UTC(year, month - 1, date)).getUTCDay()]} ${date} ${MONTHS[month - 1]}`;
+}
+
 /** "Today", "Tomorrow" or "Mon 16 Nov" for a YYYY-MM-DD day. */
 export function dayLabel(day: string, today: string): string {
   if (day === today) return 'Today';
   if (day === addDays(today, 1)) return 'Tomorrow';
-  const [year, month, date] = day.split('-').map(Number);
-  return `${WEEKDAYS[new Date(Date.UTC(year, month - 1, date)).getUTCDay()]} ${date} ${MONTHS[month - 1]}`;
+  return absoluteDay(day);
+}
+
+/** Relative and absolute together ("Tomorrow · Mon 16 Nov"); days further out are already absolute. */
+export function dayWithDate(day: string, today: string): string {
+  const label = dayLabel(day, today);
+  return label === absoluteDay(day) ? label : `${label} · ${absoluteDay(day)}`;
 }
 
 const clinicClockParts = new Intl.DateTimeFormat('en-GB', {

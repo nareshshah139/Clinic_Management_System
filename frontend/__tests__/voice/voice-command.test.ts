@@ -4,6 +4,7 @@ import {
   chooseDate,
   chooseSlot,
   confirmedStep,
+  dayWithDate,
   matchAppointment,
   matchDoctors,
   matchPatients,
@@ -205,5 +206,13 @@ describe('resolveVoiceCommand', () => {
       visitType: 'OPD',
       notes: undefined,
     });
+  });
+});
+
+describe('dayWithDate', () => {
+  it('pairs relative days with the calendar date and leaves later days as they are', () => {
+    expect(dayWithDate('2026-11-15', '2026-11-15')).toBe('Today · Sun 15 Nov');
+    expect(dayWithDate('2026-11-16', '2026-11-15')).toBe('Tomorrow · Mon 16 Nov');
+    expect(dayWithDate('2026-11-20', '2026-11-15')).toBe('Fri 20 Nov');
   });
 });

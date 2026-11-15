@@ -227,9 +227,10 @@ export function VoiceFillButton({ form, apply, hint, disabled, onBusyChange, cla
             onClick={onUndo}
             onFocus={() => setUndoFocused(true)}
             onBlur={() => setUndoFocused(false)}
+            aria-label="Undo voice fill"
             className="h-6 rounded-full px-2 text-sm font-semibold outline-none hover:bg-success-border/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            Undo
+            Undo fill
           </button>
         )}
       </span>

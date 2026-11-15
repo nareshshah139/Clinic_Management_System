@@ -54,8 +54,7 @@ describe('VoiceCommandDialog', () => {
     open();
     expect(await screen.findByRole('group', { name: 'Choose patient' })).toBeInTheDocument();
     expect(screen.getByText('Dr Shravya Rao')).toBeInTheDocument();
-    expect(screen.getByText('Tomorrow')).toBeInTheDocument();
-    expect(screen.getByText('10:00–10:30')).toBeInTheDocument();
+    expect(screen.getByText('Tomorrow · Mon 16 Nov, 10:00–10:30')).toBeInTheDocument();
     expect(book()).toBeDisabled();
     await chooseFirstRamesh();
     expect(screen.getByText('Ramesh Kumar · 9848022338')).toBeInTheDocument();
@@ -66,8 +65,10 @@ describe('VoiceCommandDialog', () => {
     open();
     await chooseFirstRamesh();
     await userEvent.click(book());
-    expect(await screen.findByRole('link', { name: 'Open Tomorrow in Appointments' }))
-      .toHaveAttribute('href', '/dashboard/appointments?date=2026-11-16&doctorId=d1');
+    const link = await screen.findByRole('link', { name: 'Open Tomorrow in Appointments' });
+    expect(link).toHaveAttribute('href', '/dashboard/appointments?date=2026-11-16&doctorId=d1');
+    expect(link).toHaveClass('underline', 'text-primary');
+    expect(link.querySelector('svg')).not.toBeNull();
     expect(api.createAppointment.mock.calls).toEqual([[
       { patientId: 'p1', doctorId: 'd1', date: '2026-11-16', slot: '10:00-10:30', visitType: 'OPD' },
       { idempotencyKey: expect.stringMatching(/^voice-command-7-/) },
