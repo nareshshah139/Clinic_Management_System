@@ -31,6 +31,15 @@ const LINKED = {
   prescriptionTemplate: null,
   verifiedAt: '2026-11-14T06:30:00.000Z',
   linkedBy: { id: 'admin-1', name: 'Meera Kulkarni' },
+  health: { canSend: 'AVAILABLE', blockers: [] },
+};
+const BLOCKED = {
+  canSend: 'BLOCKED',
+  blockers: [
+    { entity: 'WABA', code: 141006, description: 'There is an error with the payment method. This will block business initiated conversations.', fix: 'Please add a new payment method to the account.' },
+    { entity: 'BUSINESS', code: 141010, description: 'The Business has not passed business verification.', fix: 'Visit business settings and start or resolve the business verification request.' },
+    { entity: 'BUSINESS', code: 131000, description: 'Your business profile is incomplete.' },
+  ],
 };
 const TEMPLATES = [
   { name: 'prescription_ready', language: 'en', bodyParams: 2 },
@@ -109,8 +118,8 @@ describe('WhatsAppCard', () => {
       .mockResolvedValueOnce({ status: 'ACCEPTED', wamid: 'wamid.HBgM', source: 'CLINIC' })
       .mockResolvedValueOnce({ status: 'FAILED', code: 131030, reason: 'This number is not in the allowed list of the Meta test number.' });
     api.getWhatsAppMessages.mockResolvedValueOnce([]).mockResolvedValue([
-      { id: 'm1', wamid: 'wamid.HBgM', toPhone: '919704802443', kind: 'TEST_PRESCRIPTION', prescriptionId: null, status: 'DELIVERED', errorCode: null, errorTitle: null, createdAt: '2026-11-14T06:31:00.000Z', updatedAt: '2026-11-14T06:31:05.000Z' },
-      { id: 'm0', wamid: 'wamid.OLD', toPhone: '919000000001', kind: 'PRESCRIPTION', prescriptionId: 'rx', status: 'FAILED', errorCode: 131026, errorTitle: 'Message undeliverable', createdAt: '2026-11-13T06:31:00.000Z', updatedAt: '2026-11-13T06:31:00.000Z' },
+      { id: 'm1', wamid: 'wamid.HBgM', toPhone: '919704802443', kind: 'TEST_PRESCRIPTION', prescriptionId: null, status: 'DELIVERED', errorCode: null, errorTitle: null, failureReason: null, createdAt: '2026-11-14T06:31:00.000Z', updatedAt: '2026-11-14T06:31:05.000Z' },
+      { id: 'm0', wamid: 'wamid.OLD', toPhone: '919000000001', kind: 'PRESCRIPTION', prescriptionId: 'rx', status: 'FAILED', errorCode: 131026, errorTitle: 'Message undeliverable', failureReason: 'This number is not on WhatsApp or cannot receive messages.', createdAt: '2026-11-13T06:31:00.000Z', updatedAt: '2026-11-13T06:31:00.000Z' },
     ]);
     render(<WhatsAppCard />);
     const number = await screen.findByLabelText('WhatsApp number');
@@ -120,12 +129,59 @@ describe('WhatsAppCard', () => {
     await waitFor(() => expect(screen.getAllByTestId('whatsapp-message')).toHaveLength(2));
     expect(screen.getAllByTestId('whatsapp-message').map((row) => row.textContent)).toEqual([
       'Test prescription to +91970480244314 Nov 2026, 12:01 pmDelivered',
-      'Prescription to +91900000000113 Nov 2026, 12:01 pm · Message undeliverable (131026)Failed',
+      'Prescription to +91900000000113 Nov 2026, 12:01 pmThis number is not on WhatsApp or cannot receive messages. (131026)Failed',
     ]);
     fireEvent.click(screen.getByRole('button', { name: 'Send test prescription' }));
     expect((await screen.findByTestId('test-send-result')).getAttribute('role')).toBe('alert');
     expect(screen.getByTestId('test-send-result').textContent).toBe('This number is not in the allowed list of the Meta test number.');
     expect(api.sendWhatsAppTestPrescription.mock.calls).toEqual([['+91 9704802443'], ['+91 9704802443']]);
+  });
+
+  it('lists each blocker with its fix, says sends will fail, and disables the test with the reason beside it', async () => {
+    api.getWhatsAppConnection.mockResolvedValue({ ...LINKED, health: BLOCKED });
+    render(<WhatsAppCard />);
+    const warning = await screen.findByTestId('whatsapp-health-warning');
+    expect(within(warning).getByRole('heading').textContent).toBe('WhatsApp is blocking messages from this number');
+    expect(within(warning).getByText('Sends will fail until this is fixed in Meta Business Suite.')).toBeInTheDocument();
+    expect(within(warning).getAllByTestId('whatsapp-blocker').map((b) => b.textContent)).toEqual([
+      'WhatsApp Business Account: There is an error with the payment method. This will block business initiated conversations. (141006)Fix: Please add a new payment method to the account.',
+      'Business: The Business has not passed business verification. (141010)Fix: Visit business settings and start or resolve the business verification request.',
+      'Business: Your business profile is incomplete. (131000)',
+    ]);
+    fireEvent.change(screen.getByLabelText('WhatsApp number'), { target: { value: '+91 9704802443' } });
+    expect(screen.getByRole('button', { name: 'Send test prescription' })).toBeDisabled();
+    expect(screen.getByTestId('test-send-blocked').textContent).toBe('Sending is blocked by WhatsApp. Fix the issues above in Meta Business Suite first.');
+  });
+
+  it('shows no warning and keeps the test enabled when sending is available, and says so when health is unknown', async () => {
+    api.getWhatsAppConnection.mockResolvedValue(LINKED);
+    const { unmount } = render(<WhatsAppCard />);
+    await screen.findByTestId('whatsapp-verified-name');
+    fireEvent.change(screen.getByLabelText('WhatsApp number'), { target: { value: '+91 9704802443' } });
+    expect([screen.queryByTestId('whatsapp-health-warning'), screen.queryByTestId('whatsapp-health-unknown'), screen.getByRole('button', { name: 'Send test prescription' }).hasAttribute('disabled')]).toEqual([null, null, false]);
+    unmount();
+    api.getWhatsAppConnection.mockResolvedValue({ ...LINKED, health: null });
+    render(<WhatsAppCard />);
+    expect((await screen.findByTestId('whatsapp-health-unknown')).textContent).toBe('Could not check with WhatsApp whether sending is available right now.');
+    fireEvent.change(screen.getByLabelText('WhatsApp number'), { target: { value: '+91 9704802443' } });
+    expect(screen.getByRole('button', { name: 'Send test prescription' }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('checks again and clears the warning once Meta reports sending as available', async () => {
+    api.getWhatsAppConnection.mockResolvedValueOnce({ ...LINKED, health: BLOCKED }).mockResolvedValue(LINKED);
+    render(<WhatsAppCard />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(screen.queryByTestId('whatsapp-health-warning')).toBeNull());
+    expect(api.getWhatsAppConnection).toHaveBeenCalledTimes(2);
+  });
+
+  it('warns about limited sending without disabling the test', async () => {
+    api.getWhatsAppConnection.mockResolvedValue({ ...LINKED, health: { canSend: 'LIMITED', blockers: [BLOCKED.blockers[2]] } });
+    render(<WhatsAppCard />);
+    const warning = await screen.findByTestId('whatsapp-health-warning');
+    expect(within(warning).getByRole('heading').textContent).toBe('WhatsApp is limiting messages from this number');
+    fireEvent.change(screen.getByLabelText('WhatsApp number'), { target: { value: '+91 9704802443' } });
+    expect(screen.getByRole('button', { name: 'Send test prescription' }).hasAttribute('disabled')).toBe(false);
   });
 
   it('unlinks only after the in-app confirmation', async () => {

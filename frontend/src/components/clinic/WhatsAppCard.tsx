@@ -11,7 +11,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { apiClient } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 import { displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
-import type { WhatsAppConnection, WhatsAppDocumentTemplate, WhatsAppMessage, WhatsAppSendResult } from '@/lib/types';
+import type { WhatsAppConnection, WhatsAppDocumentTemplate, WhatsAppMessage, WhatsAppSendHealth, WhatsAppSendResult } from '@/lib/types';
 
 type LinkedConnection = Extract<WhatsAppConnection, { linked: true }>;
 
@@ -44,6 +44,47 @@ export function sendResultText(result: WhatsAppSendResult): string {
   if (result.status === 'ACCEPTED') return `WhatsApp accepted the message. Message ID ${result.wamid}.`;
   if (result.status === 'NOT_CONFIGURED') return 'Link the clinic WhatsApp first.';
   return result.reason;
+}
+
+const ENTITY_LABEL = { PHONE_NUMBER: 'Phone number', WABA: 'WhatsApp Business Account', BUSINESS: 'Business', APP: 'App' } as const;
+
+export const TEST_BLOCKED_TEXT = 'Sending is blocked by WhatsApp. Fix the issues above in Meta Business Suite first.';
+
+function SendHealthNotice({ health, onRecheck }: { health: WhatsAppSendHealth | null; onRecheck: () => Promise<void> }) {
+  const [checking, setChecking] = useState(false);
+  if (!health) return <p data-testid="whatsapp-health-unknown" className="text-sm text-muted-foreground">Could not check with WhatsApp whether sending is available right now.</p>;
+  if (health.canSend === 'AVAILABLE') return null;
+  const blocked = health.canSend === 'BLOCKED';
+  return (
+    <section aria-label="WhatsApp sending problems" data-testid="whatsapp-health-warning" className="space-y-3 rounded-md border border-warning-border bg-warning-soft p-4 text-sm text-warning-text">
+      <h3 className="font-medium">{blocked ? 'WhatsApp is blocking messages from this number' : 'WhatsApp is limiting messages from this number'}</h3>
+      <p>
+        {blocked ? 'Sends will fail until this is fixed in Meta Business Suite.' : 'Some sends may fail until this is fixed in Meta Business Suite.'}
+      </p>
+      {health.blockers.length > 0 && (
+        <ul className="space-y-2">
+          {health.blockers.map((b) => (
+            <li key={`${b.entity}-${b.code}`} data-testid="whatsapp-blocker">
+              <p className="font-medium">{ENTITY_LABEL[b.entity]}: {b.description} ({b.code})</p>
+              {b.fix && <p>Fix: {b.fix}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={checking}
+        onClick={() => {
+          setChecking(true);
+          void onRecheck().finally(() => setChecking(false));
+        }}
+      >
+        {checking ? 'Checking…' : 'Check again'}
+      </Button>
+    </section>
+  );
 }
 
 const templateKey = (t: { name: string; language: string }) => `${t.name}|${t.language}`;
@@ -183,7 +224,7 @@ function TemplatePicker({ connection, onChange }: { connection: LinkedConnection
   );
 }
 
-function TestSend({ onSent }: { onSent: () => void }) {
+function TestSend({ blocked, onSent }: { blocked: boolean; onSent: () => void }) {
   const ids = useId();
   const [to, setTo] = useState('');
   const [sending, setSending] = useState(false);
@@ -213,8 +254,9 @@ function TestSend({ onSent }: { onSent: () => void }) {
           <Label htmlFor={`${ids}-to`}>WhatsApp number</Label>
           <Input id={`${ids}-to`} type="tel" placeholder="+91 97048 02443" value={to} onChange={(e) => setTo(e.target.value)} autoComplete="off" />
         </div>
-        <Button type="submit" disabled={sending || !to.trim()}>{sending ? 'Sending…' : 'Send test prescription'}</Button>
+        <Button type="submit" disabled={blocked || sending || !to.trim()}>{sending ? 'Sending…' : 'Send test prescription'}</Button>
       </div>
+      {blocked && <p data-testid="test-send-blocked" className="text-sm text-warning-text">{TEST_BLOCKED_TEXT}</p>}
       {result && (
         <p role={result.status === 'ACCEPTED' ? 'status' : 'alert'} data-testid="test-send-result" className={result.status === 'ACCEPTED' ? 'text-sm text-success-text' : 'text-sm text-destructive-text'}>
           {sendResultText(result)}
@@ -242,10 +284,12 @@ function RecentMessages({ messages, onRefresh }: { messages: WhatsAppMessage[] |
             <li key={m.id} data-testid="whatsapp-message" className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
               <span className="min-w-0">
                 <span className="font-medium">{KIND_LABEL[m.kind]}</span> to +{m.toPhone}
-                <span className="block text-xs text-muted-foreground">
-                  {displayClinicDateTime(m.createdAt)}
-                  {m.status === 'FAILED' && m.errorTitle ? ` · ${m.errorTitle}${m.errorCode ? ` (${m.errorCode})` : ''}` : ''}
-                </span>
+                <span className="block text-xs text-muted-foreground">{displayClinicDateTime(m.createdAt)}</span>
+                {m.status === 'FAILED' && (m.failureReason || m.errorTitle) && (
+                  <span data-testid="whatsapp-message-reason" className="block text-xs text-destructive-text">
+                    {m.failureReason ?? m.errorTitle}{m.errorCode ? ` (${m.errorCode})` : ''}
+                  </span>
+                )}
               </span>
               <StatusBadge domain="message" status={m.status} />
             </li>
@@ -262,6 +306,14 @@ function LinkedView({ connection, onChange }: { connection: LinkedConnection; on
   const [error, setError] = useState<string | null>(null);
   const [confirm, confirmDialog] = useConfirm();
   const quality = connection.qualityRating ? QUALITY[connection.qualityRating] : undefined;
+
+  const recheck = useCallback(async () => {
+    try {
+      onChange(await apiClient.getWhatsAppConnection());
+    } catch (e) {
+      setError(getErrorMessage(e));
+    }
+  }, [onChange]);
 
   const loadMessages = useCallback(() => {
     apiClient.getWhatsAppMessages(20).then(setMessages).catch(() => setMessages([]));
@@ -305,8 +357,9 @@ function LinkedView({ connection, onChange }: { connection: LinkedConnection; on
         </div>
       </div>
       {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
+      <SendHealthNotice health={connection.health} onRecheck={recheck} />
       <TemplatePicker connection={connection} onChange={onChange} />
-      <TestSend onSent={loadMessages} />
+      <TestSend blocked={connection.health?.canSend === 'BLOCKED'} onSent={loadMessages} />
       <RecentMessages messages={messages} onRefresh={loadMessages} />
       {confirmDialog}
     </div>

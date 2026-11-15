@@ -139,6 +139,18 @@ export interface WhatsAppDocumentTemplate {
   bodyParams: number;
 }
 
+export interface WhatsAppSendBlocker {
+  entity: 'PHONE_NUMBER' | 'WABA' | 'BUSINESS' | 'APP';
+  code: number;
+  description: string;
+  fix?: string;
+}
+
+export interface WhatsAppSendHealth {
+  canSend: 'AVAILABLE' | 'LIMITED' | 'BLOCKED';
+  blockers: WhatsAppSendBlocker[];
+}
+
 export type WhatsAppConnection =
   | { linked: false; fallback: 'SERVER_ENV' | null }
   | {
@@ -151,6 +163,7 @@ export type WhatsAppConnection =
       prescriptionTemplate: WhatsAppDocumentTemplate | null;
       verifiedAt: string;
       linkedBy: { id: string; name: string } | null;
+      health: WhatsAppSendHealth | null;
     };
 
 export type WhatsAppSendResult =
@@ -169,6 +182,7 @@ export interface WhatsAppMessage {
   status: WhatsAppMessageStatus;
   errorCode: number | null;
   errorTitle: string | null;
+  failureReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
