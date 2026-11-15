@@ -1,0 +1,28 @@
+{
+  "id": "consult-01min",
+  "form": "visit-consultation",
+  "targetMinutes": 1,
+  "summary": "Quick acne follow-up where one medicine is stopped and one is added. Trap: doxycycline is stopped for acidity and must not appear as a prescription row (medication history is fine).",
+  "turns": [
+    { "speaker": "doctor", "text": "Come, sit. So how are the pimples now, any better?" },
+    { "speaker": "patient", "text": "Little better doctor, but new ones are still coming on the cheeks. And that doxycycline tablet is giving me acidity, burning in the chest." },
+    { "speaker": "doctor", "text": "Okay. Then we will stop the doxycycline completely. Don't take it from today." },
+    { "speaker": "patient", "text": "Achha, stop it." },
+    { "speaker": "doctor", "text": "Yes. Instead I am starting Sotret, isotretinoin, ten milligram capsule. One capsule once daily after dinner, for one month." },
+    { "speaker": "patient", "text": "After dinner only?" },
+    { "speaker": "doctor", "text": "Yes, with food, it absorbs better. Your lips will become dry, so keep a lip balm. Before next visit, get a lipid profile done." },
+    { "speaker": "patient", "text": "My lips are already dry. And I go out in the sun daily for college." },
+    { "speaker": "doctor", "text": "Use any plain lip balm many times a day, and a cap in the sun. No squeezing the pimples. Theek hai?" },
+    { "speaker": "patient", "text": "Okay doctor. And the lipid profile test before next visit, right?" },
+    { "speaker": "doctor", "text": "And come back to see me after four weeks with the report." },
+    { "speaker": "patient", "text": "Four weeks. Thank you doctor." }
+  ],
+  "expect": {
+    "prescriptionItems": [
+      {"drugName": {"contains": "Sotret"}, "dosage": 10, "dosageUnit": "MG", "frequency": "ONCE_DAILY", "duration": 1, "durationUnit": "MONTHS", "timing": {"anyOf": ["dinner", "food"]}}
+    ],
+    "investigations": {"includesAll": ["lipid"]},
+    "followUpInstructions": {"anyOf": ["4 week", "four week"]}
+  },
+  "allowExtra": ["chiefComplaints", "skinConcerns", "diagnosis", "medicationHistory", "examination", "acneSeverity"]
+}
