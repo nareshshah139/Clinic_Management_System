@@ -3,7 +3,7 @@
     "method": "GET",
     "path": "/v21.0/106540352242922",
     "query": {
-      "fields": "display_phone_number,verified_name,quality_rating"
+      "fields": "display_phone_number,verified_name,quality_rating,health_status"
     },
     "authorized": true,
     "status": 200,
@@ -11,7 +11,17 @@
       "display_phone_number": "+91 20 2555 0199",
       "verified_name": "Lakshmi Family Clinic",
       "quality_rating": "GREEN",
-      "id": "106540352242922"
+      "id": "106540352242922",
+      "health_status": {
+        "can_send_message": "AVAILABLE",
+        "entities": [
+          {
+            "entity_type": "WABA",
+            "id": "102290129340398",
+            "can_send_message": "AVAILABLE"
+          }
+        ]
+      }
     },
     "authorization": "Bearer <fake token>"
   },
@@ -127,6 +137,32 @@
           "before": "a",
           "after": "b"
         }
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/106540352242922",
+    "query": {
+      "fields": "display_phone_number,verified_name,quality_rating,health_status"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "display_phone_number": "+91 20 2555 0199",
+      "verified_name": "Lakshmi Family Clinic",
+      "quality_rating": "GREEN",
+      "id": "106540352242922",
+      "health_status": {
+        "can_send_message": "AVAILABLE",
+        "entities": [
+          {
+            "entity_type": "WABA",
+            "id": "102290129340398",
+            "can_send_message": "AVAILABLE"
+          }
+        ]
       }
     },
     "authorization": "Bearer <fake token>"
@@ -357,7 +393,7 @@
       "messaging_product": "whatsapp",
       "type": "application/pdf",
       "file": {
-        "filename": "prescription-cmwgi867t000g7d8g987jxlu7.pdf",
+        "filename": "prescription-cmwhh3wza000g7dsrxo02di0s.pdf",
         "size": 1481,
         "head": "%PDF-1.3"
       }
@@ -391,7 +427,7 @@
                 "type": "document",
                 "document": {
                   "id": "media-4",
-                  "filename": "prescription-cmwgi867t000g7d8g987jxlu7.pdf"
+                  "filename": "prescription-cmwhh3wza000g7dsrxo02di0s.pdf"
                 }
               }
             ]
@@ -426,6 +462,326 @@
           "id": "wamid.LOCALFAKE0005"
         }
       ]
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/106540352242922",
+    "query": {
+      "fields": "display_phone_number,verified_name,quality_rating,health_status"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "display_phone_number": "+91 20 2555 0199",
+      "verified_name": "Lakshmi Family Clinic",
+      "quality_rating": "GREEN",
+      "id": "106540352242922",
+      "health_status": {
+        "can_send_message": "AVAILABLE",
+        "entities": [
+          {
+            "entity_type": "WABA",
+            "id": "102290129340398",
+            "can_send_message": "AVAILABLE"
+          }
+        ]
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/106540352242922",
+    "query": {
+      "fields": "display_phone_number,verified_name,quality_rating,health_status"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "display_phone_number": "+91 20 2555 0199",
+      "verified_name": "Lakshmi Family Clinic",
+      "quality_rating": "GREEN",
+      "id": "106540352242922",
+      "health_status": {
+        "can_send_message": "AVAILABLE",
+        "entities": [
+          {
+            "entity_type": "WABA",
+            "id": "102290129340398",
+            "can_send_message": "AVAILABLE"
+          }
+        ]
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/102290129340398/message_templates",
+    "query": {
+      "fields": "name,language,status,components",
+      "limit": "250"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "data": [
+        {
+          "name": "prescription_ready",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "DOCUMENT"
+            },
+            {
+              "type": "BODY",
+              "text": "Hello {{1}}, {{2}} has shared your prescription. It is attached as a PDF."
+            },
+            {
+              "type": "FOOTER",
+              "text": "Reply to this message for help."
+            }
+          ]
+        },
+        {
+          "name": "appointment_reminder",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "TEXT",
+              "text": "Reminder"
+            },
+            {
+              "type": "BODY",
+              "text": "See you {{1}}"
+            }
+          ]
+        }
+      ],
+      "paging": {
+        "cursors": {
+          "before": "a",
+          "after": "b"
+        }
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/102290129340398/message_templates",
+    "query": {
+      "fields": "name,language,status,components",
+      "limit": "250"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "data": [
+        {
+          "name": "prescription_ready",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "DOCUMENT"
+            },
+            {
+              "type": "BODY",
+              "text": "Hello {{1}}, {{2}} has shared your prescription. It is attached as a PDF."
+            },
+            {
+              "type": "FOOTER",
+              "text": "Reply to this message for help."
+            }
+          ]
+        },
+        {
+          "name": "appointment_reminder",
+          "language": "en",
+          "status": "APPROVED",
+          "category": "UTILITY",
+          "components": [
+            {
+              "type": "HEADER",
+              "format": "TEXT",
+              "text": "Reminder"
+            },
+            {
+              "type": "BODY",
+              "text": "See you {{1}}"
+            }
+          ]
+        }
+      ],
+      "paging": {
+        "cursors": {
+          "before": "a",
+          "after": "b"
+        }
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/106540352242922",
+    "query": {
+      "fields": "display_phone_number,verified_name,quality_rating,health_status"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "display_phone_number": "+91 20 2555 0199",
+      "verified_name": "Lakshmi Family Clinic",
+      "quality_rating": "GREEN",
+      "id": "106540352242922",
+      "health_status": {
+        "can_send_message": "BLOCKED",
+        "entities": [
+          {
+            "entity_type": "PHONE_NUMBER",
+            "id": "106540352242922",
+            "can_send_message": "AVAILABLE",
+            "can_receive_call_sip": "BLOCKED",
+            "errors": [
+              {
+                "error_code": 138024,
+                "error_description": "WhatsApp Business calling cannot use SIP because it is not enabled",
+                "possible_solution": "Configure SIP using {PHONE_NUMBER_ID}/settings API"
+              }
+            ]
+          },
+          {
+            "entity_type": "WABA",
+            "id": "102290129340398",
+            "can_send_message": "BLOCKED",
+            "errors": [
+              {
+                "error_code": 141006,
+                "error_description": "There is an error with the payment method. This will block business initiated conversations.",
+                "possible_solution": "There was an error with your payment method. Please add a new payment method to the account."
+              }
+            ]
+          },
+          {
+            "entity_type": "BUSINESS",
+            "id": "1130344116394524",
+            "can_send_message": "BLOCKED",
+            "errors": [
+              {
+                "error_code": 141010,
+                "error_description": "The Business has not passed business verification.",
+                "possible_solution": "Visit business settings and start or resolve the business verification request."
+              },
+              {
+                "error_code": 131000,
+                "error_description": "Your business profile is incomplete. The following fields are required: Legal Name, Country, and Website.",
+                "possible_solution": "Complete the business profile in Meta Business Suite."
+              }
+            ]
+          },
+          {
+            "entity_type": "APP",
+            "id": "1013190915166848",
+            "can_send_message": "AVAILABLE",
+            "errors": [
+              {
+                "error_code": 138025
+              }
+            ],
+            "additional_info": [
+              "Your app is not subscribed to the message webhook."
+            ]
+          }
+        ]
+      }
+    },
+    "authorization": "Bearer <fake token>"
+  },
+  {
+    "method": "GET",
+    "path": "/v21.0/106540352242922",
+    "query": {
+      "fields": "display_phone_number,verified_name,quality_rating,health_status"
+    },
+    "authorized": true,
+    "status": 200,
+    "response": {
+      "display_phone_number": "+91 20 2555 0199",
+      "verified_name": "Lakshmi Family Clinic",
+      "quality_rating": "GREEN",
+      "id": "106540352242922",
+      "health_status": {
+        "can_send_message": "BLOCKED",
+        "entities": [
+          {
+            "entity_type": "PHONE_NUMBER",
+            "id": "106540352242922",
+            "can_send_message": "AVAILABLE",
+            "can_receive_call_sip": "BLOCKED",
+            "errors": [
+              {
+                "error_code": 138024,
+                "error_description": "WhatsApp Business calling cannot use SIP because it is not enabled",
+                "possible_solution": "Configure SIP using {PHONE_NUMBER_ID}/settings API"
+              }
+            ]
+          },
+          {
+            "entity_type": "WABA",
+            "id": "102290129340398",
+            "can_send_message": "BLOCKED",
+            "errors": [
+              {
+                "error_code": 141006,
+                "error_description": "There is an error with the payment method. This will block business initiated conversations.",
+                "possible_solution": "There was an error with your payment method. Please add a new payment method to the account."
+              }
+            ]
+          },
+          {
+            "entity_type": "BUSINESS",
+            "id": "1130344116394524",
+            "can_send_message": "BLOCKED",
+            "errors": [
+              {
+                "error_code": 141010,
+                "error_description": "The Business has not passed business verification.",
+                "possible_solution": "Visit business settings and start or resolve the business verification request."
+              },
+              {
+                "error_code": 131000,
+                "error_description": "Your business profile is incomplete. The following fields are required: Legal Name, Country, and Website.",
+                "possible_solution": "Complete the business profile in Meta Business Suite."
+              }
+            ]
+          },
+          {
+            "entity_type": "APP",
+            "id": "1013190915166848",
+            "can_send_message": "AVAILABLE",
+            "errors": [
+              {
+                "error_code": 138025
+              }
+            ],
+            "additional_info": [
+              "Your app is not subscribed to the message webhook."
+            ]
+          }
+        ]
+      }
     },
     "authorization": "Bearer <fake token>"
   },

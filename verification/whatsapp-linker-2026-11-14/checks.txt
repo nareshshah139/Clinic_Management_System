@@ -6,4 +6,5 @@ PASS A number Meta refuses (131030) shows the mapped reason instead of success
 PASS Sharing a saved prescription by WhatsApp returns ACCEPTED wamid.LOCALFAKE0005 and records one print event
 PASS Webhook answers Meta's challenge, rejects unsigned and wrongly signed deliveries, applies the signed 'delivered', and ignores a late 'sent'
 PASS After reload, recent messages show the test prescription as Delivered and the shared prescription as Accepted
+PASS Meta health BLOCKED (payment, business verification, profile): the card lists three blockers with fixes and the test button is disabled; the API refuses a test send with FAILED and no upload or message request reaches Meta; a webhook 131031 shows its plain reason on the message
 PASS Clinic profile fits a 390px phone without horizontal scroll

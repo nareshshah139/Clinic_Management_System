@@ -20,6 +20,19 @@ const FAKE_TOKEN = "EAAG-local-fake-token-not-a-secret";
 const APP_SECRET = "local-proof-app-secret";
 const VERIFY_TOKEN = "local-proof-verify-token";
 const NOT_ALLOWED = "919000000000";
+const AVAILABLE_HEALTH = { can_send_message: "AVAILABLE", entities: [{ entity_type: "WABA", id: WABA_ID, can_send_message: "AVAILABLE" }] };
+const BLOCKED_HEALTH = {
+  can_send_message: "BLOCKED",
+  entities: [
+    { entity_type: "PHONE_NUMBER", id: PHONE_ID, can_send_message: "AVAILABLE", can_receive_call_sip: "BLOCKED", errors: [{ error_code: 138024, error_description: "WhatsApp Business calling cannot use SIP because it is not enabled", possible_solution: "Configure SIP using {PHONE_NUMBER_ID}/settings API" }] },
+    { entity_type: "WABA", id: WABA_ID, can_send_message: "BLOCKED", errors: [{ error_code: 141006, error_description: "There is an error with the payment method. This will block business initiated conversations.", possible_solution: "There was an error with your payment method. Please add a new payment method to the account." }] },
+    { entity_type: "BUSINESS", id: "1130344116394524", can_send_message: "BLOCKED", errors: [
+      { error_code: 141010, error_description: "The Business has not passed business verification.", possible_solution: "Visit business settings and start or resolve the business verification request." },
+      { error_code: 131000, error_description: "Your business profile is incomplete. The following fields are required: Legal Name, Country, and Website.", possible_solution: "Complete the business profile in Meta Business Suite." },
+    ] },
+    { entity_type: "APP", id: "1013190915166848", can_send_message: "AVAILABLE", errors: [{ error_code: 138025 }], additional_info: ["Your app is not subscribed to the message webhook."] },
+  ],
+};
 
 function multipart(body, contentType) {
   const boundary = /boundary=(?:"([^"]+)"|([^;]+))/.exec(contentType);
@@ -43,6 +56,7 @@ function multipart(body, contentType) {
 function fakeGraph() {
   const log = [];
   const uploads = [];
+  const state = { health: AVAILABLE_HEALTH };
   let sequence = 0;
   const server = http.createServer((req, res) => {
     const chunks = [];
@@ -60,7 +74,7 @@ function fakeGraph() {
       };
       if (!entry.authorized) return reply(401, { error: { message: "Invalid OAuth access token.", type: "OAuthException", code: 190 } });
       if (req.method === "GET" && url.pathname === `/v21.0/${PHONE_ID}`)
-        return reply(200, { display_phone_number: "+91 20 2555 0199", verified_name: "Lakshmi Family Clinic", quality_rating: "GREEN", id: PHONE_ID });
+        return reply(200, { display_phone_number: "+91 20 2555 0199", verified_name: "Lakshmi Family Clinic", quality_rating: "GREEN", id: PHONE_ID, health_status: state.health });
       if (req.method === "GET" && url.pathname === `/v21.0/${WABA_ID}/message_templates`)
         return reply(200, {
           data: [
@@ -90,7 +104,7 @@ function fakeGraph() {
       reply(404, { error: { message: `Unknown path ${url.pathname}`, code: 803 } });
     });
   });
-  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ server, log, uploads, base: `http://127.0.0.1:${server.address().port}` })));
+  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ server, log, uploads, state, base: `http://127.0.0.1:${server.address().port}` })));
 }
 
 (async () => {
@@ -236,6 +250,35 @@ function fakeGraph() {
     ]);
     await shot("06-recent-messages-delivered.png");
     pass("After reload, recent messages show the test prescription as Delivered and the shared prescription as Accepted");
+
+    const sends = () => graph.log.filter((e) => e.method === "POST").length;
+    graph.state.health = BLOCKED_HEALTH;
+    const failed = delivery("failed", share.body.wamid).replace('"status":"failed"', '"status":"failed","errors":[{"code":131031,"title":"Business Account locked"}]');
+    const failedBody = await post(failed, sign(failed, APP_SECRET));
+    assert.deepEqual(await failedBody.json(), { updated: 1 });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector('[data-testid="whatsapp-health-warning"]');
+    const blockers = await page.$$eval('[data-testid="whatsapp-blocker"]', (els) => els.map((e) => e.textContent));
+    assert.deepEqual(blockers, [
+      "WhatsApp Business Account: There is an error with the payment method. This will block business initiated conversations. (141006)Fix: There was an error with your payment method. Please add a new payment method to the account.",
+      "Business: The Business has not passed business verification. (141010)Fix: Visit business settings and start or resolve the business verification request.",
+      "Business: Your business profile is incomplete. The following fields are required: Legal Name, Country, and Website. (131000)Fix: Complete the business profile in Meta Business Suite.",
+    ]);
+    assert.ok((await text('[data-testid="whatsapp-health-warning"]')).includes("Sends will fail until this is fixed in Meta Business Suite."));
+    await page.locator("::-p-aria(WhatsApp number)").fill("+91 9704802443");
+    assert.equal(await page.$eval('form[aria-labelledby] button[type="submit"]', (b) => b.disabled), true, "Send test prescription is disabled while blocked");
+    assert.equal(await text('[data-testid="test-send-blocked"]'), "Sending is blocked by WhatsApp. Fix the issues above in Meta Business Suite first.");
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-testid="whatsapp-message-reason"]')].length === 1);
+    assert.equal(await text('[data-testid="whatsapp-message-reason"]'), "Meta has locked this WhatsApp Business Account, so it cannot send messages. Resolve the account issues in Meta Business Suite; Clinic profile lists what Meta reports. (131031)");
+    await shot("08-blocked-warning.png");
+    const before = sends();
+    const refused = await page.evaluate(async () => {
+      const res = await fetch("/api/whatsapp/connection/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: "+91 97048 02443" }) });
+      return { status: res.status, body: await res.json() };
+    });
+    assert.deepEqual([refused.status, refused.body.status, refused.body.reason.startsWith("WhatsApp is blocking messages from this number, so nothing was sent. Fix it in Meta Business Suite: There is an error with the payment method.")], [200, "FAILED", true]);
+    assert.equal(sends(), before, "a blocked test send never reaches /media or /messages");
+    pass("Meta health BLOCKED (payment, business verification, profile): the card lists three blockers with fixes and the test button is disabled; the API refuses a test send with FAILED and no upload or message request reaches Meta; a webhook 131031 shows its plain reason on the message");
 
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
     await new Promise((r) => setTimeout(r, 300));
