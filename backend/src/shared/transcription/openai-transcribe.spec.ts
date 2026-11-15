@@ -5,7 +5,7 @@ import * as http from 'http';
 import type { AddressInfo } from 'net';
 import * as os from 'os';
 import * as path from 'path';
-import { looksTruncated, planTranscriptionSegments, transcribeWithOpenAI, voicedSeconds } from './openai-transcribe';
+import { chooseConsensusTranscript, planTranscriptionSegments, transcribeWithOpenAI } from './openai-transcribe';
 
 interface Reply {
   status: number;
@@ -58,30 +58,33 @@ describe('planTranscriptionSegments', () => {
   });
 });
 
-describe('looksTruncated', () => {
-  it('flags fewer than 2 chars per voiced second once there are at least 20 voiced seconds', () => {
-    expect(looksTruncated(39, 20)).toBe(true);
-    expect(looksTruncated(40, 20)).toBe(false);
-    expect(looksTruncated(223, 300)).toBe(true);
-    expect(looksTruncated(2900, 300)).toBe(false);
+describe('chooseConsensusTranscript', () => {
+  const ofLength = (n: number, letter = 'a') => letter.repeat(n);
+
+  it('keeps the first of two samples whose lengths are within 15%', () => {
+    expect(chooseConsensusTranscript([ofLength(1600, 'a'), ofLength(1800, 'b')])).toEqual({ decision: 'agree', index: 0, text: ofLength(1600, 'a') });
+    expect(chooseConsensusTranscript([ofLength(1600), ofLength(1900)])).toEqual({ decision: 'disagree' });
   });
 
-  it('never flags under 20 voiced seconds', () => {
-    expect(looksTruncated(0, 19.9)).toBe(false);
-    expect(looksTruncated(0, 20)).toBe(true);
-  });
-});
-
-describe('voicedSeconds', () => {
-  it('subtracts the overlap of silences with the span', () => {
-    const silences = [{ start: 10, end: 12 }, { start: 95, end: 105 }, { start: 200, end: 210 }];
-    expect(voicedSeconds({ start: 0, end: 100 }, silences)).toBe(93);
-    expect(voicedSeconds({ start: 100, end: 150 }, silences)).toBe(45);
-    expect(voicedSeconds({ start: 20, end: 90 }, silences)).toBe(70);
+  it('lets short samples differ by up to 40 chars', () => {
+    expect(chooseConsensusTranscript([ofLength(10, 'a'), ofLength(50, 'b')])).toEqual({ decision: 'agree', index: 0, text: ofLength(10, 'a') });
+    expect(chooseConsensusTranscript([ofLength(10), ofLength(51)])).toEqual({ decision: 'disagree' });
   });
 
-  it('is zero for a span that is entirely silent', () => {
-    expect(voicedSeconds({ start: 5, end: 8 }, [{ start: 0, end: 10 }])).toBe(0);
+  it('treats two empty transcripts of silence as agreeing', () => {
+    expect(chooseConsensusTranscript(['', ' '])).toEqual({ decision: 'agree', index: 0, text: '' });
+  });
+
+  it('flags an invented passage and a truncated fragment as disagreeing', () => {
+    expect(chooseConsensusTranscript([ofLength(1600), ofLength(2400)])).toEqual({ decision: 'disagree' });
+    expect(chooseConsensusTranscript([ofLength(1600), ofLength(220)])).toEqual({ decision: 'disagree' });
+  });
+
+  it('keeps the median length of three samples', () => {
+    expect(chooseConsensusTranscript([ofLength(1600, 'a'), ofLength(2400, 'b'), ofLength(1610, 'c')]))
+      .toEqual({ decision: 'median-of-3', index: 2, text: ofLength(1610, 'c') });
+    expect(chooseConsensusTranscript([ofLength(1600, 'a'), ofLength(220, 'b'), ofLength(1605, 'c')]))
+      .toEqual({ decision: 'median-of-3', index: 0, text: ofLength(1600, 'a') });
   });
 });
 
@@ -90,10 +93,14 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
   let directory: string;
   let respond: (upload: Received, arrival: number) => Reply;
   let received: Received[];
+  let inFlight: number;
+  let maxInFlight: number;
   const savedEnv = { ...process.env };
 
   beforeAll(async () => {
     server = http.createServer(async (req, res) => {
+      maxInFlight = Math.max(maxInFlight, ++inFlight);
+      res.on('finish', () => { inFlight--; });
       const chunks: Buffer[] = [];
       for await (const chunk of req) chunks.push(chunk as Buffer);
       const form = await new Response(Buffer.concat(chunks), { headers: { 'content-type': req.headers['content-type'] ?? '' } }).formData();
@@ -114,6 +121,8 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
   beforeEach(() => {
     directory = fs.mkdtempSync(path.join(os.tmpdir(), 'transcribe-'));
     received = [];
+    inFlight = 0;
+    maxInFlight = 0;
     respond = () => ({ status: 200, body: '{"text":"BP 120 by 80","segments":[{"text":"BP 120 by 80","start":0,"end":1.5}]}' });
     process.env.OPENAI_API_KEY = 'sk-test';
     process.env.OPENAI_TRANSCRIBE_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/audio/transcriptions`;
@@ -135,17 +144,19 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
     return { path: file, mimetype: 'audio/wav', filename: 'audio.wav' };
   };
 
-  it('uploads the audio with the model, prompt and json format for gpt-4o-transcribe, and returns text and segments', async () => {
+  it('uploads the audio twice with the model, prompt and json format for gpt-4o-transcribe, and returns the agreed text and segments', async () => {
     process.env.OPENAI_TRANSCRIBE_LANGUAGE = ' en ';
     await expect(transcribeWithOpenAI(wav())).resolves.toEqual({
       text: 'BP 120 by 80',
       segments: [{ text: 'BP 120 by 80', start: 0, end: 1.5 }],
     });
-    expect(received).toHaveLength(1);
-    expect(received[0].authorization).toBe('Bearer sk-test');
-    expect(received[0].file).toEqual({ name: 'audio.wav', type: 'audio/wav', bytes: fs.readFileSync(path.join(directory, 'audio.wav')).toString('latin1') });
-    expect(received[0].fields).toMatchObject({ model: 'gpt-4o-transcribe', language: 'en', temperature: '0', response_format: 'json', chunking_strategy: '{"type":"server_vad"}' });
-    expect(received[0].fields.prompt).toMatch(/^Medical doctor–patient conversation transcription\./);
+    expect(received).toHaveLength(2);
+    for (const upload of received) {
+      expect(upload.authorization).toBe('Bearer sk-test');
+      expect(upload.file).toEqual({ name: 'audio.wav', type: 'audio/wav', bytes: fs.readFileSync(path.join(directory, 'audio.wav')).toString('latin1') });
+      expect(upload.fields).toMatchObject({ model: 'gpt-4o-transcribe', language: 'en', temperature: '0', response_format: 'json', chunking_strategy: '{"type":"server_vad"}' });
+      expect(upload.fields.prompt).toMatch(/^Medical doctor–patient conversation transcription\./);
+    }
   });
 
   it('asks whisper models for verbose_json so diarization gets timed segments', async () => {
@@ -153,6 +164,17 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
     await transcribeWithOpenAI(wav());
     expect(received[0].fields).toMatchObject({ model: 'whisper-1', response_format: 'verbose_json' });
     expect(received[0].fields.chunking_strategy).toBeUndefined();
+  });
+
+  it('keeps the segments of the whisper sample the consensus chose', async () => {
+    process.env.OPENAI_TRANSCRIBE_MODEL = 'whisper-1';
+    const TRUE = 'Cough for three days, no fever, BP 120 by 80.';
+    const INVENTED = `${TRUE} Doctor: Good morning, how are you feeling today? Your heart rate is 72.`;
+    respond = (_upload, arrival) => (arrival === 0
+      ? { status: 200, body: JSON.stringify({ text: INVENTED, segments: [{ text: TRUE, start: 0, end: 3 }, { text: 'Doctor: Good morning', start: 3, end: 6 }] }) }
+      : { status: 200, body: JSON.stringify({ text: TRUE, segments: [{ text: TRUE, start: 0, end: 3.2 }] }) });
+    await expect(transcribeWithOpenAI(wav())).resolves.toEqual({ text: TRUE, segments: [{ text: TRUE, start: 0, end: 3.2 }] });
+    expect(received).toHaveLength(3);
   });
 
   it('converts webm to 16 kHz mono wav before uploading and removes the converted file', async () => {
@@ -213,7 +235,6 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
       throw new Error('no data chunk');
     };
 
-    // Long enough (200 chars for 50-65 voiced seconds) that the truncation guard does not retry.
     const FILLER = 'x'.repeat(200);
 
     beforeEach(() => {
@@ -221,21 +242,22 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
       respond = (upload, arrival) => ({
         status: 200,
         body: JSON.stringify({ text: ` ${uploadSeconds(upload).toFixed(1)}s ${FILLER} `, segments: [{ text: 'part', start: 0.5, end: 2 }] }),
-        delayMs: (4 - arrival) * 40,
+        delayMs: (8 - arrival) * 20,
       });
     });
 
-    it('transcribes 16 kHz mono parts split at silences and joins them in recording order', async () => {
+    it('transcribes each 16 kHz mono part twice, split at silences, and joins them in recording order', async () => {
       await expect(transcribeWithOpenAI(recording('webm'))).resolves.toMatchObject({
         text: ['49.5s', '65.0s', '63.0s', '52.5s'].map((seconds) => `${seconds} ${FILLER}`).join(' '),
       });
       expect(received.map((upload) => {
         const header = Buffer.from(upload.file!.bytes, 'latin1');
         return [upload.file?.type, header.readUInt16LE(22), header.readUInt32LE(24), upload.fields.model, upload.fields.response_format];
-      })).toEqual(Array(4).fill(['audio/wav', 1, 16000, 'gpt-4o-transcribe', 'json']));
-      expect(received.map((upload) => upload.file?.name).sort()).toEqual(
-        ['consult.part0.wav', 'consult.part1.wav', 'consult.part2.wav', 'consult.part3.wav'],
-      );
+      })).toEqual(Array(8).fill(['audio/wav', 1, 16000, 'gpt-4o-transcribe', 'json']));
+      expect(received.map((upload) => upload.file?.name).sort()).toEqual([
+        'consult.part0.wav', 'consult.part0.wav', 'consult.part1.wav', 'consult.part1.wav',
+        'consult.part2.wav', 'consult.part2.wav', 'consult.part3.wav', 'consult.part3.wav',
+      ]);
       expect(fs.readdirSync(directory)).toEqual(['consult.webm']);
     });
 
@@ -255,52 +277,77 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
       expect(fs.readdirSync(directory)).toEqual(['consult.wav']);
     });
 
-    describe('truncation guard', () => {
-      const FULL = 'full transcript '.repeat(20).trim();
-      const SHORT = 'cut off ab';
+    it('never has more requests in flight than OPENAI_TRANSCRIBE_CONCURRENCY', async () => {
+      process.env.OPENAI_TRANSCRIBE_CONCURRENCY = '2';
+      const healthy = respond;
+      respond = (upload, arrival) => ({ ...healthy(upload, arrival), delayMs: 50 });
+      await transcribeWithOpenAI(recording('wav'));
+      expect(received).toHaveLength(8);
+      expect(maxInFlight).toBe(2);
+    });
+
+    describe('consensus across two requests per part', () => {
+      // 200 s of tone without silences, cut at 60 and 120 s into three parts.
       const tone = () => {
         const file = path.join(directory, 'tone.wav');
         execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=200', '-ar', '16000', '-ac', '1', file]);
         return { path: file, mimetype: 'audio/wav', filename: 'tone.wav' };
       };
-      const text = (value: string) => ({ status: 200, body: JSON.stringify({ text: value, segments: [] }), delayMs: 0 });
-      const partName = (upload: Received) => upload.file?.name;
-
-      it('retries a short part once without the prompt and keeps the full retry', async () => {
-        let shortServed = false;
+      const TRUE: Record<string, string> = {
+        'tone.part0.wav': 'Patient reports a dry cough for three days and mild throat pain at night.',
+        'tone.part1.wav': 'No fever, no breathlessness. Blood pressure 120/80 mmHg, pulse 88 per minute.',
+        'tone.part2.wav': 'Advised steam inhalation, warm fluids and review after five days if not better.',
+      };
+      const JOINED =
+        'Patient reports a dry cough for three days and mild throat pain at night. ' +
+        'No fever, no breathlessness. Blood pressure 120/80 mmHg, pulse 88 per minute. ' +
+        'Advised steam inhalation, warm fluids and review after five days if not better.';
+      const text = (value: string) => ({ status: 200, body: JSON.stringify({ text: value, segments: [] }) });
+      const name = (upload: Received) => upload.file!.name;
+      const uploadsOf = (part: string) => received.filter((upload) => name(upload) === part).length;
+      // Serves `faulty` as the first reply for part 1 and the true text everywhere else.
+      const faultOnFirstPart1Reply = (faulty: string) => {
+        let served = false;
         respond = (upload) => {
-          if (partName(upload) === 'tone.part1.wav' && 'prompt' in upload.fields && !shortServed) {
-            shortServed = true;
-            return text(SHORT);
+          if (name(upload) === 'tone.part1.wav' && !served) {
+            served = true;
+            return text(faulty);
           }
-          return text(FULL);
+          return text(TRUE[name(upload)]);
         };
-        const result = await transcribeWithOpenAI(tone());
-        expect(result.text.split(' ').filter((word) => word === 'transcript')).toHaveLength(60);
-        expect(result.text).not.toContain(SHORT);
-        expect(received).toHaveLength(4);
-        const part1 = received.filter((upload) => partName(upload) === 'tone.part1.wav');
-        expect(part1).toHaveLength(2);
-        expect(part1.filter((upload) => 'prompt' in upload.fields)).toHaveLength(1);
-        expect(part1.filter((upload) => !('prompt' in upload.fields))).toHaveLength(1);
+      };
+
+      it('uses the agreed text with two uploads per part', async () => {
+        respond = (upload) => text(TRUE[name(upload)]);
+        await expect(transcribeWithOpenAI(tone())).resolves.toEqual({ text: JOINED, segments: [] });
+        expect([uploadsOf('tone.part0.wav'), uploadsOf('tone.part1.wav'), uploadsOf('tone.part2.wav')]).toEqual([2, 2, 2]);
       });
 
-      it('keeps the longer of two short results and still succeeds', async () => {
-        respond = (upload) => {
-          if (partName(upload) !== 'tone.part1.wav') return text(FULL);
-          return text('prompt' in upload.fields ? SHORT : 'slightly longer cut');
-        };
-        const result = await transcribeWithOpenAI(tone());
-        expect(result.text).toContain('slightly longer cut');
-        expect(result.text).not.toContain(SHORT);
-        expect(received).toHaveLength(4);
+      it('drops an invented consultation passage by asking a third time', async () => {
+        faultOnFirstPart1Reply(
+          `${TRUE['tone.part1.wav']} Doctor: Good morning, how are you feeling today? Your heart rate is 72. ` +
+            "I'll prescribe azithromycin 500 mg once daily.",
+        );
+        await expect(transcribeWithOpenAI(tone())).resolves.toEqual({ text: JOINED, segments: [] });
+        expect([uploadsOf('tone.part0.wav'), uploadsOf('tone.part1.wav'), uploadsOf('tone.part2.wav')]).toEqual([2, 3, 2]);
       });
 
-      it('guards a single-request recording too', async () => {
+      it('drops a truncated fragment by asking a third time', async () => {
+        faultOnFirstPart1Reply('No fever, ');
+        await expect(transcribeWithOpenAI(tone())).resolves.toEqual({ text: JOINED, segments: [] });
+        expect([uploadsOf('tone.part0.wav'), uploadsOf('tone.part1.wav'), uploadsOf('tone.part2.wav')]).toEqual([2, 3, 2]);
+      });
+
+      it('applies the same consensus to a single-request recording', async () => {
         process.env.OPENAI_TRANSCRIBE_SEGMENT_SECONDS = '170';
-        respond = (upload) => text('prompt' in upload.fields ? SHORT : FULL);
-        await expect(transcribeWithOpenAI(tone())).resolves.toMatchObject({ text: FULL });
-        expect(received).toHaveLength(2);
+        let served = false;
+        respond = () => {
+          if (served) return text(TRUE['tone.part0.wav']);
+          served = true;
+          return text('Patient re');
+        };
+        await expect(transcribeWithOpenAI(tone())).resolves.toEqual({ text: TRUE['tone.part0.wav'], segments: [] });
+        expect(received.map(name)).toEqual(['tone.wav', 'tone.wav', 'tone.wav']);
       });
     });
 

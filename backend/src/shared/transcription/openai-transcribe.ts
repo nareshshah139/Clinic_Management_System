@@ -39,24 +39,36 @@ const TRANSCRIPTION_PROMPT =
 // ~220 chars (HTTP 200); two 150 s halves with the same prompt: 0/20. Long recordings are sent as ~150 s parts.
 const DEFAULT_SEGMENT_S = 150;
 const SEARCH_WINDOW_S = 45;
-// Normal speech yields ~9 chars per voiced second; the truncated 300 s replies were ~0.7. 2 sits well below
-// slow speech and well above a fragment. Under 20 voiced seconds a short transcript is plausible (a one-word answer).
-const MIN_VOICED_SECONDS_TO_CHECK = 20;
-const MIN_CHARS_PER_VOICED_SECOND = 2;
 const SILENCE_FILTER = 'silencedetect=noise=-35dB:d=0.4';
 
-/** True when a transcript is implausibly short for the amount of speech sent, the signature of silent truncation. */
-export function looksTruncated(chars: number, voicedSeconds: number): boolean {
-  return voicedSeconds >= MIN_VOICED_SECONDS_TO_CHECK && chars < MIN_CHARS_PER_VOICED_SECOND * voicedSeconds;
+// Measured (gpt-4o-transcribe, temperature 0): ~2/60 150 s requests invented a passage (~1.5x length), 2/10 300 s requests truncated to ~220 chars, each random per request.
+const AGREE_WITHIN_CHARS = 40;
+const AGREE_WITHIN_FRACTION = 0.15;
+
+export interface ConsensusChoice {
+  decision: 'agree' | 'median-of-3';
+  /** Which sample to keep, so a whisper caller keeps that sample's segments. */
+  index: number;
+  text: string;
 }
 
-/** Seconds of span that are not covered by a detected silence. */
-export function voicedSeconds(span: AudioSpan, silences: AudioSpan[]): number {
-  const silent = silences.reduce(
-    (total, silence) => total + Math.max(0, Math.min(span.end, silence.end) - Math.max(span.start, silence.start)),
-    0,
-  );
-  return Math.max(0, span.end - span.start - silent);
+/**
+ * Two samples of one transcription agree when their lengths are within max(40 chars, 15%); keep the first. They
+ * disagree when one sample invented or lost content, and a third sample is needed. Of three, keep the median length:
+ * a rare failure is either too long or too short, so it never lands in the middle unless two requests fail alike.
+ */
+export function chooseConsensusTranscript(texts: [string, string]): ConsensusChoice | { decision: 'disagree' };
+export function chooseConsensusTranscript(texts: [string, string, string]): ConsensusChoice;
+export function chooseConsensusTranscript(texts: string[]): ConsensusChoice | { decision: 'disagree' } {
+  const lengths = texts.map((text) => text.trim().length);
+  if (texts.length === 2) {
+    const [a, b] = lengths;
+    return Math.abs(a - b) <= Math.max(AGREE_WITHIN_CHARS, AGREE_WITHIN_FRACTION * Math.max(a, b))
+      ? { decision: 'agree', index: 0, text: texts[0] }
+      : { decision: 'disagree' };
+  }
+  const index = [0, 1, 2].sort((i, j) => lengths[i] - lengths[j])[1];
+  return { decision: 'median-of-3', index, text: texts[index] };
 }
 
 export function isOpenAiTranscriptionConfigured(): boolean {
@@ -141,16 +153,40 @@ function detectSilences(inputPath: string): Promise<AudioSpan[]> {
   });
 }
 
-async function requestTranscription(apiKey: string, audio: TranscriptionAudio, withPrompt = true): Promise<OpenAiTranscription> {
-  const fileBuf = await fs.readFile(audio.path);
+interface Upload {
+  bytes: Buffer;
+  mimetype: string;
+  filename: string;
+}
+
+/** Lets at most `limit` calls run at once; the rest start in arrival order as slots free up. */
+type RequestLimiter = <T>(fn: () => Promise<T>) => Promise<T>;
+
+function requestLimiter(limit: number): RequestLimiter {
+  let active = 0;
+  const waiting: Array<() => void> = [];
+  return async (fn) => {
+    if (active < limit) active++;
+    else await new Promise<void>((resolve) => waiting.push(resolve));
+    try {
+      return await fn();
+    } finally {
+      const handOff = waiting.shift();
+      if (handOff) handOff();
+      else active--;
+    }
+  };
+}
+
+async function requestTranscription(apiKey: string, audio: Upload): Promise<OpenAiTranscription> {
   const form = new FormData();
-  form.append('file', new Blob([new Uint8Array(fileBuf)], { type: audio.mimetype }), audio.filename);
+  form.append('file', new Blob([new Uint8Array(audio.bytes)], { type: audio.mimetype }), audio.filename);
   const transcribeModel = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
   const transcribeLanguage = (process.env.OPENAI_TRANSCRIBE_LANGUAGE || '').trim();
   form.append('model', transcribeModel);
   if (transcribeLanguage) form.append('language', transcribeLanguage);
   form.append('temperature', '0');
-  if (withPrompt) form.append('prompt', TRANSCRIPTION_PROMPT);
+  form.append('prompt', TRANSCRIPTION_PROMPT);
   const isWhisper = /^whisper/i.test(transcribeModel);
   // gpt-4o-*-transcribe answers 400 to verbose_json; only whisper returns timed segments.
   form.append('response_format', isWhisper ? 'verbose_json' : 'json');
@@ -158,7 +194,7 @@ async function requestTranscription(apiKey: string, audio: TranscriptionAudio, w
   // really tired lately." from 10 s of silence). With it: 0/12 on silence and noise, speech unchanged (measured).
   if (!isWhisper) form.append('chunking_strategy', JSON.stringify({ type: 'server_vad' }));
   logger.log(
-    `transcription upload size=${fileBuf.length} mime=${audio.mimetype} file=${audio.filename} ` +
+    `transcription upload size=${audio.bytes.length} mime=${audio.mimetype} file=${audio.filename} ` +
       `model=${transcribeModel} language=${transcribeLanguage || 'auto'}`,
   );
 
@@ -185,18 +221,29 @@ async function requestTranscription(apiKey: string, audio: TranscriptionAudio, w
   return { text, segments };
 }
 
-/** Transcribes once; if the transcript looks truncated, retries once without the prompt and keeps the longer result. */
-async function requestGuarded(apiKey: string, audio: TranscriptionAudio, voiced: number): Promise<OpenAiTranscription> {
-  const first = await requestTranscription(apiKey, audio);
-  const firstChars = first.text.trim().length;
-  if (!looksTruncated(firstChars, voiced)) return first;
-  const retry = await requestTranscription(apiKey, audio, false);
-  const retryChars = retry.text.trim().length;
-  logger.warn(
-    `transcription looks truncated file=${audio.filename} voicedSeconds=${voiced.toFixed(1)} ` +
-      `chars=${firstChars} retryChars=${retryChars}`,
+/** Like Promise.all, but rethrows the first failure only after every promise settles, so no request outlives its caller. */
+async function settleAll<T>(promises: Array<Promise<T>>): Promise<T[]> {
+  const settled = await Promise.allSettled(promises);
+  const failed = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  if (failed) throw failed.reason;
+  return settled.map((result) => (result as PromiseFulfilledResult<T>).value);
+}
+
+/** Sends the file twice in parallel and a third time only when the two lengths disagree; see chooseConsensusTranscript. */
+async function transcribeByConsensus(apiKey: string, audio: TranscriptionAudio, limit: RequestLimiter): Promise<OpenAiTranscription> {
+  const upload: Upload = { bytes: await fs.readFile(audio.path), mimetype: audio.mimetype, filename: audio.filename };
+  const send = () => limit(() => requestTranscription(apiKey, upload));
+  const samples = await settleAll([send(), send()]);
+  let choice = chooseConsensusTranscript([samples[0].text, samples[1].text]);
+  if (choice.decision === 'disagree') {
+    samples.push(await send());
+    choice = chooseConsensusTranscript([samples[0].text, samples[1].text, samples[2].text]);
+  }
+  logger.log(
+    `transcription consensus file=${audio.filename} lengths=${samples.map((sample) => sample.text.trim().length).join(',')} ` +
+      `decision=${choice.decision}`,
   );
-  return retryChars > firstChars ? retry : first;
+  return samples[choice.index];
 }
 
 function offsetSegment(segment: unknown, offsetS: number): unknown {
@@ -229,31 +276,27 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T,
   return results;
 }
 
-// Silence detection costs a decode pass, so short clips are treated as fully voiced (the guard ignores them under 20 s anyway).
-async function singleRequestVoicedSeconds(inputPath: string, durationS: number): Promise<number> {
-  if (durationS <= 30) return durationS;
-  try {
-    return voicedSeconds({ start: 0, end: durationS }, await detectSilences(inputPath));
-  } catch (error) {
-    logger.warn(`silence detection failed, truncation guard assumes full speech: ${(error as Error).message}`);
-    return durationS;
-  }
-}
-
-async function transcribeInParts(apiKey: string, audio: TranscriptionAudio, durationS: number, plan: SegmentPlanOptions) {
+async function transcribeInParts(
+  apiKey: string,
+  audio: TranscriptionAudio,
+  durationS: number,
+  plan: SegmentPlanOptions,
+  concurrency: number,
+  limit: RequestLimiter,
+) {
   const silences = await detectSilences(audio.path);
   const spans = planTranscriptionSegments(durationS, silences, plan);
-  const concurrency = Math.floor(positiveEnv('OPENAI_TRANSCRIBE_CONCURRENCY', 4)) || 1;
   logger.log(`transcription split durationS=${durationS.toFixed(1)} parts=${spans.length} concurrency=${concurrency}`);
   const baseName = audio.filename.replace(/\.[^.]*$/, '');
+  // Parts are bounded too, so a long recording does not decode every part at once while waiting for request slots.
   const parts = await mapWithConcurrency(spans, concurrency, async (span, index) => {
     const partPath = `${audio.path}.part${index}.wav`;
     try {
       await writeSpeechWav(audio.path, partPath, span);
-      const part = await requestGuarded(
+      const part = await transcribeByConsensus(
         apiKey,
         { path: partPath, mimetype: 'audio/wav', filename: `${baseName}.part${index}.wav` },
-        voicedSeconds(span, silences),
+        limit,
       );
       return { text: part.text.trim(), segments: part.segments.map((segment) => offsetSegment(segment, span.start)) };
     } finally {
@@ -297,10 +340,11 @@ export async function transcribeWithOpenAI(audio: TranscriptionAudio): Promise<O
       );
     }
     const plan = { targetS: positiveEnv('OPENAI_TRANSCRIBE_SEGMENT_SECONDS', DEFAULT_SEGMENT_S), searchWindowS: SEARCH_WINDOW_S };
-    if (durationS <= plan.targetS + plan.searchWindowS) {
-      return await requestGuarded(apiKey, source, await singleRequestVoicedSeconds(source.path, durationS));
-    }
-    return await transcribeInParts(apiKey, source, durationS, plan);
+    // Counts requests, not parts: each part sends two or three, so 8 keeps a 30-minute recording at ~3 request waves.
+    const concurrency = Math.floor(positiveEnv('OPENAI_TRANSCRIBE_CONCURRENCY', 8)) || 1;
+    const limit = requestLimiter(concurrency);
+    if (durationS <= plan.targetS + plan.searchWindowS) return await transcribeByConsensus(apiKey, source, limit);
+    return await transcribeInParts(apiKey, source, durationS, plan, concurrency, limit);
   } finally {
     if (convertedWavPath) await fs.unlink(convertedWavPath).catch(() => undefined);
   }

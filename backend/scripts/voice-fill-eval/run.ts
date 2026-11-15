@@ -48,6 +48,8 @@ const NUMBER_WORDS = /\b(zero|oh|one|two|three|four|five|six|seven|eight|nine|te
 const letters = (text: string) => text.replace(NUMBER_WORDS, '').replace(/[^a-z]/gi, '').length;
 // Below this share of the script's letters, a transcript has lost speech rather than reworded it.
 const MIN_COVERAGE = 0.75;
+// Above this share, the transcript holds speech the script never had: an invented passage, not rewording.
+const MAX_COVERAGE = 1.2;
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
@@ -154,6 +156,7 @@ async function main() {
       unexpectedFields: subset.reduce((n, r) => n + r.extras.length, 0),
       errors: subset.filter((r) => r.error).length,
       lowCoverage: subset.filter((r) => (r.coverage ?? 1) < MIN_COVERAGE).map((r) => `${r.id}=${r.coverage}`),
+      highCoverage: subset.filter((r) => (r.coverage ?? 1) > MAX_COVERAGE).map((r) => `${r.id}=${r.coverage}`),
       p50ms: ms[Math.floor(ms.length / 2)],
       maxMs: ms[ms.length - 1],
     };
@@ -169,6 +172,7 @@ async function main() {
       ...r.extras.map((extra) => ({ case: r.id, unexpected: extra })),
       ...(r.error ? [{ case: r.id, error: r.error }] : []),
       ...((r.coverage ?? 1) < MIN_COVERAGE ? [{ case: r.id, lowCoverage: r.coverage }] : []),
+      ...((r.coverage ?? 1) > MAX_COVERAGE ? [{ case: r.id, highCoverage: r.coverage }] : []),
     ]),
     transcripts: Object.fromEntries(results.map((r) => [r.id, r.transcript])),
   };
