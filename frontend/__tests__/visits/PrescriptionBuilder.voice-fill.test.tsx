@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import { apiClient } from '@/lib/api';
 import type { VoiceFillApply, VoiceFillApplyResult } from '@/lib/voice-fill';
@@ -72,4 +72,26 @@ it('adds spoken medicines before the blank row, keeps spoken values over usual o
   act(() => result.undo());
   expect(drugInputs()).toEqual(['']);
   expect(diagnosis()).toBe('');
+});
+
+it('links a spoken stocked medicine by its standard name and keeps an unstocked strength visible in the name', async () => {
+  const doxy = { id: 'doxy', inventoryItemId: 'inv-doxy-100', name: 'Cap. Doxycycline 100 mg', dosageForm: 'CAPSULE', knownNames: [], totalStock: 40 };
+  get.mockImplementation((url: string, params?: { q?: string }) => Promise.resolve(
+    url === '/prescriptions/drugs/autocomplete' ? (params?.q === 'doxycycline' ? [doxy] : [])
+      : url === '/pharmacy/prescription-queue/inventory-stock/inv-doxy-100' ? { stockStatus: 'IN_STOCK', totalNonExpiredStock: 40 } : {},
+  ));
+  render(<PrescriptionBuilder patientId="voice-rx" visitId={null} doctorId="doctor" />);
+  await act(async () => { jest.advanceTimersByTime(1000); });
+
+  await act(async () => {
+    await applyVoiceFill({ prescriptionItems: [
+      { drugName: 'doxycycline', dosage: 100, dosageUnit: 'MG', dosePattern: '1-0-1' },
+      { drugName: 'telma', dosage: 40, dosageUnit: 'MG' },
+    ] });
+  });
+
+  expect(drugInputs()).toEqual(['Cap. Doxycycline 100 mg', 'telma 40 mg', '']);
+  const doxyCell = (document.getElementById('rx-row-0-drug') as HTMLInputElement).closest('td')!;
+  await act(async () => { fireEvent.mouseEnter(doxyCell); });
+  expect(doxyCell).toHaveTextContent('Stock: 40');
 });

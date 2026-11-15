@@ -91,9 +91,9 @@ export function stateRegistry<T extends object>(
   );
 }
 
-// Outlasts the server's whole run on a 40-minute recording (upload, ~30 s of parallel transcription, then up to
-// 60 s of Codex), so its 503 message reaches the user instead of a client abort.
-const FILL_TIMEOUT_MS = 180_000;
+// Outlasts the server's whole run on a 40-minute recording (upload, ~13 s of ffmpeg, ~30 s of parallel
+// transcription, then up to 120 s of Codex), so its 503 message reaches the user instead of a client abort.
+const FILL_TIMEOUT_MS = 240_000;
 
 let statusPromise: Promise<boolean> | null = null;
 

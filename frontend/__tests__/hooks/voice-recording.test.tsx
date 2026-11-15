@@ -93,7 +93,7 @@ describe('useVoiceFill', () => {
     act(() => { result.current.toggle(); });
   }
 
-  it('records, uploads the audio for the form, applies the fields and offers Undo', async () => {
+  it('records, uploads the audio for the form, applies the fields and offers Undo on the pill, not in a toast', async () => {
     const response = deferred();
     fetchMock.mockReturnValue(response.promise);
     const undo = jest.fn();
@@ -112,8 +112,11 @@ describe('useVoiceFill', () => {
     await act(async () => { response.resolve(json(200, { transcript: 'diagnosis acne', fields: { diagnosis: 'Acne' } })); });
 
     expect(apply.mock.calls).toEqual([[{ diagnosis: 'Acne' }]]);
-    const shown = toast.mock.calls[0][0];
-    expect([shown.variant, shown.title, shown.description, shown.action.props.onClick]).toEqual(['success', 'Filled 2 fields', 'Diagnosis, 2 medicines', undo]);
+    expect(toast.mock.calls).toEqual([]);
+    expect(result.current.phase).toEqual({ kind: 'filled', labels: ['Diagnosis', '2 medicines'] });
+
+    act(() => { result.current.undo(); });
+    expect(undo.mock.calls.length).toBe(1);
     expect(result.current.phase).toEqual({ kind: 'idle' });
   });
 
