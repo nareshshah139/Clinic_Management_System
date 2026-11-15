@@ -71,10 +71,10 @@ function score(c: Case, fields: Record<string, unknown>) {
         checks.push({ field: `${field}[${index}].${cell}`, ok: matches(want, got), expected: want, actual: got });
       }
     }
-    rows.forEach((row, i) => { if (!used.has(i)) extras.push(`${field}+${String(row.drugName)}`); });
+    rows.forEach((row, i) => { if (!used.has(i)) extras.push(`${field}+${JSON.stringify(row)}`); });
   }
   for (const key of Object.keys(fields)) {
-    if (!(key in c.expect) && !(c.allowExtra ?? []).includes(key)) extras.push(key);
+    if (!(key in c.expect) && !(c.allowExtra ?? []).includes(key)) extras.push(`${key}=${JSON.stringify(fields[key])}`);
   }
   return { checks, extras };
 }

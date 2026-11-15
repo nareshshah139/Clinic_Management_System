@@ -30,9 +30,10 @@ const AUDIO_MIME: Record<VoiceFillAudioExtension, string> = {
   wav: 'audio/wav',
 };
 
+// Codex took 43 s on a 30-minute consult transcript (measured), so 60 s left too little headroom.
 function timeoutMs(): number {
   const configured = Number(process.env.VOICE_FILL_CODEX_TIMEOUT_MS);
-  return Number.isFinite(configured) && configured > 0 ? configured : 60000;
+  return Number.isFinite(configured) && configured > 0 ? configured : 120000;
 }
 
 @Injectable()
