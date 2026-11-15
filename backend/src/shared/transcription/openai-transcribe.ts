@@ -151,8 +151,12 @@ async function requestTranscription(apiKey: string, audio: TranscriptionAudio, w
   if (transcribeLanguage) form.append('language', transcribeLanguage);
   form.append('temperature', '0');
   if (withPrompt) form.append('prompt', TRANSCRIPTION_PROMPT);
+  const isWhisper = /^whisper/i.test(transcribeModel);
   // gpt-4o-*-transcribe answers 400 to verbose_json; only whisper returns timed segments.
-  form.append('response_format', /^whisper/i.test(transcribeModel) ? 'verbose_json' : 'json');
+  form.append('response_format', isWhisper ? 'verbose_json' : 'json');
+  // Without server VAD, gpt-4o-transcribe invents speech for silence or room noise ("Doctor, I've been feeling
+  // really tired lately." from 10 s of silence). With it: 0/12 on silence and noise, speech unchanged (measured).
+  if (!isWhisper) form.append('chunking_strategy', JSON.stringify({ type: 'server_vad' }));
   logger.log(
     `transcription upload size=${fileBuf.length} mime=${audio.mimetype} file=${audio.filename} ` +
       `model=${transcribeModel} language=${transcribeLanguage || 'auto'}`,

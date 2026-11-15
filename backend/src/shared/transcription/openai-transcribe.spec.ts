@@ -144,7 +144,7 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
     expect(received).toHaveLength(1);
     expect(received[0].authorization).toBe('Bearer sk-test');
     expect(received[0].file).toEqual({ name: 'audio.wav', type: 'audio/wav', bytes: fs.readFileSync(path.join(directory, 'audio.wav')).toString('latin1') });
-    expect(received[0].fields).toMatchObject({ model: 'gpt-4o-transcribe', language: 'en', temperature: '0', response_format: 'json' });
+    expect(received[0].fields).toMatchObject({ model: 'gpt-4o-transcribe', language: 'en', temperature: '0', response_format: 'json', chunking_strategy: '{"type":"server_vad"}' });
     expect(received[0].fields.prompt).toMatch(/^Medical doctor–patient conversation transcription\./);
   });
 
@@ -152,6 +152,7 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
     process.env.OPENAI_TRANSCRIBE_MODEL = 'whisper-1';
     await transcribeWithOpenAI(wav());
     expect(received[0].fields).toMatchObject({ model: 'whisper-1', response_format: 'verbose_json' });
+    expect(received[0].fields.chunking_strategy).toBeUndefined();
   });
 
   it('converts webm to 16 kHz mono wav before uploading and removes the converted file', async () => {
