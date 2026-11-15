@@ -107,6 +107,7 @@ export function buildVoiceFillPrompt(form: VoiceFillForm, transcript: string, no
     `You fill in a form from a spoken transcript. Context: ${form.purpose}`,
     `Today is ${clinicToday(now)}, ${CLINIC_TIME_ZONE}.`,
     'Speakers often use Indian English and mix Hindi or Telugu with English.',
+    'Write every value in English with Latin letters. Transliterate names written in Devanagari, Telugu or any other script (सुनीता देवी becomes Sunita Devi).',
     'Return a JSON object with every field below. Fields:',
     ...Object.entries(form.fields).flatMap(([key, spec]) => describeField(key, spec)),
     'Fill only what the speaker explicitly said. Never guess or infer. Use null for any field not mentioned.',

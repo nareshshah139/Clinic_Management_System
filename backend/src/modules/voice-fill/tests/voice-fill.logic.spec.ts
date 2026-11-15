@@ -22,6 +22,17 @@ describe('parseVoiceFillOutput', () => {
     expect(parse(intake, { firstName: 'Asha', bloodGroup: 'O+' })).toEqual({ firstName: 'Asha' });
   });
 
+  it('accepts only Indian mobiles as plain digits, so an ABHA number cannot land in phone', () => {
+    expect(parse(intake, { phone: '12345678901234' })).toEqual({});
+    expect(parse(intake, { phone: '5848022338' })).toEqual({});
+    expect(parse(intake, { phone: '91 98480 22338' })).toEqual({ phone: '919848022338' });
+    expect(parse(intake, { phone: '+44 20 7946 0958' })).toEqual({ phone: '+442079460958' });
+  });
+
+  it('asks for Latin-script values', () => {
+    expect(buildVoiceFillPrompt(intake, 'x', new Date('2026-11-15T06:00:00Z'))).toContain('(सुनीता देवी becomes Sunita Devi)');
+  });
+
   it('keeps a leading plus on phone numbers and strips punctuation', () => {
     expect(parse(intake, { phone: '+91 (984) 802.2338' })).toEqual({ phone: '+919848022338' });
   });

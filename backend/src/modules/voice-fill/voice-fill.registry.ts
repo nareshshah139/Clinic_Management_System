@@ -59,7 +59,8 @@ export const VOICE_FILL_FORMS: Record<VoiceFillFormId, VoiceFillForm> = {
       lastName: text('Last name'),
       age: int('Age in years', 0, 150),
       gender: oneOf('Gender', ['MALE', 'FEMALE', 'OTHER']),
-      phone: text('Phone number', { normalize: 'phone', pattern: /^\+?[1-9]\d{6,14}$/ }),
+      // Plain digits must be an Indian mobile: a spoken 14-digit ABHA number once passed the looser E.164 check.
+      phone: text('Phone number', { normalize: 'phone', pattern: /^(\+[1-9]\d{6,14}|(91)?[6-9]\d{9})$/, hint: '10-digit mobile, or + and country code' }),
       email: text('Email address', { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ }),
       address: text('Address'),
       emergencyContact: text('Emergency contact', { hint: 'name and/or phone of the emergency contact' }),
