@@ -5,7 +5,13 @@ import * as http from 'http';
 import type { AddressInfo } from 'net';
 import * as os from 'os';
 import * as path from 'path';
-import { transcribeWithOpenAI } from './openai-transcribe';
+import { planTranscriptionSegments, transcribeWithOpenAI } from './openai-transcribe';
+
+interface Reply {
+  status: number;
+  body: string;
+  delayMs?: number;
+}
 
 interface Received {
   authorization?: string;
@@ -13,10 +19,49 @@ interface Received {
   file?: { name: string; type: string; bytes: string };
 }
 
+describe('planTranscriptionSegments', () => {
+  const options = { targetS: 300, searchWindowS: 45 };
+
+  it('cuts at the midpoint of the latest silence before each 300 s mark', () => {
+    expect(planTranscriptionSegments(650, [{ start: 280, end: 281 }, { start: 590, end: 592 }], options)).toEqual([
+      { start: 0, end: 280.5 },
+      { start: 280.5, end: 591 },
+      { start: 591, end: 650 },
+    ]);
+  });
+
+  it('prefers the latest of several silences in the window', () => {
+    expect(planTranscriptionSegments(400, [{ start: 260, end: 261 }, { start: 290, end: 292 }], options)).toEqual([
+      { start: 0, end: 291 },
+      { start: 291, end: 400 },
+    ]);
+  });
+
+  it('cuts hard at each 300 s mark when there is no silence', () => {
+    expect(planTranscriptionSegments(650, [], options)).toEqual([
+      { start: 0, end: 300 },
+      { start: 300, end: 600 },
+      { start: 600, end: 650 },
+    ]);
+  });
+
+  it('ignores silences before the 45 s window or after the mark', () => {
+    expect(planTranscriptionSegments(650, [{ start: 200, end: 202 }, { start: 310, end: 312 }], options)).toEqual([
+      { start: 0, end: 300 },
+      { start: 300, end: 600 },
+      { start: 600, end: 650 },
+    ]);
+  });
+
+  it('keeps audio up to target plus window as one segment', () => {
+    expect(planTranscriptionSegments(345, [{ start: 280, end: 281 }], options)).toEqual([{ start: 0, end: 345 }]);
+  });
+});
+
 describe('transcribeWithOpenAI against a local transcription endpoint', () => {
   let server: http.Server;
   let directory: string;
-  let reply: { status: number; body: string };
+  let respond: (upload: Received, arrival: number) => Reply;
   let received: Received[];
   const savedEnv = { ...process.env };
 
@@ -31,6 +76,8 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
         else entry.file = { name: value.name, type: value.type, bytes: Buffer.from(await value.arrayBuffer()).toString('latin1') };
       }
       received.push(entry);
+      const reply = respond(entry, received.length - 1);
+      if (reply.delayMs) await new Promise((resolve) => setTimeout(resolve, reply.delayMs));
       res.writeHead(reply.status, { 'content-type': 'application/json' }).end(reply.body);
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -40,7 +87,7 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
   beforeEach(() => {
     directory = fs.mkdtempSync(path.join(os.tmpdir(), 'transcribe-'));
     received = [];
-    reply = { status: 200, body: '{"text":"BP 120 by 80","segments":[{"text":"BP 120 by 80","start":0,"end":1.5}]}' };
+    respond = () => ({ status: 200, body: '{"text":"BP 120 by 80","segments":[{"text":"BP 120 by 80","start":0,"end":1.5}]}' });
     process.env.OPENAI_API_KEY = 'sk-test';
     process.env.OPENAI_TRANSCRIBE_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/audio/transcriptions`;
     delete process.env.OPENAI_TRANSCRIBE_MODEL;
@@ -57,7 +104,7 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
 
   const wav = () => {
     const file = path.join(directory, 'audio.wav');
-    fs.writeFileSync(file, 'RIFF fake wav');
+    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.5', '-ar', '16000', '-ac', '1', file]);
     return { path: file, mimetype: 'audio/wav', filename: 'audio.wav' };
   };
 
@@ -69,7 +116,7 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
     });
     expect(received).toHaveLength(1);
     expect(received[0].authorization).toBe('Bearer sk-test');
-    expect(received[0].file).toEqual({ name: 'audio.wav', type: 'audio/wav', bytes: 'RIFF fake wav' });
+    expect(received[0].file).toEqual({ name: 'audio.wav', type: 'audio/wav', bytes: fs.readFileSync(path.join(directory, 'audio.wav')).toString('latin1') });
     expect(received[0].fields).toMatchObject({ model: 'gpt-4o-transcribe', language: 'en', temperature: '0', response_format: 'json' });
     expect(received[0].fields.prompt).toMatch(/^Medical doctor–patient conversation transcription\./);
   });
@@ -102,11 +149,11 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
   });
 
   it('maps a 4xx from OpenAI to 400 and a 5xx to 503', async () => {
-    reply = { status: 413, body: '{"error":"too large"}' };
+    respond = () => ({ status: 413, body: '{"error":"too large"}' });
     await expect(transcribeWithOpenAI(wav())).rejects.toMatchObject({
       status: 400, message: 'Speech transcription rejected the recording. Please retry with a shorter, clearer clip.',
     });
-    reply = { status: 502, body: 'bad gateway' };
+    respond = () => ({ status: 502, body: 'bad gateway' });
     await expect(transcribeWithOpenAI(wav())).rejects.toMatchObject({
       status: 503, message: 'Speech transcription service is temporarily unavailable. Please try again.',
     });
@@ -118,5 +165,70 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
       status: 503, message: 'Speech transcription is unavailable. Contact an administrator to configure OPENAI_API_KEY.',
     });
     expect(received).toHaveLength(0);
+  });
+  describe('a recording longer than one segment', () => {
+    // 230 s of tone with 1 s silences at 49, 114 and 177 s. With 60 s segments it splits at those silences into
+    // parts of 49.5, 65, 63 and 52.5 s.
+    const recording = (extension: 'wav' | 'webm') => {
+      const file = path.join(directory, `consult.${extension}`);
+      const tone = 'if(between(t,49,50)+between(t,114,115)+between(t,177,178),0,0.5*sin(2*PI*440*t))';
+      execFileSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', `aevalsrc='${tone}':s=16000:d=230`,
+        ...(extension === 'webm' ? ['-c:a', 'libopus'] : []), file]);
+      return { path: file, mimetype: `audio/${extension}`, filename: `consult.${extension}` };
+    };
+    const uploadSeconds = (upload: Received) => {
+      const wavBytes = Buffer.from(upload.file!.bytes, 'latin1');
+      const byteRate = wavBytes.readUInt32LE(28);
+      for (let offset = 12; offset < wavBytes.length; offset += 8 + wavBytes.readUInt32LE(offset + 4)) {
+        if (wavBytes.toString('latin1', offset, offset + 4) === 'data') return wavBytes.readUInt32LE(offset + 4) / byteRate;
+      }
+      throw new Error('no data chunk');
+    };
+
+    beforeEach(() => {
+      process.env.OPENAI_TRANSCRIBE_SEGMENT_SECONDS = '60';
+      respond = (upload, arrival) => ({
+        status: 200,
+        body: JSON.stringify({ text: ` ${uploadSeconds(upload).toFixed(1)}s `, segments: [{ text: 'part', start: 0.5, end: 2 }] }),
+        delayMs: (4 - arrival) * 40,
+      });
+    });
+
+    it('transcribes 16 kHz mono parts split at silences and joins them in recording order', async () => {
+      await expect(transcribeWithOpenAI(recording('webm'))).resolves.toMatchObject({ text: '49.5s 65.0s 63.0s 52.5s' });
+      expect(received.map((upload) => {
+        const header = Buffer.from(upload.file!.bytes, 'latin1');
+        return [upload.file?.type, header.readUInt16LE(22), header.readUInt32LE(24), upload.fields.model, upload.fields.response_format];
+      })).toEqual(Array(4).fill(['audio/wav', 1, 16000, 'gpt-4o-transcribe', 'json']));
+      expect(received.map((upload) => upload.file?.name).sort()).toEqual(
+        ['consult.part0.wav', 'consult.part1.wav', 'consult.part2.wav', 'consult.part3.wav'],
+      );
+      expect(fs.readdirSync(directory)).toEqual(['consult.webm']);
+    });
+
+    it('shifts whisper segment times by where each part starts in the recording', async () => {
+      process.env.OPENAI_TRANSCRIBE_MODEL = 'whisper-1';
+      const { segments } = await transcribeWithOpenAI(recording('wav'));
+      expect((segments as Array<{ start: number; end: number }>).map(({ start, end }) => [start, end].map((s) => Math.round(s * 10) / 10)))
+        .toEqual([[0.5, 2], [50, 51.5], [115, 116.5], [178, 179.5]]);
+    });
+
+    it('fails the whole call when one part fails, and leaves no part files behind', async () => {
+      const healthy = respond;
+      respond = (upload, arrival) => (uploadSeconds(upload).toFixed(1) === '65.0' ? { status: 502, body: 'bad gateway' } : healthy(upload, arrival));
+      await expect(transcribeWithOpenAI(recording('wav'))).rejects.toMatchObject({
+        status: 503, message: 'Speech transcription service is temporarily unavailable. Please try again.',
+      });
+      expect(fs.readdirSync(directory)).toEqual(['consult.wav']);
+    });
+
+    it('400s a recording over OPENAI_TRANSCRIBE_MAX_SECONDS without uploading', async () => {
+      process.env.OPENAI_TRANSCRIBE_MAX_SECONDS = '120';
+      await expect(transcribeWithOpenAI(recording('wav'))).rejects.toMatchObject({
+        status: 400,
+        message: 'This recording is 4 minutes long. Speech transcription accepts up to 2 minutes; please record in shorter parts.',
+      });
+      expect(received).toHaveLength(0);
+    });
   });
 });
