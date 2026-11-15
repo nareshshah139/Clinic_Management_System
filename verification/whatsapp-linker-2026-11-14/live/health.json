@@ -1,0 +1,8 @@
+{
+  "blockers": [
+    "WhatsApp Business Account: There is an error with the payment method. This will block business initiated conversations. (141006)Fix: There was an error with your payment method. Please add a new payment method to the account.",
+    "Business: The Business has not passed business verification. (141010)Fix: Visit business settings and start or resolve the business verification request.",
+    "Business: Your business profile is incomplete. The following fields are required: Legal Name, Country, and Website. (131000)Fix: Please complete your business profile in Meta Business Suite under Settings > Business Info. All three fields (Legal Name, Country, Website) must be filled in before integrity checks can proceed."
+  ],
+  "sendDisabled": true
+}

@@ -55,6 +55,17 @@ const PROXY_KEYS = ["HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy", "NODE_
     console.log("LINKED", await text('[data-testid="whatsapp-verified-name"]'));
     await shot("01-linked-live-number.png");
 
+    const warning = await page.$('[data-testid="whatsapp-health-warning"]');
+    if (warning) {
+      const blockers = await page.$$eval('[data-testid="whatsapp-blocker"]', (els) => els.map((el) => el.textContent.trim()));
+      const disabled = await page.$eval("::-p-aria([name='Send test prescription'][role='button'])", (el) => el.disabled);
+      fs.writeFileSync(path.join(out, "health.json"), JSON.stringify({ blockers, sendDisabled: disabled }, null, 2));
+      await shot("03-live-blocked-warning.png");
+      console.log("BLOCKED", JSON.stringify({ blockers, sendDisabled: disabled }, null, 2));
+      assert.equal(disabled, true, "send is disabled while Meta blocks sending");
+      return;
+    }
+
     await page.locator("::-p-aria(WhatsApp number)").fill(TO);
     await page.locator("::-p-aria([name='Send test prescription'][role='button'])").click();
     await page.waitForSelector('[data-testid="test-send-result"]');
