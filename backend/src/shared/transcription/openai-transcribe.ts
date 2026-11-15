@@ -189,9 +189,10 @@ async function requestTranscription(apiKey: string, audio: Upload): Promise<Open
   form.append('response_format', isWhisper ? 'verbose_json' : 'json');
   // Without server VAD, gpt-4o-transcribe invents speech for silence or room noise ("Doctor, I've been feeling
   // really tired lately." from 10 s of silence). With it: 0/12 on silence and noise, speech unchanged (measured).
-  // Default VAD dropped a short phrase before a pause ("Adapalene gel, ... apply at bedtime" lost the drug name 5/5);
-  // 800 ms silence and 500 ms padding kept it 5/5 while silence and noise still came back empty.
-  if (!isWhisper) form.append('chunking_strategy', JSON.stringify({ type: 'server_vad', silence_duration_ms: 800, prefix_padding_ms: 500 }));
+  // Measured: the default 200 ms split dropped a short phrase before a pause ("Adapalene gel, ... apply at bedtime"
+  // lost the drug name 4/4); 800 ms merged conversation turns into long chunks and lost ~21% of the words. 400 ms kept
+  // both, and silence and noise still came back empty.
+  if (!isWhisper) form.append('chunking_strategy', JSON.stringify({ type: 'server_vad', silence_duration_ms: 400, prefix_padding_ms: 500 }));
   logger.log(
     `transcription upload size=${audio.bytes.length} mime=${audio.mimetype} file=${audio.filename} ` +
       `model=${transcribeModel} language=${transcribeLanguage || 'auto'}`,
