@@ -198,8 +198,8 @@
       "fitzpatrickSkinType": "IV",
       "followUpInstructions": { "contains": "month" },
       "prescriptionItems": [
-        { "drugName": { "contains": "doxycycline" }, "dosage": 100, "dosageUnit": "MG", "frequency": "TWICE_DAILY", "duration": 6, "durationUnit": "WEEKS", "timing": { "contains": "food" } },
-        { "drugName": { "contains": "adapalene" }, "frequency": "ONCE_DAILY", "timing": { "anyOf": ["bed", "night"] }, "applicationSite": { "contains": "face" } }
+        { "drugName": { "contains": "doxycycline" }, "dosage": 100, "dosageUnit": "MG", "frequency": "TWICE_DAILY", "duration": 6, "durationUnit": "WEEKS", "timing": { "anyOf": ["food", "after breakfast", "after lunch", "after dinner"] } },
+        { "drugName": { "contains": "adapalene" }, "frequency": "ONCE_DAILY", "timing": { "anyOf": ["bed", "night", "HS"] }, "applicationSite": { "contains": "face" } }
       ]
     },
     "allowExtra": ["diagnosis"]
