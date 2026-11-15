@@ -48,7 +48,35 @@ robotic.
 
 ## Results on the shipping build
 
-_Pending: the final confirmation run on this build is in progress._
+One run per row on commit 85c6704, real APIs. "Fields" counts every expected field and every prescription-row cell;
+a misheard drug name fails every cell of its row. "Coverage" is transcript letters over script letters (number words
+excluded); Hinglish clips read low because the transcriber writes Hindi words in Devanagari, which the metric does not
+count. "Invented" scans transcripts for consultation text that is not in the audio.
+
+| Set | Voice | Fields | Perfect cases | Unexpected fields | Invented | p50 | max |
+|---|---|---|---|---|---|---|---|
+| 19 short dictations | espeak (robotic) | 142/165 (86.1%) | 10/19 | 2 | 0 | 9.6 s | 14.4 s |
+| 19 short dictations | espeak + brown noise | 150/165 (90.9%) | 12/19 | 1 | 0 | 8.7 s | 16.1 s |
+| 19 short dictations | Telugu accent | 154/165 (93.3%) | 12/19 | 1 | 0 | 9.1 s | 15.9 s |
+| 19 short dictations | Hindi accent | 151/165 (91.5%) | 12/19 | 1 | 0 | 8.9 s | 13.2 s |
+| 19 short dictations | Tamil accent | 153/165 (92.7%) | 12/19 | 2 | 0 | 9.3 s | 13.9 s |
+| 19 short dictations | Mumbai accent | 155/165 (93.9%) | 14/19 | 1 | 0 | 9.1 s | 13.0 s |
+| 9 conversations, 1–30 min | espeak, 2 voices | 153/193 (79.3%) | 1/9 | 11 | 0 | 21.5 s | 58.5 s |
+| 9 conversations, 1–30 min | Telugu accents | 167/193 (86.5%) | 4/9 | 8 | 0 | 21.8 s | 63.7 s |
+| 9 conversations, 1–30 min | Telugu + brown noise | 168/193 (87.0%) | 3/9 | 8 | 0 | 22.9 s | 61.3 s |
+| 9 conversations, 1–41 min | Hindi accents | 164/193 (85.0%) | 4/9 | 9 | 0 | 17.6 s | 66.0 s |
+| 20 commands | Telugu accent | 76/77 (98.7%) | 19/20 | 0 | 0 | 6.9 s | 9.0 s |
+| 20 commands | Hindi accent | 77/77 (100%) | 20/20 | 0 | 0 | 6.8 s | 10.7 s |
+| 16 held-out commands | Telugu accent | 54/56 (96.4%) | 14/16 | 0 | 0 | 6.4 s | 10.0 s |
+| 16 held-out commands | Hindi accent | 53/56 (94.6%) | 13/16 | 0 | 0 | 6.6 s | 7.9 s |
+
+Conversation transcripts kept 0.98–1.00 coverage in every voice. The 10-minute consult scored 30/30 in all four voice
+sets. Codex extraction alone, fed the scripts as perfect transcripts, scored 193/193 on the conversations and 56/56 on
+the held-out commands, so most remaining loss is transcription (brand names, spelling variants such as Kavita/Kavitha).
+
+Run-to-run spread, measured on three repeats of the Telugu short set: 148, 148, 147 of 165 (an earlier build). The VAD
+silence setting moved the robotic espeak voice the most (138 / 156 / 142 of 165 at 200 / 800 / 400 ms) because espeak
+pauses unnaturally long; natural voices moved by at most 4 fields.
 
 ## Known limitations
 
