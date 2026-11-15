@@ -1,7 +1,8 @@
 FROM node:20-slim AS base
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+# ffmpeg/ffprobe: speech transcription converts browser audio and splits long recordings.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates ffmpeg && rm -rf /var/lib/apt/lists/*
 
 FROM base AS deps
 # Install build dependencies for native modules
