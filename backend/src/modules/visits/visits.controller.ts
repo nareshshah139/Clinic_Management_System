@@ -47,6 +47,9 @@ import sharp from 'sharp';
 import type { Express, Response } from 'express';
 import { Logger } from '@nestjs/common';
 import { transcribeWithOpenAI } from '../../shared/transcription/openai-transcribe';
+import { createLiveTranscriptionCall } from '../../shared/transcription/openai-realtime';
+import { splitSpeakers } from '../../shared/transcription/speaker-split';
+import { LiveTranscriptionDto, SpeakerSplitDto } from './dto/transcribe.dto';
 
 const fsPromises = fs.promises;
 
@@ -158,27 +161,6 @@ async function ensureTranscribeTmpDir() {
   const base = join(process.cwd(), 'uploads', 'tmp', 'transcribe');
   await fsPromises.mkdir(base, { recursive: true, mode: 0o700 });
   return base;
-}
-
-async function ensureTranscribeSessionDir() {
-  const base = join(process.cwd(), 'uploads', 'tmp', 'transcribe', 'sessions');
-  await fsPromises.mkdir(base, { recursive: true, mode: 0o700 });
-  return base;
-}
-
-async function readJsonSafe(path: string) {
-  try {
-    const buf = await fsPromises.readFile(path);
-    return JSON.parse(buf.toString('utf8'));
-  } catch {
-    return null;
-  }
-}
-
-async function writeJsonSafe(path: string, data: unknown) {
-  const tmp = `${path}.tmp-${Date.now()}`;
-  await fsPromises.writeFile(tmp, JSON.stringify(data), { mode: 0o600 });
-  await fsPromises.rename(tmp, path);
 }
 
 function imageFileFilter(_req: any, file: any, cb: any) {
@@ -729,173 +711,12 @@ export class VisitsController {
       }
       this.logger.log(`✓ Successfully transcribed ${text.length} characters`);
 
-      // Attempt speaker separation via LLM on transcript or segments
-      let diarized: {
-        segments?: Array<{
-          speaker: 'DOCTOR' | 'PATIENT';
-          text: string;
-          start_s?: number | null;
-          end_s?: number | null;
-          confidence?: number;
-        }>;
-        doctorText?: string;
-        patientText?: string;
-      } | null = null;
-      try {
-        // Build minimal segments if detailed segments are present in response
-        const rawSegments: Array<{
-          text?: string;
-          start?: number;
-          end?: number;
-        }> = segments as Array<any>;
-        const input =
-          rawSegments.length > 0
-            ? {
-                segments: rawSegments.map((s) => ({
-                  text: typeof s?.text === 'string' ? s.text : '',
-                  start_s: typeof s?.start === 'number' ? s.start : null,
-                  end_s: typeof s?.end === 'number' ? s.end : null,
-                })),
-              }
-            : { transcript: text };
-
-        const messages = [
-          {
-            role: 'system',
-            content:
-              'You are a medical scribe. Given a clinical conversation (full transcript or segments), split into speaker turns labeled DOCTOR or PATIENT only. ' +
-              'Cues: questions/instructions/orders/examination → DOCTOR; symptoms/history/concerns → PATIENT. ' +
-              'Preserve medical terms, numbers, and units verbatim. ' +
-              'Return STRICT JSON with keys: segments (array of {speaker, text, confidence, start_s, end_s}), and speakers ({doctorText, patientText}). ' +
-              'Concatenate segments chronologically for doctorText and patientText. If timestamps are provided in input, propagate them; otherwise use null. No extra commentary.',
-          },
-          { role: 'user', content: JSON.stringify(input) },
-        ];
-
-        const diarizeModel = process.env.OPENAI_DIARIZATION_MODEL || 'gpt-4o';
-
-        const diarizationJsonSchema = {
-          name: 'DiarizationSchema',
-          schema: {
-            type: 'object',
-            required: ['segments', 'speakers'],
-            properties: {
-              segments: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  required: ['speaker', 'text'],
-                  properties: {
-                    speaker: { type: 'string', enum: ['DOCTOR', 'PATIENT'] },
-                    text: { type: 'string' },
-                    confidence: { type: 'number', minimum: 0, maximum: 1 },
-                    start_s: { type: ['number', 'null'] },
-                    end_s: { type: ['number', 'null'] },
-                  },
-                },
-              },
-              speakers: {
-                type: 'object',
-                required: ['doctorText', 'patientText'],
-                properties: {
-                  doctorText: { type: 'string' },
-                  patientText: { type: 'string' },
-                },
-              },
-            },
-          },
-          strict: true,
-        } as const;
-        const diarizeResp = await fetch(
-          'https://api.openai.com/v1/chat/completions',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-            },
-            body: JSON.stringify({
-              model: diarizeModel,
-              temperature: 0,
-              response_format: {
-                type: 'json_schema',
-                json_schema: diarizationJsonSchema,
-              },
-              messages,
-            }),
-          },
-        );
-        if (!diarizeResp.ok) {
-          const errText = await diarizeResp.text();
-          this.logger.warn(
-            `transcribeAudio diarization step failed: ${diarizeResp.status} ${errText}`,
-          );
-        } else {
-          const dj = (await diarizeResp.json()) as any;
-          const content = dj?.choices?.[0]?.message?.content || '{}';
-          try {
-            const parsed = JSON.parse(content);
-            const segs = Array.isArray(parsed?.segments)
-              ? (parsed.segments as Array<any>)
-              : [];
-            const normalized = segs
-              .map((s) => ({
-                speaker:
-                  typeof s?.speaker === 'string' &&
-                  s.speaker.toUpperCase().includes('DOC')
-                    ? 'DOCTOR' as const
-                    : 'PATIENT' as const,
-                text: typeof s?.text === 'string' ? s.text : '',
-                confidence:
-                  typeof s?.confidence === 'number' ? s.confidence : undefined,
-                start_s:
-                  typeof s?.start_s === 'number' || s?.start_s === null
-                    ? s.start_s
-                    : undefined,
-                end_s:
-                  typeof s?.end_s === 'number' || s?.end_s === null
-                    ? s.end_s
-                    : undefined,
-              }))
-              .filter((s) => s.text);
-            const doctorText =
-              parsed?.speakers?.doctorText &&
-              typeof parsed.speakers.doctorText === 'string'
-                ? parsed.speakers.doctorText
-                : normalized
-                    .filter((s) => s.speaker === 'DOCTOR')
-                    .map((s) => s.text)
-                    .join(' ');
-            const patientText =
-              parsed?.speakers?.patientText &&
-              typeof parsed.speakers.patientText === 'string'
-                ? parsed.speakers.patientText
-                : normalized
-                    .filter((s) => s.speaker === 'PATIENT')
-                    .map((s) => s.text)
-                    .join(' ');
-            diarized = { segments: normalized, doctorText, patientText };
-          } catch (e) {
-            this.logger.warn(
-              'transcribeAudio diarization: failed to parse JSON content',
-            );
-          }
-        }
-      } catch (e) {
-        this.logger.warn(
-          `transcribeAudio diarization step error: ${(e as any)?.message || e}`,
-        );
-      }
-
-      const result = {
+      const split = await splitSpeakers({ text, segments });
+      return {
         text,
-        segments: diarized?.segments || [],
-        speakers: {
-          doctorText: diarized?.doctorText || '',
-          patientText: diarized?.patientText || '',
-        },
+        segments: split.segments,
+        speakers: { doctorText: split.doctorText, patientText: split.patientText },
       };
-      return result;
     } catch (e: any) {
       if (e instanceof HttpException) {
         throw e;
@@ -909,6 +730,22 @@ export class VisitsController {
     } finally {
       await fsPromises.unlink(uploadedPath).catch(() => {});
     }
+  }
+
+  // The browser sends its WebRTC offer here; the API key never leaves the server.
+  @Post('transcribe/live')
+  async startLiveTranscription(@Body() dto: LiveTranscriptionDto) {
+    return { sdp: await createLiveTranscriptionCall(dto.sdp) };
+  }
+
+  @Post('transcribe/speakers')
+  async splitTranscriptSpeakers(@Body() dto: SpeakerSplitDto) {
+    const split = await splitSpeakers({ text: dto.text });
+    return {
+      text: dto.text,
+      segments: split.segments,
+      speakers: { doctorText: split.doctorText, patientText: split.patientText },
+    };
   }
 
   // Quick OpenAI key health check (uses chat completions; no PHI/data sent)
@@ -961,306 +798,6 @@ export class VisitsController {
       this.logger.warn(`transcribe/health failed: ${msg}`);
       return { ok: false, error: msg };
     }
-  }
-
-  // Start a chunked transcription session
-  @Post('transcribe/chunk-start')
-  async startTranscriptionSession() {
-    const sessionDir = await ensureTranscribeSessionDir();
-    const id = `${Date.now()}_${randomBytes(8).toString('hex')}`;
-    const path = join(sessionDir, `${id}.json`);
-    const payload = { id, createdAt: Date.now(), chunks: [] as any[] };
-    await writeJsonSafe(path, payload);
-    return { sessionId: id };
-  }
-
-  // Upload a chunk for transcription (no diarization; we store raw segments)
-  @Post('transcribe/chunk')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: async (_req, _file, cb) => {
-          try {
-            const dir = await ensureTranscribeTmpDir();
-            cb(null, dir);
-          } catch (e) {
-            cb(e as any, undefined as any);
-          }
-        },
-        filename: (_req, file, cb) => {
-          const base = file.originalname?.split(/[\\/]/).pop() || 'audio';
-          const unique = `${Date.now()}_${randomBytes(6).toString('hex')}`;
-          const ext = base.includes('.')
-            ? base.slice(base.lastIndexOf('.'))
-            : '.bin';
-          cb(null, `${unique}${ext}`);
-        },
-      }),
-      limits: {
-        fileSize: TRANSCRIBE_UPLOAD_LIMIT_BYTES,
-        files: 1,
-      },
-    }),
-  )
-  async uploadTranscriptionChunk(
-    @UploadedFile() file: Express.Multer.File,
-    @Body()
-    body: {
-      sessionId?: string;
-      chunkIndex?: number;
-      startMs?: number;
-      endMs?: number;
-    },
-  ) {
-    if (!file) throw new BadRequestException('No file provided');
-    const uploadedPath =
-      (file as any).path ||
-      join((file as any).destination || '', (file as any).filename);
-    try {
-      // OpenAI requires minimum 0.1s of audio (~1KB for WebM)
-      // Very small chunks are likely errors or silence
-      if (file.size < 500) {
-        this.logger.warn(
-          `transcribe/chunk: chunk too small (${file.size} bytes), skipping`,
-        );
-        return { text: '', segments: [] }; // Return empty result instead of error
-      }
-      const sessionId =
-        typeof body?.sessionId === 'string' ? body.sessionId : '';
-      if (!sessionId) throw new BadRequestException('Missing sessionId');
-      const sessionDir = await ensureTranscribeSessionDir();
-      const sessionPath = join(sessionDir, `${sessionId}.json`);
-      const current = await readJsonSafe(sessionPath);
-      if (!current || !current.id)
-        throw new BadRequestException('Invalid session');
-
-      let transcription: { text: string; segments: unknown[] };
-      try {
-        transcription = await transcribeWithOpenAI({
-          path: uploadedPath,
-          mimetype: file.mimetype,
-          filename: file.originalname || 'audio.webm',
-        });
-      } catch (e: any) {
-        if (e instanceof HttpException) throw e;
-        this.logger.error(
-          `transcribe/chunk failed: ${e?.stack || e?.message || e}`,
-        );
-        throw new ServiceUnavailableException(
-          'Speech transcription failed. Please try again.',
-        );
-      }
-      const { text } = transcription;
-      // Only whisper models return timed segments; gpt-4o-transcribe gives text only.
-      const rawSegs = transcription.segments as Array<any>;
-      const startMs = Number.isFinite(body?.startMs)
-        ? Number(body?.startMs)
-        : 0;
-      const endMs = Number.isFinite(body?.endMs)
-        ? Number(body?.endMs)
-        : startMs || 0;
-      const offsetS = Math.max(0, Math.floor(startMs) / 1000);
-
-      const entry = {
-        index: Number.isFinite(body?.chunkIndex)
-          ? Number(body?.chunkIndex)
-          : current.chunks.length || 0,
-        start_s_offset: offsetS,
-        end_s_offset: Math.max(offsetS, Math.floor(endMs) / 1000),
-        text,
-        segments: rawSegs.map((s) => ({
-          text: typeof s?.text === 'string' ? s.text : '',
-          start_s: typeof s?.start === 'number' ? s.start : null,
-          end_s: typeof s?.end === 'number' ? s.end : null,
-        })),
-      };
-      current.chunks.push(entry);
-      await writeJsonSafe(sessionPath, current);
-      return { ok: true };
-    } finally {
-      await fsPromises.unlink(uploadedPath).catch(() => {});
-    }
-  }
-
-  // Complete the session: merge chunks and run diarization once on combined segments
-  @Post('transcribe/chunk-complete')
-  async completeTranscriptionSession(@Body() body: { sessionId?: string }) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey)
-      throw new ServiceUnavailableException('OPENAI_API_KEY not configured');
-    const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : '';
-    if (!sessionId) throw new BadRequestException('Missing sessionId');
-    const sessionDir = await ensureTranscribeSessionDir();
-    const sessionPath = join(sessionDir, `${sessionId}.json`);
-    const current = await readJsonSafe(sessionPath);
-    if (!current || !Array.isArray(current?.chunks))
-      throw new BadRequestException('Invalid session');
-
-    const chunks = [...current.chunks].sort(
-      (a, b) => (a.index ?? 0) - (b.index ?? 0),
-    );
-    const combinedText = chunks
-      .map((c: any) => (typeof c.text === 'string' ? c.text : ''))
-      .filter(Boolean)
-      .join(' ');
-    const combinedSegments = chunks.flatMap((c: any) => {
-      const off = Number(c?.start_s_offset) || 0;
-      const segs = Array.isArray(c?.segments) ? c.segments : [];
-      return segs.map((s: any) => ({
-        text: typeof s?.text === 'string' ? s.text : '',
-        start_s: typeof s?.start_s === 'number' ? s.start_s : null,
-        end_s: typeof s?.end_s === 'number' ? s.end_s : null,
-        // adjusted values for downstream use
-        adj_start_s: typeof s?.start_s === 'number' ? s.start_s + off : null,
-        adj_end_s: typeof s?.end_s === 'number' ? s.end_s + off : null,
-      }));
-    });
-
-    // Build diarization input
-    const input =
-      combinedSegments.length > 0
-        ? {
-            segments: combinedSegments.map((s) => ({
-              text: s.text,
-              start_s: s.adj_start_s,
-              end_s: s.adj_end_s,
-            })),
-          }
-        : { transcript: combinedText };
-
-    const messages = [
-      {
-        role: 'system',
-        content:
-          'You are a medical scribe. Given a clinical conversation (full transcript or segments), split into speaker turns labeled DOCTOR or PATIENT only. ' +
-          'Cues: questions/instructions/orders/examination → DOCTOR; symptoms/history/concerns → PATIENT. ' +
-          'Preserve medical terms, numbers, and units verbatim. ' +
-          'Return STRICT JSON with keys: segments (array of {speaker, text, confidence, start_s, end_s}), and speakers ({doctorText, patientText}). ' +
-          'Concatenate segments chronologically for doctorText and patientText. If timestamps are provided in input, propagate them; otherwise use null. No extra commentary.',
-      },
-      { role: 'user', content: JSON.stringify(input) },
-    ];
-    const diarizeModel = process.env.OPENAI_DIARIZATION_MODEL || 'gpt-4o';
-    const diarizationJsonSchema = {
-      name: 'DiarizationSchema',
-      schema: {
-        type: 'object',
-        required: ['segments', 'speakers'],
-        properties: {
-          segments: {
-            type: 'array',
-            items: {
-              type: 'object',
-              required: ['speaker', 'text'],
-              properties: {
-                speaker: { type: 'string', enum: ['DOCTOR', 'PATIENT'] },
-                text: { type: 'string' },
-                confidence: { type: 'number', minimum: 0, maximum: 1 },
-                start_s: { type: ['number', 'null'] },
-                end_s: { type: ['number', 'null'] },
-              },
-            },
-          },
-          speakers: {
-            type: 'object',
-            required: ['doctorText', 'patientText'],
-            properties: {
-              doctorText: { type: 'string' },
-              patientText: { type: 'string' },
-            },
-          },
-        },
-      },
-      strict: true,
-    } as const;
-
-    const diarizeResp = await fetch(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: diarizeModel,
-          temperature: 0,
-          response_format: {
-            type: 'json_schema',
-            json_schema: diarizationJsonSchema,
-          },
-          messages,
-        }),
-      },
-    );
-    if (!diarizeResp.ok) {
-      const errText = await diarizeResp.text();
-      this.logger.warn(
-        `transcribe/chunk-complete diarization failed: ${diarizeResp.status} ${errText}`,
-      );
-      // fallback: return combined text only
-      return {
-        text: combinedText,
-        segments: [],
-        speakers: { doctorText: '', patientText: '' },
-      };
-    }
-    const dj = (await diarizeResp.json()) as any;
-    const content = dj?.choices?.[0]?.message?.content || '{}';
-    let parsed: any = {};
-    try {
-      parsed = JSON.parse(content);
-    } catch {}
-    const segs = Array.isArray(parsed?.segments)
-      ? (parsed.segments as Array<any>)
-      : [];
-    const normalized = segs
-      .map((s) => ({
-        speaker:
-          typeof s?.speaker === 'string' &&
-          s.speaker.toUpperCase().includes('DOC')
-            ? 'DOCTOR'
-            : 'PATIENT',
-        text: typeof s?.text === 'string' ? s.text : '',
-        confidence:
-          typeof s?.confidence === 'number' ? s.confidence : undefined,
-        start_s:
-          typeof s?.start_s === 'number' || s?.start_s === null
-            ? s.start_s
-            : undefined,
-        end_s:
-          typeof s?.end_s === 'number' || s?.end_s === null
-            ? s.end_s
-            : undefined,
-      }))
-      .filter((s: any) => s.text);
-    const doctorText =
-      parsed?.speakers?.doctorText &&
-      typeof parsed.speakers.doctorText === 'string'
-        ? parsed.speakers.doctorText
-        : normalized
-            .filter((s: any) => s.speaker === 'DOCTOR')
-            .map((s: any) => s.text)
-            .join(' ');
-    const patientText =
-      parsed?.speakers?.patientText &&
-      typeof parsed.speakers.patientText === 'string'
-        ? parsed.speakers.patientText
-        : normalized
-            .filter((s: any) => s.speaker === 'PATIENT')
-            .map((s: any) => s.text)
-            .join(' ');
-
-    // Optionally clean up session file after completion
-    try {
-      await fsPromises.unlink(sessionPath).catch(() => {});
-    } catch {}
-
-    return {
-      text: combinedText,
-      segments: normalized,
-      speakers: { doctorText, patientText },
-    };
   }
 
   // Extract lab results from an uploaded image or PDF using OpenAI Vision

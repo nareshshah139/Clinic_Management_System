@@ -15,7 +15,7 @@ export interface OpenAiTranscription {
 
 const logger = new Logger('OpenAiTranscribe');
 
-const TRANSCRIPTION_PROMPT =
+export const TRANSCRIPTION_PROMPT =
   'Medical doctor–patient conversation transcription. ' +
   'Preserve punctuation, numbers, and units exactly (e.g., 120/80 mmHg). ' +
   'Use medical spellings; prefer Indian English when applicable. ' +
