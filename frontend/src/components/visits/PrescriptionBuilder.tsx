@@ -32,7 +32,7 @@ import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency,
 import { printedMedicineName } from '@/lib/medicine-names';
 import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
-import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
+import { appendSpeechToText, type SpeechToTextPreference } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
@@ -70,6 +70,12 @@ const CONTINUATION_NUDGE_PX = 36;
 const CONTINUATION_RESERVE_PX = 48;
 const PRINT_PX_PER_MM = 96 / 25.4;
 const SUGGESTION_CLASS = 'w-full px-3 py-1 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
+
+const VOICE_FIELDS = {
+  chiefComplaints: 'patient-preferred',
+  objective: 'full-transcript',
+} as const satisfies Record<string, SpeechToTextPreference>;
+type VoiceField = keyof typeof VOICE_FIELDS;
 
 type DosageUnit = 'MG' | 'ML' | 'MCG' | 'IU' | 'TABLET' | 'CAPSULE' | 'DROP' | 'SPRAY' | 'PATCH' | 'INJECTION';
 
@@ -524,12 +530,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   // Removed Topicals UI
 
   // Voice-to-text functionality (Chief Complaints)
-  const { activeVoiceField, isListening, isTranscribing, startVoiceInput } = useSpeechToTextRecorder({
+  const { activeVoiceField, isConnecting, isListening, isTranscribing, livePreview, startVoiceInput } = useSpeechToTextRecorder({
     toast,
-    resolveText: (fieldName, response) =>
-      fieldName === 'chiefComplaints'
-        ? pickSpeechToTextInsert(response, 'patient-preferred')
-        : pickSpeechToTextInsert(response, 'full-transcript'),
+    fields: VOICE_FIELDS,
     applyText: (fieldName, text) => {
       switch (fieldName) {
         case 'chiefComplaints':
@@ -542,26 +545,30 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     },
   });
 
-  const VoiceButton = useCallback(({ fieldName }: { fieldName: string }) => (
+  const VoiceButton = useCallback(({ fieldName }: { fieldName: VoiceField }) => (
     <Button
       type="button"
       variant="ghost"
       size="sm"
       className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
       onClick={() => void startVoiceInput(fieldName)}
-      disabled={isTranscribing || (isListening && activeVoiceField !== fieldName)}
+      disabled={isTranscribing || ((isConnecting || isListening) && activeVoiceField !== fieldName)}
       aria-label={
         activeVoiceField === fieldName
-          ? isListening
-            ? 'Stop voice input'
-            : 'Transcribing recording'
+          ? isConnecting
+            ? 'Connecting microphone'
+            : isListening
+              ? 'Stop voice input'
+              : 'Transcribing recording'
           : 'Start voice input'
       }
       title={
         activeVoiceField === fieldName
-          ? isListening
-            ? 'Stop voice input'
-            : 'Transcribing recording'
+          ? isConnecting
+            ? 'Connecting microphone'
+            : isListening
+              ? 'Stop voice input'
+              : 'Transcribing recording'
           : 'Start voice input'
       }
     >
@@ -571,7 +578,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         <Mic className="h-4 w-4" />
       )}
     </Button>
-  ), [activeVoiceField, isListening, isTranscribing, startVoiceInput]);
+  ), [activeVoiceField, isConnecting, isListening, isTranscribing, startVoiceInput]);
+
+  const renderVoicePreview = (fieldName: VoiceField) =>
+    activeVoiceField === fieldName && livePreview ? (
+      <p aria-live="polite" className="mt-1 text-xs italic text-muted-foreground">{livePreview}</p>
+    ) : null;
 
   // Skin Concerns moved from Assessment into Chief Complaints
   const SKIN_CONCERNS = useMemo(() => (
@@ -4763,6 +4775,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </ul>
                   )}
                 </div>
+                {renderVoicePreview('chiefComplaints')}
                 <div className="mt-2">
                   <div className="text-xs text-muted-foreground mb-1">Skin Concerns</div>
                   <div className="flex flex-wrap gap-2">
@@ -5031,6 +5044,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <Textarea placeholder="Detailed physical examination findings..." value={exObjective} onChange={(e) => setExObjective(e.target.value)} rows={3} />
                     <VoiceButton fieldName="objective" />
                   </div>
+                  {renderVoicePreview('objective')}
                 </div>
               </div>
             </CollapsibleSection>

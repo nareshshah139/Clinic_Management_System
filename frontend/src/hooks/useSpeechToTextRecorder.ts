@@ -1,9 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
-import { formatSpeechToTextError, type SpeechToTextResponse } from '@/lib/speech-to-text';
-import { getErrorMessage } from '@/lib/utils';
+import {
+  MicUnavailableError,
+  startDictationSession,
+  type DictationPhase,
+  type DictationSession,
+  type DictationView,
+} from '@/lib/dictation-session';
+import type { SpeechToTextPreference } from '@/lib/speech-to-text';
 
 type ToastFn = (input: {
   variant?: 'default' | 'destructive' | 'success' | 'warning' | 'info';
@@ -11,215 +16,114 @@ type ToastFn = (input: {
   description?: string;
 }) => void;
 
-interface UseSpeechToTextRecorderOptions {
+interface UseSpeechToTextRecorderOptions<F extends string> {
   toast: ToastFn;
-  resolveText: (fieldName: string, response: SpeechToTextResponse) => string;
-  applyText: (fieldName: string, text: string) => void;
+  fields: Readonly<Record<F, SpeechToTextPreference>>;
+  applyText: (field: F, text: string) => void;
 }
 
-export function useSpeechToTextRecorder({
+interface ActiveDictation<F extends string> {
+  field: F;
+  phase: DictationPhase;
+  session: DictationSession | null;
+  stopRequested: boolean;
+}
+
+export function useSpeechToTextRecorder<F extends string>({
   toast,
-  resolveText,
+  fields,
   applyText,
-}: UseSpeechToTextRecorderOptions) {
-  const [isListening, setIsListening] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
+}: UseSpeechToTextRecorderOptions<F>) {
+  const [active, setActive] = useState<{ field: F; view: DictationView } | null>(null);
+  const activeRef = useRef<ActiveDictation<F> | null>(null);
+  const latest = useRef({ toast, fields, applyText });
+  latest.current = { toast, fields, applyText };
 
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const stopTimerRef = useRef<number | null>(null);
-  const mountedRef = useRef(true);
+  useEffect(() => () => {
+    const current = activeRef.current;
+    activeRef.current = null;
+    current?.session?.dispose();
+  }, []);
 
-  const clearStopTimer = useCallback(() => {
-    if (stopTimerRef.current !== null) {
-      window.clearTimeout(stopTimerRef.current);
-      stopTimerRef.current = null;
+  const startVoiceInput = useCallback(async (field: F) => {
+    const current = activeRef.current;
+    if (current) {
+      if (current.field !== field || current.phase === 'finishing') return;
+      if (current.session) current.session.stop();
+      else current.stopRequested = true;
+      return;
+    }
+
+    const entry: ActiveDictation<F> = { field, phase: 'connecting', session: null, stopRequested: false };
+    activeRef.current = entry;
+    setActive({ field, view: { phase: 'connecting', live: false, preview: '' } });
+    const isCurrent = () => activeRef.current === entry;
+    const release = () => {
+      activeRef.current = null;
+      setActive(null);
+    };
+
+    let session: DictationSession;
+    try {
+      session = await startDictationSession({
+        preference: latest.current.fields[field],
+        onView: (view) => {
+          if (!isCurrent()) return;
+          entry.phase = view.phase;
+          setActive({ field, view });
+        },
+        onNotice: (notice) => {
+          if (isCurrent()) latest.current.toast({ variant: 'info', ...notice });
+        },
+      });
+    } catch (error) {
+      if (!isCurrent()) return;
+      release();
+      const unsupported = error instanceof MicUnavailableError && error.reason === 'unsupported';
+      latest.current.toast({
+        variant: 'warning',
+        title: unsupported ? 'Voice capture unavailable' : 'Microphone access denied',
+        description: error instanceof Error && error.message ? error.message : 'Check browser permissions and try again.',
+      });
+      return;
+    }
+
+    if (!isCurrent()) {
+      session.dispose();
+      return;
+    }
+    entry.session = session;
+    if (entry.stopRequested) session.stop();
+
+    const outcome = await session.outcome;
+    if (!isCurrent()) return;
+    release();
+    switch (outcome.kind) {
+      case 'text':
+        latest.current.applyText(field, outcome.text);
+        break;
+      case 'empty':
+        latest.current.toast({
+          variant: 'info',
+          title: 'No speech detected',
+          description: 'The recording may have been too quiet or contained only silence. Try speaking louder and closer to the microphone.',
+        });
+        break;
+      case 'error':
+        latest.current.toast({ variant: 'warning', title: outcome.title, description: outcome.description });
+        break;
+      case 'cancelled':
+        break;
     }
   }, []);
 
-  const cancelActiveRecording = useCallback(() => {
-    clearStopTimer();
-
-    const recorder = recorderRef.current;
-    if (recorder) {
-      recorder.ondataavailable = null;
-      recorder.onstop = null;
-      try {
-        if (recorder.state !== 'inactive') recorder.stop();
-      } catch {}
-    }
-
-    try {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-    } catch {}
-
-    recorderRef.current = null;
-    streamRef.current = null;
-  }, [clearStopTimer]);
-
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      cancelActiveRecording();
-    };
-  }, [cancelActiveRecording]);
-
-  const startVoiceInput = useCallback(async (fieldName: string) => {
-    if (isTranscribing) return;
-
-    if (
-      isListening &&
-      activeVoiceField === fieldName &&
-      recorderRef.current &&
-      recorderRef.current.state !== 'inactive'
-    ) {
-      try {
-        recorderRef.current.stop();
-      } catch {}
-      return;
-    }
-
-    if (!navigator.mediaDevices || !(window as any).MediaRecorder) {
-      toast({
-        variant: 'warning',
-        title: 'Voice capture unavailable',
-        description: 'Microphone recording is not supported in this browser.',
-      });
-      return;
-    }
-
-    setIsListening(true);
-    setActiveVoiceField(fieldName);
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 48000,
-        },
-      });
-      streamRef.current = stream;
-
-      const mediaRecorder = (window as any).MediaRecorder as typeof MediaRecorder;
-      const mimeType = mediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : mediaRecorder.isTypeSupported('audio/mp4')
-          ? 'audio/mp4'
-          : '';
-      const recorder = new MediaRecorder(stream, mimeType ? ({ mimeType } as MediaRecorderOptions) : undefined);
-      recorderRef.current = recorder;
-
-      const chunksAccumulator: Blob[] = [];
-
-      recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          chunksAccumulator.push(event.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        clearStopTimer();
-
-        try {
-          stream.getTracks().forEach((track) => track.stop());
-        } catch {}
-        streamRef.current = null;
-        recorderRef.current = null;
-
-        if (mountedRef.current) {
-          setIsListening(false);
-          setIsTranscribing(true);
-        }
-
-        try {
-          if (chunksAccumulator.length === 0) {
-            toast({
-              variant: 'warning',
-              title: 'No audio recorded',
-              description: 'Please try recording again.',
-            });
-            return;
-          }
-
-          const recordedType = mimeType || 'audio/webm';
-          const completeAudio = new Blob(chunksAccumulator, { type: recordedType });
-          const filename = recordedType === 'audio/mp4' ? 'recording.m4a' : 'recording.webm';
-          const formData = new FormData();
-          formData.append('file', completeAudio, filename);
-
-          const response = await fetch('/api/visits/transcribe', {
-            method: 'POST',
-            body: formData,
-            credentials: 'include',
-          });
-
-          if (!response.ok) {
-            handleUnauthorizedRedirect(response);
-            let errText = '';
-            try {
-              errText = await response.text();
-            } catch {}
-            throw new Error(formatSpeechToTextError(response.status, errText));
-          }
-
-          const data = (await response.json()) as SpeechToTextResponse;
-          const nextText = resolveText(fieldName, data);
-
-          if (!nextText) {
-            toast({
-              variant: 'info',
-              title: 'No speech detected',
-              description: 'The recording may have been too quiet or contained only silence. Try speaking louder and closer to the microphone.',
-            });
-            return;
-          }
-
-          if (mountedRef.current) {
-            applyText(fieldName, nextText);
-          }
-        } catch (error) {
-          if (mountedRef.current) {
-            toast({
-              variant: 'warning',
-              title: 'Speech-to-text error',
-              description: getErrorMessage(error) || 'Please try again.',
-            });
-          }
-        } finally {
-          if (mountedRef.current) {
-            setIsTranscribing(false);
-            setActiveVoiceField(null);
-          }
-        }
-      };
-
-      recorder.start(30_000);
-      stopTimerRef.current = window.setTimeout(() => {
-        if (recorder.state !== 'inactive') {
-          recorder.stop();
-        }
-      }, 600_000);
-    } catch (error) {
-      cancelActiveRecording();
-      if (mountedRef.current) {
-        setIsListening(false);
-        setActiveVoiceField(null);
-        toast({
-          variant: 'warning',
-          title: 'Microphone access denied',
-          description: getErrorMessage(error) || 'Check browser permissions and try again.',
-        });
-      }
-    }
-  }, [activeVoiceField, applyText, cancelActiveRecording, clearStopTimer, isListening, isTranscribing, resolveText, toast]);
-
+  const phase = active?.view.phase;
   return {
-    activeVoiceField,
-    isListening,
-    isTranscribing,
+    activeVoiceField: active?.field ?? null,
+    isConnecting: phase === 'connecting',
+    isListening: phase === 'listening',
+    isTranscribing: phase === 'finishing',
+    livePreview: active?.view.preview ?? '',
     startVoiceInput,
   };
 }
