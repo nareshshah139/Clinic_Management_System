@@ -69,7 +69,7 @@ import { ToastAction } from '@/components/ui/toast';
 import { appointmentsHref } from '@/lib/appointments-link';
 import { reviewBookingMessage, type ReviewBooking } from '@/lib/review-booking';
 import { isUuid } from '@/lib/id';
-import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
+import { appendSpeechToText, type SpeechToTextPreference } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 import { NativeSelect } from '@/components/ui/native-select';
 
@@ -185,6 +185,14 @@ const INITIAL_VITALS: VitalsState = {
   spo2: '',
   rr: '',
 };
+
+const VOICE_FIELDS = {
+  subjective: 'full-transcript',
+  objective: 'full-transcript',
+  assessment: 'full-transcript',
+  plan: 'full-transcript',
+} as const satisfies Record<string, SpeechToTextPreference>;
+type VoiceField = keyof typeof VOICE_FIELDS;
 
 const AUTO_SAVE_INTERVAL_MS = 8000;
 const AUTO_SAVE_RETRY_MS = 15000;
@@ -1340,9 +1348,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   
   
   // Voice-to-text functionality
-  const { activeVoiceField, isListening, isTranscribing, startVoiceInput } = useSpeechToTextRecorder({
+  const { activeVoiceField, isConnecting, isListening, isTranscribing, startVoiceInput } = useSpeechToTextRecorder({
     toast,
-    resolveText: (_fieldName, response) => pickSpeechToTextInsert(response, 'full-transcript'),
+    fields: VOICE_FIELDS,
     applyText: (fieldName, text) => {
       switch (fieldName) {
         case 'subjective':
@@ -1361,26 +1369,30 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     },
   });
   
-  const VoiceButton = useCallback(({ fieldName }: { fieldName: string }) => (
+  const VoiceButton = useCallback(({ fieldName }: { fieldName: VoiceField }) => (
     <Button
       type="button"
       variant="ghost"
       size="sm"
       className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
       onClick={() => void startVoiceInput(fieldName)}
-      disabled={isTranscribing || (isListening && activeVoiceField !== fieldName)}
+      disabled={isTranscribing || ((isConnecting || isListening) && activeVoiceField !== fieldName)}
       aria-label={
         activeVoiceField === fieldName
-          ? isListening
-            ? 'Stop voice input'
-            : 'Transcribing recording'
+          ? isConnecting
+            ? 'Connecting microphone'
+            : isListening
+              ? 'Stop voice input'
+              : 'Transcribing recording'
           : 'Start voice input'
       }
       title={
         activeVoiceField === fieldName
-          ? isListening
-            ? 'Stop voice input'
-            : 'Transcribing recording'
+          ? isConnecting
+            ? 'Connecting microphone'
+            : isListening
+              ? 'Stop voice input'
+              : 'Transcribing recording'
           : 'Start voice input'
       }
     >
@@ -1390,7 +1402,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         <Mic className="h-4 w-4" />
       )}
     </Button>
-  ), [activeVoiceField, isListening, isTranscribing, startVoiceInput]);
+  ), [activeVoiceField, isConnecting, isListening, isTranscribing, startVoiceInput]);
 
   const toggleSet = useCallback(<T,>(current: Set<T>, item: T, updater: (next: Set<T>) => void) => {
     const next = new Set(current);
