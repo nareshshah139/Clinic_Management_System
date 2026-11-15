@@ -15,7 +15,9 @@ interface UseAudioRecorderOptions {
 }
 
 const CHUNK_MS = 30_000;
-const MAX_RECORDING_MS = 600_000;
+const MAX_RECORDING_MS = 40 * 60_000;
+// Chrome defaults opus to 128 kbps, which puts 30 minutes over the 25 MB upload limit; 32 kbps is plenty for speech.
+const AUDIO_BITS_PER_SECOND = 32_000;
 
 function pickMimeType(): string {
   const recorder = (window as any).MediaRecorder as typeof MediaRecorder;
@@ -103,7 +105,7 @@ export function useAudioRecorder({ toast, onRecorded }: UseAudioRecorderOptions)
       streamRef.current = stream;
 
       const mimeType = pickMimeType();
-      const recorder = new MediaRecorder(stream, mimeType ? ({ mimeType } as MediaRecorderOptions) : undefined);
+      const recorder = new MediaRecorder(stream, { ...(mimeType && { mimeType }), audioBitsPerSecond: AUDIO_BITS_PER_SECOND });
       recorderRef.current = recorder;
       const chunks: Blob[] = [];
 

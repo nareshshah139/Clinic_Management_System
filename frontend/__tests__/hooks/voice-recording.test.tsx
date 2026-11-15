@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 import { useVoiceFill } from '@/hooks/useVoiceFill';
 
@@ -8,6 +9,10 @@ jest.mock('@/lib/api', () => ({ apiClient: {} }));
 
 class FakeMediaRecorder {
   static isTypeSupported = (type: string) => type === 'audio/webm';
+  static lastOptions: MediaRecorderOptions | undefined;
+  constructor(_stream: unknown, options?: MediaRecorderOptions) {
+    FakeMediaRecorder.lastOptions = options;
+  }
   state: 'inactive' | 'recording' = 'inactive';
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
@@ -38,6 +43,26 @@ beforeEach(() => {
   Object.defineProperty(navigator, 'mediaDevices', {
     value: { getUserMedia: jest.fn().mockResolvedValue({ getTracks: () => [track] }) },
     configurable: true,
+  });
+});
+
+describe('useAudioRecorder', () => {
+  afterEach(() => { jest.useRealTimers(); });
+
+  it('records speech at 32 kbps and hands the audio over by itself after 40 minutes', async () => {
+    jest.useFakeTimers();
+    const onRecorded = jest.fn();
+    const { result } = renderHook(() => useAudioRecorder({ toast, onRecorded }));
+
+    await act(async () => { await result.current.toggle('notes'); });
+    expect(FakeMediaRecorder.lastOptions).toEqual({ mimeType: 'audio/webm', audioBitsPerSecond: 32000 });
+
+    act(() => { jest.advanceTimersByTime(40 * 60_000 - 1); });
+    expect([result.current.recording?.key, onRecorded.mock.calls.length]).toEqual(['notes', 0]);
+
+    act(() => { jest.advanceTimersByTime(1); });
+    expect(result.current.recording).toBeNull();
+    expect(onRecorded.mock.calls.map(([key, audio, filename]) => [key, audio.type, filename])).toEqual([['notes', 'audio/webm', 'recording.webm']]);
   });
 });
 
