@@ -29,7 +29,7 @@ function run(args: string[], input: string, timeout: number): Promise<string> {
     let output = '';
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(new ServiceUnavailableException('Codex invoice extraction timed out. Try again.'));
+      reject(new ServiceUnavailableException('Codex timed out. Try again.'));
     }, timeout);
     child.stdout.on('data', (chunk) => { output = (output + chunk).slice(-65536); });
     child.stderr.on('data', (chunk) => { output = (output + chunk).slice(-65536); });
@@ -47,11 +47,55 @@ function run(args: string[], input: string, timeout: number): Promise<string> {
   });
 }
 
-export async function extractWithCodexOAuth(prompt: string, images: string[]): Promise<string> {
-  const status = await run(['login', 'status'], '', 10000);
-  if (!/chatgpt|access token/i.test(status) || /api key/i.test(status)) {
-    throw new ServiceUnavailableException('Invoice OCR requires Codex ChatGPT OAuth login on the server.');
+const usesChatGptOAuth = (status: string) => /chatgpt|access token/i.test(status) && !/api key/i.test(status);
+
+let readiness: { at: number; ready: Promise<boolean> } | undefined;
+
+export function isCodexOAuthReady(): Promise<boolean> {
+  if (!readiness || Date.now() - readiness.at > 60_000) {
+    readiness = {
+      at: Date.now(),
+      ready: run(['login', 'status'], '', 10000).then(usesChatGptOAuth, () => false),
+    };
   }
+  return readiness.ready;
+}
+
+export function resetCodexOAuthReadiness(): void {
+  readiness = undefined;
+}
+
+export async function requireCodexOAuthLogin(message: string): Promise<void> {
+  if (!usesChatGptOAuth(await run(['login', 'status'], '', 10000))) throw new ServiceUnavailableException(message);
+}
+
+export interface CodexJsonRequest {
+  prompt: string;
+  schema: object;
+  model?: string;
+  timeoutMs: number;
+}
+
+export async function completeJsonWithCodexOAuth({ prompt, schema, model, timeoutMs }: CodexJsonRequest): Promise<string> {
+  await requireCodexOAuthLogin('Codex ChatGPT OAuth login is required on the server.');
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-json-'));
+  try {
+    const schemaPath = path.join(directory, 'schema.json');
+    const outputPath = path.join(directory, 'out.json');
+    await fs.writeFile(schemaPath, JSON.stringify(schema), { mode: 0o600 });
+    await run([
+      'exec', '--ephemeral', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules',
+      '-s', 'read-only', '-C', directory, '--output-schema', schemaPath, '-o', outputPath,
+      ...(model ? ['-m', model] : []), '-c', 'model_reasoning_effort="low"', '-',
+    ], prompt, timeoutMs);
+    return await fs.readFile(outputPath, 'utf8');
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+}
+
+export async function extractWithCodexOAuth(prompt: string, images: string[]): Promise<string> {
+  await requireCodexOAuthLogin('Invoice OCR requires Codex ChatGPT OAuth login on the server.');
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'purchase-ocr-'));
   try {
     const imagePaths: string[] = [];
