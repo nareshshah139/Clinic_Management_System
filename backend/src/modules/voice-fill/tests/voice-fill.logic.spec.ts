@@ -98,9 +98,11 @@ describe('parseVoiceFillOutput', () => {
 });
 
 describe('normalizeTranscript', () => {
-  it('trims and clips to 8000 characters', () => {
+  it('keeps a 40-minute consult whole and clips beyond 60000 characters', () => {
     expect(normalizeTranscript('  BP 120 by 80 \n')).toBe('BP 120 by 80');
-    expect(normalizeTranscript(` ${'a'.repeat(9000)}`)).toBe('a'.repeat(8000));
+    const fortyMinutes = 'word '.repeat(7200).trim();
+    expect(normalizeTranscript(fortyMinutes)).toBe(fortyMinutes);
+    expect(normalizeTranscript(` ${'a'.repeat(61000)}`)).toBe('a'.repeat(60000));
     expect(normalizeTranscript(' \n ')).toBe('');
   });
 });

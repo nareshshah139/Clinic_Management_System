@@ -18,7 +18,8 @@ const DEFAULT_TEXT_MAX = 500;
 const LONG_TEXT_MAX = 4000;
 const DEFAULT_LIST_MAX = 20;
 const LIST_ITEM_MAX = 200;
-const TRANSCRIPT_MAX = 8000;
+// A 40-minute consult transcribes to ~36k chars; an 8k cap once dropped everything after minute ten.
+const TRANSCRIPT_MAX = 60000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);

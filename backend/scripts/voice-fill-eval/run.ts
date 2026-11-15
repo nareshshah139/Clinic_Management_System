@@ -41,6 +41,9 @@ const only = flag('--only')?.split(',');
 if (!audioDir && !textMode) throw new Error('Pass --audio <dir> or --text');
 
 const lower = (value: unknown) => String(value ?? '').trim().toLowerCase();
+const letters = (text: string) => text.replace(/[^a-z]/gi, '').length;
+// Below this share of the script's letters, a transcript has lost speech rather than reworded it.
+const MIN_COVERAGE = 0.75;
 
 function matches(expected: Matcher, actual: unknown): boolean {
   if (typeof expected === 'number') return actual === expected;
@@ -105,7 +108,7 @@ async function main() {
     : JSON.parse(fs.readFileSync(path.join(__dirname, 'cases.json'), 'utf8'));
   const cases = only ? loaded.filter((c) => only.includes(c.id)) : loaded;
   const service = new VoiceFillService();
-  const results: Array<{ id: string; form: string; ms: number; transcript?: string; error?: string; checks: Check[]; extras: string[] }> = [];
+  const results: Array<{ id: string; form: string; ms: number; transcript?: string; coverage?: number; error?: string; checks: Check[]; extras: string[] }> = [];
   let next = 0;
   await Promise.all(Array.from({ length: concurrency }, async () => {
     while (next < cases.length) {
@@ -113,13 +116,14 @@ async function main() {
       const started = Date.now();
       try {
         const { transcript, fields } = textMode ? await fillFromText(c) : await fillFromAudio(c, service);
-        results.push({ id: c.id, form: c.form, ms: Date.now() - started, transcript, ...score(c, fields) });
+        const coverage = Math.round((letters(transcript) / letters(c.say)) * 100) / 100;
+        results.push({ id: c.id, form: c.form, ms: Date.now() - started, transcript, coverage, ...score(c, fields) });
       } catch (error) {
         const checks = score(c, {}).checks;
         results.push({ id: c.id, form: c.form, ms: Date.now() - started, error: (error as Error).message, checks, extras: [] });
       }
       const last = results[results.length - 1];
-      console.log(`${last.error ? 'ERR ' : ''}${c.id}: ${last.checks.filter((k) => k.ok).length}/${last.checks.length} extras=${last.extras.length} ${last.ms}ms`);
+      console.log(`${last.error ? 'ERR ' : ''}${c.id}: ${last.checks.filter((k) => k.ok).length}/${last.checks.length} extras=${last.extras.length} coverage=${last.coverage ?? '-'} ${last.ms}ms`);
     }
   }));
 
@@ -132,6 +136,7 @@ async function main() {
       fieldAccuracy: `${checks.filter((k) => k.ok).length}/${checks.length}`,
       unexpectedFields: subset.reduce((n, r) => n + r.extras.length, 0),
       errors: subset.filter((r) => r.error).length,
+      lowCoverage: subset.filter((r) => (r.coverage ?? 1) < MIN_COVERAGE).map((r) => `${r.id}=${r.coverage}`),
       p50ms: ms[Math.floor(ms.length / 2)],
       maxMs: ms[ms.length - 1],
     };
@@ -146,6 +151,7 @@ async function main() {
       ...r.checks.filter((k) => !k.ok).map((k) => ({ case: r.id, field: k.field, expected: k.expected, actual: k.actual })),
       ...r.extras.map((extra) => ({ case: r.id, unexpected: extra })),
       ...(r.error ? [{ case: r.id, error: r.error }] : []),
+      ...((r.coverage ?? 1) < MIN_COVERAGE ? [{ case: r.id, lowCoverage: r.coverage }] : []),
     ]),
     transcripts: Object.fromEntries(results.map((r) => [r.id, r.transcript])),
   };
