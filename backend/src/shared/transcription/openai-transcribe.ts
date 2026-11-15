@@ -35,9 +35,29 @@ const TRANSCRIPTION_PROMPT =
   'Do not add speaker tags or commentary; output only the transcript text.';
 
 // gpt-4o-transcribe rejects audio over 1400 s and silently truncates long outputs (a 15-minute clip came back
-// cut off mid-word), while 5-minute clips transcribe in full. Long recordings are sent as ~5-minute parts.
+// cut off mid-word). Measured on 300 s of speech with the instruction prompt: 2/10 calls returned only the first
+// ~220 chars (HTTP 200); two 150 s halves with the same prompt: 0/20. Long recordings are sent as ~150 s parts.
+const DEFAULT_SEGMENT_S = 150;
 const SEARCH_WINDOW_S = 45;
+// Normal speech yields ~9 chars per voiced second; the truncated 300 s replies were ~0.7. 2 sits well below
+// slow speech and well above a fragment. Under 20 voiced seconds a short transcript is plausible (a one-word answer).
+const MIN_VOICED_SECONDS_TO_CHECK = 20;
+const MIN_CHARS_PER_VOICED_SECOND = 2;
 const SILENCE_FILTER = 'silencedetect=noise=-35dB:d=0.4';
+
+/** True when a transcript is implausibly short for the amount of speech sent, the signature of silent truncation. */
+export function looksTruncated(chars: number, voicedSeconds: number): boolean {
+  return voicedSeconds >= MIN_VOICED_SECONDS_TO_CHECK && chars < MIN_CHARS_PER_VOICED_SECOND * voicedSeconds;
+}
+
+/** Seconds of span that are not covered by a detected silence. */
+export function voicedSeconds(span: AudioSpan, silences: AudioSpan[]): number {
+  const silent = silences.reduce(
+    (total, silence) => total + Math.max(0, Math.min(span.end, silence.end) - Math.max(span.start, silence.start)),
+    0,
+  );
+  return Math.max(0, span.end - span.start - silent);
+}
 
 export function isOpenAiTranscriptionConfigured(): boolean {
   return !!process.env.OPENAI_API_KEY;
@@ -121,7 +141,7 @@ function detectSilences(inputPath: string): Promise<AudioSpan[]> {
   });
 }
 
-async function requestTranscription(apiKey: string, audio: TranscriptionAudio): Promise<OpenAiTranscription> {
+async function requestTranscription(apiKey: string, audio: TranscriptionAudio, withPrompt = true): Promise<OpenAiTranscription> {
   const fileBuf = await fs.readFile(audio.path);
   const form = new FormData();
   form.append('file', new Blob([new Uint8Array(fileBuf)], { type: audio.mimetype }), audio.filename);
@@ -130,7 +150,7 @@ async function requestTranscription(apiKey: string, audio: TranscriptionAudio): 
   form.append('model', transcribeModel);
   if (transcribeLanguage) form.append('language', transcribeLanguage);
   form.append('temperature', '0');
-  form.append('prompt', TRANSCRIPTION_PROMPT);
+  if (withPrompt) form.append('prompt', TRANSCRIPTION_PROMPT);
   // gpt-4o-*-transcribe answers 400 to verbose_json; only whisper returns timed segments.
   form.append('response_format', /^whisper/i.test(transcribeModel) ? 'verbose_json' : 'json');
   logger.log(
@@ -159,6 +179,20 @@ async function requestTranscription(apiKey: string, audio: TranscriptionAudio): 
   const segments: unknown[] = Array.isArray(data?.segments) ? data.segments : [];
   logger.log(`transcription transcriptLength=${text.length} segmentCount=${segments.length}`);
   return { text, segments };
+}
+
+/** Transcribes once; if the transcript looks truncated, retries once without the prompt and keeps the longer result. */
+async function requestGuarded(apiKey: string, audio: TranscriptionAudio, voiced: number): Promise<OpenAiTranscription> {
+  const first = await requestTranscription(apiKey, audio);
+  const firstChars = first.text.trim().length;
+  if (!looksTruncated(firstChars, voiced)) return first;
+  const retry = await requestTranscription(apiKey, audio, false);
+  const retryChars = retry.text.trim().length;
+  logger.warn(
+    `transcription looks truncated file=${audio.filename} voicedSeconds=${voiced.toFixed(1)} ` +
+      `chars=${firstChars} retryChars=${retryChars}`,
+  );
+  return retryChars > firstChars ? retry : first;
 }
 
 function offsetSegment(segment: unknown, offsetS: number): unknown {
@@ -191,8 +225,20 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T,
   return results;
 }
 
+// Silence detection costs a decode pass, so short clips are treated as fully voiced (the guard ignores them under 20 s anyway).
+async function singleRequestVoicedSeconds(inputPath: string, durationS: number): Promise<number> {
+  if (durationS <= 30) return durationS;
+  try {
+    return voicedSeconds({ start: 0, end: durationS }, await detectSilences(inputPath));
+  } catch (error) {
+    logger.warn(`silence detection failed, truncation guard assumes full speech: ${(error as Error).message}`);
+    return durationS;
+  }
+}
+
 async function transcribeInParts(apiKey: string, audio: TranscriptionAudio, durationS: number, plan: SegmentPlanOptions) {
-  const spans = planTranscriptionSegments(durationS, await detectSilences(audio.path), plan);
+  const silences = await detectSilences(audio.path);
+  const spans = planTranscriptionSegments(durationS, silences, plan);
   const concurrency = Math.floor(positiveEnv('OPENAI_TRANSCRIBE_CONCURRENCY', 4)) || 1;
   logger.log(`transcription split durationS=${durationS.toFixed(1)} parts=${spans.length} concurrency=${concurrency}`);
   const baseName = audio.filename.replace(/\.[^.]*$/, '');
@@ -200,7 +246,11 @@ async function transcribeInParts(apiKey: string, audio: TranscriptionAudio, dura
     const partPath = `${audio.path}.part${index}.wav`;
     try {
       await writeSpeechWav(audio.path, partPath, span);
-      const part = await requestTranscription(apiKey, { path: partPath, mimetype: 'audio/wav', filename: `${baseName}.part${index}.wav` });
+      const part = await requestGuarded(
+        apiKey,
+        { path: partPath, mimetype: 'audio/wav', filename: `${baseName}.part${index}.wav` },
+        voicedSeconds(span, silences),
+      );
       return { text: part.text.trim(), segments: part.segments.map((segment) => offsetSegment(segment, span.start)) };
     } finally {
       await fs.unlink(partPath).catch(() => undefined);
@@ -242,8 +292,10 @@ export async function transcribeWithOpenAI(audio: TranscriptionAudio): Promise<O
           `Speech transcription accepts up to ${Math.floor(maxS / 60)} minutes; please record in shorter parts.`,
       );
     }
-    const plan = { targetS: positiveEnv('OPENAI_TRANSCRIBE_SEGMENT_SECONDS', 300), searchWindowS: SEARCH_WINDOW_S };
-    if (durationS <= plan.targetS + plan.searchWindowS) return await requestTranscription(apiKey, source);
+    const plan = { targetS: positiveEnv('OPENAI_TRANSCRIBE_SEGMENT_SECONDS', DEFAULT_SEGMENT_S), searchWindowS: SEARCH_WINDOW_S };
+    if (durationS <= plan.targetS + plan.searchWindowS) {
+      return await requestGuarded(apiKey, source, await singleRequestVoicedSeconds(source.path, durationS));
+    }
     return await transcribeInParts(apiKey, source, durationS, plan);
   } finally {
     if (convertedWavPath) await fs.unlink(convertedWavPath).catch(() => undefined);

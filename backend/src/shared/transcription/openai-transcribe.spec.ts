@@ -5,7 +5,7 @@ import * as http from 'http';
 import type { AddressInfo } from 'net';
 import * as os from 'os';
 import * as path from 'path';
-import { planTranscriptionSegments, transcribeWithOpenAI } from './openai-transcribe';
+import { looksTruncated, planTranscriptionSegments, transcribeWithOpenAI, voicedSeconds } from './openai-transcribe';
 
 interface Reply {
   status: number;
@@ -55,6 +55,33 @@ describe('planTranscriptionSegments', () => {
 
   it('keeps audio up to target plus window as one segment', () => {
     expect(planTranscriptionSegments(345, [{ start: 280, end: 281 }], options)).toEqual([{ start: 0, end: 345 }]);
+  });
+});
+
+describe('looksTruncated', () => {
+  it('flags fewer than 2 chars per voiced second once there are at least 20 voiced seconds', () => {
+    expect(looksTruncated(39, 20)).toBe(true);
+    expect(looksTruncated(40, 20)).toBe(false);
+    expect(looksTruncated(223, 300)).toBe(true);
+    expect(looksTruncated(2900, 300)).toBe(false);
+  });
+
+  it('never flags under 20 voiced seconds', () => {
+    expect(looksTruncated(0, 19.9)).toBe(false);
+    expect(looksTruncated(0, 20)).toBe(true);
+  });
+});
+
+describe('voicedSeconds', () => {
+  it('subtracts the overlap of silences with the span', () => {
+    const silences = [{ start: 10, end: 12 }, { start: 95, end: 105 }, { start: 200, end: 210 }];
+    expect(voicedSeconds({ start: 0, end: 100 }, silences)).toBe(93);
+    expect(voicedSeconds({ start: 100, end: 150 }, silences)).toBe(45);
+    expect(voicedSeconds({ start: 20, end: 90 }, silences)).toBe(70);
+  });
+
+  it('is zero for a span that is entirely silent', () => {
+    expect(voicedSeconds({ start: 5, end: 8 }, [{ start: 0, end: 10 }])).toBe(0);
   });
 });
 
@@ -185,17 +212,22 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
       throw new Error('no data chunk');
     };
 
+    // Long enough (200 chars for 50-65 voiced seconds) that the truncation guard does not retry.
+    const FILLER = 'x'.repeat(200);
+
     beforeEach(() => {
       process.env.OPENAI_TRANSCRIBE_SEGMENT_SECONDS = '60';
       respond = (upload, arrival) => ({
         status: 200,
-        body: JSON.stringify({ text: ` ${uploadSeconds(upload).toFixed(1)}s `, segments: [{ text: 'part', start: 0.5, end: 2 }] }),
+        body: JSON.stringify({ text: ` ${uploadSeconds(upload).toFixed(1)}s ${FILLER} `, segments: [{ text: 'part', start: 0.5, end: 2 }] }),
         delayMs: (4 - arrival) * 40,
       });
     });
 
     it('transcribes 16 kHz mono parts split at silences and joins them in recording order', async () => {
-      await expect(transcribeWithOpenAI(recording('webm'))).resolves.toMatchObject({ text: '49.5s 65.0s 63.0s 52.5s' });
+      await expect(transcribeWithOpenAI(recording('webm'))).resolves.toMatchObject({
+        text: ['49.5s', '65.0s', '63.0s', '52.5s'].map((seconds) => `${seconds} ${FILLER}`).join(' '),
+      });
       expect(received.map((upload) => {
         const header = Buffer.from(upload.file!.bytes, 'latin1');
         return [upload.file?.type, header.readUInt16LE(22), header.readUInt32LE(24), upload.fields.model, upload.fields.response_format];
@@ -220,6 +252,55 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
         status: 503, message: 'Speech transcription service is temporarily unavailable. Please try again.',
       });
       expect(fs.readdirSync(directory)).toEqual(['consult.wav']);
+    });
+
+    describe('truncation guard', () => {
+      const FULL = 'full transcript '.repeat(20).trim();
+      const SHORT = 'cut off ab';
+      const tone = () => {
+        const file = path.join(directory, 'tone.wav');
+        execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=200', '-ar', '16000', '-ac', '1', file]);
+        return { path: file, mimetype: 'audio/wav', filename: 'tone.wav' };
+      };
+      const text = (value: string) => ({ status: 200, body: JSON.stringify({ text: value, segments: [] }), delayMs: 0 });
+      const partName = (upload: Received) => upload.file?.name;
+
+      it('retries a short part once without the prompt and keeps the full retry', async () => {
+        let shortServed = false;
+        respond = (upload) => {
+          if (partName(upload) === 'tone.part1.wav' && 'prompt' in upload.fields && !shortServed) {
+            shortServed = true;
+            return text(SHORT);
+          }
+          return text(FULL);
+        };
+        const result = await transcribeWithOpenAI(tone());
+        expect(result.text.split(' ').filter((word) => word === 'transcript')).toHaveLength(60);
+        expect(result.text).not.toContain(SHORT);
+        expect(received).toHaveLength(4);
+        const part1 = received.filter((upload) => partName(upload) === 'tone.part1.wav');
+        expect(part1).toHaveLength(2);
+        expect(part1.filter((upload) => 'prompt' in upload.fields)).toHaveLength(1);
+        expect(part1.filter((upload) => !('prompt' in upload.fields))).toHaveLength(1);
+      });
+
+      it('keeps the longer of two short results and still succeeds', async () => {
+        respond = (upload) => {
+          if (partName(upload) !== 'tone.part1.wav') return text(FULL);
+          return text('prompt' in upload.fields ? SHORT : 'slightly longer cut');
+        };
+        const result = await transcribeWithOpenAI(tone());
+        expect(result.text).toContain('slightly longer cut');
+        expect(result.text).not.toContain(SHORT);
+        expect(received).toHaveLength(4);
+      });
+
+      it('guards a single-request recording too', async () => {
+        process.env.OPENAI_TRANSCRIBE_SEGMENT_SECONDS = '170';
+        respond = (upload) => text('prompt' in upload.fields ? SHORT : FULL);
+        await expect(transcribeWithOpenAI(tone())).resolves.toMatchObject({ text: FULL });
+        expect(received).toHaveLength(2);
+      });
     });
 
     it('400s a recording over OPENAI_TRANSCRIBE_MAX_SECONDS without uploading', async () => {
