@@ -545,6 +545,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   });
 
   const [voiceFillBusy, setVoiceFillBusy] = useState(false);
+  // Stocked items offered for spoken medicines that did not resolve, keyed by the name voice wrote on the row.
+  const [spokenSuggestions, setSpokenSuggestions] = useState<Record<string, { name?: string }>>({});
+  const forgetSpokenSuggestion = (rowDrugName: string) =>
+    setSpokenSuggestions((prev) => Object.fromEntries(Object.entries(prev).filter(([name]) => name !== rowDrugName)));
   const VoiceButton = useCallback(({ fieldName }: { fieldName: string }) => (
     <Button
       type="button"
@@ -4593,6 +4597,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       createBlank: createBlankItem,
       inferFrequency: inferFrequencyFromDosePattern,
       setItems: (update) => flushSync(() => setItems(update)),
+      suggest: (rowDrugName, drug) => setSpokenSuggestions((prev) => ({ ...prev, [rowDrugName]: drug as { name?: string } })),
     });
     return {
       filled: [...filledFields.filled, ...medicines.filled],
@@ -5392,6 +5397,24 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 {(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return stock != null ? <span className={stock <= 5 ? 'text-destructive-text' : 'text-foreground'}>{stock}</span> : <span className="text-muted-foreground">—</span>; })()}
                               </span>
                             </div>
+                            {(() => {
+                              const suggested = !it.inventoryItemId && !it.drugId ? spokenSuggestions[it.drugName] : undefined;
+                              if (!suggested) return null;
+                              const suggestedName = String(suggested.name || '');
+                              return (
+                                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground" role="status">
+                                  <span>Did you mean <span className="text-foreground">{suggestedName}</span>?</span>
+                                  <button type="button" className="rounded underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Use ${suggestedName}`}
+                                    onClick={() => { applyDrugSelectionToRow(idx, suggested, { clearSearch: true }); forgetSpokenSuggestion(it.drugName); }}>
+                                    Use
+                                  </button>
+                                  <button type="button" className="rounded p-0.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Dismiss suggestion ${suggestedName}`}
+                                    onClick={() => forgetSpokenSuggestion(it.drugName)}>
+                                    <X className="h-3 w-3" aria-hidden="true" />
+                                  </button>
+                                </p>
+                              );
+                            })()}
                             {it.regimenState?.loading && <p className="mt-1 text-xs text-muted-foreground" role="status">Loading usual values…</p>}
                             {it.regimenState?.failed && <p className="mt-1 text-xs text-warning-text" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
                           </td>

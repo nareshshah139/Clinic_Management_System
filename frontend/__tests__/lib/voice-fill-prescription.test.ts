@@ -1,4 +1,4 @@
-import { applySpokenPrescriptionItems, resolveSpokenDrug, spokenRowPatch, spokenStrength, withStrength } from '@/lib/voice-fill-prescription';
+import { applySpokenPrescriptionItems, resolveSpokenDrug, spokenRowPatch, spokenStrength, suggestSpokenDrug, withStrength } from '@/lib/voice-fill-prescription';
 import { applyRegimenSuggestion, beginRegimenSelection, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import type { VoiceFillRow } from '@/lib/voice-fill';
 
@@ -166,5 +166,79 @@ describe('applySpokenPrescriptionItems', () => {
       ...blank(), drugName: 'doxycycline 100 mg', dosePattern: '1-0-1', frequency: 'TWICE_DAILY',
       regimenState: { touched: ['frequency'], suggested: [], loading: false, failed: false },
     });
+  });
+});
+
+describe('suggestSpokenDrug', () => {
+  const item = (name: string) => ({ inventoryItemId: `inv-${name}`, name, knownNames: [] as string[] });
+  const teczine = item('Tab. Teczine 10 mg');
+  const stock = [
+    teczine, item('Tab. Telma 40 mg'), item('Tab. Tecfix 200 mg'), item('Tab. Atarax 25 mg'), item('Tab. Levocet 5 mg'),
+    item('Tenovate cream'), item('Cap. Sotret 20 mg'), item('Fucidin cream'), item('Fucibet cream'),
+  ];
+  const suggested = (spoken: string, candidates = stock, strength = '') => suggestSpokenDrug(spoken, candidates, strength)?.name ?? null;
+
+  it('offers the stocked brand for each way the accent test transcribed "Teczine"', () => {
+    expect(['Texine', 'Taxine', 'Texanin', 'Tekzin'].map((spoken) => suggested(spoken))).toEqual(Array(4).fill('Tab. Teczine 10 mg'));
+  });
+
+  it('offers Fucidin for "Fusidic cream": they share every consonant sound but the last, and Fucibet trails far behind', () => {
+    expect(suggested('Fusidic cream')).toBe('Fucidin cream');
+  });
+
+  it('offers Sotret when the transcript glued a syllable in front of it', () => {
+    expect(suggested('Absotret')).toBe('Cap. Sotret 20 mg');
+  });
+
+  it('offers nothing when a second stocked brand sounds about as close', () => {
+    const withTaximO = [...stock, item('Tab. Taxim-O 200 mg')];
+    expect([suggested('Taxine', withTaximO), suggested('Texine', withTaximO)]).toEqual([null, 'Tab. Teczine 10 mg']);
+    expect([suggested('Texanin', [...stock, item('Tab. Texa 5 mg')]), suggested('Tekzin', [...stock, item('Tab. Texa 5 mg')])])
+      .toEqual([null, 'Tab. Teczine 10 mg']);
+  });
+
+  it('offers nothing when two strengths of the brand are stocked and none was spoken', () => {
+    const both = [...stock, item('Tab. Teczine 5 mg')];
+    expect([suggested('Texine', both), suggested('Texine', both, '5 mg')]).toEqual([null, 'Tab. Teczine 5 mg']);
+  });
+
+  it('never offers an item whose strength contradicts the spoken one', () => {
+    expect([suggested('Texine', stock, '20 mg'), suggested('Texine', stock, '10 mg'), suggested('Texine 20 mg')])
+      .toEqual([null, 'Tab. Teczine 10 mg', null]);
+  });
+
+  it('does not offer a brand that opens with a different sound', () => {
+    expect([suggested('Betnovate'), suggested('Cetzine'), suggested('Tenovat')]).toEqual([null, null, 'Tenovate cream']);
+  });
+
+  it('matches a recorded earlier name of an item', () => {
+    const renamed = { inventoryItemId: 'inv-lc', name: 'Tab. Levocetirizine 5 mg', knownNames: ['Teczine 5 mg'] };
+    expect(suggestSpokenDrug('Tekzin', [renamed, item('Tab. Telma 40 mg')])).toBe(renamed);
+  });
+
+  it('offers nothing for a short name or an empty stock list', () => {
+    expect([suggested('Tex'), suggested('Texine', [])]).toEqual([null, null]);
+  });
+});
+
+describe('suggestions while applying spoken medicines', () => {
+  const teczine = { id: 'drug-teczine', inventoryItemId: 'inv-teczine', name: 'Tab. Teczine 10 mg', knownNames: [] };
+  const telma = { id: 'drug-telma', inventoryItemId: 'inv-telma', name: 'Tab. Telma 40 mg', knownNames: [] };
+  const cetirizine = { id: 'drug-cet', inventoryItemId: 'inv-cet', name: 'Tab. Cetirizine 10 mg', knownNames: [] };
+  const stock = [teczine, telma, cetirizine];
+  // Clinic stock search matches substrings of standard names.
+  const lookup = async (q: string) => stock.filter((drug) => drug.name.toLowerCase().includes(q.toLowerCase()));
+
+  it('offers a stocked item, found by the first letters of the name, for each unresolved row only', async () => {
+    const { box, deps } = setup([blank()]);
+    const offers: [string, string][] = [];
+    await applySpokenPrescriptionItems(
+      [{ drugName: 'texine', dosage: 10, dosageUnit: 'MG' }, { drugName: 'cetirizine' }, { drugName: 'kojic soap' }],
+      { ...deps, lookup, suggest: (rowDrugName: string, drug: { name: string }) => offers.push([rowDrugName, drug.name]) },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(box.items.map((row) => row.drugName)).toEqual(['texine 10 mg', 'Tab. Cetirizine 10 mg', 'kojic soap', '']);
+    expect(offers).toEqual([['texine 10 mg', 'Tab. Teczine 10 mg']]);
   });
 });
