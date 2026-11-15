@@ -23,6 +23,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useOverbookConfirm } from '@/components/appointments/useOverbookConfirm';
 import { overbookFlag } from '@/lib/overbooking';
 import { ToastAction } from '@/components/ui/toast';
+import { VoiceFillButton } from '@/components/voice/VoiceFillButton';
+import { applyPatientVoiceFill, type PatientVoiceState } from '@/lib/voice-fill-patient';
+import type { VoiceFillFields } from '@/lib/voice-fill';
 import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta, VisitType, Room } from '@/lib/types';
 
 type Gender = 'MALE' | 'FEMALE' | 'OTHER';
@@ -56,6 +59,20 @@ interface PatientFormState {
  * @cc [owner:nareshshah139,label:accessibility] patient-row-actions
  * Every patient row MUST show Start Visit and a "More actions for <name>" menu inside the table's visible box at 1280px and wider, without horizontal scrolling.
  */
+const PATIENT_VOICE_IDS: Record<keyof PatientVoiceState, string> = {
+  firstName: 'firstName',
+  lastName: 'lastName',
+  age: 'age',
+  gender: 'gender',
+  phone: 'phone',
+  email: 'email',
+  address: 'address',
+  emergencyContact: 'emergencyContact',
+  abhaId: 'abhaId',
+  consultationType: 'consultationType',
+  referralSource: 'referralSource',
+  patientType: 'patientType',
+};
 const REQUIRED_PATIENT_FIELDS = ['firstName', 'gender', 'phone'] as const;
 type RequiredPatientField = (typeof REQUIRED_PATIENT_FIELDS)[number];
 const MISSING_FIELD_MESSAGE: Record<RequiredPatientField, string> = {
@@ -418,6 +435,12 @@ export default function PatientsManagement() {
 
   const clearMissing = (field: RequiredPatientField) =>
     setMissingFields((fields) => fields.filter((f) => f !== field));
+  const applyVoiceFill = (fields: VoiceFillFields) => {
+    return applyPatientVoiceFill(fields, PATIENT_VOICE_IDS, form, (patch) => {
+      setForm((prev) => ({ ...prev, ...(patch as Partial<PatientFormState>) }));
+      REQUIRED_PATIENT_FIELDS.forEach((field) => { if (patch[field] !== undefined) clearMissing(field); });
+    });
+  };
   const missingProps = (field: RequiredPatientField) =>
     missingFields.includes(field)
       ? { 'aria-invalid': true as const, 'aria-describedby': `${field}-missing` }
@@ -739,7 +762,10 @@ export default function PatientsManagement() {
         <Dialog open={open} onOpenChange={(v: boolean) => { if (!v) resetForm(); setOpen(v); }}>
           <DialogContent className="sm:max-w-[600px]" onCloseAutoFocus={(event: Event) => { event.preventDefault(); newPatientButton.current?.focus(); }}>
             <DialogHeader>
-              <DialogTitle>{form.id ? 'Edit Patient' : 'Create Patient'}</DialogTitle>
+              <div className="flex items-center justify-between gap-2 pr-6">
+                <DialogTitle>{form.id ? 'Edit Patient' : 'Create Patient'}</DialogTitle>
+                <VoiceFillButton form="patient-intake" apply={applyVoiceFill} hint="Say name, age, gender, phone…" />
+              </div>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">Fields marked <span aria-hidden="true">*</span> are required.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

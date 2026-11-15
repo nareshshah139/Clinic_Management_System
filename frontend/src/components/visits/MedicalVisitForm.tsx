@@ -16,8 +16,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-  Mic, 
-  MicOff,
   Save, 
   Heart, 
   Thermometer, 
@@ -59,6 +57,7 @@ import { usePatientHistory, loadPatientHistory as fetchPatientHistory, visitEntr
 import { encounterTime } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import PrescriptionBuilder, { type ConsultationSummary } from '@/components/visits/PrescriptionBuilder';
+import type { ExtraVitalsPatch } from '@/lib/voice-fill-visit';
 import { COMPLETION_RULE, canCompleteVisit, completionSteps } from '@/lib/visit-completion';
 import type VisitPhotosPanel from '@/components/visits/VisitPhotos';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
@@ -69,8 +68,6 @@ import { ToastAction } from '@/components/ui/toast';
 import { appointmentsHref } from '@/lib/appointments-link';
 import { reviewBookingMessage, type ReviewBooking } from '@/lib/review-booking';
 import { isUuid } from '@/lib/id';
-import { appendSpeechToText, type SpeechToTextPreference } from '@/lib/speech-to-text';
-import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 import { NativeSelect } from '@/components/ui/native-select';
 
 const VisitPhotos = dynamic<ComponentProps<typeof VisitPhotosPanel>>(() => import('@/components/visits/VisitPhotos'), {
@@ -185,14 +182,6 @@ const INITIAL_VITALS: VitalsState = {
   spo2: '',
   rr: '',
 };
-
-const VOICE_FIELDS = {
-  subjective: 'full-transcript',
-  objective: 'full-transcript',
-  assessment: 'full-transcript',
-  plan: 'full-transcript',
-} as const satisfies Record<string, SpeechToTextPreference>;
-type VoiceField = keyof typeof VOICE_FIELDS;
 
 const AUTO_SAVE_INTERVAL_MS = 8000;
 const AUTO_SAVE_RETRY_MS = 15000;
@@ -1345,64 +1334,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   }, [persistDraftToStorage]);
   const patientDetails: VisitContextPatient | null = patient ?? appointmentData?.patient ?? null;
 
-  
-  
-  // Voice-to-text functionality
-  const { activeVoiceField, isConnecting, isListening, isTranscribing, startVoiceInput } = useSpeechToTextRecorder({
-    toast,
-    fields: VOICE_FIELDS,
-    applyText: (fieldName, text) => {
-      switch (fieldName) {
-        case 'subjective':
-          setSubjective((prev) => appendSpeechToText(prev, text));
-          break;
-        case 'objective':
-          setObjective((prev) => appendSpeechToText(prev, text));
-          break;
-        case 'assessment':
-          setAssessment((prev) => appendSpeechToText(prev, text));
-          break;
-        case 'plan':
-          setPlan((prev) => appendSpeechToText(prev, text));
-          break;
-      }
-    },
-  });
-  
-  const VoiceButton = useCallback(({ fieldName }: { fieldName: VoiceField }) => (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
-      onClick={() => void startVoiceInput(fieldName)}
-      disabled={isTranscribing || ((isConnecting || isListening) && activeVoiceField !== fieldName)}
-      aria-label={
-        activeVoiceField === fieldName
-          ? isConnecting
-            ? 'Connecting microphone'
-            : isListening
-              ? 'Stop voice input'
-              : 'Transcribing recording'
-          : 'Start voice input'
-      }
-      title={
-        activeVoiceField === fieldName
-          ? isConnecting
-            ? 'Connecting microphone'
-            : isListening
-              ? 'Stop voice input'
-              : 'Transcribing recording'
-          : 'Start voice input'
-      }
-    >
-      {activeVoiceField === fieldName ? (
-        isListening ? <MicOff className="h-4 w-4" /> : <Spinner className="h-4 w-4 " />
-      ) : (
-        <Mic className="h-4 w-4" />
-      )}
-    </Button>
-  ), [activeVoiceField, isConnecting, isListening, isTranscribing, startVoiceInput]);
 
   const toggleSet = useCallback(<T,>(current: Set<T>, item: T, updater: (next: Set<T>) => void) => {
     const next = new Set(current);
@@ -1762,6 +1693,18 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     </>
   );
 
+  const applyExtraVitals = (patch: ExtraVitalsPatch) => {
+    const before = { temp: vitals.temp, rr: vitals.rr, painScore };
+    if (patch.temperatureF !== undefined) setVitals((current) => ({ ...current, temp: String(patch.temperatureF) }));
+    if (patch.respiratoryRate !== undefined) setVitals((current) => ({ ...current, rr: String(patch.respiratoryRate) }));
+    if (patch.painScore !== undefined) setPainScore(String(patch.painScore));
+    return () => {
+      if (patch.temperatureF !== undefined) setVitals((current) => ({ ...current, temp: before.temp }));
+      if (patch.respiratoryRate !== undefined) setVitals((current) => ({ ...current, rr: before.rr }));
+      if (patch.painScore !== undefined) setPainScore(before.painScore);
+    };
+  };
+
   const jumpToSection = (id: string) => {
     const target = document.getElementById(`consult-${id}`);
     if (!target) return;
@@ -2044,6 +1987,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       patient={patientDetails}
                       onSummaryChange={receiveConsultationSummary}
                       vitalsExtra={vitalsExtra}
+                      applyExtraVitals={applyExtraVitals}
                       investigationResults={renderLabResults}
                       toolbarTarget={toolbarTarget}
                       doctorId={doctorId}

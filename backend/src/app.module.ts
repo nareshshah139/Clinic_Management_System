@@ -1,3 +1,4 @@
+import { VoiceFillModule } from './modules/voice-fill/voice-fill.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -72,6 +73,7 @@ const fullFeatureModules = [
   AuditLogsModule,
   WhatsAppTemplatesModule,
   GoogleCalendarModule,
+  VoiceFillModule,
 ];
 
 const minimalModules = [AuthModule];

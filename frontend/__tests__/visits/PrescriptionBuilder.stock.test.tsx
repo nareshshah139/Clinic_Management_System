@@ -98,6 +98,8 @@ it('allows retry of failed inventory reads', async () => {
 });
 it('clears the previous inventory identity when another medicine is typed', async () => {
   const { input, cell } = mountRow();
+  await act(async () => {});
+  mockGet.mockClear();
   fireEvent.change(input, { target: { value: 'Different medicine' } });
   await act(async () => { fireEvent.mouseEnter(cell); });
   expect(mockGet).not.toHaveBeenCalledWith(stockUrl);

@@ -232,6 +232,22 @@
   outline: none;
 }
 
+/* Voice fill: brief confirmation on inputs the transcript just populated. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-voice-filled] {
+    animation: voice-filled-flash 1.2s ease-out;
+  }
+}
+@keyframes voice-filled-flash {
+  0%, 40% {
+    background-color: var(--success-soft);
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
 /* High-contrast mode toggle (applied via document.body.classList.toggle('high-contrast')) */
 .high-contrast {
   --background: #ffffff;

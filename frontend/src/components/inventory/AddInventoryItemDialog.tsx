@@ -16,6 +16,9 @@ import { isPendingApproval, type PossibleDuplicates } from '@/lib/inventory-item
 import { apiClient } from '@/lib/api';
 import { medicineNameProblems, normalizeStrength, standardMedicineName } from '@/lib/medicine-names';
 import { MedicineNameFields } from './MedicineNameFields';
+import { VoiceFillButton } from '@/components/voice/VoiceFillButton';
+import { applyInventoryVoiceFill } from '@/lib/voice-fill-inventory';
+import type { VoiceFillFields } from '@/lib/voice-fill';
 
 
 interface AddInventoryItemDialogProps {
@@ -212,6 +215,9 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
     }
   };
 
+  const applyVoiceFill = (fields: VoiceFillFields) =>
+    applyInventoryVoiceFill(fields, formData, (patch) => setFormData((prev) => ({ ...prev, ...patch })));
+
   return (
     <Dialog open={open} onOpenChange={(next: boolean) => { if (!next) setSentForApproval(false); onOpenChange(next); }}>
       <DialogContent className="inventory-surface w-[calc(100%-2rem)] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -228,7 +234,10 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           </DialogFooter>
         </> : <>
         <DialogHeader>
-          <DialogTitle>Add Inventory Item</DialogTitle>
+          <div className="flex items-center justify-between gap-2 pr-6">
+            <DialogTitle>Add Inventory Item</DialogTitle>
+            <VoiceFillButton form="inventory-item" apply={applyVoiceFill} hint="Say name, form, strength, price, pack size, expiry…" />
+          </div>
           <DialogDescription>
             Add a new item to your inventory. Fields marked with * are required.
           </DialogDescription>

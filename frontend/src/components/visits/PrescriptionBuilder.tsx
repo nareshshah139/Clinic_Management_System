@@ -3,7 +3,7 @@ import { displayUtcDate, displayClinicDate, displayClinicDateTime } from '@/lib/
 import { Spinner } from "@/components/ui/spinner";
 import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import type { VisitDetails } from '@/lib/types';
 import { encounterTime } from '@/lib/patient-history';
 import { PRESCRIPTION_LETTERHEAD_URL, prescriptionLetterheadUrl, prescriptionPageMargin } from '@/lib/prescription-letterhead';
@@ -34,6 +34,10 @@ import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import { appendSpeechToText, type SpeechToTextPreference } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
+import { VoiceFillButton } from '@/components/voice/VoiceFillButton';
+import { applyVoiceFillRegistry, type VoiceFillFields } from '@/lib/voice-fill';
+import { visitVoiceRegistry, type ExtraVitalsPatch } from '@/lib/voice-fill-visit';
+import { applySpokenPrescriptionItems, inventoryNamesOf } from '@/lib/voice-fill-prescription';
 import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
@@ -175,6 +179,8 @@ interface Props {
   vitalsExtra?: React.ReactNode;
   investigationResults?: (ordered: string[]) => React.ReactNode;
   toolbarTarget?: HTMLElement | null;
+  /** Applies vitals this form does not own (temperature, respiratory rate, pain) and returns the undo. */
+  applyExtraVitals?: (patch: ExtraVitalsPatch) => () => void;
 }
 
 export type ConsultationSummary = { complaint: boolean; diagnosis: boolean; plan: boolean; medicines: number; vitals: boolean };
@@ -282,11 +288,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * and the disclaimer above the signature, even when the signature is hidden.
  * Switching to In-person MUST remove both from regenerated preview and exports.
  */
-/** A stocked item answers to its standard name and the names it was recorded under before. */
-const inventoryNamesOf = (drug: any): string[] =>
-  [drug?.name, ...(Array.isArray(drug?.knownNames) ? drug.knownNames : [])].map((name) => String(name || '').trim().toLowerCase()).filter(Boolean);
-
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
@@ -545,6 +547,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     },
   });
 
+  const [voiceFillBusy, setVoiceFillBusy] = useState(false);
+  // Stocked items offered for spoken medicines that did not resolve, keyed by the name voice wrote on the row.
+  const [spokenSuggestions, setSpokenSuggestions] = useState<Record<string, { name?: string }>>({});
+  const forgetSpokenSuggestion = (rowDrugName: string) =>
+    setSpokenSuggestions((prev) => Object.fromEntries(Object.entries(prev).filter(([name]) => name !== rowDrugName)));
   const VoiceButton = useCallback(({ fieldName }: { fieldName: VoiceField }) => (
     <Button
       type="button"
@@ -552,7 +559,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       size="sm"
       className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
       onClick={() => void startVoiceInput(fieldName)}
-      disabled={isTranscribing || ((isConnecting || isListening) && activeVoiceField !== fieldName)}
+      disabled={isTranscribing || voiceFillBusy || ((isConnecting || isListening) && activeVoiceField !== fieldName)}
       aria-label={
         activeVoiceField === fieldName
           ? isConnecting
@@ -578,7 +585,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         <Mic className="h-4 w-4" />
       )}
     </Button>
-  ), [activeVoiceField, isConnecting, isListening, isTranscribing, startVoiceInput]);
+  ), [activeVoiceField, isConnecting, isListening, isTranscribing, startVoiceInput, voiceFillBusy]);
 
   const renderVoicePreview = (fieldName: VoiceField) =>
     activeVoiceField === fieldName && livePreview ? (
@@ -1656,6 +1663,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     });
   }, [loadDrugStock]);
 
+  // A row gains its inventory item through voice, a "Did you mean" Use or a dropdown pick; load its stock
+  // once instead of waiting for a hover. Rows already loaded (even as unknown) are skipped.
+  useEffect(() => {
+    for (const row of items) {
+      const inventoryItemId = row.inventoryItemId;
+      if (inventoryItemId && !(`inventory:${inventoryItemId}` in drugStockByKey)) void prefetchDrugStockById(row.drugId, inventoryItemId);
+    }
+  }, [items, drugStockByKey, prefetchDrugStockById]);
+
   const prefetchDrugStockByName = async (name?: string) => {
     const query = (name || '').trim();
     if (!query) return;
@@ -2315,6 +2331,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const regimenContext = JSON.stringify([patientId, doctorId, visitId]);
   const regimenContextRef = useRef(regimenContext);
   regimenContextRef.current = regimenContext;
+  const nextRegimenSelection = () => `${Date.now()}:${++regimenRequestSequence.current}`;
+  const selectDrugOnRow = (item: PrescriptionItemForm, drug: any, selection: string): PrescriptionItemForm => ({
+    ...beginRegimenSelection(item, selection), drugId: drug.id, inventoryItemId: drug.inventoryItemId, drugName: String(drug?.name || ''), genericName: drug.genericName,
+    dosageUnit: item.dosage ? item.dosageUnit : inferDosageUnitFromDosageForm(drug.dosageForm),
+  });
   /**
    * @cc [owner:nareshshah139,label:product] prescription-selection-retains-inventory
    * Choosing clinic stock MUST retain its inventory item ID through prescription save and reload.
@@ -2324,16 +2345,21 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     clearSearch?: boolean;
     showToast?: boolean;
   }) => {
-    const selection = `${Date.now()}:${++regimenRequestSequence.current}`;
-    const drugName = String(drug?.name || '');
+    const selection = nextRegimenSelection();
     setItems(prev => {
-      const next = prev.map((item, index) => index === rowIdx ? {
-        ...beginRegimenSelection(item, selection), drugId: drug.id, inventoryItemId: drug.inventoryItemId, drugName, genericName: drug.genericName,
-        dosageUnit: item.dosage ? item.dosageUnit : inferDosageUnitFromDosageForm(drug.dosageForm),
-      } : item);
+      const next = prev.map((item, index) => index === rowIdx ? selectDrugOnRow(item, drug, selection) : item);
       if (!hasTrailingBlank(next)) next.push(createBlankItem());
       return next;
     });
+    followDrugSelection(drug, selection);
+    if (options?.clearSearch) {
+      setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
+      setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
+      setActiveSearchRow(null);
+    }
+  };
+  const followDrugSelection = (drug: any, selection: string) => {
+    const drugName = String(drug?.name || '');
     // Resolve recent-name shortcuts only when the catalog match is unambiguous.
     void (async () => {
       try {
@@ -2368,11 +2394,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       const key = `name:${drugName.trim().toLowerCase()}`;
       drugStockRequests.current.delete(key);
       void loadDrugStock(key, () => prefetchDrugStockById(drug.id, drug.inventoryItemId));
-    }
-    if (options?.clearSearch) {
-      setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
-      setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
-      setActiveSearchRow(null);
     }
     if (drugName) {
       pushRecent('drugNames', drugName);
@@ -4549,6 +4570,61 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       setFollowUpInstructions(label);
     }
   }, [onChangeReviewDate, formatSuggestedReviewDate, followUpInstructions]);
+  const applyVoiceFill = async ({ prescriptionItems, ...fields }: VoiceFillFields) => {
+    const touchFamilyHistory = (key: string) => setFamilyHistoryTouched((prev) => Array.from(new Set([...prev, key])));
+    const previousReviewDate = reviewDate || '';
+    const filledFields = applyVoiceFillRegistry(visitVoiceRegistry({
+      heightCm: [vitalsHeightCm, setVitalsHeightCm],
+      weightKg: [vitalsWeightKg, setVitalsWeightKg],
+      bpSystolic: [vitalsBpSys, setVitalsBpSys],
+      bpDiastolic: [vitalsBpDia, setVitalsBpDia],
+      pulse: [vitalsPulse, setVitalsPulse],
+      chiefComplaints: [chiefComplaints, setChiefComplaints],
+      skinConcerns: [skinConcerns, setSkinConcerns],
+      diagnosis: [diagnosis, setDiagnosis],
+      pastHistory: [pastHistory, setPastHistory],
+      medicationHistory: [medicationHistory, setMedicationHistory],
+      menstrualHistory: [menstrualHistory, setMenstrualHistory],
+      familyHistoryDiabetes: [familyHistoryDM, (next) => { setFamilyHistoryDM(next); touchFamilyHistory('dm'); }],
+      familyHistoryHypertension: [familyHistoryHTN, (next) => { setFamilyHistoryHTN(next); touchFamilyHistory('htn'); }],
+      familyHistoryThyroid: [familyHistoryThyroid, (next) => { setFamilyHistoryThyroid(next); touchFamilyHistory('thyroid'); }],
+      familyHistoryOthers: [familyHistoryOthers, setFamilyHistoryOthers],
+      examination: [exObjective, setExObjective],
+      fitzpatrickSkinType: [exSkinType, setExSkinType],
+      acneSeverity: [exAcneSeverity, setExAcneSeverity],
+      itchScore: [exItchScore, setExItchScore],
+      procedures: [procedures, setProcedures],
+      procedurePlanned: [procedurePlanned, setProcedurePlanned],
+      investigations: [investigations, (next) => {
+        setInvestigations(next);
+        setCustomInvestigationOptions((prev) => mergeInvestigationOptions(prev, next.filter((entry) => !defaultInvestigationOptions.includes(entry))));
+      }, setInvestigations],
+      followUpInstructions: [followUpInstructions, applyFollowUpShortcut, (previous) => {
+        setFollowUpInstructions(previous);
+        onChangeReviewDate?.(previousReviewDate);
+      }],
+      applyExtraVitals,
+    }), fields);
+    const medicines = await applySpokenPrescriptionItems(prescriptionItems, {
+      lookup: async (q) => {
+        const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q, limit: 30 });
+        return Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+      },
+      select: (row, drug) => {
+        const selection = nextRegimenSelection();
+        followDrugSelection(drug, selection);
+        return selectDrugOnRow(row, drug, selection);
+      },
+      createBlank: createBlankItem,
+      inferFrequency: inferFrequencyFromDosePattern,
+      setItems: (update) => flushSync(() => setItems(update)),
+      suggest: (rowDrugName, drug) => setSpokenSuggestions((prev) => ({ ...prev, [rowDrugName]: drug as { name?: string } })),
+    });
+    return {
+      filled: [...filledFields.filled, ...medicines.filled],
+      undo: () => { medicines.undo(); filledFields.undo(); },
+    };
+  };
 
   return (
     <div className="space-y-6 overflow-visible">
@@ -4640,7 +4716,19 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {loadingTemplates ? 'Loading templates…' : 'Templates will appear once loaded.'}
               </div>
             );
-            return toolbarTarget ? createPortal(templatesBar, toolbarTarget) : templatesBar;
+            const toolbar = (
+              <>
+                {templatesBar}
+                <VoiceFillButton
+                  form="visit-consultation"
+                  apply={applyVoiceFill}
+                  hint="Say vitals, complaints, diagnosis, history, examination, medicines, follow-up…"
+                  disabled={isConnecting || isListening || isTranscribing}
+                  onBusyChange={setVoiceFillBusy}
+                />
+              </>
+            );
+            return toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar;
           })()}
 
             {/* Basic Information */}
@@ -4653,11 +4741,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
                   <div>
                     <label className="text-xs text-muted-foreground">Height (cm)</label>
-                    <Input key="vitals-height" aria-label="Height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-height" id="visit-vitals-height" aria-label="Height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Weight (kg)</label>
-                    <Input key="vitals-weight" aria-label="Weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-weight" id="visit-vitals-weight" aria-label="Weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">BMI</label>
@@ -4665,15 +4753,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">BP (Sys)</label>
-                    <Input key="vitals-bp-sys" aria-label="Systolic blood pressure" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-bp-sys" id="visit-vitals-bp-sys" aria-label="Systolic blood pressure" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">BP (Dia)</label>
-                    <Input key="vitals-bp-dia" aria-label="Diastolic blood pressure" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-bp-dia" id="visit-vitals-bp-dia" aria-label="Diastolic blood pressure" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Pulse (bpm)</label>
-                    <Input key="vitals-pulse" aria-label="Pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-pulse" id="visit-vitals-pulse" aria-label="Pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   {vitalsExtra}
                 </div>
@@ -4761,7 +4849,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   onFocus={() => setComplaintFieldFocused(true)}
                   onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setComplaintFieldFocused(false); }}
                 >
-                  <Textarea key="chief-complaints" aria-label="Chief complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+                  <Textarea key="chief-complaints" id="visit-chief-complaints" aria-label="Chief complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
                   <VoiceButton fieldName="chiefComplaints" />
                   {complaintFieldFocused && complaintOptions.length > 0 && (
                     <ul aria-label="Complaint suggestions" className="absolute left-0 top-full z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
@@ -4806,7 +4894,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="opacity-100">
                 <label className="text-xs text-muted-foreground flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                 <div className="relative diag-autocomplete">
-                  <Input key="diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} onFocus={() => setDiagnosisFieldFocused(true)} onBlur={() => setDiagnosisFieldFocused(false)} />
+                  <Input key="diagnosis" id="visit-diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} onFocus={() => setDiagnosisFieldFocused(true)} onBlur={() => setDiagnosisFieldFocused(false)} />
                   {diagnosisFieldFocused && diagOptions.length > 0 && (
                     <ul aria-label="Diagnosis suggestions" className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {diagOptions.map((opt) => (
@@ -4833,15 +4921,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground flex items-center gap-1">Past History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
-                    <Textarea key="past-history" aria-label="Past history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} onBlur={(e) => pushRecent('pastHistory', e.target.value)} />
+                    <Textarea key="past-history" id="visit-past-history" aria-label="Past history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} onBlur={(e) => pushRecent('pastHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground flex items-center gap-1">Medication History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
-                    <Textarea key="medication-history" aria-label="Medication history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} onBlur={(e) => pushRecent('medicationHistory', e.target.value)} />
+                    <Textarea key="medication-history" id="visit-medication-history" aria-label="Medication history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} onBlur={(e) => pushRecent('medicationHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground flex items-center gap-1">Menstrual History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
-                    <Textarea key="menstrual-history" aria-label="Menstrual history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} onBlur={(e) => pushRecent('menstrualHistory', e.target.value)} />
+                    <Textarea key="menstrual-history" id="visit-menstrual-history" aria-label="Menstrual history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} onBlur={(e) => pushRecent('menstrualHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
@@ -4850,7 +4938,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => { setFamilyHistoryHTN(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'htn']))); }} /> Hypertension</label>
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryThyroid} onChange={(e) => { setFamilyHistoryThyroid(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'thyroid']))); }} /> Thyroid</label>
                     </div>
-                    <Input key="family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} onBlur={(e) => pushRecent('familyHistoryOthers', e.target.value)} />
+                    <Input key="family-history-others" id="visit-family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} onBlur={(e) => pushRecent('familyHistoryOthers', e.target.value)} />
                   </div>
                 </div>
                 <div className="mt-3">
@@ -4880,11 +4968,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Acne Severity</label>
-                    <Input placeholder="mild/moderate/severe" value={exAcneSeverity} onChange={(e) => setExAcneSeverity(e.target.value)} />
+                    <Input id="visit-acne-severity" placeholder="mild/moderate/severe" value={exAcneSeverity} onChange={(e) => setExAcneSeverity(e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Itch Score (0-10)</label>
-                    <Input placeholder="0-10" value={exItchScore} onChange={(e) => setExItchScore(e.target.value)} />
+                    <Input id="visit-itch-score" placeholder="0-10" value={exItchScore} onChange={(e) => setExItchScore(e.target.value)} />
                   </div>
                 </div>
 
@@ -5041,7 +5129,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div>
                   <label className="text-xs text-muted-foreground">Detailed Examination</label>
                   <div className="flex items-center">
-                    <Textarea placeholder="Detailed physical examination findings..." value={exObjective} onChange={(e) => setExObjective(e.target.value)} rows={3} />
+                    <Textarea id="visit-examination" placeholder="Detailed physical examination findings..." value={exObjective} onChange={(e) => setExObjective(e.target.value)} rows={3} />
                     <VoiceButton fieldName="objective" />
                   </div>
                   {renderVoicePreview('objective')}
@@ -5287,6 +5375,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             <div className="relative flex items-center gap-2">
                               <Input 
                                 ref={(el) => { inputRefs.current[idx] = el; }}
+                                id={`rx-row-${idx}-drug`}
                                 value={it.drugName} 
                                 onChange={(e) => {
                                   const val = e.target.value;
@@ -5331,6 +5420,24 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 {(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return stock != null ? <span className={stock <= 5 ? 'text-destructive-text' : 'text-foreground'}>{stock}</span> : <span className="text-muted-foreground">—</span>; })()}
                               </span>
                             </div>
+                            {(() => {
+                              const suggested = !it.inventoryItemId && !it.drugId ? spokenSuggestions[it.drugName] : undefined;
+                              if (!suggested) return null;
+                              const suggestedName = String(suggested.name || '');
+                              return (
+                                <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground" role="status">
+                                  <span>Did you mean <span className="font-medium text-foreground">{suggestedName}</span>?</span>
+                                  <button type="button" className="rounded-md border border-border bg-background px-2 py-0.5 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Use ${suggestedName}`}
+                                    onClick={() => { applyDrugSelectionToRow(idx, suggested, { clearSearch: true }); forgetSpokenSuggestion(it.drugName); }}>
+                                    Use
+                                  </button>
+                                  <button type="button" className="rounded p-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Dismiss suggestion ${suggestedName}`}
+                                    onClick={() => forgetSpokenSuggestion(it.drugName)}>
+                                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                                  </button>
+                                </p>
+                              );
+                            })()}
                             {it.regimenState?.loading && <p className="mt-1 text-xs text-muted-foreground" role="status">Loading usual values…</p>}
                             {it.regimenState?.failed && <p className="mt-1 text-xs text-warning-text" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
                           </td>
@@ -5456,11 +5563,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="space-y-3 opacity-100">
                 <div>
                   <label className="text-xs text-muted-foreground flex items-center gap-1">Procedures{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
-                  <Textarea aria-label="Procedures performed" rows={2} value={procedures} onChange={(e) => setProcedures(e.target.value)} onBlur={(e) => pushRecent('procedures', e.target.value)} />
+                  <Textarea id="visit-procedures" aria-label="Procedures performed" rows={2} value={procedures} onChange={(e) => setProcedures(e.target.value)} onBlur={(e) => pushRecent('procedures', e.target.value)} />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
-                  <Textarea aria-label="Procedures planned" rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
+                  <Textarea id="visit-procedure-planned" aria-label="Procedures planned" rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
                 </div>
               </div>
             </CollapsibleSection>
@@ -5575,7 +5682,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm text-foreground flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-info-text" aria-label="Translated on print" />)}</label>
-                    <Input key="followup-instructions" aria-label="Follow-up instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
+                    <Input key="followup-instructions" id="visit-followup-instructions" aria-label="Follow-up instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
                     {followUpSuggestions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {followUpSuggestions.map((suggestion) => (

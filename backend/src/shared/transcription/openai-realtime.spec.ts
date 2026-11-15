@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import * as http from 'http';
 import type { AddressInfo } from 'net';
 import { createLiveTranscriptionCall } from './openai-realtime';
+import { TRANSCRIPTION_PROMPT } from './openai-transcribe';
 
 interface Received {
   authorization?: string;
@@ -73,9 +74,7 @@ describe('createLiveTranscriptionCall against a local realtime endpoint', () => 
       input: {
         transcription: {
           model: 'gpt-live-transcribe',
-          prompt: expect.stringMatching(
-            /^Medical doctor–patient conversation transcription\./,
-          ),
+          prompt: TRANSCRIPTION_PROMPT,
           delay: 'low',
           ...(languages ? { languages } : {}),
         },

@@ -1,0 +1,35 @@
+{
+  "id": "intake-01min",
+  "form": "patient-intake",
+  "targetMinutes": 1,
+  "summary": "Quick reception registration with first and last name spelled letter by letter, a phone number misread and corrected once, and an Instagram referral. Trap: the receptionist's first read-back of the phone ends in five six seven, the corrected and ground-truth number ends in five seven six.",
+  "turns": [
+    { "speaker": "receptionist", "text": "Good morning madam. First time here? Your name please." },
+    { "speaker": "patient", "text": "Yes, first time. Sravani Kodali." },
+    { "speaker": "receptionist", "text": "Can you spell the first name?" },
+    { "speaker": "patient", "text": "S, R, A, V, A, N, I. Sravani. Surname Kodali, K, O, D, A, L, I." },
+    { "speaker": "receptionist", "text": "Okay. Age?" },
+    { "speaker": "patient", "text": "Twenty seven." },
+    { "speaker": "receptionist", "text": "Female, twenty seven. Mobile number?" },
+    { "speaker": "patient", "text": "Nine eight four nine three, two one five seven six." },
+    { "speaker": "receptionist", "text": "Nine eight four nine three, two one five six seven. Correct?" },
+    { "speaker": "patient", "text": "No, no, last two are seven six. Five seven six." },
+    { "speaker": "receptionist", "text": "Sorry. Nine eight four nine three, two one five seven six." },
+    { "speaker": "patient", "text": "Yes, correct." },
+    { "speaker": "receptionist", "text": "And your address, which area?" },
+    { "speaker": "patient", "text": "Madhapur. Flat two zero three, Sai Residency, near Image Gardens." },
+    { "speaker": "receptionist", "text": "Madhapur, okay. How did you hear about our clinic?" },
+    { "speaker": "patient", "text": "On Instagram. I saw the doctor's videos about pigmentation." },
+    { "speaker": "receptionist", "text": "Instagram, okay. Registration fee is two hundred rupees, you can pay by UPI here. Please sit, I will call your name." }
+  ],
+  "expect": {
+    "firstName": "Sravani",
+    "lastName": "Kodali",
+    "age": 27,
+    "gender": "FEMALE",
+    "phone": "9849321576",
+    "referralSource": "INSTAGRAM",
+    "address": {"contains": "Madhapur"}
+  },
+  "allowExtra": ["patientType", "consultationType"]
+}

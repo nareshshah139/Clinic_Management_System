@@ -1,0 +1,52 @@
+{
+  "id": "consult-03min",
+  "form": "visit-consultation",
+  "targetMinutes": 3,
+  "summary": "New urticaria patient with history-taking full of explicit negatives (no fever, no diabetes in the family) and two new medicines. Traps: familyHistoryDiabetes must be false, not omitted or true; Avil bought from a medical shop is medication history, not a prescription row; father's BP makes familyHistoryHypertension true.",
+  "turns": [
+    { "speaker": "doctor", "text": "Namaste. Please sit. Tell me, what is the problem?" },
+    { "speaker": "patient", "text": "Doctor, for three weeks I am getting itching all over the body. Red raised rashes come, like mosquito bites, then after some hours they go away on their own." },
+    { "speaker": "doctor", "text": "Okay. Where exactly do they come?" },
+    { "speaker": "patient", "text": "Arms, thighs, back, sometimes on the neck also. Mostly in the night it becomes very bad." },
+    { "speaker": "doctor", "text": "Hmm. What work do you do? Any contact with chemicals, plants, animals?" },
+    { "speaker": "patient", "text": "I work in a bank in Ameerpet, doctor. Desk job, full day in the AC. At home we have no pets." },
+    { "speaker": "doctor", "text": "Okay. Each rash, how long does it stay? Does it leave any mark or dark spot after it goes?" },
+    { "speaker": "patient", "text": "Two, three hours maximum. No mark, skin becomes normal again. Then new ones come somewhere else." },
+    { "speaker": "doctor", "text": "Any swelling of the lips or eyes? Any difficulty in breathing?" },
+    { "speaker": "patient", "text": "No, no breathing problem. Once the eyes were a little puffy in the morning, that's all." },
+    { "speaker": "doctor", "text": "Any fever, joint pains, cold or cough in the last month?" },
+    { "speaker": "patient", "text": "No fever. No joint pain. Nothing like that." },
+    { "speaker": "doctor", "text": "Did you start any new tablet, any painkiller, or eat anything new before this started?" },
+    { "speaker": "patient", "text": "Nothing new doctor. Only when the itching became bad, I took Avil tablets from the medical shop for four or five days. It helps, but I feel very sleepy." },
+    { "speaker": "doctor", "text": "Achha, Avil. Okay. On a scale of zero to ten, how bad is the itching?" },
+    { "speaker": "patient", "text": "Eight. At night it is eight, I can't sleep." },
+    { "speaker": "doctor", "text": "Any asthma, thyroid, sugar, anything for yourself?" },
+    { "speaker": "patient", "text": "No doctor, I am healthy. I don't take any regular medicines." },
+    { "speaker": "doctor", "text": "And in the family? Diabetes in parents?" },
+    { "speaker": "patient", "text": "No diabetes in the family. My father has BP, he takes a tablet for that. Mother is fine." },
+    { "speaker": "doctor", "text": "Okay. Let me see the arms. Yes, these are wheals, typical. What you have is called urticaria. In simple words, hives. It is an allergy type of reaction from inside the body, it is not contagious, it is not from dirt." },
+    { "speaker": "patient", "text": "Will it go completely, doctor?" },
+    { "speaker": "doctor", "text": "Most of the time, yes, it settles in a few weeks. I am giving you two tablets. First, Teczine ten, that is levocetirizine ten milligram, one tablet once daily at bedtime, for two weeks." },
+    { "speaker": "patient", "text": "Teczine at night. Okay." },
+    { "speaker": "doctor", "text": "Second, fexofenadine one hundred eighty milligram, one tablet once daily in the morning after breakfast, also for two weeks. Stop the Avil, you don't need it now." },
+    { "speaker": "patient", "text": "Sorry doctor, fexo what?" },
+    { "speaker": "doctor", "text": "Fexofenadine. I will write it, the pharmacy will give. One in the morning after breakfast, Teczine at night. Both for two weeks." },
+    { "speaker": "patient", "text": "Okay, okay. Any food I should avoid?" },
+    { "speaker": "doctor", "text": "No strict diet. Just avoid very spicy food and no painkillers like brufen on your own. Wear loose cotton clothes. Come back after two weeks and tell me how it is." },
+    { "speaker": "patient", "text": "Two weeks. Thank you doctor." }
+  ],
+  "expect": {
+    "chiefComplaints": {"contains": "itch"},
+    "diagnosis": {"contains": "urticaria"},
+    "itchScore": 8,
+    "medicationHistory": {"contains": "Avil"},
+    "familyHistoryDiabetes": false,
+    "familyHistoryHypertension": true,
+    "prescriptionItems": [
+      {"drugName": {"contains": "Teczine"}, "dosage": 10, "dosageUnit": "MG", "frequency": "ONCE_DAILY", "duration": 2, "durationUnit": "WEEKS", "timing": {"anyOf": ["HS", "bed", "night"]}},
+      {"drugName": {"contains": "fexofenadine"}, "dosage": 180, "dosageUnit": "MG", "frequency": "ONCE_DAILY", "duration": 2, "durationUnit": "WEEKS", "timing": {"anyOf": ["breakfast", "AM", "morning"]}}
+    ],
+    "followUpInstructions": {"anyOf": ["2 week", "two week"]}
+  },
+  "allowExtra": ["examination", "pastHistory", "skinConcerns", "familyHistoryOthers"]
+}

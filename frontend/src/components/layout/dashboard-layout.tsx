@@ -12,6 +12,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { VoiceCommandButton } from "@/components/voice/VoiceCommandButton";
 import { apiClient } from "@/lib/api";
 import type { ApiError } from "@/lib/api";
 import type { User } from "@/lib/types";
@@ -156,6 +157,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </SheetContent>
             </Sheet>
             <Image src="/linae-name.png" alt="Linaé" width={304} height={112} className="h-6 w-auto" />
+            <VoiceCommandButton className="ml-auto" />
           </div>
 
           {/* Page content */}
