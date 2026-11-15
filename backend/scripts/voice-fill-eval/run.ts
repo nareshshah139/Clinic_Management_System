@@ -1,7 +1,8 @@
 // Scores voice fill against cases.json through the production code path.
 //   audio mode: VoiceFillService.fill (OpenAI transcription, then Codex extraction)
 //   text mode:  the case's script as a perfect transcript, so extraction is measured without transcription error
-// Usage: npx ts-node --transpile-only scripts/voice-fill-eval/run.ts --audio <dir> | --text  [--out report.json] [--concurrency 3]
+// Usage: npx ts-node --transpile-only scripts/voice-fill-eval/run.ts --audio <dir> | --text
+//          [--set cases|conversations] [--suffix -noisy] [--only id,id] [--out report.json] [--concurrency 3]
 import * as fs from 'fs';
 import * as path from 'path';
 import { completeJsonWithCodexOAuth } from '../../src/shared/codex/codex-oauth';
@@ -18,6 +19,7 @@ interface Case {
   id: string;
   form: VoiceFillFormId;
   say: string;
+  turns?: Array<{ speaker: string; text: string }>;
   expect: Record<string, Matcher>;
   allowExtra?: string[];
 }
@@ -33,6 +35,9 @@ const audioDir = flag('--audio');
 const textMode = args.includes('--text');
 const outPath = flag('--out');
 const concurrency = Number(flag('--concurrency') || 3);
+const set = flag('--set') || 'cases';
+const suffix = flag('--suffix') || '';
+const only = flag('--only')?.split(',');
 if (!audioDir && !textMode) throw new Error('Pass --audio <dir> or --text');
 
 const lower = (value: unknown) => String(value ?? '').trim().toLowerCase();
@@ -86,13 +91,19 @@ async function fillFromText(c: Case) {
 }
 
 async function fillFromAudio(c: Case, service: VoiceFillService) {
-  const bytes = fs.readFileSync(path.join(audioDir!, `${c.id}.webm`));
+  const bytes = fs.readFileSync(path.join(audioDir!, `${c.id}${suffix}.webm`));
   const result = await service.fill(c.id, VOICE_FILL_FORMS[c.form], { bytes, extension: 'webm' });
   return { transcript: result.transcript, fields: result.fields as Record<string, unknown> };
 }
 
 async function main() {
-  const cases: Case[] = JSON.parse(fs.readFileSync(path.join(__dirname, 'cases.json'), 'utf8'));
+  const conversationsDir = path.join(__dirname, 'conversations');
+  const loaded: Case[] = set === 'conversations'
+    ? fs.readdirSync(conversationsDir).filter((f) => f.endsWith('.json')).sort()
+      .map((f) => JSON.parse(fs.readFileSync(path.join(conversationsDir, f), 'utf8')))
+      .map((c: Case) => ({ ...c, say: (c.turns ?? []).map((t) => t.text).join(' ') }))
+    : JSON.parse(fs.readFileSync(path.join(__dirname, 'cases.json'), 'utf8'));
+  const cases = only ? loaded.filter((c) => only.includes(c.id)) : loaded;
   const service = new VoiceFillService();
   const results: Array<{ id: string; form: string; ms: number; transcript?: string; error?: string; checks: Check[]; extras: string[] }> = [];
   let next = 0;
@@ -127,7 +138,8 @@ async function main() {
   };
   const forms = [...new Set(results.map((r) => r.form))];
   const report = {
-    mode: textMode ? 'text' : 'audio',
+    mode: textMode ? 'text' : `audio${suffix}`,
+    set,
     overall: summarize(results),
     byForm: Object.fromEntries(forms.map((form) => [form, summarize(results.filter((r) => r.form === form))])),
     misses: results.flatMap((r) => [
