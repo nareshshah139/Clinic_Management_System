@@ -11,6 +11,9 @@ import { apiClient } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { getErrorMessage, formatPatientName } from '@/lib/utils';
 import type { Patient } from '@/lib/types';
+import { VoiceFillButton } from '@/components/voice/VoiceFillButton';
+import { applyPatientVoiceFill } from '@/lib/voice-fill-patient';
+import type { VoiceFillFields } from '@/lib/voice-fill';
 
 interface PatientQuickCreateDialogProps {
   open: boolean;
@@ -30,6 +33,17 @@ interface QuickCreateFormState {
   abhaId: string;
   consultationType: string;
 }
+
+const QUICK_PATIENT_VOICE_IDS = {
+  firstName: 'quick-patient-first-name',
+  lastName: 'quick-patient-last-name',
+  age: 'quick-patient-age',
+  gender: 'quick-patient-gender',
+  phone: 'quick-patient-phone',
+  email: 'quick-patient-email',
+  abhaId: 'quick-patient-abha',
+  consultationType: 'quick-patient-consultation',
+};
 
 function parseInitialValues(initialName?: string, initialPhone?: string): Partial<QuickCreateFormState> {
   const defaults: Partial<QuickCreateFormState> = {};
@@ -164,11 +178,17 @@ export default function PatientQuickCreateDialog({
     }
   };
 
+  const applyVoice = (fields: VoiceFillFields) =>
+    applyPatientVoiceFill(fields, QUICK_PATIENT_VOICE_IDS, form, (patch) => setForm((prev) => ({ ...prev, ...patch })));
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Add New Patient</DialogTitle>
+          <div className="flex items-center justify-between gap-2 pr-6">
+            <DialogTitle>Add New Patient</DialogTitle>
+            <VoiceFillButton form="patient-intake" apply={applyVoice} hint="Say name, age, gender, phone…" />
+          </div>
           <DialogDescription>
             Capture minimal details to create a patient record without leaving the scheduling flow.
           </DialogDescription>

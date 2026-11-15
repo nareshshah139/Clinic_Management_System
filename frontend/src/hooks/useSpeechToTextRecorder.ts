@@ -15,12 +15,15 @@ interface UseSpeechToTextRecorderOptions {
   toast: ToastFn;
   resolveText: (fieldName: string, response: SpeechToTextResponse) => string;
   applyText: (fieldName: string, text: string) => void;
+  /** Set false when the text is used as-is and the doctor/patient split would be wasted work. */
+  diarize?: boolean;
 }
 
 export function useSpeechToTextRecorder({
   toast,
   resolveText,
   applyText,
+  diarize = true,
 }: UseSpeechToTextRecorderOptions) {
   const [isListening, setIsListening] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -30,6 +33,7 @@ export function useSpeechToTextRecorder({
   const streamRef = useRef<MediaStream | null>(null);
   const stopTimerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
+  const sessionRef = useRef(0);
 
   const clearStopTimer = useCallback(() => {
     if (stopTimerRef.current !== null) {
@@ -65,6 +69,13 @@ export function useSpeechToTextRecorder({
     };
   }, [cancelActiveRecording]);
 
+  const cancelVoiceInput = useCallback(() => {
+    sessionRef.current += 1;
+    cancelActiveRecording();
+    setIsListening(false);
+    setActiveVoiceField(null);
+  }, [cancelActiveRecording]);
+
   const startVoiceInput = useCallback(async (fieldName: string) => {
     if (isTranscribing) return;
 
@@ -91,6 +102,7 @@ export function useSpeechToTextRecorder({
 
     setIsListening(true);
     setActiveVoiceField(fieldName);
+    const session = sessionRef.current;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -101,6 +113,10 @@ export function useSpeechToTextRecorder({
           sampleRate: 48000,
         },
       });
+      if (session !== sessionRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
 
       const mediaRecorder = (window as any).MediaRecorder as typeof MediaRecorder;
@@ -150,7 +166,7 @@ export function useSpeechToTextRecorder({
           const formData = new FormData();
           formData.append('file', completeAudio, filename);
 
-          const response = await fetch('/api/visits/transcribe', {
+          const response = await fetch(diarize ? '/api/visits/transcribe' : '/api/visits/transcribe?diarize=false', {
             method: 'POST',
             body: formData,
             credentials: 'include',
@@ -214,12 +230,13 @@ export function useSpeechToTextRecorder({
         });
       }
     }
-  }, [activeVoiceField, applyText, cancelActiveRecording, clearStopTimer, isListening, isTranscribing, resolveText, toast]);
+  }, [activeVoiceField, applyText, cancelActiveRecording, clearStopTimer, diarize, isListening, isTranscribing, resolveText, toast]);
 
   return {
     activeVoiceField,
     isListening,
     isTranscribing,
     startVoiceInput,
+    cancelVoiceInput,
   };
 }

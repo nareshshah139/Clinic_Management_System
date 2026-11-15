@@ -34,6 +34,9 @@ import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
+import { VoiceFillButton } from '@/components/voice/VoiceFillButton';
+import { applyVoiceFillRegistry, type VoiceFillFields } from '@/lib/voice-fill';
+import { visitVoiceRegistry, type ExtraVitalsPatch } from '@/lib/voice-fill-visit';
 import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
@@ -169,6 +172,8 @@ interface Props {
   vitalsExtra?: React.ReactNode;
   investigationResults?: (ordered: string[]) => React.ReactNode;
   toolbarTarget?: HTMLElement | null;
+  /** Applies vitals this form does not own (temperature, respiratory rate, pain) and returns the undo. */
+  applyExtraVitals?: (patch: ExtraVitalsPatch) => () => void;
 }
 
 export type ConsultationSummary = { complaint: boolean; diagnosis: boolean; plan: boolean; medicines: number; vitals: boolean };
@@ -280,7 +285,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
 const inventoryNamesOf = (drug: any): string[] =>
   [drug?.name, ...(Array.isArray(drug?.knownNames) ? drug.knownNames : [])].map((name) => String(name || '').trim().toLowerCase()).filter(Boolean);
 
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
@@ -542,6 +547,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     },
   });
 
+  const [voiceFillBusy, setVoiceFillBusy] = useState(false);
   const VoiceButton = useCallback(({ fieldName }: { fieldName: string }) => (
     <Button
       type="button"
@@ -549,7 +555,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       size="sm"
       className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
       onClick={() => void startVoiceInput(fieldName)}
-      disabled={isTranscribing || (isListening && activeVoiceField !== fieldName)}
+      disabled={isTranscribing || voiceFillBusy || (isListening && activeVoiceField !== fieldName)}
       aria-label={
         activeVoiceField === fieldName
           ? isListening
@@ -571,7 +577,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         <Mic className="h-4 w-4" />
       )}
     </Button>
-  ), [activeVoiceField, isListening, isTranscribing, startVoiceInput]);
+  ), [activeVoiceField, isListening, isTranscribing, startVoiceInput, voiceFillBusy]);
 
   // Skin Concerns moved from Assessment into Chief Complaints
   const SKIN_CONCERNS = useMemo(() => (
@@ -4537,6 +4543,42 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       setFollowUpInstructions(label);
     }
   }, [onChangeReviewDate, formatSuggestedReviewDate, followUpInstructions]);
+  const applyVoiceFill = (fields: VoiceFillFields) => {
+    const touchFamilyHistory = (key: string) => setFamilyHistoryTouched((prev) => Array.from(new Set([...prev, key])));
+    const previousReviewDate = reviewDate || '';
+    return applyVoiceFillRegistry(visitVoiceRegistry({
+      heightCm: [vitalsHeightCm, setVitalsHeightCm],
+      weightKg: [vitalsWeightKg, setVitalsWeightKg],
+      bpSystolic: [vitalsBpSys, setVitalsBpSys],
+      bpDiastolic: [vitalsBpDia, setVitalsBpDia],
+      pulse: [vitalsPulse, setVitalsPulse],
+      chiefComplaints: [chiefComplaints, setChiefComplaints],
+      skinConcerns: [skinConcerns, setSkinConcerns],
+      diagnosis: [diagnosis, setDiagnosis],
+      pastHistory: [pastHistory, setPastHistory],
+      medicationHistory: [medicationHistory, setMedicationHistory],
+      menstrualHistory: [menstrualHistory, setMenstrualHistory],
+      familyHistoryDiabetes: [familyHistoryDM, (next) => { setFamilyHistoryDM(next); touchFamilyHistory('dm'); }],
+      familyHistoryHypertension: [familyHistoryHTN, (next) => { setFamilyHistoryHTN(next); touchFamilyHistory('htn'); }],
+      familyHistoryThyroid: [familyHistoryThyroid, (next) => { setFamilyHistoryThyroid(next); touchFamilyHistory('thyroid'); }],
+      familyHistoryOthers: [familyHistoryOthers, setFamilyHistoryOthers],
+      examination: [exObjective, setExObjective],
+      fitzpatrickSkinType: [exSkinType, setExSkinType],
+      acneSeverity: [exAcneSeverity, setExAcneSeverity],
+      itchScore: [exItchScore, setExItchScore],
+      procedures: [procedures, setProcedures],
+      procedurePlanned: [procedurePlanned, setProcedurePlanned],
+      investigations: [investigations, (next) => {
+        setInvestigations(next);
+        setCustomInvestigationOptions((prev) => mergeInvestigationOptions(prev, next.filter((entry) => !defaultInvestigationOptions.includes(entry))));
+      }, setInvestigations],
+      followUpInstructions: [followUpInstructions, applyFollowUpShortcut, (previous) => {
+        setFollowUpInstructions(previous);
+        onChangeReviewDate?.(previousReviewDate);
+      }],
+      applyExtraVitals,
+    }), fields);
+  };
 
   return (
     <div className="space-y-6 overflow-visible">
@@ -4628,7 +4670,19 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {loadingTemplates ? 'Loading templates…' : 'Templates will appear once loaded.'}
               </div>
             );
-            return toolbarTarget ? createPortal(templatesBar, toolbarTarget) : templatesBar;
+            const toolbar = (
+              <>
+                {templatesBar}
+                <VoiceFillButton
+                  form="visit-consultation"
+                  apply={applyVoiceFill}
+                  hint="Say vitals, complaints, diagnosis, history, examination, follow-up…"
+                  disabled={isListening || isTranscribing}
+                  onBusyChange={setVoiceFillBusy}
+                />
+              </>
+            );
+            return toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar;
           })()}
 
             {/* Basic Information */}
@@ -4641,11 +4695,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
                   <div>
                     <label className="text-xs text-muted-foreground">Height (cm)</label>
-                    <Input key="vitals-height" aria-label="Height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-height" id="visit-vitals-height" aria-label="Height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Weight (kg)</label>
-                    <Input key="vitals-weight" aria-label="Weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-weight" id="visit-vitals-weight" aria-label="Weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">BMI</label>
@@ -4653,15 +4707,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">BP (Sys)</label>
-                    <Input key="vitals-bp-sys" aria-label="Systolic blood pressure" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-bp-sys" id="visit-vitals-bp-sys" aria-label="Systolic blood pressure" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">BP (Dia)</label>
-                    <Input key="vitals-bp-dia" aria-label="Diastolic blood pressure" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-bp-dia" id="visit-vitals-bp-dia" aria-label="Diastolic blood pressure" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Pulse (bpm)</label>
-                    <Input key="vitals-pulse" aria-label="Pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-pulse" id="visit-vitals-pulse" aria-label="Pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   {vitalsExtra}
                 </div>
@@ -4749,7 +4803,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   onFocus={() => setComplaintFieldFocused(true)}
                   onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setComplaintFieldFocused(false); }}
                 >
-                  <Textarea key="chief-complaints" aria-label="Chief complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+                  <Textarea key="chief-complaints" id="visit-chief-complaints" aria-label="Chief complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
                   <VoiceButton fieldName="chiefComplaints" />
                   {complaintFieldFocused && complaintOptions.length > 0 && (
                     <ul aria-label="Complaint suggestions" className="absolute left-0 top-full z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
@@ -4793,7 +4847,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="opacity-100">
                 <label className="text-xs text-muted-foreground flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                 <div className="relative diag-autocomplete">
-                  <Input key="diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} onFocus={() => setDiagnosisFieldFocused(true)} onBlur={() => setDiagnosisFieldFocused(false)} />
+                  <Input key="diagnosis" id="visit-diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} onFocus={() => setDiagnosisFieldFocused(true)} onBlur={() => setDiagnosisFieldFocused(false)} />
                   {diagnosisFieldFocused && diagOptions.length > 0 && (
                     <ul aria-label="Diagnosis suggestions" className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-sm max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {diagOptions.map((opt) => (
@@ -4820,15 +4874,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground flex items-center gap-1">Past History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
-                    <Textarea key="past-history" aria-label="Past history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} onBlur={(e) => pushRecent('pastHistory', e.target.value)} />
+                    <Textarea key="past-history" id="visit-past-history" aria-label="Past history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} onBlur={(e) => pushRecent('pastHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground flex items-center gap-1">Medication History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
-                    <Textarea key="medication-history" aria-label="Medication history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} onBlur={(e) => pushRecent('medicationHistory', e.target.value)} />
+                    <Textarea key="medication-history" id="visit-medication-history" aria-label="Medication history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} onBlur={(e) => pushRecent('medicationHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground flex items-center gap-1">Menstrual History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
-                    <Textarea key="menstrual-history" aria-label="Menstrual history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} onBlur={(e) => pushRecent('menstrualHistory', e.target.value)} />
+                    <Textarea key="menstrual-history" id="visit-menstrual-history" aria-label="Menstrual history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} onBlur={(e) => pushRecent('menstrualHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
@@ -4837,7 +4891,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => { setFamilyHistoryHTN(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'htn']))); }} /> Hypertension</label>
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryThyroid} onChange={(e) => { setFamilyHistoryThyroid(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'thyroid']))); }} /> Thyroid</label>
                     </div>
-                    <Input key="family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} onBlur={(e) => pushRecent('familyHistoryOthers', e.target.value)} />
+                    <Input key="family-history-others" id="visit-family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} onBlur={(e) => pushRecent('familyHistoryOthers', e.target.value)} />
                   </div>
                 </div>
                 <div className="mt-3">
@@ -4867,11 +4921,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Acne Severity</label>
-                    <Input placeholder="mild/moderate/severe" value={exAcneSeverity} onChange={(e) => setExAcneSeverity(e.target.value)} />
+                    <Input id="visit-acne-severity" placeholder="mild/moderate/severe" value={exAcneSeverity} onChange={(e) => setExAcneSeverity(e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Itch Score (0-10)</label>
-                    <Input placeholder="0-10" value={exItchScore} onChange={(e) => setExItchScore(e.target.value)} />
+                    <Input id="visit-itch-score" placeholder="0-10" value={exItchScore} onChange={(e) => setExItchScore(e.target.value)} />
                   </div>
                 </div>
 
@@ -5028,7 +5082,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div>
                   <label className="text-xs text-muted-foreground">Detailed Examination</label>
                   <div className="flex items-center">
-                    <Textarea placeholder="Detailed physical examination findings..." value={exObjective} onChange={(e) => setExObjective(e.target.value)} rows={3} />
+                    <Textarea id="visit-examination" placeholder="Detailed physical examination findings..." value={exObjective} onChange={(e) => setExObjective(e.target.value)} rows={3} />
                     <VoiceButton fieldName="objective" />
                   </div>
                 </div>
@@ -5442,11 +5496,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="space-y-3 opacity-100">
                 <div>
                   <label className="text-xs text-muted-foreground flex items-center gap-1">Procedures{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
-                  <Textarea aria-label="Procedures performed" rows={2} value={procedures} onChange={(e) => setProcedures(e.target.value)} onBlur={(e) => pushRecent('procedures', e.target.value)} />
+                  <Textarea id="visit-procedures" aria-label="Procedures performed" rows={2} value={procedures} onChange={(e) => setProcedures(e.target.value)} onBlur={(e) => pushRecent('procedures', e.target.value)} />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
-                  <Textarea aria-label="Procedures planned" rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
+                  <Textarea id="visit-procedure-planned" aria-label="Procedures planned" rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
                 </div>
               </div>
             </CollapsibleSection>
@@ -5561,7 +5615,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm text-foreground flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-info-text" aria-label="Translated on print" />)}</label>
-                    <Input key="followup-instructions" aria-label="Follow-up instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
+                    <Input key="followup-instructions" id="visit-followup-instructions" aria-label="Follow-up instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
                     {followUpSuggestions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {followUpSuggestions.map((suggestion) => (
