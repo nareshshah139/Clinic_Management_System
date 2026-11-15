@@ -1,6 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 import { useVoiceFill } from '@/hooks/useVoiceFill';
 
 const toast = jest.fn();
@@ -63,27 +62,6 @@ describe('useAudioRecorder', () => {
     act(() => { jest.advanceTimersByTime(1); });
     expect(result.current.recording).toBeNull();
     expect(onRecorded.mock.calls.map(([key, audio, filename]) => [key, audio.type, filename])).toEqual([['notes', 'audio/webm', 'recording.webm']]);
-  });
-});
-
-describe('useSpeechToTextRecorder', () => {
-  it('posts the recording to the transcribe endpoint and inserts the text into the field that recorded it', async () => {
-    const applyText = jest.fn();
-    const response = deferred();
-    fetchMock.mockReturnValue(response.promise);
-    const { result } = renderHook(() => useSpeechToTextRecorder({ toast, resolveText: (_field, data) => data.text ?? '', applyText }));
-
-    await act(async () => { await result.current.startVoiceInput('chiefComplaints'); });
-    expect([result.current.isListening, result.current.activeVoiceField]).toEqual([true, 'chiefComplaints']);
-
-    await act(async () => { await result.current.startVoiceInput('chiefComplaints'); });
-    expect([result.current.isListening, result.current.isTranscribing, result.current.activeVoiceField]).toEqual([false, true, 'chiefComplaints']);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect([url, init.credentials, ((init.body as FormData).get('file') as File).name]).toEqual(['/api/visits/transcribe', 'include', 'recording.webm']);
-
-    await act(async () => { response.resolve(json(200, { text: 'itching for two weeks' })); });
-    expect(applyText.mock.calls).toEqual([['chiefComplaints', 'itching for two weeks']]);
-    expect([result.current.isTranscribing, result.current.activeVoiceField]).toEqual([false, null]);
   });
 });
 

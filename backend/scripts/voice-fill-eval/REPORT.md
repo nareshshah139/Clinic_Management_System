@@ -19,9 +19,8 @@ Branch `claude/kind-newton-es1z66`. Every number here was measured against the r
 
 These checks cost money or need ffmpeg, so CI does not run them and they stay off unless someone asks for a test pass.
 
-- `VOICE_FILL_MEDIA_TESTS=1 npx jest src/shared/transcription` (in `backend/`) runs the transcription integration tests,
-  which need ffmpeg but call no paid API. Without the variable they are skipped; the pure planner and consensus tests
-  always run.
+- `npm run test:transcription --workspace=backend` runs the transcription tests, which need ffmpeg but call no paid
+  API. The default `npm test` (and so CI) leaves them out.
 - `VOICE_FILL_EVAL=paid` must be set for `run.ts` and for accented voices in `generate-audio.cjs`; both refuse to start
   without it because every case calls paid OpenAI or Codex endpoints.
 

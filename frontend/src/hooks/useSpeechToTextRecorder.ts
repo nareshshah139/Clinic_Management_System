@@ -1,64 +1,129 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAudioRecorder, type RecorderToast } from '@/hooks/useAudioRecorder';
-import { postAudio, type SpeechToTextResponse } from '@/lib/speech-to-text';
-import { getErrorMessage } from '@/lib/utils';
+import {
+  MicUnavailableError,
+  startDictationSession,
+  type DictationPhase,
+  type DictationSession,
+  type DictationView,
+} from '@/lib/dictation-session';
+import type { SpeechToTextPreference } from '@/lib/speech-to-text';
 
-interface UseSpeechToTextRecorderOptions {
-  toast: RecorderToast;
-  resolveText: (fieldName: string, response: SpeechToTextResponse) => string;
-  applyText: (fieldName: string, text: string) => void;
+type ToastFn = (input: {
+  variant?: 'default' | 'destructive' | 'success' | 'warning' | 'info';
+  title: string;
+  description?: string;
+}) => void;
+
+interface UseSpeechToTextRecorderOptions<F extends string> {
+  toast: ToastFn;
+  fields: Readonly<Record<F, SpeechToTextPreference>>;
+  applyText: (field: F, text: string) => void;
 }
 
-export function useSpeechToTextRecorder({ toast, resolveText, applyText }: UseSpeechToTextRecorderOptions) {
-  const [transcribingField, setTranscribingField] = useState<string | null>(null);
-  const mountedRef = useRef(true);
+interface ActiveDictation<F extends string> {
+  field: F;
+  phase: DictationPhase;
+  session: DictationSession | null;
+  stopRequested: boolean;
+}
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
+export function useSpeechToTextRecorder<F extends string>({
+  toast,
+  fields,
+  applyText,
+}: UseSpeechToTextRecorderOptions<F>) {
+  const [active, setActive] = useState<{ field: F; view: DictationView } | null>(null);
+  const activeRef = useRef<ActiveDictation<F> | null>(null);
+  const latest = useRef({ toast, fields, applyText });
+  latest.current = { toast, fields, applyText };
+
+  useEffect(() => () => {
+    const current = activeRef.current;
+    activeRef.current = null;
+    current?.session?.dispose();
   }, []);
 
-  const transcribe = async (fieldName: string, audio: Blob, filename: string) => {
-    setTranscribingField(fieldName);
+  const startVoiceInput = useCallback(async (field: F) => {
+    const current = activeRef.current;
+    if (current) {
+      if (current.field !== field || current.phase === 'finishing') return;
+      if (current.session) current.session.stop();
+      else current.stopRequested = true;
+      return;
+    }
+
+    const entry: ActiveDictation<F> = { field, phase: 'connecting', session: null, stopRequested: false };
+    activeRef.current = entry;
+    setActive({ field, view: { phase: 'connecting', live: false, preview: '' } });
+    const isCurrent = () => activeRef.current === entry;
+    const release = () => {
+      activeRef.current = null;
+      setActive(null);
+    };
+
+    let session: DictationSession;
     try {
-      const data = await postAudio<SpeechToTextResponse>('/api/visits/transcribe', audio, filename);
-      const text = resolveText(fieldName, data);
-      if (!text) {
-        toast({
+      session = await startDictationSession({
+        preference: latest.current.fields[field],
+        onView: (view) => {
+          if (!isCurrent()) return;
+          entry.phase = view.phase;
+          setActive({ field, view });
+        },
+        onNotice: (notice) => {
+          if (isCurrent()) latest.current.toast({ variant: 'info', ...notice });
+        },
+      });
+    } catch (error) {
+      if (!isCurrent()) return;
+      release();
+      const unsupported = error instanceof MicUnavailableError && error.reason === 'unsupported';
+      latest.current.toast({
+        variant: 'warning',
+        title: unsupported ? 'Voice capture unavailable' : 'Microphone access denied',
+        description: error instanceof Error && error.message ? error.message : 'Check browser permissions and try again.',
+      });
+      return;
+    }
+
+    if (!isCurrent()) {
+      session.dispose();
+      return;
+    }
+    entry.session = session;
+    if (entry.stopRequested) session.stop();
+
+    const outcome = await session.outcome;
+    if (!isCurrent()) return;
+    release();
+    switch (outcome.kind) {
+      case 'text':
+        latest.current.applyText(field, outcome.text);
+        break;
+      case 'empty':
+        latest.current.toast({
           variant: 'info',
           title: 'No speech detected',
           description: 'The recording may have been too quiet or contained only silence. Try speaking louder and closer to the microphone.',
         });
-        return;
-      }
-      if (mountedRef.current) applyText(fieldName, text);
-    } catch (error) {
-      if (mountedRef.current) {
-        toast({ variant: 'warning', title: 'Speech-to-text error', description: getErrorMessage(error) || 'Please try again.' });
-      }
-    } finally {
-      if (mountedRef.current) setTranscribingField(null);
+        break;
+      case 'error':
+        latest.current.toast({ variant: 'warning', title: outcome.title, description: outcome.description });
+        break;
+      case 'cancelled':
+        break;
     }
-  };
+  }, []);
 
-  const { recording, toggle } = useAudioRecorder({
-    toast,
-    onRecorded: (fieldName, audio, filename) => void transcribe(fieldName, audio, filename),
-  });
-
-  const isTranscribing = transcribingField !== null;
-  const startVoiceInput = useCallback(async (fieldName: string) => {
-    if (!isTranscribing) await toggle(fieldName);
-  }, [isTranscribing, toggle]);
-
+  const phase = active?.view.phase;
   return {
-    activeVoiceField: recording?.key ?? transcribingField,
-    isListening: recording !== null,
-    isTranscribing,
+    activeVoiceField: active?.field ?? null,
+    isConnecting: phase === 'connecting',
+    isListening: phase === 'listening',
+    isTranscribing: phase === 'finishing',
+    livePreview: active?.view.preview ?? '',
     startVoiceInput,
   };
 }

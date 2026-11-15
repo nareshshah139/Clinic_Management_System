@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import { apiClient } from '@/lib/api';
-import type { VoiceFillApply } from '@/lib/voice-fill';
+import type { VoiceFillApply, VoiceFillRow } from '@/lib/voice-fill';
 
 let applyVoiceFill: VoiceFillApply = () => ({ filled: [], undo: () => {} });
 
@@ -44,7 +44,7 @@ afterEach(() => jest.useRealTimers());
 const drugInputs = () => screen.getAllByPlaceholderText('Search medicine name...').map((input) => (input as HTMLInputElement).value);
 const chips = () => screen.queryAllByText(/Did you mean/).map((chip) => chip.textContent);
 
-async function speak(prescriptionItems: Record<string, unknown>[]) {
+async function speak(prescriptionItems: VoiceFillRow[]) {
   render(<PrescriptionBuilder patientId="voice-suggest" visitId={null} doctorId="doctor" />);
   await act(async () => { jest.advanceTimersByTime(1000); });
   await act(async () => { await applyVoiceFill({ prescriptionItems }); });

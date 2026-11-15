@@ -28,7 +28,7 @@ const logger = new Logger('OpenAiTranscribe');
 
 // Context only: no example vitals, doses or drug names. The previous prompt's examples ("120/80 mmHg",
 // "heart rate", "azithromycin 500 mg PO OD x3 days") were played back as invented consultation passages.
-const TRANSCRIPTION_PROMPT =
+export const TRANSCRIPTION_PROMPT =
   'Outpatient clinic in India. Speakers use Indian English and sometimes Hindi or Telugu words.';
 
 // gpt-4o-transcribe rejects audio over 1400 s and silently truncates long outputs (a 15-minute clip came back

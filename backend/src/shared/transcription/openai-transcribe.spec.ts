@@ -88,10 +88,7 @@ describe('chooseConsensusTranscript', () => {
   });
 });
 
-// Runs real ffmpeg on generated audio; kept out of CI by the owner's choice. Opt in with VOICE_FILL_MEDIA_TESTS=1.
-const mediaTests = process.env.VOICE_FILL_MEDIA_TESTS === '1' ? describe : describe.skip;
-
-mediaTests('transcribeWithOpenAI against a local transcription endpoint', () => {
+describe('transcribeWithOpenAI against a local transcription endpoint', () => {
   let server: http.Server;
   let directory: string;
   let respond: (upload: Received, arrival: number) => Reply;
