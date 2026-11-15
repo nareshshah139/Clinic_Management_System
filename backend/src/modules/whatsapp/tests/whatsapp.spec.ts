@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { WhatsAppGraphClient } from '../graph-client';
+import { parseSendHealth } from '../send-health';
 import { parseStatusUpdates } from '../message-status';
 import { normalizeWhatsAppNumber } from '../phone-number';
 import { openToken, sealToken, whatsappTokenKey } from '../token-cipher';
@@ -9,6 +10,88 @@ import { WhatsAppController } from '../whatsapp.controller';
 import { acceptedOrThrow, WhatsAppService } from '../whatsapp.service';
 
 type Row = Record<string, any>;
+
+const BLOCKED_HEALTH_STATUS = {
+  can_send_message: 'BLOCKED',
+  entities: [
+    {
+      entity_type: 'PHONE_NUMBER',
+      id: '1392400937296402',
+      can_send_message: 'AVAILABLE',
+      can_receive_call_sip: 'BLOCKED',
+      errors: [
+        {
+          error_code: 138024,
+          error_description:
+            'WhatsApp Business calling cannot use SIP because it is not enabled',
+          possible_solution:
+            'Configure SIP using {PHONE_NUMBER_ID}/settings API',
+        },
+      ],
+    },
+    {
+      entity_type: 'WABA',
+      id: '1185628673999814',
+      can_send_message: 'BLOCKED',
+      errors: [
+        {
+          error_code: 141006,
+          error_description:
+            'There is an error with the payment method. This will block business initiated conversations.',
+          possible_solution:
+            'There was an error with your payment method. Please add a new payment method to the account.',
+        },
+      ],
+    },
+    {
+      entity_type: 'BUSINESS',
+      id: '1130344116394524',
+      can_send_message: 'BLOCKED',
+      errors: [
+        {
+          error_code: 141010,
+          error_description:
+            'The Business has not passed business verification.',
+          possible_solution:
+            'Visit business settings and start or resolve the business verification request.',
+        },
+        {
+          error_code: 131000,
+          error_description:
+            'Your business profile is incomplete. The following fields are required: Legal Name, Country, and Website.',
+          possible_solution: 'Complete the business profile.',
+        },
+      ],
+    },
+    {
+      entity_type: 'APP',
+      id: '1013190915166848',
+      can_send_message: 'AVAILABLE',
+      errors: [{ error_code: 138025 }],
+      additional_info: [
+        'Your app is not subscribed to the message webhook. This means you will not receive any messages sent to your phone number.',
+      ],
+    },
+  ],
+};
+
+const phoneBody = (health_status?: unknown) => ({
+  display_phone_number: '+91 20 2555 0199',
+  verified_name: 'Lakshmi Family Clinic',
+  quality_rating: 'GREEN',
+  id: 'clinic-phone',
+  ...(health_status ? { health_status } : {}),
+});
+
+const AVAILABLE_HEALTH_STATUS = {
+  can_send_message: 'AVAILABLE',
+  entities: [
+    { entity_type: 'WABA', id: 'waba-9', can_send_message: 'AVAILABLE' },
+  ],
+};
+
+const BLOCKED_REASON =
+  'WhatsApp is blocking messages from this number, so nothing was sent. Fix it in Meta Business Suite: There is an error with the payment method. This will block business initiated conversations (141006); The Business has not passed business verification (141010); Your business profile is incomplete. The following fields are required: Legal Name, Country, and Website (131000).';
 
 function pick(row: Row | undefined, select: Row | undefined, db: FakeDb) {
   if (!row) return null;
@@ -160,12 +243,7 @@ function fakeGraph(
   > = {
     'GET /v21.0/clinic-phone': () => ({
       status: 200,
-      body: {
-        display_phone_number: '+91 20 2555 0199',
-        verified_name: 'Lakshmi Family Clinic',
-        quality_rating: 'GREEN',
-        id: 'clinic-phone',
-      },
+      body: phoneBody(AVAILABLE_HEALTH_STATUS),
     }),
     'POST /v21.0/clinic-phone/media': () => ({
       status: 200,
@@ -377,7 +455,7 @@ describe('WhatsApp', () => {
     expect(s.calls.map((c) => [c.method, c.url, c.auth])).toEqual([
       [
         'GET',
-        'http://graph.test/v21.0/clinic-phone?fields=display_phone_number,verified_name,quality_rating',
+        'http://graph.test/v21.0/clinic-phone?fields=display_phone_number,verified_name,quality_rating,health_status',
         'Bearer clinic-token',
       ],
     ]);
@@ -391,6 +469,7 @@ describe('WhatsApp', () => {
       prescriptionTemplate: null,
       verifiedAt: expect.any(Date),
       linkedBy: { id: 'admin-1', name: 'Meera Kulkarni' },
+      health: { canSend: 'AVAILABLE', blockers: [] },
     });
     const read = JSON.stringify(
       await s.controller.connection({
@@ -614,6 +693,22 @@ describe('WhatsApp', () => {
       132001,
       'The chosen template does not exist in that language. Pick the template again in Clinic profile.',
     ],
+    [
+      131031,
+      'Meta has locked this WhatsApp Business Account, so it cannot send messages. Resolve the account issues in Meta Business Suite; Clinic profile lists what Meta reports.',
+    ],
+    [
+      141006,
+      'The WhatsApp Business Account has a payment method problem, which blocks messages the clinic starts. Add a valid payment method in Meta Business Suite.',
+    ],
+    [
+      141010,
+      'The business behind this WhatsApp number has not passed Meta business verification. Complete the verification in Meta Business Suite.',
+    ],
+    [
+      131000,
+      'The WhatsApp business profile is incomplete. Add the legal name, country and website in Meta Business Suite.',
+    ],
     [100, 'Meta rejected a value in the request: Invalid parameter detail.'],
     [368, 'Temporarily blocked for policies violations.'],
   ])(
@@ -645,6 +740,247 @@ describe('WhatsApp', () => {
       expect(s.db.messages).toEqual([]);
     },
   );
+
+  describe('send health', () => {
+    const admin = {
+      user: { id: 'admin-1', branchId: 'branch-1', role: 'ADMIN' },
+    };
+
+    it('keeps only the blockers of entities that cannot send, and learns the business account id', () => {
+      expect(parseSendHealth(BLOCKED_HEALTH_STATUS)).toEqual({
+        sendHealth: {
+          canSend: 'BLOCKED',
+          blockers: [
+            {
+              entity: 'WABA',
+              code: 141006,
+              description:
+                'There is an error with the payment method. This will block business initiated conversations.',
+              fix: 'There was an error with your payment method. Please add a new payment method to the account.',
+            },
+            {
+              entity: 'BUSINESS',
+              code: 141010,
+              description: 'The Business has not passed business verification.',
+              fix: 'Visit business settings and start or resolve the business verification request.',
+            },
+            {
+              entity: 'BUSINESS',
+              code: 131000,
+              description:
+                'Your business profile is incomplete. The following fields are required: Legal Name, Country, and Website.',
+              fix: 'Complete the business profile.',
+            },
+          ],
+        },
+        businessAccountId: '1185628673999814',
+      });
+      expect(
+        parseSendHealth({ can_send_message: 'LIMITED', entities: [] }),
+      ).toEqual({
+        sendHealth: { canSend: 'LIMITED', blockers: [] },
+        businessAccountId: null,
+      });
+      expect([
+        parseSendHealth(undefined),
+        parseSendHealth({ can_send_message: 'SOON' }),
+      ]).toEqual([null, null]);
+    });
+
+    it('refuses a prescription and a test up front when Meta says sending is blocked, without calling /media or /messages', async () => {
+      const s = setup({
+        'GET /v21.0/clinic-phone': () => ({
+          status: 200,
+          body: phoneBody(BLOCKED_HEALTH_STATUS),
+        }),
+      });
+      await linkClinic(s, undefined);
+      const prescription = await s.whatsapp.sendPrescription({
+        branchId: 'branch-1',
+        to: '9704802443',
+        pdfBuffer: pdf,
+        fileName: 'rx.pdf',
+        caption: 'c',
+        patientName: 'Asha Verma',
+        doctorName: 'Dr. Priya Menon',
+        prescriptionId: 'rx1',
+        kind: 'PRESCRIPTION',
+      });
+      const test = await s.controller.sendTest(admin, { to: '9704802443' });
+      expect([prescription, test]).toEqual([
+        { status: 'FAILED', reason: BLOCKED_REASON },
+        { status: 'FAILED', reason: BLOCKED_REASON },
+      ]);
+      expect(s.calls).toEqual([]);
+      expect(s.db.messages).toEqual([]);
+    });
+
+    it('carries health on GET /whatsapp/connection, checks Meta live each time, and reports unknown when Meta cannot be reached', async () => {
+      let answer: () => { status: number; body: unknown } = () => ({
+        status: 200,
+        body: phoneBody(BLOCKED_HEALTH_STATUS),
+      });
+      const s = setup({ 'GET /v21.0/clinic-phone': () => answer() });
+      await linkClinic(s);
+      const read = async () => {
+        const view = (await s.controller.connection(admin)) as any;
+        return view.health;
+      };
+      const blocked = await read();
+      expect([
+        blocked.canSend,
+        blocked.blockers.map((b: any) => b.code),
+      ]).toEqual(['BLOCKED', [141006, 141010, 131000]]);
+      answer = () => ({
+        status: 200,
+        body: phoneBody(AVAILABLE_HEALTH_STATUS),
+      });
+      expect(await read()).toEqual({ canSend: 'AVAILABLE', blockers: [] });
+      answer = () => ({
+        status: 500,
+        body: { error: { message: 'Service unavailable' } },
+      });
+      expect(await read()).toBeNull();
+      expect(
+        s.calls.filter((c) => c.url.includes('clinic-phone?')).length,
+      ).toBe(4);
+    });
+
+    it('remembers health for 30 seconds between sends, then asks Meta again and sends once it is fixed', async () => {
+      let status: unknown = BLOCKED_HEALTH_STATUS;
+      const s = setup({
+        'GET /v21.0/clinic-phone': () => ({
+          status: 200,
+          body: phoneBody(status),
+        }),
+      });
+      await linkClinic(s);
+      const send = () =>
+        s.whatsapp.sendText({
+          branchId: 'branch-1',
+          to: '9704802443',
+          text: 'hi',
+          kind: 'TEXT',
+        });
+      const now = jest.spyOn(Date, 'now');
+      const start = Date.now();
+      now.mockReturnValue(start + 10_000);
+      status = AVAILABLE_HEALTH_STATUS;
+      expect((await send()).status).toBe('FAILED');
+      expect(s.calls).toEqual([]);
+      now.mockReturnValue(start + 31_000);
+      expect(await send()).toEqual({
+        status: 'ACCEPTED',
+        wamid: 'wamid.HBg1',
+        source: 'CLINIC',
+      });
+      expect(
+        s.calls.map((c) => `${c.method} ${new URL(c.url).pathname}`),
+      ).toEqual([
+        'GET /v21.0/clinic-phone',
+        'POST /v21.0/clinic-phone/messages',
+      ]);
+      now.mockRestore();
+    });
+
+    it('still sends when health cannot be read', async () => {
+      const s = setup({
+        'GET /v21.0/other-phone': () => ({
+          status: 500,
+          body: { error: { message: 'Service unavailable' } },
+        }),
+        'POST /v21.0/other-phone/messages': () => ({
+          status: 200,
+          body: { messages: [{ id: 'wamid.OTHER' }] },
+        }),
+      });
+      await linkClinic(s);
+      s.db.connections[0].phoneNumberId = 'other-phone';
+      expect(
+        await s.whatsapp.sendText({
+          branchId: 'branch-1',
+          to: '9704802443',
+          text: 'hi',
+          kind: 'TEXT',
+        }),
+      ).toEqual({ status: 'ACCEPTED', wamid: 'wamid.OTHER', source: 'CLINIC' });
+    });
+
+    it('learns the business account id from Meta when the clinic linked without one, so templates work without linking again', async () => {
+      const s = setup({
+        'GET /v21.0/clinic-phone': () => ({
+          status: 200,
+          body: phoneBody(BLOCKED_HEALTH_STATUS),
+        }),
+        'GET /v21.0/1185628673999814/message_templates': () => ({
+          status: 200,
+          body: {
+            data: [
+              {
+                name: 'rx',
+                language: 'en',
+                status: 'APPROVED',
+                components: [{ type: 'HEADER', format: 'DOCUMENT' }],
+              },
+            ],
+          },
+        }),
+      });
+      const view = (await s.connections.link(
+        { id: 'admin-1', branchId: 'branch-1' },
+        { accessToken: 'clinic-token', phoneNumberId: 'clinic-phone' },
+      )) as any;
+      expect(view.businessAccountId).toBe('1185628673999814');
+      s.db.connections[0].businessAccountId = null;
+      const read = (await s.controller.connection(admin)) as any;
+      expect([
+        read.businessAccountId,
+        s.db.connections[0].businessAccountId,
+      ]).toEqual(['1185628673999814', '1185628673999814']);
+      expect(await s.connections.templates('branch-1')).toEqual([
+        { name: 'rx', language: 'en', bodyParams: 0 },
+      ]);
+    });
+
+    it('keeps a business account id the clinic typed', async () => {
+      const s = setup({
+        'GET /v21.0/clinic-phone': () => ({
+          status: 200,
+          body: phoneBody(BLOCKED_HEALTH_STATUS),
+        }),
+      });
+      await linkClinic(s);
+      expect(s.db.connections[0].businessAccountId).toBe('waba-9');
+    });
+
+    it('lists the reason a webhook-reported failure gives, in the clinic words when the code is known', async () => {
+      const s = setup();
+      s.db.messages.push(
+        {
+          id: 'a',
+          status: 'FAILED',
+          errorCode: 131031,
+          errorTitle: 'Business Account locked',
+        },
+        {
+          id: 'b',
+          status: 'FAILED',
+          errorCode: 999999,
+          errorTitle: 'Odd failure',
+        },
+        { id: 'c', status: 'DELIVERED', errorCode: null, errorTitle: null },
+      );
+      const rows = await s.connections.recentMessages('branch-1', 20);
+      expect(rows.map((r: any) => [r.id, r.failureReason])).toEqual([
+        [
+          'a',
+          'Meta has locked this WhatsApp Business Account, so it cannot send messages. Resolve the account issues in Meta Business Suite; Clinic profile lists what Meta reports.',
+        ],
+        ['b', 'Odd failure'],
+        ['c', null],
+      ]);
+    });
+  });
 
   it('retries a 5xx once, then reports the failure without recording a message', async () => {
     let attempts = 0;

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { parseSendHealth } from './send-health';
 import type {
   DocumentTemplate,
   PhoneNumberProfile,
@@ -21,7 +22,18 @@ const META_REASONS: Record<number, string> = {
     "This number is not in the allowed list of the Meta test number. Add it under WhatsApp > API Setup in Meta, or link the clinic's live number.",
   132001:
     'The chosen template does not exist in that language. Pick the template again in Clinic profile.',
+  131031:
+    'Meta has locked this WhatsApp Business Account, so it cannot send messages. Resolve the account issues in Meta Business Suite; Clinic profile lists what Meta reports.',
+  141006:
+    'The WhatsApp Business Account has a payment method problem, which blocks messages the clinic starts. Add a valid payment method in Meta Business Suite.',
+  141010:
+    'The business behind this WhatsApp number has not passed Meta business verification. Complete the verification in Meta Business Suite.',
+  131000:
+    'The WhatsApp business profile is incomplete. Add the legal name, country and website in Meta Business Suite.',
 };
+
+export const metaReasonFor = (code: number | null): string | undefined =>
+  code === null ? undefined : META_REASONS[code];
 
 type MetaError = {
   code?: unknown;
@@ -96,7 +108,8 @@ export class WhatsAppGraphClient {
     token: string,
     phoneNumberId: string,
   ): Promise<GraphResult<PhoneNumberProfile>> {
-    const fields = 'display_phone_number,verified_name,quality_rating';
+    const fields =
+      'display_phone_number,verified_name,quality_rating,health_status';
     return this.call(
       `/${encodeURIComponent(phoneNumberId)}?fields=${fields}`,
       token,
@@ -106,6 +119,7 @@ export class WhatsAppGraphClient {
         verifiedName: String(json.verified_name ?? ''),
         qualityRating:
           typeof json.quality_rating === 'string' ? json.quality_rating : null,
+        health: parseSendHealth(json.health_status),
       }),
     );
   }

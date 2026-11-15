@@ -5,13 +5,14 @@ import {
 } from '@nestjs/common';
 import { displayClinicDate } from '../../common/date-display';
 import { PrismaService } from '../../shared/database/prisma.service';
-import { WhatsAppGraphClient } from './graph-client';
+import { WhatsAppGraphClient, metaReasonFor } from './graph-client';
 import { INVALID_NUMBER_REASON, normalizeWhatsAppNumber } from './phone-number';
 import { renderSamplePrescriptionPdf } from './sample-prescription-pdf';
 import { openToken, sealToken, whatsappTokenKey } from './token-cipher';
 import {
   PRESCRIPTION_BODY_VALUES,
   type DocumentTemplate,
+  type SendHealth,
   type WhatsAppSendResult,
 } from './whatsapp.types';
 import { WhatsAppService } from './whatsapp.service';
@@ -28,6 +29,7 @@ export type WhatsAppConnectionView =
       prescriptionTemplate: DocumentTemplate | null;
       verifiedAt: Date;
       linkedBy: { id: string; name: string } | null;
+      health: SendHealth | null;
     };
 
 export type Actor = { id: string; branchId: string };
@@ -60,7 +62,10 @@ export class WhatsAppConnectionService {
     private readonly whatsapp: WhatsAppService,
   ) {}
 
-  async view(branchId: string): Promise<WhatsAppConnectionView> {
+  async view(
+    branchId: string,
+    options: { fresh?: boolean } = {},
+  ): Promise<WhatsAppConnectionView> {
     const row = await this.prisma.whatsAppConnection.findUnique({
       where: { branchId },
       select: VIEW_SELECT,
@@ -73,10 +78,18 @@ export class WhatsAppConnectionService {
             ? 'SERVER_ENV'
             : null,
       };
+    const health = await this.liveHealth(branchId, row, options);
+    const businessAccountId =
+      row.businessAccountId ?? health?.businessAccountId ?? null;
+    if (businessAccountId && !row.businessAccountId)
+      await this.prisma.whatsAppConnection.update({
+        where: { branchId },
+        data: { businessAccountId },
+      });
     return {
       linked: true,
       phoneNumberId: row.phoneNumberId,
-      businessAccountId: row.businessAccountId,
+      businessAccountId,
       displayPhoneNumber: row.displayPhoneNumber,
       verifiedName: row.verifiedName,
       qualityRating: row.qualityRating,
@@ -95,7 +108,25 @@ export class WhatsAppConnectionService {
             name: `${row.linkedBy.firstName} ${row.linkedBy.lastName}`.trim(),
           }
         : null,
+      health: health?.sendHealth ?? null,
     };
+  }
+
+  /** A Meta or key failure here is reported as unknown health; it must never break the page. */
+  private async liveHealth(
+    branchId: string,
+    row: { phoneNumberId: string },
+    options: { fresh?: boolean },
+  ) {
+    try {
+      const { token } = await this.credentials(branchId);
+      return await this.whatsapp.sendHealth(
+        { token, phoneNumberId: row.phoneNumberId, source: 'CLINIC' },
+        options,
+      );
+    } catch {
+      return null;
+    }
   }
 
   /** Stores the credentials only after Meta confirms the token can read that phone number. */
@@ -109,12 +140,15 @@ export class WhatsAppConnectionService {
   ) {
     const accessToken = input.accessToken.trim();
     const phoneNumberId = input.phoneNumberId.trim();
-    const businessAccountId = input.businessAccountId?.trim() || null;
-    const profile = await this.graph.getPhoneNumber(accessToken, phoneNumberId);
+    const profile = await this.whatsapp.checkNumber(accessToken, phoneNumberId);
     if (!profile.ok)
       throw new BadRequestException(
         `WhatsApp did not accept these details. ${profile.reason}`,
       );
+    const businessAccountId =
+      input.businessAccountId?.trim() ||
+      profile.value.health?.businessAccountId ||
+      null;
     const previous = await this.prisma.whatsAppConnection.findUnique({
       where: { branchId: actor.branchId },
       select: { businessAccountId: true },
@@ -241,8 +275,8 @@ export class WhatsAppConnectionService {
     return this.view(branchId);
   }
 
-  recentMessages(branchId: string, limit: number) {
-    return this.prisma.whatsAppMessage.findMany({
+  async recentMessages(branchId: string, limit: number) {
+    const rows = await this.prisma.whatsAppMessage.findMany({
       where: { branchId },
       orderBy: { createdAt: 'desc' },
       take: Math.min(Math.max(Math.trunc(limit) || 20, 1), 100),
@@ -259,6 +293,13 @@ export class WhatsAppConnectionService {
         updatedAt: true,
       },
     });
+    return rows.map((row) => ({
+      ...row,
+      failureReason:
+        row.status === 'FAILED'
+          ? (metaReasonFor(row.errorCode) ?? row.errorTitle)
+          : null,
+    }));
   }
 
   private async credentials(branchId: string) {

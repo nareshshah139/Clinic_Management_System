@@ -47,10 +47,31 @@ export type DocumentTemplate = {
   bodyParams: number;
 };
 
+export type SendAvailability = 'AVAILABLE' | 'LIMITED' | 'BLOCKED';
+
+export type SendBlocker = {
+  entity: 'PHONE_NUMBER' | 'WABA' | 'BUSINESS' | 'APP';
+  code: number;
+  description: string;
+  fix?: string;
+};
+
+export type SendHealth = {
+  canSend: SendAvailability;
+  blockers: SendBlocker[];
+};
+
+/** What Meta says about sending from a number, and the business account it belongs to when Meta names one. */
+export type PhoneNumberHealth = {
+  sendHealth: SendHealth;
+  businessAccountId: string | null;
+};
+
 export type PhoneNumberProfile = {
   displayPhoneNumber: string;
   verifiedName: string;
   qualityRating: string | null;
+  health: PhoneNumberHealth | null;
 };
 
 export type MessageStatusUpdate = {

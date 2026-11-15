@@ -3,11 +3,14 @@ import type { WhatsAppConnection } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { WhatsAppGraphClient, type GraphResult } from './graph-client';
 import { REPLACEABLE_BY } from './message-status';
+import { blockedReason } from './send-health';
 import { INVALID_NUMBER_REASON, normalizeWhatsAppNumber } from './phone-number';
 import { openToken, whatsappTokenKey } from './token-cipher';
 import {
   PRESCRIPTION_BODY_VALUES,
   type MessageStatusUpdate,
+  type PhoneNumberHealth,
+  type PhoneNumberProfile,
   type TemplateMessage,
   type WhatsAppMessageKind,
   type WhatsAppSendResult,
@@ -35,6 +38,8 @@ export type PrescriptionMessage = {
   prescriptionId?: string;
   kind: Extract<WhatsAppMessageKind, 'PRESCRIPTION' | 'TEST_PRESCRIPTION'>;
 };
+
+const HEALTH_TTL_MS = 30_000;
 
 export const NOT_LINKED_REASON =
   'Link the clinic WhatsApp in Clinic profile first.';
@@ -74,6 +79,10 @@ function readDoctorOverride(
 @Injectable()
 export class WhatsAppService {
   private readonly logger = new Logger(WhatsAppService.name);
+  private readonly healthByNumber = new Map<
+    string,
+    { at: number; health: PhoneNumberHealth }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -91,6 +100,32 @@ export class WhatsAppService {
     doctorId?: string,
   ): Promise<WhatsAppSender | null> {
     return (await this.route(branchId, doctorId))?.sender ?? null;
+  }
+
+  /** Reads the number from Meta and remembers its send health for the next sends. */
+  async checkNumber(
+    token: string,
+    phoneNumberId: string,
+  ): Promise<GraphResult<PhoneNumberProfile>> {
+    const profile = await this.graph.getPhoneNumber(token, phoneNumberId);
+    if (profile.ok && profile.value.health)
+      this.healthByNumber.set(phoneNumberId, {
+        at: Date.now(),
+        health: profile.value.health,
+      });
+    return profile;
+  }
+
+  /** Null when Meta could not be asked or sent no health; callers treat that as unknown, never as blocked. */
+  async sendHealth(
+    sender: WhatsAppSender,
+    options: { fresh?: boolean } = {},
+  ): Promise<PhoneNumberHealth | null> {
+    const cached = this.healthByNumber.get(sender.phoneNumberId);
+    if (!options.fresh && cached && Date.now() - cached.at < HEALTH_TTL_MS)
+      return cached.health;
+    const profile = await this.checkNumber(sender.token, sender.phoneNumberId);
+    return profile.ok ? profile.value.health : null;
   }
 
   sendText(target: SendTarget & { text: string }): Promise<WhatsAppSendResult> {
@@ -183,6 +218,15 @@ export class WhatsAppService {
     try {
       const route = await this.route(target.branchId, target.doctorId);
       if (!route) return { status: 'NOT_CONFIGURED' };
+      const health = await this.sendHealth(route.sender);
+      if (health?.sendHealth.canSend === 'BLOCKED') {
+        const result: WhatsAppSendResult = {
+          status: 'FAILED',
+          reason: blockedReason(health.sendHealth),
+        };
+        this.logger.warn(`WhatsApp ${target.kind} not sent: ${result.reason}`);
+        return result;
+      }
       const sent = await deliver(route, to);
       result = sent.ok
         ? { status: 'ACCEPTED', wamid: sent.value, source: route.sender.source }

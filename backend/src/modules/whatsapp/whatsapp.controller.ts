@@ -84,7 +84,7 @@ export class WhatsAppController {
 
   @Get('connection')
   connection(@Request() req: AuthenticatedRequest) {
-    return this.connections.view(req.user.branchId);
+    return this.connections.view(req.user.branchId, { fresh: true });
   }
 
   @Put('connection')
