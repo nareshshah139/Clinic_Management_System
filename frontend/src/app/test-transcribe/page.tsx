@@ -217,6 +217,7 @@ export default function TestTranscribePage() {
       const fileName = `test-recording.${mimeType === 'audio/webm' ? 'webm' : 'm4a'}`;
       const formData = new FormData();
       formData.append('file', completeAudio, fileName);
+      formData.append('diarize', 'true');
       
       console.log(`FormData prepared with file: ${fileName}`);
 
