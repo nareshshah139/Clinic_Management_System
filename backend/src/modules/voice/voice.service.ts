@@ -1,9 +1,3 @@
-// Repo path: backend/src/modules/voice/voice.service.ts
-// One generic parse: check length -> one chat call with a strict schema -> rebuild the response
-// from a whitelist. Per-intent knowledge lives in voice-intents.ts.
-// Pattern: whatsapp-templates.service.ts generate() (key check :112-115, timeout :117 and :169-170),
-// except that a timeout here is a 503, not the RequestTimeoutException (408) it throws at :186-188.
-
 import { BadRequestException, Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { VOICE_TEXT_LIMITS, type ParsedByIntent, type VoiceIntent, type VoiceStatus } from '@cms/shared-types/voice';
 import { VOICE_INTENT_SPECS } from './voice-intents';
@@ -46,22 +40,57 @@ export class VoiceService {
    * range, names that are substrings of the transcript, and `heard` equal to the request text.
    */
   async parse<K extends VoiceIntent>(intent: K, text: string): Promise<ParsedByIntent[K]> {
-    // heard = text.replace(/\s+/g, ' ').trim()
-    // !heard || heard.length > VOICE_TEXT_LIMITS[intent] -> BadRequestException(VOICE_BAD_TEXT_MESSAGE)
-    // apiKey = process.env.OPENAI_API_KEY; !apiKey -> ServiceUnavailableException(VOICE_NOT_CONFIGURED_MESSAGE)
-    // spec = VOICE_INTENT_SPECS[intent]; prepared = spec.prepare(heard)
-    // controller = new AbortController(); timer = setTimeout(abort, Number(process.env.OPENAI_HTTP_TIMEOUT_MS || 15000))
-    // try raw = await this.chat({ apiKey, model: process.env.OPENAI_COMMAND_MODEL || 'gpt-4o-mini',
-    //                             system: spec.system, user: prepared.user, schema: spec.schema, signal })
-    // catch (AbortError | non-2xx | bad JSON) -> logger.warn(`voice ${intent} failed: ${status|name}`)
-    //                                           ServiceUnavailableException(VOICE_UNAVAILABLE_MESSAGE)
-    // finally clearTimeout(timer)
-    // return spec.sanitize(raw, heard, prepared)
-    void BadRequestException; void ServiceUnavailableException; void VOICE_TEXT_LIMITS; void VOICE_INTENT_SPECS;
-    throw new Error('not implemented');
+    const heard = text.replace(/\s+/g, ' ').trim();
+    if (!heard || heard.length > VOICE_TEXT_LIMITS[intent]) {
+      throw new BadRequestException(VOICE_BAD_TEXT_MESSAGE);
+    }
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new ServiceUnavailableException(VOICE_NOT_CONFIGURED_MESSAGE);
+
+    const spec = VOICE_INTENT_SPECS[intent];
+    const prepared = spec.prepare(heard);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Number(process.env.OPENAI_HTTP_TIMEOUT_MS || 15000));
+    let raw: unknown;
+    try {
+      raw = await this.chat({
+        apiKey,
+        model: process.env.OPENAI_COMMAND_MODEL || 'gpt-4o-mini',
+        system: spec.system,
+        user: prepared.user,
+        schema: spec.schema,
+        signal: controller.signal,
+      });
+    } catch (e) {
+      // Status or error name only: provider error text can echo the transcript.
+      const reason = (e as { status?: number })?.status ?? (e as Error)?.name ?? 'unknown';
+      this.logger.warn(`voice ${intent} failed: ${reason}`);
+      throw new ServiceUnavailableException(VOICE_UNAVAILABLE_MESSAGE);
+    } finally {
+      clearTimeout(timer);
+    }
+    return spec.sanitize(raw, heard, prepared);
   }
 }
 
 /** Default ChatCall: POST https://api.openai.com/v1/chat/completions, temperature 0,
  *  response_format { type: 'json_schema', json_schema: { name, strict: true, schema } }. */
-export const openAiChat: ChatCall = async () => { throw new Error('not implemented'); };
+export const openAiChat: ChatCall = async ({ apiKey, model, system, user, schema, signal }) => {
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      response_format: { type: 'json_schema', json_schema: { name: 'voice_parse', strict: true, schema } },
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+    }),
+    signal,
+  });
+  if (!resp.ok) throw Object.assign(new Error(`OpenAI ${resp.status}`), { status: resp.status });
+  const data = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  return JSON.parse(data.choices?.[0]?.message?.content ?? '');
+};

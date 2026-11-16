@@ -31,6 +31,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { WhatsAppTemplatesModule } from './modules/whatsapp-templates/whatsapp-templates.module';
 import { GoogleCalendarModule } from './modules/google-calendar/google-calendar.module';
+import { VoiceModule } from './modules/voice/voice.module';
 
 const minimalBoot = process.env.MINIMAL_BOOT === 'true';
 
@@ -68,6 +69,7 @@ const fullFeatureModules = [
   AuditLogsModule,
   WhatsAppTemplatesModule,
   GoogleCalendarModule,
+  VoiceModule,
 ];
 
 const minimalModules = [AuthModule];

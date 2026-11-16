@@ -1,13 +1,3 @@
-// Repo path: backend/src/modules/voice/voice.controller.ts
-// One free status route and three parse routes, one per intent. Each parse route carries exactly
-// the roles and permissions of the write its form's confirm calls, so the parser is never a wider
-// door than the form. voice.controller.spec.ts reflects on both controllers and fails if they drift.
-//
-// Throttling: ThrottlerModule (@Global) and ThrottlerGuard (APP_GUARD) are already registered once,
-// in auth.module.ts:12-17 and :33-36. Global guards apply in module scan order, AppModule's own
-// first (@nestjs/core scanner.js:100-106), so JwtAuthGuard has set req.user before ThrottlerGuard
-// runs. This module adds only route-level @Throttle metadata. See rationale "Problems found" 1.
-
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { UserRole } from '@prisma/client';
@@ -17,6 +7,8 @@ import { Permissions } from '../../shared/decorators/permissions.decorator';
 import { VoiceService } from './voice.service';
 import { ParseRequestDto } from './voice.dto';
 
+// JwtAuthGuard runs before the global ThrottlerGuard (both are registered once, in app.module and
+// auth.module), so req.user is set when the tracker runs. This module adds only route metadata.
 /** Per signed-in user; IP only if a route were ever reached without a user. */
 export function voiceUserTracker(req: Record<string, any>): string {
   return req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`;
