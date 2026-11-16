@@ -1,0 +1,36 @@
+{
+  "name": "@cms/shared-types",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src/medicine-name.cjs",
+    "src/medicine-name.d.cts",
+    "src/voice.cjs",
+    "src/voice.d.cts"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./medicine-name": {
+      "types": "./src/medicine-name.d.cts",
+      "default": "./src/medicine-name.cjs"
+    },
+    "./voice": {
+      "types": "./src/voice.d.cts",
+      "default": "./src/voice.cjs"
+    }
+  }
+}
